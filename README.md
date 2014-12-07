@@ -9,6 +9,10 @@ Timely dataflow is a low-latency cyclic dataflow computational model, introduced
 
 There are other less-qualitative benefits, including improving performance due by removing the hash maps required (by Naiad) when the timely dataflow graph was not as structured. It is possible that there will be drawbacks to this design, though so far they have been restricted to having to think harder as part of designing the interface.
 
+## Starting Out ##
+
+After `git clone`-ing the repository, if you have [Rust](http://www.rust-lang.org) and [Cargo](https://crates.io) installed (Cargo comes with a Rust install), you should be able to type any of `cargo build`, `cargo run`, and `cargo bench`. If you put `--release` after the first two, the performance will be a bit better. The examples currently assemble and "run" both a barrier micro-benchmark and a queueing micro-benchmark. The examples don't do anything useful! 
+
 ## Caveats ##
 
 This is a pet project, partly for learning a bit about Rust. While it is meant to be somewhat smarter and more flexible than Naiad as regards progress tracking, there are lots of things it doesn't yet do, and may never do. But, putting it out there in public may get other people thinking about whether and how they might help out, even if just by reading and commenting.
