@@ -1,0 +1,5 @@
+[package]
+
+name = "timely"
+version = "0.0.1"
+authors = ["Frank McSherry <fmcsherry@me.com>"]
