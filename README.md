@@ -11,7 +11,20 @@ There are other less-qualitative benefits, including improving performance due b
 
 ## Starting Out ##
 
-After `git clone`-ing the repository, if you have [Rust](http://www.rust-lang.org) and [Cargo](https://crates.io) installed (Cargo comes with a Rust install), you should be able to type any of `cargo build`, `cargo run`, and `cargo bench`. If you put `--release` after the first two, the performance will be a bit better. The examples currently assemble and "run" both a barrier micro-benchmark and a queueing micro-benchmark. The examples don't do anything useful! 
+After `git clone`-ing the repository, if you have [Rust](http://www.rust-lang.org) and [Cargo](https://crates.io) installed (Cargo comes with a Rust install), you should be able to type any of `cargo build`, `cargo run`, and `cargo bench`. If you put `--release` after the first two, the performance will be a bit better. The examples currently assemble and "run" both a barrier micro-benchmark and a queueing micro-benchmark. The examples don't do anything useful!
+
+On my laptop, eliding some whining about unused methods, it looks like this:
+```
+% cargo bench
+Compiling timely v0.0.1 (file:///Users/mcsherry/Projects/timely-dataflow)
+    Running target/release/timely-d1e180029f621076
+
+    running 2 tests
+    test test_barrier_bench ... bench:       185 ns/iter (+/- 68)
+    test test_queue_bench   ... bench:      2178 ns/iter (+/- 764)
+
+    test result: ok. 0 passed; 0 failed; 0 ignored; 2 measured
+```
 
 ## Caveats ##
 
