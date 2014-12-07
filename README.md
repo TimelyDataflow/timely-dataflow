@@ -43,28 +43,28 @@ Initially, a scope must both describe its internal structure (so the parent can 
 To complete the signature of the `Scope` trait, a scope must also present a number of inputs and outputs (as progress will be specific to the inputs and outputs of the scope, and must be separately indicated). To understanding the trait, the type `Antichain<T: PartialOrd>` indicates a set of partially ordered elements none of which are strictly less than any other.
 
 ```rust
-        pub trait Scope<T: Timestamp, S: PathSummary<T>>
-        {
-            fn inputs(&self) -> uint;   // number of inputs to the scope
-            fn outputs(&self) -> uint;  // number of outputs from the scope
+pub trait Scope<T: Timestamp, S: PathSummary<T>>
+{
+    fn inputs(&self) -> uint;   // number of inputs to the scope
+    fn outputs(&self) -> uint;  // number of outputs from the scope
 
-            // 1a. returns (input -> output) summaries, and initial message capabilities on outputs.
-            fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>);
+    // 1a. returns (input -> output) summaries, and initial message capabilities on outputs.
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>);
 
-            // 1b. receives (output -> input) summaries, and initial messages capabilities on inputs.
-            fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<S>>>, frontier: &Vec<Vec<(T, i64)>>) -> ();
+    // 1b. receives (output -> input) summaries, and initial messages capabilities on inputs.
+    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<S>>>, frontier: &Vec<Vec<(T, i64)>>) -> ();
 
-            // 2a. receives changes in the message capabilities from the external graph.
-            fn push_external_progress(&mut self, frontier_progress: &Vec<Vec<(T, i64)>>) -> ();
+    // 2a. receives changes in the message capabilities from the external graph.
+    fn push_external_progress(&mut self, frontier_progress: &Vec<Vec<(T, i64)>>) -> ();
 
-            // 2b. describing changes internal to the scope, specifically:
-            //      * changes to messages capabilities for each output,
-            //      * number of messages consumed on each input,
-            //      * number of messages produced on each output.
-            fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<Vec<(T, i64)>>,
-                                                 messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                                 messages_produced: &mut Vec<Vec<(T, i64)>>) -> ();
-        }
+    // 2b. describing changes internal to the scope, specifically:
+    //      * changes to messages capabilities for each output,
+    //      * number of messages consumed on each input,
+    //      * number of messages produced on each output.
+    fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<Vec<(T, i64)>>,
+                                         messages_consumed: &mut Vec<Vec<(T, i64)>>,
+                                         messages_produced: &mut Vec<Vec<(T, i64)>>) -> ();
+}
 ```
 
 One non-obivous design (there are several) is that `pull_internal_progress` should be responsible for indicating what messages were accepted by the scope, rather than have `push_external_progress` assign responsibility. We found the former worked better in Naiad, in that the scheduler did not need to understand the routing of messages; workers simply picked up what they were delivered, and told the scheduler, who eventually concludes that all messages are accounted for.
