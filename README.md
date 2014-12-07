@@ -52,7 +52,8 @@ pub trait Scope<T: Timestamp, S: PathSummary<T>>
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>);
 
     // 1b. receives (output -> input) summaries, and initial messages capabilities on inputs.
-    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<S>>>, frontier: &Vec<Vec<(T, i64)>>) -> ();
+    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<S>>>,
+                                       frontier: &Vec<Vec<(T, i64)>>) -> ();
 
     // 2a. receives changes in the message capabilities from the external graph.
     fn push_external_progress(&mut self, frontier_progress: &Vec<Vec<(T, i64)>>) -> ();
