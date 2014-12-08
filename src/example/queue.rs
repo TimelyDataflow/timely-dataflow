@@ -32,7 +32,7 @@ where T:Timestamp,
         {
             input:      input.clone(),
             output:     output.clone(),
-            to_send:    HashMap::new(),
+            to_send:    Vec::new(),
             guarantee:  Vec::new(),
         };
 
@@ -104,7 +104,7 @@ struct QueueScope<T:Timestamp, S: PathSummary<T>, D:Copy+'static>
 {
     input:      Rc<RefCell<ScopeInputQueue<T, D>>>,
     output:     Rc<RefCell<Vec<Box<TargetPort<T, D>>>>>,
-    to_send:    HashMap<T, Vec<D>>,
+    to_send:    Vec<(T, Vec<D>)>,
     guarantee:  Vec<(T, i64)>,
 }
 
@@ -139,7 +139,7 @@ impl<T:Timestamp, S:PathSummary<T>, D:Copy+'static> Scope<T, S> for QueueScope<T
 
         for key in sendable.iter()
         {
-            self.to_send.insert(*key, input.extract_queue(key).unwrap());
+            self.to_send.push((*key, input.extract_queue(key).unwrap()));
         }
     }
 
@@ -150,15 +150,15 @@ impl<T:Timestamp, S:PathSummary<T>, D:Copy+'static> Scope<T, S> for QueueScope<T
         // ask the input if it has consumed messages and created queues ...
         self.input.borrow_mut().pull_progress(&mut messages_consumed[0], &mut frontier_progress[0]);
 
-        for (&time, data) in self.to_send.iter()
+        for &(ref time, ref data) in self.to_send.iter()
         {
             //println!("Sending at {}", time);
             for target in self.output.borrow_mut().iter_mut()
             {
-                messages_produced[0].push((time, 1));
-                frontier_progress[0].push((time, -1));
+                messages_produced[0].push((*time, 1));
+                frontier_progress[0].push((*time, -1));
 
-                target.deliver_data(&time, data);
+                target.deliver_data(time, data);
             }
         }
 

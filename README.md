@@ -47,15 +47,17 @@ From the set of outstanding timestamps and path summaries of the graph, one can 
 
 ## Scope Interface ##
 
-We structure a timely dataflow graph as a collection of hierarchically nested `Scope`s, each of which has an associated `Timestamp` and `PathSummary` type, indicating the way in which its inputs and outputs understand progress. While scopes can be simple vertices, they may also contain other Scopes, whose timestamps and path summaries can extend those of its parent.
+We structure a timely dataflow graph as a collection of hierarchically nested `Scope`s, each of which has an associated `Timestamp` and `PathSummary` type, indicating the way in which its inputs and outputs understand progress. While scopes can be simple vertices, they may also contain other scopes, whose timestamps and path summaries can extend those of its parent.
 
-Initially, a scope must both describe its internal structure (so the parent can reason messages moving through it) and learn about the external structure connecting its outputs back to its inputs (so that it can reason about how its messages might return to it). At runtime a scope must be able to respond to progress in the external graph (perhaps changes in which timestamps it may see in the future), and communicate any resulting progress it makes (including messages from the external scope, produced for the external scope, and as yet unprocessed).
+Initially, a scope must both describe its internal structure (so the parent can reason about messages moving through it) and learn about the external structure connecting its outputs back to its inputs (so that it can reason about how its messages might return to it). At runtime a scope must be able to respond to progress in the external graph (perhaps changes in which timestamps it may see in the future), and communicate any resulting progress it makes (including messages consumed from the external scope, produced for the external scope, and messages as yet unprocessed).
 
-1. Initialization:  a. describing its internal path summary structure (inputs -> outputs) and initial message capabilities,
-                    b. learning about the external path summary structure (outputs -> inputs) and initial message capabilities.
+1. Initialization:
+  a. describing its internal path summary structure (inputs -> outputs) and initial message capabilities,
+  b. learning about the external path summary structure (outputs -> inputs) and initial message capabilities.
 
-2. Execution:       a. receiving updates about progress in the external dataflow graph,
-                    b. communicating updates about progress within the scope to the containing scope.
+2. Execution:
+  a. receiving updates about progress in the external dataflow graph,
+  b. communicating updates about progress within the scope to the containing scope.
 
 To complete the signature of the `Scope` trait, a scope must also present a number of inputs and outputs (as progress will be specific to the inputs and outputs of the scope, and must be separately indicated). To understanding the trait, the type `Antichain<T: PartialOrd>` indicates a set of partially ordered elements none of which are strictly less than any other.
 
@@ -85,7 +87,7 @@ pub trait Scope<T: Timestamp, S: PathSummary<T>>
 }
 ```
 
-One non-obivous design (there are several) is that `pull_internal_progress` should be responsible for indicating what messages were accepted by the scope, rather than have `push_external_progress` assign responsibility. We found the former worked better in Naiad, in that the scheduler did not need to understand the routing of messages; workers simply picked up what they were delivered, and told the scheduler, who eventually concludes that all messages are accounted for.
+One non-obivous design (there are several) is that `pull_internal_progress` should indicate what messages were accepted by the scope, rather than have `push_external_progress` assign responsibility. We found the former worked better in Naiad, in that the scheduler did not need to understand the routing of messages; workers simply picked up what they were delivered, and told the scheduler, who eventually concludes that all messages are accounted for.
 
 ## Scope Implementation ##
 

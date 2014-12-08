@@ -120,6 +120,34 @@ where TOuter: Timestamp,
     }
 }
 
+/*
+#[deriving(Default)]
+pub struct PerScopeState<T: Timestamp, S: PathSummary<T>>
+{
+    inputs:                 uint,                       // cached information about inputs
+    outputs:                uint,                       // cached information about outputs
+
+    scope:                  Box<Scope<T, S>>,           // the scope itself
+
+    summary:                Vec<Vec<Antichain<S>>>,     // internal path summaries (input x output)
+    guarantees:             Vec<MutableAntichain<T>>,   // per-input:   guarantee made by parent scope in inputs
+    capabilities:           Vec<MutableAntichain<T>>,   // per-output:  capabilities retained by scope on outputs
+    outstanding_messages:   Vec<MutableAntichain<T>>,   // per-input:   counts of messages on each input
+
+    progress:               Vec<Vec<(T, i64)>>,         // per-output:  temp buffer used to ask about progress
+    consumed:               Vec<Vec<(T, i64)>>,         // per-input:   temp buffer used to ask about consumed messages
+    produced:               Vec<Vec<(T, i64)>>,         // per-output:  temp buffer used to ask about produced messages
+
+    guarantee_changes:      Vec<Vec<(T, i64)>>,         // per-input:   temp storage for changes in some guarantee...
+
+    source_counts:          Vec<Vec<(T, i64)>>,         // per-output:  counts of pointstamp changes at sources
+    target_counts:          Vec<Vec<(T, i64)>>,         // per-input:   counts of pointstamp changes at targets
+
+    target_pushed:          Vec<Vec<(T, i64)>>,         // per-input:   counts of pointstamp changes pushed to targets
+}
+
+*/
+
 #[deriving(Default)]
 pub struct SubscopeState<TTime:Timestamp, TSummary>
 {
@@ -246,7 +274,11 @@ pub struct Subgraph<TOuter:Timestamp, SOuter, TInner:Timestamp, SInner>
     subscope_state:         Vec<SubscopeState<(TOuter, TInner), Summary<SOuter, SInner>>>,
     subscope_buffers:       Vec<SubscopeBuffers<(TOuter, TInner)>>,
 
+    notify:                 Vec<bool>,
+
     pointstamps:            PointstampCounter<(TOuter, TInner)>,
+
+    //children:               Vec<PerScopeState<(TOuter, TInner), Summary<SOuter, SInner>>>,
 
     input_messages:         Vec<Rc<RefCell<Vec<((TOuter, TInner), i64)>>>>,
 }
@@ -284,6 +316,7 @@ where TOuter: Timestamp,
                 new_state.capabilities[output].update_iter_and(work[output].iter().map(|&x|x), |_, _| {});
             }
 
+            self.notify.push(self.subscopes[index].notify_me());
             self.subscope_state.push(new_state);
             self.subscope_buffers.push(SubscopeBuffers::new(inputs, outputs));
 
@@ -441,7 +474,7 @@ where TOuter: Timestamp,
         // consider pushing to each nested scope in turn.
         for (index, scope) in self.subscopes.iter_mut().enumerate()
         {
-            if scope.notify_me()
+            if self.notify[index]
             {
                 let changes = &mut self.subscope_buffers[index].guarantee_changes;
 
@@ -524,7 +557,8 @@ where TOuter: Timestamp,
                                          &mut buffers.consumed,
                                          &mut buffers.produced);
 
-            for output in range(0, scope.outputs())
+            // nb: scope.outputs() would involve a virtual call ...
+            for output in range(0, buffers.produced.len())
             {
                 // Step 2a: handle produced messages!
                 if buffers.produced[output].len() > 0
@@ -571,7 +605,8 @@ where TOuter: Timestamp,
                 }
             }
 
-            for input in range(0, scope.inputs())
+            // nb: scope.inputs() would involve a virtual call ...
+            for input in range(0, buffers.consumed.len())
             {
                 // Step 2c: handle consumed messages.
                 if buffers.consumed[input].len() > 0
@@ -596,7 +631,7 @@ where TOuter: Timestamp,
         // Step 3: push any progress to each target subgraph ...
         for (index, scope) in self.subscopes.iter_mut().enumerate()
         {
-            if scope.notify_me()
+            if self.notify[index]
             {
                 let changes = &mut self.subscope_buffers[index].guarantee_changes;
 
