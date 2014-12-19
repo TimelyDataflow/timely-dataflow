@@ -11,3 +11,4 @@ pub mod path_summary;
 pub mod subgraph;
 pub mod timestamp;
 pub mod scope;
+pub mod broadcast;

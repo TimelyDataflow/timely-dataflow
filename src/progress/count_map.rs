@@ -28,7 +28,7 @@ impl<T:Eq+Copy+'static> CountMap<T, > for Vec<(T, i64)>
             }
         }
 
-        if !found { self.push((key, val)); }
+        if !found && val != 0 { self.push((key, val)); }
         if let Some(index) = remove_at { self.swap_remove(index); }
         return new_val;
     }

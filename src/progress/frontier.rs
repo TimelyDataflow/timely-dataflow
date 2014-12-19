@@ -42,7 +42,7 @@ impl<T: PartialOrd+Eq+Copy+Show> Antichain<T>
     pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
 }
 
-#[deriving(Default)]
+#[deriving(Default, Show)]
 pub struct MutableAntichain<T:Eq>
 {
     occurrences:    Vec<(T, i64)>,  // occurrence count of each time
@@ -50,7 +50,7 @@ pub struct MutableAntichain<T:Eq>
     pub elements:   Vec<T>,     // the set of times with precedent count == 0
 }
 
-impl<T: PartialOrd+Eq+Copy+Show> MutableAntichain<T>
+impl<T: PartialOrd+Eq+Copy+Show+'static> MutableAntichain<T>
 {
     pub fn new() -> MutableAntichain<T>
     {
@@ -236,6 +236,100 @@ impl<T: PartialOrd+Eq+Copy+Show> MutableAntichain<T>
                     let (ref key, _) = self.precedents[index];
 
                     if key.eq(elem) { to_remove = index; }
+                }
+
+                self.precedents.swap_remove(to_remove);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn update_and(&mut self, elem: T, delta: i64, action: |T, i64| -> ()) -> ()
+    {
+        if delta != 0
+        {
+            if self.occurrences.len() > 100
+            {
+                println!("occurrences:\tmessed up (len() = {})", self.occurrences.len());
+                // for &(key, val) in self.occurrences.iter()
+                // {
+                //     println!("\toccurrence: {} : {}", key, val);
+                // }
+            }
+            if self.precedents.len() > 100 { println!("precedents:\tmessed up"); }
+
+            let new_value = self.occurrences.update(elem, delta);
+            let old_value = new_value - delta;
+
+            // introducing the time to the set
+            if old_value <= 0 && new_value > 0
+            {
+                let mut preceded_by = 0;
+
+                // maintain precedent counts relative to the set
+                for &(key, ref mut val) in self.precedents.iter_mut()
+                {
+                    if key.gt(&elem)
+                    {
+                        if *val == 0
+                        {
+                            // find and remove key from elements
+                            let mut found_index = 0;
+                            for i in range(0, self.elements.len()) { if self.elements[i].eq(&key) { found_index = i; }}
+                            self.elements.swap_remove(found_index);
+
+                            action(key, -1);
+                        }
+                        *val += 1;
+                    }
+                    else
+                    {
+                        preceded_by += 1;
+                    }
+                }
+
+                // insert count always; maybe put in elements
+                self.precedents.push((elem, preceded_by));
+                if preceded_by == 0
+                {
+                    self.elements.push(elem);
+                    action(elem, 1);
+                }
+            }
+
+            // removing the time from the set
+            if old_value > 0 && new_value <= 0
+            {
+                // maintain precedent counts relative to the set
+                for &(key, ref mut val) in self.precedents.iter_mut()
+                {
+                    if key.gt(&elem)
+                    {
+                        *val -= 1;
+                        if *val == 0
+                        {
+                            self.elements.push(key);
+                            action(key, 1);
+                        }
+                    }
+                }
+
+                // remove elem if in elements
+                if self.elements.contains(&elem)
+                {
+                    let mut found_index = 0;
+                    for i in range(0, self.elements.len()) { if self.elements[i].eq(&elem) { found_index = i; }}
+                    self.elements.swap_remove(found_index);
+
+                    action(elem, -1);
+                }
+
+                let mut to_remove = -1;
+                for index in range(0, self.precedents.len())
+                {
+                    let (ref key, _) = self.precedents[index];
+
+                    if key.eq(&elem) { to_remove = index; }
                 }
 
                 self.precedents.swap_remove(to_remove);

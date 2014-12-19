@@ -1,5 +1,11 @@
 [package]
 
 name = "timely"
-version = "0.0.1"
+version = "0.0.4"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
+
+[dependencies]
+columnar="0.0.4"
+
+# docopt="0.6.15"
+# docopt_macros = "0.6.15"

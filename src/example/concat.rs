@@ -6,7 +6,7 @@ use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use example::ports::{SourcePort, TargetPort};
+use example::ports::{TargetPort, TeePort};
 use example::stream::Stream;
 
 pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }
@@ -18,77 +18,76 @@ where T:Timestamp,
 {
     fn concat(&mut self, other: &mut Stream<T, S, D>) -> Stream<T, S, D>
     {
-        let concat = Rc::new(RefCell::new(ConcatScope
-        {
-            messages:   Vec::from_fn(2, |_| Vec::new()),
-            targets:    Vec::new(),
-        }));
+        let messages = Vec::from_fn(2, |_| Rc::new(RefCell::new(Vec::new())));
+        let targets = TeePort::new();
 
-        let index = self.graph.add_scope(box concat.clone());
+        let concat = ConcatScope
+        {
+            consumed:   messages.clone(),
+            produced:   targets.updates.clone(),
+        };
+
+        let index = self.graph.add_scope(box concat);
 
         self.graph.connect(self.name, ScopeInput(index, 0));
         other.graph.connect(other.name, ScopeInput(index, 1));
 
-        self.port.register_interest(box()(concat.clone(), 0));
-        other.port.register_interest(box()(concat.clone(), 1));
+        self.port.borrow_mut().push(box()(messages[0].clone(), targets.clone()));
+        other.port.borrow_mut().push(box()(messages[1].clone(), targets.clone()));
 
-        return Stream{ name:ScopeOutput(index, 0), port: box concat, graph: self.graph.as_box() };
+        return self.copy_with(ScopeOutput(index, 0), targets.targets.clone());
     }
 }
 
-pub struct ConcatScope<T:Timestamp, D:Copy+'static>
+pub struct ConcatScope<T:Timestamp>
 {
-    messages:   Vec<Vec<(T, i64)>>,       // messages consumed since last asked
-    targets:    Vec<Box<TargetPort<T, D>>>, // places to send things
+    consumed:   Vec<Rc<RefCell<Vec<(T, i64)>>>>,       // messages consumed since last asked
+    produced:   Rc<RefCell<Vec<(T, i64)>>>,
 }
 
-impl<T:Timestamp, S:PathSummary<T>, D:Copy+'static> Scope<T, S> for Rc<RefCell<ConcatScope<T, D>>>
+impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for ConcatScope<T>
 {
     fn name(&self) -> String { format!("Concat") }
-    fn inputs(&self) -> uint { self.borrow().messages.len() }
+    fn inputs(&self) -> uint { self.consumed.len() }
     fn outputs(&self) -> uint { 1 }
 
     fn pull_internal_progress(&mut self, _frontier_progress: &mut Vec<Vec<(T, i64)>>,
                                           messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                          messages_produced: &mut Vec<Vec<(T, i64)>>) -> ()
+                                          messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool
     {
-        let mut concat = self.borrow_mut();
-
-        for input in range(0, concat.messages.len())
+        for (index, updates) in self.consumed.iter().enumerate()
         {
-            for &(key, val) in concat.messages[input].iter()
+            for &(key, val) in updates.borrow().iter()
             {
-                messages_consumed[input].push((key, val));
-                messages_produced[0].push((key, val));
+                messages_consumed[index].push((key, val));
             }
 
-            concat.messages[input].clear();
+            updates.borrow_mut().clear();
         }
+
+        for &(key, val) in self.produced.borrow().iter()
+        {
+            messages_produced[0].push((key, val));
+        }
+
+        self.produced.borrow_mut().clear();
+
+        return true;
     }
 
     fn notify_me(&self) -> bool { false }
 }
 
-impl<T:Timestamp, D:Copy+'static> SourcePort<T, D> for Rc<RefCell<ConcatScope<T, D>>>
-{
-    fn register_interest(&mut self, target: Box<TargetPort<T, D>>) -> ()
-    {
-        self.borrow_mut().targets.push(target);
-    }
-}
-
-impl<T:Timestamp, D:Copy+'static> TargetPort<T, D> for (Rc<RefCell<ConcatScope<T, D>>>, uint)
+impl<T:Timestamp, D:Copy+'static> TargetPort<T, D> for (Rc<RefCell<Vec<(T, i64)>>>, TeePort<T, D>)
 {
     fn deliver_data(&mut self, time: &T, data: &Vec<D>)
     {
-        let (ref rc, index) = *self;
-        let mut borrow = rc.borrow_mut();
+        let (ref counts, ref target) = *self;
 
-        borrow.messages[index].update(*time, 1);
+        counts.borrow_mut().push((*time, data.len() as i64));
 
-        for target in borrow.targets.iter_mut()
-        {
-            target.deliver_data(time, data);
-        }
+        target.deliver_data(time, data);
     }
+
+    fn flush(&mut self) -> () { let (_, ref target) = *self; target.flush(); }
 }
