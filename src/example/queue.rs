@@ -40,7 +40,7 @@ where T:Timestamp,
 
         self.graph.connect(self.name, ScopeInput(index, 0));
         self.port.borrow_mut().push(box input);
-
+        
         return self.copy_with(ScopeOutput(index, 0), output);
     }
 }

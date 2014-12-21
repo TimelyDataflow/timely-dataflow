@@ -19,7 +19,8 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash+Eq+Show> DistinctExtensionTra
 {
     fn distinct(&mut self) -> Stream<T, S, D>
     {
-        let (sender, receiver) = exchange_with(&mut (*self.allocator.borrow_mut()), |record| hash::hash(&record) as uint);
+        let allocator = &mut (*self.allocator.borrow_mut());
+        let (sender, receiver) = exchange_with(allocator, |record| hash::hash(&record) as uint);
         let scope = DistinctScope
         {
             input:      receiver,
@@ -29,12 +30,11 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash+Eq+Show> DistinctExtensionTra
         };
 
         let targets = scope.output.targets.clone();
-
         let index = self.graph.add_scope(box scope);
 
         self.graph.connect(self.name, ScopeInput(index, 0));
         self.port.borrow_mut().push(box sender);
-
+    
         return self.copy_with(ScopeOutput(index, 0), targets);
     }
 }

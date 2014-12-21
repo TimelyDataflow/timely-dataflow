@@ -116,8 +116,8 @@ fn _queue_multi(threads: uint)
 }
 
 
-#[bench]
-fn _command_bench(bencher: &mut Bencher) { _command(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
+// #[bench]
+// fn _command_bench(bencher: &mut Bencher) { _command(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
 fn _command_multi(threads: uint)
 {
     for allocator in ChannelAllocator::new_vector(threads).into_iter()
@@ -161,7 +161,6 @@ where T1: Timestamp, S1: PathSummary<T1>,
         let mut queue = sub_ingress1.queue()
                                     .distinct()
                                     ;
-
         // egress each of the streams from the subgraph.
         let sub_egress1 = subgraph.add_output_to_graph(&mut queue, graph.as_box());
         let sub_egress2 = subgraph.add_output_to_graph(&mut sub_ingress2, graph.as_box());
@@ -193,10 +192,11 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
+    let broadcaster = MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()));
     let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
                                                       &mut stream1.concat(&mut feedback1_output),
                                                       &mut stream2.concat(&mut feedback2_output),
-                                                      MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
+                                                      broadcaster);
 
     // connect feedback sources. notice that we have swapped indices ...
     feedback1.connect_input(&mut egress2);
