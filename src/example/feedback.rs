@@ -7,15 +7,16 @@ use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use example::ports::{TargetPort, TeePort};
+use example::ports::TargetPort;
+use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
-pub trait FeedbackExtensionTrait<T: Timestamp, S: PathSummary<T>, D:Copy+'static>
+pub trait FeedbackExtensionTrait<T: Timestamp, S: PathSummary<T>, D:Data>
 {
     fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<T, S, D>, Stream<T, S, D>);
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D:Copy+'static> FeedbackExtensionTrait<T, S, D> for Stream<T, S, D>
+impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> for Stream<T, S, D>
 {
     fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<T, S, D>, Stream<T, S, D>)
     {
@@ -23,7 +24,7 @@ impl<T: Timestamp, S: PathSummary<T>, D:Copy+'static> FeedbackExtensionTrait<T, 
         {
             limit:      limit,
             summary:    summary,
-            targets:    TeePort::new(),
+            targets:    OutputPort::new(),
             consumed:   Rc::new(RefCell::new(Vec::new())),
         };
 
@@ -47,15 +48,15 @@ impl<T: Timestamp, S: PathSummary<T>, D:Copy+'static> FeedbackExtensionTrait<T, 
     }
 }
 
-pub struct FeedbackTargetPort<T: Timestamp, S: PathSummary<T>, D:Copy+'static>
+pub struct FeedbackTargetPort<T: Timestamp, S: PathSummary<T>, D:Data>
 {
     limit:      T,
     summary:    S,
-    targets:    TeePort<T, D>,
+    targets:    OutputPort<T, D>,
     consumed:   Rc<RefCell<Vec<(T, i64)>>>,
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Copy+'static> TargetPort<T, D> for FeedbackTargetPort<T, S, D>
+impl<T: Timestamp, S: PathSummary<T>, D: Data> TargetPort<T, D> for FeedbackTargetPort<T, S, D>
 {
     fn deliver_data(&mut self, time: &T, data: &Vec<D>)
     {
@@ -117,7 +118,7 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for FeedbackScope<T, S>
         self.consumed_messages.borrow_mut().clear();
         self.produced_messages.borrow_mut().clear();
 
-        return true;
+        return false;
     }
 
     fn notify_me(&self) -> bool { false }

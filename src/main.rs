@@ -1,10 +1,12 @@
+#![feature(unsafe_destructor)]
+
 extern crate core;
 extern crate test;
 extern crate serialize;
 extern crate columnar;
 
-// extern crate docopt;
-// use docopt::Docopt;
+extern crate docopt;
+use docopt::Docopt;
 
 use test::Bencher;
 
@@ -23,12 +25,13 @@ use communication::channels::Data;
 use std::hash::Hash;
 use core::fmt::Show;
 
-use example::input::{InputExtensionTrait};
+use example::input::{InputExtensionTrait, InputHelper};
 use example::concat::{ConcatExtensionTrait};
 use example::feedback::{FeedbackExtensionTrait};
 use example::queue::{QueueExtensionTrait};
 use example::distinct::{DistinctExtensionTrait};
 use example::stream::Stream;
+use example::command::{CommandExtensionTrait};
 
 use example::graph_builder::GraphBoundary;
 use example::barrier::BarrierScope;
@@ -45,50 +48,55 @@ mod example;
 mod networking;
 mod communication;
 
-// static USAGE: &'static str = "
-// Usage: timely queue [options] [<arguments>...]
-//        timely barrier [options] [<arguments>...]
-//        timely networking [options] [<arguments>...]
-//
-// Options:
-//     -t <arg>, --threads <arg>    number of threads per worker [default: 1]
-//     -p <arg>, --processid <arg>  identity of this process     [default: 0]
-//     -n <arg>, --processes <arg>  number of processes involved [default: 1]
-// ";
+static USAGE: &'static str = "
+Usage: timely queue [options] [<arguments>...]
+       timely barrier [options] [<arguments>...]
+       timely command [options] [<arguments>...]
+       timely networking [options] [<arguments>...]
+
+Options:
+    -t <arg>, --threads <arg>    number of threads per worker [default: 1]
+    -p <arg>, --processid <arg>  identity of this process     [default: 0]
+    -n <arg>, --processes <arg>  number of processes involved [default: 1]
+";
 
 fn main()
 {
 
-    // let args = Docopt::new(USAGE).and_then(|dopt| dopt.parse()).unwrap_or_else(|e| e.exit());
-    //
-    // let threads = if let Some(threads) = from_str(args.get_str("-t")) { threads } else { panic!("invalid setting for --threads: {}", args.get_str("-t")) };
-    // let process_id = if let Some(proc_id) = from_str(args.get_str("-p")) { proc_id } else { panic!("invalid setting for --processid: {}", args.get_str("-p")) };
-    // let processes:uint = if let Some(processes) = from_str(args.get_str("-n")) { processes } else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
+    let args = Docopt::new(USAGE).and_then(|dopt| dopt.parse()).unwrap_or_else(|e| e.exit());
 
-    let threads = 4u;
-    let process_id = 0u;
-    let processes = 1u;
+    let threads = if let Some(threads) = from_str(args.get_str("-t")) { threads }
+                  else { panic!("invalid setting for --threads: {}", args.get_str("-t")) };
+    let process_id = if let Some(proc_id) = from_str(args.get_str("-p")) { proc_id }
+                     else { panic!("invalid setting for --processid: {}", args.get_str("-p")) };
+    let processes:uint = if let Some(processes) = from_str(args.get_str("-n")) { processes }
+                         else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
+
+    // let threads = 3u;
+    // let process_id = 0u;
+    // let processes = 1u;
 
     println!("Hello, world!");
 
     println!("Starting timely with\n\tthreads:\t{}\n\tprocesses:\t{}\n\tprocessid:\t{}", threads, processes, process_id);
 
-    _queue_multi(threads); println!("started queue test");
-    _barrier_multi(threads); println!("started barrier test");
-    _networking(process_id, processes);
+    // _queue_multi(threads); println!("started queue test");
+    // _barrier_multi(threads); println!("started barrier test");
+    // _networking(process_id, processes);
 
-    // if args.get_bool("queue") { _queue_multi(threads); println!("started queue test"); }
-    // if args.get_bool("barrier") { _barrier_multi(threads); println!("started barrier test"); }
-    //
-    // if args.get_bool("networking")
-    // {
-    //     if processes > 1u
-    //     {
-    //         println!("testing networking with {} processes", processes);
-    //         _networking(process_id, processes);
-    //     }
-    //     else { println!("set --processes > 1 for networking test"); }
-    // }
+    if args.get_bool("queue") { _queue_multi(threads); println!("started queue test"); }
+    if args.get_bool("barrier") { _barrier_multi(threads); println!("started barrier test"); }
+    if args.get_bool("command") { _command_multi(threads); println!("started command test"); }
+
+    if args.get_bool("networking")
+    {
+        if processes > 1u
+        {
+            println!("testing networking with {} processes", processes);
+            _networking(process_id, processes);
+        }
+        else { println!("set --processes > 1 for networking test"); }
+    }
 }
 
 fn _networking(my_id: uint, processes: uint)
@@ -107,6 +115,18 @@ fn _queue_multi(threads: uint)
     }
 }
 
+
+#[bench]
+fn _command_bench(bencher: &mut Bencher) { _command(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
+fn _command_multi(threads: uint)
+{
+    for allocator in ChannelAllocator::new_vector(threads).into_iter()
+    {
+        spawn(move || _command(allocator, None));
+    }
+}
+
+
 #[bench]
 fn _barrier_bench(bencher: &mut Bencher) { _barrier(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
 fn _barrier_multi(threads: uint)
@@ -120,7 +140,8 @@ fn _barrier_multi(threads: uint)
 fn _create_subgraph<T1, T2, S1, S2, D, B1, B2>(graph: &mut Rc<RefCell<Subgraph<T1, S1, T2, S2, B1>>>,
                                                source1: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
                                                source2: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                               broadcaster: B2) -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
+                                               broadcaster: B2)
+                                                -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
 where T1: Timestamp, S1: PathSummary<T1>,
       T2: Timestamp, S2: PathSummary<T2>,
       D:  Data+Hash+Eq+Show,
@@ -148,7 +169,7 @@ where T1: Timestamp, S1: PathSummary<T1>,
         (sub_egress1, sub_egress2)
     };
 
-    // sort of a mess, but the way to get the subgraph out of the Rc<RefCell<...>>
+    // sort of a mess, but the way to get the subgraph out of the Rc<RefCell<...>>.
     // will explode if anyone else is still sitting on a reference to subgraph.
     graph.add_scope(box try_unwrap(subgraph).ok().expect("hm").into_inner());
 
@@ -160,28 +181,26 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), uint, uint, MultiThreadedBroadcaster<((), uint)>>>> = Rc::new(RefCell::new(Default::default()));
+    let mut graph: Rc<RefCell<Subgraph<(), (), _, _, _>>> = Rc::new(RefCell::new(Default::default()));
     graph.borrow_mut().broadcaster = MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()));
 
     // try building some input scopes
-    let (input1, mut stream1) = graph.new_input(allocator.clone());
-    let (input2, mut stream2) = graph.new_input(allocator.clone());
+    let (mut input1, mut stream1) = graph.new_input(allocator.clone());
+    let (mut input2, mut stream2) = graph.new_input(allocator.clone());
 
     // prepare some feedback edges
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
-
-    // prepare the concatenation of those edges and the inputs
-    let mut concat1 = stream1.concat(&mut feedback1_output);
-    let mut concat2 = stream2.concat(&mut feedback2_output);
+    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000), Local(1));
+    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
-    let broadcaster = MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()));
-    let (mut sub_egress1, mut sub_egress2) = _create_subgraph(&mut graph.clone(), &mut concat1, &mut concat2, broadcaster);
+    let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
+                                                      &mut stream1.concat(&mut feedback1_output),
+                                                      &mut stream2.concat(&mut feedback2_output),
+                                                      MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
 
     // connect feedback sources. notice that we have swapped indices ...
-    feedback1.connect_input(&mut sub_egress2);
-    feedback2.connect_input(&mut sub_egress1);
+    feedback1.connect_input(&mut egress2);
+    feedback2.connect_input(&mut egress1);
 
     // finalize the graph/subgraph
     graph.borrow_mut().get_internal_summary();
@@ -217,6 +236,41 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
 }
 
 
+fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
+{
+    let allocator = Rc::new(RefCell::new(allocator));
+
+    // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
+    let mut graph = new_graph(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
+
+    // try building some input scopes
+    let mut input: (InputHelper<((),uint), uint>, Stream<((),uint), _, uint>) = graph.new_input(allocator.clone());
+
+    // prepare some feedback edges
+    let mut feedback = input.1.feedback(((), 1000), Local(1));
+
+    // build up a subgraph using the concatenated inputs/feedbacks
+    let mut result = input.1.concat(&mut feedback.1)
+                            .command("./target/release/command".to_string());
+
+    // connect feedback sources. notice that we have swapped indices ...
+    feedback.0.connect_input(&mut result);
+
+    // start things up!
+    graph.borrow_mut().get_internal_summary();
+    graph.borrow_mut().set_external_summary(Vec::new(), &Vec::new());
+    graph.borrow_mut().push_external_progress(&Vec::new());
+
+    //input.0.send_messages(&((), 0), &vec![1u]);
+    input.0.close_at(&((), 0u));
+
+    // spin
+    match bencher
+    {
+        Some(bencher) => bencher.iter(|| { graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
+        None          => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
+    }
+}
 
 fn _barrier(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
 {

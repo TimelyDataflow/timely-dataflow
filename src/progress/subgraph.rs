@@ -508,6 +508,9 @@ where TOuter: Timestamp,
                                          messages_consumed: &mut Vec<Vec<(TOuter, i64)>>,           // to populate
                                          messages_produced: &mut Vec<Vec<(TOuter, i64)>>) -> bool   // to populate
     {
+        // should be false when there is nothing left to do
+        let mut active = false;
+
         // println!("starting pull_internal");
 
         // Step 1: handle messages introduced through each graph input
@@ -555,9 +558,15 @@ where TOuter: Timestamp,
         {
             let buffers = &mut self.subscope_buffers[index];
 
-            scope.pull_internal_progress(&mut buffers.progress,
-                                         &mut buffers.consumed,
-                                         &mut buffers.produced);
+            let subactive = scope.pull_internal_progress(&mut buffers.progress,
+                                                         &mut buffers.consumed,
+                                                         &mut buffers.produced);
+
+            if subactive
+            {
+                // println!("Remaining active due to {}", scope.name());
+                active = true;
+            }
 
             // nb: scope.outputs() would involve a virtual call ...
             for output in range(0, buffers.produced.len())
@@ -688,29 +697,29 @@ where TOuter: Timestamp,
         // pointstamps should be cleared in push_to_targets()
         self.pointstamps.clear_pushed();
 
-        // should be false when there is nothing left to do
-        let mut done = true;
         for scope in range(0, self.subscopes.len())
         {
             if self.subscope_state[scope].outstanding_messages.iter().any(|x| x.elements.len() > 0)
             {
-                done = false;
-                /*
-                println!("NOT DONE: due to Scope({}): outstanding messages", self.subscopes[scope].name());
-                for input in range(0, self.subscopes[scope].inputs())
-                {
-                    println!("\tspecifically: input[{}]: {}", input, self.subscope_state[scope].outstanding_messages[input]);
-                }
-                */
+                active = true;
+                // println!("NOT DONE: due to Scope({}): outstanding messages", self.subscopes[scope].name());
+                // for input in range(0, self.subscopes[scope].inputs())
+                // {
+                //     println!("\tspecifically: input[{}]: {}", input, self.subscope_state[scope].outstanding_messages[input]);
+                // }
             }
             if self.subscope_state[scope].capabilities.iter().any(|x| x.elements.len() > 0)
             {
-                done = false;
+                active = true;
                 // println!("NOT DONE: due to Scope({}): outstanding capabilities",  self.subscopes[scope].name());
+                // for output in range(0, self.subscopes[scope].outputs())
+                // {
+                //     println!("\tspecifically: output[{}]: {}", output, self.subscope_state[scope].capabilities[output]);
+                // }
             }
         }
 
-        return !done;
+        return active;
     }
 }
 

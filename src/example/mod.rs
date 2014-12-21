@@ -6,5 +6,6 @@ pub mod ports;
 pub mod stream;
 pub mod barrier;
 pub mod graph_builder;
+pub mod command;
 
 pub mod distinct;

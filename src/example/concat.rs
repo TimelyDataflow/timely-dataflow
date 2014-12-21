@@ -6,7 +6,8 @@ use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use example::ports::{TargetPort, TeePort};
+use example::ports::TargetPort;
+use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }
@@ -14,12 +15,12 @@ pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }
 impl<T, S, D> ConcatExtensionTrait for Stream<T, S, D>
 where T:Timestamp,
       S:PathSummary<T>,
-      D:Copy+'static,
+      D:Data,
 {
     fn concat(&mut self, other: &mut Stream<T, S, D>) -> Stream<T, S, D>
     {
         let messages = Vec::from_fn(2, |_| Rc::new(RefCell::new(Vec::new())));
-        let targets = TeePort::new();
+        let targets = OutputPort::new();
 
         let concat = ConcatScope
         {
@@ -59,7 +60,7 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for ConcatScope<T>
         {
             for &(key, val) in updates.borrow().iter()
             {
-                messages_consumed[index].push((key, val));
+                messages_consumed[index].update(key, val);
             }
 
             updates.borrow_mut().clear();
@@ -67,27 +68,24 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for ConcatScope<T>
 
         for &(key, val) in self.produced.borrow().iter()
         {
-            messages_produced[0].push((key, val));
+            messages_produced[0].update(key, val);
         }
 
         self.produced.borrow_mut().clear();
 
-        return true;
+        return false;
     }
 
     fn notify_me(&self) -> bool { false }
 }
 
-impl<T:Timestamp, D:Copy+'static> TargetPort<T, D> for (Rc<RefCell<Vec<(T, i64)>>>, TeePort<T, D>)
+impl<T:Timestamp, D:Data> TargetPort<T, D> for (Rc<RefCell<Vec<(T, i64)>>>, OutputPort<T, D>)
 {
     fn deliver_data(&mut self, time: &T, data: &Vec<D>)
     {
-        let (ref counts, ref target) = *self;
-
-        counts.borrow_mut().push((*time, data.len() as i64));
-
-        target.deliver_data(time, data);
+        self.0.borrow_mut().push((*time, data.len() as i64));
+        self.1.deliver_data(time, data);
     }
 
-    fn flush(&mut self) -> () { let (_, ref target) = *self; target.flush(); }
+    fn flush(&mut self) -> () { self.1.flush(); }
 }

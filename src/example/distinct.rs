@@ -5,35 +5,30 @@ use std::hash;
 use core::fmt::Show;
 
 use progress::{Timestamp, PathSummary, Scope};
-use communication::channels::{Data, ExchangeReceiver, OutputBuffer, exchange_with};
+use communication::channels::{Data};
+use communication::exchange::{ExchangeReceiver, exchange_with};
 use example::stream::Stream;
-use example::ports::TeePort;
+use communication::channels::OutputPort;
 
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 
-pub trait DistinctExtensionTrait
-{
-    fn distinct(&mut self) -> Self;
-}
+pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
 impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash+Eq+Show> DistinctExtensionTrait for Stream<T, S, D>
 {
     fn distinct(&mut self) -> Stream<T, S, D>
     {
-        // allocate an exchange channel pair? :D
-        let alloc = &mut (*self.allocator.borrow_mut());
-        let (sender, receiver) = exchange_with(alloc, |record| hash::hash(&record) as uint);
-
+        let (sender, receiver) = exchange_with(&mut (*self.allocator.borrow_mut()), |record| hash::hash(&record) as uint);
         let scope = DistinctScope
         {
             input:      receiver,
-            output:     OutputBuffer { buffers: HashMap::new(), target: TeePort::new() },
+            output:     OutputPort::new(),
             elements:   HashMap::new(),
             dispose:    Vec::new(),
         };
 
-        let targets = scope.output.target.targets.clone();
+        let targets = scope.output.targets.clone();
 
         let index = self.graph.add_scope(box scope);
 
@@ -47,9 +42,8 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash+Eq+Show> DistinctExtensionTra
 pub struct DistinctScope<T: Timestamp, D: Data+Hash+Eq+PartialEq>
 {
     input:      ExchangeReceiver<T, D>,
-    output:     OutputBuffer<T, D>,
+    output:     OutputPort<T, D>,
     elements:   HashMap<T, HashSet<D>>,
-
     dispose:    Vec<T>,
 }
 
@@ -58,13 +52,11 @@ impl<T: Timestamp+Hash+Eq, S: PathSummary<T>, D: Data+Hash+Eq+PartialEq+Show> Sc
     fn inputs(&self) -> uint { 1 }
     fn outputs(&self) -> uint { 1 }
 
-    fn push_external_progress(&mut self, frontier_progress: &Vec<Vec<(T, i64)>>) -> ()
+    fn push_external_progress(&mut self, external: &Vec<Vec<(T, i64)>>) -> ()
     {
-        // garbage collection
         for key in self.elements.keys()
         {
-            // if any frontier additions strictly dominate a time, we can garbage collect it.
-            if frontier_progress[0].iter().any(|&(time, delta)| delta > 0 && time.gt(key))
+            if external[0].iter().any(|&(time, delta)| delta > 0 && time.gt(key))
             {
                 self.dispose.push(*key);
             }
@@ -73,35 +65,26 @@ impl<T: Timestamp+Hash+Eq, S: PathSummary<T>, D: Data+Hash+Eq+PartialEq+Show> Sc
         while let Some(key) = self.dispose.pop() { self.elements.remove(&key); }
     }
 
-    fn pull_internal_progress(&mut self,  frontier_progress: &mut Vec<Vec<(T, i64)>>,
-                                          messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                          messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool
+    fn pull_internal_progress(&mut self,  internal: &mut Vec<Vec<(T, i64)>>,
+                                          consumed: &mut Vec<Vec<(T, i64)>>,
+                                          produced: &mut Vec<Vec<(T, i64)>>) -> bool
     {
         for (time, data) in self.input
         {
+            let mut output = self.output.buffer_for(&time);
             let set = match self.elements.entry(time)
             {
                 Occupied(x) => x.into_mut(),
                 Vacant(x)   => x.set(HashSet::new()),
             };
 
-            let mut helper = self.output.buffer_for(&time);
-
-            for &datum in data.iter()
-            {
-                if set.insert(datum)
-                {
-                    helper.send(datum);
-                }
-            }
-
-            helper.flush();
+            // send anything new ...
+            for &datum in data.iter() { if set.insert(datum) { output.send(datum); } }
         }
 
-        self.output.flush();
-
-        self.input.pull_progress(&mut messages_consumed[0], &mut frontier_progress[0]);
-        self.output.pull_progress(&mut messages_produced[0]);
+        // extract what we know about progress from the input and output adapters.
+        self.input.pull_progress(&mut consumed[0], &mut internal[0]);
+        self.output.pull_progress(&mut produced[0]);
 
         return false;
     }

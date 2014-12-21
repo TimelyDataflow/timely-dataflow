@@ -180,6 +180,11 @@ impl<T:Timestamp, S:PathSummary<T>, D:Copy+'static> Scope<T, S> for QueueScope<T
             frontier_progress[0].push((*time, -1));
         }
 
+        for target in self.output.borrow_mut().iter_mut()
+        {
+            target.flush();
+        }
+
         self.to_send.clear();
 
         return true;

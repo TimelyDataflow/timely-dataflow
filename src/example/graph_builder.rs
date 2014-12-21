@@ -11,16 +11,16 @@ use progress::subgraph::{Subgraph, Summary};
 use progress::broadcast::ProgressBroadcaster;
 
 use example::stream::Stream;
-use example::ports::{TargetPort, TeePort};
-
+use example::ports::TargetPort;
+use communication::channels::{Data, OutputPort};
 
 pub trait GraphBoundary<T1:Timestamp, T2:Timestamp, S1:PathSummary<T1>, S2:PathSummary<T2>> :
 {
     // adds an input to self, from source, contained in graph.
-    fn add_input<D:Copy+'static>(&mut self, source: &mut Stream<T1, S1, D>) ->
+    fn add_input<D:Data>(&mut self, source: &mut Stream<T1, S1, D>) ->
         Stream<(T1, T2), Summary<S1, S2>, D>;
-    fn add_output_to_graph<D:Copy+'static>(&mut self, source: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                                      graph: Box<Graph<T1, S1>>) ->
+    fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
+                                              graph: Box<Graph<T1, S1>>) ->
         Stream<T1, S1, D>;
 
 
@@ -39,10 +39,10 @@ where TOuter: Timestamp,
       SInner: PathSummary<TInner>,
       Bcast:  ProgressBroadcaster<(TOuter, TInner)>
 {
-    fn add_input<D: Copy+'static>(&mut self, source: &mut Stream<TOuter, SOuter, D>) ->
+    fn add_input<D: Data>(&mut self, source: &mut Stream<TOuter, SOuter, D>) ->
         Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>
     {
-        let ingress = IngressNub { targets: TeePort::new(), };
+        let ingress = IngressNub { targets: OutputPort::new(), };
 
         let listeners = ingress.targets.targets.clone();
 
@@ -56,7 +56,7 @@ where TOuter: Timestamp,
         return Stream { name: GraphInput(index), port: listeners, graph: self.as_box(), allocator: source.allocator.clone() };
     }
 
-    fn add_output_to_graph<D: Copy+'static>(&mut self, source: &mut Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>,
+    fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>,
                                                         graph: Box<Graph<TOuter, SOuter>>) -> Stream<TOuter, SOuter, D>
     {
         let mut borrow = self.borrow_mut();
@@ -86,14 +86,14 @@ where TOuter: Timestamp,
 }
 
 
-pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, Data: Copy+'static>
+pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data>
 {
-    targets: TeePort<(TOuter, TInner), Data>,
+    targets: OutputPort<(TOuter, TInner), TData>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, Data: Copy+'static> TargetPort<TOuter, Data> for IngressNub<TOuter, TInner, Data>
+impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> TargetPort<TOuter, TData> for IngressNub<TOuter, TInner, TData>
 {
-    fn deliver_data(&mut self, time: &TOuter, data: &Vec<Data>)
+    fn deliver_data(&mut self, time: &TOuter, data: &Vec<TData>)
     {
         self.targets.deliver_data(&(*time, Default::default()), data);
     }
@@ -101,15 +101,15 @@ impl<TOuter: Timestamp, TInner: Timestamp, Data: Copy+'static> TargetPort<TOuter
 }
 
 
-pub struct EgressNub<TOuter, TInner, Data>
+pub struct EgressNub<TOuter, TInner, TData>
 {
-    targets: Rc<RefCell<Vec<Box<TargetPort<TOuter, Data>>>>>,
+    targets: Rc<RefCell<Vec<Box<TargetPort<TOuter, TData>>>>>,
 }
 
-impl<TOuter, TInner, Data> TargetPort<(TOuter, TInner), Data> for EgressNub<TOuter, TInner, Data>
-where TOuter: Timestamp, TInner: Timestamp, Data: Copy+'static
+impl<TOuter, TInner, TData> TargetPort<(TOuter, TInner), TData> for EgressNub<TOuter, TInner, TData>
+where TOuter: Timestamp, TInner: Timestamp, TData: Data
 {
-    fn deliver_data(&mut self, time: &(TOuter, TInner), data: &Vec<Data>)
+    fn deliver_data(&mut self, time: &(TOuter, TInner), data: &Vec<TData>)
     {
         for target in self.targets.borrow_mut().iter_mut()
         {

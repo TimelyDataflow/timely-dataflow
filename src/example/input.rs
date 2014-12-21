@@ -8,24 +8,24 @@ use progress::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
 use communication::ChannelAllocator;
 
-use example::ports::{TargetPort, TeePort};
+use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>>
 {
     // returns both an input scope and a stream representing its output.
-    fn new_input<D:Copy+'static>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>);
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>);
 }
 
 impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> for G
 {
-    fn new_input<D:Copy+'static>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>)
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>)
     {
         let helper = InputHelper
         {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(Vec::new())),
-            tee_port: TeePort::new(),
+            tee_port: OutputPort::new(),
         };
 
         let index = self.add_scope(box InputScope
@@ -70,24 +70,29 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T>
         for &(key, val) in self.progress.borrow().iter() { frontier_progress[0].push((key, val)); }
         self.progress.borrow_mut().clear();
 
-        return true;
+        return false;
     }
 
     fn notify_me(&self) -> bool { false }
 }
 
-pub struct InputHelper<T: Timestamp, D: Copy+'static>
+pub struct InputHelper<T: Timestamp, D: Data>
 {
     frontier:   Rc<RefCell<MutableAntichain<T>>>,    // times available for sending
     progress:   Rc<RefCell<Vec<(T, i64)>>>,          // times closed since last asked
-    tee_port:   TeePort<T, D>,
+    tee_port:   OutputPort<T, D>,
 }
 
-impl<T:Timestamp, D: Copy+'static> InputHelper<T, D>
+impl<T:Timestamp, D: Data> InputHelper<T, D>
 {
-    pub fn send_messages(&self, time: &T, data: &Vec<D>)
+    pub fn send_messages(&mut self, time: &T, data: &Vec<D>)
     {
-        self.tee_port.deliver_data(time, data);
+        let mut buffer = self.tee_port.buffer_for(time);
+
+        for record in data.iter()
+        {
+            buffer.send(*record);
+        }
     }
 
     pub fn advance(&self, start: &T, end: &T)
