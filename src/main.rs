@@ -39,6 +39,8 @@ use example::barrier::BarrierScope;
 use std::rc::{Rc, try_unwrap};
 use std::cell::RefCell;
 
+use std::thread::Thread;
+
 // use std::os::args;
 
 use networking::initialize_networking;
@@ -106,34 +108,37 @@ fn _networking(my_id: uint, processes: uint)
 }
 
 #[bench]
-fn _queue_bench(bencher: &mut Bencher) { _queue(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
+fn queue_bench(bencher: &mut Bencher) { _queue(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
 fn _queue_multi(threads: uint)
 {
+    let mut guards = Vec::new();
     for allocator in ChannelAllocator::new_vector(threads).into_iter()
     {
-        spawn(move || _queue(allocator, None));
+        guards.push(Thread::spawn(move || _queue(allocator, None)));
     }
 }
 
 
 // #[bench]
-// fn _command_bench(bencher: &mut Bencher) { _command(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
+// fn command_bench(bencher: &mut Bencher) { _command(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
 fn _command_multi(threads: uint)
 {
+    let mut guards = Vec::new();
     for allocator in ChannelAllocator::new_vector(threads).into_iter()
     {
-        spawn(move || _command(allocator, None));
+        guards.push(Thread::spawn(move || _command(allocator, None)));
     }
 }
 
 
 #[bench]
-fn _barrier_bench(bencher: &mut Bencher) { _barrier(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
+fn barrier_bench(bencher: &mut Bencher) { _barrier(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
 fn _barrier_multi(threads: uint)
 {
+    let mut guards = Vec::new();
     for allocator in ChannelAllocator::new_vector(threads).into_iter()
     {
-        spawn(move || _barrier(allocator, None));
+        guards.push(Thread::spawn(move || _barrier(allocator, None)));
     }
 }
 
@@ -266,8 +271,13 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     // spin
     match bencher
     {
-        Some(bencher) => bencher.iter(|| { graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
-        None          => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
+        Some(bencher) => bencher.iter(||
+        {
+            graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
+        }),
+        None          => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new())
+        {
+        },
     }
 }
 

@@ -2,6 +2,7 @@ extern crate libc;
 
 use std::io::stdio::{stdin_raw, stdout_raw};
 use std::io::{MemReader, MemWriter, IoErrorKind};
+use std::thread::Thread;
 
 fn main()
 {
@@ -28,11 +29,14 @@ fn main()
 
     loop
     {
+
+
         // push some amount, then try decoding...
         match reader.push(1024, &mut buffer)
         {
             Ok(_)  => { },
-            Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) } },
+            Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) }
+                        else { Thread::yield_now(); }},
         }
 
         let available = buffer.len();

@@ -17,6 +17,7 @@ use example::stream::Stream;
 use communication::channels::OutputPort;
 use progress::count_map::CountMap;
 
+use std::thread::Thread;
 
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
@@ -83,24 +84,31 @@ impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
         }
 
         let expected = MemReader::new(length_buf.clone()).read_le_uint().ok().expect("gis read all");
+        let mut buffer = Vec::new();
+        read = 0;
 
-        // println!("Command: expecting {} bytes", expected);
+        while read < expected
+        {
+            let just_read = match stdout.push(expected - read, &mut buffer)
+            {
+                Ok(len)  => len,
+                Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) } else { 0 } },
+            };
 
-        let read_bytes = stdout.read_exact(expected).ok().expect("");
+            read += just_read;
+        }
 
-        // println!("Read them!");
-
-        let mut reader = MemReader::new(read_bytes);
+        let mut reader = MemReader::new(buffer);
 
         for index in range(0, internal.len())
         {
-            let number = reader.read_le_uint().ok().expect("");
+            let number = reader.read_le_uint().ok().expect("1");
             for _ in range(0, number)
             {
-                let time = reader.read_le_uint().ok().expect("");
-                let delta = reader.read_le_i64().ok().expect("");
+                let time = reader.read_le_uint().ok().expect("2");
+                let delta = reader.read_le_i64().ok().expect("3");
 
-                // println!("Command: intializing {} : {}", time, delta);
+                println!("Command: intializing {} : {}", time, delta);
 
                 internal[index].update(((), time), delta);
             }
@@ -162,7 +170,8 @@ impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
         match stdout.push(1024, &mut self.buffer)
         {
             Ok(_)  => { },
-            Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) } },
+            Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) }
+                        else { Thread::yield_now(); }},
         }
 
         let buffer = replace(&mut self.buffer, Vec::new());
