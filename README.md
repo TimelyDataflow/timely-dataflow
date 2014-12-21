@@ -11,7 +11,7 @@ There are other less-qualitative benefits, including improving performance due b
 
 ## Starting Out ##
 
-After `git clone`-ing the repository, if you have [Rust](http://www.rust-lang.org) and [Cargo](https://crates.io) installed (Cargo comes with a Rust install), you should be able to type any of `cargo build`, `cargo run`, and `cargo bench`. If you put `--release` after the first two, the performance will be a bit better. The examples currently assemble and "run" both a barrier micro-benchmark and a queueing micro-benchmark. The examples don't do anything useful!
+After `git clone`-ing the repository, if you have [Rust](http://www.rust-lang.org) and [Cargo](https://crates.io) installed (Cargo comes with a Rust install), you should be able to type `cargo bench`. The examples currently assemble and "run" both a barrier micro-benchmark and a queueing micro-benchmark. The examples don't do anything useful!
 
 On my laptop, eliding some whining about unused methods, it looks like this:
 ```
@@ -25,6 +25,8 @@ Compiling timely v0.0.1 (file:///Users/mcsherry/Projects/timely-dataflow)
 
     test result: ok. 0 passed; 0 failed; 0 ignored; 2 measured
 ```
+
+You can also type `cargo build --release`, which will do a release build of `timely`. At this point, you can type `cargo run --release --bin timely`, and you should get usage information about further parameters, and modes to test out. You'll need the `--bin timely` because the project builds other executables, specifically one in `bin/command.rs` used to demonstrate hooking external processes as timely dataflow vertices.
 
 ## Caveats ##
 
