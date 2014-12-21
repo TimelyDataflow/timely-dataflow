@@ -16,14 +16,14 @@ After `git clone`-ing the repository, if you have [Rust](http://www.rust-lang.or
 On my laptop, eliding some whining about unused methods, it looks like this:
 ```
 % cargo bench
-Compiling timely v0.0.1 (file:///Users/mcsherry/Projects/timely-dataflow)
-    Running target/release/timely-d1e180029f621076
+Compiling timely v0.0.4 (file:///Users/mcsherry/Projects/timely-dataflow)
+    Running target/release/timely-b7288f7ac38456ba
 
-    running 2 tests
-    test test_barrier_bench ... bench:       185 ns/iter (+/- 68)
-    test test_queue_bench   ... bench:      2178 ns/iter (+/- 764)
+running 2 tests
+test _barrier_bench ... bench:       220 ns/iter (+/- 64)
+test _queue_bench   ... bench:      1203 ns/iter (+/- 269)
 
-    test result: ok. 0 passed; 0 failed; 0 ignored; 2 measured
+test result: ok. 0 passed; 0 failed; 0 ignored; 2 measured
 ```
 
 You can also type `cargo build --release`, which will do a release build of `timely`. At this point, you can type `cargo run --release --bin timely`, and you should get usage information about further parameters, and modes to test out. You'll need the `--bin timely` because the project builds other executables, specifically one in `bin/command.rs` used to demonstrate hooking external processes as timely dataflow vertices.

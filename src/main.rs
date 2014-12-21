@@ -244,7 +244,7 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     let mut graph = new_graph(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
 
     // try building some input scopes
-    let mut input: (InputHelper<((),uint), uint>, Stream<((),uint), _, uint>) = graph.new_input(allocator.clone());
+    let mut input: (InputHelper<_, uint>, _) = graph.new_input(allocator.clone());
 
     // prepare some feedback edges
     let mut feedback = input.1.feedback(((), 1000), Local(1));
@@ -261,7 +261,6 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     graph.borrow_mut().set_external_summary(Vec::new(), &Vec::new());
     graph.borrow_mut().push_external_progress(&Vec::new());
 
-    //input.0.send_messages(&((), 0), &vec![1u]);
     input.0.close_at(&((), 0u));
 
     // spin

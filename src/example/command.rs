@@ -29,13 +29,19 @@ where S: PathSummary<((), uint)>,
 {
     fn command(&mut self, program: String) -> Stream<((), uint), S, D>
     {
-        let mut process = Command::new(program).spawn().ok().expect("err");
+        let mut process = match Command::new(program.clone()).spawn()
+        {
+            Ok(p) => p,
+            Err(e) => panic!("Process creation error: {}; program: {}", e, program),
+        };
+
 
         let fd1 = (&mut process.stdout).as_mut().unwrap().as_raw_fd();
         let fd2 = (&mut process.stdin).as_mut().unwrap().as_raw_fd();
 
         let command = CommandScope { process: process, buffer: Vec::new() };
 
+        // set stdin and stdout to be non-blocking
         unsafe { libc::fcntl(fd1, libc::F_SETFL, libc::O_NONBLOCK); }
         unsafe { libc::fcntl(fd2, libc::F_SETFL, libc::O_NONBLOCK); }
 
