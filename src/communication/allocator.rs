@@ -4,14 +4,16 @@ use std::any::{Any, AnyMutRefExt};
 
 pub struct ChannelAllocator
 {
-    index:              uint,
-    pub multiplicity:   uint,
-    allocated:          uint,                             // indicates how many have been allocated (locally).
-    channels:           Arc<Mutex<Vec<Box<Any+Send>>>>,   // type -> Vec<(Vec<Sender<type>>, Vec<Receiver<type>>)>
+    pub index:          uint,
+    multiplicity:   uint,
+    allocated:      uint,                             // indicates how many have been allocated (locally).
+    channels:       Arc<Mutex<Vec<Box<Any+Send>>>>,   // type -> Vec<(Vec<Sender<type>>, Vec<Receiver<type>>)>
 }
 
 impl ChannelAllocator
 {
+    pub fn multiplicity(&self) -> uint { self.multiplicity }
+
     pub fn new_channel<T:Send>(&mut self) -> (Vec<Sender<T>>, Option<Receiver<T>>)
     {
         let mut channels = self.channels.lock();

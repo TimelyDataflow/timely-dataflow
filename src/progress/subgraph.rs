@@ -504,14 +504,12 @@ where TOuter: Timestamp,
     }
 
     // information from the vertex about its progress (updates to the output frontiers, recv'd and sent message counts)
-    fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<Vec<(TOuter, i64)>>,           // to populate
-                                         messages_consumed: &mut Vec<Vec<(TOuter, i64)>>,           // to populate
-                                         messages_produced: &mut Vec<Vec<(TOuter, i64)>>) -> bool   // to populate
+    fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<Vec<(TOuter, i64)>>,
+                                         messages_consumed: &mut Vec<Vec<(TOuter, i64)>>,
+                                         messages_produced: &mut Vec<Vec<(TOuter, i64)>>) -> bool
     {
         // should be false when there is nothing left to do
         let mut active = false;
-
-        // println!("starting pull_internal");
 
         // Step 1: handle messages introduced through each graph input
         for input in range(0, self.inputs())

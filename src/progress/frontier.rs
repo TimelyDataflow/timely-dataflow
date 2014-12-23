@@ -248,15 +248,15 @@ impl<T: PartialOrd+Eq+Copy+Show+'static> MutableAntichain<T>
     {
         if delta != 0
         {
-            if self.occurrences.len() > 100
-            {
-                println!("occurrences:\tmessed up (len() = {})", self.occurrences.len());
-                // for &(key, val) in self.occurrences.iter()
-                // {
-                //     println!("\toccurrence: {} : {}", key, val);
-                // }
-            }
-            if self.precedents.len() > 100 { println!("precedents:\tmessed up"); }
+            // if self.occurrences.len() > 100
+            // {
+            //     println!("occurrences:\tlen() = {}", self.occurrences.len());
+            //     // for &(key, val) in self.occurrences.iter()
+            //     // {
+            //     //     println!("\toccurrence: {} : {}", key, val);
+            //     // }
+            // }
+            // if self.precedents.len() > 100 { println!("precedents:\tlen() = {}", self.precedents.len()); }
 
             let new_value = self.occurrences.update(elem, delta);
             let old_value = new_value - delta;

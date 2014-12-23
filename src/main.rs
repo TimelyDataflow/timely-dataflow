@@ -163,7 +163,7 @@ where T1: Timestamp, S1: PathSummary<T1>,
         let mut sub_ingress2 = subgraph.add_input(source2);
 
         // putting a queueing scope into the subgraph!
-        let mut queue = sub_ingress1.queue()
+        let mut queue = sub_ingress1//.queue()
                                     .distinct()
                                     ;
         // egress each of the streams from the subgraph.
@@ -193,8 +193,8 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     let (mut input2, mut stream2) = graph.new_input(allocator.clone());
 
     // prepare some feedback edges
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000), Local(1));
+    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000000), Local(1));
+    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
     let broadcaster = MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()));
@@ -290,7 +290,7 @@ fn _barrier(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
 
     // add a new, relatively pointless, scope.
     // It has a non-trivial path summary, so the timely dataflow graph is not improperly cyclic.
-    graph.add_scope(box BarrierScope { epoch: 0u, ready: true, degree: allocator.borrow().multiplicity as i64, ttl: 10000000 });
+    graph.add_scope(box BarrierScope { epoch: 0u, ready: true, degree: allocator.borrow().multiplicity() as i64, ttl: 10000000 });
 
     // attach the scope's output back to its input.
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));

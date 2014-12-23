@@ -33,7 +33,7 @@ impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> 
             frontier: helper.frontier.clone(),
             progress: helper.progress.clone(),
             messages: helper.tee_port.updates.clone(),
-            copies:   allocator.borrow().multiplicity,
+            copies:   allocator.borrow().multiplicity(),
         });
 
         let targets = helper.tee_port.targets.clone();
