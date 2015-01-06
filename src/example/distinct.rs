@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::collections::hash_map::{Occupied, Vacant};
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::hash::Hash;
 use std::hash;
 use core::fmt::Show;
@@ -26,7 +26,7 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash+Eq+Show> DistinctExtensionTra
         let (sender, receiver) = exchange_with(allocator, |record| hash::hash(&record));
         let scope = DistinctScope
         {
-            index:      allocator.index,
+            index:      allocator.index(),
             input:      receiver,
             output:     OutputPort::new(),
             elements:   HashMap::new(),
@@ -75,13 +75,13 @@ impl<T: Timestamp+Hash+Eq, S: PathSummary<T>, D: Data+Hash+Eq+PartialEq+Show> Sc
         // drain the input into sets.
         for (time, data) in self.input
         {
-            let set = match self.elements.entry(time)
+            let set = match self.elements.entry(&time)
             {
                 Occupied(x) => x.into_mut(),
                 Vacant(x)   =>
                 {
                     self.internal.update(time, 1);
-                    x.set(HashSet::new())
+                    x.insert(HashSet::new())
                 },
             };
 
@@ -91,7 +91,7 @@ impl<T: Timestamp+Hash+Eq, S: PathSummary<T>, D: Data+Hash+Eq+PartialEq+Show> Sc
         // see if we should send any of it
         for key in self.elements.keys()
         {
-            if self.external.iter().any(|&(t,v)| t.gt(key)) { self.dispose.push(*key); }
+            if self.external.iter().any(|&(t,_)| t.gt(key)) { self.dispose.push(*key); }
         }
 
         // send anything we have finalized

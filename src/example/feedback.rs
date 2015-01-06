@@ -7,7 +7,7 @@ use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use example::ports::TargetPort;
+use communication::Observer;
 use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
@@ -41,7 +41,7 @@ impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> fo
         let helper = FeedbackHelper
         {
             index:  index,
-            target: Some(box target_port as Box<TargetPort<T, D>>),
+            target: Some(box target_port as Box<Observer<(T, Vec<D>)>>),
         };
 
         return (helper, self.copy_with(ScopeOutput(index, 0), targets.targets));
@@ -56,28 +56,22 @@ pub struct FeedbackTargetPort<T: Timestamp, S: PathSummary<T>, D:Data>
     consumed:   Rc<RefCell<Vec<(T, i64)>>>,
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Data> TargetPort<T, D> for FeedbackTargetPort<T, S, D>
+impl<T: Timestamp, S: PathSummary<T>, D: Data> Observer<(T, Vec<D>)> for FeedbackTargetPort<T, S, D>
 {
-    fn deliver_data(&mut self, time: &T, data: &Vec<D>)
-    {
-        self.consumed.borrow_mut().update(*time, data.len() as i64);
-
-        let new_time = self.summary.results_in(time);
-
-        if new_time.le(&self.limit)
-        {
-            self.targets.deliver_data(&new_time, data);
-        }
+    fn next(&mut self, (time, data): (T, Vec<D>)) {
+        self.consumed.borrow_mut().update(time, data.len() as i64);
+        let new_time = self.summary.results_in(&time);
+        if new_time.le(&self.limit) { self.targets.next((new_time, data)); }
     }
 
-    fn flush(&mut self) -> () { self.targets.flush(); }
+    fn done(&mut self) -> () { self.targets.done(); }
 }
 
 
 pub struct FeedbackHelper<T:Timestamp, S: PathSummary<T>, D:Copy+'static>
 {
     index:  uint,
-    target: Option<Box<TargetPort<T, D>>>,
+    target: Option<Box<Observer<(T, Vec<D>)>>>,
 }
 
 impl<T:Timestamp, S:PathSummary<T>, D:Copy+'static> FeedbackHelper<T, S, D>

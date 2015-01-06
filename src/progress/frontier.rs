@@ -159,7 +159,7 @@ impl<T: PartialOrd+Eq+Copy+Show+'static> MutableAntichain<T>
 
 
     //#[inline(always)]
-    pub fn update_iter_and<I: Iterator<(T, i64)>>(&mut self, mut updates: I, action: |T, i64| -> ()) -> ()
+    pub fn update_iter_and<I: Iterator<Item = (T, i64)>>(&mut self, mut updates: I, action: |T, i64| -> ()) -> ()
     {
         for (ref elem, delta) in updates
         {

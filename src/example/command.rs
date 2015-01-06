@@ -67,11 +67,11 @@ impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(((), uint), i64)>>)
     {
-        let mut internal = Vec::from_fn(1, |_| Vec::new());
+        let mut internal = vec![Vec::new()];
 
         let stdout = (&mut self.process.stdout).as_mut().unwrap();
 
-        let mut length_buf = Vec::from_elem(8, 0u8);
+        let mut length_buf: Vec<_> = range(0, 8).map(|_| 0u8).collect();
 
         let mut read = 0;
         while read < 8
@@ -114,10 +114,7 @@ impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
             }
         }
 
-        // println!("Command: Done init!");
-
-        (Vec::from_fn(1, |_| Vec::from_fn(1, |_| Antichain::from_elem(Default::default()))),
-         internal)
+        (vec![vec![Antichain::from_elem(Default::default())]], internal)
     }
 
     // Reports (out -> in) summaries for the vertex, and initial frontier information.

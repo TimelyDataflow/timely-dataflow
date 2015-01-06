@@ -11,7 +11,7 @@ use progress::subgraph::{Subgraph, Summary};
 use progress::broadcast::ProgressBroadcaster;
 
 use example::stream::Stream;
-use example::ports::TargetPort;
+use communication::Observer;
 use communication::channels::{Data, OutputPort};
 
 pub trait GraphBoundary<T1:Timestamp, T2:Timestamp, S1:PathSummary<T1>, S2:PathSummary<T2>> :
@@ -67,57 +67,50 @@ where TOuter: Timestamp,
         borrow.connect(source.name, GraphOutput(index));
         source.port.borrow_mut().push(box EgressNub { targets: targets.clone() });
 
-        return Stream{ name: ScopeOutput(borrow.index, index), port: targets, graph: graph.as_box(), allocator: source.allocator.clone() };
+        return Stream {
+            name: ScopeOutput(borrow.index, index),
+            port: targets, graph: graph.as_box(),
+            allocator: source.allocator.clone() };
     }
 
     fn new_subgraph<T, S, B>(&mut self, _default: T, broadcaster: B) -> Rc<RefCell<Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S, B>>>
     where T: Timestamp,
-    S: PathSummary<T>,
-    B: ProgressBroadcaster<((TOuter, TInner), T)>
-
+          S: PathSummary<T>,
+          B: ProgressBroadcaster<((TOuter, TInner), T)>
     {
         let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S, B> = Default::default();
-
         result.index = self.borrow().subscopes.len();
         result.broadcaster = broadcaster;
-
         return Rc::new(RefCell::new(result));
     }
 }
 
 
-pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data>
-{
+pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
     targets: OutputPort<(TOuter, TInner), TData>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> TargetPort<TOuter, TData> for IngressNub<TOuter, TInner, TData>
+impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer<(TOuter, Vec<TData>)> for IngressNub<TOuter, TInner, TData>
 {
-    fn deliver_data(&mut self, time: &TOuter, data: &Vec<TData>)
-    {
-        self.targets.deliver_data(&(*time, Default::default()), data);
+    fn next(&mut self, (time, data): (TOuter, Vec<TData>)) {
+        self.targets.next(((time, Default::default()), data));
     }
-    fn flush(&mut self) -> () { self.targets.flush(); }
+    fn done(&mut self) -> () { self.targets.done(); }
 }
 
 
-pub struct EgressNub<TOuter, TInner, TData>
-{
-    targets: Rc<RefCell<Vec<Box<TargetPort<TOuter, TData>>>>>,
+pub struct EgressNub<TOuter, TInner, TData> {
+    targets: Rc<RefCell<Vec<Box<Observer<(TOuter, Vec<TData>)>>>>>,
 }
 
-impl<TOuter, TInner, TData> TargetPort<(TOuter, TInner), TData> for EgressNub<TOuter, TInner, TData>
-where TOuter: Timestamp, TInner: Timestamp, TData: Data
-{
-    fn deliver_data(&mut self, time: &(TOuter, TInner), data: &Vec<TData>)
-    {
-        for target in self.targets.borrow_mut().iter_mut()
-        {
-            target.deliver_data(&time.0, data);
+impl<TOuter, TInner, TData> Observer<((TOuter, TInner), Vec<TData>)> for EgressNub<TOuter, TInner, TData>
+where TOuter: Timestamp, TInner: Timestamp, TData: Data {
+    fn next(&mut self, (time, data): ((TOuter, TInner), Vec<TData>)) {
+        for target in self.targets.borrow_mut().iter_mut() {
+            target.next((time.0, data.clone()));
         }
     }
-    fn flush(&mut self) -> ()
-    {
-        for target in self.targets.borrow_mut().iter_mut() { target.flush(); }
+    fn done(&mut self) -> () {
+        for target in self.targets.borrow_mut().iter_mut() { target.done(); }
     }
 }

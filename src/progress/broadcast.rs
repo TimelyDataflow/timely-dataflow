@@ -4,9 +4,9 @@ use progress::Timestamp;
 
 use communication::ChannelAllocator;
 
-use std::comm::{Sender, Receiver};
+use std::sync::mpsc::{Sender, Receiver};
 
-#[deriving(Send, Clone, Copy)]
+#[deriving(Clone, Copy)]
 pub enum Progress<T:Timestamp>
 {
     MessagesUpdate(uint, uint, T, i64),  // (scope, input port, timestamp, changes)
@@ -41,23 +41,17 @@ impl<T:Timestamp+Send+Copy+Clone> ProgressBroadcaster<T> for MultiThreadedBroadc
     fn send_and_recv(&mut self, updates: &mut Vec<Progress<T>>) -> ()
     {
         // if the length is one, just return the updates...
-        if self.senders.len() > 1
-        {
-            if updates.len() > 0
-            {
-                for sender in self.senders.iter()
-                {
-                    if let Some(mut vector) = self.queue.pop()
-                    {
-                        for &update in updates.iter()
-                        {
+        if self.senders.len() > 1 {
+            if updates.len() > 0 {
+                for sender in self.senders.iter() {
+                    if let Some(mut vector) = self.queue.pop() {
+                        for &update in updates.iter() {
                             vector.push(update);
                         }
-                        sender.send(vector)
+                        sender.send(vector).ok().expect("sigh")
                     }
-                    else
-                    {
-                        sender.send(updates.clone())
+                    else {
+                        sender.send(updates.clone()).ok().expect("sigh")
                     }
                 }
 

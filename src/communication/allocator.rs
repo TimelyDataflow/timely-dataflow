@@ -1,22 +1,24 @@
 use std::sync::{Arc, Mutex};
-use std::any::{Any, AnyMutRefExt};
+use std::any::Any;
+use std::sync::mpsc::{Sender, Receiver, channel};
 
 
 pub struct ChannelAllocator
 {
-    pub index:          uint,
-    multiplicity:   uint,
-    allocated:      uint,                             // indicates how many have been allocated (locally).
-    channels:       Arc<Mutex<Vec<Box<Any+Send>>>>,   // type -> Vec<(Vec<Sender<type>>, Vec<Receiver<type>>)>
+    index:          uint,                           // number out of peers
+    multiplicity:   uint,                           // number of peer allocators (for typed channel allocation).
+    allocated:      uint,                           // indicates how many have been allocated (locally).
+    channels:       Arc<Mutex<Vec<Box<Any+Send>>>>, // Box -> (Vec<Sender<type>>, Vec<Option<Receiver<type>>>).
 }
 
 impl ChannelAllocator
 {
+    pub fn index(&self) -> uint { self.index }
     pub fn multiplicity(&self) -> uint { self.multiplicity }
 
     pub fn new_channel<T:Send>(&mut self) -> (Vec<Sender<T>>, Option<Receiver<T>>)
     {
-        let mut channels = self.channels.lock();
+        let mut channels = self.channels.lock().ok().expect("mutex error?");
 
         // we need a new channel ...
         if self.allocated == channels.len()
@@ -49,12 +51,12 @@ impl ChannelAllocator
     {
         let channels = Arc::new(Mutex::new(Vec::new()));
 
-        Vec::from_fn(multiplicity, |index| ChannelAllocator
+        range(0, multiplicity).map(|index| ChannelAllocator
         {
             index: index,
             multiplicity: multiplicity,
             allocated: 0,
             channels: channels.clone(),
-        })
+        }).collect()
     }
 }

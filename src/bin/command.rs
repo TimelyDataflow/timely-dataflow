@@ -29,8 +29,6 @@ fn main()
 
     loop
     {
-
-
         // push some amount, then try decoding...
         match reader.push(1024, &mut buffer)
         {

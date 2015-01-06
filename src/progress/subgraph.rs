@@ -64,7 +64,7 @@ impl<S:PartialOrd+Copy, T:PartialOrd+Copy> PartialOrd for Summary<S, T>
                 match *other
                 {
                     Local(iters2) => iters.partial_cmp(&iters2),
-                    _ => Some(Less),
+                    _ => Some(Ordering::Less),
                 }
             },
             Outer(s1, iters) =>
@@ -73,7 +73,7 @@ impl<S:PartialOrd+Copy, T:PartialOrd+Copy> PartialOrd for Summary<S, T>
                 {
                     Outer(s2, iters2) => if s1.eq(&s2) { iters.partial_cmp(&iters2) }
                                          else          { s1.partial_cmp(&s2) },
-                    _ => Some(Greater),
+                    _ => Some(Ordering::Greater),
                 }
             },
         }
@@ -167,9 +167,9 @@ impl<TTime:Timestamp, TSummary> SubscopeState<TTime, TSummary>
         SubscopeState
         {
             summary:                summary,
-            guarantees:             Vec::from_fn(inputs, |_| Default::default()),
-            capabilities:           Vec::from_fn(outputs, |_| Default::default()),
-            outstanding_messages:   Vec::from_fn(inputs, |_| Default::default()),
+            guarantees:             range(0, inputs).map(|_| Default::default()).collect(),
+            capabilities:           range(0, outputs).map(|_| Default::default()).collect(),
+            outstanding_messages:   range(0, inputs).map(|_| Default::default()).collect(),
         }
     }
 }
@@ -191,11 +191,11 @@ impl<TTime:Timestamp> SubscopeBuffers<TTime>
     {
         SubscopeBuffers
         {
-            progress:    Vec::from_fn(outputs, |_| Vec::new()),
-            consumed:    Vec::from_fn(inputs, |_| Vec::new()),
-            produced:    Vec::from_fn(outputs, |_| Vec::new()),
+            progress:    range(0, outputs).map(|_| Vec::new()).collect(),
+            consumed:    range(0, inputs).map(|_| Vec::new()).collect(),
+            produced:    range(0, outputs).map(|_| Vec::new()).collect(),
 
-            guarantee_changes:  Vec::from_fn(inputs, |_| Vec::new()),
+            guarantee_changes:  range(0, inputs).map(|_| Vec::new()).collect(),
         }
     }
 }
@@ -318,8 +318,7 @@ where TOuter: Timestamp,
             let mut new_state = SubscopeState::new(inputs, outputs, summary);
 
             // install initial capabilities
-            for output in range(0, outputs)
-            {
+            for output in range(0, outputs){
                 new_state.capabilities[output].update_iter_and(work[output].iter().map(|&x|x), |_, _| {});
             }
 
@@ -328,31 +327,29 @@ where TOuter: Timestamp,
             self.subscope_buffers.push(SubscopeBuffers::new(inputs, outputs));
 
             // initialize storage for vector-based source and target path summaries.
-            self.source_summaries.push(Vec::from_fn(outputs, |_| Vec::new()));
-            self.target_summaries.push(Vec::from_fn(inputs, |_| Vec::new()));
+            self.source_summaries.push(range(0, outputs).map(|_| Vec::new()).collect());
+            self.target_summaries.push(range(0, inputs).map(|_| Vec::new()).collect());
 
-            self.pointstamps.target_pushed.push(Vec::from_fn(inputs, |_| Default::default()));
-            self.pointstamps.target_counts.push(Vec::from_fn(inputs, |_| Default::default()));
-            self.pointstamps.source_counts.push(Vec::from_fn(outputs, |_| Default::default()));
+            self.pointstamps.target_pushed.push(range(0, inputs).map(|_| Default::default()).collect());
+            self.pointstamps.target_counts.push(range(0, inputs).map(|_| Default::default()).collect());
+            self.pointstamps.source_counts.push(range(0, outputs).map(|_| Default::default()).collect());
 
             // take capabilities as pointstamps
-            for output in range(0, outputs)
-            {
+            for output in range(0, outputs) {
                 let location = SourceLoc(ScopeOutput(index, output));
-                for &time in self.subscope_state[index].capabilities[output].elements.iter()
-                {
+                for &time in self.subscope_state[index].capabilities[output].elements.iter(){
                     self.pointstamps.update(location, time, 1);
                 }
             }
         }
 
         // initialize space for input -> Vec<(Target, Antichain) mapping.
-        self.input_summaries = Vec::from_fn(self.inputs(), |_| Vec::new());
+        self.input_summaries = range(0, self.inputs()).map(|_| Vec::new()).collect();
 
-        self.pointstamps.input_counts = Vec::from_fn(self.inputs(), |_| Default::default());
-        self.pointstamps.output_pushed = Vec::from_fn(self.outputs(), |_| Default::default());
+        self.pointstamps.input_counts = range(0, self.inputs()).map(|_| Default::default()).collect();
+        self.pointstamps.output_pushed = range(0, self.outputs()).map(|_| Default::default()).collect();
 
-        self.external_summaries = Vec::from_fn(self.outputs(), |_| Vec::from_fn(self.inputs(), |_| Default::default()));
+        self.external_summaries = range(0, self.outputs()).map(|_| range(0, self.inputs()).map(|_| Default::default()).collect()).collect();
 
         // TODO: Explain better.
         self.set_summaries();
@@ -360,26 +357,19 @@ where TOuter: Timestamp,
         self.push_pointstamps_to_targets();
 
         // TODO: WTF is this all about? Who wrote this? Me...
-        let mut work = Vec::from_fn(self.outputs(), |_| Vec::new());
-        for (output, map) in work.iter_mut().enumerate()
-        {
-            for &(key, val) in self.pointstamps.output_pushed[output].elements().iter()
-            {
+        let mut work: Vec<_> = range(0, self.outputs()).map(|_| Vec::new()).collect();
+        for (output, map) in work.iter_mut().enumerate() {
+            for &(key, val) in self.pointstamps.output_pushed[output].elements().iter() {
                 map.push((key.0, val));
             }
         }
 
-        let mut summaries = Vec::from_fn(self.inputs(), |_| Vec::from_fn(self.outputs(), |_| Antichain::new()));
-        for input in range(0, self.inputs())
-        {
-            for &(target, ref antichain) in self.input_summaries[input].iter()
-            {
-                if let GraphOutput(output) = target
-                {
-                    for &summary in antichain.elements.iter()
-                    {
-                        summaries[input][output].insert(match summary
-                        {
+        let mut summaries: Vec<Vec<_>> = range(0, self.inputs()).map(|_| range(0, self.outputs()).map(|_| Antichain::new()).collect()).collect();
+        for input in range(0, self.inputs()) {
+            for &(target, ref antichain) in self.input_summaries[input].iter() {
+                if let GraphOutput(output) = target {
+                    for &summary in antichain.elements.iter() {
+                        summaries[input][output].insert(match summary {
                             Local(_)    => Default::default(),
                             Outer(y, _) => y,
                         });
@@ -443,7 +433,7 @@ where TOuter: Timestamp,
             let inputs = self.subscopes[subscope].inputs();
             let outputs = self.subscopes[subscope].outputs();
 
-            let mut summaries = Vec::from_fn(outputs, |_| Vec::from_fn(inputs, |_| Antichain::new()));
+            let mut summaries: Vec<Vec<_>> = range(0, outputs).map(|_| range(0, inputs).map(|_| Antichain::new()).collect()).collect();
 
             for output in range(0, summaries.len())
             {
@@ -758,22 +748,16 @@ where TOuter: Timestamp,
     fn push_pointstamps_to_targets(&mut self) -> ()
     {
         // for each scope, do inputs and outputs
-        for (index, scope) in self.subscopes.iter().enumerate()
-        {
+        for (index, scope) in self.subscopes.iter().enumerate() {
             // for each input of the scope
-            for input in range(0, scope.inputs())
-            {
+            for input in range(0, scope.inputs()) {
                 // for each of the updates at ScopeInput(scope, input) ...
-                for &(time, value) in self.pointstamps.target_counts[index][input].elements().iter()
-                {
+                for &(time, value) in self.pointstamps.target_counts[index][input].elements().iter() {
                     // for each target it can reach ...
-                    for &(target, ref antichain) in self.target_summaries[index][input].iter()
-                    {
-                        for summary in antichain.elements.iter()
-                        {
+                    for &(target, ref antichain) in self.target_summaries[index][input].iter() {
+                        for summary in antichain.elements.iter() {
                             // do stuff.
-                            let dest = match target
-                            {
+                            let dest = match target {
                                 ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope][input],
                                 GraphOutput(output)      => &mut self.pointstamps.output_pushed[output],
                             };
@@ -788,19 +772,14 @@ where TOuter: Timestamp,
             }
 
             // for each output of the scope
-            for output in range(0, scope.outputs())
-            {
+            for output in range(0, scope.outputs()) {
                 // for each of the updates at ScopeOutput(scope, output) ...
-                for &(time, value) in self.pointstamps.source_counts[index][output].elements().iter()
-                {
+                for &(time, value) in self.pointstamps.source_counts[index][output].elements().iter() {
                     // for each target it can reach ...
-                    for &(target, ref antichain) in self.source_summaries[index][output].iter()
-                    {
-                        for summary in antichain.elements.iter()
-                        {
+                    for &(target, ref antichain) in self.source_summaries[index][output].iter() {
+                        for summary in antichain.elements.iter() {
                             // do stuff.
-                            let dest = match target
-                            {
+                            let dest = match target {
                                 ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope][input],
                                 GraphOutput(output)      => &mut self.pointstamps.output_pushed[output],
                             };
@@ -816,19 +795,14 @@ where TOuter: Timestamp,
         }
 
         // for each of the graph inputs
-        for input in range(0, self.inputs())
-        {
+        for input in range(0, self.inputs()) {
             // for each of the updates at GraphInput(input) ...
-            for &(time, value) in self.pointstamps.input_counts[input].iter()
-            {
+            for &(time, value) in self.pointstamps.input_counts[input].iter() {
                 // for each target it can reach ...
-                for &(target, ref antichain) in self.input_summaries[input].iter()
-                {
-                    for summary in antichain.elements.iter()
-                    {
+                for &(target, ref antichain) in self.input_summaries[input].iter() {
+                    for summary in antichain.elements.iter() {
                         // do stuff.
-                        let dest = match target
-                        {
+                        let dest = match target {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope][input],
                             GraphOutput(output)      => &mut self.pointstamps.output_pushed[output],
                         };
@@ -849,15 +823,11 @@ where TOuter: Timestamp,
     fn set_summaries(&mut self) -> ()
     {
         // load up edges from source outputs
-        for scope in range(0, self.subscopes.len())
-        {
-            for output in range(0, self.subscopes[scope].outputs())
-            {
+        for scope in range(0, self.subscopes.len()) {
+            for output in range(0, self.subscopes[scope].outputs()) {
                 self.source_summaries[scope][output].clear();
-                for &target in self.scope_edges[scope][output].iter()
-                {
-                    if match target { ScopeInput(t, _) => self.subscopes[t].notify_me(), _ => true }
-                    {
+                for &target in self.scope_edges[scope][output].iter() {
+                    if match target { ScopeInput(t, _) => self.subscopes[t].notify_me(), _ => true } {
                         self.source_summaries[scope][output].push((target, Antichain::from_elem(self.default_summary)));
                     }
                 }
@@ -865,46 +835,34 @@ where TOuter: Timestamp,
         }
 
         // load up edges from graph inputs
-        for input in range(0, self.inputs())
-        {
+        for input in range(0, self.inputs()) {
             self.input_summaries[input].clear();
-            for &target in self.input_edges[input].iter()
-            {
-                if match target { ScopeInput(t, _) => self.subscopes[t].notify_me(), _ => true }
-                {
+            for &target in self.input_edges[input].iter() {
+                if match target { ScopeInput(t, _) => self.subscopes[t].notify_me(), _ => true } {
                     self.input_summaries[input].push((target, Antichain::from_elem(self.default_summary)));
                 }
             }
         }
 
         let mut done = false;
-        while !done
-        {
+        while !done {
             done = true;
 
             // process edges from scope outputs ...
-            for scope in range(0, self.subscopes.len())
-            {
-                for output in range(0, self.subscopes[scope].outputs())
-                {
+            for scope in range(0, self.subscopes.len()) {
+                for output in range(0, self.subscopes[scope].outputs()) {
                     // for each target: ScopeOutput(scope, output) -> target ...
-                    for target in self.scope_edges[scope][output].iter()
-                    {
+                    for target in self.scope_edges[scope][output].iter() {
                         let next_sources = self.target_to_sources(target);
-                        for &(next_source, next_summary) in next_sources.iter()
-                        {
+                        for &(next_source, next_summary) in next_sources.iter() {
                             // this should always be true, because that is how t_2_s works.
-                            if let ScopeOutput(next_scope, next_output) = next_source
-                            {
+                            if let ScopeOutput(next_scope, next_output) = next_source {
                                 // clone this so that we aren't holding a read ref to self.source_summaries.
                                 let reachable = self.source_summaries[next_scope][next_output].clone();
-                                for &(next_target, ref antichain) in reachable.iter()
-                                {
-                                    for summary in antichain.elements.iter()
-                                    {
+                                for &(next_target, ref antichain) in reachable.iter() {
+                                    for summary in antichain.elements.iter() {
                                         let candidate_summary = next_summary.followed_by(summary);
-                                        if try_to_add_summary(&mut self.source_summaries[scope][output], next_target, candidate_summary)
-                                        {
+                                        if try_to_add_summary(&mut self.source_summaries[scope][output], next_target, candidate_summary) {
                                             done = false;
                                         }
                                     }
@@ -916,26 +874,19 @@ where TOuter: Timestamp,
             }
 
             // process edges from graph inputs ...
-            for input in range(0, self.inputs())
-            {
+            for input in range(0, self.inputs()) {
                 // for each target: ScopeOutput(scope, output) -> target ...
-                for target in self.input_edges[input].iter()
-                {
+                for target in self.input_edges[input].iter() {
                     let next_sources = self.target_to_sources(target);
-                    for &(next_source, next_summary) in next_sources.iter()
-                    {
+                    for &(next_source, next_summary) in next_sources.iter() {
                         // this should always be true, because that is how t_2_s works.
-                        if let ScopeOutput(next_scope, next_output) = next_source
-                        {
+                        if let ScopeOutput(next_scope, next_output) = next_source {
                             // clone this so that we aren't holding a read ref to self.source_summaries.
                             let reachable = self.source_summaries[next_scope][next_output].clone();
-                            for &(next_target, ref antichain) in reachable.iter()
-                            {
-                                for summary in antichain.elements.iter()
-                                {
+                            for &(next_target, ref antichain) in reachable.iter() {
+                                for summary in antichain.elements.iter() {
                                     let candidate_summary = next_summary.followed_by(summary);
-                                    if try_to_add_summary(&mut self.input_summaries[input], next_target, candidate_summary)
-                                    {
+                                    if try_to_add_summary(&mut self.input_summaries[input], next_target, candidate_summary) {
                                         done = false;
                                     }
                                 }
@@ -947,22 +898,16 @@ where TOuter: Timestamp,
         }
 
         // now that we are done, populate self.target_summaries
-        for scope in range(0, self.subscopes.len())
-        {
-            for input in range(0, self.subscopes[scope].inputs())
-            {
+        for scope in range(0, self.subscopes.len()) {
+            for input in range(0, self.subscopes[scope].inputs()) {
                 self.target_summaries[scope][input].clear();
 
                 let next_sources = self.target_to_sources(&ScopeInput(scope, input));
 
-                for &(next_source, next_summary) in next_sources.iter()
-                {
-                    if let ScopeOutput(next_scope, next_output) = next_source
-                    {
-                        for &(next_target, ref antichain) in self.source_summaries[next_scope][next_output].iter()
-                        {
-                            for summary in antichain.elements.iter()
-                            {
+                for &(next_source, next_summary) in next_sources.iter() {
+                    if let ScopeOutput(next_scope, next_output) = next_source {
+                        for &(next_target, ref antichain) in self.source_summaries[next_scope][next_output].iter() {
+                            for summary in antichain.elements.iter() {
                                 let candidate_summary = next_summary.followed_by(summary);
                                 try_to_add_summary(&mut self.target_summaries[scope][input], next_target, candidate_summary);
                             }
@@ -977,25 +922,18 @@ where TOuter: Timestamp,
     {
         let mut result = Vec::new();
 
-        match *target
-        {
-            GraphOutput(port) =>
-            {
-                for input in range(0, self.inputs())
-                {
-                    for &summary in self.external_summaries[port][input].elements.iter()
-                    {
+        match *target {
+            GraphOutput(port) => {
+                for input in range(0, self.inputs()) {
+                    for &summary in self.external_summaries[port][input].elements.iter() {
                         result.push((GraphInput(input), Outer(summary, Default::default())));
                     }
                 }
             },
-            ScopeInput(graph, port) =>
-            {
+            ScopeInput(graph, port) => {
                 // this one is harder; propose connected output ports
-                for i in range(0, self.subscopes[graph].outputs())
-                {
-                    for &summary in self.subscope_state[graph].summary[port][i].elements.iter()
-                    {
+                for i in range(0, self.subscopes[graph].outputs()) {
+                    for &summary in self.subscope_state[graph].summary[port][i].elements.iter() {
                         result.push((ScopeOutput(graph, i), summary));
                     }
                 }
@@ -1024,17 +962,14 @@ where TOuter: Timestamp,
 
     pub fn connect(&mut self, source: Source, target: Target)
     {
-        match source
-        {
-            ScopeOutput(scope, index) =>
-            {
+        match source {
+            ScopeOutput(scope, index) => {
                 while self.scope_edges.len() < scope + 1        { self.scope_edges.push(Vec::new()); }
                 while self.scope_edges[scope].len() < index + 1 { self.scope_edges[scope].push(Vec::new()); }
 
                 self.scope_edges[scope][index].push(target);
             },
-            GraphInput(input) =>
-            {
+            GraphInput(input) => {
                 while self.input_edges.len() < input + 1        { self.input_edges.push(Vec::new()); }
 
                 self.input_edges[input].push(target);
@@ -1055,10 +990,8 @@ pub fn new_graph<T: Timestamp, S: PathSummary<S>, B: ProgressBroadcaster<((), T)
 fn try_to_add_summary<S>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool
 where S: PartialOrd+Eq+Copy+Show
 {
-    for &(ref t, ref mut antichain) in vector.iter_mut()
-    {
-        if target.eq(t)
-        {
+    for &(ref t, ref mut antichain) in vector.iter_mut() {
+        if target.eq(t) {
             return antichain.insert(summary);
         }
     }

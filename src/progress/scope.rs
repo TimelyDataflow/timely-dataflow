@@ -12,8 +12,8 @@ pub trait Scope<T: Timestamp, S: PathSummary<T>> : 'static
     // by default, full connectivity from all inputs to all outputs, and no capabilities reserved.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>)
     {
-        (Vec::from_fn(self.inputs(), |_| Vec::from_fn(self.outputs(), |_| Antichain::from_elem(Default::default()))),
-         Vec::from_fn(self.outputs(), |_| Vec::new()))
+        (range(0, self.inputs()).map(|_| range(0, self.outputs()).map(|_| Antichain::from_elem(Default::default())).collect()).collect(),
+         range(0, self.outputs()).map(|_| Vec::new()).collect())
     }
 
     // Reports (out -> in) summaries for the vertex, and initial frontier information.
@@ -22,7 +22,7 @@ pub trait Scope<T: Timestamp, S: PathSummary<T>> : 'static
 
 
     // Reports changes to the projection of external work onto each of the scope's inputs.
-    // TODO: Update this to be strictly external work, i.e. not work from this vertex. 
+    // TODO: Update this to be strictly external work, i.e. not work from this vertex.
     fn push_external_progress(&mut self, _frontier_progress: &Vec<Vec<(T, i64)>>) -> () { }
 
 

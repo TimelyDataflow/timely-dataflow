@@ -1,3 +1,4 @@
+#![feature(associated_types)]
 #![feature(unsafe_destructor)]
 
 extern crate core;
@@ -64,14 +65,13 @@ Options:
 
 fn main()
 {
-
     let args = Docopt::new(USAGE).and_then(|dopt| dopt.parse()).unwrap_or_else(|e| e.exit());
 
-    let threads = if let Some(threads) = from_str(args.get_str("-t")) { threads }
+    let threads = if let Some(threads) = args.get_str("-t").parse() { threads }
                   else { panic!("invalid setting for --threads: {}", args.get_str("-t")) };
-    let process_id = if let Some(proc_id) = from_str(args.get_str("-p")) { proc_id }
+    let process_id = if let Some(proc_id) = args.get_str("-p").parse() { proc_id }
                      else { panic!("invalid setting for --processid: {}", args.get_str("-p")) };
-    let processes:uint = if let Some(processes) = from_str(args.get_str("-n")) { processes }
+    let processes:uint = if let Some(processes) = args.get_str("-n").parse() { processes }
                          else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
 
     // let threads = 3u;
@@ -95,16 +95,16 @@ fn main()
         if processes > 1u
         {
             println!("testing networking with {} processes", processes);
-            _networking(process_id, processes);
+            _networking(process_id, threads, processes);
         }
         else { println!("set --processes > 1 for networking test"); }
     }
 }
 
-fn _networking(my_id: uint, processes: uint)
+fn _networking(my_id: uint, threads: uint, processes: uint)
 {
-    let addresses = Vec::from_fn(processes, |index| format!("localhost:{}", 2101 + index).to_string());
-    let _connections = initialize_networking(addresses, my_id);
+    let addresses = range(0, processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
+    let _connections = initialize_networking(addresses, my_id, threads);
 }
 
 #[bench]
@@ -154,7 +154,7 @@ where T1: Timestamp, S1: PathSummary<T1>,
       B2: ProgressBroadcaster<((T1, T2), uint)>,
 {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let mut subgraph = graph.new_subgraph(0, broadcaster);
+    let mut subgraph = graph.new_subgraph::<_, uint, _>(0, broadcaster);
 
     let (sub_egress1, sub_egress2) =
     {
