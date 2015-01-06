@@ -39,7 +39,7 @@ impl<'a, T: Timestamp, D: Data> Drop for OutputBuffer<'a, T, D>
     }
 }
 
-#[deriving(Default)]
+#[derive(Default)]
 pub struct OutputPort<T: Timestamp, D: Copy+'static>
 {
     pub targets:    Rc<RefCell<Vec<Box<Observer<(T, Vec<D>)>>>>>,

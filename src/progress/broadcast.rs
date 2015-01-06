@@ -6,7 +6,7 @@ use communication::ChannelAllocator;
 
 use std::sync::mpsc::{Sender, Receiver};
 
-#[deriving(Clone, Copy)]
+#[derive(Clone, Copy)]
 pub enum Progress<T:Timestamp>
 {
     MessagesUpdate(uint, uint, T, i64),  // (scope, input port, timestamp, changes)

@@ -10,7 +10,7 @@ use std::mem;
 
 use std::time::duration::Duration;
 
-#[deriving(Copy)]
+#[derive(Copy)]
 struct MessageHeader {
     graph:      u32,   // graph identifier
     channel:    u32,   // index of channel
@@ -105,7 +105,7 @@ impl<R: Reader> BinaryReceiver<R>
                                          else { Vec::new() };
                         reader.push_at_least(h_len, h_len, &mut buffer).ok().expect("BinaryReader: payload read");
 
-                        self.targets[h_tgt][h_grp][h_chn].as_ref().unwrap().0.send(buffer);
+                        self.targets[h_tgt][h_grp][h_chn].as_ref().unwrap().0.send(buffer).ok().expect("send error");
                         cursor += mem::size_of::<MessageHeader>() as u32 + header.length;
                         valid = true;
                     }
@@ -190,7 +190,7 @@ impl<W: Writer> BinarySender<W>
             }
             // end-inline
 
-            self.buffers[header.source as uint][header.graph as uint][header.channel as uint].as_ref().unwrap().send(buffer);
+            self.buffers[header.source as uint][header.graph as uint][header.channel as uint].as_ref().unwrap().send(buffer).ok().expect("err");
         }
     }
 }
@@ -299,7 +299,7 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: uint) -> IoResult<Ve
     return Ok(results);
 }
 
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct BinaryChannelAllocator
 {
     allocated:      uint,                           // indicates how many have been allocated (locally).
@@ -328,7 +328,7 @@ impl BinaryChannelAllocator
         }
 
         for writer in self.writers.iter() {
-            writer.send(((index, graph, self.allocated), back_to_worker.clone()));
+            writer.send(((index, graph, self.allocated), back_to_worker.clone())).ok().expect("send error");
         }
 
         for reader in self.readers.iter() {

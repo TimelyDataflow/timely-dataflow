@@ -17,21 +17,21 @@ use progress::count_map::CountMap;
 use progress::broadcast::{ProgressBroadcaster, Progress};
 use progress::broadcast::Progress::{MessagesUpdate, FrontierUpdate};
 
-#[deriving(Eq, PartialEq, Hash, Copy, Clone, Show)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Show)]
 pub enum Source
 {
     GraphInput(uint),           // from outer scope
     ScopeOutput(uint, uint),    // (scope, port) may have interesting connectivity
 }
 
-#[deriving(Eq, PartialEq, Hash, Copy, Clone, Show)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Show)]
 pub enum Target
 {
     GraphOutput(uint),          // to outer scope
     ScopeInput(uint, uint),     // (scope, port) may have interesting connectivity
 }
 
-#[deriving(Eq, PartialEq, Hash, Copy, Clone, Show)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Show)]
 pub enum Location
 {
     SourceLoc(Source),
@@ -41,7 +41,7 @@ pub enum Location
 
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for (TOuter, TInner) { }
 
-#[deriving(Copy, Clone, Eq, PartialEq, Show)]
+#[derive(Copy, Clone, Eq, PartialEq, Show)]
 pub enum Summary<S, T>
 {
     Local(T),    // reachable within scope, after some iterations.
@@ -151,7 +151,7 @@ pub struct PerScopeState<T: Timestamp, S: PathSummary<T>>
 
 */
 
-#[deriving(Default)]
+#[derive(Default)]
 pub struct SubscopeState<TTime:Timestamp, TSummary>
 {
     summary:                Vec<Vec<Antichain<TSummary>>>,  // internal path summaries
@@ -174,7 +174,7 @@ impl<TTime:Timestamp, TSummary> SubscopeState<TTime, TSummary>
     }
 }
 
-#[deriving(Default)]
+#[derive(Default)]
 pub struct SubscopeBuffers<TTime:Timestamp>
 {
     progress:        Vec<Vec<(TTime, i64)>>,
@@ -200,7 +200,7 @@ impl<TTime:Timestamp> SubscopeBuffers<TTime>
     }
 }
 
-#[deriving(Default)]
+#[derive(Default)]
 pub struct PointstampCounter<T:Timestamp>
 {
     pub source_counts:  Vec<Vec<Vec<(T, i64)>>>,
@@ -241,7 +241,7 @@ impl<T:Timestamp> PointstampCounter<T>
     }
 }
 
-#[deriving(Default)]
+#[derive(Default)]
 pub struct Subgraph<TOuter:Timestamp, SOuter, TInner:Timestamp, SInner, Broadcaster: ProgressBroadcaster<(TOuter, TInner)>>
 {
     pub name:               String,

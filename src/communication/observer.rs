@@ -1,5 +1,5 @@
 use std::mem;
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::Sender;
 
 // observer trait
 pub trait Observer<T> : 'static {
@@ -10,7 +10,7 @@ pub trait Observer<T> : 'static {
 
 // implementation for inter-thread queues
 impl<T:Send+'static> Observer<T> for Sender<T> {
-    fn next(&mut self, data: T) { self.send(data); }
+    fn next(&mut self, data: T) { self.send(data).ok().expect("Sender.next() error"); }
     fn done(&mut self) { }
 }
 

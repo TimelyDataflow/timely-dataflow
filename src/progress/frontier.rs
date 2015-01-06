@@ -3,7 +3,7 @@ use std::default::Default;
 
 use progress::count_map::CountMap;
 
-#[deriving(Default, Clone, Show)]
+#[derive(Default, Clone, Show)]
 pub struct Antichain<T>
 {
     pub elements: Vec<T>
@@ -42,7 +42,7 @@ impl<T: PartialOrd+Eq+Copy+Show> Antichain<T>
     pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
 }
 
-#[deriving(Default, Show)]
+#[derive(Default, Show)]
 pub struct MutableAntichain<T:Eq>
 {
     occurrences:    Vec<(T, i64)>,  // occurrence count of each time
