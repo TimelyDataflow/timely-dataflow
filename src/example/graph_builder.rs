@@ -12,17 +12,14 @@ use progress::broadcast::ProgressBroadcaster;
 
 use example::stream::Stream;
 use communication::Observer;
-use communication::channels::{Data, OutputPort};
+use communication::channels::{Data, OutputPort, ObserverHelper};
 
 pub trait GraphBoundary<T1:Timestamp, T2:Timestamp, S1:PathSummary<T1>, S2:PathSummary<T2>> :
 {
     // adds an input to self, from source, contained in graph.
-    fn add_input<D:Data>(&mut self, source: &mut Stream<T1, S1, D>) ->
-        Stream<(T1, T2), Summary<S1, S2>, D>;
+    fn add_input<D:Data>(&mut self, source: &mut Stream<T1, S1, D>) -> Stream<(T1, T2), Summary<S1, S2>, D>;
     fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                              graph: Box<Graph<T1, S1>>) ->
-        Stream<T1, S1, D>;
-
+                                              graph: Box<Graph<T1, S1>>) -> Stream<T1, S1, D>;
 
     fn new_subgraph<T, S, B>(&mut self, default: T, broadcaster: B) -> Rc<RefCell<Subgraph<(T1, T2), Summary<S1, S2>, T, S, B>>>
     where T: Timestamp,
@@ -42,22 +39,22 @@ where TOuter: Timestamp,
     fn add_input<D: Data>(&mut self, source: &mut Stream<TOuter, SOuter, D>) ->
         Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>
     {
-        let ingress = IngressNub { targets: OutputPort::new(), };
+        let targets = Rc::new(RefCell::new(Vec::new()));
+        let produced = Rc::new(RefCell::new(Vec::new()));
 
-        let listeners = ingress.targets.targets.clone();
+        let ingress = IngressNub { targets: ObserverHelper::new(OutputPort{ shared: targets.clone() }, produced.clone()) };
 
         let mut borrow = self.borrow_mut();
-
-        let index = borrow.new_input(ingress.targets.updates.clone());
+        let index = borrow.new_input(produced);
 
         source.graph.connect(source.name, ScopeInput(borrow.index, index));
-        source.port.borrow_mut().push(box ingress);
+        source.add_observer(ingress);
 
-        return Stream { name: GraphInput(index), port: listeners, graph: self.as_box(), allocator: source.allocator.clone() };
+        return Stream { name: GraphInput(index), ports: targets, graph: self.as_box(), allocator: source.allocator.clone() };
     }
 
     fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>,
-                                                        graph: Box<Graph<TOuter, SOuter>>) -> Stream<TOuter, SOuter, D>
+                                               graph: Box<Graph<TOuter, SOuter>>) -> Stream<TOuter, SOuter, D>
     {
         let mut borrow = self.borrow_mut();
         let index = borrow.new_output();
@@ -65,21 +62,23 @@ where TOuter: Timestamp,
         let targets = Rc::new(RefCell::new(Vec::new()));
 
         borrow.connect(source.name, GraphOutput(index));
-        source.port.borrow_mut().push(box EgressNub { targets: targets.clone() });
+        source.add_observer(EgressNub { targets: targets.clone() });
 
         return Stream {
             name: ScopeOutput(borrow.index, index),
-            port: targets, graph: graph.as_box(),
+            ports: targets,
+            graph: graph.as_box(),
             allocator: source.allocator.clone() };
     }
 
-    fn new_subgraph<T, S, B>(&mut self, _default: T, broadcaster: B) -> Rc<RefCell<Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S, B>>>
+    fn new_subgraph<T, S, B>(&mut self, _default: T, broadcaster: B)
+            -> Rc<RefCell<Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S, B>>>
     where T: Timestamp,
           S: PathSummary<T>,
           B: ProgressBroadcaster<((TOuter, TInner), T)>
     {
         let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S, B> = Default::default();
-        result.index = self.borrow().subscopes.len();
+        result.index = self.borrow().subscopes.len() as u64;
         result.broadcaster = broadcaster;
         return Rc::new(RefCell::new(result));
     }
@@ -87,30 +86,24 @@ where TOuter: Timestamp,
 
 
 pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
-    targets: OutputPort<(TOuter, TInner), TData>,
+    targets: ObserverHelper<(TOuter, TInner), TData, OutputPort<(TOuter, TInner), TData>>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer<(TOuter, Vec<TData>)> for IngressNub<TOuter, TInner, TData>
+impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer<TOuter, TData> for IngressNub<TOuter, TInner, TData>
 {
-    fn next(&mut self, (time, data): (TOuter, Vec<TData>)) {
-        self.targets.next(((time, Default::default()), data));
-    }
-    fn done(&mut self) -> () { self.targets.done(); }
+    fn push(&mut self, data: &TData) { self.targets.push(data); }
+    fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(*time, Default::default())); }
+    fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(*time, Default::default())); }
 }
 
 
 pub struct EgressNub<TOuter, TInner, TData> {
-    targets: Rc<RefCell<Vec<Box<Observer<(TOuter, Vec<TData>)>>>>>,
+    targets: Rc<RefCell<Vec<Box<Observer<TOuter, TData>>>>>,
 }
 
-impl<TOuter, TInner, TData> Observer<((TOuter, TInner), Vec<TData>)> for EgressNub<TOuter, TInner, TData>
+impl<TOuter, TInner, TData> Observer<(TOuter, TInner), TData> for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp, TData: Data {
-    fn next(&mut self, (time, data): ((TOuter, TInner), Vec<TData>)) {
-        for target in self.targets.borrow_mut().iter_mut() {
-            target.next((time.0, data.clone()));
-        }
-    }
-    fn done(&mut self) -> () {
-        for target in self.targets.borrow_mut().iter_mut() { target.done(); }
-    }
+    fn open(&mut self, time: &(TOuter, TInner)) { for target in self.targets.borrow_mut().iter_mut() { target.open(&time.0); } }
+    fn push(&mut self, data: &TData) { for target in self.targets.borrow_mut().iter_mut() { target.push(data); } }
+    fn shut(&mut self, time: &(TOuter, TInner)) { for target in self.targets.borrow_mut().iter_mut() { target.shut(&time.0); } }
 }

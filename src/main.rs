@@ -1,4 +1,3 @@
-#![feature(associated_types)]
 #![feature(unsafe_destructor)]
 
 extern crate core;
@@ -14,6 +13,7 @@ use test::Bencher;
 use std::default::Default;
 
 use progress::{Timestamp, PathSummary, Graph, Scope};
+use progress::graph::GraphExtension;
 use progress::subgraph::{Subgraph, Summary, new_graph};
 use progress::subgraph::Summary::Local;
 use progress::subgraph::Source::ScopeOutput;
@@ -23,7 +23,8 @@ use progress::broadcast::{ProgressBroadcaster, MultiThreadedBroadcaster};
 use communication::ChannelAllocator;
 
 use communication::channels::Data;
-use std::hash::Hash;
+use std::hash::{Hash, SipHasher};
+use std::collections::hash_map::Hasher;
 use core::fmt::Show;
 
 use example::input::{InputExtensionTrait, InputHelper};
@@ -71,8 +72,8 @@ fn main()
                   else { panic!("invalid setting for --threads: {}", args.get_str("-t")) };
     let process_id = if let Some(proc_id) = args.get_str("-p").parse() { proc_id }
                      else { panic!("invalid setting for --processid: {}", args.get_str("-p")) };
-    let processes:uint = if let Some(processes) = args.get_str("-n").parse() { processes }
-                         else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
+    let processes: u64 = if let Some(processes) = args.get_str("-n").parse() { processes }
+                    else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
 
     // let threads = 3u;
     // let process_id = 0u;
@@ -90,10 +91,8 @@ fn main()
     if args.get_bool("barrier") { _barrier_multi(threads); println!("started barrier test"); }
     if args.get_bool("command") { _command_multi(threads); println!("started command test"); }
 
-    if args.get_bool("networking")
-    {
-        if processes > 1u
-        {
+    if args.get_bool("networking") {
+        if processes > 1u64 {
             println!("testing networking with {} processes", processes);
             _networking(process_id, threads, processes);
         }
@@ -101,19 +100,16 @@ fn main()
     }
 }
 
-fn _networking(my_id: uint, threads: uint, processes: uint)
-{
+fn _networking(my_id: u64, threads: u64, processes: u64) {
     let addresses = range(0, processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
     let _connections = initialize_networking(addresses, my_id, threads);
 }
 
 #[bench]
-fn queue_bench(bencher: &mut Bencher) { _queue(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
-fn _queue_multi(threads: uint)
-{
+fn queue_bench(bencher: &mut Bencher) { _queue(ChannelAllocator::new_vector(1).swap_remove(0), Some(bencher)); }
+fn _queue_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ChannelAllocator::new_vector(threads).into_iter()
-    {
+    for allocator in ChannelAllocator::new_vector(threads).into_iter() {
         guards.push(Thread::spawn(move || _queue(allocator, None)));
     }
 }
@@ -121,19 +117,17 @@ fn _queue_multi(threads: uint)
 
 // #[bench]
 // fn command_bench(bencher: &mut Bencher) { _command(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
-fn _command_multi(threads: uint)
-{
+fn _command_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ChannelAllocator::new_vector(threads).into_iter()
-    {
+    for allocator in ChannelAllocator::new_vector(threads).into_iter() {
         guards.push(Thread::spawn(move || _command(allocator, None)));
     }
 }
 
 
 #[bench]
-fn barrier_bench(bencher: &mut Bencher) { _barrier(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
-fn _barrier_multi(threads: uint)
+fn barrier_bench(bencher: &mut Bencher) { _barrier(ChannelAllocator::new_vector(1).swap_remove(0), Some(bencher)); }
+fn _barrier_multi(threads: u64)
 {
     let mut guards = Vec::new();
     for allocator in ChannelAllocator::new_vector(threads).into_iter()
@@ -149,15 +143,14 @@ fn _create_subgraph<T1, T2, S1, S2, D, B1, B2>(graph: &mut Rc<RefCell<Subgraph<T
                                                 -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
 where T1: Timestamp, S1: PathSummary<T1>,
       T2: Timestamp, S2: PathSummary<T2>,
-      D:  Data+Hash+Eq+Show,
+      D:  Data+Hash<SipHasher>+Eq+Show,
       B1: ProgressBroadcaster<(T1, T2)>,
-      B2: ProgressBroadcaster<((T1, T2), uint)>,
+      B2: ProgressBroadcaster<((T1, T2), u64)>,
 {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let mut subgraph = graph.new_subgraph::<_, uint, _>(0, broadcaster);
+    let mut subgraph = graph.new_subgraph::<_, u64, _>(0, broadcaster);
 
-    let (sub_egress1, sub_egress2) =
-    {
+    let (sub_egress1, sub_egress2) = {
         // create new ingress nodes, passing in a reference to the subgraph for them to use.
         let mut sub_ingress1 = subgraph.add_input(source1);
         let mut sub_ingress2 = subgraph.add_input(source2);
@@ -175,13 +168,12 @@ where T1: Timestamp, S1: PathSummary<T1>,
 
     // sort of a mess, but the way to get the subgraph out of the Rc<RefCell<...>>.
     // will explode if anyone else is still sitting on a reference to subgraph.
-    graph.add_scope(box try_unwrap(subgraph).ok().expect("hm").into_inner());
+    graph.add_scope(try_unwrap(subgraph).ok().expect("hm").into_inner());
 
     return (sub_egress1, sub_egress2);
 }
 
-fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
-{
+fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
@@ -216,8 +208,8 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
 
     // move some data into the dataflow graph.
-    input1.send_messages(&((), 0), &vec![1u]);
-    input2.send_messages(&((), 0), &vec![2u]);
+    input1.send_messages(&((), 0), vec![1u64]);
+    input2.send_messages(&((), 0), vec![2u64]);
 
     // see what everyone thinks about that ...
     graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
@@ -233,23 +225,21 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
 
     // spin
-    match bencher
-    {
+    match bencher {
         Some(bencher) => bencher.iter(|| { graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
         None          => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { }
     }
 }
 
 
-fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
-{
+fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph = new_graph(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
 
     // try building some input scopes
-    let mut input: (InputHelper<_, uint>, _) = graph.new_input(allocator.clone());
+    let mut input: (InputHelper<_, u64>, _) = graph.new_input(allocator.clone());
 
     // prepare some feedback edges
     let mut feedback = input.1.feedback(((), 1000), Local(1));
@@ -266,18 +256,12 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     graph.borrow_mut().set_external_summary(Vec::new(), &Vec::new());
     graph.borrow_mut().push_external_progress(&Vec::new());
 
-    input.0.close_at(&((), 0u));
+    input.0.close_at(&((), 0));
 
     // spin
-    match bencher
-    {
-        Some(bencher) => bencher.iter(||
-        {
-            graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
-        }),
-        None          => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new())
-        {
-        },
+    match bencher {
+        Some(b) => b.iter(|| { graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
+        None    => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
     }
 }
 
@@ -290,7 +274,7 @@ fn _barrier(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
 
     // add a new, relatively pointless, scope.
     // It has a non-trivial path summary, so the timely dataflow graph is not improperly cyclic.
-    graph.add_scope(box BarrierScope { epoch: 0u, ready: true, degree: allocator.borrow().multiplicity() as i64, ttl: 10000000 });
+    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.borrow().multiplicity() as i64, ttl: 10000000 });
 
     // attach the scope's output back to its input.
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));

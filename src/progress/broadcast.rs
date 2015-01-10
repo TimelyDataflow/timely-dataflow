@@ -9,8 +9,8 @@ use std::sync::mpsc::{Sender, Receiver};
 #[derive(Clone, Copy)]
 pub enum Progress<T:Timestamp>
 {
-    MessagesUpdate(uint, uint, T, i64),  // (scope, input port, timestamp, changes)
-    FrontierUpdate(uint, uint, T, i64),  // (scope, output port, timestamp, change)
+    MessagesUpdate(u64, u64, T, i64),  // (scope, input port, timestamp, changes)
+    FrontierUpdate(u64, u64, T, i64),  // (scope, output port, timestamp, change)
 }
 
 

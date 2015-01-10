@@ -4,11 +4,13 @@ use std::default::Default;
 
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Graph, Scope, PathSummary, Timestamp};
+use progress::graph::GraphExtension;
 use progress::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
 use communication::ChannelAllocator;
 
-use communication::channels::{Data, OutputPort};
+use communication::Observer;
+use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
 
 pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>>
@@ -19,44 +21,45 @@ pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>>
 
 impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> for G
 {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>)
-    {
-        let helper = InputHelper
-        {
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>) {
+        let targets = Rc::new(RefCell::new(Vec::new()));//Default::default();
+        let produced = Rc::new(RefCell::new(Vec::new()));//Default::default();
+
+        let helper = InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(Vec::new())),
-            tee_port: OutputPort::new(),
+            output:   ObserverHelper::new(OutputPort{ shared: targets.clone() }, produced.clone()),
         };
 
-        let index = self.add_scope(box InputScope
-        {
+        let index = self.add_scope(InputScope {
             frontier: helper.frontier.clone(),
             progress: helper.progress.clone(),
-            messages: helper.tee_port.updates.clone(),
+            messages: produced.clone(),
             copies:   allocator.borrow().multiplicity(),
         });
 
-        let targets = helper.tee_port.targets.clone();
-        return (helper, Stream{ name: ScopeOutput(index, 0), port: targets, graph: self.as_box(), allocator: allocator.clone() });
+        return (helper, Stream {
+            name: ScopeOutput(index, 0),
+            ports: targets,
+            graph: self.as_box(),
+            allocator: allocator.clone()
+        });
     }
 }
 
-pub struct InputScope<T:Timestamp>
-{
+pub struct InputScope<T:Timestamp> {
     frontier:   Rc<RefCell<MutableAntichain<T>>>,    // times available for sending
     progress:   Rc<RefCell<Vec<(T, i64)>>>,          // times closed since last asked
     messages:   Rc<RefCell<Vec<(T, i64)>>>,          // messages sent since last asked
-    copies:     uint,
+    copies:     u64,
 }
 
-impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T>
-{
+impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T> {
     fn name(&self) -> String { format!("Input") }
-    fn inputs(&self) -> uint { 0 }
-    fn outputs(&self) -> uint { 1 }
+    fn inputs(&self) -> u64 { 0 }
+    fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>)
-    {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>) {
         (Vec::new(), vec![self.frontier.borrow().elements.iter().map(|&x| (x, self.copies as i64)).collect()])
     }
 
@@ -76,33 +79,25 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T>
     fn notify_me(&self) -> bool { false }
 }
 
-pub struct InputHelper<T: Timestamp, D: Data>
-{
+pub struct InputHelper<T: Timestamp, D: Data> {
     frontier:   Rc<RefCell<MutableAntichain<T>>>,    // times available for sending
     progress:   Rc<RefCell<Vec<(T, i64)>>>,          // times closed since last asked
-    tee_port:   OutputPort<T, D>,
+    output:     ObserverHelper<T, D, OutputPort<T, D>>,
 }
 
-impl<T:Timestamp, D: Data> InputHelper<T, D>
-{
-    pub fn send_messages(&mut self, time: &T, data: &Vec<D>)
-    {
-        let mut buffer = self.tee_port.buffer_for(time);
-
-        for record in data.iter()
-        {
-            buffer.send(*record);
-        }
+impl<T:Timestamp, D: Data> InputHelper<T, D> {
+    pub fn send_messages(&mut self, time: &T, data: Vec<D>) {
+        self.output.open(time);
+        for datum in data.into_iter() { self.output.push(&datum); }
+        self.output.shut(time);
     }
 
-    pub fn advance(&self, start: &T, end: &T)
-    {
+    pub fn advance(&self, start: &T, end: &T) {
         self.frontier.borrow_mut().update_weight(start, -1, &mut (*self.progress.borrow_mut()));
         self.frontier.borrow_mut().update_weight(end,  1, &mut (*self.progress.borrow_mut()));
     }
 
-    pub fn close_at(&self, time: &T)
-    {
+    pub fn close_at(&self, time: &T) {
         self.frontier.borrow_mut().update_weight(time, -1, &mut (*self.progress.borrow_mut()));
     }
 }

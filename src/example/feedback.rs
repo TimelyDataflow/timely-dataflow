@@ -1,104 +1,91 @@
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::default::Default;
 
 use progress::{Timestamp, PathSummary, Graph, Scope};
 use progress::frontier::Antichain;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
+use progress::graph::GraphExtension;
+
 
 use communication::Observer;
+use communication::channels::ObserverHelper;
 use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
-pub trait FeedbackExtensionTrait<T: Timestamp, S: PathSummary<T>, D:Data>
-{
-    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<T, S, D>, Stream<T, S, D>);
+pub trait FeedbackExtensionTrait<T: Timestamp, S: PathSummary<T>, D:Data> {
+    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<T, S, D, ObserverHelper<T, D, FeedbackObserver<T, S, D>>>, Stream<T, S, D>);
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> for Stream<T, S, D>
-{
-    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<T, S, D>, Stream<T, S, D>)
-    {
-        let target_port = FeedbackTargetPort
-        {
-            limit:      limit,
-            summary:    summary,
-            targets:    OutputPort::new(),
-            consumed:   Rc::new(RefCell::new(Vec::new())),
-        };
+impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> for Stream<T, S, D> {
+    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<T, S, D, ObserverHelper<T, D, FeedbackObserver<T, S, D>>>, Stream<T, S, D>) {
 
-        // capture these guys for later use
-        let targets = target_port.targets.clone();
+        let targets: Rc<RefCell<Vec<_>>>  = Default::default();
+        let produced: Rc<RefCell<Vec<_>>> = Default::default();
+        let consumed: Rc<RefCell<Vec<_>>> = Default::default();
 
-        let index = self.graph.add_scope(box FeedbackScope
-        {
-            consumed_messages:  target_port.consumed.clone(),
-            produced_messages:  target_port.targets.updates.clone(),
+        let feedback_output = ObserverHelper::new(OutputPort { shared: targets.clone() }, produced.clone());
+        let feedback_input =  ObserverHelper::new(FeedbackObserver { limit: limit, summary: summary, targets: feedback_output }, consumed.clone());
+
+        let index = self.graph.add_scope(FeedbackScope {
+            consumed_messages:  consumed.clone(),
+            produced_messages:  produced.clone(),
             summary:            summary,
         });
 
-        let helper = FeedbackHelper
-        {
+        let helper = FeedbackHelper {
             index:  index,
-            target: Some(box target_port as Box<Observer<(T, Vec<D>)>>),
+            target: Some(feedback_input),
         };
 
-        return (helper, self.copy_with(ScopeOutput(index, 0), targets.targets));
+        return (helper, self.copy_with(ScopeOutput(index, 0), targets));
     }
 }
 
-pub struct FeedbackTargetPort<T: Timestamp, S: PathSummary<T>, D:Data>
-{
+// implementation of the feedback vertex, essentially, as an observer
+pub struct FeedbackObserver<T: Timestamp, S: PathSummary<T>, D:Data> {
     limit:      T,
     summary:    S,
-    targets:    OutputPort<T, D>,
-    consumed:   Rc<RefCell<Vec<(T, i64)>>>,
+    targets:    ObserverHelper<T, D, OutputPort<T, D>>,
+    // consumed:   Rc<RefCell<Vec<(T, i64)>>>,
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Data> Observer<(T, Vec<D>)> for FeedbackTargetPort<T, S, D>
-{
-    fn next(&mut self, (time, data): (T, Vec<D>)) {
-        self.consumed.borrow_mut().update(time, data.len() as i64);
-        let new_time = self.summary.results_in(&time);
-        if new_time.le(&self.limit) { self.targets.next((new_time, data)); }
-    }
-
-    fn done(&mut self) -> () { self.targets.done(); }
+impl<T: Timestamp, S: PathSummary<T>, D: Data> Observer<T, D> for FeedbackObserver<T, S, D> {
+    fn open(&mut self, time: &T) { self.targets.open(&self.summary.results_in(time)); }
+    fn push(&mut self, data: &D) { self.targets.push(data); } // TODO : Consult self.limit! buffer! break cycles!
+    fn shut(&mut self, time: &T) { self.targets.shut(&self.summary.results_in(time)); }
 }
 
 
-pub struct FeedbackHelper<T:Timestamp, S: PathSummary<T>, D:Copy+'static>
-{
-    index:  uint,
-    target: Option<Box<Observer<(T, Vec<D>)>>>,
+// a handy widget for connecting feedback edges
+pub struct FeedbackHelper<T:Timestamp, S: PathSummary<T>, D:Data, O: Observer<T, D>> {
+    index:  u64,
+    target: Option<O>,
 }
 
-impl<T:Timestamp, S:PathSummary<T>, D:Copy+'static> FeedbackHelper<T, S, D>
-{
-    pub fn connect_input(&mut self, source: &mut Stream<T, S, D>) -> ()
-    {
+impl<T:Timestamp, S:PathSummary<T>, D:Data, O: Observer<T, D>> FeedbackHelper<T, S, D, O> {
+    pub fn connect_input(&mut self, source: &mut Stream<T, S, D>) -> () {
         source.graph.connect(source.name, ScopeInput(self.index, 0));
-        source.port.borrow_mut().push(self.target.take().unwrap());
+        source.add_observer(self.target.take().unwrap());
     }
 }
 
 
-pub struct FeedbackScope<T:Timestamp, S: PathSummary<T>>
-{
+// the scope that the progress tracker interacts with
+pub struct FeedbackScope<T:Timestamp, S: PathSummary<T>> {
     consumed_messages:  Rc<RefCell<Vec<(T, i64)>>>,
     produced_messages:  Rc<RefCell<Vec<(T, i64)>>>,
     summary:            S,
 }
 
-impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for FeedbackScope<T, S>
-{
+impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for FeedbackScope<T, S> {
     fn name(&self) -> String { format!("Feedback") }
-    fn inputs(&self) -> uint { 1 }
-    fn outputs(&self) -> uint { 1 }
+    fn inputs(&self) -> u64 { 1 }
+    fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>)
-    {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>) {
         (vec![vec![Antichain::from_elem(self.summary)]], vec![Vec::new()])
     }
 

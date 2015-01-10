@@ -2,105 +2,104 @@ use std::mem;
 use std::sync::mpsc::Sender;
 
 // observer trait
-pub trait Observer<T> : 'static {
-    fn next(&mut self, data: T); // reveals more data to the observer.
-    fn done(&mut self);          // indicates that we are done for now.
+pub trait Observer<T, D> : 'static {
+    fn open(&mut self, time: &T);   // new punctuation, essentially ...
+    fn push(&mut self, time: &D);   // reveals push data to the observer.
+    fn shut(&mut self, time: &T);   // indicates that we are done for now.
 }
 
-
 // implementation for inter-thread queues
-impl<T:Send+'static> Observer<T> for Sender<T> {
-    fn next(&mut self, data: T) { self.send(data).ok().expect("Sender.next() error"); }
-    fn done(&mut self) { }
+impl<T:Clone+Send+'static, D:Clone+Send+'static> Observer<T, D> for (Vec<D>, Sender<(T, Vec<D>)>) {
+    fn open(&mut self, time: &T) { }
+    fn push(&mut self, data: &D) { self.0.push(data.clone()); }
+    fn shut(&mut self, time: &T) { let vec = mem::replace(&mut self.0, Vec::new()); self.1.send((time.clone(), vec)); }
 }
 
 // an observer broadcasting to many observers
-pub struct BroadcastObserver<T, O: Observer<T>> {
+pub struct BroadcastObserver<T, D, O: Observer<T, D>> {
     observers:  Vec<O>,
 }
 
-impl<T: Clone, O: Observer<T>> Observer<T> for BroadcastObserver<T, O> {
-    #[inline(always)]
-    fn next(&mut self, record: T) {
-        for observer in self.observers.iter_mut() { observer.next(record.clone()); }
-    }
-
-    fn done(&mut self) { for observer in self.observers.iter_mut() { observer.done(); }}
+impl<T: Clone, D: Clone, O: Observer<T, D>> Observer<T, D> for BroadcastObserver<T, D, O> {
+    fn open(&mut self, time: &T) { for observer in self.observers.iter_mut() { observer.open(time); } }
+    fn push(&mut self, data: &D) { for observer in self.observers.iter_mut() { observer.push(data); } }
+    fn shut(&mut self, time: &T) { for observer in self.observers.iter_mut() { observer.shut(time); }}
 }
 
 
 // an observer routing between many observers
-pub struct ExchangeObserver<T, O: Observer<T>, H: Fn(&T) -> u64> {
-    observers:  Vec<O>,
-    hash_func:  H,
+pub struct ExchangeObserver<T, D, O: Observer<T, D>, H: Fn(&D) -> u64> {
+    pub observers:  Vec<O>,
+    pub hash_func:  H,
 }
 
-impl<T, O: Observer<T>, H: Fn(&T) -> u64+'static> Observer<T> for ExchangeObserver<T, O, H> {
-    #[inline(always)]
-    fn next(&mut self, record: T) -> () {
-        let len = self.observers.len() as u64;
-        self.observers[((self.hash_func)(&record) % len) as uint].next(record);
+impl<T, D: Clone, O: Observer<T, D>, H: Fn(&D) -> u64+'static> Observer<T, D> for ExchangeObserver<T, D, O, H> {
+    fn open(&mut self, time: &T) -> () { for observer in self.observers.iter_mut() { observer.open(time); } }
+    fn push(&mut self, data: &D) -> () {
+        let dst = (self.hash_func)(data) % self.observers.len() as u64;
+        self.observers[dst as usize].push(data);
     }
-
-    fn done(&mut self) -> () { for observer in self.observers.iter_mut() { observer.done(); } }
+    fn shut(&mut self, time: &T) -> () { for observer in self.observers.iter_mut() { observer.shut(time); } }
 }
 
 // an observer buffering records before sending
-pub struct BufferedObserver<T, O: Observer<Vec<T>>> {
+pub struct BufferedObserver<T, D, O: Observer<T, Vec<D>>> {
     limit:      u64,
-    buffer:     Vec<T>,
+    buffer:     Vec<D>,
     observer:   O,
 }
 
-impl<T:'static, O: Observer<Vec<T>>> Observer<T> for BufferedObserver<T, O> {
-    #[inline(always)]
-    fn next(&mut self, record: T) -> () {
-        self.buffer.push(record);
+impl<T:Clone+'static, D: Clone+'static, O: Observer<T, Vec<D>>> Observer<T, D> for BufferedObserver<T, D, O> {
+    fn open(&mut self, time: &T) { self.observer.open(time); }
+    fn push(&mut self, data: &D) -> () {
+        self.buffer.push(data.clone());
         if self.buffer.len() as u64 > self.limit {
-            self.observer.next(mem::replace(&mut self.buffer, Vec::new()));
+            self.observer.push(&mut self.buffer);
+            self.buffer.clear();
         }
     }
-
-    fn done(&mut self) -> () {
-        self.observer.next(mem::replace(&mut self.buffer, Vec::new()));
-        self.observer.done();
+    fn shut(&mut self, time: &T) -> () {
+        self.observer.push(&self.buffer);
+        self.observer.shut(time);
+        self.buffer.clear();
     }
 }
 
 // dual to BufferedObserver, flattens out buffers
-pub struct FlattenedObserver<T, O: Observer<T>> {
+pub struct FlattenedObserver<T, D, O: Observer<T, D>> {
     observer:   O,
 }
 
-impl<T, O: Observer<T>> Observer<Vec<T>> for FlattenedObserver<T, O> {
-    #[inline(always)]
-    fn next(&mut self, records: Vec<T>) -> () {
-        for record in records.into_iter() { self.observer.next(record); }
-    }
-
-    fn done(&mut self) -> () { self.observer.done(); }
+impl<T, D, O: Observer<T, D>> Observer<T, Vec<D>> for FlattenedObserver<T, D, O> {
+    fn open(&mut self, time: &T) -> () { self.observer.open(time); }
+    fn push(&mut self, data: &Vec<D>) -> () { for datum in data.iter() { self.observer.push(datum); } }
+    fn shut(&mut self, time: &T) -> () { self.observer.shut(time); }
 }
 
 
 // discriminated union of two observers
-pub enum ObserverPair<T, O1: Observer<T>, O2: Observer<T>> {
+pub enum ObserverPair<T, D, O1: Observer<T, D>, O2: Observer<T, D>> {
     Type1(O1),
     Type2(O2),
 }
 
-impl<T, O1: Observer<T>, O2: Observer<T>> Observer<T> for ObserverPair<T, O1, O2> {
-    #[inline(always)]
-    fn next(&mut self, data: T) {
+impl<T, D, O1: Observer<T, D>, O2: Observer<T, D>> Observer<T, D> for ObserverPair<T, D, O1, O2> {
+    fn open(&mut self, time: &T) {
         match *self {
-            ObserverPair::Type1(ref mut observer) => observer.next(data),
-            ObserverPair::Type2(ref mut observer) => observer.next(data),
+            ObserverPair::Type1(ref mut observer) => observer.open(time),
+            ObserverPair::Type2(ref mut observer) => observer.open(time),
         }
     }
-
-    fn done(&mut self) {
+    fn push(&mut self, data: &D) {
         match *self {
-            ObserverPair::Type1(ref mut observer) => observer.done(),
-            ObserverPair::Type2(ref mut observer) => observer.done(),
+            ObserverPair::Type1(ref mut observer) => observer.push(data),
+            ObserverPair::Type2(ref mut observer) => observer.push(data),
+        }
+    }
+    fn shut(&mut self, time: &T) {
+        match *self {
+            ObserverPair::Type1(ref mut observer) => observer.shut(time),
+            ObserverPair::Type2(ref mut observer) => observer.shut(time),
         }
     }
 }

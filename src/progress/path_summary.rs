@@ -14,8 +14,8 @@ impl PathSummary<()> for ()
     fn followed_by(&self, _: &()) -> () { () }
 }
 
-impl PathSummary<uint> for uint
+impl PathSummary<u64> for u64
 {
-    fn results_in(&self, src: &uint) -> uint { *self + *src }
-    fn followed_by(&self, other: &uint) -> uint { *self + *other }
+    fn results_in(&self, src: &u64) -> u64 { *self + *src }
+    fn followed_by(&self, other: &u64) -> u64 { *self + *other }
 }

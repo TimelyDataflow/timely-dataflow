@@ -2,6 +2,8 @@
 extern crate libc;
 
 use std::mem::replace;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use std::os::unix::prelude::AsRawFd;
 
@@ -16,6 +18,7 @@ use communication::channels::{Data};
 use example::stream::Stream;
 use communication::channels::OutputPort;
 use progress::count_map::CountMap;
+use progress::graph::GraphExtension;
 
 use std::thread::Thread;
 
@@ -24,18 +27,15 @@ use progress::subgraph::Target::ScopeInput;
 
 pub trait CommandExtensionTrait { fn command(&mut self, program: String) -> Self; }
 
-impl<S, D> CommandExtensionTrait for Stream<((), uint), S, D>
-where S: PathSummary<((), uint)>,
+impl<S, D> CommandExtensionTrait for Stream<((), u64), S, D>
+where S: PathSummary<((), u64)>,
       D: Data
 {
-    fn command(&mut self, program: String) -> Stream<((), uint), S, D>
-    {
-        let mut process = match Command::new(program.clone()).spawn()
-        {
+    fn command(&mut self, program: String) -> Stream<((), u64), S, D> {
+        let mut process = match Command::new(program.clone()).spawn() {
             Ok(p) => p,
             Err(e) => panic!("Process creation error: {}; program: {}", e, program),
         };
-
 
         let fd1 = (&mut process.stdout).as_mut().unwrap().as_raw_fd();
         let fd2 = (&mut process.stdin).as_mut().unwrap().as_raw_fd();
@@ -46,11 +46,11 @@ where S: PathSummary<((), uint)>,
         unsafe { libc::fcntl(fd1, libc::F_SETFL, libc::O_NONBLOCK); }
         unsafe { libc::fcntl(fd2, libc::F_SETFL, libc::O_NONBLOCK); }
 
-        let index = self.graph.add_scope(box command);
+        let index = self.graph.add_scope(command);
 
         self.graph.connect(self.name, ScopeInput(index, 0));
 
-        return self.copy_with(ScopeOutput(index, 0), OutputPort::new().targets);
+        return self.copy_with(ScopeOutput(index, 0), Rc::new(RefCell::new(Vec::new())));
     }
 }
 
@@ -60,24 +60,17 @@ struct CommandScope
     buffer:     Vec<u8>,
 }
 
-impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
-{
-    fn inputs(&self) -> uint { 1 }
-    fn outputs(&self) -> uint { 1 }
+impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
+    fn inputs(&self) -> u64 { 1 }
+    fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(((), uint), i64)>>)
-    {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(((), u64), i64)>>) {
         let mut internal = vec![Vec::new()];
-
         let stdout = (&mut self.process.stdout).as_mut().unwrap();
-
         let mut length_buf: Vec<_> = range(0, 8).map(|_| 0u8).collect();
-
         let mut read = 0;
-        while read < 8
-        {
-            read += match stdout.read(length_buf.slice_mut(read, 8))
-            {
+        while read < 8 {
+            read += match stdout.read(length_buf.slice_mut(read, 8)) {
                 Ok(len) => len,
                 Err(_err) => 0,
             };
@@ -87,10 +80,8 @@ impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
         let mut buffer = Vec::new();
         read = 0;
 
-        while read < expected
-        {
-            let just_read = match stdout.push(expected - read, &mut buffer)
-            {
+        while read < expected {
+            let just_read = match stdout.push(expected - read, &mut buffer) {
                 Ok(len)  => len,
                 Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) } else { 0 } },
             };
@@ -99,73 +90,48 @@ impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
         }
 
         let mut reader = MemReader::new(buffer);
-
-        for index in range(0, internal.len())
-        {
-            let number = reader.read_le_uint().ok().expect("1");
-            for _ in range(0, number)
-            {
-                let time = reader.read_le_uint().ok().expect("2");
+        for index in range(0, internal.len()) {
+            let number = reader.read_le_u64().ok().expect("1");
+            for _ in range(0, number) {
+                let time = reader.read_le_u64().ok().expect("2");
                 let delta = reader.read_le_i64().ok().expect("3");
-
                 println!("Command: intializing {} : {}", time, delta);
-
-                internal[index].update(((), time), delta);
+                internal[index].update(&((), time), delta);
             }
         }
 
         (vec![vec![Antichain::from_elem(Default::default())]], internal)
     }
 
-    // Reports (out -> in) summaries for the vertex, and initial frontier information.
-    // TODO: Update this to be summaries along paths external to the vertex, as this is strictly more informative.
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<S>>>, _frontier: &Vec<Vec<(((), uint), i64)>>) -> ()
-    {
-
-    }
-
-
-    fn push_external_progress(&mut self, external: &Vec<Vec<(((), uint), i64)>>) -> ()
-    {
-        // println!("Command: in push");
-
+    fn push_external_progress(&mut self, external: &Vec<Vec<(((), u64), i64)>>) -> () {
         let mut writer = MemWriter::new();
-
-        for index in range(0, external.len())
-        {
+        for index in range(0, external.len()) {
             writer.write_le_uint(external[index].len()).ok().expect("a");
-            for &(((), time), delta) in external[index].iter()
-            {
-                writer.write_le_uint(time).ok().expect("b");
+            for &(((), time), delta) in external[index].iter() {
+                writer.write_le_u64(time).ok().expect("b");
                 writer.write_le_i64(delta).ok().expect("c");
-
-                // println!("Command: pushing {} : {}", time, delta);
             }
         }
 
         let bytes = writer.into_inner();
-
         let stdin = (&mut self.process.stdin).as_mut().unwrap();
-
-        match stdin.write_le_uint(bytes.len())
-        {
+        match stdin.write_le_u64(bytes.len() as u64) {
             Ok(_) => {},
             Err(e) => { panic!("ERROR: {}",e); }
         }
-            // .ok().expect("write failure a");
+
         stdin.write(bytes.as_slice()).ok().expect("write failure b");
         stdin.flush().ok().expect("flush failure");
     }
 
-    fn pull_internal_progress(&mut self,  internal: &mut Vec<Vec<(((), uint), i64)>>,
-                                          consumed: &mut Vec<Vec<(((), uint), i64)>>,
-                                          produced: &mut Vec<Vec<(((), uint), i64)>>) -> bool
+    fn pull_internal_progress(&mut self,  internal: &mut Vec<Vec<(((), u64), i64)>>,
+                                          consumed: &mut Vec<Vec<(((), u64), i64)>>,
+                                          produced: &mut Vec<Vec<(((), u64), i64)>>) -> bool
     {
         let stdout = (&mut self.process.stdout).as_mut().unwrap();
 
         // push some amount, then try decoding...
-        match stdout.push(1024, &mut self.buffer)
-        {
+        match stdout.push(1024, &mut self.buffer) {
             Ok(_)  => { },
             Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) }
                         else { Thread::yield_now(); }},
@@ -178,54 +144,42 @@ impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
 
         let mut done = false;
 
-        while !done
-        {
+        while !done {
             // println!("spinning furiously");
-            let read = match reader.read_le_uint()
-            {
+            let read = match reader.read_le_u64() {
                 Ok(x) => x,
                 Err(_) => { done = true; 0 }
             };
 
-            if done || read + 8 + cursor > available
-            {
-                done = true;
-            }
-            else
-            {
-                for index in range(0, internal.len())
-                {
-                    let number = reader.read_le_uint().ok().expect("3");
-                    for _ in range(0, number)
-                    {
-                        let time = reader.read_le_uint().ok().expect("4");
+            if done || read + 8 + cursor > available as u64 { done = true; }
+            else {
+                for index in range(0, internal.len()) {
+                    let number = reader.read_le_u64().ok().expect("3");
+                    for _ in range(0, number) {
+                        let time = reader.read_le_u64().ok().expect("4");
                         let delta = reader.read_le_i64().ok().expect("5");
 
-                        internal[index].update(((), time), delta);
+                        internal[index].update(&((), time), delta);
                     }
                 }
 
-                for index in range(0, consumed.len())
-                {
-                    let number = reader.read_le_uint().ok().expect("6");
-                    for _ in range(0, number)
-                    {
-                        let time = reader.read_le_uint().ok().expect("7");
+                for index in range(0, consumed.len()) {
+                    let number = reader.read_le_u64().ok().expect("6");
+                    for _ in range(0, number) {
+                        let time = reader.read_le_u64().ok().expect("7");
                         let delta = reader.read_le_i64().ok().expect("8");
 
-                        consumed[index].update(((), time), delta);
+                        consumed[index].update(&((), time), delta);
                     }
                 }
 
-                for index in range(0, produced.len())
-                {
-                    let number = reader.read_le_uint().ok().expect("9");
-                    for _ in range(0, number)
-                    {
-                        let time = reader.read_le_uint().ok().expect("10");
+                for index in range(0, produced.len()) {
+                    let number = reader.read_le_u64().ok().expect("9");
+                    for _ in range(0, number) {
+                        let time = reader.read_le_u64().ok().expect("10");
                         let delta = reader.read_le_i64().ok().expect("11");
 
-                        produced[index].update(((), time), delta);
+                        produced[index].update(&((), time), delta);
                     }
                 }
 
@@ -233,10 +187,7 @@ impl<S: PathSummary<((), uint)>> Scope<((), uint), S> for CommandScope
             }
         }
 
-        // println!("resting");
-
-        self.buffer = reader.into_inner().slice(cursor, available).to_vec();
-
+        self.buffer = reader.into_inner()[cursor as usize .. available].to_vec();
         return false;
     }
 
