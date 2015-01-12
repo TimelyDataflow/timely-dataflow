@@ -19,7 +19,7 @@ use progress::subgraph::Summary::Local;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 
-use progress::broadcast::{ProgressBroadcaster, MultiThreadedBroadcaster};
+use progress::broadcast::{Progcaster, MultiThreadedBroadcaster};
 use communication::ChannelAllocator;
 
 use communication::channels::Data;
@@ -136,19 +136,17 @@ fn _barrier_multi(threads: u64)
     }
 }
 
-fn _create_subgraph<T1, T2, S1, S2, D, B1, B2>(graph: &mut Rc<RefCell<Subgraph<T1, S1, T2, S2, B1>>>,
+fn _create_subgraph<T1, T2, S1, S2, D>(graph: &mut Rc<RefCell<Subgraph<T1, S1, T2, S2>>>,
                                                source1: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
                                                source2: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                               broadcaster: B2)
+                                               progcaster: Progcaster<((T1,T2),u64)>)
                                                 -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
 where T1: Timestamp, S1: PathSummary<T1>,
       T2: Timestamp, S2: PathSummary<T2>,
       D:  Data+Hash<SipHasher>+Eq+Show,
-      B1: ProgressBroadcaster<(T1, T2)>,
-      B2: ProgressBroadcaster<((T1, T2), u64)>,
 {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let mut subgraph = graph.new_subgraph::<_, u64, _>(0, broadcaster);
+    let mut subgraph = graph.new_subgraph::<_, u64>(0, progcaster);
 
     let (sub_egress1, sub_egress2) = {
         // create new ingress nodes, passing in a reference to the subgraph for them to use.
@@ -177,8 +175,8 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), _, _, _>>> = Rc::new(RefCell::new(Default::default()));
-    graph.borrow_mut().broadcaster = MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()));
+    let mut graph: Rc<RefCell<Subgraph<(), (), _, _>>> = Rc::new(RefCell::new(Default::default()));
+    graph.borrow_mut().progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
 
     // try building some input scopes
     let (mut input1, mut stream1) = graph.new_input(allocator.clone());
@@ -189,11 +187,11 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
-    let broadcaster = MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()));
+    let progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
     let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
                                                       &mut stream1.concat(&mut feedback1_output),
                                                       &mut stream2.concat(&mut feedback2_output),
-                                                      broadcaster);
+                                                      progcaster);
 
     // connect feedback sources. notice that we have swapped indices ...
     feedback1.connect_input(&mut egress2);
@@ -236,7 +234,7 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph = new_graph(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
+    let mut graph = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()))));
 
     // try building some input scopes
     let mut input: (InputHelper<_, u64>, _) = graph.new_input(allocator.clone());
@@ -270,7 +268,7 @@ fn _barrier(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph = new_graph(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
+    let mut graph = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()))));
 
     // add a new, relatively pointless, scope.
     // It has a non-trivial path summary, so the timely dataflow graph is not improperly cyclic.

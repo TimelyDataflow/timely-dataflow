@@ -60,19 +60,15 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T> {
     fn outputs(&self) -> u64 { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>) {
-        (Vec::new(), vec![self.frontier.borrow().elements.iter().map(|&x| (x, self.copies as i64)).collect()])
+        (Vec::new(), vec![self.frontier.borrow().elements.iter().map(|x| (x.clone(), self.copies as i64)).collect()])
     }
 
     fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<Vec<(T, i64)>>,
                                         _messages_consumed: &mut Vec<Vec<(T, i64)>>,
                                          messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool
     {
-        for &(key, val) in self.messages.borrow().iter() { messages_produced[0].push((key, val)); }
-        self.messages.borrow_mut().clear();
-
-        for &(key, val) in self.progress.borrow().iter() { frontier_progress[0].push((key, val)); }
-        self.progress.borrow_mut().clear();
-
+        for (ref key, val) in self.messages.borrow_mut().drain() { messages_produced[0].update(key, val); }
+        for (ref key, val) in self.progress.borrow_mut().drain() { frontier_progress[0].update(key, val); }
         return false;
     }
 

@@ -16,7 +16,7 @@ impl ChannelAllocator
     pub fn index(&self) -> u64 { self.index }
     pub fn multiplicity(&self) -> u64 { self.multiplicity }
 
-    pub fn new_channel<T:Send>(&mut self) -> (Vec<Sender<T>>, Option<Receiver<T>>) {
+    pub fn new_channel<T:Send>(&mut self) -> (Vec<Sender<T>>, Receiver<T>) {
         let mut channels = self.channels.lock().ok().expect("mutex error?");
 
         // we need a new channel ...
@@ -36,7 +36,7 @@ impl ChannelAllocator
         match channels[self.allocated as usize].downcast_mut::<(Vec<Sender<T>>, Vec<Option<Receiver<T>>>)>() {
             Some(&mut (ref mut senders, ref mut receivers)) => {
                 self.allocated += 1;
-                (senders.clone(), receivers[self.index as usize].take())
+                (senders.clone(), receivers[self.index as usize].take().unwrap())
             }
             _ => { panic!("unable to cast channel correctly"); }
         }

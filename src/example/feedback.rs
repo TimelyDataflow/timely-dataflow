@@ -93,8 +93,8 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for FeedbackScope<T, S> {
                                           messages_consumed: &mut Vec<Vec<(T, i64)>>,
                                           messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool
     {
-        for &(key, val) in self.consumed_messages.borrow().iter() { messages_consumed[0].push((key, val)); }
-        for &(key, val) in self.produced_messages.borrow().iter() { messages_produced[0].push((key, val)); }
+        for &(ref key, val) in self.consumed_messages.borrow().iter() { messages_consumed[0].update(key, val); }
+        for &(ref key, val) in self.produced_messages.borrow().iter() { messages_produced[0].update(key, val); }
 
         self.consumed_messages.borrow_mut().clear();
         self.produced_messages.borrow_mut().clear();

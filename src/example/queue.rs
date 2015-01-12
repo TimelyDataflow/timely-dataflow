@@ -80,8 +80,8 @@ impl<T: Timestamp, D:Data> ScopeInputQueue<T, D>
 {
     pub fn pull_progress(&mut self, consumed: &mut Vec<(T, i64)>, progress: &mut Vec<(T, i64)>)
     {
-        for &(key, val) in self.consumed_messages.iter() { consumed.push((key, val)); }
-        for &(key, val) in self.frontier_progress.iter() { progress.push((key, val)); }
+        for &(ref key, val) in self.consumed_messages.iter() { consumed.update(key, val); }
+        for &(ref key, val) in self.frontier_progress.iter() { progress.update(key, val); }
 
         self.consumed_messages.clear();
         self.frontier_progress.clear();
@@ -119,8 +119,8 @@ impl<T:Timestamp, S:PathSummary<T>, D:Data> Scope<T, S> for QueueScope<T, S, D>
     fn outputs(&self) -> u64 { 1 }
 
     fn set_external_summary(&mut self, _: Vec<Vec<Antichain<S>>>, guarantee: &Vec<Vec<(T, i64)>>) -> () {
-        for &(key, val) in guarantee[0].iter() {
-            self.guarantee.push((key, val));
+        for &(ref key, val) in guarantee[0].iter() {
+            self.guarantee.push((key.clone(), val));
         }
     }
 
@@ -129,13 +129,14 @@ impl<T:Timestamp, S:PathSummary<T>, D:Data> Scope<T, S> for QueueScope<T, S, D>
         let mut input = self.input.borrow_mut();
         let mut sendable = Vec::new();
         for key in input.queues.keys() {
-            if !self.guarantee.iter().any(|&(x,_)| x.le(key)) {
-                sendable.push(*key);
+            if !self.guarantee.iter().any(|&(ref x, _)| x.le(key)) {
+                sendable.push(key.clone());
             }
         }
 
-        for key in sendable.iter() {
-            self.to_send.push((*key, input.extract_queue(key).unwrap()));
+        for key in sendable.drain() {
+            let data = input.extract_queue(&key).unwrap();
+            self.to_send.push((key, data));
         }
     }
 
@@ -146,15 +147,15 @@ impl<T:Timestamp, S:PathSummary<T>, D:Data> Scope<T, S> for QueueScope<T, S, D>
         // ask the input if it has consumed messages and created queues ...
         self.input.borrow_mut().pull_progress(&mut messages_consumed[0], &mut frontier_progress[0]);
 
-        for (time, data) in self.to_send.drain() {
-            messages_produced[0].push((time, data.len() as i64));
-            frontier_progress[0].push((time, -1));
+        for (ref time, ref data) in self.to_send.drain() {
+            messages_produced[0].update(time, data.len() as i64);
+            frontier_progress[0].update(time, -1);
 
-            for target in self.output.borrow_mut().iter_mut() { target.open(&time); }
+            for target in self.output.borrow_mut().iter_mut() { target.open(time); }
             for target in self.output.borrow_mut().iter_mut() {
                 for datum in data.iter() { target.push(datum); }
             }
-            for target in self.output.borrow_mut().iter_mut() { target.shut(&time); }
+            for target in self.output.borrow_mut().iter_mut() { target.shut(time); }
         }
 
         return true;

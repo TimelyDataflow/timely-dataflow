@@ -8,7 +8,7 @@ use progress::subgraph::Source::{GraphInput, ScopeOutput};
 use progress::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::subgraph::{Subgraph, Summary};
 
-use progress::broadcast::ProgressBroadcaster;
+use progress::broadcast::Progcaster;
 
 use example::stream::Stream;
 use communication::Observer;
@@ -21,20 +21,18 @@ pub trait GraphBoundary<T1:Timestamp, T2:Timestamp, S1:PathSummary<T1>, S2:PathS
     fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
                                               graph: Box<Graph<T1, S1>>) -> Stream<T1, S1, D>;
 
-    fn new_subgraph<T, S, B>(&mut self, default: T, broadcaster: B) -> Rc<RefCell<Subgraph<(T1, T2), Summary<S1, S2>, T, S, B>>>
+    fn new_subgraph<T, S>(&mut self, default: T, progcaster: Progcaster<((T1,T2),T)>) -> Rc<RefCell<Subgraph<(T1, T2), Summary<S1, S2>, T, S>>>
     where T: Timestamp,
-          S: PathSummary<T>,
-          B: ProgressBroadcaster<((T1, T2), T)>;
+          S: PathSummary<T>;
 }
 
-impl<TOuter, SOuter, TInner, SInner, Bcast>
+impl<TOuter, SOuter, TInner, SInner>
 GraphBoundary<TOuter, TInner, SOuter, SInner>
-for Rc<RefCell<Subgraph<TOuter, SOuter, TInner, SInner, Bcast>>>
+for Rc<RefCell<Subgraph<TOuter, SOuter, TInner, SInner>>>
 where TOuter: Timestamp,
       TInner: Timestamp,
       SOuter: PathSummary<TOuter>,
       SInner: PathSummary<TInner>,
-      Bcast:  ProgressBroadcaster<(TOuter, TInner)>
 {
     fn add_input<D: Data>(&mut self, source: &mut Stream<TOuter, SOuter, D>) ->
         Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>
@@ -71,15 +69,14 @@ where TOuter: Timestamp,
             allocator: source.allocator.clone() };
     }
 
-    fn new_subgraph<T, S, B>(&mut self, _default: T, broadcaster: B)
-            -> Rc<RefCell<Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S, B>>>
+    fn new_subgraph<T, S>(&mut self, _default: T, progcaster: Progcaster<((TOuter,TInner),T)>)
+            -> Rc<RefCell<Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S>>>
     where T: Timestamp,
           S: PathSummary<T>,
-          B: ProgressBroadcaster<((TOuter, TInner), T)>
     {
-        let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S, B> = Default::default();
-        result.index = self.borrow().subscopes.len() as u64;
-        result.broadcaster = broadcaster;
+        let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> = Default::default();
+        result.index = self.borrow().children() as u64;
+        result.progcaster = progcaster;
         return Rc::new(RefCell::new(result));
     }
 }
@@ -92,8 +89,8 @@ pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
 impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer<TOuter, TData> for IngressNub<TOuter, TInner, TData>
 {
     fn push(&mut self, data: &TData) { self.targets.push(data); }
-    fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(*time, Default::default())); }
-    fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(*time, Default::default())); }
+    fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(time.clone(), Default::default())); }
+    fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(time.clone(), Default::default())); }
 }
 
 

@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::hash::{Hash, SipHasher};
-use std::collections::hash_map::Hasher;
 use std::collections::hash_state::DefaultState;
 use std::hash;
 use core::fmt::Show;
@@ -35,8 +34,6 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Show> DistinctE
         };
 
         let targets = Rc::new(RefCell::new(Vec::new()));
-
-        let hash_state: DefaultState<SipHasher> = Default::default();
 
         let scope = DistinctScope {
             input:      receiver,
@@ -92,7 +89,7 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+PartialEq+Show>
 
         // see if we should send any of it
         for key in self.elements.keys() {
-            if self.external.iter().any(|&(t,_)| t.gt(key)) { self.dispose.push(*key); }
+            if self.external.iter().any(|&(ref t,_)| t.gt(key)) { self.dispose.push(key.clone()); }
         }
 
         // send anything we have finalized

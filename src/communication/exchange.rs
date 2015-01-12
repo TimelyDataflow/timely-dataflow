@@ -25,7 +25,7 @@ pub fn exchange_with<T: Timestamp, D: Data, F: Fn(&D) -> u64>(allocator: &mut Ch
     };
 
     let exchange_receiver = ExchangeReceiver {
-        receiver:   receiver.unwrap(),
+        receiver:   receiver,
         buffers:    HashMap::new(),
         doubles:    HashMap::new(),
         consumed:   Vec::new(),
@@ -84,11 +84,13 @@ pub struct ExchangeReceiver<T:Timestamp, D:Data>
 impl<T:Timestamp, D:Data> Iterator for ExchangeReceiver<T, D>
 {
     type Item = (T, Vec<D>);
+
     fn next(&mut self) -> Option<(T, Vec<D>)> {
-        let next_key = self.doubles.keys().next().map(|x|x.clone());    // if data in double-buffer, return it. else swap buffers.
+        let next_key = self.doubles.keys().next().map(|x| x.clone());
         if let Some(key) = next_key {
             self.frontier.update(&key, -1);
-            return self.doubles.remove(&key).map(|x| (key, x));         // TODO : Get Rust folks to give me my key back!!!
+            let val = self.doubles.remove(&key).unwrap();
+            return Some((key, val));
         }
         else {
             self.drain();
