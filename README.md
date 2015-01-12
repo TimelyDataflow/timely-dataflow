@@ -4,7 +4,7 @@ Timely dataflow is a low-latency cyclic dataflow computational model, introduced
 
 This project is a flexible implementation of timely dataflow in [Rust](http://www.rust-lang.org). It's main feature is that it takes a new, much more modular approach to coordinating the timely dataflow computation. Naiad threw the entire dataflow graph in a big pile and, with enough restrictions and bits of tape, it all worked.
 
-Our approach here is to organize things a bit more. While a dataflow graph may have vertices in it (where computation happens), these vertices can be backed by other timely dataflow graphs. There is relatively little information the parent scope needs to have about the child, and by maintain that abstraction, we make several new things possible:
+Our approach here is to organize things a bit more. While a dataflow graph may have vertices in it (where computation happens), these vertices can be backed by other timely dataflow graphs. There is relatively little information the parent scope needs to have about the child, and by maintaining that abstraction, we make several new things possible:
 
 * subgraphs may use notions of progress other than ''iteration count'' as used in Naiad.
 * subgraphs may coordinate among varying sets of workers, allowing tighter coordination when desired.
