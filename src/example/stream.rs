@@ -11,7 +11,7 @@ use communication::Data;
 pub struct Stream<T: Timestamp, S: PathSummary<T>, D:Data>
 {
     pub name:       Source,                                 // used to name the source in the host graph.
-    pub ports:      Rc<RefCell<Vec<Box<Observer<T, D>>>>>,  // used to register interest in the output.
+    pub ports:      Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,  // used to register interest in the output.
     pub graph:      Box<Graph<T, S>>,                       // probably doesn't need to depend on T or S (make a new trait).
                                                             // (oops, it does; for graph.add_scope())
     pub allocator:  Rc<RefCell<ChannelAllocator>>,          // for allocating communication channels
@@ -19,11 +19,11 @@ pub struct Stream<T: Timestamp, S: PathSummary<T>, D:Data>
 
 impl<T: Timestamp, S: PathSummary<T>, D:Data> Stream<T, S, D>
 {
-    pub fn add_observer<O: Observer<T, D>>(&mut self, observer: O) {
+    pub fn add_observer<O: Observer<Time=T, Data=D>>(&mut self, observer: O) {
         self.ports.borrow_mut().push(Box::new(observer));
     }
 
-    pub fn copy_with<D2: Data>(&self, name: Source, port: Rc<RefCell<Vec<Box<Observer<T, D2>>>>>) -> Stream<T, S, D2> {
+    pub fn copy_with<D2: Data>(&self, name: Source, port: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D2>>>>>) -> Stream<T, S, D2> {
         Stream {
             name: name,
             ports: port,

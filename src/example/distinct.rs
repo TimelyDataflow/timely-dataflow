@@ -56,7 +56,7 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Show> DistinctE
 pub struct DistinctScope<T: Timestamp, D: Data+Hash<SipHasher>+Eq+PartialEq>
 {
     input:      ExchangeReceiver<T, D>,
-    output:     ObserverHelper<T, D, OutputPort<T, D>>,
+    output:     ObserverHelper<OutputPort<T, D>>,
     elements:   HashMap<T, HashSet<D, DefaultState<SipHasher>>>,
     dispose:    Vec<T>,
 

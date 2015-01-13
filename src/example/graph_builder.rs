@@ -83,11 +83,13 @@ where TOuter: Timestamp,
 
 
 pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
-    targets: ObserverHelper<(TOuter, TInner), TData, OutputPort<(TOuter, TInner), TData>>,
+    targets: ObserverHelper<OutputPort<(TOuter, TInner), TData>>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer<TOuter, TData> for IngressNub<TOuter, TInner, TData>
+impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<TOuter, TInner, TData>
 {
+    type Time = TOuter;
+    type Data = TData;
     fn push(&mut self, data: &TData) { self.targets.push(data); }
     fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(time.clone(), Default::default())); }
     fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(time.clone(), Default::default())); }
@@ -95,11 +97,13 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer<TOuter, TData> 
 
 
 pub struct EgressNub<TOuter, TInner, TData> {
-    targets: Rc<RefCell<Vec<Box<Observer<TOuter, TData>>>>>,
+    targets: Rc<RefCell<Vec<Box<Observer<Time=TOuter, Data=TData>>>>>,
 }
 
-impl<TOuter, TInner, TData> Observer<(TOuter, TInner), TData> for EgressNub<TOuter, TInner, TData>
+impl<TOuter, TInner, TData> Observer for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp, TData: Data {
+    type Time = (TOuter, TInner);
+    type Data = TData;
     fn open(&mut self, time: &(TOuter, TInner)) { for target in self.targets.borrow_mut().iter_mut() { target.open(&time.0); } }
     fn push(&mut self, data: &TData) { for target in self.targets.borrow_mut().iter_mut() { target.push(data); } }
     fn shut(&mut self, time: &(TOuter, TInner)) { for target in self.targets.borrow_mut().iter_mut() { target.shut(&time.0); } }

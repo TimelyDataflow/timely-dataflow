@@ -50,8 +50,10 @@ pub struct ScopeInputQueue<T: Timestamp, D:Data>
     buffer:             Vec<D>,
 }
 
-impl<T: Timestamp, D:Data> Observer<T, D> for Rc<RefCell<ScopeInputQueue<T, D>>>
+impl<T: Timestamp, D:Data> Observer for Rc<RefCell<ScopeInputQueue<T, D>>>
 {
+    type Time = T;
+    type Data = D;
     fn open(&mut self, time: &T) { }
     fn push(&mut self, data: &D) {
         // TODO : Fix so not so manny borrows ...
@@ -107,7 +109,7 @@ impl<T: Timestamp, D:Data> ScopeInputQueue<T, D>
 struct QueueScope<T:Timestamp, S: PathSummary<T>, D:Data>
 {
     input:      Rc<RefCell<ScopeInputQueue<T, D>>>,
-    output:     Rc<RefCell<Vec<Box<Observer<T, D>>>>>,
+    output:     Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
     to_send:    Vec<(T, Vec<D>)>,
     guarantee:  Vec<(T, i64)>,
 }

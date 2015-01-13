@@ -1,3 +1,4 @@
+#![allow(unstable)]
 #![feature(unsafe_destructor)]
 
 extern crate core;
@@ -73,14 +74,13 @@ fn main()
     let process_id = if let Some(proc_id) = args.get_str("-p").parse() { proc_id }
                      else { panic!("invalid setting for --processid: {}", args.get_str("-p")) };
     let processes: u64 = if let Some(processes) = args.get_str("-n").parse() { processes }
-                    else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
+                         else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
 
     // let threads = 3u;
     // let process_id = 0u;
     // let processes = 1u;
 
     println!("Hello, world!");
-
     println!("Starting timely with\n\tthreads:\t{}\n\tprocesses:\t{}\n\tprocessid:\t{}", threads, processes, process_id);
 
     // _queue_multi(threads); println!("started queue test");
@@ -137,10 +137,10 @@ fn _barrier_multi(threads: u64)
 }
 
 fn _create_subgraph<T1, T2, S1, S2, D>(graph: &mut Rc<RefCell<Subgraph<T1, S1, T2, S2>>>,
-                                               source1: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                               source2: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                               progcaster: Progcaster<((T1,T2),u64)>)
-                                                -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
+                                       source1: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
+                                       source2: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
+                                       progcaster: Progcaster<((T1,T2),u64)>)
+                                        -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
 where T1: Timestamp, S1: PathSummary<T1>,
       T2: Timestamp, S2: PathSummary<T2>,
       D:  Data+Hash<SipHasher>+Eq+Show,
@@ -235,18 +235,11 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()))));
-
-    // try building some input scopes
-    let mut input: (InputHelper<_, u64>, _) = graph.new_input(allocator.clone());
-
-    // prepare some feedback edges
+    let mut input: (InputHelper<_, u64>, _) = graph.new_input(allocator);
     let mut feedback = input.1.feedback(((), 1000), Local(1));
-
-    // build up a subgraph using the concatenated inputs/feedbacks
     let mut result = input.1.concat(&mut feedback.1)
                             .command("./target/release/command".to_string());
 
-    // connect feedback sources. notice that we have swapped indices ...
     feedback.0.connect_input(&mut result);
 
     // start things up!
@@ -263,18 +256,10 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     }
 }
 
-fn _barrier(allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
+fn _barrier(mut allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
 {
-    let allocator = Rc::new(RefCell::new(allocator));
-
-    // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()))));
-
-    // add a new, relatively pointless, scope.
-    // It has a non-trivial path summary, so the timely dataflow graph is not improperly cyclic.
-    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.borrow().multiplicity() as i64, ttl: 10000000 });
-
-    // attach the scope's output back to its input.
+    let mut graph = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut allocator)));
+    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.multiplicity() as i64, ttl: 10000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 
     // start things up!

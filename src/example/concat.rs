@@ -35,13 +35,11 @@ where T:Timestamp,
     }
 }
 
-pub struct ConcatScope<T:Timestamp>
-{
+pub struct ConcatScope<T:Timestamp> {
     consumed:   Vec<Rc<RefCell<Vec<(T, i64)>>>>
 }
 
-impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for ConcatScope<T>
-{
+impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for ConcatScope<T> {
     fn name(&self) -> String { format!("Concat") }
     fn inputs(&self) -> u64 { self.consumed.len() as u64 }
     fn outputs(&self) -> u64 { 1 }

@@ -12,9 +12,9 @@ pub trait Scope<T: Timestamp, S: PathSummary<T>> : 'static
     // by default, full connectivity from all inputs to all outputs, and no capabilities reserved.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>)
     {
-        (range(0, self.inputs()).map(|_| range(0, self.outputs()).map(|_| Antichain::from_elem(Default::default())).collect())
-                                .collect(),
-         range(0, self.outputs()).map(|_| Vec::new()).collect())
+        ((0..self.inputs()).map(|_| (0..self.outputs()).map(|_| Antichain::from_elem(Default::default()))
+                                                       .collect()).collect(),
+         (0..self.outputs()).map(|_| Vec::new()).collect())
     }
 
     // Reports (out -> in) summaries for the vertex, and initial frontier information.

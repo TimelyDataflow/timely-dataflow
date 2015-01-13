@@ -1,56 +1,118 @@
 use std::mem;
 use std::sync::mpsc::Sender;
 
+// TODO : Observer requires a &mut reference, and should have the "No races!" property:
+// TODO : If you hold a &mut ref, no one else can call open/push/shut. Don't let go of it!
+// TODO : Probably a good place to insist on RAII...
+
 // observer trait
-pub trait Observer<T, D> : 'static {
-    fn open(&mut self, time: &T);   // new punctuation, essentially ...
-    fn push(&mut self, time: &D);   // reveals push data to the observer.
-    fn shut(&mut self, time: &T);   // indicates that we are done for now.
+pub trait Observer : 'static {
+    type Time;
+    type Data;
+    fn open(&mut self, time: &Self::Time);   // new punctuation, essentially ...
+    fn push(&mut self, time: &Self::Data);   // reveals push data to the observer.
+    fn shut(&mut self, time: &Self::Time);   // indicates that we are done for now.
 }
 
+// impl Observer {
+//     pub fn session<'a>(&'a mut self, time: &'a <Self as Observer>::Time) -> ObserverSession<'a, Self> {
+//         ObserverSession::new(self, time);
+//     }
+// }
+
+pub trait ObserverSessionExt : Observer {
+    fn session<'a>(&'a mut self, time: &'a <Self as Observer>::Time) -> ObserverSession<'a, Self>;
+}
+
+impl<O: Observer> ObserverSessionExt for O {
+    fn session<'a>(&'a mut self, time: &'a <O as Observer>::Time) -> ObserverSession<'a, O> {
+        ObserverSession::new(self, time);
+    }
+}
+
+// Attempt at RAII for observers. Intended to prevent mis-use
+// TODO : ?Sized because we don't know the Observer size; irc indicates might be bad.
+pub struct ObserverSession<'a, O:Observer+'a> where <O as Observer>::Time: 'a {
+    observer:   &'a mut O,
+    time:       &'a O::Time,
+}
+
+#[unsafe_destructor]
+// TODO : ?Sized because we don't know the Observer size; irc indicates might be bad.
+impl<'a, O:Observer+'a> Drop for ObserverSession<'a, O> where <O as Observer>::Time: 'a {
+    fn drop(&mut self) {
+        self.observer.shut(self.time);
+    }
+}
+
+// TODO : ?Sized because we don't know the Observer size; irc indicates might be bad.
+impl<'a, O:Observer+'a> ObserverSession<'a, O> {
+    fn new(obs: &'a mut O, time: &'a O::Time) -> ObserverSession<'a, O> {
+        obs.open(time);
+        ObserverSession {
+            observer: obs,
+            time:     time,
+        }
+    }
+    fn push(&mut self, data: &O::Data) {
+        self.observer.push(data);
+    }
+}
+
+
+
 // implementation for inter-thread queues
-impl<T:Clone+Send+'static, D:Clone+Send+'static> Observer<T, D> for (Vec<D>, Sender<(T, Vec<D>)>) {
-    fn open(&mut self, time: &T) { }
+impl<T:Clone+Send+'static, D:Clone+Send+'static> Observer for (Vec<D>, Sender<(T, Vec<D>)>) {
+    type Time = T;
+    type Data = D;
+    fn open(&mut self,_time: &T) { }
     fn push(&mut self, data: &D) { self.0.push(data.clone()); }
     fn shut(&mut self, time: &T) { let vec = mem::replace(&mut self.0, Vec::new()); self.1.send((time.clone(), vec)); }
 }
 
+
 // an observer broadcasting to many observers
-pub struct BroadcastObserver<T, D, O: Observer<T, D>> {
+pub struct BroadcastObserver<O: Observer> {
     observers:  Vec<O>,
 }
 
-impl<T: Clone, D: Clone, O: Observer<T, D>> Observer<T, D> for BroadcastObserver<T, D, O> {
-    fn open(&mut self, time: &T) { for observer in self.observers.iter_mut() { observer.open(time); } }
-    fn push(&mut self, data: &D) { for observer in self.observers.iter_mut() { observer.push(data); } }
-    fn shut(&mut self, time: &T) { for observer in self.observers.iter_mut() { observer.shut(time); }}
+impl<O: Observer> Observer for BroadcastObserver<O> {
+    type Time = O::Time;
+    type Data = O::Data;
+    fn open(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.open(time); } }
+    fn push(&mut self, data: &O::Data) { for observer in self.observers.iter_mut() { observer.push(data); } }
+    fn shut(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.shut(time); }}
 }
 
 
 // an observer routing between many observers
-pub struct ExchangeObserver<T, D, O: Observer<T, D>, H: Fn(&D) -> u64> {
+pub struct ExchangeObserver<O: Observer, H: Fn(&O::Data) -> u64> {
     pub observers:  Vec<O>,
     pub hash_func:  H,
 }
 
-impl<T, D: Clone, O: Observer<T, D>, H: Fn(&D) -> u64+'static> Observer<T, D> for ExchangeObserver<T, D, O, H> {
-    fn open(&mut self, time: &T) -> () { for observer in self.observers.iter_mut() { observer.open(time); } }
-    fn push(&mut self, data: &D) -> () {
+impl<O: Observer, H: Fn(&O::Data) -> u64+'static> Observer for ExchangeObserver<O, H> where O::Data : Clone {
+    type Time = O::Time;
+    type Data = O::Data;
+    fn open(&mut self, time: &O::Time) -> () { for observer in self.observers.iter_mut() { observer.open(time); } }
+    fn push(&mut self, data: &O::Data) -> () {
         let dst = (self.hash_func)(data) % self.observers.len() as u64;
         self.observers[dst as usize].push(data);
     }
-    fn shut(&mut self, time: &T) -> () { for observer in self.observers.iter_mut() { observer.shut(time); } }
+    fn shut(&mut self, time: &O::Time) -> () { for observer in self.observers.iter_mut() { observer.shut(time); } }
 }
 
 // an observer buffering records before sending
-pub struct BufferedObserver<T, D, O: Observer<T, Vec<D>>> {
+pub struct BufferedObserver<D, O: Observer> {
     limit:      u64,
     buffer:     Vec<D>,
     observer:   O,
 }
 
-impl<T:Clone+'static, D: Clone+'static, O: Observer<T, Vec<D>>> Observer<T, D> for BufferedObserver<T, D, O> {
-    fn open(&mut self, time: &T) { self.observer.open(time); }
+impl<D: Clone+'static, O: Observer<Data = Vec<D>>> Observer for BufferedObserver<D, O> where O::Time : Clone + 'static {
+    type Time = O::Time;
+    type Data = D;
+    fn open(&mut self, time: &O::Time) { self.observer.open(time); }
     fn push(&mut self, data: &D) -> () {
         self.buffer.push(data.clone());
         if self.buffer.len() as u64 > self.limit {
@@ -58,7 +120,7 @@ impl<T:Clone+'static, D: Clone+'static, O: Observer<T, Vec<D>>> Observer<T, D> f
             self.buffer.clear();
         }
     }
-    fn shut(&mut self, time: &T) -> () {
+    fn shut(&mut self, time: &O::Time) -> () {
         self.observer.push(&self.buffer);
         self.observer.shut(time);
         self.buffer.clear();
@@ -66,24 +128,28 @@ impl<T:Clone+'static, D: Clone+'static, O: Observer<T, Vec<D>>> Observer<T, D> f
 }
 
 // dual to BufferedObserver, flattens out buffers
-pub struct FlattenedObserver<T, D, O: Observer<T, D>> {
+pub struct FlattenedObserver<O: Observer> {
     observer:   O,
 }
 
-impl<T, D, O: Observer<T, D>> Observer<T, Vec<D>> for FlattenedObserver<T, D, O> {
-    fn open(&mut self, time: &T) -> () { self.observer.open(time); }
-    fn push(&mut self, data: &Vec<D>) -> () { for datum in data.iter() { self.observer.push(datum); } }
-    fn shut(&mut self, time: &T) -> () { self.observer.shut(time); }
+impl<O: Observer> Observer for FlattenedObserver<O> {
+    type Time = O::Time;
+    type Data = Vec<O::Data>;
+    fn open(&mut self, time: &O::Time) -> () { self.observer.open(time); }
+    fn push(&mut self, data: &Vec<O::Data>) -> () { for datum in data.iter() { self.observer.push(datum); } }
+    fn shut(&mut self, time: &O::Time) -> () { self.observer.shut(time); }
 }
 
 
 // discriminated union of two observers
-pub enum ObserverPair<T, D, O1: Observer<T, D>, O2: Observer<T, D>> {
+pub enum ObserverPair<O1: Observer, O2: Observer> {
     Type1(O1),
     Type2(O2),
 }
 
-impl<T, D, O1: Observer<T, D>, O2: Observer<T, D>> Observer<T, D> for ObserverPair<T, D, O1, O2> {
+impl<T, D, O1: Observer<Time=T, Data=D>, O2: Observer<Time=T, Data=D>> Observer for ObserverPair<O1, O2> {
+    type Time = T;
+    type Data = D;
     fn open(&mut self, time: &T) {
         match *self {
             ObserverPair::Type1(ref mut observer) => observer.open(time),

@@ -16,11 +16,11 @@ use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 pub trait FeedbackExtensionTrait<T: Timestamp, S: PathSummary<T>, D:Data> {
-    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<T, S, D, ObserverHelper<T, D, FeedbackObserver<T, S, D>>>, Stream<T, S, D>);
+    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<T, S, D>>>, Stream<T, S, D>);
 }
 
 impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> for Stream<T, S, D> {
-    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<T, S, D, ObserverHelper<T, D, FeedbackObserver<T, S, D>>>, Stream<T, S, D>) {
+    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<T, S, D>>>, Stream<T, S, D>) {
 
         let targets: Rc<RefCell<Vec<_>>>  = Default::default();
         let produced: Rc<RefCell<Vec<_>>> = Default::default();
@@ -48,11 +48,13 @@ impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> fo
 pub struct FeedbackObserver<T: Timestamp, S: PathSummary<T>, D:Data> {
     limit:      T,
     summary:    S,
-    targets:    ObserverHelper<T, D, OutputPort<T, D>>,
+    targets:    ObserverHelper<OutputPort<T, D>>,
     // consumed:   Rc<RefCell<Vec<(T, i64)>>>,
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Data> Observer<T, D> for FeedbackObserver<T, S, D> {
+impl<T: Timestamp, S: PathSummary<T>, D: Data> Observer for FeedbackObserver<T, S, D> {
+    type Time = T;
+    type Data = D;
     fn open(&mut self, time: &T) { self.targets.open(&self.summary.results_in(time)); }
     fn push(&mut self, data: &D) { self.targets.push(data); } // TODO : Consult self.limit! buffer! break cycles!
     fn shut(&mut self, time: &T) { self.targets.shut(&self.summary.results_in(time)); }
@@ -60,13 +62,13 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data> Observer<T, D> for FeedbackObserv
 
 
 // a handy widget for connecting feedback edges
-pub struct FeedbackHelper<T:Timestamp, S: PathSummary<T>, D:Data, O: Observer<T, D>> {
+pub struct FeedbackHelper<O: Observer> {
     index:  u64,
     target: Option<O>,
 }
 
-impl<T:Timestamp, S:PathSummary<T>, D:Data, O: Observer<T, D>> FeedbackHelper<T, S, D, O> {
-    pub fn connect_input(&mut self, source: &mut Stream<T, S, D>) -> () {
+impl<O: Observer> FeedbackHelper<O> where O::Time : Timestamp, O::Data : Data {
+    pub fn connect_input<S: PathSummary<O::Time>>(&mut self, source: &mut Stream<O::Time, S, O::Data>) -> () {
         source.graph.connect(source.name, ScopeInput(self.index, 0));
         source.add_observer(self.target.take().unwrap());
     }

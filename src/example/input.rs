@@ -78,7 +78,7 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T> {
 pub struct InputHelper<T: Timestamp, D: Data> {
     frontier:   Rc<RefCell<MutableAntichain<T>>>,    // times available for sending
     progress:   Rc<RefCell<Vec<(T, i64)>>>,          // times closed since last asked
-    output:     ObserverHelper<T, D, OutputPort<T, D>>,
+    output:     ObserverHelper<OutputPort<T, D>>,
 }
 
 impl<T:Timestamp, D: Data> InputHelper<T, D> {
