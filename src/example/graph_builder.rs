@@ -37,7 +37,7 @@ where TOuter: Timestamp,
     fn add_input<D: Data>(&mut self, source: &mut Stream<TOuter, SOuter, D>) ->
         Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>
     {
-        let targets = Rc::new(RefCell::new(Vec::new()));
+        let targets: Rc<RefCell<Vec<Box<Observer<Time=(TOuter,TInner), Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
         let produced = Rc::new(RefCell::new(Vec::new()));
 
         let ingress = IngressNub { targets: ObserverHelper::new(OutputPort{ shared: targets.clone() }, produced.clone()) };
@@ -57,7 +57,7 @@ where TOuter: Timestamp,
         let mut borrow = self.borrow_mut();
         let index = borrow.new_output();
 
-        let targets = Rc::new(RefCell::new(Vec::new()));
+        let targets: Rc<RefCell<Vec<Box<Observer<Time=TOuter, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
 
         borrow.connect(source.name, GraphOutput(index));
         source.add_observer(EgressNub { targets: targets.clone() });

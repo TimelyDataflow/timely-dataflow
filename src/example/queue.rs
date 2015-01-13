@@ -26,7 +26,7 @@ where T:Timestamp,
 {
     fn queue(&mut self) -> Stream<T, S, D> {
         let input = ScopeInputQueue::new_shared();
-        let output = Rc::new(RefCell::new(Vec::new()));
+        let output: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
 
         let index = self.graph.add_scope(QueueScope {
             input:      input.clone(),
@@ -38,7 +38,14 @@ where T:Timestamp,
         self.graph.connect(self.name, ScopeInput(index, 0));
         self.add_observer(input);
 
-        return self.copy_with(ScopeOutput(index, 0), output);
+        // return self.copy_with(ScopeOutput(index, 0), output);
+        Stream {
+            name: ScopeOutput(index, 0),
+            ports: output,
+            graph: self.graph.as_box(),
+            allocator: self.allocator.clone(),
+        }
+
     }
 }
 

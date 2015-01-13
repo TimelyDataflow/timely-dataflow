@@ -22,9 +22,9 @@ pub trait FeedbackExtensionTrait<T: Timestamp, S: PathSummary<T>, D:Data> {
 impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> for Stream<T, S, D> {
     fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<T, S, D>>>, Stream<T, S, D>) {
 
-        let targets: Rc<RefCell<Vec<_>>>  = Default::default();
-        let produced: Rc<RefCell<Vec<_>>> = Default::default();
-        let consumed: Rc<RefCell<Vec<_>>> = Default::default();
+        let targets: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Default::default();
+        let produced: Rc<RefCell<Vec<(T, i64)>>> = Default::default();
+        let consumed: Rc<RefCell<Vec<(T, i64)>>> = Default::default();
 
         let feedback_output = ObserverHelper::new(OutputPort { shared: targets.clone() }, produced.clone());
         let feedback_input =  ObserverHelper::new(FeedbackObserver { limit: limit, summary: summary, targets: feedback_output }, consumed.clone());
@@ -40,7 +40,14 @@ impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> fo
             target: Some(feedback_input),
         };
 
-        return (helper, self.copy_with(ScopeOutput(index, 0), targets));
+        let result = Stream {
+            name: ScopeOutput(index, 0),
+            ports: targets.clone(),
+            graph: self.graph.as_box(),
+            allocator: self.allocator.clone(),
+        };
+
+        return (helper, result);
     }
 }
 

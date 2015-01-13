@@ -19,7 +19,7 @@ where T:Timestamp,
       D:Data,
 {
     fn concat(&mut self, other: &mut Stream<T, S, D>) -> Stream<T, S, D> {
-        let targets = Rc::new(RefCell::new(Vec::new()));
+        let targets: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
         let consumed = vec![Rc::new(RefCell::new(Vec::new())),
                             Rc::new(RefCell::new(Vec::new()))];
 
@@ -31,7 +31,12 @@ where T:Timestamp,
         self.add_observer(ObserverHelper::new(OutputPort { shared: targets.clone() }, consumed[0].clone()));
         other.add_observer(ObserverHelper::new(OutputPort { shared: targets.clone() }, consumed[1].clone()));
 
-        return self.copy_with(ScopeOutput(index, 0), targets.clone());
+        Stream {
+            name: ScopeOutput(index, 0),
+            ports: targets,
+            graph: self.graph.as_box(),
+            allocator: self.allocator.clone(),
+        }
     }
 }
 

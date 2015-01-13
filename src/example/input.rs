@@ -22,7 +22,7 @@ pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>>
 impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> for G
 {
     fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>) {
-        let targets = Rc::new(RefCell::new(Vec::new()));//Default::default();
+        let targets: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));//Default::default();
         let produced = Rc::new(RefCell::new(Vec::new()));//Default::default();
 
         let helper = InputHelper {

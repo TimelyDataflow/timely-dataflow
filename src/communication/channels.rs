@@ -12,18 +12,17 @@ use std::default::Default;
 pub trait Data : Clone+Send+Show+'static { }
 impl<T: Clone+Send+Show+'static> Data for T { }
 
+
 pub struct OutputPort<T: Timestamp, D: Data> {
     pub shared:    Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
 }
 
-
 impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
     type Time = T;
     type Data = D;
-    // TODO : Way wrong. borrow once in a RAII helper, once you figure that out.
-    fn push(&mut self, data: &D) { for target in self.shared.borrow_mut().iter_mut() { target.push(data); } }
-    fn open(&mut self, time: &T) -> () { for target in self.shared.borrow_mut().iter_mut() { target.open(time); } }
-    fn shut(&mut self, time: &T) -> () { for target in self.shared.borrow_mut().iter_mut() { target.shut(time); } }
+    fn push(&mut self, data: &D) { for target in self.shared.borrow_mut().iter_mut() { target.push(data);  } }
+    fn open(&mut self, time: &T) { for target in self.shared.borrow_mut().iter_mut() { target.open(time); } }
+    fn shut(&mut self, time: &T) { for target in self.shared.borrow_mut().iter_mut() { target.shut(time); } }
 }
 
 

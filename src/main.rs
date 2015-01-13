@@ -22,6 +22,7 @@ use progress::subgraph::Target::ScopeInput;
 
 use progress::broadcast::{Progcaster, MultiThreadedBroadcaster};
 use communication::ChannelAllocator;
+use communication::channels::ObserverHelper;
 
 use communication::channels::Data;
 use std::hash::{Hash, SipHasher};
@@ -30,7 +31,7 @@ use core::fmt::Show;
 
 use example::input::{InputExtensionTrait, InputHelper};
 use example::concat::{ConcatExtensionTrait};
-use example::feedback::{FeedbackExtensionTrait};
+use example::feedback::{FeedbackExtensionTrait, FeedbackHelper, FeedbackObserver};
 use example::queue::{QueueExtensionTrait};
 use example::distinct::{DistinctExtensionTrait};
 use example::stream::Stream;
@@ -69,9 +70,9 @@ fn main()
 {
     let args = Docopt::new(USAGE).and_then(|dopt| dopt.parse()).unwrap_or_else(|e| e.exit());
 
-    let threads = if let Some(threads) = args.get_str("-t").parse() { threads }
+    let threads: u64 = if let Some(threads) = args.get_str("-t").parse() { threads }
                   else { panic!("invalid setting for --threads: {}", args.get_str("-t")) };
-    let process_id = if let Some(proc_id) = args.get_str("-p").parse() { proc_id }
+    let process_id: u64 = if let Some(proc_id) = args.get_str("-p").parse() { proc_id }
                      else { panic!("invalid setting for --processid: {}", args.get_str("-p")) };
     let processes: u64 = if let Some(processes) = args.get_str("-n").parse() { processes }
                          else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
@@ -87,7 +88,7 @@ fn main()
     // _barrier_multi(threads); println!("started barrier test");
     // _networking(process_id, processes);
 
-    if args.get_bool("queue") { _queue_multi(threads); println!("started queue test"); }
+    // if args.get_bool("queue") { _queue_multi(threads); println!("started queue test"); }
     if args.get_bool("barrier") { _barrier_multi(threads); println!("started barrier test"); }
     if args.get_bool("command") { _command_multi(threads); println!("started command test"); }
 
@@ -171,18 +172,21 @@ where T1: Timestamp, S1: PathSummary<T1>,
     return (sub_egress1, sub_egress2);
 }
 
+// TODO : Commented out while rustc works on an ICE issue.
 fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), _, _>>> = Rc::new(RefCell::new(Default::default()));
+    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = Rc::new(RefCell::new(Default::default()));
     graph.borrow_mut().progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
 
     // try building some input scopes
-    let (mut input1, mut stream1) = graph.new_input(allocator.clone());
-    let (mut input2, mut stream2) = graph.new_input(allocator.clone());
+    let (mut input1, mut stream1) = graph.new_input::<u64>(allocator.clone());
+    let (mut input2, mut stream2) = graph.new_input::<u64>(allocator.clone());
 
     // prepare some feedback edges
+    // TODO : the next line, and lines like it, produce internal compiler errors.
+    // let (mut feedback1, mut feedback1_output): (FeedbackHelper<ObserverHelper<FeedbackObserver<((),u64), Summary<(), u64>, u64>>>, Stream<((), u64), Summary<(), u64>, u64>) = stream1.feedback(((), 1000000), Local(1));
     let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000000), Local(1));
     let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
 
@@ -230,14 +234,15 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
 }
 
 
+// TODO : Commented out while rustc works on an ICE issue
 fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()))));
-    let mut input: (InputHelper<_, u64>, _) = graph.new_input(allocator);
+    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()))));
+    let mut input: (InputHelper<((), u64), u64>, _) = graph.new_input(allocator);
     let mut feedback = input.1.feedback(((), 1000), Local(1));
-    let mut result = input.1.concat(&mut feedback.1)
+    let mut result: Stream<((), u64), Summary<(), u64>, u64> = input.1.concat(&mut feedback.1)
                             .command("./target/release/command".to_string());
 
     feedback.0.connect_input(&mut result);
@@ -258,7 +263,7 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
 
 fn _barrier(mut allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
 {
-    let mut graph = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut allocator)));
+    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut allocator)));
     graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.multiplicity() as i64, ttl: 10000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 

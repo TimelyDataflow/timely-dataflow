@@ -19,6 +19,7 @@ use communication::exchange::{ExchangeReceiver, exchange_with};
 use example::stream::Stream;
 use communication::channels::{OutputPort, ObserverHelper};
 use communication::Observer;
+use communication::observer::ObserverSessionExt;
 
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
@@ -33,7 +34,7 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Show> DistinctE
             exchange_with(allocator, |record| hash::hash(&record))
         };
 
-        let targets = Rc::new(RefCell::new(Vec::new()));
+        let targets: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
 
         let scope = DistinctScope {
             input:      receiver,
@@ -49,7 +50,14 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Show> DistinctE
         self.graph.connect(self.name, ScopeInput(index, 0));
         self.add_observer(sender);
 
-        return self.copy_with(ScopeOutput(index, 0), targets);
+        // return self.copy_with(ScopeOutput(index, 0), targets);
+        Stream {
+            name: ScopeOutput(index, 0),
+            ports: targets,
+            graph: self.graph.as_box(),
+            allocator: self.allocator.clone(),
+        }
+
     }
 }
 
@@ -92,21 +100,22 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+PartialEq+Show>
             if self.external.iter().any(|&(ref t,_)| t.gt(key)) { self.dispose.push(key.clone()); }
         }
 
-        // send anything we have finalized
-        while let Some(ref key) = self.dispose.pop() {
-            self.output.open(key);
-            if let Some(data) = self.elements.remove(key) { for datum in data.into_iter() { self.output.push(&datum); } }
-            self.output.shut(key);
-            self.internal.update(key, -1);
+        // send anything for times we have finalized
+        for time in self.dispose.drain() {
+            if let Some(data) = self.elements.remove(&time) {
+                let mut session = self.output.session(&time);
+                for datum in data.into_iter() { session.push(&datum); }
+            }
+            self.internal.update(&time, -1);
         }
 
         // extract what we know about progress from the input and output adapters.
         self.input.pull_progress(&mut consumed[0], &mut internal[0]);
         self.output.pull_progress(&mut produced[0]);
 
-        while let Some((ref time, delta)) = self.internal.pop() { internal[0].update(time, delta); }
+        for (time, delta) in self.internal.drain() { internal[0].update(&time, delta); }
 
-        return false;
+        return false;   // no unannounced internal work
     }
 
     fn name(&self) -> String { format!("Distinct") }

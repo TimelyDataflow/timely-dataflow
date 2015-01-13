@@ -19,6 +19,7 @@ use example::stream::Stream;
 use communication::channels::OutputPort;
 use progress::count_map::CountMap;
 use progress::graph::GraphExtension;
+use communication::Observer;
 
 use std::thread::Thread;
 
@@ -32,6 +33,7 @@ where S: PathSummary<((), u64)>,
       D: Data
 {
     fn command(&mut self, program: String) -> Stream<((), u64), S, D> {
+
         let mut process = match Command::new(program.clone()).spawn() {
             Ok(p) => p,
             Err(e) => panic!("Process creation error: {}; program: {}", e, program),
@@ -50,7 +52,12 @@ where S: PathSummary<((), u64)>,
 
         self.graph.connect(self.name, ScopeInput(index, 0));
 
-        return self.copy_with(ScopeOutput(index, 0), Rc::new(RefCell::new(Vec::new())));
+        Stream {
+            name: ScopeOutput(index, 0),
+            ports: Default::default(),
+            graph: self.graph.as_box(),
+            allocator: self.allocator.clone(),
+        }
     }
 }
 

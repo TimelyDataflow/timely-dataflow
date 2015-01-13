@@ -3,7 +3,7 @@ use std::sync::mpsc::Sender;
 
 // TODO : Observer requires a &mut reference, and should have the "No races!" property:
 // TODO : If you hold a &mut ref, no one else can call open/push/shut. Don't let go of it!
-// TODO : Probably a good place to insist on RAII...
+// TODO : Probably a good place to insist on RAII... (see ObserverSession)
 
 // observer trait
 pub trait Observer : 'static {
@@ -14,38 +14,30 @@ pub trait Observer : 'static {
     fn shut(&mut self, time: &Self::Time);   // indicates that we are done for now.
 }
 
-// impl Observer {
-//     pub fn session<'a>(&'a mut self, time: &'a <Self as Observer>::Time) -> ObserverSession<'a, Self> {
-//         ObserverSession::new(self, time);
-//     }
-// }
-
+// extension trait for creating an RAII observer session from any observer
 pub trait ObserverSessionExt : Observer {
     fn session<'a>(&'a mut self, time: &'a <Self as Observer>::Time) -> ObserverSession<'a, Self>;
 }
 
 impl<O: Observer> ObserverSessionExt for O {
     fn session<'a>(&'a mut self, time: &'a <O as Observer>::Time) -> ObserverSession<'a, O> {
-        ObserverSession::new(self, time);
+        ObserverSession::new(self, time)
     }
 }
 
-// Attempt at RAII for observers. Intended to prevent mis-use
-// TODO : ?Sized because we don't know the Observer size; irc indicates might be bad.
+// Attempt at RAII for observers. Intended to prevent mis-sequencing of open/push/shut.
 pub struct ObserverSession<'a, O:Observer+'a> where <O as Observer>::Time: 'a {
     observer:   &'a mut O,
     time:       &'a O::Time,
 }
 
 #[unsafe_destructor]
-// TODO : ?Sized because we don't know the Observer size; irc indicates might be bad.
 impl<'a, O:Observer+'a> Drop for ObserverSession<'a, O> where <O as Observer>::Time: 'a {
     fn drop(&mut self) {
         self.observer.shut(self.time);
     }
 }
 
-// TODO : ?Sized because we don't know the Observer size; irc indicates might be bad.
 impl<'a, O:Observer+'a> ObserverSession<'a, O> {
     fn new(obs: &'a mut O, time: &'a O::Time) -> ObserverSession<'a, O> {
         obs.open(time);
@@ -54,11 +46,10 @@ impl<'a, O:Observer+'a> ObserverSession<'a, O> {
             time:     time,
         }
     }
-    fn push(&mut self, data: &O::Data) {
+    pub fn push(&mut self, data: &O::Data) {
         self.observer.push(data);
     }
 }
-
 
 
 // implementation for inter-thread queues
