@@ -4,7 +4,7 @@ use std::sync::mpsc::{Sender, Receiver};
 use progress::Timestamp;
 use communication::ChannelAllocator;
 
-type ProgressVec<T> = Vec<(u64, u64, T, i64)>;  // (scope, [in/out]port, timestamp, delta)
+pub type ProgressVec<T> = Vec<(u64, u64, T, i64)>;  // (scope, [in/out]port, timestamp, delta)
 
 // a mechanism for broadcasting progress information within a scope
 // broadcasts contents of update, repopulates from broadcasts
