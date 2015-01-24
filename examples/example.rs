@@ -2,6 +2,7 @@
 #![feature(unsafe_destructor)]
 
 extern crate core;
+extern crate timely;
 extern crate test;
 extern crate serialize;
 extern crate columnar;
@@ -13,46 +14,37 @@ use test::Bencher;
 
 use std::default::Default;
 
-use progress::{Timestamp, PathSummary, Graph, Scope};
-use progress::graph::GraphExtension;
-use progress::subgraph::{Subgraph, Summary, new_graph};
-use progress::subgraph::Summary::Local;
-use progress::subgraph::Source::ScopeOutput;
-use progress::subgraph::Target::ScopeInput;
+use timely::progress::{Timestamp, PathSummary, Graph, Scope};
+use timely::progress::graph::GraphExtension;
+use timely::progress::subgraph::{Subgraph, Summary, new_graph};
+use timely::progress::subgraph::Summary::Local;
+use timely::progress::subgraph::Source::ScopeOutput;
+use timely::progress::subgraph::Target::ScopeInput;
+use timely::progress::broadcast::{Progcaster, MultiThreadedBroadcaster};
+use timely::communication::{ProcessCommunicator, Communicator};
+// use timely::communication::channels::ObserverHelper;
+use timely::communication::channels::Data;
 
-use progress::broadcast::{Progcaster, MultiThreadedBroadcaster};
-use communication::{ProcessCommunicator, Communicator};
-use communication::channels::ObserverHelper;
-
-use communication::channels::Data;
 use std::hash::{Hash, SipHasher};
-use std::collections::hash_map::Hasher;
 use core::fmt::Debug;
 
-use example::input::{InputExtensionTrait, InputHelper};
-use example::concat::{ConcatExtensionTrait};
-use example::feedback::{FeedbackExtensionTrait, FeedbackHelper, FeedbackObserver};
-use example::queue::{QueueExtensionTrait};
-use example::distinct::{DistinctExtensionTrait};
-use example::stream::Stream;
-use example::command::{CommandExtensionTrait};
+use timely::example::input::{InputExtensionTrait, InputHelper};
+use timely::example::concat::{ConcatExtensionTrait};
+use timely::example::feedback::FeedbackExtensionTrait;
+// use timely::example::queue::{QueueExtensionTrait};
+use timely::example::distinct::{DistinctExtensionTrait};
+use timely::example::stream::Stream;
+use timely::example::command::{CommandExtensionTrait};
 
-use example::graph_builder::GraphBoundary;
-use example::barrier::BarrierScope;
+use timely::example::graph_builder::GraphBoundary;
+use timely::example::barrier::BarrierScope;
 
 use std::rc::{Rc, try_unwrap};
 use std::cell::RefCell;
 
 use std::thread::Thread;
 
-// use std::os::args;
-
-use networking::initialize_networking;
-
-mod progress;
-mod example;
-mod networking;
-mod communication;
+use timely::networking::initialize_networking;
 
 static USAGE: &'static str = "
 Usage: timely queue [options] [<arguments>...]
@@ -87,7 +79,9 @@ fn main() {
     // _barrier_multi(threads); println!("started barrier test");
     // _networking(process_id, processes);
 
-    if args.get_bool("queue") { _queue_multi(threads); println!("started queue test"); }
+    if args.get_bool("queue") {
+        _queue_multi(threads); println!("started queue test");
+    }
     if args.get_bool("barrier") { _barrier_multi(threads); println!("started barrier test"); }
     if args.get_bool("command") { _command_multi(threads); println!("started command test"); }
 
@@ -182,8 +176,8 @@ fn _queue(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     // prepare some feedback edges
     // TODO : the next line, and lines like it, produce internal compiler errors.
     // let (mut feedback1, mut feedback1_output): (FeedbackHelper<ObserverHelper<FeedbackObserver<((),u64), Summary<(), u64>, u64>>>, Stream<((), u64), Summary<(), u64>, u64>) = stream1.feedback(((), 1000000), Local(1));
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
+    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000), Local(1));
+    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
     let progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
