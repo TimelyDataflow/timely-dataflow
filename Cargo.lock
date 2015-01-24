@@ -2,14 +2,14 @@
 name = "timely"
 version = "0.0.4"
 dependencies = [
- "columnar 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "columnar 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt 0.6.31 (registry+https://github.com/rust-lang/crates.io-index)",
  "docopt_macros 0.6.31 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "columnar"
-version = "0.0.5"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
