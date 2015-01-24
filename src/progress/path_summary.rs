@@ -1,8 +1,8 @@
-use core::fmt::Show;
+use core::fmt::Debug;
 use std::default::Default;
 
 // summarized reachability from one location to another.
-pub trait PathSummary<T> : 'static+Copy+Clone+Eq+PartialOrd+Show+Default
+pub trait PathSummary<T> : 'static+Copy+Clone+Eq+PartialOrd+Debug+Default
 {
     fn results_in(&self, src: &T) -> T;             // advances a timestamp
     fn followed_by(&self, other: &Self) -> Self;    // composes two summaries

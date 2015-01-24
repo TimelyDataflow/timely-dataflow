@@ -3,8 +3,8 @@ name = "timely"
 version = "0.0.4"
 dependencies = [
  "columnar 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "docopt 0.6.30 (registry+https://github.com/rust-lang/crates.io-index)",
- "docopt_macros 0.6.30 (registry+https://github.com/rust-lang/crates.io-index)",
+ "docopt 0.6.31 (registry+https://github.com/rust-lang/crates.io-index)",
+ "docopt_macros 0.6.31 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -14,19 +14,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "docopt"
-version = "0.6.30"
+version = "0.6.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "regex 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-serialize 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.2.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "docopt_macros"
-version = "0.6.30"
+version = "0.6.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "docopt 0.6.30 (registry+https://github.com/rust-lang/crates.io-index)",
+ "docopt 0.6.31 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -36,6 +36,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "rustc-serialize"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
