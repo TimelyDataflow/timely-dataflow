@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::default::Default;
-use core::fmt::Show;
+use core::fmt::Debug;
 
 use std::mem;
 
@@ -17,13 +17,13 @@ use progress::count_map::CountMap;
 
 use progress::broadcast::{Progcaster, ProgressBroadcaster};
 
-#[derive(Eq, PartialEq, Hash, Copy, Clone, Show)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Source {
     GraphInput(u64),           // from outer scope
     ScopeOutput(u64, u64),    // (scope, port) may have interesting connectivity
 }
 
-#[derive(Eq, PartialEq, Hash, Copy, Clone, Show)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Target {
     GraphOutput(u64),          // to outer scope
     ScopeInput(u64, u64),     // (scope, port) may have interesting connectivity
@@ -31,7 +31,7 @@ pub enum Target {
 
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for (TOuter, TInner) { }
 
-#[derive(Copy, Clone, Eq, PartialEq, Show)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Summary<S, T> {
     Local(T),    // reachable within scope, after some iterations.
     Outer(S, T), // unreachable within scope, reachable through outer scope and some iterations.
@@ -719,7 +719,7 @@ where T: Timestamp, S: PathSummary<T>
 }
 
 fn try_to_add_summary<S>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool
-where S: PartialOrd+Eq+Copy+Show
+where S: PartialOrd+Eq+Copy+Debug
 {
     for &mut (ref t, ref mut antichain) in vector.iter_mut() { if target.eq(t) { return antichain.insert(summary); } }
     vector.push((target, Antichain::from_elem(summary)));

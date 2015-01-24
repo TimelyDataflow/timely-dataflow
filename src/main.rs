@@ -27,7 +27,7 @@ use communication::channels::ObserverHelper;
 use communication::channels::Data;
 use std::hash::{Hash, SipHasher};
 use std::collections::hash_map::Hasher;
-use core::fmt::Show;
+use core::fmt::Debug;
 
 use example::input::{InputExtensionTrait, InputHelper};
 use example::concat::{ConcatExtensionTrait};
@@ -144,7 +144,7 @@ fn _create_subgraph<T1, T2, S1, S2, D>(graph: &mut Rc<RefCell<Subgraph<T1, S1, T
                                         -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
 where T1: Timestamp, S1: PathSummary<T1>,
       T2: Timestamp, S2: PathSummary<T2>,
-      D:  Data+Hash<SipHasher>+Eq+Show,
+      D:  Data+Hash<SipHasher>+Eq+Debug,
 {
     // build up a subgraph using the concatenated inputs/feedbacks
     let mut subgraph = graph.new_subgraph::<_, u64>(0, progcaster);

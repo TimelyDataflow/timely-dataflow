@@ -3,7 +3,7 @@ use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::hash::{Hash, SipHasher};
 use std::collections::hash_state::DefaultState;
 use std::hash;
-use core::fmt::Show;
+use core::fmt::Debug;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -26,7 +26,7 @@ use progress::subgraph::Target::ScopeInput;
 
 pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Show> DistinctExtensionTrait for Stream<T, S, D> {
+impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Debug> DistinctExtensionTrait for Stream<T, S, D> {
     fn distinct(&mut self) -> Stream<T, S, D> {
 
         let (sender, receiver) = {
@@ -72,7 +72,7 @@ pub struct DistinctScope<T: Timestamp, D: Data+Hash<SipHasher>+Eq+PartialEq>
     external:   Vec<(T, i64)>,
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+PartialEq+Show> Scope<T, S> for DistinctScope<T, D>
+impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+PartialEq+Debug> Scope<T, S> for DistinctScope<T, D>
 {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }

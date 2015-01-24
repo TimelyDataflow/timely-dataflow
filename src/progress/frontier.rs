@@ -1,15 +1,15 @@
-use core::fmt::Show;
+use core::fmt::Debug;
 use std::default::Default;
 
 use progress::count_map::CountMap;
 
-#[derive(Default, Clone, Show)]
+#[derive(Default, Clone, Debug)]
 pub struct Antichain<T>
 {
     pub elements: Vec<T>
 }
 
-impl<T: PartialOrd+Eq+Copy+Show> Antichain<T>
+impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T>
 {
     // returns true if element is added to the set
     pub fn insert(&mut self, element: T) -> bool {
@@ -37,14 +37,14 @@ impl<T: PartialOrd+Eq+Copy+Show> Antichain<T>
     pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
 }
 
-#[derive(Default, Show)]
+#[derive(Default, Debug)]
 pub struct MutableAntichain<T:Eq> {
     occurrences:    Vec<(T, i64)>,  // occurrence count of each time
     precedents:     Vec<(T, i64)>,  // precedent count of each time with occurrence count > 0
     pub elements:   Vec<T>,     // the set of times with precedent count == 0
 }
 
-impl<T: PartialOrd+Eq+Clone+Show+'static> MutableAntichain<T> {
+impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
     pub fn new() -> MutableAntichain<T> {
         MutableAntichain {
             occurrences: Default::default(),

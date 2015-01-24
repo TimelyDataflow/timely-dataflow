@@ -1,4 +1,4 @@
-use core::fmt::Show;
+use core::fmt::Debug;
 
 use progress::Timestamp;
 use progress::count_map::CountMap;
@@ -9,8 +9,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-pub trait Data : Clone+Send+Show+'static { }
-impl<T: Clone+Send+Show+'static> Data for T { }
+pub trait Data : Clone+Send+Debug+'static { }
+impl<T: Clone+Send+Debug+'static> Data for T { }
 
 
 pub struct OutputPort<T: Timestamp, D: Data> {
