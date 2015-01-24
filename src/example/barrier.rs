@@ -6,7 +6,7 @@ use progress::subgraph::Summary::Local;
 pub struct BarrierScope {
     pub ready:  bool,
     pub epoch:  u64,
-    pub degree: i64,
+    pub degree: u64,
     pub ttl:    u64,
 }
 
@@ -17,7 +17,7 @@ impl Scope<((), u64), Summary<(), u64>> for BarrierScope {
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<Summary<(), u64>>>>, Vec<Vec<(((), u64), i64)>>) {
         return (vec![vec![Antichain::from_elem(Local(1))]],
-                vec![vec![(((), self.epoch), self.degree)]]);
+                vec![vec![(((), self.epoch), self.degree as i64)]]);
     }
 
     fn push_external_progress(&mut self, external: &Vec<Vec<(((), u64), i64)>>) -> () {
@@ -32,7 +32,6 @@ impl Scope<((), u64), Summary<(), u64>> for BarrierScope {
                                         _consumed: &mut Vec<Vec<(((), u64), i64)>>,
                                         _produced: &mut Vec<Vec<(((), u64), i64)>>) -> bool
     {
-
         if self.ready {
             internal[0].push((((), self.epoch), -1));
 
@@ -44,6 +43,6 @@ impl Scope<((), u64), Summary<(), u64>> for BarrierScope {
             self.ready = false;
         }
 
-        return true;
+        return false;
     }
 }

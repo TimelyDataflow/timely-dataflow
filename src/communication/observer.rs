@@ -20,7 +20,7 @@ pub trait ObserverSessionExt : Observer {
 }
 
 impl<O: Observer> ObserverSessionExt for O {
-    fn session<'a>(&'a mut self, time: &'a <O as Observer>::Time) -> ObserverSession<'a, O> {
+    #[inline(always)] fn session<'a>(&'a mut self, time: &'a <O as Observer>::Time) -> ObserverSession<'a, O> {
         ObserverSession::new(self, time)
     }
 }
@@ -33,20 +33,18 @@ pub struct ObserverSession<'a, O:Observer+'a> where <O as Observer>::Time: 'a {
 
 #[unsafe_destructor]
 impl<'a, O:Observer+'a> Drop for ObserverSession<'a, O> where <O as Observer>::Time: 'a {
-    fn drop(&mut self) {
-        self.observer.shut(self.time);
-    }
+    #[inline(always)] fn drop(&mut self) { self.observer.shut(self.time); }
 }
 
 impl<'a, O:Observer+'a> ObserverSession<'a, O> {
-    fn new(obs: &'a mut O, time: &'a O::Time) -> ObserverSession<'a, O> {
+    #[inline(always)] fn new(obs: &'a mut O, time: &'a O::Time) -> ObserverSession<'a, O> {
         obs.open(time);
         ObserverSession {
             observer: obs,
             time:     time,
         }
     }
-    pub fn push(&mut self, data: &O::Data) {
+    #[inline(always)] pub fn push(&mut self, data: &O::Data) {
         self.observer.push(data);
     }
 }
@@ -56,9 +54,9 @@ impl<'a, O:Observer+'a> ObserverSession<'a, O> {
 impl<T:Clone+Send+'static, D:Clone+Send+'static> Observer for (Vec<D>, Sender<(T, Vec<D>)>) {
     type Time = T;
     type Data = D;
-    fn open(&mut self,_time: &T) { }
-    fn push(&mut self, data: &D) { self.0.push(data.clone()); }
-    fn shut(&mut self, time: &T) { let vec = mem::replace(&mut self.0, Vec::new()); self.1.send((time.clone(), vec)); }
+    #[inline(always)] fn open(&mut self,_time: &T) { }
+    #[inline(always)] fn push(&mut self, data: &D) { self.0.push(data.clone()); }
+    #[inline(always)] fn shut(&mut self, time: &T) { let vec = mem::replace(&mut self.0, Vec::new()); self.1.send((time.clone(), vec)); }
 }
 
 
@@ -70,9 +68,9 @@ pub struct BroadcastObserver<O: Observer> {
 impl<O: Observer> Observer for BroadcastObserver<O> {
     type Time = O::Time;
     type Data = O::Data;
-    fn open(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.open(time); } }
-    fn push(&mut self, data: &O::Data) { for observer in self.observers.iter_mut() { observer.push(data); } }
-    fn shut(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.shut(time); }}
+    #[inline(always)] fn open(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.open(time); } }
+    #[inline(always)] fn push(&mut self, data: &O::Data) { for observer in self.observers.iter_mut() { observer.push(data); } }
+    #[inline(always)] fn shut(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.shut(time); }}
 }
 
 
@@ -85,12 +83,12 @@ pub struct ExchangeObserver<O: Observer, H: Fn(&O::Data) -> u64> {
 impl<O: Observer, H: Fn(&O::Data) -> u64+'static> Observer for ExchangeObserver<O, H> where O::Data : Clone {
     type Time = O::Time;
     type Data = O::Data;
-    fn open(&mut self, time: &O::Time) -> () { for observer in self.observers.iter_mut() { observer.open(time); } }
-    fn push(&mut self, data: &O::Data) -> () {
+    #[inline(always)] fn open(&mut self, time: &O::Time) -> () { for observer in self.observers.iter_mut() { observer.open(time); } }
+    #[inline(always)] fn push(&mut self, data: &O::Data) -> () {
         let dst = (self.hash_func)(data) % self.observers.len() as u64;
         self.observers[dst as usize].push(data);
     }
-    fn shut(&mut self, time: &O::Time) -> () { for observer in self.observers.iter_mut() { observer.shut(time); } }
+    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () { for observer in self.observers.iter_mut() { observer.shut(time); } }
 }
 
 // an observer buffering records before sending
@@ -103,15 +101,15 @@ pub struct BufferedObserver<D, O: Observer> {
 impl<D: Clone+'static, O: Observer<Data = Vec<D>>> Observer for BufferedObserver<D, O> where O::Time : Clone + 'static {
     type Time = O::Time;
     type Data = D;
-    fn open(&mut self, time: &O::Time) { self.observer.open(time); }
-    fn push(&mut self, data: &D) -> () {
+    #[inline(always)] fn open(&mut self, time: &O::Time) { self.observer.open(time); }
+    #[inline(always)] fn push(&mut self, data: &D) -> () {
         self.buffer.push(data.clone());
         if self.buffer.len() as u64 > self.limit {
             self.observer.push(&mut self.buffer);
             self.buffer.clear();
         }
     }
-    fn shut(&mut self, time: &O::Time) -> () {
+    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () {
         self.observer.push(&self.buffer);
         self.observer.shut(time);
         self.buffer.clear();
@@ -126,9 +124,9 @@ pub struct FlattenedObserver<O: Observer> {
 impl<O: Observer> Observer for FlattenedObserver<O> {
     type Time = O::Time;
     type Data = Vec<O::Data>;
-    fn open(&mut self, time: &O::Time) -> () { self.observer.open(time); }
-    fn push(&mut self, data: &Vec<O::Data>) -> () { for datum in data.iter() { self.observer.push(datum); } }
-    fn shut(&mut self, time: &O::Time) -> () { self.observer.shut(time); }
+    #[inline(always)] fn open(&mut self, time: &O::Time) -> () { self.observer.open(time); }
+    #[inline(always)] fn push(&mut self, data: &Vec<O::Data>) -> () { for datum in data.iter() { self.observer.push(datum); } }
+    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () { self.observer.shut(time); }
 }
 
 
@@ -141,19 +139,19 @@ pub enum ObserverPair<O1: Observer, O2: Observer> {
 impl<T, D, O1: Observer<Time=T, Data=D>, O2: Observer<Time=T, Data=D>> Observer for ObserverPair<O1, O2> {
     type Time = T;
     type Data = D;
-    fn open(&mut self, time: &T) {
+    #[inline(always)] fn open(&mut self, time: &T) {
         match *self {
             ObserverPair::Type1(ref mut observer) => observer.open(time),
             ObserverPair::Type2(ref mut observer) => observer.open(time),
         }
     }
-    fn push(&mut self, data: &D) {
+    #[inline(always)] fn push(&mut self, data: &D) {
         match *self {
             ObserverPair::Type1(ref mut observer) => observer.push(data),
             ObserverPair::Type2(ref mut observer) => observer.push(data),
         }
     }
-    fn shut(&mut self, time: &T) {
+    #[inline(always)] fn shut(&mut self, time: &T) {
         match *self {
             ObserverPair::Type1(ref mut observer) => observer.shut(time),
             ObserverPair::Type2(ref mut observer) => observer.shut(time),

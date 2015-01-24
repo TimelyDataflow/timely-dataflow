@@ -2,7 +2,7 @@ use std::default::Default;
 use std::sync::mpsc::{Sender, Receiver};
 
 use progress::Timestamp;
-use communication::ChannelAllocator;
+use communication::{Communicator, ProcessCommunicator, Pushable, Pullable};
 
 type ProgressVec<T> = Vec<(u64, u64, T, i64)>;  // (scope, [in/out]port, timestamp, delta)
 
@@ -34,17 +34,16 @@ impl<T:Timestamp> Default for Progcaster<T> {
 
 
 pub struct MultiThreadedBroadcaster<T:Timestamp> {
-    senders:    Vec<Sender<(ProgressVec<T>, ProgressVec<T>)>>,
-    receiver:   Receiver<(ProgressVec<T>, ProgressVec<T>)>,
-    // queue:      Vec<ProgressVec<T>>,
+    senders:    Vec<Box<Pushable<(ProgressVec<T>, ProgressVec<T>)>>>,
+    receiver:   Box<Pullable<(ProgressVec<T>, ProgressVec<T>)>>,
 }
 
 impl<T:Timestamp+Send> ProgressBroadcaster<T> for MultiThreadedBroadcaster<T> {
     fn send_and_recv(&mut self, messages: &mut ProgressVec<T>, internal: &mut ProgressVec<T>) -> () {
         if self.senders.len() > 1 {  // if the length is one, just return the updates...
             if messages.len() > 0 || internal.len() > 0 {
-                for sender in self.senders.iter() {
-                    sender.send((messages.clone(), internal.clone())).ok().expect("broadcast send error");
+                for sender in self.senders.iter_mut() {
+                    sender.push((messages.clone(), internal.clone()));
                 }
 
                 messages.clear();
@@ -52,18 +51,16 @@ impl<T:Timestamp+Send> ProgressBroadcaster<T> for MultiThreadedBroadcaster<T> {
             }
 
             // let receiver = &self.receiver.as_ref().unwrap();
-            while let Ok((mut recv_messages, mut recv_internal)) = self.receiver.try_recv() {
+            while let Some((mut recv_messages, mut recv_internal)) = self.receiver.pull() {
                 for update in recv_messages.drain() { messages.push(update); }
                 for update in recv_internal.drain() { internal.push(update); }
-                // if self.queue.len() < 16 { self.queue.push(recv_messages); }
-                // if self.queue.len() < 16 { self.queue.push(recv_internal); }
             }
         }
     }
 }
 
 impl<T:Timestamp+Send> MultiThreadedBroadcaster<T> {
-    pub fn from(allocator: &mut ChannelAllocator) -> MultiThreadedBroadcaster<T> {
+    pub fn from(allocator: &mut ProcessCommunicator) -> MultiThreadedBroadcaster<T> {
         let (senders, receiver) = allocator.new_channel();
         MultiThreadedBroadcaster {
             senders:    senders,

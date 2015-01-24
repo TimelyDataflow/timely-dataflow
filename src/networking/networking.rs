@@ -7,8 +7,9 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread::Thread;
 use std::sync::{Arc, Future};
 use std::mem;
-
 use std::time::duration::Duration;
+
+use communication::{Communicator, Pushable, Pullable};
 
 #[derive(Copy)]
 struct MessageHeader {
@@ -117,7 +118,9 @@ impl<R: Reader> BinaryReceiver<R>
 
     fn ensure(&mut self, target: u64, graph: u64, channel: u64) {
         while self.targets[target as usize].len() as u64 <= graph { self.targets[target as usize].push(Vec::new()); }
-        while self.targets[target as usize][graph as usize].len() as u64 <= channel { self.targets[target as usize][graph as usize].push(None); }
+        while self.targets[target as usize][graph as usize].len() as u64 <= channel {
+            self.targets[target as usize][graph as usize].push(None);
+        }
 
         while let None = self.targets[target as usize][graph as usize][channel as usize] {
             // receive channel descriptions if any
@@ -142,7 +145,9 @@ struct BinarySender<W: Writer>
 
 impl<W: Writer> BinarySender<W>
 {
-    fn new(writer: W, targets: u64, sources: Receiver<(MessageHeader, Vec<u8>)>, channels: Receiver<((u64, u64, u64), Sender<Vec<u8>>)>) -> BinarySender<W> {
+    fn new(writer: W, targets: u64,
+           sources: Receiver<(MessageHeader, Vec<u8>)>,
+           channels: Receiver<((u64, u64, u64), Sender<Vec<u8>>)>) -> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
@@ -158,14 +163,16 @@ impl<W: Writer> BinarySender<W>
             buffer.clear();
 
             // inline because borrow-checker hate me
-            let source = header.source;
-            let graph = header.graph;
-            let channel = header.channel;
+            let source = header.source as usize;
+            let graph = header.graph as usize;
+            let channel = header.channel as usize;
 
-            while self.buffers[source as usize].len() as u64 <= graph { self.buffers[source as usize].push(Vec::new()); }
-            while self.buffers[source as usize][graph as usize].len() as u64 <= channel { self.buffers[source as usize][graph as usize].push(None); }
+            while self.buffers[source].len() <= graph { self.buffers[source].push(Vec::new()); }
+            while self.buffers[source][graph].len() <= channel {
+                self.buffers[source][graph].push(None);
+            }
 
-            while let None = self.buffers[source as usize][graph as usize][channel as usize] {
+            while let None = self.buffers[source][graph][channel] {
                 let ((t, g, c), s) = self.channels.recv().ok().expect("error");
                 while self.buffers[t as usize].len() as u64 <= g { self.buffers[t as usize].push(Vec::new()); }
                 while self.buffers[t as usize][g as usize].len() as u64 <= c { self.buffers[t as usize][g as usize].push(None); }
@@ -173,7 +180,7 @@ impl<W: Writer> BinarySender<W>
             }
             // end-inline
 
-            self.buffers[header.source as usize][header.graph as usize][header.channel as usize].as_ref().unwrap().send(buffer).ok().expect("err");
+            self.buffers[source][graph][channel].as_ref().unwrap().send(buffer).ok().expect("err");
         }
     }
 }
@@ -218,6 +225,9 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
     }
 
     return Ok(BinaryChannelAllocator {
+        index:          my_index,
+        peers:          workers,
+        graph:          0,          // TODO : Fix this
         allocated:      0,
         writers:        writers,
         readers:        readers,
@@ -267,9 +277,50 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> IoResult<Vec
     return Ok(results);
 }
 
+struct BinaryPushable<T> {
+    sender:     Sender<(MessageHeader, Vec<u8>)>,   // targets for each remote destination
+    receiver:   Receiver<Vec<u8>>,                  // source of empty binary vectors
+    buffer:     Vec<T>,                             // typed buffers (pre-serialization)
+    threshold:  usize,
+}
+
+impl<T:'static> Pushable<T> for BinaryPushable<T> {
+    #[inline]
+    fn push(&mut self, data: T) {
+        self.buffer.push(data);
+        if self.buffer.len() > self.threshold {
+            // serialize that stuff and send it
+            // ...
+        }
+    }
+}
+
+struct BinaryPullable<T> {
+    senders:    Vec<Sender<Vec<u8>>>,   // places to put used binary vectors
+    receiver:   Receiver<Vec<u8>>,      // source of serialized buffers
+    staged:     Vec<T>,                 // deserialized data, in progress.
+    cursor:     usize,                  // cursor into self.staged
+}
+
+impl<T:'static> Pullable<T> for BinaryPullable<T> {
+    #[inline]
+    fn pull(&mut self) -> Option<T> {
+        if self.staged.len() == 0 {
+            if let Some(serialized) = self.receiver.try_recv().ok() {
+                // deserialize stuff in to self.staged
+                // ...
+            }
+        }
+        self.staged.pop()
+    }
+}
+
 #[derive(Clone)]
 pub struct BinaryChannelAllocator {
-    allocated:      u64,                           // indicates how many have been allocated (locally).
+    index:          u64,        // index of this worker
+    peers:          u64,        // number of peer workers
+    graph:          u64,        // identifier for the current graph
+    allocated:      u64,        // indicates how many have been allocated (locally).
 
     // for loading up state in the networking threads.
     writers:        Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>)>>,                     // (index, back-to-worker)
@@ -278,12 +329,10 @@ pub struct BinaryChannelAllocator {
     writer_senders: Vec<Sender<(MessageHeader, Vec<u8>)>>
 }
 
-impl BinaryChannelAllocator
-{
+impl BinaryChannelAllocator {
     // returns: (send to net <--> back from net), then (back to net <--> recv from net)
     pub fn new_channel(&mut self, index: u64, graph: u64) -> (Vec<Sender<(MessageHeader, Vec<u8>)>>, Receiver<Vec<u8>>,
-                                                              Vec<Sender<Vec<u8>>>,                  Receiver<Vec<u8>>)
-    {
+                                                              Vec<Sender<Vec<u8>>>,                  Receiver<Vec<u8>>) {
         let mut send_to_net = Vec::new();
         let mut back_to_net = Vec::new();
 
@@ -307,5 +356,40 @@ impl BinaryChannelAllocator
         self.allocated += 1;
 
         return (send_to_net, back_from_net, back_to_net, recv_from_net);
+    }
+}
+
+impl Communicator for BinaryChannelAllocator {
+    fn index(&self) -> u64 { self.index }
+    fn peers(&self) -> u64 { self.peers }
+    fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+        let mut pushers: Vec<Box<Pushable<T>>> = Vec::new();
+        for index in (0..self.writers.len()) {
+            let (s,r) = channel();  // (back_to_worker, back_from_net)
+            pushers.push(Box::new(BinaryPushable {
+                sender:     self.writer_senders[index].clone(),
+                receiver:   r,
+                buffer:     Vec::new(),
+                threshold:  256,
+            }));
+            self.writers[index].send(((self.index, self.graph, self.allocated), s));
+        }
+
+        let (send,recv) = channel();
+        let mut pullsends = Vec::new();
+        for reader in self.readers.iter() {
+            let (s,r) = channel();
+            pullsends.push(s);
+            reader.send(((self.index, self.graph, self.allocated), send.clone(), r));
+        }
+
+        let pullable = Box::new(BinaryPullable {
+            senders:    pullsends,
+            receiver:   recv,
+            staged:     Vec::new(),
+            cursor:     0,
+        });
+
+        return (pushers, pullable);
     }
 }

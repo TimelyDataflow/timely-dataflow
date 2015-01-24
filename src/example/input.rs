@@ -7,40 +7,38 @@ use progress::{Graph, Scope, PathSummary, Timestamp};
 use progress::graph::GraphExtension;
 use progress::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
-use communication::ChannelAllocator;
+use communication::{ProcessCommunicator, Communicator};
 
 use communication::Observer;
 use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
 
-pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>>
-{
-    // returns both an input scope and a stream representing its output.
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>);
+// returns both an input scope and a stream representing its output.
+pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>> {
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ProcessCommunicator>>) -> (InputHelper<T, D>, Stream<T, S, D>);
 }
 
-impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> for G
-{
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ChannelAllocator>>) -> (InputHelper<T, D>, Stream<T, S, D>) {
-        let targets: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));//Default::default();
+impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> for G {
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ProcessCommunicator>>) -> (InputHelper<T, D>, Stream<T, S, D>) {
+        let output: OutputPort<T, D> = Default::default();//Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));//Default::default();
         let produced = Rc::new(RefCell::new(Vec::new()));//Default::default();
 
         let helper = InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(Vec::new())),
-            output:   ObserverHelper::new(OutputPort{ shared: targets.clone() }, produced.clone()),
+            output:   ObserverHelper::new(output.clone(), produced.clone()),
         };
 
         let index = self.add_scope(InputScope {
             frontier: helper.frontier.clone(),
             progress: helper.progress.clone(),
             messages: produced.clone(),
-            copies:   allocator.borrow().multiplicity(),
+            copies:   allocator.borrow().peers(),
         });
 
         return (helper, Stream {
             name: ScopeOutput(index, 0),
-            ports: targets,
+            ports: output,
             graph: self.as_box(),
             allocator: allocator.clone()
         });

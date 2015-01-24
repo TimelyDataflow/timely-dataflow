@@ -22,12 +22,12 @@ pub trait FeedbackExtensionTrait<T: Timestamp, S: PathSummary<T>, D:Data> {
 impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> for Stream<T, S, D> {
     fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<T, S, D>>>, Stream<T, S, D>) {
 
-        let targets: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Default::default();
+        let targets: OutputPort<T, D> = Default::default();
         let produced: Rc<RefCell<Vec<(T, i64)>>> = Default::default();
         let consumed: Rc<RefCell<Vec<(T, i64)>>> = Default::default();
 
-        let feedback_output = ObserverHelper::new(OutputPort { shared: targets.clone() }, produced.clone());
-        let feedback_input =  ObserverHelper::new(FeedbackObserver { limit: limit, summary: summary, targets: feedback_output }, consumed.clone());
+        let feedback_output = ObserverHelper::new(targets.clone(), produced.clone());
+        let feedback_input =  ObserverHelper::new(FeedbackObserver { limit: limit, summary: summary, targets: feedback_output, active: false }, consumed.clone());
 
         let index = self.graph.add_scope(FeedbackScope {
             consumed_messages:  consumed.clone(),
@@ -42,7 +42,7 @@ impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> fo
 
         let result = Stream {
             name: ScopeOutput(index, 0),
-            ports: targets.clone(),
+            ports: targets,
             graph: self.graph.as_box(),
             allocator: self.allocator.clone(),
         };
@@ -51,20 +51,30 @@ impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> fo
     }
 }
 
+enum FeedbackObserverStatus<T: Timestamp> {
+    Active(T),
+    Inactive,
+}
+
 // implementation of the feedback vertex, essentially, as an observer
 pub struct FeedbackObserver<T: Timestamp, S: PathSummary<T>, D:Data> {
     limit:      T,
     summary:    S,
     targets:    ObserverHelper<OutputPort<T, D>>,
-    // consumed:   Rc<RefCell<Vec<(T, i64)>>>,
+    active:     bool,
+    // status:     FeedbackObserverStatus<T>,  // for debugging ideally
 }
 
 impl<T: Timestamp, S: PathSummary<T>, D: Data> Observer for FeedbackObserver<T, S, D> {
     type Time = T;
     type Data = D;
-    fn open(&mut self, time: &T) { self.targets.open(&self.summary.results_in(time)); }
-    fn push(&mut self, data: &D) { self.targets.push(data); } // TODO : Consult self.limit! buffer! break cycles!
-    fn shut(&mut self, time: &T) { self.targets.shut(&self.summary.results_in(time)); }
+    #[inline(always)] fn open(&mut self, time: &T) {
+        self.active = time.le(&self.limit); // don't send if not less than limit
+        // println!("active: {}", self.active);
+        if self.active { self.targets.open(&self.summary.results_in(time)); }
+    }
+    #[inline(always)] fn push(&mut self, data: &D) { if self.active { self.targets.push(data); } }
+    #[inline(always)] fn shut(&mut self, time: &T) { if self.active { self.targets.shut(&self.summary.results_in(time)); } }
 }
 
 
@@ -100,14 +110,10 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for FeedbackScope<T, S> {
 
     fn pull_internal_progress(&mut self, _frontier_progress: &mut Vec<Vec<(T, i64)>>,
                                           messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                          messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool
-    {
-        for &(ref key, val) in self.consumed_messages.borrow().iter() { messages_consumed[0].update(key, val); }
-        for &(ref key, val) in self.produced_messages.borrow().iter() { messages_produced[0].update(key, val); }
-
-        self.consumed_messages.borrow_mut().clear();
-        self.produced_messages.borrow_mut().clear();
-
+                                          messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool {
+        for (ref key, val) in self.consumed_messages.borrow_mut().drain() { messages_consumed[0].update(key, val); }
+        for (ref key, val) in self.produced_messages.borrow_mut().drain() { messages_produced[0].update(key, val); }
+        // println!("feedback pulled: c: {}, p: {}", messages_consumed[0].len(), messages_produced[0].len());
         return false;
     }
 

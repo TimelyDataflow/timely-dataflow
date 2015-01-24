@@ -20,9 +20,20 @@ pub struct OutputPort<T: Timestamp, D: Data> {
 impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
     type Time = T;
     type Data = D;
-    fn push(&mut self, data: &D) { for target in self.shared.borrow_mut().iter_mut() { target.push(data);  } }
-    fn open(&mut self, time: &T) { for target in self.shared.borrow_mut().iter_mut() { target.open(time); } }
-    fn shut(&mut self, time: &T) { for target in self.shared.borrow_mut().iter_mut() { target.shut(time); } }
+    #[inline(always)] fn push(&mut self, data: &D) { for target in self.shared.borrow_mut().iter_mut() { target.push(data);  } }
+    #[inline(always)] fn open(&mut self, time: &T) { for target in self.shared.borrow_mut().iter_mut() { target.open(time); } }
+    #[inline(always)] fn shut(&mut self, time: &T) { for target in self.shared.borrow_mut().iter_mut() { target.shut(time); } }
+}
+
+impl<T: Timestamp, D: Data> Default for OutputPort<T, D> {
+    fn default() -> OutputPort<T, D> {
+        let temp : Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
+        OutputPort { shared: temp }
+    }
+}
+
+impl<T: Timestamp, D: Data> Clone for OutputPort<T, D> {
+    fn clone(&self) -> OutputPort<T, D> { OutputPort { shared: self.shared.clone() } }
 }
 
 
@@ -35,9 +46,9 @@ pub struct ObserverHelper<O: Observer> {
 impl<O: Observer> Observer for ObserverHelper<O> where O::Time : Timestamp {
     type Time = O::Time;
     type Data = O::Data;
-    fn open(&mut self,_time: &O::Time) { }
-    fn push(&mut self, data: &O::Data) { self.count += 1; self.observer.push(data); }
-    fn shut(&mut self, time: &O::Time) -> () {
+    #[inline(always)] fn open(&mut self, time: &O::Time) { self.observer.open(time); }
+    #[inline(always)] fn push(&mut self, data: &O::Data) { self.count += 1; self.observer.push(data); }
+    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () {
         self.counts.borrow_mut().update(time, self.count);
         self.observer.shut(time);
         self.count = 0;
@@ -53,7 +64,7 @@ impl<O: Observer> ObserverHelper<O> where O::Time : Eq+Clone+'static {
         }
     }
 
-    pub fn pull_progress(&mut self, updates: &mut Vec<(O::Time, i64)>) {
+    #[inline(always)] pub fn pull_progress(&mut self, updates: &mut Vec<(O::Time, i64)>) {
         for (ref time, delta) in self.counts.borrow_mut().drain() { updates.update(time, delta); }
     }
 }

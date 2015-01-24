@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::default::Default;
 
 use progress::{Timestamp, PathSummary, Graph, Scope};
 use progress::graph::GraphExtension;
@@ -19,7 +20,7 @@ where T:Timestamp,
       D:Data,
 {
     fn concat(&mut self, other: &mut Stream<T, S, D>) -> Stream<T, S, D> {
-        let targets: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
+        let outputs: OutputPort<T, D> = Default::default();
         let consumed = vec![Rc::new(RefCell::new(Vec::new())),
                             Rc::new(RefCell::new(Vec::new()))];
 
@@ -28,12 +29,12 @@ where T:Timestamp,
         self.graph.connect(self.name, ScopeInput(index, 0));
         other.graph.connect(other.name, ScopeInput(index, 1));
 
-        self.add_observer(ObserverHelper::new(OutputPort { shared: targets.clone() }, consumed[0].clone()));
-        other.add_observer(ObserverHelper::new(OutputPort { shared: targets.clone() }, consumed[1].clone()));
+        self.add_observer(ObserverHelper::new(outputs.clone(), consumed[0].clone()));
+        other.add_observer(ObserverHelper::new(outputs.clone(), consumed[1].clone()));
 
         Stream {
             name: ScopeOutput(index, 0),
-            ports: targets,
+            ports: outputs,
             graph: self.graph.as_box(),
             allocator: self.allocator.clone(),
         }

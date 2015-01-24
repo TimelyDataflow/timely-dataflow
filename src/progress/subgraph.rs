@@ -142,6 +142,7 @@ impl<T: Timestamp, S: PathSummary<T>> ScopeWrapper<T, S> {
 
         result.summary = summary;
 
+        // TODO : Gross. Fix.
         for (index, capability) in result.capabilities.iter_mut().enumerate() {
             capability.update_iter_and(work[index].iter().map(|x|x.clone()), |_, _| {});
         }
@@ -152,6 +153,7 @@ impl<T: Timestamp, S: PathSummary<T>> ScopeWrapper<T, S> {
     fn push_pointstamps(&mut self, external_progress: &Vec<Vec<(T, i64)>>) {
         if self.notify {
             for input_port in (0..self.inputs as usize) {
+                self.guarantees[input_port].test_size(50, "self.guarantees");
                 self.guarantees[input_port]
                     .update_into_cm(&external_progress[input_port], &mut self.guarantee_changes[input_port]);
             }
@@ -178,13 +180,17 @@ impl<T: Timestamp, S: PathSummary<T>> ScopeWrapper<T, S> {
             for (time, delta) in self.produced_messages[output].drain() {
                 for &target in self.edges[output].iter() {
                     match target {
-                        ScopeInput(tgt, tgt_in)   => { pointstamp_messages.push((tgt, tgt_in, time, delta)); },
+                        ScopeInput(tgt, tgt_in)   => {
+                            // println!("p: pointstamp: {:?}", (tgt, tgt_in, time, delta));
+                            pointstamp_messages.push((tgt, tgt_in, time, delta));
+                        },
                         GraphOutput(graph_output) => { output_action(graph_output, time, delta); },
                     }
                 }
             }
 
             for (time, delta) in self.internal_progress[output as usize].drain() {
+                // println!("i: pointstamp: {:?}", (self.index, output as u64, time, delta));
                 pointstamp_internal.push((self.index, output as u64, time, delta));
             }
         }
@@ -192,6 +198,7 @@ impl<T: Timestamp, S: PathSummary<T>> ScopeWrapper<T, S> {
         // for each input: consumed messages
         for input in range(0, self.inputs as usize) {
             for (time, delta) in self.consumed_messages[input as usize].drain() {
+                // println!("c: pointstamp: {:?}", (self.index, input as u64, time, -delta));
                 pointstamp_messages.push((self.index, input as u64, time, -delta));
             }
         }
@@ -324,6 +331,7 @@ where TOuter: Timestamp,
         for (output, map) in work.iter_mut().enumerate() {
             for &(ref key, val) in self.pointstamps.output_pushed[output].elements().iter() {
                 map.update(&key.0, val);
+                self.external_capability[output].update(&key.0, val);
             }
         }
 
@@ -438,7 +446,10 @@ where TOuter: Timestamp,
                 messages_consumed[input as usize].update(&time.0, delta);
                 for &target in self.input_edges[input as usize].iter() {
                     match target {
-                        ScopeInput(tgt, tgt_in)   => { self.pointstamp_messages.push((tgt, tgt_in, time, delta)); },
+                        ScopeInput(tgt, tgt_in)   => {
+                            // println!("e: pointstamp: {:?}", (tgt, tgt_in, time, delta));
+                            self.pointstamp_messages.push((tgt, tgt_in, time, delta));
+                        },
                         GraphOutput(graph_output) => { messages_produced[graph_output as usize].update(&time.0, delta); },
                     }
                 }
@@ -461,12 +472,15 @@ where TOuter: Timestamp,
         {
             let pointstamps = &mut self.pointstamps;
             for (scope, input, time, delta) in self.pointstamp_messages.drain() {
+                self.children[scope as usize].outstanding_messages[input as usize].test_size(50, "self.outstanding");
                 self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
                     pointstamps.update_target(ScopeInput(scope, input), time, delta);
                 });
             }
 
             for (scope, output, time, delta) in self.pointstamp_internal.drain() {
+                // println!("capability change: {:?} {:?}", time, delta);
+                self.children[scope as usize].capabilities[output as usize].test_size(50, "self.capabilities");
                 self.children[scope as usize].capabilities[output as usize].update_and(&time, delta, |time, delta| {
                     pointstamps.update_source(ScopeOutput(scope, output), time, delta);
                 });
@@ -484,7 +498,10 @@ where TOuter: Timestamp,
         for output in (0..self.outputs) {
             // prep an iterator which extracts the first field of the time
             let updates = self.pointstamps.output_pushed[output as usize].iter().map(|&(ref time, val)| (time.0.clone(), val));
+            self.external_capability[output as usize].test_size(50, "ext_cap");
+            // println!("ext_cap.len() = {}", self.external_capability[output as usize].occurrences.len());
             self.external_capability[output as usize].update_iter_and(updates, |time,val| {
+                        // internal_progress[output as usize].test_size(50, "internal_progress");
                         internal_progress[output as usize].update(time, val);
                     });
         }
@@ -496,6 +513,8 @@ where TOuter: Timestamp,
             if child.outstanding_messages.iter().any(|x| x.elements.len() > 0) { active = true; }
             if child.capabilities.iter().any(|x| x.elements.len() > 0) { active = true; }
         }
+
+        // println!("{}, {}, {}", internal_progress.len(), messages_consumed.len(), messages_produced.len());
 
         return active;
     }

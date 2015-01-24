@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::default::Default;
 
 use progress::frontier::Antichain;
 use progress::{Graph, Scope, PathSummary, Timestamp};
@@ -11,7 +12,7 @@ use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
 use communication::Observer;
-use communication::channels::Data;
+use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 
@@ -26,7 +27,7 @@ where T:Timestamp,
 {
     fn queue(&mut self) -> Stream<T, S, D> {
         let input = ScopeInputQueue::new_shared();
-        let output: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
+        let output: OutputPort<T, D> = Default::default();
 
         let index = self.graph.add_scope(QueueScope {
             input:      input.clone(),
@@ -116,7 +117,7 @@ impl<T: Timestamp, D:Data> ScopeInputQueue<T, D>
 struct QueueScope<T:Timestamp, S: PathSummary<T>, D:Data>
 {
     input:      Rc<RefCell<ScopeInputQueue<T, D>>>,
-    output:     Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
+    output:     OutputPort<T, D>,//Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
     to_send:    Vec<(T, Vec<D>)>,
     guarantee:  Vec<(T, i64)>,
 }
@@ -160,11 +161,14 @@ impl<T:Timestamp, S:PathSummary<T>, D:Data> Scope<T, S> for QueueScope<T, S, D>
             messages_produced[0].update(time, data.len() as i64);
             frontier_progress[0].update(time, -1);
 
-            for target in self.output.borrow_mut().iter_mut() { target.open(time); }
-            for target in self.output.borrow_mut().iter_mut() {
-                for datum in data.iter() { target.push(datum); }
-            }
-            for target in self.output.borrow_mut().iter_mut() { target.shut(time); }
+            self.output.open(time);
+            for datum in data.iter() { self.output.push(datum); }
+            self.output.shut(time)
+            // for target in self.output.borrow_mut().iter_mut() { target.open(time); }
+            // for target in self.output.borrow_mut().iter_mut() {
+            //     for datum in data.iter() { target.push(datum); }
+            // }
+            // for target in self.output.borrow_mut().iter_mut() { target.shut(time); }
         }
 
         return true;

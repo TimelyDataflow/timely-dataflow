@@ -11,6 +11,7 @@ impl<T:Eq+Clone+'static> CountMap<T, > for Vec<(T, i64)>
 {
     #[inline(always)]
     fn update(&mut self, key: &T, val: i64) -> i64 {
+        if self.len() > 100 { println!("perf: self.len() = {}", self.len()); }
         let mut remove_at = None;
         let mut found = false;
         let mut new_val = val;

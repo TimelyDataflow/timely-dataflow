@@ -37,10 +37,10 @@ where TOuter: Timestamp,
     fn add_input<D: Data>(&mut self, source: &mut Stream<TOuter, SOuter, D>) ->
         Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>
     {
-        let targets: Rc<RefCell<Vec<Box<Observer<Time=(TOuter,TInner), Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
+        let targets: OutputPort<(TOuter, TInner), D> = Default::default();
         let produced = Rc::new(RefCell::new(Vec::new()));
 
-        let ingress = IngressNub { targets: ObserverHelper::new(OutputPort{ shared: targets.clone() }, produced.clone()) };
+        let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
 
         let mut borrow = self.borrow_mut();
         let index = borrow.new_input(produced);
@@ -57,8 +57,8 @@ where TOuter: Timestamp,
         let mut borrow = self.borrow_mut();
         let index = borrow.new_output();
 
-        let targets: Rc<RefCell<Vec<Box<Observer<Time=TOuter, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
-
+        let targets: OutputPort<TOuter, D> = Default::default();
+        
         borrow.connect(source.name, GraphOutput(index));
         source.add_observer(EgressNub { targets: targets.clone() });
 
@@ -90,21 +90,27 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<
 {
     type Time = TOuter;
     type Data = TData;
+    #[inline(always)]
     fn push(&mut self, data: &TData) { self.targets.push(data); }
+    #[inline(always)]
     fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(time.clone(), Default::default())); }
+    #[inline(always)]
     fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(time.clone(), Default::default())); }
 }
 
 
-pub struct EgressNub<TOuter, TInner, TData> {
-    targets: Rc<RefCell<Vec<Box<Observer<Time=TOuter, Data=TData>>>>>,
+pub struct EgressNub<TOuter : Timestamp, TInner, TData: Data> {
+    targets: OutputPort<TOuter, TData>,
 }
 
 impl<TOuter, TInner, TData> Observer for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp, TData: Data {
     type Time = (TOuter, TInner);
     type Data = TData;
-    fn open(&mut self, time: &(TOuter, TInner)) { for target in self.targets.borrow_mut().iter_mut() { target.open(&time.0); } }
-    fn push(&mut self, data: &TData) { for target in self.targets.borrow_mut().iter_mut() { target.push(data); } }
-    fn shut(&mut self, time: &(TOuter, TInner)) { for target in self.targets.borrow_mut().iter_mut() { target.shut(&time.0); } }
+    #[inline(always)]
+    fn open(&mut self, time: &(TOuter, TInner)) { self.targets.open(&time.0); }
+    #[inline(always)]
+    fn push(&mut self, data: &TData) { self.targets.push(data); }
+    #[inline(always)]
+    fn shut(&mut self, time: &(TOuter, TInner)) { self.targets.shut(&time.0); }
 }

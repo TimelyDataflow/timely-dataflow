@@ -21,7 +21,7 @@ use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 
 use progress::broadcast::{Progcaster, MultiThreadedBroadcaster};
-use communication::ChannelAllocator;
+use communication::{ProcessCommunicator, Communicator};
 use communication::channels::ObserverHelper;
 
 use communication::channels::Data;
@@ -66,8 +66,7 @@ Options:
     -n <arg>, --processes <arg>  number of processes involved [default: 1]
 ";
 
-fn main()
-{
+fn main() {
     let args = Docopt::new(USAGE).and_then(|dopt| dopt.parse()).unwrap_or_else(|e| e.exit());
 
     let threads: u64 = if let Some(threads) = args.get_str("-t").parse() { threads }
@@ -88,7 +87,7 @@ fn main()
     // _barrier_multi(threads); println!("started barrier test");
     // _networking(process_id, processes);
 
-    // if args.get_bool("queue") { _queue_multi(threads); println!("started queue test"); }
+    if args.get_bool("queue") { _queue_multi(threads); println!("started queue test"); }
     if args.get_bool("barrier") { _barrier_multi(threads); println!("started barrier test"); }
     if args.get_bool("command") { _command_multi(threads); println!("started command test"); }
 
@@ -107,33 +106,31 @@ fn _networking(my_id: u64, threads: u64, processes: u64) {
 }
 
 #[bench]
-fn queue_bench(bencher: &mut Bencher) { _queue(ChannelAllocator::new_vector(1).swap_remove(0), Some(bencher)); }
+fn queue_bench(bencher: &mut Bencher) { _queue(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
 fn _queue_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ChannelAllocator::new_vector(threads).into_iter() {
-        guards.push(Thread::spawn(move || _queue(allocator, None)));
+    for allocator in ProcessCommunicator::new_vector(threads).into_iter() {
+        guards.push(Thread::scoped(move || _queue(allocator, None)));
     }
 }
 
 
 // #[bench]
-// fn command_bench(bencher: &mut Bencher) { _command(ChannelAllocator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
+// fn command_bench(bencher: &mut Bencher) { _command(ProcessCommunicator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
 fn _command_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ChannelAllocator::new_vector(threads).into_iter() {
-        guards.push(Thread::spawn(move || _command(allocator, None)));
+    for allocator in ProcessCommunicator::new_vector(threads).into_iter() {
+        guards.push(Thread::scoped(move || _command(allocator, None)));
     }
 }
 
 
 #[bench]
-fn barrier_bench(bencher: &mut Bencher) { _barrier(ChannelAllocator::new_vector(1).swap_remove(0), Some(bencher)); }
-fn _barrier_multi(threads: u64)
-{
+fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
+fn _barrier_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ChannelAllocator::new_vector(threads).into_iter()
-    {
-        guards.push(Thread::spawn(move || _barrier(allocator, None)));
+    for allocator in ProcessCommunicator::new_vector(threads).into_iter() {
+        guards.push(Thread::scoped(move || _barrier(allocator, None)));
     }
 }
 
@@ -172,10 +169,8 @@ where T1: Timestamp, S1: PathSummary<T1>,
     return (sub_egress1, sub_egress2);
 }
 
-// TODO : Commented out while rustc works on an ICE issue.
-fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
+fn _queue(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
-
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = Rc::new(RefCell::new(Default::default()));
     graph.borrow_mut().progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
@@ -187,8 +182,8 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     // prepare some feedback edges
     // TODO : the next line, and lines like it, produce internal compiler errors.
     // let (mut feedback1, mut feedback1_output): (FeedbackHelper<ObserverHelper<FeedbackObserver<((),u64), Summary<(), u64>, u64>>>, Stream<((), u64), Summary<(), u64>, u64>) = stream1.feedback(((), 1000000), Local(1));
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
+    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 10000000), Local(1));
+    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 10000000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
     let progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
@@ -216,15 +211,10 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     // see what everyone thinks about that ...
     graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
 
-    // indicate that eaah input sent a message, and won't send again until epoch 1000000.
-    // obviously pretty clunky. will be important to make a more friendly interface later on.
     input1.advance(&((), 0), &((), 1000000));
     input2.advance(&((), 0), &((), 1000000));
     input1.close_at(&((), 1000000));
     input2.close_at(&((), 1000000));
-
-    // see what everyone thinks about that ...
-    graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
 
     // spin
     match bencher {
@@ -233,9 +223,7 @@ fn _queue(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     }
 }
 
-
-// TODO : Commented out while rustc works on an ICE issue
-fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
+fn _command(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
@@ -261,10 +249,9 @@ fn _command(allocator: ChannelAllocator, bencher: Option<&mut Bencher>) {
     }
 }
 
-fn _barrier(mut allocator: ChannelAllocator, bencher: Option<&mut Bencher>)
-{
+fn _barrier(mut allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut allocator)));
-    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.multiplicity() as i64, ttl: 10000000 });
+    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 10000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 
     // start things up!
