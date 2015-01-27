@@ -3,7 +3,7 @@ use std::default::Default;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::{Timestamp, PathSummary, Graph, Scope};
+use progress::{Timestamp, PathSummary, Graph, Scope, CountMap};
 use progress::subgraph::Source::{GraphInput, ScopeOutput};
 use progress::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::subgraph::{Subgraph, Summary};
@@ -38,7 +38,7 @@ where TOuter: Timestamp,
         Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>
     {
         let targets: OutputPort<(TOuter, TInner), D> = Default::default();
-        let produced = Rc::new(RefCell::new(Vec::new()));
+        let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
 
@@ -58,7 +58,7 @@ where TOuter: Timestamp,
         let index = borrow.new_output();
 
         let targets: OutputPort<TOuter, D> = Default::default();
-        
+
         borrow.connect(source.name, GraphOutput(index));
         source.add_observer(EgressNub { targets: targets.clone() });
 
@@ -90,12 +90,9 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<
 {
     type Time = TOuter;
     type Data = TData;
-    #[inline(always)]
-    fn push(&mut self, data: &TData) { self.targets.push(data); }
-    #[inline(always)]
-    fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(time.clone(), Default::default())); }
-    #[inline(always)]
-    fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(time.clone(), Default::default())); }
+    #[inline(always)] fn push(&mut self, data: &TData) { self.targets.push(data); }
+    #[inline(always)] fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(time.clone(), Default::default())); }
+    #[inline(always)] fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(time.clone(), Default::default())); }
 }
 
 
@@ -107,10 +104,7 @@ impl<TOuter, TInner, TData> Observer for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp, TData: Data {
     type Time = (TOuter, TInner);
     type Data = TData;
-    #[inline(always)]
-    fn open(&mut self, time: &(TOuter, TInner)) { self.targets.open(&time.0); }
-    #[inline(always)]
-    fn push(&mut self, data: &TData) { self.targets.push(data); }
-    #[inline(always)]
-    fn shut(&mut self, time: &(TOuter, TInner)) { self.targets.shut(&time.0); }
+    #[inline(always)] fn open(&mut self, time: &(TOuter, TInner)) { self.targets.open(&time.0); }
+    #[inline(always)] fn push(&mut self, data: &TData) { self.targets.push(data); }
+    #[inline(always)] fn shut(&mut self, time: &(TOuter, TInner)) { self.targets.shut(&time.0); }
 }

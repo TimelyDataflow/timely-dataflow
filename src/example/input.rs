@@ -20,12 +20,12 @@ pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>> {
 
 impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> for G {
     fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ProcessCommunicator>>) -> (InputHelper<T, D>, Stream<T, S, D>) {
-        let output: OutputPort<T, D> = Default::default();//Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));//Default::default();
-        let produced = Rc::new(RefCell::new(Vec::new()));//Default::default();
+        let output: OutputPort<T, D> = Default::default();
+        let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let helper = InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
-            progress: Rc::new(RefCell::new(Vec::new())),
+            progress: Rc::new(RefCell::new(CountMap::new())),
             output:   ObserverHelper::new(output.clone(), produced.clone()),
         };
 
@@ -47,8 +47,8 @@ impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> 
 
 pub struct InputScope<T:Timestamp> {
     frontier:   Rc<RefCell<MutableAntichain<T>>>,    // times available for sending
-    progress:   Rc<RefCell<Vec<(T, i64)>>>,          // times closed since last asked
-    messages:   Rc<RefCell<Vec<(T, i64)>>>,          // messages sent since last asked
+    progress:   Rc<RefCell<CountMap<T>>>,          // times closed since last asked
+    messages:   Rc<RefCell<CountMap<T>>>,          // messages sent since last asked
     copies:     u64,
 }
 
@@ -57,16 +57,23 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T> {
     fn inputs(&self) -> u64 { 0 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>) {
-        (Vec::new(), vec![self.frontier.borrow().elements.iter().map(|x| (x.clone(), self.copies as i64)).collect()])
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<T>>) {
+        let mut map = CountMap::new();
+        for x in self.frontier.borrow().elements.iter() {
+            map.update(x, self.copies as i64);
+        }
+        (Vec::new(), vec![map])
+        // (Vec::new(), vec![self.frontier.borrow().elements.iter().map(|x| (x.clone(), self.copies as i64)).collect()])
     }
 
-    fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<Vec<(T, i64)>>,
-                                        _messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                         messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool
+    fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<CountMap<T>>,
+                                        _messages_consumed: &mut Vec<CountMap<T>>,
+                                         messages_produced: &mut Vec<CountMap<T>>) -> bool
     {
-        for (ref key, val) in self.messages.borrow_mut().drain() { messages_produced[0].update(key, val); }
-        for (ref key, val) in self.progress.borrow_mut().drain() { frontier_progress[0].update(key, val); }
+        self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
+        self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
+        // for (ref key, val) in self.messages.borrow_mut().drain() { messages_produced[0].update(key, val); }
+        // for (ref key, val) in self.progress.borrow_mut().drain() { frontier_progress[0].update(key, val); }
         return false;
     }
 
@@ -75,7 +82,7 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T> {
 
 pub struct InputHelper<T: Timestamp, D: Data> {
     frontier:   Rc<RefCell<MutableAntichain<T>>>,    // times available for sending
-    progress:   Rc<RefCell<Vec<(T, i64)>>>,          // times closed since last asked
+    progress:   Rc<RefCell<CountMap<T>>>,          // times closed since last asked
     output:     ObserverHelper<OutputPort<T, D>>,
 }
 

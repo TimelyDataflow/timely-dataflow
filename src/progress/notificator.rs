@@ -7,8 +7,8 @@ use std::vec::Drain;
 pub struct Notificator<T: Timestamp> {
     pending:        MutableAntichain<T>,    // requests that have not yet been notified
     frontier:       MutableAntichain<T>,    // outstanding work, preventing notification
-    available:      Vec<(T, i64)>,
-    temp:           Vec<(T, i64)>,
+    available:      CountMap<T>,
+    temp:           CountMap<T>,
 }
 
 impl<T: Timestamp> Notificator<T> {
@@ -22,7 +22,8 @@ impl<T: Timestamp> Notificator<T> {
                 }
             }
         }
-        for (pend, val) in self.temp.drain() {
+        while let Some((pend, val)) = self.temp.pop() {
+        // for (pend, val) in self.temp.drain() {
             self.pending.update(&pend, val);
         }
     }

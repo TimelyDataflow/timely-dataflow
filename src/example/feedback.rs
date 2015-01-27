@@ -23,8 +23,8 @@ impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> fo
     fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<T, S, D>>>, Stream<T, S, D>) {
 
         let targets: OutputPort<T, D> = Default::default();
-        let produced: Rc<RefCell<Vec<(T, i64)>>> = Default::default();
-        let consumed: Rc<RefCell<Vec<(T, i64)>>> = Default::default();
+        let produced: Rc<RefCell<CountMap<T>>> = Default::default();
+        let consumed: Rc<RefCell<CountMap<T>>> = Default::default();
 
         let feedback_output = ObserverHelper::new(targets.clone(), produced.clone());
         let feedback_input =  ObserverHelper::new(FeedbackObserver { limit: limit, summary: summary, targets: feedback_output, active: false }, consumed.clone());
@@ -94,8 +94,8 @@ impl<O: Observer> FeedbackHelper<O> where O::Time : Timestamp, O::Data : Data {
 
 // the scope that the progress tracker interacts with
 pub struct FeedbackScope<T:Timestamp, S: PathSummary<T>> {
-    consumed_messages:  Rc<RefCell<Vec<(T, i64)>>>,
-    produced_messages:  Rc<RefCell<Vec<(T, i64)>>>,
+    consumed_messages:  Rc<RefCell<CountMap<T>>>,
+    produced_messages:  Rc<RefCell<CountMap<T>>>,
     summary:            S,
 }
 
@@ -104,15 +104,18 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for FeedbackScope<T, S> {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>) {
-        (vec![vec![Antichain::from_elem(self.summary)]], vec![Vec::new()])
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<T>>) {
+        (vec![vec![Antichain::from_elem(self.summary)]], vec![CountMap::new()])
     }
 
-    fn pull_internal_progress(&mut self, _frontier_progress: &mut Vec<Vec<(T, i64)>>,
-                                          messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                          messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool {
-        for (ref key, val) in self.consumed_messages.borrow_mut().drain() { messages_consumed[0].update(key, val); }
-        for (ref key, val) in self.produced_messages.borrow_mut().drain() { messages_produced[0].update(key, val); }
+    fn pull_internal_progress(&mut self, _frontier_progress: &mut Vec<CountMap<T>>,
+                                          messages_consumed: &mut Vec<CountMap<T>>,
+                                          messages_produced: &mut Vec<CountMap<T>>) -> bool {
+
+        self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
+        self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);
+        // for (ref key, val) in self.consumed_messages.borrow_mut().drain() { messages_consumed[0].update(key, val); }
+        // for (ref key, val) in self.produced_messages.borrow_mut().drain() { messages_produced[0].update(key, val); }
         // println!("feedback pulled: c: {}, p: {}", messages_consumed[0].len(), messages_produced[0].len());
         return false;
     }

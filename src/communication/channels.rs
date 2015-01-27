@@ -39,7 +39,7 @@ impl<T: Timestamp, D: Data> Clone for OutputPort<T, D> {
 
 pub struct ObserverHelper<O: Observer> {
     observer:   O,
-    counts:     Rc<RefCell<Vec<(O::Time, i64)>>>,
+    counts:     Rc<RefCell<CountMap<O::Time>>>,
     count:      i64,
 }
 
@@ -56,7 +56,7 @@ impl<O: Observer> Observer for ObserverHelper<O> where O::Time : Timestamp {
 }
 
 impl<O: Observer> ObserverHelper<O> where O::Time : Eq+Clone+'static {
-    pub fn new(observer: O, counts: Rc<RefCell<Vec<(O::Time, i64)>>>) -> ObserverHelper<O> {
+    pub fn new(observer: O, counts: Rc<RefCell<CountMap<O::Time>>>) -> ObserverHelper<O> {
         ObserverHelper {
             observer:   observer,
             counts:     counts,
@@ -64,7 +64,7 @@ impl<O: Observer> ObserverHelper<O> where O::Time : Eq+Clone+'static {
         }
     }
 
-    #[inline(always)] pub fn pull_progress(&mut self, updates: &mut Vec<(O::Time, i64)>) {
-        for (ref time, delta) in self.counts.borrow_mut().drain() { updates.update(time, delta); }
+    #[inline(always)] pub fn pull_progress(&mut self, updates: &mut CountMap<O::Time>) {
+        while let Some((ref time, delta)) = self.counts.borrow_mut().pop() { updates.update(time, delta); }
     }
 }

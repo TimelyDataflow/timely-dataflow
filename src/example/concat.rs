@@ -21,8 +21,8 @@ where T:Timestamp,
 {
     fn concat(&mut self, other: &mut Stream<T, S, D>) -> Stream<T, S, D> {
         let outputs: OutputPort<T, D> = Default::default();
-        let consumed = vec![Rc::new(RefCell::new(Vec::new())),
-                            Rc::new(RefCell::new(Vec::new()))];
+        let consumed = vec![Rc::new(RefCell::new(CountMap::new())),
+                            Rc::new(RefCell::new(CountMap::new()))];
 
         let index = self.graph.add_scope(ConcatScope { consumed: consumed.clone() });
 
@@ -42,7 +42,7 @@ where T:Timestamp,
 }
 
 pub struct ConcatScope<T:Timestamp> {
-    consumed:   Vec<Rc<RefCell<Vec<(T, i64)>>>>
+    consumed:   Vec<Rc<RefCell<CountMap<T>>>>
 }
 
 impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for ConcatScope<T> {
@@ -50,12 +50,13 @@ impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for ConcatScope<T> {
     fn inputs(&self) -> u64 { self.consumed.len() as u64 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn pull_internal_progress(&mut self, _frontier_progress: &mut Vec<Vec<(T, i64)>>,
-                                          messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                          messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool
+    fn pull_internal_progress(&mut self, _frontier_progress: &mut Vec<CountMap<T>>,
+                                          messages_consumed: &mut Vec<CountMap<T>>,
+                                          messages_produced: &mut Vec<CountMap<T>>) -> bool
     {
         for (index, updates) in self.consumed.iter().enumerate() {
-            for (key, val) in updates.borrow_mut().drain() {
+            while let Some((key, val)) = updates.borrow_mut().pop() {
+            // for (key, val) in updates.borrow_mut().drain() {
                 messages_consumed[index].update(&key, val);
                 messages_produced[0].update(&key, val);
             }

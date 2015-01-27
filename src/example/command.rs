@@ -71,8 +71,8 @@ impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(((), u64), i64)>>) {
-        let mut internal = vec![Vec::new()];
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<((), u64)>>) {
+        let mut internal = vec![CountMap::new()];
         let stdout = (&mut self.process.stdout).as_mut().unwrap();
         let mut length_buf: Vec<_> = range(0, 8).map(|_| 0u8).collect();
         let mut read = 0;
@@ -110,11 +110,12 @@ impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
         (vec![vec![Antichain::from_elem(Default::default())]], internal)
     }
 
-    fn push_external_progress(&mut self, external: &Vec<Vec<(((), u64), i64)>>) -> () {
+    fn push_external_progress(&mut self, external: &mut Vec<CountMap<((), u64)>>) -> () {
         let mut writer = MemWriter::new();
         for index in range(0, external.len()) {
             writer.write_le_uint(external[index].len()).ok().expect("a");
-            for &(((), time), delta) in external[index].iter() {
+            while let Some((((), time), delta)) = external[index].pop() {
+            // for &(((), time), delta) in external[index].iter() {
                 writer.write_le_u64(time).ok().expect("b");
                 writer.write_le_i64(delta).ok().expect("c");
             }
@@ -131,9 +132,9 @@ impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
         stdin.flush().ok().expect("flush failure");
     }
 
-    fn pull_internal_progress(&mut self,  internal: &mut Vec<Vec<(((), u64), i64)>>,
-                                          consumed: &mut Vec<Vec<(((), u64), i64)>>,
-                                          produced: &mut Vec<Vec<(((), u64), i64)>>) -> bool
+    fn pull_internal_progress(&mut self,  internal: &mut Vec<CountMap<((), u64)>>,
+                                          consumed: &mut Vec<CountMap<((), u64)>>,
+                                          produced: &mut Vec<CountMap<((), u64)>>) -> bool
     {
         let stdout = (&mut self.process.stdout).as_mut().unwrap();
 

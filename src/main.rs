@@ -198,10 +198,10 @@ fn _queue(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
 
     // finalize the graph/subgraph
     graph.borrow_mut().get_internal_summary();
-    graph.borrow_mut().set_external_summary(Vec::new(), &Vec::new());
+    graph.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
 
     // do one round of push progress, pull progress ...
-    graph.borrow_mut().push_external_progress(&Vec::new());
+    graph.borrow_mut().push_external_progress(&mut Vec::new());
     graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
 
     // move some data into the dataflow graph.
@@ -237,8 +237,8 @@ fn _command(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
 
     // start things up!
     graph.borrow_mut().get_internal_summary();
-    graph.borrow_mut().set_external_summary(Vec::new(), &Vec::new());
-    graph.borrow_mut().push_external_progress(&Vec::new());
+    graph.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
+    graph.borrow_mut().push_external_progress(&mut Vec::new());
 
     input.0.close_at(&((), 0));
 
@@ -256,8 +256,8 @@ fn _barrier(mut allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
 
     // start things up!
     graph.borrow_mut().get_internal_summary();
-    graph.borrow_mut().set_external_summary(Vec::new(), &Vec::new());
-    graph.borrow_mut().push_external_progress(&Vec::new());
+    graph.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
+    graph.borrow_mut().push_external_progress(&mut Vec::new());
 
     // spin
     match bencher

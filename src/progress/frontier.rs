@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 use std::default::Default;
 
-use progress::count_map::CountMap;
+use progress::CountMap;
 
 #[derive(Default, Clone, Debug)]
 pub struct Antichain<T> {
@@ -36,17 +36,17 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
 
 #[derive(Default, Debug)]
 pub struct MutableAntichain<T:Eq> {
-    pub occurrences:    Vec<(T, i64)>,  // occurrence count of each time
-    precedents:     Vec<(T, i64)>,  // precedent count of each time with occurrence count > 0
-    pub elements:   Vec<T>,     // the set of times with precedent count == 0
+    pub occurrences:    CountMap<T>,    // occurrence count of each time
+    precedents:         Vec<(T, i64)>,    // precedent count of each time with occurrence count > 0
+    pub elements:       Vec<T>,         // the set of times with precedent count == 0
 }
 
 impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
     pub fn new() -> MutableAntichain<T> {
         MutableAntichain {
-            occurrences: Default::default(),
-            precedents: Default::default(),
-            elements: Vec::new(),
+            occurrences:    Default::default(),
+            precedents:     Default::default(),
+            elements:       Vec::new(),
         }
     }
 
@@ -63,18 +63,19 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
 
     #[inline]
     pub fn count(&self, time: &T) -> Option<i64> {
-        for &(ref key, val) in self.occurrences.iter() {
+        for &(ref key, val) in self.occurrences.elements().iter() {
             if time.eq(key) { return Some(val); }
         }
         return None;
     }
 
     // TODO : Four different versions of basically the same code. Fix that!
-    pub fn update_into_cm(&mut self, updates: &Vec<(T, i64)>, results: &mut Vec<(T, i64)>) -> () {
-        self.update_iter_and(updates.iter().map(|x| x.clone()), |time, val| { results.update(time, val); });
+    // TODO : Should this drain updates through to the CM? Check out uses!
+    pub fn update_into_cm(&mut self, updates: &CountMap<T>, results: &mut CountMap<T>) -> () {
+        self.update_iter_and(updates.elements().iter().map(|x| x.clone()), |time, val| { results.update(time, val); });
     }
 
-    pub fn update_weight(&mut self, elem: &T, delta: i64, results: &mut Vec<(T, i64)>) -> () {
+    pub fn update_weight(&mut self, elem: &T, delta: i64, results: &mut CountMap<T>) -> () {
         self.update_and(elem, delta, |time, delta| { results.update(time, delta); });
     }
 
@@ -155,7 +156,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
         {
             // panic!();
             println!("{}:\toccurrences:\tlen() = {}", name, self.occurrences.len());
-            for &(ref key, val) in self.occurrences.iter() { println!("{}: \toccurrence: {:?} : {:?}", name, key, val); }
+            for &(ref key, val) in self.occurrences.elements().iter() { println!("{}: \toccurrence: {:?} : {:?}", name, key, val); }
             panic!();
         }
         if self.precedents.len() > threshold { println!("{}: precedents:\tlen() = {}", name, self.precedents.len()); }

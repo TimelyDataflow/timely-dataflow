@@ -33,7 +33,7 @@ where T:Timestamp,
             input:      input.clone(),
             output:     output.clone(),
             to_send:    Vec::new(),
-            guarantee:  Vec::new(),
+            guarantee:  CountMap::new(),
         });
 
         self.graph.connect(self.name, ScopeInput(index, 0));
@@ -50,16 +50,14 @@ where T:Timestamp,
     }
 }
 
-pub struct ScopeInputQueue<T: Timestamp, D:Data>
-{
-    consumed_messages:  Vec<(T, i64)>,
-    frontier_progress:  Vec<(T, i64)>,
+pub struct ScopeInputQueue<T: Timestamp, D:Data> {
+    consumed_messages:  CountMap<T>,
+    frontier_progress:  CountMap<T>,
     queues:             HashMap<T, Vec<D>>,
     buffer:             Vec<D>,
 }
 
-impl<T: Timestamp, D:Data> Observer for Rc<RefCell<ScopeInputQueue<T, D>>>
-{
+impl<T: Timestamp, D:Data> Observer for Rc<RefCell<ScopeInputQueue<T, D>>> {
     type Time = T;
     type Data = D;
     fn open(&mut self, time: &T) { }
@@ -86,40 +84,31 @@ impl<T: Timestamp, D:Data> Observer for Rc<RefCell<ScopeInputQueue<T, D>>>
     }
 }
 
-impl<T: Timestamp, D:Data> ScopeInputQueue<T, D>
-{
-    pub fn pull_progress(&mut self, consumed: &mut Vec<(T, i64)>, progress: &mut Vec<(T, i64)>)
-    {
-        for &(ref key, val) in self.consumed_messages.iter() { consumed.update(key, val); }
-        for &(ref key, val) in self.frontier_progress.iter() { progress.update(key, val); }
-
-        self.consumed_messages.clear();
-        self.frontier_progress.clear();
+impl<T: Timestamp, D:Data> ScopeInputQueue<T, D> {
+    pub fn pull_progress(&mut self, consumed: &mut CountMap<T>, progress: &mut CountMap<T>) {
+        while let Some((ref key, val)) = self.consumed_messages.pop() { consumed.update(key, val); }
+        while let Some((ref key, val)) = self.frontier_progress.pop() { progress.update(key, val); }
     }
 
-    pub fn extract_queue(&mut self, time: &T) -> Option<Vec<D>>
-    {
+    pub fn extract_queue(&mut self, time: &T) -> Option<Vec<D>> {
         self.queues.remove(time)
     }
 
-    pub fn new_shared() -> Rc<RefCell<ScopeInputQueue<T, D>>>
-    {
-        Rc::new(RefCell::new(ScopeInputQueue
-        {
-            consumed_messages:  Vec::new(),
-            frontier_progress:  Vec::new(),
+    pub fn new_shared() -> Rc<RefCell<ScopeInputQueue<T, D>>> {
+        Rc::new(RefCell::new(ScopeInputQueue {
+            consumed_messages:  CountMap::new(),
+            frontier_progress:  CountMap::new(),
             queues:             HashMap::new(),
             buffer:             Vec::new(),
         }))
     }
 }
 
-struct QueueScope<T:Timestamp, S: PathSummary<T>, D:Data>
-{
+struct QueueScope<T:Timestamp, S: PathSummary<T>, D:Data> {
     input:      Rc<RefCell<ScopeInputQueue<T, D>>>,
     output:     OutputPort<T, D>,//Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
     to_send:    Vec<(T, Vec<D>)>,
-    guarantee:  Vec<(T, i64)>,
+    guarantee:  CountMap<T>,        // TODO : Should probably be a MutableAntichain
 }
 
 impl<T:Timestamp, S:PathSummary<T>, D:Data> Scope<T, S> for QueueScope<T, S, D>
@@ -128,18 +117,18 @@ impl<T:Timestamp, S:PathSummary<T>, D:Data> Scope<T, S> for QueueScope<T, S, D>
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<S>>>, guarantee: &Vec<Vec<(T, i64)>>) -> () {
-        for &(ref key, val) in guarantee[0].iter() {
-            self.guarantee.push((key.clone(), val));
+    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<S>>>, guarantee: &mut Vec<CountMap<T>>) -> () {
+        while let Some((ref key, val)) = guarantee[0].pop() {
+            self.guarantee.update(key, val);
         }
     }
 
-    fn push_external_progress(&mut self, progress: &Vec<Vec<(T, i64)>>) -> () {
-        for &(ref key, val) in progress[0].iter() { self.guarantee.update(key, val); }
+    fn push_external_progress(&mut self, progress: &mut Vec<CountMap<T>>) -> () {
+        while let Some((ref key, val)) = progress[0].pop() { self.guarantee.update(key, val); }
         let mut input = self.input.borrow_mut();
         let mut sendable = Vec::new();
         for key in input.queues.keys() {
-            if !self.guarantee.iter().any(|&(ref x, _)| x.le(key)) {
+            if !self.guarantee.elements().iter().any(|&(ref x, _)| x.le(key)) {
                 sendable.push(key.clone());
             }
         }
@@ -150,9 +139,9 @@ impl<T:Timestamp, S:PathSummary<T>, D:Data> Scope<T, S> for QueueScope<T, S, D>
         }
     }
 
-    fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<Vec<(T, i64)>>,
-                                         messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                         messages_produced: &mut Vec<Vec<(T, i64)>>) -> bool
+    fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<CountMap<T>>,
+                                         messages_consumed: &mut Vec<CountMap<T>>,
+                                         messages_produced: &mut Vec<CountMap<T>>) -> bool
     {
         // ask the input if it has consumed messages and created queues ...
         self.input.borrow_mut().pull_progress(&mut messages_consumed[0], &mut frontier_progress[0]);

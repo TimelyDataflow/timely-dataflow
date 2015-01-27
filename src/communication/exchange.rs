@@ -24,8 +24,8 @@ pub fn exchange_with<T: Timestamp, D: Data, F: Fn(&D)->u64>(allocator: &mut Proc
         receiver:   receiver,
         buffers:    HashMap::new(),
         doubles:    HashMap::new(),
-        consumed:   Vec::new(),
-        frontier:   Vec::new(),
+        consumed:   CountMap::new(),
+        frontier:   CountMap::new(),
     };
 
     return (exchange_sender, exchange_receiver);
@@ -35,8 +35,8 @@ pub struct ExchangeReceiver<T:Timestamp, D:Data> {
     receiver:   Box<Pullable<(T, Vec<D>)>>,  // receiver pair for the exchange channel
     buffers:    HashMap<T, Vec<D>>,     // buffers incoming records indexed by time
     doubles:    HashMap<T, Vec<D>>,     // double-buffered to prevent unbounded reading
-    consumed:   Vec<(T, i64)>,          // retains cumulative messages consumed
-    frontier:   Vec<(T, i64)>,          // retains un-claimed messages updates
+    consumed:   CountMap<T>,          // retains cumulative messages consumed
+    frontier:   CountMap<T>,          // retains un-claimed messages updates
 }
 
 impl<T:Timestamp, D:Data> Iterator for ExchangeReceiver<T, D> {
@@ -67,7 +67,7 @@ impl<T:Timestamp, D:Data> ExchangeReceiver<T, D> {
         }
     }
 
-    pub fn pull_progress(&mut self, consumed: &mut Vec<(T, i64)>, progress: &mut Vec<(T, i64)>) {
+    pub fn pull_progress(&mut self, consumed: &mut CountMap<T>, progress: &mut CountMap<T>) {
         while let Some((ref time, value)) = self.consumed.pop() { consumed.update(time, value); }
         while let Some((ref time, value)) = self.frontier.pop() { progress.update(time, value); }
     }

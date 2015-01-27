@@ -34,7 +34,7 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Debug> Distinct
 
         let index = self.graph.add_scope(DistinctScope {
             input:          receiver,
-            output:         ObserverHelper::new(targets.clone(), Default::default()),
+            output:         ObserverHelper::new(targets.clone(), Rc::new(RefCell::new(CountMap::new()))),
             elements:       HashMap::new(),
             notificator:    Default::default(),
         });
@@ -62,13 +62,13 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+PartialEq+Debug
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn push_external_progress(&mut self, external: &Vec<Vec<(T, i64)>>) -> () {
-        for &(ref time, val) in external[0].iter() { self.notificator.update_frontier(time, val); }
+    fn push_external_progress(&mut self, external: &mut Vec<CountMap<T>>) -> () {
+        while let Some((ref time, val)) = external[0].pop() { self.notificator.update_frontier(time, val); }
     }
 
-    fn pull_internal_progress(&mut self, internal: &mut Vec<Vec<(T, i64)>>,
-                                         consumed: &mut Vec<Vec<(T, i64)>>,
-                                         produced: &mut Vec<Vec<(T, i64)>>) -> bool
+    fn pull_internal_progress(&mut self, internal: &mut Vec<CountMap<T>>,
+                                         consumed: &mut Vec<CountMap<T>>,
+                                         produced: &mut Vec<CountMap<T>>) -> bool
     {
         // drain the input into sets.
         for (time, data) in self.input {
