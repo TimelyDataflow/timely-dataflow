@@ -37,12 +37,11 @@ impl MessageHeader {
         try!(writer.write_le_u64(self.source));
         try!(writer.write_le_u64(self.target));
         try!(writer.write_le_u64(self.length));
-
         Ok(())
     }
 }
 
-// structure in charge of receiving data from a Reader, most likely the network
+// structure in charge of receiving data from a Reader, for example the network
 struct BinaryReceiver<R: Reader> {
     // targets (and u8 returns) indexed by worker, graph, and channel.
     // option because they get filled progressively; alt design might change that.
@@ -56,8 +55,7 @@ struct BinaryReceiver<R: Reader> {
     channels:   Receiver<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>,
 }
 
-impl<R: Reader> BinaryReceiver<R>
-{
+impl<R: Reader> BinaryReceiver<R> {
     fn new(reader: R, targets: u64, channels: Receiver<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>) -> BinaryReceiver<R> {
         BinaryReceiver {
             targets:    range(0, targets).map(|_| Vec::new()).collect(),
@@ -134,18 +132,17 @@ impl<R: Reader> BinaryReceiver<R>
     }
 }
 
-// structure in charge of sending data to a Writer, most likely the network
-struct BinarySender<W: Writer>
-{
+// structure in charge of sending data to a Writer, for example the network
+struct BinarySender<W: Writer> {
     writer:     W,
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
     buffers:    Vec<Vec<Vec<Option<Sender<Vec<u8>>>>>>,
     channels:   Receiver<((u64, u64, u64), Sender<Vec<u8>>)>,
 }
 
-impl<W: Writer> BinarySender<W>
-{
-    fn new(writer: W, targets: u64,
+impl<W: Writer> BinarySender<W> {
+    fn new(writer: W,
+           targets: u64,
            sources: Receiver<(MessageHeader, Vec<u8>)>,
            channels: Receiver<((u64, u64, u64), Sender<Vec<u8>>)>) -> BinarySender<W> {
         BinarySender {
@@ -162,7 +159,7 @@ impl<W: Writer> BinarySender<W>
             self.writer.write(buffer.as_slice()).ok().expect("BinarySender: payload send failure");
             buffer.clear();
 
-            // inline because borrow-checker hate me
+            // inline because borrow-checker hates me
             let source = header.source as usize;
             let graph = header.graph as usize;
             let channel = header.channel as usize;
@@ -185,8 +182,7 @@ impl<W: Writer> BinarySender<W>
     }
 }
 
-pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> IoResult<BinaryChannelAllocator>
-{
+pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> IoResult<BinaryCommunicator> {
     let hosts1 = Arc::new(addresses);
     let hosts2 = hosts1.clone();
 
@@ -224,7 +220,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
         }
     }
 
-    return Ok(BinaryChannelAllocator {
+    return Ok(BinaryCommunicator {
         index:          my_index,
         peers:          workers,
         graph:          0,          // TODO : Fix this
@@ -235,8 +231,8 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
     });
 }
 
+// result contains connections [0, my_index - 1].
 fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> IoResult<Vec<Option<TcpStream>>> {
-    // contains connections [0, my_index - 1].
     let mut results: Vec<_> = (0..my_index).map(|_| None).collect();
     for index in (0..my_index) {
         let mut connected = false;
@@ -259,11 +255,9 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> IoResult<Vec
     return Ok(results);
 }
 
+// result contains connections [my_index + 1, addresses.len() - 1].
 fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> IoResult<Vec<Option<TcpStream>>> {
-    // contains connections [my_index + 1, addresses.len() - 1].
     let mut results: Vec<_> = (0..(addresses.len() - my_index as usize)).map(|_| None).collect();
-
-    // listen for incoming connections
     let listener = TcpListener::bind(addresses[my_index as usize].as_slice());
 
     let mut acceptor = try!(listener.listen());
@@ -289,8 +283,9 @@ impl<T:'static> Pushable<T> for BinaryPushable<T> {
     fn push(&mut self, data: T) {
         self.buffer.push(data);
         if self.buffer.len() > self.threshold {
-            // serialize that stuff and send it
-            // ...
+            assert!(false);
+            // TODO : serialize that stuff and send it
+            // TODO : ...
         }
     }
 }
@@ -307,16 +302,18 @@ impl<T:'static> Pullable<T> for BinaryPullable<T> {
     fn pull(&mut self) -> Option<T> {
         if self.staged.len() == 0 {
             if let Some(serialized) = self.receiver.try_recv().ok() {
-                // deserialize stuff in to self.staged
-                // ...
+                assert!(serialized.len() > 0);
+                assert!(false)
+                // TODO : deserialize stuff in to self.staged
+                // TODO : ...
             }
         }
-        self.staged.pop()
+        self.staged.pop()   // worry about the fact that this is probably in the wrong order
     }
 }
 
 #[derive(Clone)]
-pub struct BinaryChannelAllocator {
+pub struct BinaryCommunicator {
     index:          u64,        // index of this worker
     peers:          u64,        // number of peer workers
     graph:          u64,        // identifier for the current graph
@@ -329,37 +326,9 @@ pub struct BinaryChannelAllocator {
     writer_senders: Vec<Sender<(MessageHeader, Vec<u8>)>>
 }
 
-impl BinaryChannelAllocator {
-    // returns: (send to net <--> back from net), then (back to net <--> recv from net)
-    pub fn new_channel(&mut self, index: u64, graph: u64) -> (Vec<Sender<(MessageHeader, Vec<u8>)>>, Receiver<Vec<u8>>,
-                                                              Vec<Sender<Vec<u8>>>,                  Receiver<Vec<u8>>) {
-        let mut send_to_net = Vec::new();
-        let mut back_to_net = Vec::new();
+// A Communicator backed by Sender<Vec<u8>>/Receiver<Vec<u8>> pairs (e.g. networking, shared memory, files, pipes)
 
-        let (back_to_worker, back_from_net) = channel();
-        let (send_to_worker, recv_from_net) = channel();
-
-        for sender in self.writer_senders.iter() {
-            send_to_net.push(sender.clone());
-        }
-
-        for writer in self.writers.iter() {
-            writer.send(((index, graph, self.allocated), back_to_worker.clone())).ok().expect("send error");
-        }
-
-        for reader in self.readers.iter() {
-            let (b2n, bfw) = channel();
-            back_to_net.push(b2n);
-            reader.send(((index, graph, self.allocated), send_to_worker.clone(), bfw)).ok().expect("send error")
-        }
-
-        self.allocated += 1;
-
-        return (send_to_net, back_from_net, back_to_net, recv_from_net);
-    }
-}
-
-impl Communicator for BinaryChannelAllocator {
+impl Communicator for BinaryCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
     fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
@@ -372,7 +341,7 @@ impl Communicator for BinaryChannelAllocator {
                 buffer:     Vec::new(),
                 threshold:  256,
             }));
-            self.writers[index].send(((self.index, self.graph, self.allocated), s));
+            self.writers[index].send(((self.index, self.graph, self.allocated), s)).ok().expect("send error");
         }
 
         let (send,recv) = channel();
@@ -380,7 +349,7 @@ impl Communicator for BinaryChannelAllocator {
         for reader in self.readers.iter() {
             let (s,r) = channel();
             pullsends.push(s);
-            reader.send(((self.index, self.graph, self.allocated), send.clone(), r));
+            reader.send(((self.index, self.graph, self.allocated), send.clone(), r)).ok().expect("send error");
         }
 
         let pullable = Box::new(BinaryPullable {

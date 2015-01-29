@@ -4,13 +4,13 @@ use std::cell::RefCell;
 use std::sync::mpsc::{Sender, Receiver};
 use communication::Observer;
 
-pub trait Pushable<T> : 'static { fn push(&mut self, data: T); }    // like observer
-pub trait Pullable<T> : 'static { fn pull(&mut self) -> Option<T>; } // like iterator
+pub trait Pushable<T> : 'static { fn push(&mut self, data: T); }        // like observer
+pub trait Pullable<T> : 'static { fn pull(&mut self) -> Option<T>; }    // like iterator
 
 impl<T:'static> Pushable<T> for Rc<RefCell<Vec<T>>> { fn push(&mut self, data: T) { self.borrow_mut().push(data); } }
 impl<T:'static> Pullable<T> for Rc<RefCell<Vec<T>>> { fn pull(&mut self) -> Option<T> { self.borrow_mut().pop() } }
 
-impl<T:Send> Pushable<T> for Sender<T> { fn push(&mut self, data: T) { self.send(data); } }
+impl<T:Send> Pushable<T> for Sender<T> { fn push(&mut self, data: T) { self.send(data).ok().expect("send error"); } }
 impl<T:Send> Pullable<T> for Receiver<T> { fn pull(&mut self) -> Option<T> { self.try_recv().ok() }}
 
 impl<T:Send> Pushable<T> for Box<Pushable<T>> { fn push(&mut self, data: T) { (**self).push(data); } }

@@ -15,7 +15,7 @@ use progress::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::subgraph::Summary::{Local, Outer};
 use progress::count_map::CountMap;
 
-use progress::broadcast::{Progcaster, ProgressBroadcaster};
+use progress::broadcast::{Progcaster};
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Source {
@@ -242,7 +242,7 @@ impl<T:Timestamp> PointstampCounter<T> {
     }
 }
 
-#[derive(Default)]
+// #[derive(Default)]
 pub struct Subgraph<TOuter:Timestamp, SOuter: PathSummary<TOuter>, TInner:Timestamp, SInner: PathSummary<TInner>> {
 
     pub name:               String,                     // a helpful name
@@ -468,8 +468,7 @@ where TOuter: Timestamp,
 
         // Step 2: pull_internal_progress from subscopes.
         // for index in (0..self.children.len())
-        for (index, child) in self.children.iter_mut().enumerate()
-        {
+        for child in self.children.iter_mut() {
             let subactive = child.pull_pointstamps(&mut self.pointstamp_messages,
                                                    &mut self.pointstamp_internal,
                                                    |out, time, delta| { messages_produced[out as usize].update(&time.0, delta); });
@@ -745,14 +744,35 @@ where TOuter: Timestamp,
             },
         }
     }
+
+    pub fn new_from(progcaster: Progcaster<(TOuter,TInner)>) -> Subgraph<TOuter, SOuter, TInner, SInner> {
+        Subgraph {
+            name:                   Default::default(),
+            index:                  Default::default(),
+            default_summary:        Default::default(),
+            inputs:                 Default::default(),
+            outputs:                Default::default(),
+            input_edges:            Default::default(),
+            external_summaries:     Default::default(),
+            source_summaries:       Default::default(),
+            target_summaries:       Default::default(),
+            input_summaries:        Default::default(),
+            external_capability:    Default::default(),
+            external_guarantee:     Default::default(),
+            children:               Default::default(),
+            input_messages:         Default::default(),
+            pointstamps:            Default::default(),
+            pointstamp_messages:    Default::default(),
+            pointstamp_internal:    Default::default(),
+            progcaster:             progcaster,
+        }
+    }
 }
 
 pub fn new_graph<T, S>(progcaster: Progcaster<((), T)>) -> Rc<RefCell<Subgraph<(), (), T, S>>>
 where T: Timestamp, S: PathSummary<T>
 {
-    let mut result: Subgraph<(), (), T, S> = Default::default();
-    result.progcaster = progcaster;
-    return Rc::new(RefCell::new(result));
+    return Rc::new(RefCell::new(Subgraph::new_from(progcaster)));
 }
 
 fn try_to_add_summary<S>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool

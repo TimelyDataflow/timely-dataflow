@@ -74,9 +74,9 @@ where TOuter: Timestamp,
     where T: Timestamp,
           S: PathSummary<T>,
     {
-        let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> = Default::default();
+        let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> = Subgraph::new_from(progcaster);
         result.index = self.borrow().children() as u64;
-        result.progcaster = progcaster;
+        // result.progcaster = progcaster;
         return Rc::new(RefCell::new(result));
     }
 }

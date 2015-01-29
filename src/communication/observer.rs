@@ -56,7 +56,7 @@ impl<T:Clone+Send+'static, D:Clone+Send+'static> Observer for (Vec<D>, Sender<(T
     type Data = D;
     #[inline(always)] fn open(&mut self,_time: &T) { }
     #[inline(always)] fn push(&mut self, data: &D) { self.0.push(data.clone()); }
-    #[inline(always)] fn shut(&mut self, time: &T) { let vec = mem::replace(&mut self.0, Vec::new()); self.1.send((time.clone(), vec)); }
+    #[inline(always)] fn shut(&mut self, time: &T) { let vec = mem::replace(&mut self.0, Vec::new()); self.1.send((time.clone(), vec)).ok().expect("send error"); }
 }
 
 

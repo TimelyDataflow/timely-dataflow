@@ -1,5 +1,7 @@
 #![allow(unstable)]
 #![feature(unsafe_destructor)]
+#![allow(dead_code)]
+#![allow(missing_copy_implementations)]
 
 extern crate core;
 extern crate test;
@@ -11,8 +13,6 @@ use docopt::Docopt;
 
 use test::Bencher;
 
-use std::default::Default;
-
 use progress::{Timestamp, PathSummary, Graph, Scope};
 use progress::graph::GraphExtension;
 use progress::subgraph::{Subgraph, Summary, new_graph};
@@ -20,19 +20,19 @@ use progress::subgraph::Summary::Local;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 
-use progress::broadcast::{Progcaster, MultiThreadedBroadcaster};
+use progress::broadcast::Progcaster;
 use communication::{ProcessCommunicator, Communicator};
-use communication::channels::ObserverHelper;
+// use communication::channels::ObserverHelper;
 
 use communication::channels::Data;
 use std::hash::{Hash, SipHasher};
-use std::collections::hash_map::Hasher;
+// use std::collections::hash_map::Hasher;
 use core::fmt::Debug;
 
 use example::input::{InputExtensionTrait, InputHelper};
 use example::concat::{ConcatExtensionTrait};
-use example::feedback::{FeedbackExtensionTrait, FeedbackHelper, FeedbackObserver};
-use example::queue::{QueueExtensionTrait};
+use example::feedback::{FeedbackExtensionTrait};
+// use example::queue::{QueueExtensionTrait};
 use example::distinct::{DistinctExtensionTrait};
 use example::stream::Stream;
 use example::command::{CommandExtensionTrait};
@@ -172,8 +172,7 @@ where T1: Timestamp, S1: PathSummary<T1>,
 fn _queue(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = Rc::new(RefCell::new(Default::default()));
-    graph.borrow_mut().progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
+    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
 
     // try building some input scopes
     let (mut input1, mut stream1) = graph.new_input::<u64>(allocator.clone());
@@ -181,12 +180,11 @@ fn _queue(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
 
     // prepare some feedback edges
     // TODO : the next line, and lines like it, produce internal compiler errors.
-    // let (mut feedback1, mut feedback1_output): (FeedbackHelper<ObserverHelper<FeedbackObserver<((),u64), Summary<(), u64>, u64>>>, Stream<((), u64), Summary<(), u64>, u64>) = stream1.feedback(((), 1000000), Local(1));
     let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000000), Local(1));
     let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
-    let progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
+    let progcaster = Progcaster::new(&mut (*allocator.borrow_mut()));
     let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
                                                       &mut stream1.concat(&mut feedback1_output),
                                                       &mut stream2.concat(&mut feedback2_output),
@@ -227,7 +225,7 @@ fn _command(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut()))));
+    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
     let mut input: (InputHelper<((), u64), u64>, _) = graph.new_input(allocator);
     let mut feedback = input.1.feedback(((), 1000), Local(1));
     let mut result: Stream<((), u64), Summary<(), u64>, u64> = input.1.concat(&mut feedback.1)
@@ -250,7 +248,7 @@ fn _command(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
 }
 
 fn _barrier(mut allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut allocator)));
+    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut allocator));
     graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 10000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 

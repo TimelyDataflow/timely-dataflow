@@ -3,8 +3,11 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
-use std::mem;
-use communication::{Observer, Pushable, Pullable, PushableObserver};
+use communication::{Observer, Pushable, Pullable};
+
+// The Communicator trait presents the interface a worker has to the outside world.
+// The worker can see its index, the total number of peers, and acquire channels to and from the other workers.
+// There is an assumption that each worker performs the same channel allocation logic; things go wrong otherwise.
 
 pub trait Communicator {
     fn index(&self) -> u64;     // number out of peers
@@ -12,6 +15,7 @@ pub trait Communicator {
     fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
 }
 
+// The simplest communicator remains worker-local and just queues sent messages.
 
 pub struct ThreadCommunicator;
 impl Communicator for ThreadCommunicator {
@@ -23,8 +27,7 @@ impl Communicator for ThreadCommunicator {
     }
 }
 
-
-// a specific Communicator for inter-thread intra-process communication
+// A specific Communicator for inter-thread intra-process communication
 pub struct ProcessCommunicator {
     index:      u64,                            // number out of peers
     peers:      u64,                            // number of peer allocators (for typed channel allocation).

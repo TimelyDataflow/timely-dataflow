@@ -1,7 +1,7 @@
 use progress::Timestamp;
 use progress::frontier::MutableAntichain;
 use progress::count_map::CountMap;
-use std::vec::Drain;
+// use std::vec::Drain;
 
 #[derive(Default)]
 pub struct Notificator<T: Timestamp> {

@@ -9,7 +9,7 @@ use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
 use communication::channels::{Data, OutputPort, ObserverHelper};
-use communication::Observer;
+// use communication::Observer;
 use example::stream::Stream;
 
 pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }

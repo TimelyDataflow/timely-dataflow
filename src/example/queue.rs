@@ -60,9 +60,9 @@ pub struct ScopeInputQueue<T: Timestamp, D:Data> {
 impl<T: Timestamp, D:Data> Observer for Rc<RefCell<ScopeInputQueue<T, D>>> {
     type Time = T;
     type Data = D;
-    fn open(&mut self, time: &T) { }
+    fn open(&mut self,_time: &T) { }
     fn push(&mut self, data: &D) {
-        // TODO : Fix so not so manny borrows ...
+        // TODO : Fix so not so many borrows ...
         self.borrow_mut().buffer.push(data.clone());
     }
 
@@ -76,7 +76,7 @@ impl<T: Timestamp, D:Data> Observer for Rc<RefCell<ScopeInputQueue<T, D>>> {
                 input.frontier_progress.update(time, 1);
             }
 
-            let &mut ScopeInputQueue { buffer: ref mut buffer, queues: ref mut queues, ..} = &mut *input;
+            let &mut ScopeInputQueue { ref mut buffer, ref mut queues, ..} = &mut *input;
 
             for elem in buffer.drain() { queues[time.clone()].push(elem); }
             // for elem in buf.drain() { input.queues[time.clone()].push(elem); }

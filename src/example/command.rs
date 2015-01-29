@@ -16,7 +16,7 @@ use progress::frontier::Antichain;
 use progress::{PathSummary, Scope};
 use communication::channels::{Data};
 use example::stream::Stream;
-use communication::channels::OutputPort;
+// use communication::channels::OutputPort;
 use progress::count_map::CountMap;
 use progress::graph::GraphExtension;
 use communication::Observer;
@@ -74,10 +74,10 @@ impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<((), u64)>>) {
         let mut internal = vec![CountMap::new()];
         let stdout = (&mut self.process.stdout).as_mut().unwrap();
-        let mut length_buf: Vec<_> = range(0, 8).map(|_| 0u8).collect();
+        let mut length_buf: Vec<_> = (0..8).map(|_| 0u8).collect();
         let mut read = 0;
         while read < 8 {
-            read += match stdout.read(length_buf.slice_mut(read, 8)) {
+            read += match stdout.read(&mut length_buf[read..8]) {
                 Ok(len) => len,
                 Err(_err) => 0,
             };
@@ -161,9 +161,9 @@ impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
 
             if done || read + 8 + cursor > available as u64 { done = true; }
             else {
-                for index in range(0, internal.len()) {
+                for index in (0..internal.len()) {
                     let number = reader.read_le_u64().ok().expect("3");
-                    for _ in range(0, number) {
+                    for _ in (0..number) {
                         let time = reader.read_le_u64().ok().expect("4");
                         let delta = reader.read_le_i64().ok().expect("5");
 
@@ -171,9 +171,9 @@ impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
                     }
                 }
 
-                for index in range(0, consumed.len()) {
+                for index in (0..consumed.len()) {
                     let number = reader.read_le_u64().ok().expect("6");
-                    for _ in range(0, number) {
+                    for _ in (0..number) {
                         let time = reader.read_le_u64().ok().expect("7");
                         let delta = reader.read_le_i64().ok().expect("8");
 
@@ -181,9 +181,9 @@ impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
                     }
                 }
 
-                for index in range(0, produced.len()) {
+                for index in (0..produced.len()) {
                     let number = reader.read_le_u64().ok().expect("9");
-                    for _ in range(0, number) {
+                    for _ in (0..number) {
                         let time = reader.read_le_u64().ok().expect("10");
                         let delta = reader.read_le_i64().ok().expect("11");
 
