@@ -31,7 +31,7 @@ extern crate core;
 extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};
-use timely::progress::subgraph::{Subgraph, new_graph};
+use timely::progress::subgraph::new_graph;
 use timely::progress::broadcast::Progcaster;
 use timely::progress::scope::Scope;
 use timely::progress::graph::{Graph, GraphExtension};
@@ -41,8 +41,6 @@ use timely::example::barrier::BarrierScope;
 
 use test::Bencher;
 
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::thread::Thread;
 
 
@@ -60,7 +58,7 @@ fn _barrier_multi(threads: u64) {
 }
 
 fn _barrier(mut allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut allocator));
+    let mut graph = new_graph(Progcaster::new(&mut allocator));
     graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 

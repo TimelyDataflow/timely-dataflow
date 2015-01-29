@@ -19,14 +19,11 @@ use progress::subgraph::{Subgraph, Summary, new_graph};
 use progress::subgraph::Summary::Local;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
-
 use progress::broadcast::Progcaster;
 use communication::{ProcessCommunicator, Communicator};
-// use communication::channels::ObserverHelper;
 
 use communication::channels::Data;
 use std::hash::{Hash, SipHasher};
-// use std::collections::hash_map::Hasher;
 use core::fmt::Debug;
 
 use example::input::{InputExtensionTrait, InputHelper};
@@ -172,7 +169,7 @@ where T1: Timestamp, S1: PathSummary<T1>,
 fn _queue(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
+    let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
 
     // try building some input scopes
     let (mut input1, mut stream1) = graph.new_input::<u64>(allocator.clone());
@@ -225,7 +222,7 @@ fn _command(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
+    let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
     let mut input: (InputHelper<((), u64), u64>, _) = graph.new_input(allocator);
     let mut feedback = input.1.feedback(((), 1000), Local(1));
     let mut result: Stream<((), u64), Summary<(), u64>, u64> = input.1.concat(&mut feedback.1)
@@ -248,7 +245,7 @@ fn _command(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
 }
 
 fn _barrier(mut allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut allocator));
+    let mut graph = new_graph(Progcaster::new(&mut allocator));
     graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 10000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 

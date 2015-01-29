@@ -58,15 +58,13 @@ fn main() {
 fn _queue(allocator: ProcessCommunicator) {
     let allocator = Rc::new(RefCell::new(allocator));
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
+    let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
 
     // try building some input scopes
     let (mut input1, mut stream1) = graph.new_input::<u64>(allocator.clone());
     let (mut input2, mut stream2) = graph.new_input::<u64>(allocator.clone());
 
     // prepare some feedback edges
-    // TODO : the next line, and lines like it, produce internal compiler errors.
-    // let (mut feedback1, mut feedback1_output): (FeedbackHelper<ObserverHelper<FeedbackObserver<((),u64), Summary<(), u64>, u64>>>, Stream<((), u64), Summary<(), u64>, u64>) = stream1.feedback(((), 1000000), Local(1));
     let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000), Local(1));
     let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000), Local(1));
 
