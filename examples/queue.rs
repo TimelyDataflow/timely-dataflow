@@ -32,8 +32,8 @@ extern crate core;
 use timely::communication::ProcessCommunicator;
 use timely::communication::channels::Data;
 use timely::progress::{Timestamp, PathSummary};
-use timely::progress::subgraph::{Subgraph, Summary};
-use timely::progress::broadcast::{Progcaster, MultiThreadedBroadcaster};
+use timely::progress::subgraph::{Subgraph, Summary, new_graph};
+use timely::progress::broadcast::Progcaster;
 use timely::progress::subgraph::Summary::Local;
 use timely::progress::scope::Scope;
 use timely::progress::graph::{Graph, GraphExtension};
@@ -48,7 +48,6 @@ use core::fmt::Debug;
 
 use std::rc::{Rc, try_unwrap};
 use std::cell::RefCell;
-use std::default::Default;
 use std::hash::{Hash, SipHasher};
 
 fn main() {
@@ -59,8 +58,7 @@ fn main() {
 fn _queue(allocator: ProcessCommunicator) {
     let allocator = Rc::new(RefCell::new(allocator));
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = Rc::new(RefCell::new(Default::default()));
-    graph.borrow_mut().progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
+    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
 
     // try building some input scopes
     let (mut input1, mut stream1) = graph.new_input::<u64>(allocator.clone());
@@ -73,7 +71,7 @@ fn _queue(allocator: ProcessCommunicator) {
     let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
-    let progcaster = Progcaster::Process(MultiThreadedBroadcaster::from(&mut (*allocator.borrow_mut())));
+    let progcaster = Progcaster::new(&mut (*allocator.borrow_mut()));
     let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
                                                       &mut stream1.concat(&mut feedback1_output),
                                                       &mut stream2.concat(&mut feedback2_output),
@@ -85,10 +83,10 @@ fn _queue(allocator: ProcessCommunicator) {
 
     // finalize the graph/subgraph
     graph.borrow_mut().get_internal_summary();
-    graph.borrow_mut().set_external_summary(Vec::new(), &Vec::new());
+    graph.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
 
     // do one round of push progress, pull progress ...
-    graph.borrow_mut().push_external_progress(&Vec::new());
+    graph.borrow_mut().push_external_progress(&mut Vec::new());
     graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
 
     // move some data into the dataflow graph.

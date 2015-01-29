@@ -32,7 +32,7 @@ extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};
 use timely::progress::subgraph::{Subgraph, new_graph};
-use timely::progress::broadcast::{Progcaster, MultiThreadedBroadcaster};
+use timely::progress::broadcast::Progcaster;
 use timely::progress::scope::Scope;
 use timely::progress::graph::{Graph, GraphExtension};
 use timely::progress::subgraph::Source::ScopeOutput;
@@ -60,14 +60,14 @@ fn _barrier_multi(threads: u64) {
 }
 
 fn _barrier(mut allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
-    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::Process(MultiThreadedBroadcaster::from(&mut allocator)));
+    let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut allocator));
     graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 
     // start things up!
     graph.borrow_mut().get_internal_summary();
-    graph.borrow_mut().set_external_summary(Vec::new(), &Vec::new());
-    graph.borrow_mut().push_external_progress(&Vec::new());
+    graph.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
+    graph.borrow_mut().push_external_progress(&mut Vec::new());
 
     // spin
     match bencher
