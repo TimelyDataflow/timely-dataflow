@@ -13,7 +13,7 @@ use std::old_io::process::{Command, Process};
 use std::default::Default;
 use progress::frontier::Antichain;
 
-use progress::{PathSummary, Scope, Graph};
+use progress::{Scope, Graph, Timestamp};
 use communication::channels::{Data};
 use example::stream::Stream;
 // use communication::channels::OutputPort;
@@ -28,9 +28,7 @@ use progress::subgraph::Target::ScopeInput;
 
 pub trait CommandExtensionTrait { fn command(&mut self, program: String) -> Self; }
 
-impl<G: Graph<Timestamp = ((), u64)>, D: Data> CommandExtensionTrait for Stream<G, D>
-where <G as Graph>::Summary : PathSummary<((), u64)>
-{
+impl<G: Graph<Timestamp = ((), u64)>, D: Data> CommandExtensionTrait for Stream<G, D> {
     fn command(&mut self, program: String) -> Stream<G, D> {
 
         let mut process = match Command::new(program.clone()).spawn() {
@@ -65,11 +63,11 @@ struct CommandScope {
     buffer:     Vec<u8>,
 }
 
-impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
+impl Scope<((), u64)> for CommandScope {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<((), u64)>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<((), u64) as Timestamp>::Summary>>>, Vec<CountMap<((), u64)>>) {
         let mut internal = vec![CountMap::new()];
         let stdout = (&mut self.process.stdout).as_mut().unwrap();
         let mut length_buf: Vec<_> = (0..8).map(|_| 0u8).collect();

@@ -14,7 +14,7 @@ use progress::count_map::CountMap;
 use progress::graph::GraphExtension;
 
 use progress::notificator::Notificator;
-use progress::{Timestamp, PathSummary, Scope, Graph};
+use progress::{Timestamp, Scope, Graph};
 use communication::channels::{Data};
 use communication::exchange::{ExchangeReceiver, exchange_with};
 use example::stream::Stream;
@@ -58,7 +58,7 @@ pub struct DistinctScope<T: Timestamp, D: Data+Hash<SipHasher>+Eq+PartialEq> {
     notificator:    Notificator<T>,
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+PartialEq+Debug> Scope<T, S> for DistinctScope<T, D> {
+impl<T: Timestamp, D: Data+Hash<SipHasher>+Eq+PartialEq+Debug> Scope<T> for DistinctScope<T, D> {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 

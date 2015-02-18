@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::{Timestamp, PathSummary, Graph, Scope};
+use progress::{Timestamp, Graph, Scope};
 use progress::graph::GraphExtension;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
@@ -41,7 +41,7 @@ pub struct ConcatScope<T:Timestamp> {
     consumed:   Vec<Rc<RefCell<CountMap<T>>>>
 }
 
-impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for ConcatScope<T> {
+impl<T:Timestamp> Scope<T> for ConcatScope<T> {
     fn name(&self) -> String { format!("Concat") }
     fn inputs(&self) -> u64 { self.consumed.len() as u64 }
     fn outputs(&self) -> u64 { 1 }

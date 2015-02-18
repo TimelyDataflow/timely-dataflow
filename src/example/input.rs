@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Graph, Scope, PathSummary, Timestamp};
+use progress::{Graph, Scope, Timestamp};
 use progress::graph::GraphExtension;
 use progress::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
@@ -52,12 +52,12 @@ pub struct InputScope<T:Timestamp> {
     copies:     u64,
 }
 
-impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for InputScope<T> {
+impl<T:Timestamp> Scope<T> for InputScope<T> {
     fn name(&self) -> String { format!("Input") }
     fn inputs(&self) -> u64 { 0 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut map = CountMap::new();
         for x in self.frontier.borrow().elements.iter() {
             map.update(x, self.copies as i64);

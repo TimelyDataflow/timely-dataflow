@@ -1,6 +1,6 @@
 use progress::frontier::Antichain;
 use progress::{ Scope, CountMap };
-use progress::subgraph::{Summary};
+use progress::subgraph::Summary;
 use progress::subgraph::Summary::Local;
 
 pub struct BarrierScope {
@@ -10,7 +10,7 @@ pub struct BarrierScope {
     pub ttl:    u64,
 }
 
-impl Scope<((), u64), Summary<(), u64>> for BarrierScope {
+impl Scope<((), u64)> for BarrierScope {
     fn name(&self) -> String { format!("Barrier") }
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }

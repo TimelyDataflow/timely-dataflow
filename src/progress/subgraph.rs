@@ -81,8 +81,8 @@ where TOuter: Timestamp,
 }
 
 
-pub struct ScopeWrapper<T: Timestamp, S: PathSummary<T>> {
-    scope:                  Box<Scope<T, S>>,          // the scope itself
+pub struct ScopeWrapper<T: Timestamp> {
+    scope:                  Box<Scope<T>>,          // the scope itself
 
     index:                  u64,
 
@@ -92,7 +92,7 @@ pub struct ScopeWrapper<T: Timestamp, S: PathSummary<T>> {
     edges:                  Vec<Vec<Target>>,
 
     notify:                 bool,
-    summary:                Vec<Vec<Antichain<S>>>,     // internal path summaries (input x output)
+    summary:                Vec<Vec<Antichain<T::Summary>>>,     // internal path summaries (input x output)
 
     guarantees:             Vec<MutableAntichain<T>>,   // per-input:   guarantee made by parent scope in inputs
     capabilities:           Vec<MutableAntichain<T>>,   // per-output:  capabilities retained by scope on outputs
@@ -109,8 +109,8 @@ pub struct ScopeWrapper<T: Timestamp, S: PathSummary<T>> {
     // target_pushed:          Vec<Vec<(T, i64)>>,         // per-input:   counts of pointstamp changes pushed to targets
 }
 
-impl<T: Timestamp, S: PathSummary<T>> ScopeWrapper<T, S> {
-    fn new(scope: Box<Scope<T, S>>, index: u64) -> ScopeWrapper<T, S> {
+impl<T: Timestamp> ScopeWrapper<T> {
+    fn new(scope: Box<Scope<T>>, index: u64) -> ScopeWrapper<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
@@ -245,33 +245,33 @@ impl<T:Timestamp> PointstampCounter<T> {
 }
 
 // #[derive(Default)]
-pub struct Subgraph<TOuter:Timestamp, SOuter: PathSummary<TOuter>, TInner:Timestamp, SInner: PathSummary<TInner>> {
+pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
 
     pub name:               String,                     // a helpful name
     pub index:              u64,                        // a useful integer
 
     //default_time:           (TOuter, TInner),
-    default_summary:        Summary<SOuter, SInner>,    // default summary to use for something TODO: figure out what.
+    default_summary:        Summary<TOuter::Summary, TInner::Summary>,    // default summary to use for something TODO: figure out what.
 
     inputs:                 u64,                        // number inputs into the scope
     outputs:                u64,                        // number outputs from the scope
 
     input_edges:            Vec<Vec<Target>>,           // edges as list of Targets for each input_port.
 
-    external_summaries:     Vec<Vec<Antichain<SOuter>>>,// path summaries from output -> input (TODO: Check) using any edges
+    external_summaries:     Vec<Vec<Antichain<TOuter::Summary>>>,// path summaries from output -> input (TODO: Check) using any edges
 
     // maps from (scope, output), (scope, input) and (input) to respective Vec<(target, antichain)> lists
     // TODO: sparsify complete_summaries to contain only paths which avoid their target scopes.
     // TODO: differentiate summaries by type of destination, to remove match from inner-most loop (of push_poinstamps).
-    source_summaries:       Vec<Vec<Vec<(Target, Antichain<Summary<SOuter, SInner>>)>>>,
-    target_summaries:       Vec<Vec<Vec<(Target, Antichain<Summary<SOuter, SInner>>)>>>,
-    input_summaries:        Vec<Vec<(Target, Antichain<Summary<SOuter, SInner>>)>>,
+    source_summaries:       Vec<Vec<Vec<(Target, Antichain<Summary<TOuter::Summary, TInner::Summary>>)>>>,
+    target_summaries:       Vec<Vec<Vec<(Target, Antichain<Summary<TOuter::Summary, TInner::Summary>>)>>>,
+    input_summaries:        Vec<Vec<(Target, Antichain<Summary<TOuter::Summary, TInner::Summary>>)>>,
 
     // state reflecting work in and promises made to external scope.
     external_capability:    Vec<MutableAntichain<TOuter>>,
     external_guarantee:     Vec<MutableAntichain<TOuter>>,
 
-    children:               Vec<ScopeWrapper<(TOuter, TInner), Summary<SOuter, SInner>>>,
+    children:               Vec<ScopeWrapper<(TOuter, TInner)>>,
 
     input_messages:         Vec<Rc<RefCell<CountMap<(TOuter, TInner)>>>>,
 
@@ -284,20 +284,13 @@ pub struct Subgraph<TOuter:Timestamp, SOuter: PathSummary<TOuter>, TInner:Timest
 }
 
 
-impl<TOuter, SOuter, TInner, SInner>
-Scope<TOuter, SOuter>
-for Subgraph<TOuter, SOuter, TInner, SInner>
-where TOuter: Timestamp,
-      TInner: Timestamp,
-      SOuter: PathSummary<TOuter>,
-      SInner: PathSummary<TInner>,
-{
+impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TInner> {
     fn name(&self) -> String { self.name.clone() }
     fn inputs(&self)  -> u64 { self.inputs }
     fn outputs(&self) -> u64 { self.outputs }
 
     // produces (in -> out) summaries using only edges internal to the vertex.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<SOuter>>>, Vec<CountMap<TOuter>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Vec<CountMap<TOuter>>) {
         // seal subscopes; prepare per-scope state/buffers
         for index in (0..self.children.len()) {
             let inputs  = self.children[index].inputs;
@@ -363,7 +356,7 @@ where TOuter: Timestamp,
     }
 
     // receives (out -> in) summaries using only edges external to the vertex.
-    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<SOuter>>>, frontier: &mut Vec<CountMap<TOuter>>) -> () {
+    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut Vec<CountMap<TOuter>>) -> () {
         self.external_summaries = summaries;
         self.set_summaries();        // now sort out complete reachability internally...
 
@@ -537,28 +530,25 @@ where TOuter: Timestamp,
 }
 
 
-impl<TOuter, SOuter, TInner, SInner> Graph
-for Rc<RefCell<Subgraph<TOuter, SOuter, TInner, SInner>>>
+impl<TOuter, TInner> Graph
+for Rc<RefCell<Subgraph<TOuter, TInner>>>
 where TOuter: Timestamp,
       TInner: Timestamp,
-      SOuter: PathSummary<TOuter>,
-      SInner: PathSummary<TInner>,
 {
     type Timestamp = (TOuter, TInner);
-    type Summary = Summary<SOuter, SInner>;
 
     fn connect(&mut self, source: Source, target: Target) { self.borrow_mut().connect(source, target); }
 
-    fn add_boxed_scope(&mut self, scope: Box<Scope<(TOuter, TInner), Summary<SOuter, SInner>>>) -> u64 {
+    fn add_boxed_scope(&mut self, scope: Box<Scope<(TOuter, TInner)>>) -> u64 {
         let mut borrow = self.borrow_mut();
         let index = borrow.children.len() as u64;
         borrow.children.push(ScopeWrapper::new(scope, index));
         return index;
     }
 
-    fn new_subgraph<T: Timestamp, S: PathSummary<T>>(&mut self, _default: T, progcaster: Progcaster<((TOuter, TInner),T)>)
-            -> Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> {
-        let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> = Subgraph::new_from(progcaster);
+    fn new_subgraph<T: Timestamp>(&mut self, _default: T, progcaster: Progcaster<((TOuter, TInner),T)>)
+            -> Subgraph<(TOuter, TInner), T> {
+        let mut result: Subgraph<(TOuter, TInner), T> = Subgraph::new_from(progcaster);
         result.index = self.borrow().children() as u64;
         return result;
     }
@@ -566,13 +556,7 @@ where TOuter: Timestamp,
 
 
 
-impl<TOuter, SOuter, TInner, SInner>
-Subgraph<TOuter, SOuter, TInner, SInner>
-where TOuter: Timestamp,
-      TInner: Timestamp,
-      SOuter: PathSummary<TOuter>,
-      SInner: PathSummary<TInner>,
-{
+impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     pub fn children(&self) -> usize { self.children.len() }
 
     fn push_pointstamps_to_targets(&mut self) -> () {
@@ -710,7 +694,7 @@ where TOuter: Timestamp,
         }
     }
 
-    fn target_to_sources(&self, target: &Target) -> Vec<(Source, Summary<SOuter, SInner>)> {
+    fn target_to_sources(&self, target: &Target) -> Vec<(Source, Summary<TOuter::Summary, TInner::Summary>)> {
         let mut result = Vec::new();
 
         match *target {
@@ -756,7 +740,7 @@ where TOuter: Timestamp,
         }
     }
 
-    pub fn new_from(progcaster: Progcaster<(TOuter,TInner)>) -> Subgraph<TOuter, SOuter, TInner, SInner> {
+    pub fn new_from(progcaster: Progcaster<(TOuter,TInner)>) -> Subgraph<TOuter, TInner> {
         Subgraph {
             name:                   Default::default(),
             index:                  Default::default(),
@@ -780,7 +764,7 @@ where TOuter: Timestamp,
     }
 }
 
-pub fn new_graph<T: Timestamp, S: PathSummary<T>>(progcaster: Progcaster<((), T)>) -> Rc<RefCell<Subgraph<(), (), T, S>>> {
+pub fn new_graph<T: Timestamp>(progcaster: Progcaster<((), T)>) -> Rc<RefCell<Subgraph<(), T>>> {
     return Rc::new(RefCell::new(Subgraph::new_from(progcaster)));
 }
 

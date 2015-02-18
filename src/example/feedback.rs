@@ -9,18 +9,17 @@ use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 use progress::graph::GraphExtension;
 
-
 use communication::Observer;
 use communication::channels::ObserverHelper;
 use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 pub trait FeedbackExtensionTrait<G: Graph, D:Data> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: G::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>);
+    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>);
 }
 
 impl<G: Graph, D:Data> FeedbackExtensionTrait<G, D> for Stream<G, D> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: G::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>) {
+    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>) {
 
         let targets: OutputPort<G::Timestamp, D> = Default::default();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
@@ -59,7 +58,7 @@ enum FeedbackObserverStatus<T: Timestamp> {
 // implementation of the feedback vertex, essentially, as an observer
 pub struct FeedbackObserver<G: Graph, D:Data> {
     limit:      G::Timestamp,
-    summary:    G::Summary,
+    summary:    <G::Timestamp as Timestamp>::Summary,
     targets:    ObserverHelper<OutputPort<G::Timestamp, D>>,
     active:     bool,
     // status:     FeedbackObserverStatus<T>,  // for debugging ideally
@@ -85,9 +84,7 @@ pub struct FeedbackHelper<O: Observer> {
 }
 
 impl<O: Observer> FeedbackHelper<O> where O::Time : Timestamp, O::Data : Data {
-    pub fn connect_input<G:Graph<Timestamp=O::Time>>(&mut self, source: &mut Stream<G, O::Data>) -> ()
-    where <G as Graph>::Summary : PathSummary<O::Time> // help out the type-checker, I guess
-    {
+    pub fn connect_input<G:Graph<Timestamp=O::Time>>(&mut self, source: &mut Stream<G, O::Data>) -> () {
         source.graph.connect(source.name, ScopeInput(self.index, 0));
         source.add_observer(self.target.take().unwrap());
     }
@@ -95,18 +92,18 @@ impl<O: Observer> FeedbackHelper<O> where O::Time : Timestamp, O::Data : Data {
 
 
 // the scope that the progress tracker interacts with
-pub struct FeedbackScope<T:Timestamp, S: PathSummary<T>> {
+pub struct FeedbackScope<T:Timestamp> {
     consumed_messages:  Rc<RefCell<CountMap<T>>>,
     produced_messages:  Rc<RefCell<CountMap<T>>>,
-    summary:            S,
+    summary:            T::Summary,
 }
 
-impl<T:Timestamp, S:PathSummary<T>> Scope<T, S> for FeedbackScope<T, S> {
+impl<T:Timestamp> Scope<T> for FeedbackScope<T> {
     fn name(&self) -> String { format!("Feedback") }
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         (vec![vec![Antichain::from_elem(self.summary)]], vec![CountMap::new()])
     }
 

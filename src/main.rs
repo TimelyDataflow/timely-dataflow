@@ -135,7 +135,7 @@ fn _create_subgraph<G: Graph, D>(graph: &mut G,
 where D: Data+Hash<SipHasher>+Eq+Debug,
 {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let mut subgraph = Rc::new(RefCell::new(graph.new_subgraph::<_, u64>(0, progcaster)));
+    let mut subgraph = Rc::new(RefCell::new(graph.new_subgraph::<u64>(0, progcaster)));
 
     let (sub_egress1, sub_egress2) = {
         // create new ingress nodes, passing in a reference to the subgraph for them to use.

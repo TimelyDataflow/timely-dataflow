@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::Antichain;
-use progress::{Graph, Scope, PathSummary, Timestamp};
+use progress::{Graph, Scope, Timestamp};
 use progress::graph::GraphExtension;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
@@ -100,20 +100,20 @@ impl<T: Timestamp, D:Data> ScopeInputQueue<T, D> {
     }
 }
 
-struct QueueScope<T:Timestamp, S: PathSummary<T>, D:Data> {
+struct QueueScope<T:Timestamp, D:Data> {
     input:      Rc<RefCell<ScopeInputQueue<T, D>>>,
-    output:     OutputPort<T, D>,//Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
+    output:     OutputPort<T, D>,
     to_send:    Vec<(T, Vec<D>)>,
     guarantee:  CountMap<T>,        // TODO : Should probably be a MutableAntichain
 }
 
-impl<T:Timestamp, S:PathSummary<T>, D:Data> Scope<T, S> for QueueScope<T, S, D>
+impl<T:Timestamp, D:Data> Scope<T> for QueueScope<T, D>
 {
     fn name(&self) -> String { format!("Queue") }
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<S>>>, guarantee: &mut Vec<CountMap<T>>) -> () {
+    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, guarantee: &mut Vec<CountMap<T>>) -> () {
         while let Some((ref key, val)) = guarantee[0].pop() {
             self.guarantee.update(key, val);
         }

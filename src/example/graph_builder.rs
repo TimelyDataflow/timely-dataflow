@@ -3,19 +3,17 @@ use std::default::Default;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::{Timestamp, PathSummary, Graph, Scope, CountMap};
+use progress::{Timestamp, Graph, Scope, CountMap};
 use progress::subgraph::Source::{GraphInput, ScopeOutput};
 use progress::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::subgraph::Subgraph;
-use progress::subgraph::Summary as SubSummary;
 
 use example::stream::Stream;
 use communication::Observer;
 use communication::channels::{Data, OutputPort, ObserverHelper};
 
-pub trait GraphBoundary<G1: Graph, G2: Graph, T2: Timestamp, S2: PathSummary<T2>>
-where G2 : Graph<Timestamp = (G1::Timestamp, T2),
-                 Summary = SubSummary<G1::Summary, S2>>
+pub trait GraphBoundary<G1: Graph, G2: Graph, T2: Timestamp>
+where G2 : Graph<Timestamp = (G1::Timestamp, T2)>
 {
     // adds an input to self, from source, contained in graph.
     fn add_input<D:Data>(&mut self, source: &mut Stream<G1, D>) -> Stream<G2, D>;
@@ -24,12 +22,11 @@ where G2 : Graph<Timestamp = (G1::Timestamp, T2),
 }
 
 
-impl<GOuter: Graph, TInner: Timestamp, SInner: PathSummary<TInner>>
-GraphBoundary<GOuter, Self, TInner, SInner>
-for Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>
+impl<GOuter: Graph, TInner: Timestamp>
+GraphBoundary<GOuter, Self, TInner>
+for Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>
 where GOuter : Graph,
       TInner: Timestamp,
-      SInner: PathSummary<TInner>,
 {
     fn add_input<D: Data>(&mut self, source: &mut Stream<GOuter, D>) -> Stream<Self, D> {
         let targets: OutputPort<(GOuter::Timestamp, TInner), D> = Default::default();

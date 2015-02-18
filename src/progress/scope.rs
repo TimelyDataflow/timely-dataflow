@@ -1,14 +1,14 @@
 use std::default::Default;
 
-use progress::{Timestamp, PathSummary, CountMap, Antichain};
+use progress::{Timestamp, CountMap, Antichain};
 
-pub trait Scope<T: Timestamp, S: PathSummary<T>> : 'static {
+pub trait Scope<T: Timestamp> : 'static {
     fn inputs(&self) -> u64;               // number of inputs to the vertex.
     fn outputs(&self) -> u64;              // number of outputs from the vertex.
 
     // Returns (in -> out) summaries using only edges internal to the vertex, and initial capabilities.
     // by default, full connectivity from all inputs to all outputs, and no capabilities reserved.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         ((0..self.inputs()).map(|_| (0..self.outputs()).map(|_| Antichain::from_elem(Default::default()))
                                                        .collect()).collect(),
          (0..self.outputs()).map(|_| CountMap::new()).collect())
@@ -16,7 +16,7 @@ pub trait Scope<T: Timestamp, S: PathSummary<T>> : 'static {
 
     // Reports (out -> in) summaries for the vertex, and initial frontier information.
     // TODO: Update this to be summaries along paths external to the vertex, as this is strictly more informative.
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<S>>>, _frontier: &mut Vec<CountMap<T>>) -> () { }
+    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, _frontier: &mut Vec<CountMap<T>>) -> () { }
 
 
     // Reports changes to the projection of external work onto each of the scope's inputs.
