@@ -1,8 +1,8 @@
 use std::mem;
 use std::sync::mpsc::Sender;
 
-// TODO : Observer requires a &mut reference, and should have the "No races!" property:
-// TODO : If you hold a &mut ref, no one else can call open/push/shut. Don't let go of it!
+// TODO : Using an Observer requires a &mut reference, and should have the "No races!" property:
+// TODO : If you hold a &mut ref, no one else can call open/push/shut. Don't let go of that &mut!
 // TODO : Probably a good place to insist on RAII... (see ObserverSession)
 
 // observer trait
@@ -39,16 +39,12 @@ impl<'a, O:Observer+'a> Drop for ObserverSession<'a, O> where <O as Observer>::T
 impl<'a, O:Observer+'a> ObserverSession<'a, O> {
     #[inline(always)] fn new(obs: &'a mut O, time: &'a O::Time) -> ObserverSession<'a, O> {
         obs.open(time);
-        ObserverSession {
-            observer: obs,
-            time:     time,
-        }
+        ObserverSession { observer: obs, time: time }
     }
     #[inline(always)] pub fn push(&mut self, data: &O::Data) {
         self.observer.push(data);
     }
 }
-
 
 // implementation for inter-thread queues
 impl<T:Clone+Send+'static, D:Clone+Send+'static> Observer for (Vec<D>, Sender<(T, Vec<D>)>) {
@@ -70,7 +66,7 @@ impl<O: Observer> Observer for BroadcastObserver<O> {
     type Data = O::Data;
     #[inline(always)] fn open(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.open(time); } }
     #[inline(always)] fn push(&mut self, data: &O::Data) { for observer in self.observers.iter_mut() { observer.push(data); } }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.shut(time); }}
+    #[inline(always)] fn shut(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.shut(time); } }
 }
 
 

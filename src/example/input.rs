@@ -7,7 +7,7 @@ use progress::{Graph, Scope, PathSummary, Timestamp};
 use progress::graph::GraphExtension;
 use progress::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
-use communication::{ProcessCommunicator, Communicator};
+use communication::Communicator;
 
 use communication::Observer;
 use communication::channels::{Data, OutputPort, ObserverHelper};
@@ -15,11 +15,11 @@ use example::stream::Stream;
 
 // returns both an input scope and a stream representing its output.
 pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>> {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ProcessCommunicator>>) -> (InputHelper<T, D>, Stream<T, S, D>);
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<Communicator>>) -> (InputHelper<T, D>, Stream<T, S, D>);
 }
 
 impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> for G {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<ProcessCommunicator>>) -> (InputHelper<T, D>, Stream<T, S, D>) {
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<Communicator>>) -> (InputHelper<T, D>, Stream<T, S, D>) {
         let output: OutputPort<T, D> = Default::default();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 

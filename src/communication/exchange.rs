@@ -2,21 +2,19 @@ use std::collections::HashMap;
 use std::mem::swap;
 
 use progress::Timestamp;
-use communication::Data;
-use communication::{ProcessCommunicator, Communicator, Pullable, Pushable, PushableObserver};
-// use communication::Observer;
-use communication::observer::{ExchangeObserver};
-// use std::sync::mpsc::{Sender, Receiver};
 use progress::count_map::CountMap;
+use communication::Data;
+use communication::{Communicator, Pullable, Pushable, PushableObserver};
+use communication::observer::{ExchangeObserver};
 
-pub fn exchange_with<T: Timestamp, D: Data, F: Fn(&D)->u64>(allocator: &mut ProcessCommunicator,
+pub fn exchange_with<T: Timestamp, D: Data, F: Fn(&D)->u64>(allocator: &mut Communicator,
                                                             hash_func: F) -> (ExchangeObserver<PushableObserver<T,D,Box<Pushable<(T,Vec<D>)>>>, F>,
-                                                                               ExchangeReceiver<T, D>)
+                                                                              ExchangeReceiver<T, D>)
 {
     let (senders, receiver) = allocator.new_channel();
 
     let exchange_sender = ExchangeObserver {
-        observers:  senders.into_iter().map(|x| PushableObserver { data: Vec::new(), pushable: x}).collect(), //.into_iter().map(|x| (Vec::new(), x)).collect(),
+        observers:  senders.into_iter().map(|x| PushableObserver { data: Vec::new(), pushable: x}).collect(),
         hash_func:  hash_func,
     };
 
@@ -32,11 +30,11 @@ pub fn exchange_with<T: Timestamp, D: Data, F: Fn(&D)->u64>(allocator: &mut Proc
 }
 
 pub struct ExchangeReceiver<T:Timestamp, D:Data> {
-    receiver:   Box<Pullable<(T, Vec<D>)>>,  // receiver pair for the exchange channel
-    buffers:    HashMap<T, Vec<D>>,     // buffers incoming records indexed by time
-    doubles:    HashMap<T, Vec<D>>,     // double-buffered to prevent unbounded reading
-    consumed:   CountMap<T>,          // retains cumulative messages consumed
-    frontier:   CountMap<T>,          // retains un-claimed messages updates
+    receiver:   Box<Pullable<(T, Vec<D>)>>, // receiver pair for the exchange channel
+    buffers:    HashMap<T, Vec<D>>,         // buffers incoming records indexed by time
+    doubles:    HashMap<T, Vec<D>>,         // double-buffered to prevent unbounded reading
+    consumed:   CountMap<T>,                // retains cumulative messages consumed
+    frontier:   CountMap<T>,                // retains un-claimed messages updates
 }
 
 impl<T:Timestamp, D:Data> Iterator for ExchangeReceiver<T, D> {

@@ -1,4 +1,6 @@
-#![allow(unstable)]
+#![feature(core)]
+#![feature(hash)]
+#![feature(alloc)]
 #![feature(unsafe_destructor)]
 
 /* Based on src/main.rs from timely-dataflow by Frank McSherry,
@@ -29,7 +31,7 @@
 extern crate timely;
 extern crate core;
 
-use timely::communication::ProcessCommunicator;
+use timely::communication::{Communicator, ProcessCommunicator};
 use timely::communication::channels::Data;
 use timely::progress::{Timestamp, PathSummary};
 use timely::progress::subgraph::{Subgraph, Summary, new_graph};
@@ -55,7 +57,7 @@ fn main() {
 }
 
 
-fn _queue(allocator: ProcessCommunicator) {
+fn _queue(allocator: Communicator) {
     let allocator = Rc::new(RefCell::new(allocator));
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));

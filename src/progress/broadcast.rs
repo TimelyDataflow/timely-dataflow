@@ -9,13 +9,9 @@ pub struct Progcaster<T:Timestamp> {
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
-    pub fn new<C: Communicator>(communicator: &mut C) -> Progcaster<T> {
+    pub fn new(communicator: &mut Communicator) -> Progcaster<T> {
         let (senders, receiver) = communicator.new_channel();
-        Progcaster {
-            senders:    senders,
-            receiver:   receiver,
-            // queue:      Vec::new(),
-        }
+        Progcaster { senders: senders, receiver: receiver }
     }
     pub fn send_and_recv(&mut self, messages: &mut ProgressVec<T>, internal: &mut ProgressVec<T>) -> () {
         if self.senders.len() > 1 {  // if the length is one, just return the updates...

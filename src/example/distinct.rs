@@ -71,7 +71,8 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+PartialEq+Debug
                                          produced: &mut Vec<CountMap<T>>) -> bool
     {
         // drain the input into sets.
-        for (time, data) in self.input {
+        while let Some((time, data)) = self.input.next() {
+        // for (time, data) in self.input {
             let set = match self.elements.entry(time) {
                 Occupied(x) => x.into_mut(),
                 Vacant(x)   => {
@@ -85,7 +86,8 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+PartialEq+Debug
         }
 
         // // send anything for times we have finalized
-        for (time, _count) in self.notificator {
+        while let Some((time, _count)) = self.notificator.next() {
+        // for (time, _count) in self.notificator {
             if let Some(data) = self.elements.remove(&time) {
                 let mut session = self.output.session(&time);
                 for datum in data.into_iter() { session.push(&datum); }

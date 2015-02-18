@@ -1,9 +1,11 @@
-#![allow(unstable)]
+#![feature(io)]
+#![feature(libc)]
+#![feature(std_misc)]
 
 extern crate libc;
 
-use std::io::stdio::{stdin_raw, stdout_raw};
-use std::io::{MemReader, MemWriter, IoErrorKind};
+use std::old_io::stdio::{stdin_raw, stdout_raw};
+use std::old_io::{MemReader, MemWriter, IoErrorKind};
 use std::thread::Thread;
 
 fn main() {
@@ -21,7 +23,7 @@ fn main() {
 
     let bytes = memwriter.into_inner();
     writer.write_le_u64(bytes.len() as u64).ok().expect("");
-    writer.write(bytes.as_slice()).ok().expect("");
+    writer.write_all(&bytes[]).ok().expect("");
     writer.flush().ok().expect("");
 
     let mut buffer = Vec::new();
@@ -74,7 +76,7 @@ fn main() {
 
                     let bytes = memwriter.into_inner();
                     writer.write_le_u64(bytes.len() as u64).ok().expect("");
-                    writer.write(&bytes[]).ok().expect("");
+                    writer.write_all(&bytes[]).ok().expect("");
                     writer.flush().ok().expect("");
                 }
 

@@ -19,7 +19,7 @@ pub trait GraphBoundary<T1:Timestamp, T2:Timestamp, S1:PathSummary<T1>, S2:PathS
     // adds an input to self, from source, contained in graph.
     fn add_input<D:Data>(&mut self, source: &mut Stream<T1, S1, D>) -> Stream<(T1, T2), Summary<S1, S2>, D>;
     fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                              graph: Box<Graph<T1, S1>>) -> Stream<T1, S1, D>;
+                                              graph: Box<Graph<T1, S1, Timestamp = T1, Summary = S1>>) -> Stream<T1, S1, D>;
 
     fn new_subgraph<T, S>(&mut self, default: T, progcaster: Progcaster<((T1,T2),T)>) -> Rc<RefCell<Subgraph<(T1, T2), Summary<S1, S2>, T, S>>>
     where T: Timestamp,
@@ -52,7 +52,7 @@ where TOuter: Timestamp,
     }
 
     fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>,
-                                               graph: Box<Graph<TOuter, SOuter>>) -> Stream<TOuter, SOuter, D>
+                                               graph: Box<Graph<TOuter, SOuter, Timestamp = TOuter, Summary = SOuter>>) -> Stream<TOuter, SOuter, D>
     {
         let mut borrow = self.borrow_mut();
         let index = borrow.new_output();

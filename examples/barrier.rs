@@ -1,5 +1,8 @@
-#![allow(unstable)]
+#![feature(core)]
+#![feature(test)]
+#![feature(std_misc)]
 #![feature(unsafe_destructor)]
+
 
 /* Based on src/main.rs from timely-dataflow by Frank McSherry,
 *
@@ -52,12 +55,12 @@ fn main() {
 fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
 fn _barrier_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ProcessCommunicator::new_vector(threads).into_iter() {
-        guards.push(Thread::scoped(move || _barrier(allocator, None)));
+    for communicator in ProcessCommunicator::new_vector(threads).into_iter() {
+        guards.push(Thread::scoped(move || _barrier(communicator, None)));
     }
 }
 
-fn _barrier(mut allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
+fn _barrier(mut allocator: Communicator, bencher: Option<&mut Bencher>) {
     let mut graph = new_graph(Progcaster::new(&mut allocator));
     graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));

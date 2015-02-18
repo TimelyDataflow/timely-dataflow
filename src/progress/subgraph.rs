@@ -543,6 +543,9 @@ where TOuter: Timestamp,
       SOuter: PathSummary<TOuter>,
       SInner: PathSummary<TInner>,
 {
+    type Timestamp = (TOuter, TInner);
+    type Summary = Summary<SOuter, SInner>;
+
     fn connect(&mut self, source: Source, target: Target) { self.borrow_mut().connect(source, target); }
 
     fn add_boxed_scope(&mut self, scope: Box<Scope<(TOuter, TInner), Summary<SOuter, SInner>>>) -> u64 {
@@ -552,7 +555,9 @@ where TOuter: Timestamp,
         return index;
     }
 
-    fn as_box(&self) -> Box<Graph<(TOuter, TInner), Summary<SOuter, SInner>>> { Box::new(self.clone()) }
+    fn as_box(&self) -> Box<Graph<(TOuter, TInner), Summary<SOuter, SInner>, Timestamp = (TOuter, TInner), Summary = Summary<SOuter, SInner>>> {
+        Box::new(self.clone()) as Box<Graph<(TOuter, TInner), Summary<SOuter, SInner>, Timestamp = (TOuter, TInner), Summary = Summary<SOuter, SInner>>>
+    }
 }
 
 impl<TOuter, SOuter, TInner, SInner>

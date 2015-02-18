@@ -7,8 +7,8 @@ use std::mem::replace;
 
 use std::os::unix::prelude::AsRawFd;
 
-use std::io::{MemWriter, MemReader, IoErrorKind};
-use std::io::process::{Command, Process};
+use std::old_io::{MemWriter, MemReader, IoErrorKind};
+use std::old_io::process::{Command, Process};
 
 use std::default::Default;
 use progress::frontier::Antichain;
@@ -128,7 +128,7 @@ impl<S: PathSummary<((), u64)>> Scope<((), u64), S> for CommandScope {
             Err(e) => { panic!("ERROR: {}",e); }
         }
 
-        stdin.write(bytes.as_slice()).ok().expect("write failure b");
+        stdin.write_all(&bytes[]).ok().expect("write failure b");
         stdin.flush().ok().expect("flush failure");
     }
 

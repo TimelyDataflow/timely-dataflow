@@ -1,8 +1,8 @@
 extern crate serialize;
 
 use serialize::{Encoder, Decoder};
-use std::io;
-use std::io::{IoResult, Reader, Writer, IoError};
+use std::old_io;
+use std::old_io::{IoResult, Reader, Writer, IoError};
 use std::char::from_u32;
 
 pub struct BinaryDecoder<R: Reader> { reader: R }
@@ -79,7 +79,7 @@ impl<R: Reader> serialize::Decoder for BinaryDecoder<R>
     fn read_map_elt_val<T, F>(&mut self, _idx: usize, f: F) -> IoResult<T>
         where F: FnOnce(&mut BinaryDecoder<R>) -> IoResult<T> { f(self) }
 
-    fn error(&mut self, _err: &str) -> io::IoError { IoError::last_error() }
+    fn error(&mut self, _err: &str) -> IoError { IoError::last_error() }
 }
 
 pub struct BinaryEncoder<R: Writer> { writer: R }

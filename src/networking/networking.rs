@@ -1,6 +1,6 @@
-use std::io::{TcpListener, TcpStream};
-use std::io::{Acceptor, Listener, IoResult, MemReader};
-use std::io::timer::sleep;
+use std::old_io::{TcpListener, TcpStream};
+use std::old_io::{Acceptor, Listener, IoResult, MemReader};
+use std::old_io::timer::sleep;
 
 use std::sync::mpsc::{Sender, Receiver, channel};
 
@@ -9,10 +9,13 @@ use std::sync::{Arc, Future};
 use std::mem;
 use std::time::duration::Duration;
 
-use communication::{Communicator, Pushable, Pullable};
+use communication::{Pushable, Communicator, BinaryCommunicator, ProcessCommunicator};
+
+// TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.
+// TODO : Could be moved somewhere less networking-specific.
 
 #[derive(Copy)]
-struct MessageHeader {
+pub struct MessageHeader {
     graph:      u64,   // graph identifier
     channel:    u64,   // index of channel
     source:     u64,   // index of worker sending message
@@ -154,9 +157,11 @@ impl<W: Writer> BinarySender<W> {
     }
 
     fn send_loop(&mut self) {
+        println!("send loop:\tstarting");
         for (header, mut buffer) in self.sources.iter() {
+            println!("send loop:\treceived data");
             header.write_to(&mut self.writer).ok().expect("BinarySender: header send failure");
-            self.writer.write(buffer.as_slice()).ok().expect("BinarySender: payload send failure");
+            self.writer.write_all(&buffer[]).ok().expect("BinarySender: payload send failure");
             buffer.clear();
 
             // inline because borrow-checker hates me
@@ -182,7 +187,9 @@ impl<W: Writer> BinarySender<W> {
     }
 }
 
-pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> IoResult<BinaryCommunicator> {
+pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> IoResult<Vec<Communicator>> {
+
+    let processes = addresses.len() as u64;
     let hosts1 = Arc::new(addresses);
     let hosts2 = hosts1.clone();
 
@@ -220,15 +227,23 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
         }
     }
 
-    return Ok(BinaryCommunicator {
-        index:          my_index,
-        peers:          workers,
-        graph:          0,          // TODO : Fix this
-        allocated:      0,
-        writers:        writers,
-        readers:        readers,
-        writer_senders: senders,
-    });
+    let proc_comms = ProcessCommunicator::new_vector(workers);
+
+    let mut results = Vec::new();
+    for (index, proc_comm) in proc_comms.into_iter().enumerate() {
+        results.push(Communicator::Binary(Box::new(BinaryCommunicator {
+            inner:          proc_comm,
+            index:          my_index * workers + index as u64,
+            peers:          workers * processes,
+            graph:          0,          // TODO : Fix this
+            allocated:      0,
+            writers:        writers.clone(),
+            readers:        readers.clone(),
+            writer_senders: senders.clone(),
+        })));
+    }
+
+    return Ok(results);
 }
 
 // result contains connections [0, my_index - 1].
@@ -269,96 +284,4 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> IoResult<Vec
     }
 
     return Ok(results);
-}
-
-struct BinaryPushable<T> {
-    sender:     Sender<(MessageHeader, Vec<u8>)>,   // targets for each remote destination
-    receiver:   Receiver<Vec<u8>>,                  // source of empty binary vectors
-    buffer:     Vec<T>,                             // typed buffers (pre-serialization)
-    threshold:  usize,
-}
-
-impl<T:'static> Pushable<T> for BinaryPushable<T> {
-    #[inline]
-    fn push(&mut self, data: T) {
-        self.buffer.push(data);
-        if self.buffer.len() > self.threshold {
-            assert!(false);
-            // TODO : serialize that stuff and send it
-            // TODO : ...
-        }
-    }
-}
-
-struct BinaryPullable<T> {
-    senders:    Vec<Sender<Vec<u8>>>,   // places to put used binary vectors
-    receiver:   Receiver<Vec<u8>>,      // source of serialized buffers
-    staged:     Vec<T>,                 // deserialized data, in progress.
-    cursor:     usize,                  // cursor into self.staged
-}
-
-impl<T:'static> Pullable<T> for BinaryPullable<T> {
-    #[inline]
-    fn pull(&mut self) -> Option<T> {
-        if self.staged.len() == 0 {
-            if let Some(serialized) = self.receiver.try_recv().ok() {
-                assert!(serialized.len() > 0);
-                assert!(false)
-                // TODO : deserialize stuff in to self.staged
-                // TODO : ...
-            }
-        }
-        self.staged.pop()   // worry about the fact that this is probably in the wrong order
-    }
-}
-
-#[derive(Clone)]
-pub struct BinaryCommunicator {
-    index:          u64,        // index of this worker
-    peers:          u64,        // number of peer workers
-    graph:          u64,        // identifier for the current graph
-    allocated:      u64,        // indicates how many have been allocated (locally).
-
-    // for loading up state in the networking threads.
-    writers:        Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>)>>,                     // (index, back-to-worker)
-    readers:        Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>>,  // (index, data-to-worker, back-from-worker)
-
-    writer_senders: Vec<Sender<(MessageHeader, Vec<u8>)>>
-}
-
-// A Communicator backed by Sender<Vec<u8>>/Receiver<Vec<u8>> pairs (e.g. networking, shared memory, files, pipes)
-
-impl Communicator for BinaryCommunicator {
-    fn index(&self) -> u64 { self.index }
-    fn peers(&self) -> u64 { self.peers }
-    fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
-        let mut pushers: Vec<Box<Pushable<T>>> = Vec::new();
-        for index in (0..self.writers.len()) {
-            let (s,r) = channel();  // (back_to_worker, back_from_net)
-            pushers.push(Box::new(BinaryPushable {
-                sender:     self.writer_senders[index].clone(),
-                receiver:   r,
-                buffer:     Vec::new(),
-                threshold:  256,
-            }));
-            self.writers[index].send(((self.index, self.graph, self.allocated), s)).ok().expect("send error");
-        }
-
-        let (send,recv) = channel();
-        let mut pullsends = Vec::new();
-        for reader in self.readers.iter() {
-            let (s,r) = channel();
-            pullsends.push(s);
-            reader.send(((self.index, self.graph, self.allocated), send.clone(), r)).ok().expect("send error");
-        }
-
-        let pullable = Box::new(BinaryPullable {
-            senders:    pullsends,
-            receiver:   recv,
-            staged:     Vec::new(),
-            cursor:     0,
-        });
-
-        return (pushers, pullable);
-    }
 }

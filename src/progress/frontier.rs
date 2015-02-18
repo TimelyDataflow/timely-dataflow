@@ -81,7 +81,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
 
 
     //#[inline(always)]
-    pub fn update_iter_and<I: Iterator<Item = (T, i64)>, A: FnMut(&T, i64) -> ()>(&mut self, mut updates: I, mut action: A) -> () {
+    pub fn update_iter_and<I: Iterator<Item = (T, i64)>, A: FnMut(&T, i64) -> ()>(&mut self, updates: I, mut action: A) -> () {
         for (ref elem, delta) in updates {
             // self.update_and(elem, delta, action);
             let new_value = self.occurrences.update(elem, delta);
@@ -154,7 +154,6 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
     pub fn test_size(&self, threshold: usize, name: &str) {
         if self.occurrences.len() > threshold
         {
-            // panic!();
             println!("{}:\toccurrences:\tlen() = {}", name, self.occurrences.len());
             for &(ref key, val) in self.occurrences.elements().iter() { println!("{}: \toccurrence: {:?} : {:?}", name, key, val); }
             panic!();

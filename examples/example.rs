@@ -1,10 +1,14 @@
-#![allow(unstable)]
+#![feature(test)]
+#![feature(core)]
+#![feature(hash)]
+#![feature(alloc)]
+#![feature(std_misc)]
 #![feature(unsafe_destructor)]
 
 extern crate core;
 extern crate timely;
 extern crate test;
-extern crate serialize;
+// extern crate serialize;
 extern crate columnar;
 
 extern crate docopt;
@@ -58,11 +62,11 @@ Options:
 fn main() {
     let args = Docopt::new(USAGE).and_then(|dopt| dopt.parse()).unwrap_or_else(|e| e.exit());
 
-    let threads: u64 = if let Some(threads) = args.get_str("-t").parse() { threads }
+    let threads: u64 = if let Ok(threads) = args.get_str("-t").parse() { threads }
                   else { panic!("invalid setting for --threads: {}", args.get_str("-t")) };
-    let process_id: u64 = if let Some(proc_id) = args.get_str("-p").parse() { proc_id }
+    let process_id: u64 = if let Ok(proc_id) = args.get_str("-p").parse() { proc_id }
                      else { panic!("invalid setting for --processid: {}", args.get_str("-p")) };
-    let processes: u64 = if let Some(processes) = args.get_str("-n").parse() { processes }
+    let processes: u64 = if let Ok(processes) = args.get_str("-n").parse() { processes }
                          else { panic!("invalid setting for --processes: {}", args.get_str("-n")) };
 
     println!("Hello, world!");
@@ -92,8 +96,8 @@ fn _networking(my_id: u64, threads: u64, processes: u64) {
 fn queue_bench(bencher: &mut Bencher) { _queue(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
 fn _queue_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ProcessCommunicator::new_vector(threads).into_iter() {
-        guards.push(Thread::scoped(move || _queue(allocator, None)));
+    for communicator in ProcessCommunicator::new_vector(threads).into_iter() {
+        guards.push(Thread::scoped(move || _queue(communicator, None)));
     }
 }
 
@@ -102,8 +106,8 @@ fn _queue_multi(threads: u64) {
 // fn command_bench(bencher: &mut Bencher) { _command(ProcessCommunicator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
 fn _command_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ProcessCommunicator::new_vector(threads).into_iter() {
-        guards.push(Thread::scoped(move || _command(allocator, None)));
+    for communicator in ProcessCommunicator::new_vector(threads).into_iter() {
+        guards.push(Thread::scoped(move || _command(communicator, None)));
     }
 }
 
@@ -112,8 +116,8 @@ fn _command_multi(threads: u64) {
 fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
 fn _barrier_multi(threads: u64) {
     let mut guards = Vec::new();
-    for allocator in ProcessCommunicator::new_vector(threads).into_iter() {
-        guards.push(Thread::scoped(move || _barrier(allocator, None)));
+    for communicator in ProcessCommunicator::new_vector(threads).into_iter() {
+        guards.push(Thread::scoped(move || _barrier(communicator, None)));
     }
 }
 
@@ -152,7 +156,7 @@ where T1: Timestamp, S1: PathSummary<T1>,
     return (sub_egress1, sub_egress2);
 }
 
-fn _queue(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
+fn _queue(allocator: Communicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
@@ -203,7 +207,7 @@ fn _queue(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     }
 }
 
-fn _command(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
+fn _command(allocator: Communicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
@@ -229,7 +233,7 @@ fn _command(allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
     }
 }
 
-fn _barrier(mut allocator: ProcessCommunicator, bencher: Option<&mut Bencher>) {
+fn _barrier(mut allocator: Communicator, bencher: Option<&mut Bencher>) {
     let mut graph: Rc<RefCell<Subgraph<(), (), u64, u64>>> = new_graph(Progcaster::new(&mut allocator));
     graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 10000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
