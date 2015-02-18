@@ -3,20 +3,16 @@ use progress::subgraph::{Source, Target};
 use progress::broadcast::Progcaster;
 
 // cloneable so that we can make some copies, let different streams call connect.
-pub trait Graph : 'static {
+pub trait Graph : Clone+'static {
     type Timestamp : Timestamp;
     type Summary : PathSummary<Self::Timestamp>;
 
     fn connect(&mut self, source: Source, target: Target);
     fn add_boxed_scope(&mut self, scope: Box<Scope<Self::Timestamp, Self::Summary>>) -> u64;
-
     fn new_subgraph<T: Timestamp, S: PathSummary<T>>(&mut self, default: T, progcaster: Progcaster<(Self::Timestamp,T)>) ->
         Subgraph<Self::Timestamp, Self::Summary, T, S>;
 
-    // Box<Graph<T,S>>.clone() doesn't seem to work.
-    // perhaps this should be with the Stream code?
-    // fn as_box(&self) -> Box<Graph<Timestamp = Self::Timestamp, Summary = Self::Summary>>;
-    fn graph_clone(&self) -> Self;
+    // fn graph_clone(&self) -> Self;
 }
 
 pub trait GraphExtension<G: Graph> {

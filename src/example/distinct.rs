@@ -45,7 +45,7 @@ impl<G: Graph, D: Data+Hash<SipHasher>+Eq+Debug> DistinctExtensionTrait for Stre
         Stream {
             name: ScopeOutput(index, 0),
             ports: targets,
-            graph: self.graph.graph_clone(),
+            graph: self.graph.clone(),
             allocator: self.allocator.clone(),
         }
     }

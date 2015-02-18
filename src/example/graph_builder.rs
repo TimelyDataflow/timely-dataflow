@@ -19,20 +19,19 @@ where G2 : Graph<Timestamp = (G1::Timestamp, T2),
 {
     // adds an input to self, from source, contained in graph.
     fn add_input<D:Data>(&mut self, source: &mut Stream<G1, D>) -> Stream<G2, D>;
-    fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<G2, D>,
-                                              graph: G1) -> Stream<G1, D>;
+    fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<G2, D>, graph: &G1) -> Stream<G1, D>;
 
 }
 
 
 impl<GOuter: Graph, TInner: Timestamp, SInner: PathSummary<TInner>>
-GraphBoundary<GOuter, Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>, TInner, SInner>
+GraphBoundary<GOuter, Self, TInner, SInner>
 for Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>
 where GOuter : Graph,
       TInner: Timestamp,
       SInner: PathSummary<TInner>,
 {
-    fn add_input<D: Data>(&mut self, source: &mut Stream<GOuter, D>) -> Stream<Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>, D> {
+    fn add_input<D: Data>(&mut self, source: &mut Stream<GOuter, D>) -> Stream<Self, D> {
         let targets: OutputPort<(GOuter::Timestamp, TInner), D> = Default::default();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
@@ -44,10 +43,15 @@ where GOuter : Graph,
         source.graph.connect(source.name, ScopeInput(borrow.index, index));
         source.add_observer(ingress);
 
-        return Stream { name: GraphInput(index), ports: targets, graph: self.graph_clone(), allocator: source.allocator.clone() };
+        Stream {
+            name: GraphInput(index),
+            ports: targets,
+            graph: self.clone(),
+            allocator: source.allocator.clone()
+        }
     }
 
-    fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>, D>, graph: GOuter) -> Stream<GOuter, D> {
+    fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<Self, D>, graph: &GOuter) -> Stream<GOuter, D> {
         let mut borrow = self.borrow_mut();
         let index = borrow.new_output();
 
@@ -56,14 +60,13 @@ where GOuter : Graph,
         borrow.connect(source.name, GraphOutput(index));
         source.add_observer(EgressNub { targets: targets.clone() });
 
-        return Stream {
+        Stream {
             name: ScopeOutput(borrow.index, index),
             ports: targets,
-            graph: graph.graph_clone(),
-            allocator: source.allocator.clone() };
+            graph: graph.clone(),
+            allocator: source.allocator.clone()
+        }
     }
-
-
 }
 
 

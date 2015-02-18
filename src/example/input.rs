@@ -39,7 +39,7 @@ impl<G: Graph> InputExtensionTrait<G> for G {
         return (helper, Stream {
             name: ScopeOutput(index, 0),
             ports: output,
-            graph: self.graph_clone(),
+            graph: self.clone(),
             allocator: allocator.clone()
         });
     }

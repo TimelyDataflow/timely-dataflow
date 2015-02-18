@@ -39,7 +39,7 @@ impl<G: Graph, D: Data> QueueExtensionTrait for Stream<G, D> {
         Stream {
             name: ScopeOutput(index, 0),
             ports: output,
-            graph: self.graph.graph_clone(),
+            graph: self.graph.clone(),
             allocator: self.allocator.clone(),
         }
 

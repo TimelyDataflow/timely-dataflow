@@ -43,7 +43,7 @@ impl<G: Graph, D:Data> FeedbackExtensionTrait<G, D> for Stream<G, D> {
         let result = Stream {
             name: ScopeOutput(index, 0),
             ports: targets,
-            graph: self.graph.graph_clone(),
+            graph: self.graph.clone(),
             allocator: self.allocator.clone(),
         };
 

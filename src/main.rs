@@ -153,8 +153,8 @@ where D:  Data+Hash<SipHasher>+Eq+Debug,
         let mut distinct = sub_ingress1.distinct();
 
         // egress each of the streams from the subgraph.
-        let sub_egress1 = subgraph.add_output_to_graph(&mut distinct, graph.graph_clone());
-        let sub_egress2 = subgraph.add_output_to_graph(&mut sub_ingress2, graph.graph_clone());
+        let sub_egress1 = subgraph.add_output_to_graph(&mut distinct, graph);
+        let sub_egress2 = subgraph.add_output_to_graph(&mut sub_ingress2, graph);
 
         (sub_egress1, sub_egress2)
     };

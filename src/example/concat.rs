@@ -31,7 +31,7 @@ impl<G: Graph, D: Data> ConcatExtensionTrait for Stream<G, D> {
         Stream {
             name: ScopeOutput(index, 0),
             ports: outputs,
-            graph: self.graph.graph_clone(),
+            graph: self.graph.clone(),
             allocator: self.allocator.clone(),
         }
     }

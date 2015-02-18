@@ -554,20 +554,12 @@ where TOuter: Timestamp,
         return index;
     }
 
-    fn new_subgraph<T, S>(&mut self, _default: T, progcaster: Progcaster<((TOuter, TInner),T)>)
-            -> Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S>
-    where T: Timestamp,
-          S: PathSummary<T>,
-    {
+    fn new_subgraph<T: Timestamp, S: PathSummary<T>>(&mut self, _default: T, progcaster: Progcaster<((TOuter, TInner),T)>)
+            -> Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> {
         let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> = Subgraph::new_from(progcaster);
         result.index = self.borrow().children() as u64;
         // result.progcaster = progcaster;
         return result;
-    }
-
-    fn graph_clone(&self) -> Rc<RefCell<Subgraph<TOuter, SOuter, TInner, SInner>>> {
-        self.clone()
-        // Box::new(self.clone()) as Box<Graph<Timestamp = (TOuter, TInner), Summary = Summary<SOuter, SInner>>>
     }
 }
 
