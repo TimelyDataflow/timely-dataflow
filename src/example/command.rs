@@ -2,8 +2,6 @@
 extern crate libc;
 
 use std::mem::replace;
-// use std::rc::Rc;
-// use std::cell::RefCell;
 
 use std::os::unix::prelude::AsRawFd;
 
@@ -11,17 +9,14 @@ use std::old_io::{MemWriter, MemReader, IoErrorKind};
 use std::old_io::process::{Command, Process};
 
 use std::default::Default;
-use progress::frontier::Antichain;
-
-use progress::{Scope, Graph, Timestamp};
-use communication::channels::{Data};
-use example::stream::Stream;
-// use communication::channels::OutputPort;
-use progress::count_map::CountMap;
-use progress::graph::GraphExtension;
-use communication::Observer;
-
 use std::thread::Thread;
+
+use progress::frontier::Antichain;
+use progress::{Scope, Graph, Timestamp};
+use progress::count_map::CountMap;
+use communication::channels::{Data};
+use communication::Observer;
+use example::stream::Stream;
 
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;

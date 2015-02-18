@@ -11,7 +11,6 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::count_map::CountMap;
-use progress::graph::GraphExtension;
 
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Graph};

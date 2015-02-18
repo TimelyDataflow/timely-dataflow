@@ -6,7 +6,6 @@ use std::default::Default;
 
 use progress::frontier::Antichain;
 use progress::{Graph, Scope, Timestamp};
-use progress::graph::GraphExtension;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;

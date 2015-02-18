@@ -7,7 +7,6 @@ use progress::frontier::Antichain;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
-use progress::graph::GraphExtension;
 
 use communication::Observer;
 use communication::channels::ObserverHelper;

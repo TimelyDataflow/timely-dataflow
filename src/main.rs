@@ -21,7 +21,6 @@ use docopt::Docopt;
 use test::Bencher;
 
 use progress::{Graph, Scope};
-use progress::graph::GraphExtension;
 use progress::subgraph::new_graph;
 use progress::subgraph::Summary::Local;
 use progress::subgraph::Source::ScopeOutput;
