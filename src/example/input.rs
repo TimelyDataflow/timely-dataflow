@@ -14,13 +14,13 @@ use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
 
 // returns both an input scope and a stream representing its output.
-pub trait InputExtensionTrait<T: Timestamp, S: PathSummary<T>> {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<Communicator>>) -> (InputHelper<T, D>, Stream<T, S, D>);
+pub trait InputExtensionTrait<G: Graph> {
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<Communicator>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D>);
 }
 
-impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> for G {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<Communicator>>) -> (InputHelper<T, D>, Stream<T, S, D>) {
-        let output: OutputPort<T, D> = Default::default();
+impl<G: Graph> InputExtensionTrait<G> for G {
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<Communicator>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D>) {
+        let output: OutputPort<G::Timestamp, D> = Default::default();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let helper = InputHelper {
@@ -39,7 +39,7 @@ impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>> InputExtensionTrait<T, S> 
         return (helper, Stream {
             name: ScopeOutput(index, 0),
             ports: output,
-            graph: self.as_box(),
+            graph: self.graph_clone(),
             allocator: allocator.clone()
         });
     }

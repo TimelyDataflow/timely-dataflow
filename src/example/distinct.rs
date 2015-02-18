@@ -14,7 +14,7 @@ use progress::count_map::CountMap;
 use progress::graph::GraphExtension;
 
 use progress::notificator::Notificator;
-use progress::{Timestamp, PathSummary, Scope};
+use progress::{Timestamp, PathSummary, Scope, Graph};
 use communication::channels::{Data};
 use communication::exchange::{ExchangeReceiver, exchange_with};
 use example::stream::Stream;
@@ -27,10 +27,10 @@ use progress::subgraph::Target::ScopeInput;
 
 pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Debug> DistinctExtensionTrait for Stream<T, S, D> {
-    fn distinct(&mut self) -> Stream<T, S, D> {
+impl<G: Graph, D: Data+Hash<SipHasher>+Eq+Debug> DistinctExtensionTrait for Stream<G, D> {
+    fn distinct(&mut self) -> Stream<G, D> {
         let (sender, receiver) = { exchange_with(&mut (*self.allocator.borrow_mut()), |x| hash::hash(&x)) };
-        let targets: OutputPort<T,D> = Default::default();
+        let targets: OutputPort<G::Timestamp,D> = Default::default();
 
         let index = self.graph.add_scope(DistinctScope {
             input:          receiver,
@@ -45,7 +45,7 @@ impl<T: Timestamp, S: PathSummary<T>, D: Data+Hash<SipHasher>+Eq+Debug> Distinct
         Stream {
             name: ScopeOutput(index, 0),
             ports: targets,
-            graph: self.graph.as_box(),
+            graph: self.graph.graph_clone(),
             allocator: self.allocator.clone(),
         }
     }

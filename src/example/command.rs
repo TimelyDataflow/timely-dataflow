@@ -13,7 +13,7 @@ use std::old_io::process::{Command, Process};
 use std::default::Default;
 use progress::frontier::Antichain;
 
-use progress::{PathSummary, Scope};
+use progress::{PathSummary, Scope, Graph};
 use communication::channels::{Data};
 use example::stream::Stream;
 // use communication::channels::OutputPort;
@@ -28,11 +28,10 @@ use progress::subgraph::Target::ScopeInput;
 
 pub trait CommandExtensionTrait { fn command(&mut self, program: String) -> Self; }
 
-impl<S, D> CommandExtensionTrait for Stream<((), u64), S, D>
-where S: PathSummary<((), u64)>,
-      D: Data
+impl<G: Graph<Timestamp = ((), u64)>, D: Data> CommandExtensionTrait for Stream<G, D>
+where <G as Graph>::Summary : PathSummary<((), u64)>
 {
-    fn command(&mut self, program: String) -> Stream<((), u64), S, D> {
+    fn command(&mut self, program: String) -> Stream<G, D> {
 
         let mut process = match Command::new(program.clone()).spawn() {
             Ok(p) => p,
@@ -55,14 +54,13 @@ where S: PathSummary<((), u64)>,
         Stream {
             name: ScopeOutput(index, 0),
             ports: Default::default(),
-            graph: self.graph.as_box(),
+            graph: self.graph.graph_clone(),
             allocator: self.allocator.clone(),
         }
     }
 }
 
-struct CommandScope
-{
+struct CommandScope {
     process:    Process,
     buffer:     Vec<u8>,
 }

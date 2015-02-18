@@ -1,23 +1,28 @@
-use progress::{Timestamp, PathSummary, Scope};
+use progress::{Timestamp, PathSummary, Scope, Subgraph};
 use progress::subgraph::{Source, Target};
+use progress::broadcast::Progcaster;
 
 // cloneable so that we can make some copies, let different streams call connect.
-pub trait Graph<T: Timestamp, S: PathSummary<T>> : 'static {
-    type Timestamp;
+pub trait Graph : 'static {
+    type Timestamp : Timestamp;
     type Summary : PathSummary<Self::Timestamp>;
 
     fn connect(&mut self, source: Source, target: Target);
-    fn add_boxed_scope(&mut self, scope: Box<Scope<T, S>>) -> u64;
+    fn add_boxed_scope(&mut self, scope: Box<Scope<Self::Timestamp, Self::Summary>>) -> u64;
+
+    fn new_subgraph<T: Timestamp, S: PathSummary<T>>(&mut self, default: T, progcaster: Progcaster<(Self::Timestamp,T)>) ->
+        Subgraph<Self::Timestamp, Self::Summary, T, S>;
 
     // Box<Graph<T,S>>.clone() doesn't seem to work.
     // perhaps this should be with the Stream code?
-    fn as_box(&self) -> Box<Graph<T, S, Timestamp = T, Summary = S>>;
+    // fn as_box(&self) -> Box<Graph<Timestamp = Self::Timestamp, Summary = Self::Summary>>;
+    fn graph_clone(&self) -> Self;
 }
 
-pub trait GraphExtension<T: Timestamp, S: PathSummary<T>> {
-    fn add_scope<SC: Scope<T, S>>(&mut self, scope: SC) -> u64;
+pub trait GraphExtension<G: Graph> {
+    fn add_scope<SC: Scope<G::Timestamp, G::Summary>>(&mut self, scope: SC) -> u64;
 }
 
-impl<T: Timestamp, S: PathSummary<T>, G: Graph<T, S>+?Sized> GraphExtension<T, S> for G {
-    fn add_scope<SC: Scope<T, S>>(&mut self, scope: SC) -> u64 { self.add_boxed_scope(Box::new(scope)) }
+impl<G: Graph> GraphExtension<G> for G {
+    fn add_scope<SC: Scope<G::Timestamp, G::Summary>>(&mut self, scope: SC) -> u64 { self.add_boxed_scope(Box::new(scope)) }
 }

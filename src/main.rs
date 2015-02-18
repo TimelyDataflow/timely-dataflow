@@ -20,9 +20,9 @@ use docopt::Docopt;
 
 use test::Bencher;
 
-use progress::{Timestamp, PathSummary, Graph, Scope};
+use progress::{Graph, Scope};
 use progress::graph::GraphExtension;
-use progress::subgraph::{Subgraph, Summary, new_graph};
+use progress::subgraph::new_graph;
 use progress::subgraph::Summary::Local;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
@@ -127,17 +127,22 @@ fn _barrier_multi(communicators: Vec<Communicator>) {
     }
 }
 
-fn _create_subgraph<T1, T2, S1, S2, D>(graph: &mut Rc<RefCell<Subgraph<T1, S1, T2, S2>>>,
-                                       source1: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                       source2: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                       progcaster: Progcaster<((T1,T2),u64)>)
-                            -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
-where T1: Timestamp, S1: PathSummary<T1>,
-      T2: Timestamp, S2: PathSummary<T2>,
-      D:  Data+Hash<SipHasher>+Eq+Debug,
+// fn _create_subgraph<T1, T2, S1, S2, D>(graph: &mut Rc<RefCell<Subgraph<T1, S1, T2, S2>>>,
+//                                        source1: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
+//                                        source2: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
+//                                        progcaster: Progcaster<((T1,T2),u64)>)
+//                             -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
+// where T1: Timestamp, S1: PathSummary<T1>,
+//       T2: Timestamp, S2: PathSummary<T2>,
+fn _create_subgraph<G: Graph, D>(graph: &mut G,
+                                       source1: &mut Stream<G, D>,
+                                       source2: &mut Stream<G, D>,
+                                       progcaster: Progcaster<(G::Timestamp,u64)>)
+                            -> (Stream<G, D>, Stream<G, D>)
+where D:  Data+Hash<SipHasher>+Eq+Debug,
 {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let mut subgraph = graph.new_subgraph::<_, u64>(0, progcaster);
+    let mut subgraph = Rc::new(RefCell::new(graph.new_subgraph::<_, u64>(0, progcaster)));
 
     let (sub_egress1, sub_egress2) = {
         // create new ingress nodes, passing in a reference to the subgraph for them to use.
@@ -148,8 +153,8 @@ where T1: Timestamp, S1: PathSummary<T1>,
         let mut distinct = sub_ingress1.distinct();
 
         // egress each of the streams from the subgraph.
-        let sub_egress1 = subgraph.add_output_to_graph(&mut distinct, graph.as_box());
-        let sub_egress2 = subgraph.add_output_to_graph(&mut sub_ingress2, graph.as_box());
+        let sub_egress1 = subgraph.add_output_to_graph(&mut distinct, graph.graph_clone());
+        let sub_egress2 = subgraph.add_output_to_graph(&mut sub_ingress2, graph.graph_clone());
 
         (sub_egress1, sub_egress2)
     };
@@ -219,8 +224,8 @@ fn _command(allocator: Communicator, bencher: Option<&mut Bencher>) {
     let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
     let mut input = graph.new_input::<u64>(allocator);
     let mut feedback = input.1.feedback(((), 1000), Local(1));
-    let mut result: Stream<((), u64), Summary<(), u64>, u64> = input.1.concat(&mut feedback.1)
-                                                                      .command("./target/release/command".to_string());
+    let mut result: Stream<_, u64> = input.1.concat(&mut feedback.1)
+                                            .command("./target/release/command".to_string());
 
     feedback.0.connect_input(&mut result);
 

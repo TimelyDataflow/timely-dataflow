@@ -14,13 +14,9 @@ use example::stream::Stream;
 
 pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }
 
-impl<T, S, D> ConcatExtensionTrait for Stream<T, S, D>
-where T:Timestamp,
-      S:PathSummary<T>,
-      D:Data,
-{
-    fn concat(&mut self, other: &mut Stream<T, S, D>) -> Stream<T, S, D> {
-        let outputs: OutputPort<T, D> = Default::default();
+impl<G: Graph, D: Data> ConcatExtensionTrait for Stream<G, D> {
+    fn concat(&mut self, other: &mut Stream<G, D>) -> Stream<G, D> {
+        let outputs: OutputPort<G::Timestamp, D> = Default::default();
         let consumed = vec![Rc::new(RefCell::new(CountMap::new())),
                             Rc::new(RefCell::new(CountMap::new()))];
 
@@ -35,7 +31,7 @@ where T:Timestamp,
         Stream {
             name: ScopeOutput(index, 0),
             ports: outputs,
-            graph: self.graph.as_box(),
+            graph: self.graph.graph_clone(),
             allocator: self.allocator.clone(),
         }
     }

@@ -15,16 +15,16 @@ use communication::channels::ObserverHelper;
 use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
-pub trait FeedbackExtensionTrait<T: Timestamp, S: PathSummary<T>, D:Data> {
-    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<T, S, D>>>, Stream<T, S, D>);
+pub trait FeedbackExtensionTrait<G: Graph, D:Data> {
+    fn feedback(&mut self, limit: G::Timestamp, summary: G::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>);
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> for Stream<T, S, D> {
-    fn feedback(&mut self, limit: T, summary: S) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<T, S, D>>>, Stream<T, S, D>) {
+impl<G: Graph, D:Data> FeedbackExtensionTrait<G, D> for Stream<G, D> {
+    fn feedback(&mut self, limit: G::Timestamp, summary: G::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>) {
 
-        let targets: OutputPort<T, D> = Default::default();
-        let produced: Rc<RefCell<CountMap<T>>> = Default::default();
-        let consumed: Rc<RefCell<CountMap<T>>> = Default::default();
+        let targets: OutputPort<G::Timestamp, D> = Default::default();
+        let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
+        let consumed: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
 
         let feedback_output = ObserverHelper::new(targets.clone(), produced.clone());
         let feedback_input =  ObserverHelper::new(FeedbackObserver { limit: limit, summary: summary, targets: feedback_output, active: false }, consumed.clone());
@@ -43,7 +43,7 @@ impl<T: Timestamp, S: PathSummary<T>, D:Data> FeedbackExtensionTrait<T, S, D> fo
         let result = Stream {
             name: ScopeOutput(index, 0),
             ports: targets,
-            graph: self.graph.as_box(),
+            graph: self.graph.graph_clone(),
             allocator: self.allocator.clone(),
         };
 
@@ -57,24 +57,24 @@ enum FeedbackObserverStatus<T: Timestamp> {
 }
 
 // implementation of the feedback vertex, essentially, as an observer
-pub struct FeedbackObserver<T: Timestamp, S: PathSummary<T>, D:Data> {
-    limit:      T,
-    summary:    S,
-    targets:    ObserverHelper<OutputPort<T, D>>,
+pub struct FeedbackObserver<G: Graph, D:Data> {
+    limit:      G::Timestamp,
+    summary:    G::Summary,
+    targets:    ObserverHelper<OutputPort<G::Timestamp, D>>,
     active:     bool,
     // status:     FeedbackObserverStatus<T>,  // for debugging ideally
 }
 
-impl<T: Timestamp, S: PathSummary<T>, D: Data> Observer for FeedbackObserver<T, S, D> {
-    type Time = T;
+impl<G: Graph, D: Data> Observer for FeedbackObserver<G, D> {
+    type Time = G::Timestamp;
     type Data = D;
-    #[inline(always)] fn open(&mut self, time: &T) {
+    #[inline(always)] fn open(&mut self, time: &G::Timestamp) {
         self.active = time.le(&self.limit); // don't send if not less than limit
         // println!("active: {}", self.active);
         if self.active { self.targets.open(&self.summary.results_in(time)); }
     }
     #[inline(always)] fn push(&mut self, data: &D) { if self.active { self.targets.push(data); } }
-    #[inline(always)] fn shut(&mut self, time: &T) { if self.active { self.targets.shut(&self.summary.results_in(time)); } }
+    #[inline(always)] fn shut(&mut self, time: &G::Timestamp) { if self.active { self.targets.shut(&self.summary.results_in(time)); } }
 }
 
 
@@ -85,7 +85,9 @@ pub struct FeedbackHelper<O: Observer> {
 }
 
 impl<O: Observer> FeedbackHelper<O> where O::Time : Timestamp, O::Data : Data {
-    pub fn connect_input<S: PathSummary<O::Time>>(&mut self, source: &mut Stream<O::Time, S, O::Data>) -> () {
+    pub fn connect_input<G:Graph<Timestamp=O::Time>>(&mut self, source: &mut Stream<G, O::Data>) -> ()
+    where <G as Graph>::Summary : PathSummary<O::Time> // help out the type-checker, I guess
+    {
         source.graph.connect(source.name, ScopeInput(self.index, 0));
         source.add_observer(self.target.take().unwrap());
     }

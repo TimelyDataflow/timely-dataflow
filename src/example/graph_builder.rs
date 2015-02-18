@@ -6,38 +6,34 @@ use std::cell::RefCell;
 use progress::{Timestamp, PathSummary, Graph, Scope, CountMap};
 use progress::subgraph::Source::{GraphInput, ScopeOutput};
 use progress::subgraph::Target::{GraphOutput, ScopeInput};
-use progress::subgraph::{Subgraph, Summary};
-
-use progress::broadcast::Progcaster;
+use progress::subgraph::Subgraph;
+use progress::subgraph::Summary as SubSummary;
 
 use example::stream::Stream;
 use communication::Observer;
 use communication::channels::{Data, OutputPort, ObserverHelper};
 
-pub trait GraphBoundary<T1:Timestamp, T2:Timestamp, S1:PathSummary<T1>, S2:PathSummary<T2>> :
+pub trait GraphBoundary<G1: Graph, G2: Graph, T2: Timestamp, S2: PathSummary<T2>>
+where G2 : Graph<Timestamp = (G1::Timestamp, T2),
+                 Summary = SubSummary<G1::Summary, S2>>
 {
     // adds an input to self, from source, contained in graph.
-    fn add_input<D:Data>(&mut self, source: &mut Stream<T1, S1, D>) -> Stream<(T1, T2), Summary<S1, S2>, D>;
-    fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-                                              graph: Box<Graph<T1, S1, Timestamp = T1, Summary = S1>>) -> Stream<T1, S1, D>;
+    fn add_input<D:Data>(&mut self, source: &mut Stream<G1, D>) -> Stream<G2, D>;
+    fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<G2, D>,
+                                              graph: G1) -> Stream<G1, D>;
 
-    fn new_subgraph<T, S>(&mut self, default: T, progcaster: Progcaster<((T1,T2),T)>) -> Rc<RefCell<Subgraph<(T1, T2), Summary<S1, S2>, T, S>>>
-    where T: Timestamp,
-          S: PathSummary<T>;
 }
 
-impl<TOuter, SOuter, TInner, SInner>
-GraphBoundary<TOuter, TInner, SOuter, SInner>
-for Rc<RefCell<Subgraph<TOuter, SOuter, TInner, SInner>>>
-where TOuter: Timestamp,
+
+impl<GOuter: Graph, TInner: Timestamp, SInner: PathSummary<TInner>>
+GraphBoundary<GOuter, Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>, TInner, SInner>
+for Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>
+where GOuter : Graph,
       TInner: Timestamp,
-      SOuter: PathSummary<TOuter>,
       SInner: PathSummary<TInner>,
 {
-    fn add_input<D: Data>(&mut self, source: &mut Stream<TOuter, SOuter, D>) ->
-        Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>
-    {
-        let targets: OutputPort<(TOuter, TInner), D> = Default::default();
+    fn add_input<D: Data>(&mut self, source: &mut Stream<GOuter, D>) -> Stream<Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>, D> {
+        let targets: OutputPort<(GOuter::Timestamp, TInner), D> = Default::default();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
@@ -48,16 +44,14 @@ where TOuter: Timestamp,
         source.graph.connect(source.name, ScopeInput(borrow.index, index));
         source.add_observer(ingress);
 
-        return Stream { name: GraphInput(index), ports: targets, graph: self.as_box(), allocator: source.allocator.clone() };
+        return Stream { name: GraphInput(index), ports: targets, graph: self.graph_clone(), allocator: source.allocator.clone() };
     }
 
-    fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<(TOuter, TInner), Summary<SOuter, SInner>, D>,
-                                               graph: Box<Graph<TOuter, SOuter, Timestamp = TOuter, Summary = SOuter>>) -> Stream<TOuter, SOuter, D>
-    {
+    fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<Rc<RefCell<Subgraph<GOuter::Timestamp, GOuter::Summary, TInner, SInner>>>, D>, graph: GOuter) -> Stream<GOuter, D> {
         let mut borrow = self.borrow_mut();
         let index = borrow.new_output();
 
-        let targets: OutputPort<TOuter, D> = Default::default();
+        let targets: OutputPort<GOuter::Timestamp, D> = Default::default();
 
         borrow.connect(source.name, GraphOutput(index));
         source.add_observer(EgressNub { targets: targets.clone() });
@@ -65,20 +59,11 @@ where TOuter: Timestamp,
         return Stream {
             name: ScopeOutput(borrow.index, index),
             ports: targets,
-            graph: graph.as_box(),
+            graph: graph.graph_clone(),
             allocator: source.allocator.clone() };
     }
 
-    fn new_subgraph<T, S>(&mut self, _default: T, progcaster: Progcaster<((TOuter,TInner),T)>)
-            -> Rc<RefCell<Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S>>>
-    where T: Timestamp,
-          S: PathSummary<T>,
-    {
-        let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> = Subgraph::new_from(progcaster);
-        result.index = self.borrow().children() as u64;
-        // result.progcaster = progcaster;
-        return Rc::new(RefCell::new(result));
-    }
+
 }
 
 

@@ -20,14 +20,10 @@ pub trait QueueExtensionTrait {
     fn queue(&mut self) -> Self;
 }
 
-impl<T, S, D> QueueExtensionTrait for Stream<T, S, D>
-where T:Timestamp,
-      S:PathSummary<T>,
-      D:Data,
-{
-    fn queue(&mut self) -> Stream<T, S, D> {
+impl<G: Graph, D: Data> QueueExtensionTrait for Stream<G, D> {
+    fn queue(&mut self) -> Stream<G, D> {
         let input = ScopeInputQueue::new_shared();
-        let output: OutputPort<T, D> = Default::default();
+        let output: OutputPort<G::Timestamp, D> = Default::default();
 
         let index = self.graph.add_scope(QueueScope {
             input:      input.clone(),
@@ -43,7 +39,7 @@ where T:Timestamp,
         Stream {
             name: ScopeOutput(index, 0),
             ports: output,
-            graph: self.graph.as_box(),
+            graph: self.graph.graph_clone(),
             allocator: self.allocator.clone(),
         }
 

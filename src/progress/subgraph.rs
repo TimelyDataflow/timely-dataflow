@@ -535,8 +535,7 @@ where TOuter: Timestamp,
 }
 
 
-impl<TOuter, SOuter, TInner, SInner>
-Graph<(TOuter, TInner), Summary<SOuter, SInner>>
+impl<TOuter, SOuter, TInner, SInner> Graph
 for Rc<RefCell<Subgraph<TOuter, SOuter, TInner, SInner>>>
 where TOuter: Timestamp,
       TInner: Timestamp,
@@ -555,10 +554,24 @@ where TOuter: Timestamp,
         return index;
     }
 
-    fn as_box(&self) -> Box<Graph<(TOuter, TInner), Summary<SOuter, SInner>, Timestamp = (TOuter, TInner), Summary = Summary<SOuter, SInner>>> {
-        Box::new(self.clone()) as Box<Graph<(TOuter, TInner), Summary<SOuter, SInner>, Timestamp = (TOuter, TInner), Summary = Summary<SOuter, SInner>>>
+    fn new_subgraph<T, S>(&mut self, _default: T, progcaster: Progcaster<((TOuter, TInner),T)>)
+            -> Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S>
+    where T: Timestamp,
+          S: PathSummary<T>,
+    {
+        let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> = Subgraph::new_from(progcaster);
+        result.index = self.borrow().children() as u64;
+        // result.progcaster = progcaster;
+        return result;
+    }
+
+    fn graph_clone(&self) -> Rc<RefCell<Subgraph<TOuter, SOuter, TInner, SInner>>> {
+        self.clone()
+        // Box::new(self.clone()) as Box<Graph<Timestamp = (TOuter, TInner), Summary = Summary<SOuter, SInner>>>
     }
 }
+
+
 
 impl<TOuter, SOuter, TInner, SInner>
 Subgraph<TOuter, SOuter, TInner, SInner>
