@@ -29,7 +29,9 @@ pub enum Target {
     ScopeInput(u64, u64),     // (scope, port) may have interesting connectivity
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for (TOuter, TInner) { }
+impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for (TOuter, TInner) {
+    type Summary = Summary<TOuter::Summary, TInner::Summary>;
+}
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Summary<S, T> {
@@ -558,7 +560,6 @@ where TOuter: Timestamp,
             -> Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> {
         let mut result: Subgraph<(TOuter, TInner), Summary<SOuter, SInner>, T, S> = Subgraph::new_from(progcaster);
         result.index = self.borrow().children() as u64;
-        // result.progcaster = progcaster;
         return result;
     }
 }
@@ -779,16 +780,14 @@ where TOuter: Timestamp,
     }
 }
 
-pub fn new_graph<T, S>(progcaster: Progcaster<((), T)>) -> Rc<RefCell<Subgraph<(), (), T, S>>>
-where T: Timestamp, S: PathSummary<T>
-{
+pub fn new_graph<T: Timestamp, S: PathSummary<T>>(progcaster: Progcaster<((), T)>) -> Rc<RefCell<Subgraph<(), (), T, S>>> {
     return Rc::new(RefCell::new(Subgraph::new_from(progcaster)));
 }
 
-fn try_to_add_summary<S>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool
-where S: PartialOrd+Eq+Copy+Debug
-{
-    for &mut (ref t, ref mut antichain) in vector.iter_mut() { if target.eq(t) { return antichain.insert(summary); } }
+fn try_to_add_summary<S: PartialOrd+Eq+Copy+Debug>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool {
+    for &mut (ref t, ref mut antichain) in vector.iter_mut() {
+        if target.eq(t) { return antichain.insert(summary); }
+    }
     vector.push((target, Antichain::from_elem(summary)));
     return true;
 }

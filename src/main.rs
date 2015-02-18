@@ -127,19 +127,12 @@ fn _barrier_multi(communicators: Vec<Communicator>) {
     }
 }
 
-// fn _create_subgraph<T1, T2, S1, S2, D>(graph: &mut Rc<RefCell<Subgraph<T1, S1, T2, S2>>>,
-//                                        source1: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-//                                        source2: &mut Stream<(T1, T2), Summary<S1, S2>, D>,
-//                                        progcaster: Progcaster<((T1,T2),u64)>)
-//                             -> (Stream<(T1, T2), Summary<S1, S2>, D>, Stream<(T1, T2), Summary<S1, S2>, D>)
-// where T1: Timestamp, S1: PathSummary<T1>,
-//       T2: Timestamp, S2: PathSummary<T2>,
 fn _create_subgraph<G: Graph, D>(graph: &mut G,
-                                       source1: &mut Stream<G, D>,
-                                       source2: &mut Stream<G, D>,
-                                       progcaster: Progcaster<(G::Timestamp,u64)>)
+                                 source1: &mut Stream<G, D>,
+                                 source2: &mut Stream<G, D>,
+                                 progcaster: Progcaster<(G::Timestamp,u64)>)
                             -> (Stream<G, D>, Stream<G, D>)
-where D:  Data+Hash<SipHasher>+Eq+Debug,
+where D: Data+Hash<SipHasher>+Eq+Debug,
 {
     // build up a subgraph using the concatenated inputs/feedbacks
     let mut subgraph = Rc::new(RefCell::new(graph.new_subgraph::<_, u64>(0, progcaster)));
