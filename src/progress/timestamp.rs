@@ -1,10 +1,9 @@
 use core::fmt::Debug;
 use std::hash::Hash;
-use std::collections::hash_map::Hasher;
 use std::default::Default;
 
 // TODO : Remove Copy requirement
-pub trait Timestamp: Copy+Eq+PartialOrd+PartialEq+Default+Hash<Hasher>+Debug+Send+Clone+'static {
+pub trait Timestamp: Copy+Hash+Eq+PartialOrd+PartialEq+Default+Debug+Send+Clone+'static {
     type Summary : PathSummary<Self>;   // summarizes cumulative action of Timestamp along a path
 }
 

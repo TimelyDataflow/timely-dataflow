@@ -26,9 +26,9 @@ use progress::subgraph::Target::ScopeInput;
 
 pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
-impl<G: Graph, D: Data+Hash<SipHasher>+Eq+Debug> DistinctExtensionTrait for Stream<G, D> {
+impl<G: Graph, D: Data+Hash+Eq+Debug> DistinctExtensionTrait for Stream<G, D> {
     fn distinct(&mut self) -> Stream<G, D> {
-        let (sender, receiver) = { exchange_with(&mut (*self.allocator.borrow_mut()), |x| hash::hash(&x)) };
+        let (sender, receiver) = { exchange_with(&mut (*self.allocator.borrow_mut()), |x| hash::hash::<_,SipHasher>(&x)) };
         let targets: OutputPort<G::Timestamp,D> = Default::default();
 
         let index = self.graph.add_scope(DistinctScope {
@@ -50,14 +50,14 @@ impl<G: Graph, D: Data+Hash<SipHasher>+Eq+Debug> DistinctExtensionTrait for Stre
     }
 }
 
-pub struct DistinctScope<T: Timestamp, D: Data+Hash<SipHasher>+Eq+PartialEq> {
+pub struct DistinctScope<T: Timestamp, D: Data+Hash+Eq+PartialEq> {
     input:          ExchangeReceiver<T, D>,
     output:         ObserverHelper<OutputPort<T, D>>,
     elements:       HashMap<T, HashSet<D, DefaultState<SipHasher>>>,
     notificator:    Notificator<T>,
 }
 
-impl<T: Timestamp, D: Data+Hash<SipHasher>+Eq+PartialEq+Debug> Scope<T> for DistinctScope<T, D> {
+impl<T: Timestamp, D: Data+Hash+Eq+PartialEq+Debug> Scope<T> for DistinctScope<T, D> {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 

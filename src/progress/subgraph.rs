@@ -80,6 +80,27 @@ where TOuter: Timestamp,
     }
 }
 
+// TODO : Would prefer this version, but something breaks down wrt type inference;
+// TODO : complains about "can't resolve method" ... maybe duplicate method definitions?
+// impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<(TOuter, TInner)> for Summary<TOuter::Summary, TInner::Summary> {
+//     // this makes sense for a total order, but less clear for a partial order.
+//     fn results_in(&self, &(ref outer, ref inner): &(TOuter, TInner)) -> (TOuter, TInner) {
+//         match *self {
+//             Local(ref iters)              => (outer.clone(), iters.results_in(inner)),
+//             Outer(ref summary, ref iters) => (summary.results_in(outer), iters.results_in(&Default::default())),
+//         }
+//     }
+//     fn followed_by(&self, other: &Summary<TOuter::Summary, TInner::Summary>) -> Summary<TOuter::Summary, TInner::Summary>
+//     {
+//         match (*self, *other) {
+//             (Local(inner1), Local(inner2))             => Local(inner1.followed_by(&inner2)),
+//             (Local(_), Outer(_, _))                    => *other,
+//             (Outer(outer1, inner1), Local(inner2))     => Outer(outer1, inner1.followed_by(&inner2)),
+//             (Outer(outer1, _), Outer(outer2, inner2))  => Outer(outer1.followed_by(&outer2), inner2),
+//         }
+//     }
+// }
+
 
 pub struct ScopeWrapper<T: Timestamp> {
     scope:                  Box<Scope<T>>,          // the scope itself
@@ -182,21 +203,15 @@ impl<T: Timestamp> ScopeWrapper<T> {
         // for each output: produced messages and internal progress
         for output in (0..self.outputs as usize) {
             while let Some((time, delta)) = self.produced_messages[output].pop() {
-            // for (time, delta) in self.produced_messages[output].drain() {
                 for &target in self.edges[output].iter() {
                     match target {
-                        ScopeInput(tgt, tgt_in)   => {
-                            // println!("p: pointstamp: {:?}", (tgt, tgt_in, time, delta));
-                            pointstamp_messages.push((tgt, tgt_in, time, delta));
-                        },
+                        ScopeInput(tgt, tgt_in)   => { pointstamp_messages.push((tgt, tgt_in, time, delta)); },
                         GraphOutput(graph_output) => { output_action(graph_output, time, delta); },
                     }
                 }
             }
 
             while let Some((time, delta)) = self.internal_progress[output as usize].pop() {
-            // for (time, delta) in self.internal_progress[output as usize].drain() {
-                // println!("i: pointstamp: {:?}", (self.index, output as u64, time, delta));
                 pointstamp_internal.push((self.index, output as u64, time, delta));
             }
         }
@@ -204,8 +219,6 @@ impl<T: Timestamp> ScopeWrapper<T> {
         // for each input: consumed messages
         for input in range(0, self.inputs as usize) {
             while let Some((time, delta)) = self.consumed_messages[input as usize].pop() {
-            // for (time, delta) in self.consumed_messages[input as usize].drain() {
-                // println!("c: pointstamp: {:?}", (self.index, input as u64, time, -delta));
                 pointstamp_messages.push((self.index, input as u64, time, -delta));
             }
         }

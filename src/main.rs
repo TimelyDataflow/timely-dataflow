@@ -4,6 +4,7 @@
 #![feature(core)]
 #![feature(std_misc)]
 #![feature(collections)]
+#![feature(old_io)]
 #![feature(io)]
 #![feature(hash)]
 #![feature(libc)]
@@ -29,7 +30,7 @@ use progress::broadcast::Progcaster;
 use communication::{ThreadCommunicator, ProcessCommunicator, Communicator};
 
 use communication::channels::Data;
-use std::hash::{Hash, SipHasher};
+use std::hash::Hash;
 use core::fmt::Debug;
 
 use example::stream::Stream;
@@ -45,7 +46,7 @@ use example::barrier::BarrierScope;
 use std::rc::{Rc, try_unwrap};
 use std::cell::RefCell;
 
-use std::thread::Thread;
+use std::thread;
 
 use networking::initialize_networking;
 
@@ -103,7 +104,7 @@ fn queue_bench(bencher: &mut Bencher) { _queue(ProcessCommunicator::new_vector(1
 fn _queue_multi(communicators: Vec<Communicator>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
-        guards.push(Thread::scoped(move || _queue(communicator, None)));
+        guards.push(thread::scoped(move || _queue(communicator, None)));
     }
 }
 
@@ -112,7 +113,7 @@ fn _queue_multi(communicators: Vec<Communicator>) {
 fn _command_multi(communicators: Vec<Communicator>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
-        guards.push(Thread::scoped(move || _command(communicator, None)));
+        guards.push(thread::scoped(move || _command(communicator, None)));
     }
 }
 
@@ -122,17 +123,15 @@ fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vect
 fn _barrier_multi(communicators: Vec<Communicator>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
-        guards.push(Thread::scoped(move || _barrier(communicator, None)));
+        guards.push(thread::scoped(move || _barrier(communicator, None)));
     }
 }
 
-fn _create_subgraph<G: Graph, D>(graph: &mut G,
+fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug>(graph: &mut G,
                                  source1: &mut Stream<G, D>,
                                  source2: &mut Stream<G, D>,
                                  progcaster: Progcaster<(G::Timestamp,u64)>)
-                            -> (Stream<G, D>, Stream<G, D>)
-where D: Data+Hash<SipHasher>+Eq+Debug,
-{
+                            -> (Stream<G, D>, Stream<G, D>) {
     // build up a subgraph using the concatenated inputs/feedbacks
     let mut subgraph = Rc::new(RefCell::new(graph.new_subgraph::<u64>(0, progcaster)));
 

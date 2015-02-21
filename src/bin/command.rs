@@ -1,12 +1,11 @@
-#![feature(io)]
+#![feature(old_io)]
 #![feature(libc)]
-#![feature(std_misc)]
 
 extern crate libc;
 
 use std::old_io::stdio::{stdin_raw, stdout_raw};
 use std::old_io::{MemReader, MemWriter, IoErrorKind};
-use std::thread::Thread;
+use std::thread;
 
 fn main() {
     unsafe { libc::fcntl(0, libc::F_SETFL, libc::O_NONBLOCK); }
@@ -23,7 +22,7 @@ fn main() {
 
     let bytes = memwriter.into_inner();
     writer.write_le_u64(bytes.len() as u64).ok().expect("");
-    writer.write_all(&bytes[]).ok().expect("");
+    writer.write_all(&bytes[..]).ok().expect("");
     writer.flush().ok().expect("");
 
     let mut buffer = Vec::new();
@@ -33,7 +32,7 @@ fn main() {
         match reader.push(1024, &mut buffer) {
             Ok(_)  => { },
             Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) }
-                        else { Thread::yield_now(); }},
+                        else { thread::yield_now(); }},
         }
 
         let available = buffer.len() as u64;
@@ -76,7 +75,7 @@ fn main() {
 
                     let bytes = memwriter.into_inner();
                     writer.write_le_u64(bytes.len() as u64).ok().expect("");
-                    writer.write_all(&bytes[]).ok().expect("");
+                    writer.write_all(&bytes[..]).ok().expect("");
                     writer.flush().ok().expect("");
                 }
 

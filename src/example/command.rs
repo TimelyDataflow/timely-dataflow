@@ -9,7 +9,7 @@ use std::old_io::{MemWriter, MemReader, IoErrorKind};
 use std::old_io::process::{Command, Process};
 
 use std::default::Default;
-use std::thread::Thread;
+use std::thread;
 
 use progress::frontier::Antichain;
 use progress::{Scope, Graph, Timestamp};
@@ -119,7 +119,7 @@ impl Scope<((), u64)> for CommandScope {
             Err(e) => { panic!("ERROR: {}",e); }
         }
 
-        stdin.write_all(&bytes[]).ok().expect("write failure b");
+        stdin.write_all(&bytes[..]).ok().expect("write failure b");
         stdin.flush().ok().expect("flush failure");
     }
 
@@ -133,7 +133,7 @@ impl Scope<((), u64)> for CommandScope {
         match stdout.push(1024, &mut self.buffer) {
             Ok(_)  => { },
             Err(e) => { if e.kind != IoErrorKind::ResourceUnavailable { panic!("Pull error: {}", e) }
-                        else { Thread::yield_now(); }},
+                        else { thread::yield_now(); }},
         }
 
         let buffer = replace(&mut self.buffer, Vec::new());

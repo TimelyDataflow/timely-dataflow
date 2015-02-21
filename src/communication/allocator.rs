@@ -36,7 +36,7 @@ impl Communicator {
             &Communicator::Binary(ref b)  => b.peers(),
         }
     }
-    pub fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    pub fn new_channel<T:Send+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         match self {
             &mut Communicator::Thread(ref mut t)  => t.new_channel(),
             &mut Communicator::Process(ref mut p) => p.new_channel(),
@@ -50,8 +50,7 @@ pub struct ThreadCommunicator;
 impl ThreadCommunicator {
     fn index(&self) -> u64 { 0 }
     fn peers(&self) -> u64 { 1 }
-    // fn inner<'a>(&'a mut self) -> &'a mut Communicator { self }
-    fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    fn new_channel<T:Send+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         return (vec![Box::new(shared.clone()) as Box<Pushable<T>>], Box::new(shared.clone()) as Box<Pullable<T>>)
     }
@@ -71,7 +70,7 @@ impl ProcessCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
     fn inner<'a>(&'a mut self) -> &'a Communicator { &mut self.inner }
-    fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    fn new_channel<T:Send+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         let mut channels = self.channels.lock().ok().expect("mutex error?");
         if self.allocated == channels.len() as u64 {  // we need a new channel ...
             let mut senders = Vec::new();
@@ -131,59 +130,42 @@ pub struct BinaryCommunicator {
 }
 
 // A Communicator backed by Sender<Vec<u8>>/Receiver<Vec<u8>> pairs (e.g. networking, shared memory, files, pipes)
-
-// We would like new_channel to allocate binary pushables and pullables for remote workers,
-// and pass through to a ProcessCommunicator for process-local workers.
-
 impl BinaryCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
     fn inner<'a>(&'a mut self) -> &'a Communicator { &mut self.inner }
-    fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
-
-        // built-up vector of Box<Pushable<T>> to return
-        let mut pushers: Vec<Box<Pushable<T>>> = Vec::new();
+    fn new_channel<T:Send+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+        let mut pushers: Vec<Box<Pushable<T>>> = Vec::new(); // built-up vector of Box<Pushable<T>> to return
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
         let inner_peers = self.inner.peers();
-        let (mut inner_sends, inner_recv) = self.inner.new_channel();
+        let (inner_sends, inner_recv) = self.inner.new_channel();
 
-        for index in (0..self.peers) {
-            // for each peer, we need a Box<Pushable<T>>
-            if index / inner_peers == self.index / inner_peers {
-                // if this is process-local use the process-local pushable
-                pushers.push(inner_sends.remove(0));
-            }
-            else {
-                // otherwise, we'll need to prep a BinaryPushable<T>
-
-                // generate a binary (Vec<u8>) channel pair of (back_to_worker, back_from_net)
-                let (s,r) = channel();
-
-                let mut sender_idx = index / inner_peers;
-                if sender_idx > self.index / inner_peers {
-                    sender_idx -= 1;
-                }
-
+        // prep a pushable for each endpoint, multiplied by inner_peers
+        for (index, writer) in self.writers.iter().enumerate() {
+            for _ in (0..inner_peers) {
+                let (s,r) = channel();  // generate a binary (Vec<u8>) channel pair of (back_to_worker, back_from_net)
+                writer.send(((self.index, self.graph, self.allocated), s)).ok().expect("send error");
                 pushers.push(Box::new(BinaryPushable {
-                    sender:     self.writer_senders[sender_idx as usize].clone(),    // where to send serialized messages
-                    receiver:   r,                                          // what to tug to get empty vectors
-                    buffer:     Vec::new(),                                 // buffer of deserialized (T) records
-                    threshold:  256,                                        // how many to deserialize before breaking (I think)
+                    sender:     self.writer_senders[index].clone(), // where to send serialized messages
+                    receiver:   r,                                  // what to tug to get empty vectors
+                    buffer:     Vec::new(),                         // buffer of deserialized (T) records
+                    threshold:  1,                                  // how many to deserialize before breaking (I think)
                 }));
-
-                self.writers[sender_idx as usize].send(((self.index, self.graph, self.allocated), s)).ok().expect("send error");
             }
         }
 
-        let (send,recv) = channel();    // binary channel from binary listener to BinaryPullable<T>
+        // splice inner_sends into the vector of pushables
+        for (index, writer) in inner_sends.into_iter().enumerate() {
+            pushers.insert((self.index * inner_peers) as usize + index, writer);
+        }
 
+        // prep a Box<Pullable<T>> using inner_recv and fresh registered pullables
+        let (send,recv) = channel();    // binary channel from binary listener to BinaryPullable<T>
         let mut pullsends = Vec::new();
         for reader in self.readers.iter() {
             let (s,r) = channel();
             pullsends.push(s);
-
-            // register interest in hearing about data for self.index using the binary channel
             reader.send(((self.index, self.graph, self.allocated), send.clone(), r)).ok().expect("send error");
         }
 
@@ -210,7 +192,7 @@ impl<T:'static> Pushable<T> for BinaryPushable<T> {
     #[inline]
     fn push(&mut self, data: T) {
         self.buffer.push(data);
-        if self.buffer.len() > self.threshold {
+        if self.buffer.len() >= self.threshold {
             assert!(false);
             // TODO : serialize that stuff and send it
             // TODO : ...

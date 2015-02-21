@@ -4,7 +4,7 @@ use std::old_io::timer::sleep;
 
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-use std::thread::Thread;
+use std::thread;
 use std::sync::{Arc, Future};
 use std::mem;
 use std::time::duration::Duration;
@@ -72,7 +72,7 @@ impl<R: Reader> BinaryReceiver<R> {
     fn recv_loop(&mut self) {
         loop {
             // push some amount into our buffer, then try decoding...
-            match self.reader.push(1us << 20, &mut self.buffer) {
+            match self.reader.push(1usize << 20, &mut self.buffer) {
                 Ok(_)  => { },
                 Err(e) => { panic!("BinaryReceiver error: {}", e); },
             }
@@ -161,7 +161,7 @@ impl<W: Writer> BinarySender<W> {
         for (header, mut buffer) in self.sources.iter() {
             println!("send loop:\treceived data");
             header.write_to(&mut self.writer).ok().expect("BinarySender: header send failure");
-            self.writer.write_all(&buffer[]).ok().expect("BinarySender: payload send failure");
+            self.writer.write_all(&buffer[..]).ok().expect("BinarySender: payload send failure");
             buffer.clear();
 
             // inline because borrow-checker hates me
@@ -222,8 +222,8 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             let mut recver = BinaryReceiver::new(stream.clone(), workers, reader_channels_r);
 
             // start senders and receivers associated with this stream
-            Thread::spawn(move || sender.send_loop());
-            Thread::spawn(move || recver.recv_loop());
+            thread::spawn(move || sender.send_loop());
+            thread::spawn(move || recver.recv_loop());
         }
     }
 

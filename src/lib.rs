@@ -3,6 +3,7 @@
 #![feature(std_misc)]
 #![feature(collections)]
 #![feature(io)]
+#![feature(old_io)]
 #![feature(hash)]
 #![feature(libc)]
 

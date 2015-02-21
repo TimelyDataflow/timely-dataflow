@@ -82,7 +82,7 @@ pub struct FeedbackHelper<O: Observer> {
     target: Option<O>,
 }
 
-impl<O: Observer> FeedbackHelper<O> where O::Time : Timestamp, O::Data : Data {
+impl<O: Observer+'static> FeedbackHelper<O> where O::Time: Timestamp, O::Data : Data {
     pub fn connect_input<G:Graph<Timestamp=O::Time>>(&mut self, source: &mut Stream<G, O::Data>) -> () {
         source.graph.connect(source.name, ScopeInput(self.index, 0));
         source.add_observer(self.target.take().unwrap());

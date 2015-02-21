@@ -6,7 +6,7 @@ use std::sync::mpsc::Sender;
 // TODO : Probably a good place to insist on RAII... (see ObserverSession)
 
 // observer trait
-pub trait Observer : 'static {
+pub trait Observer {
     type Time;
     type Data;
     fn open(&mut self, time: &Self::Time);   // new punctuation, essentially ...

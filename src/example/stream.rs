@@ -18,7 +18,7 @@ pub struct Stream<G: Graph, D:Data> {
 }
 
 impl<G: Graph, D:Data> Stream<G, D> {
-    pub fn add_observer<O: Observer<Time=G::Timestamp, Data=D>>(&mut self, observer: O) {
+    pub fn add_observer<O: Observer<Time=G::Timestamp, Data=D>+'static>(&mut self, observer: O) {
         self.ports.shared.borrow_mut().push(Box::new(observer));
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::mem::swap;
+use core::marker::PhantomData;
 
 use progress::Timestamp;
 use progress::count_map::CountMap;
@@ -14,7 +15,7 @@ pub fn exchange_with<T: Timestamp, D: Data, F: Fn(&D)->u64>(allocator: &mut Comm
     let (senders, receiver) = allocator.new_channel();
 
     let exchange_sender = ExchangeObserver {
-        observers:  senders.into_iter().map(|x| PushableObserver { data: Vec::new(), pushable: x}).collect(),
+        observers:  senders.into_iter().map(|x| PushableObserver { data: Vec::new(), pushable: x, phantom: PhantomData }).collect(),
         hash_func:  hash_func,
     };
 

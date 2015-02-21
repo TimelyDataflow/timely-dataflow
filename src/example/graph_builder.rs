@@ -2,6 +2,7 @@ use std::default::Default;
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use core::marker::PhantomData;
 
 use progress::{Timestamp, Graph, Scope, CountMap};
 use progress::subgraph::Source::{GraphInput, ScopeOutput};
@@ -55,7 +56,7 @@ where GOuter : Graph,
         let targets: OutputPort<GOuter::Timestamp, D> = Default::default();
 
         borrow.connect(source.name, GraphOutput(index));
-        source.add_observer(EgressNub { targets: targets.clone() });
+        source.add_observer(EgressNub { targets: targets.clone(), phantom: PhantomData });
 
         Stream {
             name: ScopeOutput(borrow.index, index),
@@ -71,8 +72,7 @@ pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
     targets: ObserverHelper<OutputPort<(TOuter, TInner), TData>>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<TOuter, TInner, TData>
-{
+impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<TOuter, TInner, TData> {
     type Time = TOuter;
     type Data = TData;
     #[inline(always)] fn push(&mut self, data: &TData) { self.targets.push(data); }
@@ -81,8 +81,9 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<
 }
 
 
-pub struct EgressNub<TOuter : Timestamp, TInner, TData: Data> {
+pub struct EgressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
     targets: OutputPort<TOuter, TData>,
+    phantom: PhantomData<TInner>,
 }
 
 impl<TOuter, TInner, TData> Observer for EgressNub<TOuter, TInner, TData>
