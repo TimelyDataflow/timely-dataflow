@@ -14,7 +14,6 @@ use communication::Observer;
 use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
-
 pub trait QueueExtensionTrait {
     fn queue(&mut self) -> Self;
 }
@@ -106,8 +105,7 @@ struct QueueScope<T:Timestamp, D:Data> {
     guarantee:  CountMap<T>,        // TODO : Should probably be a MutableAntichain
 }
 
-impl<T:Timestamp, D:Data> Scope<T> for QueueScope<T, D>
-{
+impl<T:Timestamp, D:Data> Scope<T> for QueueScope<T, D> {
     fn name(&self) -> String { format!("Queue") }
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }

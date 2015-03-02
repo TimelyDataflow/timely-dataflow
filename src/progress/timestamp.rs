@@ -1,10 +1,11 @@
 use core::fmt::Debug;
 use std::hash::Hash;
 use std::default::Default;
+use columnar::Columnar;
 
-// TODO : Remove Copy requirement
-pub trait Timestamp: Copy+Hash+Eq+PartialOrd+PartialEq+Default+Debug+Send+Clone+'static {
-    type Summary : PathSummary<Self>;   // summarizes cumulative action of Timestamp along a path
+// TODO : Remove Copy requirement; understand Columnar requirement (for serialization at the moment)
+pub trait Timestamp: Copy+Hash+Eq+PartialOrd+PartialEq+Default+Debug+Send+Clone+Columnar+'static {
+    type Summary : PathSummary<Self> + 'static;   // summarizes cumulative action of Timestamp along a path
 }
 
 impl Timestamp for () { type Summary = (); }

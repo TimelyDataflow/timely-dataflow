@@ -24,9 +24,11 @@ use communication::observer::ObserverSessionExt;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 
+use columnar::Columnar;
+
 pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
-impl<G: Graph, D: Data+Hash+Eq+Debug> DistinctExtensionTrait for Stream<G, D> {
+impl<G: Graph, D: Data+Hash+Eq+Debug+Columnar> DistinctExtensionTrait for Stream<G, D> {
     fn distinct(&mut self) -> Stream<G, D> {
         let (sender, receiver) = { exchange_with(&mut (*self.allocator.borrow_mut()), |x| hash::hash::<_,SipHasher>(&x)) };
         let targets: OutputPort<G::Timestamp,D> = Default::default();

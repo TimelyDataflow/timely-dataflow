@@ -2,7 +2,7 @@ use std::default::Default;
 
 use progress::{Timestamp, CountMap, Antichain};
 
-pub trait Scope<T: Timestamp> : 'static {
+pub trait Scope<T: Timestamp> {
     fn inputs(&self) -> u64;               // number of inputs to the vertex.
     fn outputs(&self) -> u64;              // number of outputs from the vertex.
 

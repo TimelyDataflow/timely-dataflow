@@ -13,6 +13,7 @@ use communication::channels::ObserverHelper;
 use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
+
 pub trait FeedbackExtensionTrait<G: Graph, D:Data> {
     fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>);
 }

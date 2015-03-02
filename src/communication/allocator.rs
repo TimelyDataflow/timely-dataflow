@@ -3,12 +3,19 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
+
+use std::old_io::{MemReader, MemWriter};
+use core::marker::PhantomData;
+
+use columnar::{Columnar, ColumnarStack};
 use communication::{Observer, Pushable, Pullable};
 use networking::networking::MessageHeader;
+use std::default::Default;
 
 // The Communicator trait presents the interface a worker has to the outside world.
 // The worker can see its index, the total number of peers, and acquire channels to and from the other workers.
 // There is an assumption that each worker performs the same channel allocation logic; things go wrong otherwise.
+// TODO : Commented out for now, due to boxing issues (new_channel has generic params, making Box<Communicator> bad for Rust).
 // pub trait Communicator : 'static {
 //     fn index(&self) -> u64;     // number out of peers
 //     fn peers(&self) -> u64;     // number of peers
@@ -36,7 +43,7 @@ impl Communicator {
             &Communicator::Binary(ref b)  => b.peers(),
         }
     }
-    pub fn new_channel<T:Send+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    pub fn new_channel<T:Send+Columnar+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         match self {
             &mut Communicator::Thread(ref mut t)  => t.new_channel(),
             &mut Communicator::Process(ref mut p) => p.new_channel(),
@@ -124,7 +131,8 @@ pub struct BinaryCommunicator {
 
     // for loading up state in the networking threads.
     pub writers:        Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>)>>,                     // (index, back-to-worker)
-    pub readers:        Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>>,  // (index, data-to-worker, back-from-worker)
+    pub readers:        Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>>,  // (index, data-to-worker,
+                                                                                             //         back-from-worker)
 
     pub writer_senders: Vec<Sender<(MessageHeader, Vec<u8>)>>
 }
@@ -134,7 +142,7 @@ impl BinaryCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
     fn inner<'a>(&'a mut self) -> &'a Communicator { &mut self.inner }
-    fn new_channel<T:Send+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    fn new_channel<T:Send+Columnar+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         let mut pushers: Vec<Box<Pushable<T>>> = Vec::new(); // built-up vector of Box<Pushable<T>> to return
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
@@ -145,13 +153,17 @@ impl BinaryCommunicator {
         for (index, writer) in self.writers.iter().enumerate() {
             for _ in (0..inner_peers) {
                 let (s,r) = channel();  // generate a binary (Vec<u8>) channel pair of (back_to_worker, back_from_net)
+                let target_index = if index as u64 >= (self.index * inner_peers) { index as u64 + inner_peers } else { index as u64 };
+                println!("init'ing send channel: ({} {} {})", self.index, self.graph, self.allocated);
                 writer.send(((self.index, self.graph, self.allocated), s)).ok().expect("send error");
-                pushers.push(Box::new(BinaryPushable {
-                    sender:     self.writer_senders[index].clone(), // where to send serialized messages
-                    receiver:   r,                                  // what to tug to get empty vectors
-                    buffer:     Vec::new(),                         // buffer of deserialized (T) records
-                    threshold:  1,                                  // how many to deserialize before breaking (I think)
-                }));
+                let header = MessageHeader {
+                    graph:      self.graph,
+                    channel:    self.allocated,
+                    source:     self.index,
+                    target:     target_index,
+                    length:     0,
+                };
+                pushers.push(Box::new(BinaryPushable::new(header, self.writer_senders[index].clone(), r)));
             }
         }
 
@@ -166,6 +178,7 @@ impl BinaryCommunicator {
         for reader in self.readers.iter() {
             let (s,r) = channel();
             pullsends.push(s);
+            println!("init'ing recv channel: ({} {} {})", self.index, self.graph, self.allocated);
             reader.send(((self.index, self.graph, self.allocated), send.clone(), r)).ok().expect("send error");
         }
 
@@ -173,58 +186,81 @@ impl BinaryCommunicator {
             inner:      inner_recv,
             senders:    pullsends,
             receiver:   recv,
-            staged:     Vec::new(),
-            cursor:     0,
+            stack:      Default::default(),
         });
+
+        self.allocated += 1;
 
         return (pushers, pullable);
     }
 }
 
-struct BinaryPushable<T> {
+struct BinaryPushable<T: Columnar> {
+    header:     MessageHeader,
     sender:     Sender<(MessageHeader, Vec<u8>)>,   // targets for each remote destination
     receiver:   Receiver<Vec<u8>>,                  // source of empty binary vectors
-    buffer:     Vec<T>,                             // typed buffers (pre-serialization)
-    threshold:  usize,
+    phantom:    PhantomData<T>,
+    stack:      <T as Columnar>::Stack,
 }
 
-impl<T:'static> Pushable<T> for BinaryPushable<T> {
-    #[inline]
-    fn push(&mut self, data: T) {
-        self.buffer.push(data);
-        if self.buffer.len() >= self.threshold {
-            assert!(false);
-            // TODO : serialize that stuff and send it
-            // TODO : ...
+impl<T: Columnar> BinaryPushable<T> {
+    pub fn new(header: MessageHeader, sender: Sender<(MessageHeader, Vec<u8>)>, receiver: Receiver<Vec<u8>>) -> BinaryPushable<T> {
+        println!("constructing pushable for target worker: {}", header.target);
+        BinaryPushable {
+            header:     header,
+            sender:     sender,
+            receiver:   receiver,
+            phantom:    PhantomData,
+            stack:      Default::default(),
         }
     }
 }
 
-struct BinaryPullable<T> {
+impl<T:Columnar+'static> Pushable<T> for BinaryPushable<T> {
+    #[inline]
+    fn push(&mut self, data: T) {
+        self.stack.push(data);
+
+        let mut writer = MemWriter::from_vec(if let Some(buffer) = self.receiver.try_recv().ok() { buffer } else { Vec::new() });
+        self.stack.write(&mut writer).ok();
+        let buffer = writer.into_inner();
+
+        let mut header = self.header;
+        header.length = buffer.len() as u64;
+
+        self.sender.send((header, buffer)).ok();
+    }
+}
+
+struct BinaryPullable<T: Columnar> {
     inner:      Box<Pullable<T>>,       // inner pullable (e.g. intra-process typed queue)
     senders:    Vec<Sender<Vec<u8>>>,   // places to put used binary vectors
     receiver:   Receiver<Vec<u8>>,      // source of serialized buffers
-    staged:     Vec<T>,                 // deserialized data, in progress.
-    cursor:     usize,                  // cursor into self.staged
+    stack:      <T as Columnar>::Stack,
 }
 
-impl<T:'static> Pullable<T> for BinaryPullable<T> {
+impl<T:Columnar+'static> Pullable<T> for BinaryPullable<T> {
     #[inline]
     fn pull(&mut self) -> Option<T> {
         if let Some(data) = self.inner.pull() {
             Some(data)
         }
         else {
-            if self.staged.len() == 0 {
-                if let Some(serialized) = self.receiver.try_recv().ok() {
-                    assert!(serialized.len() > 0);
-                    assert!(false)
-                    // TODO : deserialize stuff in to self.staged
-                    // TODO : ...
-                }
-            }
+            if let Some(bytes) = self.receiver.try_recv().ok() {
+                println!("found some binary data!");
+                let mut reader = MemReader::new(bytes);
+                let mut buffer = Vec::new();
 
-            self.staged.pop()   // TODO : worry about the fact that this is probably in the wrong order
+                self.stack.encode(&mut buffer);
+
+                self.stack.read(&mut reader, buffer).ok();
+                let result = self.stack.pop();
+
+                if result.is_some() { println!("legit data"); }
+
+                result
+            }
+            else { None }
         }
     }
 }

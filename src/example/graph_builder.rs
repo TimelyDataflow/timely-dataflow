@@ -23,12 +23,7 @@ where G2 : Graph<Timestamp = (G1::Timestamp, T2)>
 }
 
 
-impl<GOuter: Graph, TInner: Timestamp>
-GraphBoundary<GOuter, Self, TInner>
-for Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>
-where GOuter : Graph,
-      TInner: Timestamp,
-{
+impl<GOuter: Graph, TInner: Timestamp> GraphBoundary<GOuter, Self, TInner> for Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>> {
     fn add_input<D: Data>(&mut self, source: &mut Stream<GOuter, D>) -> Stream<Self, D> {
         let targets: OutputPort<(GOuter::Timestamp, TInner), D> = Default::default();
         let produced = Rc::new(RefCell::new(CountMap::new()));

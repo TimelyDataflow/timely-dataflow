@@ -12,6 +12,7 @@
 
 // extern crate serialize;
 extern crate core;
+extern crate columnar;
 
 pub mod networking;
 // pub mod serialization;

@@ -8,9 +8,12 @@ use communication::Data;
 use communication::{Communicator, Pullable, Pushable, PushableObserver};
 use communication::observer::{ExchangeObserver};
 
+use columnar::Columnar;
+
 pub fn exchange_with<T: Timestamp, D: Data, F: Fn(&D)->u64>(allocator: &mut Communicator,
                                                             hash_func: F) -> (ExchangeObserver<PushableObserver<T,D,Box<Pushable<(T,Vec<D>)>>>, F>,
                                                                               ExchangeReceiver<T, D>)
+where D : Columnar
 {
     let (senders, receiver) = allocator.new_channel();
 

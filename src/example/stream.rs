@@ -12,8 +12,7 @@ use communication::channels::OutputPort;
 pub struct Stream<G: Graph, D:Data> {
     pub name:       Source,                         // used to name the source in the host graph.
     pub ports:      OutputPort<G::Timestamp, D>,    // used to register interest in the output.
-    pub graph:      G,                              // probably doesn't need to depend on T or S (make a new trait).
-                                                    // (oops, it does; for graph.add_scope())
+    pub graph:      G,                              // graph builder for connecting edges, etc.
     pub allocator:  Rc<RefCell<Communicator>>,      // for allocating communication channels
 }
 

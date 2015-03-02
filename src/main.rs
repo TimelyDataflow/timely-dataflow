@@ -21,6 +21,8 @@ use docopt::Docopt;
 
 use test::Bencher;
 
+use columnar::Columnar;
+
 use progress::{Graph, Scope};
 use progress::subgraph::new_graph;
 use progress::subgraph::Summary::Local;
@@ -127,7 +129,7 @@ fn _barrier_multi(communicators: Vec<Communicator>) {
     }
 }
 
-fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug>(graph: &mut G,
+fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G,
                                  source1: &mut Stream<G, D>,
                                  source2: &mut Stream<G, D>,
                                  progcaster: Progcaster<(G::Timestamp,u64)>)
@@ -167,8 +169,8 @@ fn _queue(allocator: Communicator, bencher: Option<&mut Bencher>) {
     let (mut input2, mut stream2) = graph.new_input::<u64>(allocator.clone());
 
     // prepare some feedback edges
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
+    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000), Local(1));
+    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
     let progcaster = Progcaster::new(&mut (*allocator.borrow_mut()));
@@ -236,7 +238,7 @@ fn _command(allocator: Communicator, bencher: Option<&mut Bencher>) {
 
 fn _barrier(mut allocator: Communicator, bencher: Option<&mut Bencher>) {
     let mut graph = new_graph(Progcaster::new(&mut allocator));
-    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 10000000 });
+    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 
     // start things up!

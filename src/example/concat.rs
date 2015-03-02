@@ -9,6 +9,7 @@ use progress::count_map::CountMap;
 
 use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
+use columnar::Columnar;
 
 pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }
 
@@ -39,7 +40,7 @@ pub struct ConcatScope<T:Timestamp> {
     consumed:   Vec<Rc<RefCell<CountMap<T>>>>
 }
 
-impl<T:Timestamp> Scope<T> for ConcatScope<T> {
+impl<T:Timestamp> Scope<T> for ConcatScope<T> where <T as Columnar>::Stack: 'static {
     fn name(&self) -> String { format!("Concat") }
     fn inputs(&self) -> u64 { self.consumed.len() as u64 }
     fn outputs(&self) -> u64 { 1 }

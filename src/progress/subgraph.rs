@@ -259,7 +259,6 @@ impl<T:Timestamp> PointstampCounter<T> {
 
 // #[derive(Default)]
 pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
-
     pub name:               String,                     // a helpful name
     pub index:              u64,                        // a useful integer
 
@@ -543,11 +542,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 }
 
 
-impl<TOuter, TInner> Graph
-for Rc<RefCell<Subgraph<TOuter, TInner>>>
-where TOuter: Timestamp,
-      TInner: Timestamp,
-{
+impl<TOuter: Timestamp, TInner: Timestamp> Graph for Rc<RefCell<Subgraph<TOuter, TInner>>> {
     type Timestamp = (TOuter, TInner);
 
     fn connect(&mut self, source: Source, target: Target) { self.borrow_mut().connect(source, target); }
