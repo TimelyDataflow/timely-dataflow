@@ -72,15 +72,9 @@ impl<R: Reader> BinaryReceiver<R> {
     fn recv_loop(&mut self) {
         loop {
             // push some amount into our buffer, then try decoding...
-            match self.reader.push(1usize << 20, &mut self.buffer) {
-                Ok(_)  => { },
-                Err(e) => { panic!("BinaryReceiver error: {}", e); },
-            }
+            self.reader.push(1usize << 20, &mut self.buffer).unwrap();
 
             let available = self.buffer.len() as u64;
-
-            if available > 0 { println!("Received data: {}", available); }
-
             let mut reader = MemReader::new(mem::replace(&mut self.buffer, Vec::new()));
             let mut cursor = 0u64;
 
@@ -96,12 +90,8 @@ impl<R: Reader> BinaryReceiver<R> {
                     let h_chn = header.channel as usize; // target channel
                     let h_len = header.length as usize;  // length in bytes
 
-                    // println!("expecting {} bytes", h_len);
-                    // println!("looking at {} bytes", available - cursor);
-
                     // if we have at least a full message ...
                     if available - cursor >= header.length {
-                        // println!("success!");
                         self.ensure(header.target, header.graph, header.channel);
 
                         let mut buffer = if let Ok(b) = self.targets[h_tgt][h_grp][h_chn].as_ref().unwrap().1.try_recv() { b }
@@ -110,19 +100,16 @@ impl<R: Reader> BinaryReceiver<R> {
                         reader.push_at_least(h_len, h_len, &mut buffer).unwrap();
                         cursor += header.length;
 
-                        println!("about to deliver {} bytes", buffer.len());
-
                         self.targets[h_tgt][h_grp][h_chn].as_ref().unwrap().0.send(buffer).unwrap();
                         valid = true;
                     }
                     else {
-                        // println!("insufficient binary data");
                         cursor -= mem::size_of::<MessageHeader>() as u64;
                     }
                 }
             }
 
-            // way inefficient... =/
+            // TODO: way inefficient... =/ Fix! :D
             self.buffer = reader.into_inner();
             if cursor > 0 {
                 for index in (0..(available - cursor)) {
@@ -131,20 +118,8 @@ impl<R: Reader> BinaryReceiver<R> {
 
                 self.buffer.truncate((available - cursor) as usize);
             }
-            //
-            // // if we read
-            // if cursor > 0 {
-            //     println!("reseting data (avail: {}, cursor: {}) to {}", available, cursor, available - cursor);
-            //     if reader.eof() { println!("buffer consumed? ..."); }
-            //     reader.push_at_least((available - cursor) as usize, (available - cursor) as usize, &mut self.double)
-            //           .unwrap();
-            //     mem::swap(&mut self.buffer, &mut self.double);
-            //     self.double = reader.into_inner();
-            //     self.double.clear();
-            // }
-            // else {
-            //     self.buffer = reader.into_inner();
-            // }
+
+            // thread::yield_now();
         }
     }
 
@@ -196,11 +171,11 @@ impl<W: Writer> BinarySender<W> {
     fn send_loop(&mut self) {
         println!("send loop:\tstarting");
         for (mut header, mut buffer) in self.sources.iter() {
-            println!("send loop:\treceived data");
+            // println!("send loop:\treceived data");
             header.length = buffer.len() as u64;
-            println!("sending {} bytes", header.length);
-            header.write_to(&mut self.writer).ok().expect("BinarySender: header send failure");
-            self.writer.write_all(&buffer[..]).ok().expect("BinarySender: payload send failure");
+            // println!("sending {} bytes", header.length);
+            header.write_to(&mut self.writer).unwrap();
+            self.writer.write_all(&buffer[..]).unwrap();
             buffer.clear();
 
             // inline because borrow-checker hates me
@@ -215,7 +190,7 @@ impl<W: Writer> BinarySender<W> {
             }
 
             while let None = self.buffers[source][graph][channel] {
-                let ((t, g, c), s) = self.channels.recv().ok().expect("error");
+                let ((t, g, c), s) = self.channels.recv().unwrap();
                 while self.buffers.len() as u64 <= t { self.buffers.push(Vec::new()); }
                 while self.buffers[t as usize].len() as u64 <= g { self.buffers[t as usize].push(Vec::new()); }
                 while self.buffers[t as usize][g as usize].len() as u64 <= c { self.buffers[t as usize][g as usize].push(None); }
@@ -223,7 +198,7 @@ impl<W: Writer> BinarySender<W> {
             }
             // end-inline
 
-            self.buffers[source][graph][channel].as_ref().unwrap().send(buffer).ok().expect("err");
+            self.buffers[source][graph][channel].as_ref().unwrap().send(buffer).unwrap();
         }
     }
 }

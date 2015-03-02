@@ -155,7 +155,7 @@ impl BinaryCommunicator {
                 let (s,r) = channel();  // generate a binary (Vec<u8>) channel pair of (back_to_worker, back_from_net)
                 let target_index = if index as u64 >= (self.index * inner_peers) { index as u64 + inner_peers } else { index as u64 };
                 println!("init'ing send channel: ({} {} {})", self.index, self.graph, self.allocated);
-                writer.send(((self.index, self.graph, self.allocated), s)).ok().expect("send error");
+                writer.send(((self.index, self.graph, self.allocated), s)).unwrap();
                 let header = MessageHeader {
                     graph:      self.graph,
                     channel:    self.allocated,
@@ -179,7 +179,7 @@ impl BinaryCommunicator {
             let (s,r) = channel();
             pullsends.push(s);
             println!("init'ing recv channel: ({} {} {})", self.index, self.graph, self.allocated);
-            reader.send(((self.index, self.graph, self.allocated), send.clone(), r)).ok().expect("send error");
+            reader.send(((self.index, self.graph, self.allocated), send.clone(), r)).unwrap();
         }
 
         let pullable = Box::new(BinaryPullable {
@@ -247,18 +247,13 @@ impl<T:Columnar+'static> Pullable<T> for BinaryPullable<T> {
         }
         else {
             if let Some(bytes) = self.receiver.try_recv().ok() {
-                println!("found some binary data!");
                 let mut reader = MemReader::new(bytes);
                 let mut buffer = Vec::new();
 
                 self.stack.encode(&mut buffer);
 
                 self.stack.read(&mut reader, buffer).ok();
-                let result = self.stack.pop();
-
-                if result.is_some() { println!("legit data"); }
-
-                result
+                self.stack.pop()
             }
             else { None }
         }
