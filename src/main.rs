@@ -242,7 +242,7 @@ fn _command(allocator: Communicator, bencher: Option<&mut Bencher>) {
 
 fn _barrier(mut allocator: Communicator, bencher: Option<&mut Bencher>) {
     let mut graph = new_graph(Progcaster::new(&mut allocator));
-    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 10000 });
+    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 
     // start things up!
