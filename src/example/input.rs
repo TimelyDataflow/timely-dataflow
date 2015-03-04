@@ -62,7 +62,6 @@ impl<T:Timestamp> Scope<T> for InputScope<T> {
             map.update(x, self.copies as i64);
         }
         (Vec::new(), vec![map])
-        // (Vec::new(), vec![self.frontier.borrow().elements.iter().map(|x| (x.clone(), self.copies as i64)).collect()])
     }
 
     fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<CountMap<T>>,

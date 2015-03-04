@@ -91,7 +91,7 @@ fn main() {
 
     println!("Communicator constructed: {:?}", communicators.len());
 
-    if args.get_bool("queue") { _queue_multi(communicators); println!("started queue test"); }
+    if args.get_bool("queue") {  println!("started queue test"); _queue_multi(communicators); }
     else if args.get_bool("barrier") { println!("started barrier test"); _barrier_multi(communicators); }
     else if args.get_bool("command") { _command_multi(communicators); println!("started command test"); }
 }
@@ -106,7 +106,11 @@ fn queue_bench(bencher: &mut Bencher) { _queue(ProcessCommunicator::new_vector(1
 fn _queue_multi(communicators: Vec<Communicator>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
-        guards.push(thread::scoped(move || _queue(communicator, None)));
+        // guards.push(thread::scoped(move || _queue(communicator, None)));
+
+        guards.push(thread::Builder::new().name(format!("worker thread {}", communicator.index()))
+                                          .scoped(move || _queue(communicator, None))
+                                          .unwrap());
     }
 }
 
@@ -169,8 +173,8 @@ fn _queue(allocator: Communicator, bencher: Option<&mut Bencher>) {
     let (mut input2, mut stream2) = graph.new_input::<u64>(allocator.clone());
 
     // prepare some feedback edges
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000), Local(1));
+    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 10000), Local(1));
+    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 10000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
     let progcaster = Progcaster::new(&mut (*allocator.borrow_mut()));

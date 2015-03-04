@@ -220,10 +220,10 @@ impl<T:Columnar+'static> Pushable<T> for BinaryPushable<T> {
     #[inline]
     fn push(&mut self, data: T) {
         self.stack.push(data);
-
         let mut writer = MemWriter::from_vec(if let Some(buffer) = self.receiver.try_recv().ok() { buffer } else { Vec::new() });
         self.stack.write(&mut writer).ok();
         let buffer = writer.into_inner();
+        // println!("serialized to {} bytes", buffer.len());
 
         let mut header = self.header;
         header.length = buffer.len() as u64;
@@ -242,17 +242,19 @@ struct BinaryPullable<T: Columnar> {
 impl<T:Columnar+'static> Pullable<T> for BinaryPullable<T> {
     #[inline]
     fn pull(&mut self) -> Option<T> {
+        // println!("in binary pullable.pull()");
         if let Some(data) = self.inner.pull() {
             Some(data)
         }
         else {
             if let Some(bytes) = self.receiver.try_recv().ok() {
+                // println!("received {} bytes", bytes.len());
                 let mut reader = MemReader::new(bytes);
                 let mut buffer = Vec::new();
 
                 self.stack.encode(&mut buffer);
 
-                self.stack.read(&mut reader, buffer).ok();
+                self.stack.read(&mut reader, buffer).unwrap();
                 self.stack.pop()
             }
             else { None }

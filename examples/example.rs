@@ -14,6 +14,8 @@ use docopt::Docopt;
 
 use test::Bencher;
 
+use columnar::Columnar;
+
 use timely::progress::{Graph, Scope};
 use timely::progress::subgraph::new_graph;
 use timely::progress::subgraph::Summary::Local;
@@ -117,7 +119,7 @@ fn _barrier_multi(threads: u64) {
     }
 }
 
-fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug>(graph: &mut G,
+fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G,
                                  source1: &mut Stream<G, D>,
                                  source2: &mut Stream<G, D>,
                                  progcaster: Progcaster<(G::Timestamp,u64)>)

@@ -118,8 +118,6 @@ impl<R: Reader> BinaryReceiver<R> {
 
                 self.buffer.truncate((available - cursor) as usize);
             }
-
-            // thread::yield_now();
         }
     }
 
@@ -240,10 +238,10 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             // start senders and receivers associated with this stream
             thread::Builder::new().name(format!("send thread {}", index))
                                   .spawn(move || sender.send_loop())
-                                  .ok();
+                                  .unwrap();
             thread::Builder::new().name(format!("recv thread {}", index))
                                   .spawn(move || recver.recv_loop())
-                                  .ok();
+                                  .unwrap();
 
         }
     }

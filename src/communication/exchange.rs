@@ -45,15 +45,21 @@ impl<T:Timestamp, D:Data> Iterator for ExchangeReceiver<T, D> {
     type Item = (T, Vec<D>);
 
     fn next(&mut self) -> Option<(T, Vec<D>)> {
+        // println!("calling next");
         let next_key = self.doubles.keys().next().map(|x| x.clone());
+        // println!("second step");
         if let Some(key) = next_key {
+            // println!("found something");
             self.frontier.update(&key, -1);
             let val = self.doubles.remove(&key).unwrap();
+            // println!("returning");
             return Some((key, val));
         }
         else {
+            // println!("else");
             self.drain();
             swap(&mut self.buffers, &mut self.doubles);
+            // println!("done else");
             return None;
         }
     }
@@ -62,7 +68,9 @@ impl<T:Timestamp, D:Data> Iterator for ExchangeReceiver<T, D> {
 
 impl<T:Timestamp, D:Data> ExchangeReceiver<T, D> {
     fn drain(&mut self) {
+        // println!("in drain");
         while let Some((time, data)) = self.receiver.pull() {
+            // println!("in drain loop");
             self.consumed.update(&time, (data.len() as i64));
             if !self.buffers.contains_key(&time) { self.frontier.update(&time, 1); self.buffers.insert(time, data); }
             else                                 { self.buffers[time].push_all(data.as_slice()); }

@@ -13,6 +13,7 @@ pub struct Notificator<T: Timestamp> {
 
 impl<T: Timestamp> Notificator<T> {
     pub fn update_frontier(&mut self, time: &T, delta: i64) {
+        // println!("notificator update: {:?} {:?}", time, delta);
         self.frontier.update(time, delta);
         for pend in self.pending.elements.iter() {
             if time.le(pend) && !self.frontier.less_than(pend) {
@@ -22,8 +23,8 @@ impl<T: Timestamp> Notificator<T> {
                 }
             }
         }
+
         while let Some((pend, val)) = self.temp.pop() {
-        // for (pend, val) in self.temp.drain() {
             self.pending.update(&pend, val);
         }
     }

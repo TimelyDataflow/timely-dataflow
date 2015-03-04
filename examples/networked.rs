@@ -4,9 +4,13 @@
 
 extern crate timely;
 extern crate core;
+extern crate columnar;
 
 extern crate docopt;
 use docopt::Docopt;
+
+
+use columnar::Columnar;
 
 use timely::communication::Communicator;
 use timely::communication::channels::Data;
@@ -107,7 +111,7 @@ fn _queue(allocator: Communicator) {
     while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { }
 }
 
-fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug>(graph: &mut G,
+fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G,
                                  source1: &mut Stream<G, D>,
                                  source2: &mut Stream<G, D>,
                                  progcaster: Progcaster<(G::Timestamp,u64)>)

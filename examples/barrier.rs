@@ -1,6 +1,5 @@
 #![feature(core)]
 #![feature(test)]
-#![feature(std_misc)]
 #![feature(unsafe_destructor)]
 
 
@@ -44,7 +43,7 @@ use timely::example::barrier::BarrierScope;
 
 use test::Bencher;
 
-use std::thread::Thread;
+use std::thread;
 
 
 fn main() {
@@ -56,7 +55,7 @@ fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vect
 fn _barrier_multi(threads: u64) {
     let mut guards = Vec::new();
     for communicator in ProcessCommunicator::new_vector(threads).into_iter() {
-        guards.push(Thread::scoped(move || _barrier(communicator, None)));
+        guards.push(thread::scoped(move || _barrier(communicator, None)));
     }
 }
 

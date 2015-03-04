@@ -453,6 +453,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
                                          messages_consumed: &mut Vec<CountMap<TOuter>>,
                                          messages_produced: &mut Vec<CountMap<TOuter>>) -> bool
     {
+        // println!("Pulling internal");
+
         // should be false when there is nothing left to do
         let mut active = false;
 

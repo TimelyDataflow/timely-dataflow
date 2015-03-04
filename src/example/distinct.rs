@@ -13,7 +13,7 @@ use std::default::Default;
 use progress::count_map::CountMap;
 
 use progress::notificator::Notificator;
-use progress::{Timestamp, Scope, Graph};
+use progress::{Timestamp, Scope, Graph, Antichain};
 use communication::channels::{Data};
 use communication::exchange::{ExchangeReceiver, exchange_with};
 use example::stream::Stream;
@@ -63,37 +63,55 @@ impl<T: Timestamp, D: Data+Hash+Eq+PartialEq+Debug> Scope<T> for DistinctScope<T
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
+    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut Vec<CountMap<T>>) -> () {
+        while let Some((ref time, val)) = frontier[0].pop() {
+            self.notificator.update_frontier(time, val);
+        }
+    }
+
     fn push_external_progress(&mut self, external: &mut Vec<CountMap<T>>) -> () {
-        while let Some((ref time, val)) = external[0].pop() { self.notificator.update_frontier(time, val); }
+        // println!("progress happened");
+        while let Some((ref time, val)) = external[0].pop() {
+            self.notificator.update_frontier(time, val);
+        }
     }
 
     fn pull_internal_progress(&mut self, internal: &mut Vec<CountMap<T>>,
                                          consumed: &mut Vec<CountMap<T>>,
                                          produced: &mut Vec<CountMap<T>>) -> bool
     {
+        // println!("pull_internal Distinct");
+
         // drain the input into sets.
         while let Some((time, data)) = self.input.next() {
-        // for (time, data) in self.input {
-            let set = match self.elements.entry(time) {
-                Occupied(x) => x.into_mut(),
-                Vacant(x)   => {
-                    internal[0].update(&time, 1);
-                    self.notificator.notify_at(&time);
-                    x.insert(HashSet::with_hash_state(Default::default()))
-                },
-            };
+            // println!("distinct recv: {:?} {:?}", time, data);
+            if data.len() > 0 {
+                let set = match self.elements.entry(time) {
+                    Occupied(x) => x.into_mut(),
+                    Vacant(x)   => {
+                        internal[0].update(&time, 1);
+                        self.notificator.notify_at(&time);
+                        x.insert(HashSet::with_hash_state(Default::default()))
+                    },
+                };
 
-            for datum in data.into_iter() { set.insert(datum); }
+                for datum in data.into_iter() { set.insert(datum); }
+            }
         }
 
-        // // send anything for times we have finalized
+        // send anything for times we have finalized
         while let Some((time, _count)) = self.notificator.next() {
-        // for (time, _count) in self.notificator {
+            // println!("distinct: notification {:?}", time);
             if let Some(data) = self.elements.remove(&time) {
-                let mut session = self.output.session(&time);
-                for datum in data.into_iter() { session.push(&datum); }
+                if data.len() > 0 {
+                    let mut session = self.output.session(&time);
+                    for datum in data.into_iter() {
+                        // println!("distinct send: {:?} {:?}", time, datum);
+                        session.push(&datum);
+                    }
+                }
+                internal[0].update(&time, -1);
             }
-            internal[0].update(&time, -1);
         }
 
         // extract what we know about progress from the input and output adapters.
