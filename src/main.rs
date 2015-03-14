@@ -6,6 +6,7 @@
 #![feature(collections)]
 #![feature(old_io)]
 #![feature(io)]
+#![feature(net)]
 #![feature(hash)]
 #![feature(libc)]
 
@@ -15,6 +16,7 @@
 extern crate core;
 extern crate test;
 extern crate columnar;
+extern crate byteorder;
 
 extern crate docopt;
 use docopt::Docopt;
@@ -58,7 +60,7 @@ mod networking;
 mod communication;
 
 static USAGE: &'static str = "
-Usage: timely queue [options] [<arguments>...]
+Usage: timely distinct [options] [<arguments>...]
        timely barrier [options] [<arguments>...]
        timely command [options] [<arguments>...]
 
@@ -91,7 +93,7 @@ fn main() {
 
     println!("Communicator constructed: {:?}", communicators.len());
 
-    if args.get_bool("queue") {  println!("started queue test"); _queue_multi(communicators); }
+    if args.get_bool("distinct") {  println!("started distinct test"); _distinct_multi(communicators); }
     else if args.get_bool("barrier") { println!("started barrier test"); _barrier_multi(communicators); }
     else if args.get_bool("command") { _command_multi(communicators); println!("started command test"); }
 }
@@ -102,14 +104,12 @@ fn _networking(my_id: u64, threads: u64, processes: u64) {
 }
 
 #[bench]
-fn queue_bench(bencher: &mut Bencher) { _queue(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
-fn _queue_multi(communicators: Vec<Communicator>) {
+fn distinct_bench(bencher: &mut Bencher) { _distinct(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
+fn _distinct_multi(communicators: Vec<Communicator>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
-        // guards.push(thread::scoped(move || _queue(communicator, None)));
-
         guards.push(thread::Builder::new().name(format!("worker thread {}", communicator.index()))
-                                          .scoped(move || _queue(communicator, None))
+                                          .scoped(move || _distinct(communicator, None))
                                           .unwrap());
     }
 }
@@ -163,7 +163,7 @@ fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G,
     return (sub_egress1, sub_egress2);
 }
 
-fn _queue(allocator: Communicator, bencher: Option<&mut Bencher>) {
+fn _distinct(allocator: Communicator, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
@@ -173,8 +173,8 @@ fn _queue(allocator: Communicator, bencher: Option<&mut Bencher>) {
     let (mut input2, mut stream2) = graph.new_input::<u64>(allocator.clone());
 
     // prepare some feedback edges
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 10000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 10000), Local(1));
+    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 100000), Local(1));
+    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 100000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
     let progcaster = Progcaster::new(&mut (*allocator.borrow_mut()));

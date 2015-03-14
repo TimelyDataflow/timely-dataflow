@@ -113,9 +113,7 @@ impl<T:Timestamp> Scope<T> for FeedbackScope<T> {
 
         self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
         self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);
-        // for (ref key, val) in self.consumed_messages.borrow_mut().drain() { messages_consumed[0].update(key, val); }
-        // for (ref key, val) in self.produced_messages.borrow_mut().drain() { messages_produced[0].update(key, val); }
-        // println!("feedback pulled: c: {}, p: {}", messages_consumed[0].len(), messages_produced[0].len());
+        // println!("feedback pulled: c: {:?}, p: {:?}", messages_consumed[0], messages_produced[0]);
         return false;
     }
 

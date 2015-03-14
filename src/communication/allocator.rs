@@ -4,7 +4,6 @@ use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-use std::old_io::{MemReader, MemWriter};
 use core::marker::PhantomData;
 
 use columnar::{Columnar, ColumnarStack};
@@ -111,11 +110,11 @@ impl ProcessCommunicator {
     pub fn new_vector(count: u64) -> Vec<Communicator> {
         let channels = Arc::new(Mutex::new(Vec::new()));
         return (0 .. count).map(|index| Communicator::Process(Box::new(ProcessCommunicator {
-            inner: Communicator::Thread(Box::new(ThreadCommunicator)),
-            index: index,
-            peers: count,
-            allocated: 0,
-            channels: channels.clone(),
+            inner:      Communicator::Thread(Box::new(ThreadCommunicator)),
+            index:      index,
+            peers:      count,
+            allocated:  0,
+            channels:   channels.clone(),
         }))).collect();
     }
 }
@@ -123,18 +122,16 @@ impl ProcessCommunicator {
 
 // A communicator intended for binary channels (networking, pipes, shared memory)
 pub struct BinaryCommunicator {
-    pub inner:          Communicator,    // inner ProcessCommunicator (use for process-local channels)
-    pub index:          u64,             // index of this worker
-    pub peers:          u64,             // number of peer workers
-    pub graph:          u64,             // identifier for the current graph
-    pub allocated:      u64,             // indicates how many channels have been allocated (locally).
+    pub inner:      Communicator,    // inner ProcessCommunicator (use for process-local channels)
+    pub index:      u64,             // index of this worker
+    pub peers:      u64,             // number of peer workers
+    pub graph:      u64,             // identifier for the current graph
+    pub allocated:  u64,             // indicates how many channels have been allocated (locally).
 
     // for loading up state in the networking threads.
-    pub writers:        Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>)>>,                     // (index, back-to-worker)
-    pub readers:        Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>>,  // (index, data-to-worker,
-                                                                                             //         back-from-worker)
-
-    pub writer_senders: Vec<Sender<(MessageHeader, Vec<u8>)>>
+    pub writers:    Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>)>>,                     // (index, back-to-worker)
+    pub readers:    Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>>,  // (index, data-to-worker, back-from-worker)
+    pub senders:    Vec<Sender<(MessageHeader, Vec<u8>)>>                                // for sending bytes!
 }
 
 // A Communicator backed by Sender<Vec<u8>>/Receiver<Vec<u8>> pairs (e.g. networking, shared memory, files, pipes)
@@ -163,7 +160,7 @@ impl BinaryCommunicator {
                     target:     target_index,
                     length:     0,
                 };
-                pushers.push(Box::new(BinaryPushable::new(header, self.writer_senders[index].clone(), r)));
+                pushers.push(Box::new(BinaryPushable::new(header, self.senders[index].clone(), r)));
             }
         }
 
@@ -200,17 +197,18 @@ struct BinaryPushable<T: Columnar> {
     sender:     Sender<(MessageHeader, Vec<u8>)>,   // targets for each remote destination
     receiver:   Receiver<Vec<u8>>,                  // source of empty binary vectors
     phantom:    PhantomData<T>,
+    buffer:     Vec<u8>,
     stack:      <T as Columnar>::Stack,
 }
 
 impl<T: Columnar> BinaryPushable<T> {
     pub fn new(header: MessageHeader, sender: Sender<(MessageHeader, Vec<u8>)>, receiver: Receiver<Vec<u8>>) -> BinaryPushable<T> {
-        println!("constructing pushable for target worker: {}", header.target);
         BinaryPushable {
             header:     header,
             sender:     sender,
             receiver:   receiver,
             phantom:    PhantomData,
+            buffer:     Vec::new(),
             stack:      Default::default(),
         }
     }
@@ -219,16 +217,16 @@ impl<T: Columnar> BinaryPushable<T> {
 impl<T:Columnar+'static> Pushable<T> for BinaryPushable<T> {
     #[inline]
     fn push(&mut self, data: T) {
+        let mut bytes = if let Some(buffer) = self.receiver.try_recv().ok() { buffer } else { Vec::new() };
+        bytes.clear();
+
         self.stack.push(data);
-        let mut writer = MemWriter::from_vec(if let Some(buffer) = self.receiver.try_recv().ok() { buffer } else { Vec::new() });
-        self.stack.write(&mut writer).ok();
-        let buffer = writer.into_inner();
-        // println!("serialized to {} bytes", buffer.len());
+        self.stack.encode(&mut bytes).unwrap();
 
         let mut header = self.header;
-        header.length = buffer.len() as u64;
+        header.length = bytes.len() as u64;
 
-        self.sender.send((header, buffer)).ok();
+        self.sender.send((header, bytes)).ok();
     }
 }
 
@@ -242,22 +240,12 @@ struct BinaryPullable<T: Columnar> {
 impl<T:Columnar+'static> Pullable<T> for BinaryPullable<T> {
     #[inline]
     fn pull(&mut self) -> Option<T> {
-        // println!("in binary pullable.pull()");
-        if let Some(data) = self.inner.pull() {
-            Some(data)
+        if let Some(data) = self.inner.pull() { Some(data) }
+        else if let Some(bytes) = self.receiver.try_recv().ok() {
+            self.stack.decode(&mut bytes.as_slice()).unwrap();
+            self.senders[0].send(bytes).unwrap();                   // TODO : Not clear where bytes came from; find out!
+            self.stack.pop()
         }
-        else {
-            if let Some(bytes) = self.receiver.try_recv().ok() {
-                // println!("received {} bytes", bytes.len());
-                let mut reader = MemReader::new(bytes);
-                let mut buffer = Vec::new();
-
-                self.stack.encode(&mut buffer);
-
-                self.stack.read(&mut reader, buffer).unwrap();
-                self.stack.pop()
-            }
-            else { None }
-        }
+        else { None }
     }
 }

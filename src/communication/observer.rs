@@ -36,7 +36,7 @@ impl<'a, O:Observer+'a> Drop for ObserverSession<'a, O> where <O as Observer>::T
     #[inline(always)] fn drop(&mut self) { self.observer.shut(self.time); }
 }
 
-impl<'a, O:Observer+'a> ObserverSession<'a, O> {
+impl<'a, O:Observer+'a> ObserverSession<'a, O> where <O as Observer>::Time : 'a {
     #[inline(always)] fn new(obs: &'a mut O, time: &'a O::Time) -> ObserverSession<'a, O> {
         obs.open(time);
         ObserverSession { observer: obs, time: time }

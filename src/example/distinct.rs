@@ -1,128 +1,62 @@
 use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::hash::{Hash, SipHasher};
 use std::collections::hash_state::DefaultState;
-use std::hash;
-use core::fmt::Debug;
-
-use std::rc::Rc;
-use std::cell::RefCell;
-
+use std::hash::{hash, Hash, SipHasher};
 use std::default::Default;
 
-use progress::count_map::CountMap;
-
-use progress::notificator::Notificator;
-use progress::{Timestamp, Scope, Graph, Antichain};
-use communication::channels::{Data};
-use communication::exchange::{ExchangeReceiver, exchange_with};
-use example::stream::Stream;
-use communication::channels::{OutputPort, ObserverHelper};
-use communication::Observer;
-use communication::observer::ObserverSessionExt;
-
+use progress::Graph;
 use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
+use communication::channels::Data;
+use communication::exchange::exchange_with;
+use communication::channels::OutputPort;
+use communication::observer::ObserverSessionExt;
+use example::stream::Stream;
+use example::unary::UnaryScope;
 
 use columnar::Columnar;
 
 pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
-impl<G: Graph, D: Data+Hash+Eq+Debug+Columnar> DistinctExtensionTrait for Stream<G, D> {
+impl<G: Graph, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for Stream<G, D> {
     fn distinct(&mut self) -> Stream<G, D> {
-        let (sender, receiver) = { exchange_with(&mut (*self.allocator.borrow_mut()), |x| hash::hash::<_,SipHasher>(&x)) };
+        let (sender, receiver) = { exchange_with(&mut (*self.allocator.borrow_mut()), |x| hash::<_,SipHasher>(&x)) };
         let targets: OutputPort<G::Timestamp,D> = Default::default();
 
-        let index = self.graph.add_scope(DistinctScope {
-            input:          receiver,
-            output:         ObserverHelper::new(targets.clone(), Rc::new(RefCell::new(CountMap::new()))),
-            elements:       HashMap::new(),
-            notificator:    Default::default(),
-        });
+        // Distinct = UnaryScope + HashMap + logic
+        let mut elements = HashMap::new();
+        let scope = UnaryScope::new(receiver, targets.clone(), move |handle| {
 
-        self.graph.connect(self.name, ScopeInput(index, 0));
-        self.add_observer(sender);
-
-        Stream {
-            name: ScopeOutput(index, 0),
-            ports: targets,
-            graph: self.graph.clone(),
-            allocator: self.allocator.clone(),
-        }
-    }
-}
-
-pub struct DistinctScope<T: Timestamp, D: Data+Hash+Eq+PartialEq> {
-    input:          ExchangeReceiver<T, D>,
-    output:         ObserverHelper<OutputPort<T, D>>,
-    elements:       HashMap<T, HashSet<D, DefaultState<SipHasher>>>,
-    notificator:    Notificator<T>,
-}
-
-impl<T: Timestamp, D: Data+Hash+Eq+PartialEq+Debug> Scope<T> for DistinctScope<T, D> {
-    fn inputs(&self) -> u64 { 1 }
-    fn outputs(&self) -> u64 { 1 }
-
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut Vec<CountMap<T>>) -> () {
-        while let Some((ref time, val)) = frontier[0].pop() {
-            self.notificator.update_frontier(time, val);
-        }
-    }
-
-    fn push_external_progress(&mut self, external: &mut Vec<CountMap<T>>) -> () {
-        // println!("progress happened");
-        while let Some((ref time, val)) = external[0].pop() {
-            self.notificator.update_frontier(time, val);
-        }
-    }
-
-    fn pull_internal_progress(&mut self, internal: &mut Vec<CountMap<T>>,
-                                         consumed: &mut Vec<CountMap<T>>,
-                                         produced: &mut Vec<CountMap<T>>) -> bool
-    {
-        // println!("pull_internal Distinct");
-
-        // drain the input into sets.
-        while let Some((time, data)) = self.input.next() {
-            // println!("distinct recv: {:?} {:?}", time, data);
-            if data.len() > 0 {
-                let set = match self.elements.entry(time) {
+            // drain the input into sets.
+            // TODO : VERY IMPORTANT: if data.len() == 0, one should not be able to notify.
+            // TODO : Not enforced anywhere yet, but important to correct / know about ...
+            while let Some((time, data)) = handle.input.next() {
+                // println!("distinct: now getting data for {:?}", time);
+                let set = match elements.entry(time) {
                     Occupied(x) => x.into_mut(),
                     Vacant(x)   => {
-                        internal[0].update(&time, 1);
-                        self.notificator.notify_at(&time);
-                        x.insert(HashSet::with_hash_state(Default::default()))
+                        handle.notificator.notify_at(&time);
+                        x.insert(HashSet::<D, DefaultState<SipHasher>>::with_hash_state(Default::default()))
                     },
                 };
 
                 for datum in data.into_iter() { set.insert(datum); }
             }
-        }
 
-        // send anything for times we have finalized
-        while let Some((time, _count)) = self.notificator.next() {
-            // println!("distinct: notification {:?}", time);
-            if let Some(data) = self.elements.remove(&time) {
-                if data.len() > 0 {
-                    let mut session = self.output.session(&time);
-                    for datum in data.into_iter() {
-                        // println!("distinct send: {:?} {:?}", time, datum);
-                        session.push(&datum);
+            // send anything for times we have finalized
+            while let Some((time, _count)) = handle.notificator.next() {
+                if let Some(data) = elements.remove(&time) {
+                    let mut session = handle.output.session(&time);
+                    for datum in &data {
+                        // println!("distinct; sent at {:?}", time);
+                        session.push(datum);
                     }
                 }
-                internal[0].update(&time, -1);
             }
-        }
+        });
 
-        // extract what we know about progress from the input and output adapters.
-        self.input.pull_progress(&mut consumed[0], &mut internal[0]);
-        self.output.pull_progress(&mut produced[0]);
-
-        // println!("Distinct pulled: i: {}, c: {}, p; {}", internal[0].len(), consumed[0].len(), produced[0].len());
-
-        return false;   // no unannounced internal work
+        let index = self.graph.add_scope(scope);
+        self.connect_to(ScopeInput(index, 0), sender);
+        self.clone_with(ScopeOutput(index, 0), targets)
     }
-
-    fn name(&self) -> String { format!("Distinct") }
-    fn notify_me(&self) -> bool { true }
 }

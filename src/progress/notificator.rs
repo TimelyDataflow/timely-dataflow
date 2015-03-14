@@ -9,14 +9,17 @@ pub struct Notificator<T: Timestamp> {
     frontier:       MutableAntichain<T>,    // outstanding work, preventing notification
     available:      CountMap<T>,
     temp:           CountMap<T>,
+    changes:        CountMap<T>,
 }
 
 impl<T: Timestamp> Notificator<T> {
-    pub fn update_frontier(&mut self, time: &T, delta: i64) {
-        // println!("notificator update: {:?} {:?}", time, delta);
-        self.frontier.update(time, delta);
+    pub fn update_frontier_from_cm(&mut self, count_map: &mut CountMap<T>) {
+        // println!("notificator update: {:?}", count_map);
+        while let Some((ref time, delta)) = count_map.pop() {
+            self.frontier.update(time, delta);
+        }
         for pend in self.pending.elements.iter() {
-            if time.le(pend) && !self.frontier.less_than(pend) {
+            if !self.frontier.le(pend) {
                 if let Some(val) = self.pending.count(pend) {
                     self.temp.update(pend, -val);
                     self.available.update(pend, val);
@@ -30,11 +33,21 @@ impl<T: Timestamp> Notificator<T> {
     }
 
     pub fn notify_at(&mut self, time: &T) {
-        if self.frontier.less_than(time) {
+        self.changes.update(time, 1);
+        if self.frontier.le(time) {
             self.pending.update(time, 1);
         }
-        else                             {
-            self.available.update(time, 1);
+        else {
+            // println!("notificator error? notify_at called with time not le the frontier. {:?}", time);
+            println!("notificator error? {:?} vs {:?}", time, self.frontier);
+            panic!("");
+            // self.available.update(time, 1);
+        }
+    }
+
+    pub fn pull_progress(&mut self, internal: &mut CountMap<T>) {
+        while let Some((time, delta)) = self.changes.pop() {
+            internal.update(&time, delta);
         }
     }
 }
@@ -43,6 +56,10 @@ impl<T: Timestamp> Notificator<T> {
 impl<T: Timestamp> Iterator for Notificator<T> {
     type Item = (T, i64);
     fn next(&mut self) -> Option<(T, i64)> {
-        self.available.pop()
+        if let Some((time, delta)) =  self.available.pop() {
+            self.changes.update(&time, -delta);
+            Some((time, delta))
+        }
+        else { None }
     }
 }

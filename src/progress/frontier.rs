@@ -34,7 +34,7 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
     pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct MutableAntichain<T:Eq> {
     pub occurrences:    CountMap<T>,    // occurrence count of each time
     precedents:         Vec<(T, i64)>,    // precedent count of each time with occurrence count > 0
@@ -57,8 +57,13 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
     }
 
     #[inline]
-    pub fn less_than(&self, time: &T) -> bool {
+    pub fn lt(&self, time: &T) -> bool {
         self.elements.iter().any(|x| x.lt(time))
+    }
+
+    #[inline]
+    pub fn le(&self, time: &T) -> bool {
+        self.elements.iter().any(|x| x.le(time))
     }
 
     #[inline]
@@ -152,19 +157,20 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
 
     #[inline]
     pub fn test_size(&self, threshold: usize, name: &str) {
-        if self.occurrences.len() > threshold
-        {
+        if self.occurrences.len() > threshold {
             println!("{}:\toccurrences:\tlen() = {}", name, self.occurrences.len());
-            for &(ref key, val) in self.occurrences.elements().iter() { println!("{}: \toccurrence: {:?} : {:?}", name, key, val); }
-            panic!();
+            // for &(ref key, val) in self.occurrences.elements().iter() { println!("{}: \toccurrence: {:?} : {:?}", name, key, val); }
+            // panic!();
         }
-        if self.precedents.len() > threshold { println!("{}: precedents:\tlen() = {}", name, self.precedents.len()); }
+        if self.precedents.len() > threshold {
+            println!("{}: precedents:\tlen() = {}", name, self.precedents.len());
+        }
     }
 
     #[inline]
     pub fn update_and<A: FnMut(&T, i64)->()>(&mut self, elem: &T, delta: i64, mut action: A) -> () {
         if delta != 0 {
-            self.test_size(100, "???");
+            // self.test_size(100, "???");
             let new_value = self.occurrences.update(elem, delta);
             let old_value = new_value - delta;
 

@@ -1,6 +1,10 @@
-use std::old_io::{TcpListener, TcpStream};
-use std::old_io::{Acceptor, Listener, IoResult, MemReader};
+// use std::old_io::{TcpListener, TcpStream};
+// use std::old_io::{Acceptor, Listener, IoResult, MemReader};
 use std::old_io::timer::sleep;
+use std::io::{Read, Write, Result};
+
+use std::net::{TcpListener, TcpStream};
+use std::mem::size_of;
 
 use std::sync::mpsc::{Sender, Receiver, channel};
 
@@ -8,6 +12,8 @@ use std::thread;
 use std::sync::{Arc, Future};
 use std::mem;
 use std::time::duration::Duration;
+
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use communication::{Pushable, Communicator, BinaryCommunicator, ProcessCommunicator};
 
@@ -24,28 +30,34 @@ pub struct MessageHeader {
 }
 
 impl MessageHeader {
-    fn read_from<R: Reader>(reader: &mut R) -> IoResult<MessageHeader> {
-        Ok(MessageHeader {
-            graph:      try!(reader.read_le_u64()),
-            channel:    try!(reader.read_le_u64()),
-            source:     try!(reader.read_le_u64()),
-            target:     try!(reader.read_le_u64()),
-            length:     try!(reader.read_le_u64()),
-        })
+    // returns a header when there is enough supporting data
+    fn try_read(bytes: &mut &[u8]) -> Option<MessageHeader> {
+        if bytes.len() > size_of::<MessageHeader>() {
+            let headers: &[MessageHeader] = unsafe { mem::transmute((*bytes).clone()) };
+            let header = headers[0];
+            if bytes.len() >= size_of::<MessageHeader>() + header.length as usize {
+                *bytes = &(*bytes)[size_of::<MessageHeader>()..];
+                return Some(header);
+            }
+            else {
+                println!("bytes.len() = {}, needed = {}", bytes.len(), size_of::<MessageHeader>() + header.length as usize);
+            }
+        }
+        return None;
     }
 
-    fn write_to<W: Writer>(&self, writer: &mut W) -> IoResult<()> {
-        try!(writer.write_le_u64(self.graph));
-        try!(writer.write_le_u64(self.channel));
-        try!(writer.write_le_u64(self.source));
-        try!(writer.write_le_u64(self.target));
-        try!(writer.write_le_u64(self.length));
+    fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
+        try!(writer.write_u64::<LittleEndian>(self.graph));
+        try!(writer.write_u64::<LittleEndian>(self.channel));
+        try!(writer.write_u64::<LittleEndian>(self.source));
+        try!(writer.write_u64::<LittleEndian>(self.target));
+        try!(writer.write_u64::<LittleEndian>(self.length));
         Ok(())
     }
 }
 
 // structure in charge of receiving data from a Reader, for example the network
-struct BinaryReceiver<R: Reader> {
+struct BinaryReceiver<R: Read> {
     // targets (and u8 returns) indexed by worker, graph, and channel.
     // option because they get filled progressively; alt design might change that.
     targets:    Vec<Vec<Vec<Option<(Sender<Vec<u8>>, Receiver<Vec<u8>>)>>>>,
@@ -58,10 +70,10 @@ struct BinaryReceiver<R: Reader> {
     channels:   Receiver<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>,
 }
 
-impl<R: Reader> BinaryReceiver<R> {
+impl<R: Read> BinaryReceiver<R> {
     fn new(reader: R, targets: u64, channels: Receiver<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>) -> BinaryReceiver<R> {
         BinaryReceiver {
-            targets:    range(0, targets).map(|_| Vec::new()).collect(),
+            targets:    (0..targets).map(|_| Vec::new()).collect(),
             reader:     reader,
             buffer:     Vec::new(),
             double:     Vec::new(),
@@ -71,53 +83,61 @@ impl<R: Reader> BinaryReceiver<R> {
 
     fn recv_loop(&mut self) {
         loop {
-            // push some amount into our buffer, then try decoding...
-            self.reader.push(1usize << 20, &mut self.buffer).unwrap();
 
-            let available = self.buffer.len() as u64;
-            let mut reader = MemReader::new(mem::replace(&mut self.buffer, Vec::new()));
-            let mut cursor = 0u64;
+            // attempt to read some more bytes into our buffer
+            let valid = self.buffer.len();
+            self.buffer.reserve(1 << 20);
+            unsafe { self.buffer.set_len(valid + (1 << 20)); }
+            // println!("reading");
+            let read = self.reader.read(&mut self.buffer[valid..(valid + (1 << 20))]).unwrap_or(0);
+            // println!("read: {}", read);
 
-            let mut valid = true;   // true as long as we've not run out of data in self.buffer
-            while valid {
-                valid = false;
-                // attempt to read a header out of the reader
-                if let Ok(header) = MessageHeader::read_from(&mut reader) {
-                    cursor += mem::size_of::<MessageHeader>() as u64;
+            unsafe { self.buffer.set_len(valid + read); }
 
+            {
+                // get a view of available bytes
+                let mut slice = &self.buffer[..];
+
+                while let Some(header) = MessageHeader::try_read(&mut slice) {
                     let h_tgt = header.target as usize;  // target worker
                     let h_grp = header.graph as usize;   // target graph
                     let h_chn = header.channel as usize; // target channel
                     let h_len = header.length as usize;  // length in bytes
 
-                    // if we have at least a full message ...
-                    if available - cursor >= header.length {
-                        self.ensure(header.target, header.graph, header.channel);
+                    // println!("looking for {} bytes; have {} bytes", h_len, slice.len());
 
-                        let mut buffer = if let Ok(b) = self.targets[h_tgt][h_grp][h_chn].as_ref().unwrap().1.try_recv() { b }
-                                         else { Vec::new() };
+                    while self.targets.len() <= h_tgt { self.targets.push(Vec::new()) ;}
+                    while self.targets[h_tgt].len() <= h_grp { self.targets[h_tgt].push(Vec::new()) ;}
+                    while self.targets[h_tgt][h_grp].len() <= h_chn { self.targets[h_tgt][h_grp].push(None) ;}
 
-                        reader.push_at_least(h_len, h_len, &mut buffer).unwrap();
-                        cursor += header.length;
+                    // ensure that the destination exists!
+                    while let None = self.targets[h_tgt][h_grp][h_chn] {
+                        // receive channel descriptions if any
+                        let ((t, g, c), s, r) = self.channels.recv().unwrap();
+                        while self.targets.len() as u64 <= t { self.targets.push(Vec::new()); }
+                        while self.targets[t as usize].len() as u64 <= g { self.targets[t as usize].push(Vec::new()); }
+                        while self.targets[t as usize][g as usize].len() as u64 <= c { self.targets[t as usize][g as usize].push(None); }
 
-                        self.targets[h_tgt][h_grp][h_chn].as_ref().unwrap().0.send(buffer).unwrap();
-                        valid = true;
+                        self.targets[t as usize][g as usize][c as usize] = Some((s, r));
                     }
-                    else {
-                        cursor -= mem::size_of::<MessageHeader>() as u64;
-                    }
+
+                    let mut buffer = if let Ok(b) = self.targets[h_tgt][h_grp][h_chn].as_ref().unwrap().1.try_recv() { b }
+                                     else { Vec::new() };
+
+                    buffer.clear();
+                    buffer.push_all(&slice[..h_len]);
+
+                    slice = &slice[h_len..];
+
+                    self.targets[h_tgt][h_grp][h_chn].as_ref().unwrap().0.send(buffer).unwrap();
                 }
+
+                // TODO: way inefficient... =/ Fix! :D
+                self.double.clear();
+                self.double.push_all(slice);
             }
 
-            // TODO: way inefficient... =/ Fix! :D
-            self.buffer = reader.into_inner();
-            if cursor > 0 {
-                for index in (0..(available - cursor)) {
-                    self.buffer[index as usize] = self.buffer[(cursor + index) as usize];
-                }
-
-                self.buffer.truncate((available - cursor) as usize);
-            }
+            mem::swap(&mut self.buffer, &mut self.double);
         }
     }
 
@@ -133,7 +153,6 @@ impl<R: Reader> BinaryReceiver<R> {
         while let None = self.targets[target as usize][graph as usize][channel as usize] {
             // receive channel descriptions if any
             let ((t, g, c), s, r) = self.channels.recv().unwrap();
-
             while self.targets.len() as u64 <= t { self.targets.push(Vec::new()); }
             while self.targets[t as usize].len() as u64 <= g { self.targets[t as usize].push(Vec::new()); }
             while self.targets[t as usize][g as usize].len() as u64 <= c { self.targets[t as usize][g as usize].push(None); }
@@ -146,14 +165,14 @@ impl<R: Reader> BinaryReceiver<R> {
 }
 
 // structure in charge of sending data to a Writer, for example the network
-struct BinarySender<W: Writer> {
+struct BinarySender<W: Write> {
     writer:     W,
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
     buffers:    Vec<Vec<Vec<Option<Sender<Vec<u8>>>>>>,
     channels:   Receiver<((u64, u64, u64), Sender<Vec<u8>>)>,
 }
 
-impl<W: Writer> BinarySender<W> {
+impl<W: Write> BinarySender<W> {
     fn new(writer: W,
            targets: u64,
            sources: Receiver<(MessageHeader, Vec<u8>)>,
@@ -201,19 +220,19 @@ impl<W: Writer> BinarySender<W> {
     }
 }
 
-pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> IoResult<Vec<Communicator>> {
+pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> Result<Vec<Communicator>> {
 
     let processes = addresses.len() as u64;
     let hosts1 = Arc::new(addresses);
     let hosts2 = hosts1.clone();
 
-    let mut start_task = Future::spawn(move || start_connections(hosts1, my_index));
-    let mut await_task = Future::spawn(move || await_connections(hosts2, my_index));
+    let start_task = Future::spawn(move || start_connections(hosts1, my_index));
+    let await_task = Future::spawn(move || await_connections(hosts2, my_index));
 
-    let mut results = try!(await_task.get());
+    let mut results = try!(await_task.into_inner());
 
     results.push(None);
-    results.push_all(try!(start_task.get()).as_slice());
+    results.append(&mut try!(start_task.into_inner()));
 
     println!("worker {}:\tinitialization complete", my_index);
 
@@ -232,8 +251,8 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             readers.push(reader_channels_s);    //
             senders.push(sender_channels_s);    //
 
-            let mut sender = BinarySender::new(stream.clone(), workers, sender_channels_r, writer_channels_r);
-            let mut recver = BinaryReceiver::new(stream.clone(), workers, reader_channels_r);
+            let mut sender = BinarySender::new(stream.try_clone().unwrap(), workers, sender_channels_r, writer_channels_r);
+            let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), workers, reader_channels_r);
 
             // start senders and receivers associated with this stream
             thread::Builder::new().name(format!("send thread {}", index))
@@ -258,7 +277,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             allocated:      0,
             writers:        writers.clone(),
             readers:        readers.clone(),
-            writer_senders: senders.clone(),
+            senders:        senders.clone(),
         })));
     }
 
@@ -266,14 +285,14 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
 }
 
 // result contains connections [0, my_index - 1].
-fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> IoResult<Vec<Option<TcpStream>>> {
+fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..my_index).map(|_| None).collect();
     for index in (0..my_index) {
         let mut connected = false;
         while !connected {
-            match TcpStream::connect_timeout(addresses[index as usize].as_slice(), Duration::minutes(1)) {
+            match TcpStream::connect(addresses[index as usize].as_slice()) {
                 Ok(mut stream) => {
-                    try!(stream.write_le_u64(my_index));
+                    try!(stream.write_u64::<LittleEndian>(my_index));
                     results[index as usize] = Some(stream);
                     println!("worker {}:\tconnection to worker {}", my_index, index);
                     connected = true;
@@ -290,14 +309,13 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> IoResult<Vec
 }
 
 // result contains connections [my_index + 1, addresses.len() - 1].
-fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> IoResult<Vec<Option<TcpStream>>> {
+fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..(addresses.len() - my_index as usize - 1)).map(|_| None).collect();
-    let listener = TcpListener::bind(addresses[my_index as usize].as_slice());
+    let listener = try!(TcpListener::bind(addresses[my_index as usize].as_slice()));
 
-    let mut acceptor = try!(listener.listen());
     for _ in (my_index as usize + 1 .. addresses.len()) {
-        let mut stream = try!(acceptor.accept());
-        let identifier = try!(stream.read_le_uint());
+        let mut stream = try!(listener.accept()).0;
+        let identifier = try!(stream.read_u64::<LittleEndian>()) as usize;
         results[identifier - my_index as usize - 1] = Some(stream);
         println!("worker {}:\tconnection from worker {}", my_index, identifier);
     }

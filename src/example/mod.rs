@@ -9,3 +9,4 @@ pub mod graph_builder;
 pub mod command;
 
 pub mod distinct;
+pub mod unary;

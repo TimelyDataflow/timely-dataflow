@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::mem::swap;
 use core::marker::PhantomData;
 
@@ -10,11 +11,11 @@ use communication::observer::{ExchangeObserver};
 
 use columnar::Columnar;
 
-pub fn exchange_with<T: Timestamp, D: Data, F: Fn(&D)->u64>(allocator: &mut Communicator,
-                                                            hash_func: F) -> (ExchangeObserver<PushableObserver<T,D,Box<Pushable<(T,Vec<D>)>>>, F>,
-                                                                              ExchangeReceiver<T, D>)
-where D : Columnar
-{
+pub fn exchange_with<T: Timestamp,
+                     D: Data+Columnar,
+                     F: Fn(&D)->u64>(allocator: &mut Communicator,
+                                     hash_func: F) -> (ExchangeObserver<PushableObserver<T,D,Box<Pushable<(T,Vec<D>)>>>, F>,
+                                                       ExchangeReceiver<T, D>) {
     let (senders, receiver) = allocator.new_channel();
 
     let exchange_sender = ExchangeObserver {
@@ -45,40 +46,32 @@ impl<T:Timestamp, D:Data> Iterator for ExchangeReceiver<T, D> {
     type Item = (T, Vec<D>);
 
     fn next(&mut self) -> Option<(T, Vec<D>)> {
-        // println!("calling next");
         let next_key = self.doubles.keys().next().map(|x| x.clone());
-        // println!("second step");
         if let Some(key) = next_key {
-            // println!("found something");
-            self.frontier.update(&key, -1);
             let val = self.doubles.remove(&key).unwrap();
-            // println!("returning");
+            self.consumed.update(&key, (val.len() as i64));
             return Some((key, val));
         }
         else {
-            // println!("else");
             self.drain();
             swap(&mut self.buffers, &mut self.doubles);
-            // println!("done else");
             return None;
         }
     }
 }
 
-
 impl<T:Timestamp, D:Data> ExchangeReceiver<T, D> {
     fn drain(&mut self) {
-        // println!("in drain");
-        while let Some((time, data)) = self.receiver.pull() {
-            // println!("in drain loop");
-            self.consumed.update(&time, (data.len() as i64));
-            if !self.buffers.contains_key(&time) { self.frontier.update(&time, 1); self.buffers.insert(time, data); }
-            else                                 { self.buffers[time].push_all(data.as_slice()); }
+        while let Some((time, mut data)) = self.receiver.pull() {
+            match self.buffers.entry(time)  {
+                Occupied(entry) => { entry.into_mut().append(&mut data); },
+                Vacant(entry)   => { entry.insert(data); },
+            }
         }
     }
 
-    pub fn pull_progress(&mut self, consumed: &mut CountMap<T>, progress: &mut CountMap<T>) {
+    pub fn pull_progress(&mut self, consumed: &mut CountMap<T>) {
+        // println!("consumed progress: {:?}", self.consumed);
         while let Some((ref time, value)) = self.consumed.pop() { consumed.update(time, value); }
-        while let Some((ref time, value)) = self.frontier.pop() { progress.update(time, value); }
     }
 }

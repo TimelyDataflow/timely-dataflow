@@ -15,18 +15,18 @@ use progress::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::subgraph::Summary::{Local, Outer};
 use progress::count_map::CountMap;
 
-use progress::broadcast::{Progcaster};
+use progress::broadcast::{Progcaster, ProgressVec};
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Source {
-    GraphInput(u64),           // from outer scope
-    ScopeOutput(u64, u64),    // (scope, port) may have interesting connectivity
+    GraphInput(u64),        // from outer scope
+    ScopeOutput(u64, u64),  // (scope, port) may have interesting connectivity
 }
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Target {
-    GraphOutput(u64),          // to outer scope
-    ScopeInput(u64, u64),     // (scope, port) may have interesting connectivity
+    GraphOutput(u64),       // to outer scope
+    ScopeInput(u64, u64),   // (scope, port) may have interesting connectivity
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for (TOuter, TInner) {
@@ -69,8 +69,7 @@ where TOuter: Timestamp,
             Outer(ref summary, ref iters) => (summary.results_in(outer), iters.results_in(&Default::default())),
         }
     }
-    fn followed_by(&self, other: &Summary<SOuter, SInner>) -> Summary<SOuter, SInner>
-    {
+    fn followed_by(&self, other: &Summary<SOuter, SInner>) -> Summary<SOuter, SInner> {
         match (*self, *other) {
             (Local(inner1), Local(inner2))             => Local(inner1.followed_by(&inner2)),
             (Local(_), Outer(_, _))                    => *other,
@@ -80,8 +79,7 @@ where TOuter: Timestamp,
     }
 }
 
-// TODO : Would prefer this version, but something breaks down wrt type inference;
-// TODO : complains about "can't resolve method" ... maybe duplicate method definitions?
+// TODO : Would prefer this version, but something breaks down wrt type inference ...
 // impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<(TOuter, TInner)> for Summary<TOuter::Summary, TInner::Summary> {
 //     // this makes sense for a total order, but less clear for a partial order.
 //     fn results_in(&self, &(ref outer, ref inner): &(TOuter, TInner)) -> (TOuter, TInner) {
@@ -124,10 +122,6 @@ pub struct ScopeWrapper<T: Timestamp> {
     produced_messages:      Vec<CountMap<T>>,         // per-output:  temp buffer used to ask about produced messages
 
     guarantee_changes:      Vec<CountMap<T>>,         // per-input:   temp storage for changes in some guarantee...
-
-    // source_counts:          Vec<Vec<(T, i64)>>,         // per-output:  counts of pointstamp changes at sources
-    // target_counts:          Vec<Vec<(T, i64)>>,         // per-input:   counts of pointstamp changes at targets
-    // target_pushed:          Vec<Vec<(T, i64)>>,         // per-input:   counts of pointstamp changes pushed to targets
 }
 
 impl<T: Timestamp> ScopeWrapper<T> {
@@ -141,24 +135,20 @@ impl<T: Timestamp> ScopeWrapper<T> {
             index:      index,
             inputs:     inputs,
             outputs:    outputs,
-            edges:      (0..outputs).map(|_| Default::default()).collect(),
+            edges:      vec![Default::default(); outputs as usize],
 
             notify:     notify,
             summary:    Vec::new(),
 
-            guarantees:             (0..inputs ).map(|_| Default::default()).collect(),
-            capabilities:           (0..outputs).map(|_| Default::default()).collect(),
-            outstanding_messages:   (0..inputs ).map(|_| Default::default()).collect(),
+            guarantees:             vec![Default::default(); inputs as usize],
+            capabilities:           vec![Default::default(); outputs as usize],
+            outstanding_messages:   vec![Default::default(); inputs as usize],
 
-            internal_progress: (0..outputs).map(|_| CountMap::new()).collect(),
-            consumed_messages: (0..inputs ).map(|_| CountMap::new()).collect(),
-            produced_messages: (0..outputs).map(|_| CountMap::new()).collect(),
+            internal_progress: vec![CountMap::new(); outputs as usize],
+            consumed_messages: vec![CountMap::new(); inputs as usize],
+            produced_messages: vec![CountMap::new(); outputs as usize],
 
-            guarantee_changes: (0..inputs).map(|_| CountMap::new()).collect(),
-
-            // source_counts: (0..outputs).map(|_| Default::default()).collect(),
-            // target_counts: (0..inputs ).map(|_| Default::default()).collect(),
-            // target_pushed: (0..inputs ).map(|_| Default::default()).collect(),
+            guarantee_changes: vec![CountMap::new(); inputs as usize],
         };
 
         let (summary, work) = result.scope.get_internal_summary();
@@ -175,8 +165,11 @@ impl<T: Timestamp> ScopeWrapper<T> {
 
     fn push_pointstamps(&mut self, external_progress: &Vec<CountMap<T>>) {
         if self.notify {
+            // println!("pushing to {}: {:?}", self.index, external_progress);
+            // println!("currently: {:?}", self.guarantees);
+
             for input_port in (0..self.inputs as usize) {
-                self.guarantees[input_port].test_size(50, "self.guarantees");
+                // self.guarantees[input_port].test_size(50, "self.guarantees");
                 self.guarantees[input_port]
                     .update_into_cm(&external_progress[input_port], &mut self.guarantee_changes[input_port]);
             }
@@ -192,8 +185,8 @@ impl<T: Timestamp> ScopeWrapper<T> {
     }
 
     fn pull_pointstamps<A: FnMut(u64, T,i64)->()>(&mut self,
-                                                  pointstamp_messages: &mut Vec<(u64, u64, T, i64)>,
-                                                  pointstamp_internal: &mut Vec<(u64, u64, T, i64)>,
+                                                  pointstamp_messages: &mut ProgressVec<T>,
+                                                  pointstamp_internal: &mut ProgressVec<T>,
                                                   mut output_action:   A) -> bool {
 
         let active = self.scope.pull_internal_progress(&mut self.internal_progress,
@@ -242,7 +235,7 @@ impl<T:Timestamp> PointstampCounter<T> {
     //#[inline(always)]
     pub fn update_target(&mut self, target: Target, time: &T, value: i64) {
         if let ScopeInput(scope, input) = target { self.target_counts[scope as usize][input as usize].update(time, value); }
-        else                                     { println!("lolwut?"); } // no graph outputs as poinstamps
+        else                                     { println!("lolwut?"); } // no graph outputs as pointstamps
     }
 
     pub fn update_source(&mut self, source: Source, time: &T, value: i64) {
@@ -257,12 +250,10 @@ impl<T:Timestamp> PointstampCounter<T> {
     }
 }
 
-// #[derive(Default)]
 pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     pub name:               String,                     // a helpful name
     pub index:              u64,                        // a useful integer
 
-    //default_time:           (TOuter, TInner),
     default_summary:        Summary<TOuter::Summary, TInner::Summary>,    // default summary to use for something TODO: figure out what.
 
     inputs:                 u64,                        // number inputs into the scope
@@ -289,10 +280,12 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
 
     pointstamps:            PointstampCounter<(TOuter, TInner)>,
 
-    pointstamp_messages:    Vec<(u64, u64, (TOuter, TInner), i64)>,
-    pointstamp_internal:    Vec<(u64, u64, (TOuter, TInner), i64)>,
+    pointstamp_messages_cm: CountMap<(u64, u64, (TOuter, TInner))>,
+    pointstamp_internal_cm: CountMap<(u64, u64, (TOuter, TInner))>,
+    pointstamp_messages:    ProgressVec<(TOuter, TInner)>,
+    pointstamp_internal:    ProgressVec<(TOuter, TInner)>,
 
-    pub progcaster:        Progcaster<(TOuter, TInner)>,
+    progcaster:             Progcaster<(TOuter, TInner)>,
 }
 
 
@@ -305,33 +298,32 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Vec<CountMap<TOuter>>) {
         // seal subscopes; prepare per-scope state/buffers
         for index in (0..self.children.len()) {
-            let inputs  = self.children[index].inputs;
-            let outputs = self.children[index].outputs;
+            let inputs  = self.children[index].inputs as usize;
+            let outputs = self.children[index].outputs as usize;
 
             // initialize storage for vector-based source and target path summaries.
-            self.source_summaries.push(range(0, outputs).map(|_| Vec::new()).collect());
-            self.target_summaries.push(range(0, inputs).map(|_| Vec::new()).collect());
+            self.source_summaries.push(vec![Vec::new(); outputs]);
+            self.target_summaries.push(vec![Vec::new(); inputs]);
 
-            self.pointstamps.target_pushed.push(range(0, inputs).map(|_| Default::default()).collect());
-            self.pointstamps.target_counts.push(range(0, inputs).map(|_| Default::default()).collect());
-            self.pointstamps.source_counts.push(range(0, outputs).map(|_| Default::default()).collect());
+            self.pointstamps.target_pushed.push(vec![Default::default(); inputs]);
+            self.pointstamps.target_counts.push(vec![Default::default(); inputs]);
+            self.pointstamps.source_counts.push(vec![Default::default(); outputs]);
 
             // take capabilities as pointstamps
             for output in (0..outputs) {
-                for time in self.children[index].capabilities[output as usize].elements.iter(){
-                    self.pointstamps.update_source(ScopeOutput(index as u64, output), time, 1);
+                for time in self.children[index].capabilities[output].elements.iter(){
+                    self.pointstamps.update_source(ScopeOutput(index as u64, output as u64), time, 1);
                 }
             }
         }
 
         // initialize space for input -> Vec<(Target, Antichain) mapping.
-        self.input_summaries = range(0, self.inputs()).map(|_| Vec::new()).collect();
+        self.input_summaries = vec![Vec::new(); self.inputs() as usize];
 
-        self.pointstamps.input_counts = range(0, self.inputs()).map(|_| Default::default()).collect();
-        self.pointstamps.output_pushed = range(0, self.outputs()).map(|_| Default::default()).collect();
+        self.pointstamps.input_counts = vec![Default::default(); self.inputs() as usize];
+        self.pointstamps.output_pushed = vec![Default::default(); self.outputs() as usize];
 
-        self.external_summaries = range(0, self.outputs()).map(|_| range(0, self.inputs()).map(|_| Default::default()).collect())
-                                                                                          .collect();
+        self.external_summaries = vec![vec![Default::default(); self.inputs() as usize]; self.outputs() as usize];
 
         // TODO: Explain better.
         self.set_summaries();
@@ -339,7 +331,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         self.push_pointstamps_to_targets();
 
         // TODO: WTF is this all about? Who wrote this? Me...
-        let mut work: Vec<_> = range(0, self.outputs()).map(|_| CountMap::new()).collect();
+        let mut work = vec![CountMap::new(); self.outputs() as usize];
         for (output, map) in work.iter_mut().enumerate() {
             for &(ref key, val) in self.pointstamps.output_pushed[output].elements().iter() {
                 map.update(&key.0, val);
@@ -347,8 +339,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             }
         }
 
-        let mut summaries: Vec<Vec<_>> = (0..self.inputs()).map(|_| (0..self.outputs()).map(|_| Antichain::new())
-                                                                                       .collect()).collect();
+        let mut summaries = vec![vec![Antichain::new(); self.outputs() as usize]; self.inputs() as usize];
+
         for input in range(0, self.inputs()) {
             for &(target, ref antichain) in self.input_summaries[input as usize].iter() {
                 if let GraphOutput(output) = target {
@@ -370,12 +362,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
     // receives (out -> in) summaries using only edges external to the vertex.
     fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut Vec<CountMap<TOuter>>) -> () {
         self.external_summaries = summaries;
-        self.set_summaries();        // now sort out complete reachability internally...
+        self.set_summaries();
 
         // change frontier to local times; introduce as pointstamps
         for graph_input in (0..self.inputs) {
             while let Some((time, val)) = frontier[graph_input as usize].pop() {
-            // for &(ref time, val) in frontier[graph_input as usize].iter() {
                 self.pointstamps.update_source(GraphInput(graph_input), &(time, Default::default()), val);
             }
         }
@@ -396,18 +387,18 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             let mut changes = mem::replace(&mut self.children[subscope].guarantee_changes, Vec::new());
 
             if self.children[subscope].notify {
-                for input_port in range(0, changes.len()) {
+                for input_port in (0..changes.len()) {
                     self.children[subscope]
                         .guarantees[input_port]
                         .update_into_cm(&self.pointstamps.target_pushed[subscope][input_port], &mut changes[input_port]);
                 }
             }
 
-            let inputs = self.children[subscope].inputs;
-            let outputs = self.children[subscope].outputs;
+            let inputs = self.children[subscope].inputs as usize;
+            let outputs = self.children[subscope].outputs as usize;
 
-            let mut summaries: Vec<Vec<_>> = range(0, outputs).map(|_| range(0, inputs).map(|_| Antichain::new()).collect())
-                                                                                       .collect();
+            let mut summaries = vec![vec![Antichain::new(); inputs]; outputs];
+
             for output in (0..summaries.len()) {
                 for &(target, ref antichain) in self.source_summaries[subscope][output].iter() {
                     if let ScopeInput(target_scope, target_input) = target {
@@ -430,10 +421,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
     // information for the scope about progress in the outside world (updates to the input frontiers)
     // important to push this information on to subscopes.
     fn push_external_progress(&mut self, external_progress: &mut Vec<CountMap<TOuter>>) -> () {
+
+        // println!("subgraph.pep: {:?}", external_progress);
+        // println!("currently: {:?}", self.)
         // transform into pointstamps to use push_progress_to_target().
         for (input, progress) in external_progress.iter_mut().enumerate() {
             while let Some((time, val)) = progress.pop() {
-            // for &(ref time, val) in progress.iter() {
                 self.pointstamps.update_source(GraphInput(input as u64), &(time, Default::default()), val);
             }
         }
@@ -461,14 +454,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         // Step 1: handle messages introduced through each graph input
         for input in (0..self.inputs) {
             while let Some((time, delta)) = self.input_messages[input as usize].borrow_mut().pop() {
-            // for (time, delta) in self.input_messages[input as usize].borrow_mut().drain() {
                 messages_consumed[input as usize].update(&time.0, delta);
                 for &target in self.input_edges[input as usize].iter() {
                     match target {
-                        ScopeInput(tgt, tgt_in)   => {
-                            // println!("e: pointstamp: {:?}", (tgt, tgt_in, time, delta));
-                            self.pointstamp_messages.push((tgt, tgt_in, time, delta));
-                        },
+                        ScopeInput(tgt, tgt_in)   => { self.pointstamp_messages.push((tgt, tgt_in, time, delta)); },
                         GraphOutput(graph_output) => { messages_produced[graph_output as usize].update(&time.0, delta); },
                     }
                 }
@@ -488,17 +477,23 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         // Intermission: exchange pointstamp updates, and then move them to the pointstamps structure.
         self.progcaster.send_and_recv(&mut self.pointstamp_messages, &mut self.pointstamp_internal);
         {
+            while let Some((a, b, c, d)) = self.pointstamp_messages.pop() { self.pointstamp_messages_cm.update(&(a, b, c), d); }
+            while let Some(((a, b, c), d)) = self.pointstamp_messages_cm.pop() { self.pointstamp_messages.push((a, b, c, d)); }
+            while let Some((a, b, c, d)) = self.pointstamp_internal.pop() { self.pointstamp_internal_cm.update(&(a, b, c), d); }
+            while let Some(((a, b, c), d)) = self.pointstamp_internal_cm.pop() { self.pointstamp_internal.push((a, b, c, d)); }
+
+            // println!("subgraph pointstamps exchanged:");
+            // println!("  messages: {:?}", self.pointstamp_messages);
+            // println!("  internal: {:?}", self.pointstamp_internal);
+
             let pointstamps = &mut self.pointstamps;
             for (scope, input, time, delta) in self.pointstamp_messages.drain() {
-                self.children[scope as usize].outstanding_messages[input as usize].test_size(50, "self.outstanding");
                 self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
                     pointstamps.update_target(ScopeInput(scope, input), time, delta);
                 });
             }
 
             for (scope, output, time, delta) in self.pointstamp_internal.drain() {
-                // println!("capability change: {:?} {:?}", time, delta);
-                self.children[scope as usize].capabilities[output as usize].test_size(50, "self.capabilities");
                 self.children[scope as usize].capabilities[output as usize].update_and(&time, delta, |time, delta| {
                     pointstamps.update_source(ScopeOutput(scope, output), time, delta);
                 });
@@ -514,19 +509,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
         // Step 4: push progress to each graph output ...
         for output in (0..self.outputs) {
-            // prep an iterator which extracts the first field of the time
             while let Some((time, val)) = self.pointstamps.output_pushed[output as usize].pop() {
                 self.external_capability[output as usize].update_and(&time.0, val, |t,v| {
                     internal_progress[output as usize].update(t, v);
                 });
             }
-            // let updates = self.pointstamps.output_pushed[output as usize].iter().map(|&(ref time, val)| (time.0.clone(), val));
-            // // self.external_capability[output as usize].test_size(50, "ext_cap");
-            // // println!("ext_cap.len() = {}", self.external_capability[output as usize].occurrences.len());
-            // self.external_capability[output as usize].update_iter_and(updates, |time,val| {
-            //             // internal_progress[output as usize].test_size(50, "internal_progress");
-            //             internal_progress[output as usize].update(time, val);
-            //         });
         }
 
         // pointstamps should be cleared in push_to_targets()
@@ -573,20 +560,21 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for index in (0..self.children.len()) {
             for input in (0..self.pointstamps.target_counts[index].len()) {
                 while let Some((time, value)) = self.pointstamps.target_counts[index][input as usize].pop() {
-                // for (time, value) in self.pointstamps.target_counts[index][input as usize].drain() {
+                    // println!("target({}, {}): {:?} {:?}", index, input, time, value);
                     for &(target, ref antichain) in self.target_summaries[index][input as usize].iter() {
                         let mut dest = match target {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
                             GraphOutput(output)      => &mut self.pointstamps.output_pushed[output as usize],
                         };
-                        for summary in antichain.elements.iter() { dest.update(&summary.results_in(&time), value); }
+                        for summary in antichain.elements.iter() { dest.update(&summary.results_in(&time), value);
+                            // println!("updating {:?} for {:?} by {:?}", target, summary.results_in(&time), value);
+                        }
                     }
                 }
             }
 
             for output in (0..self.pointstamps.source_counts[index].len()) {
                 while let Some((time, value)) = self.pointstamps.source_counts[index][output as usize].pop() {
-                // for (time, value) in self.pointstamps.source_counts[index][output as usize].drain() {
                     for &(target, ref antichain) in self.source_summaries[index][output as usize].iter() {
                         let mut dest = match target {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
@@ -599,8 +587,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
 
         for input in (0..self.inputs as usize) {                                        // for each graph inputs ...
-            while let Some((time, value)) = self.pointstamps.input_counts[input].pop() {
-            // for (time, value) in self.pointstamps.input_counts[input].drain() {         // for each update at GraphInput(input)...
+            while let Some((time, value)) = self.pointstamps.input_counts[input].pop() {// for each update at GraphInput(input)...
                 for &(target, ref antichain) in self.input_summaries[input].iter() {    // for each target it can reach ...
                     let mut dest = match target {
                         ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
@@ -689,6 +676,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for scope in (0..self.children.len()) {
             for input in (0..self.children[scope].inputs) {
                 self.target_summaries[scope][input as usize].clear();
+                // first: add a link directly to the associate scope input (recently fixed)
+                try_to_add_summary(&mut self.target_summaries[scope][input as usize], ScopeInput(scope as u64, input), Default::default());
                 let next_sources = self.target_to_sources(&ScopeInput(scope as u64, input));
                 for &(next_source, next_summary) in next_sources.iter() {
                     if let ScopeOutput(next_scope, next_output) = next_source {
@@ -767,6 +756,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             children:               Default::default(),
             input_messages:         Default::default(),
             pointstamps:            Default::default(),
+            pointstamp_messages_cm: Default::default(),
+            pointstamp_internal_cm: Default::default(),
             pointstamp_messages:    Default::default(),
             pointstamp_internal:    Default::default(),
             progcaster:             progcaster,

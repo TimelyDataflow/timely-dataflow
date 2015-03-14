@@ -9,21 +9,18 @@ pub trait Scope<T: Timestamp> {
     // Returns (in -> out) summaries using only edges internal to the vertex, and initial capabilities.
     // by default, full connectivity from all inputs to all outputs, and no capabilities reserved.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
-        ((0..self.inputs()).map(|_| (0..self.outputs()).map(|_| Antichain::from_elem(Default::default()))
-                                                       .collect()).collect(),
-         (0..self.outputs()).map(|_| CountMap::new()).collect())
+        (vec![vec![Antichain::from_elem(Default::default()); self.outputs() as usize]; self.inputs() as usize],
+         vec![CountMap::new(); self.outputs() as usize])
     }
 
     // Reports (out -> in) summaries for the vertex, and initial frontier information.
     // TODO: Update this to be summaries along paths external to the vertex, as this is strictly more informative.
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, _frontier: &mut Vec<CountMap<T>>) -> () { }
 
-
     // Reports changes to the projection of external work onto each of the scope's inputs.
     // TODO: Update this to be strictly external work, i.e. not work from this vertex.
     // Note: callee is expected to consume the contents of _external to indicate acknowledgement.
     fn push_external_progress(&mut self, _external: &mut Vec<CountMap<T>>) -> () { }
-
 
     // Requests changes to the projection of internal work onto each of the scope's outputs, and
     //          changes to the number of messages consumed by each of the scope's inputs, and
