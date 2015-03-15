@@ -19,7 +19,7 @@ pub struct Stream<G: Graph, D:Data> {
     pub name:       Source,                         // used to name the source in the host graph.
     pub ports:      OutputPort<G::Timestamp, D>,    // used to register interest in the output.
     pub graph:      G,                              // graph builder for connecting edges, etc.
-    pub allocator:  Rc<RefCell<Communicator>>,      // for allocating communication channels
+    pub allocator:  Rc<RefCell<CommunicatorEnum>>,      // for allocating communication channels
 }
 
 impl<G: Graph, D:Data> Stream<G, D> {

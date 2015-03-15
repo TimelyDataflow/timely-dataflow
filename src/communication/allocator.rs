@@ -21,7 +21,7 @@ use std::default::Default;
 //     fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
 // }
 
-pub enum Communicator {
+pub enum CommunicatorEnum {
     Thread(Box<ThreadCommunicator>),     // same thread communicator (mostly no-ops)
     Process(Box<ProcessCommunicator>),   // same process communicator (typed channels)
     Binary(Box<BinaryCommunicator>),     // remote communicators (serialized channels)
