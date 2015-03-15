@@ -84,28 +84,35 @@ fn main() {
     println!("Starting timely with\n\tworkers:\t{}\n\tprocesses:\t{}\n\tprocessid:\t{}", workers, processes, process_id);
 
     // vector holding communicators to use; one per local worker.
-    let communicators = if processes > 1    {
-                            let addresses = range(0, processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
-                            initialize_networking(addresses, process_id, workers).ok().expect("error initializing networking")
-                        }
-                        else if workers > 1 { ProcessCommunicator::new_vector(workers) }
-                        else                { vec![Communicator::Thread(Box::new(ThreadCommunicator))] };
-
-    println!("Communicator constructed: {:?}", communicators.len());
-
-    if args.get_bool("distinct") {  println!("started distinct test"); _distinct_multi(communicators); }
-    else if args.get_bool("barrier") { println!("started barrier test"); _barrier_multi(communicators); }
-    else if args.get_bool("command") { _command_multi(communicators); println!("started command test"); }
+    if processes > 1 {
+        let addresses = (0..processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
+        let communicators = initialize_networking(addresses, process_id, workers).ok().expect("error initializing networking");
+        if args.get_bool("distinct") { _distinct_multi(communicators); }
+        else if args.get_bool("barrier") { _barrier_multi(communicators); }
+        else if args.get_bool("command") { _command_multi(communicators); }
+    }
+    else if workers > 1 {
+        let communicators = ProcessCommunicator::new_vector(workers);
+        if args.get_bool("distinct") { _distinct_multi(communicators); }
+        else if args.get_bool("barrier") { _barrier_multi(communicators); }
+        else if args.get_bool("command") { _command_multi(communicators); }
+    }
+    else {
+        let communicators = vec![ThreadCommunicator];
+        if args.get_bool("distinct") { _distinct_multi(communicators); }
+        else if args.get_bool("barrier") { _barrier_multi(communicators); }
+        else if args.get_bool("command") { _command_multi(communicators); }
+    };
 }
 
-fn _networking(my_id: u64, threads: u64, processes: u64) {
-    let addresses = range(0, processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
-    let _connections = initialize_networking(addresses, my_id, threads);
-}
+// fn _networking(my_id: u64, threads: u64, processes: u64) {
+//     let addresses = range(0, processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
+//     let _connections = initialize_networking(addresses, my_id, threads);
+// }
 
 #[bench]
 fn distinct_bench(bencher: &mut Bencher) { _distinct(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
-fn _distinct_multi(communicators: Vec<Communicator>) {
+fn _distinct_multi<C: Communicator>(communicators: Vec<C>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
         guards.push(thread::Builder::new().name(format!("worker thread {}", communicator.index()))
@@ -116,7 +123,7 @@ fn _distinct_multi(communicators: Vec<Communicator>) {
 
 // #[bench]
 // fn command_bench(bencher: &mut Bencher) { _command(ProcessCommunicator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
-fn _command_multi(communicators: Vec<Communicator>) {
+fn _command_multi<C: Communicator>(communicators: Vec<C>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
         guards.push(thread::scoped(move || _command(communicator, None)));
@@ -126,18 +133,20 @@ fn _command_multi(communicators: Vec<Communicator>) {
 
 #[bench]
 fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
-fn _barrier_multi(communicators: Vec<Communicator>) {
+fn _barrier_multi<C: Communicator>(communicators: Vec<C>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
         guards.push(thread::scoped(move || _barrier(communicator, None)));
     }
 }
 
-fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G,
-                                 source1: &mut Stream<G, D>,
-                                 source2: &mut Stream<G, D>,
+fn _create_subgraph<G: Graph,
+                    C: Communicator,
+                    D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G,
+                                 source1: &mut Stream<G, D, C>,
+                                 source2: &mut Stream<G, D, C>,
                                  progcaster: Progcaster<(G::Timestamp,u64)>)
-                            -> (Stream<G, D>, Stream<G, D>) {
+                            -> (Stream<G, D, C>, Stream<G, D, C>) {
     // build up a subgraph using the concatenated inputs/feedbacks
     let mut subgraph = Rc::new(RefCell::new(graph.new_subgraph::<u64>(0, progcaster)));
 
@@ -163,7 +172,7 @@ fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G,
     return (sub_egress1, sub_egress2);
 }
 
-fn _distinct(allocator: Communicator, bencher: Option<&mut Bencher>) {
+fn _distinct<C: Communicator>(allocator: C, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
@@ -214,15 +223,15 @@ fn _distinct(allocator: Communicator, bencher: Option<&mut Bencher>) {
     }
 }
 
-fn _command(allocator: Communicator, bencher: Option<&mut Bencher>) {
+fn _command<C: Communicator>(allocator: C, bencher: Option<&mut Bencher>) {
     let allocator = Rc::new(RefCell::new(allocator));
 
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
     let mut input = graph.new_input::<u64>(allocator);
     let mut feedback = input.1.feedback(((), 1000), Local(1));
-    let mut result: Stream<_, u64> = input.1.concat(&mut feedback.1)
-                                            .command("./target/release/command".to_string());
+    let mut result: Stream<_, u64, _> = input.1.concat(&mut feedback.1)
+                                               .command("./target/release/command".to_string());
 
     feedback.0.connect_input(&mut result);
 
@@ -240,7 +249,7 @@ fn _command(allocator: Communicator, bencher: Option<&mut Bencher>) {
     }
 }
 
-fn _barrier(mut allocator: Communicator, bencher: Option<&mut Bencher>) {
+fn _barrier<C: Communicator>(mut allocator: C, bencher: Option<&mut Bencher>) {
     let mut graph = new_graph(Progcaster::new(&mut allocator));
     graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));

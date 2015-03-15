@@ -13,12 +13,12 @@ use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
 
 // returns both an input scope and a stream representing its output.
-pub trait InputExtensionTrait<G: Graph> {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<Communicator>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D>);
+pub trait InputExtensionTrait<G: Graph, C: Communicator> {
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<C>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D, C>);
 }
 
-impl<G: Graph> InputExtensionTrait<G> for G {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<Communicator>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D>) {
+impl<G: Graph, C: Communicator> InputExtensionTrait<G, C> for G {
+    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<C>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D, C>) {
         let output: OutputPort<G::Timestamp, D> = Default::default();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 

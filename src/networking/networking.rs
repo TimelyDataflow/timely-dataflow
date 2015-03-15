@@ -15,7 +15,7 @@ use std::time::duration::Duration;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use communication::{Pushable, Communicator, BinaryCommunicator, ProcessCommunicator};
+use communication::{Pushable, BinaryCommunicator, ProcessCommunicator};
 
 // TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.
 // TODO : Could be moved somewhere less networking-specific.
@@ -220,7 +220,7 @@ impl<W: Write> BinarySender<W> {
     }
 }
 
-pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> Result<Vec<Communicator>> {
+pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> Result<Vec<BinaryCommunicator>> {
 
     let processes = addresses.len() as u64;
     let hosts1 = Arc::new(addresses);
@@ -269,7 +269,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
 
     let mut results = Vec::new();
     for (index, proc_comm) in proc_comms.into_iter().enumerate() {
-        results.push(Communicator::Binary(Box::new(BinaryCommunicator {
+        results.push(BinaryCommunicator {
             inner:          proc_comm,
             index:          my_index * workers + index as u64,
             peers:          workers * processes,
@@ -278,7 +278,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             writers:        writers.clone(),
             readers:        readers.clone(),
             senders:        senders.clone(),
-        })));
+        });
     }
 
     return Ok(results);

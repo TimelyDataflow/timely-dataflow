@@ -8,18 +8,19 @@ use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
+use communication::Communicator;
 use communication::Observer;
 use communication::channels::ObserverHelper;
 use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 
-pub trait FeedbackExtensionTrait<G: Graph, D:Data> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>);
+pub trait FeedbackExtensionTrait<G: Graph, D:Data, C: Communicator> {
+    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D, C>);
 }
 
-impl<G: Graph, D:Data> FeedbackExtensionTrait<G, D> for Stream<G, D> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>) {
+impl<G: Graph, D:Data, C: Communicator> FeedbackExtensionTrait<G, D, C> for Stream<G, D, C> {
+    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D, C>) {
 
         let targets: OutputPort<G::Timestamp, D> = Default::default();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
@@ -84,7 +85,7 @@ pub struct FeedbackHelper<O: Observer> {
 }
 
 impl<O: Observer+'static> FeedbackHelper<O> where O::Time: Timestamp, O::Data : Data {
-    pub fn connect_input<G:Graph<Timestamp=O::Time>>(&mut self, source: &mut Stream<G, O::Data>) -> () {
+    pub fn connect_input<G:Graph<Timestamp=O::Time>, C: Communicator>(&mut self, source: &mut Stream<G, O::Data, C>) -> () {
         source.graph.connect(source.name, ScopeInput(self.index, 0));
         source.add_observer(self.target.take().unwrap());
     }

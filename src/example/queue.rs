@@ -10,6 +10,7 @@ use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
+use communication::Communicator;
 use communication::Observer;
 use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
@@ -18,8 +19,8 @@ pub trait QueueExtensionTrait {
     fn queue(&mut self) -> Self;
 }
 
-impl<G: Graph, D: Data> QueueExtensionTrait for Stream<G, D> {
-    fn queue(&mut self) -> Stream<G, D> {
+impl<G: Graph, D: Data, C: Communicator> QueueExtensionTrait for Stream<G, D, C> {
+    fn queue(&mut self) -> Stream<G, D, C> {
         let input = ScopeInputQueue::new_shared();
         let output: OutputPort<G::Timestamp, D> = Default::default();
 

@@ -7,14 +7,15 @@ use progress::subgraph::Source::ScopeOutput;
 use progress::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 
+use communication::Communicator;
 use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
 use columnar::Columnar;
 
 pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }
 
-impl<G: Graph, D: Data> ConcatExtensionTrait for Stream<G, D> {
-    fn concat(&mut self, other: &mut Stream<G, D>) -> Stream<G, D> {
+impl<G: Graph, D: Data, C: Communicator> ConcatExtensionTrait for Stream<G, D, C> {
+    fn concat(&mut self, other: &mut Stream<G, D, C>) -> Stream<G, D, C> {
         let outputs: OutputPort<G::Timestamp, D> = Default::default();
         let consumed = vec![Rc::new(RefCell::new(CountMap::new())),
                             Rc::new(RefCell::new(CountMap::new()))];

@@ -7,6 +7,7 @@ pub mod stream;
 pub mod barrier;
 pub mod graph_builder;
 pub mod command;
+// pub mod select;
 
 pub mod distinct;
 pub mod unary;

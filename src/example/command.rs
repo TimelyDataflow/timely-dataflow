@@ -15,7 +15,7 @@ use progress::frontier::Antichain;
 use progress::{Scope, Graph, Timestamp};
 use progress::count_map::CountMap;
 use communication::channels::{Data};
-use communication::Observer;
+use communication::{Observer, Communicator};
 use example::stream::Stream;
 
 use progress::subgraph::Source::ScopeOutput;
@@ -23,8 +23,8 @@ use progress::subgraph::Target::ScopeInput;
 
 pub trait CommandExtensionTrait { fn command(&mut self, program: String) -> Self; }
 
-impl<G: Graph<Timestamp = ((), u64)>, D: Data> CommandExtensionTrait for Stream<G, D> {
-    fn command(&mut self, program: String) -> Stream<G, D> {
+impl<G: Graph<Timestamp = ((), u64)>, D: Data, C: Communicator> CommandExtensionTrait for Stream<G, D, C> {
+    fn command(&mut self, program: String) -> Stream<G, D, C> {
 
         let mut process = match Command::new(program.clone()).spawn() {
             Ok(p) => p,

@@ -10,21 +10,21 @@ use progress::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::subgraph::Subgraph;
 
 use example::stream::Stream;
-use communication::Observer;
+use communication::{Observer, Communicator};
 use communication::channels::{Data, OutputPort, ObserverHelper};
 
-pub trait GraphBoundary<G1: Graph, G2: Graph, T2: Timestamp>
-where G2 : Graph<Timestamp = (G1::Timestamp, T2)>
+pub trait GraphBoundary<G1: Graph, G2: Graph<Timestamp = (G1::Timestamp, T2)>, T2: Timestamp, C: Communicator>
+// where G2 :
 {
     // adds an input to self, from source, contained in graph.
-    fn add_input<D:Data>(&mut self, source: &mut Stream<G1, D>) -> Stream<G2, D>;
-    fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<G2, D>, graph: &G1) -> Stream<G1, D>;
+    fn add_input<D:Data>(&mut self, source: &mut Stream<G1, D, C>) -> Stream<G2, D, C>;
+    fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<G2, D, C>, graph: &G1) -> Stream<G1, D, C>;
 
 }
 
 
-impl<GOuter: Graph, TInner: Timestamp> GraphBoundary<GOuter, Self, TInner> for Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>> {
-    fn add_input<D: Data>(&mut self, source: &mut Stream<GOuter, D>) -> Stream<Self, D> {
+impl<GOuter: Graph, TInner: Timestamp, C: Communicator> GraphBoundary<GOuter, Self, TInner, C> for Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>> {
+    fn add_input<D: Data>(&mut self, source: &mut Stream<GOuter, D, C>) -> Stream<Self, D, C> {
         let targets: OutputPort<(GOuter::Timestamp, TInner), D> = Default::default();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
@@ -44,7 +44,7 @@ impl<GOuter: Graph, TInner: Timestamp> GraphBoundary<GOuter, Self, TInner> for R
         }
     }
 
-    fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<Self, D>, graph: &GOuter) -> Stream<GOuter, D> {
+    fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<Self, D, C>, graph: &GOuter) -> Stream<GOuter, D, C> {
         let mut borrow = self.borrow_mut();
         let index = borrow.new_output();
 

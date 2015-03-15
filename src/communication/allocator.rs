@@ -15,45 +15,45 @@ use std::default::Default;
 // The worker can see its index, the total number of peers, and acquire channels to and from the other workers.
 // There is an assumption that each worker performs the same channel allocation logic; things go wrong otherwise.
 // TODO : Commented out for now, due to boxing issues (new_channel has generic params, making Box<Communicator> bad for Rust).
-// pub trait Communicator : 'static {
-//     fn index(&self) -> u64;     // number out of peers
-//     fn peers(&self) -> u64;     // number of peers
-//     fn new_channel<T:Send>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
+pub trait Communicator : Send+'static {
+    fn index(&self) -> u64;     // number out of peers
+    fn peers(&self) -> u64;     // number of peers
+    fn new_channel<T:Send+Columnar+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
+}
+
+// pub enum CommunicatorEnum {
+//     Thread(Box<ThreadCommunicator>),     // same thread communicator (mostly no-ops)
+//     Process(Box<ProcessCommunicator>),   // same process communicator (typed channels)
+//     Binary(Box<BinaryCommunicator>),     // remote communicators (serialized channels)
 // }
-
-pub enum Communicator {
-    Thread(Box<ThreadCommunicator>),     // same thread communicator (mostly no-ops)
-    Process(Box<ProcessCommunicator>),   // same process communicator (typed channels)
-    Binary(Box<BinaryCommunicator>),     // remote communicators (serialized channels)
-}
-
-impl Communicator {
-    pub fn index(&self) -> u64 {
-        match self {
-            &Communicator::Thread(ref t)  => t.index(),
-            &Communicator::Process(ref p) => p.index(),
-            &Communicator::Binary(ref b)  => b.index(),
-        }
-    }
-    pub fn peers(&self) -> u64 {
-        match self {
-            &Communicator::Thread(ref t)  => t.peers(),
-            &Communicator::Process(ref p) => p.peers(),
-            &Communicator::Binary(ref b)  => b.peers(),
-        }
-    }
-    pub fn new_channel<T:Send+Columnar+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
-        match self {
-            &mut Communicator::Thread(ref mut t)  => t.new_channel(),
-            &mut Communicator::Process(ref mut p) => p.new_channel(),
-            &mut Communicator::Binary(ref mut b)  => b.new_channel(),
-        }
-    }
-}
+//
+// impl Communicator {
+//     pub fn index(&self) -> u64 {
+//         match self {
+//             &Communicator::Thread(ref t)  => t.index(),
+//             &Communicator::Process(ref p) => p.index(),
+//             &Communicator::Binary(ref b)  => b.index(),
+//         }
+//     }
+//     pub fn peers(&self) -> u64 {
+//         match self {
+//             &Communicator::Thread(ref t)  => t.peers(),
+//             &Communicator::Process(ref p) => p.peers(),
+//             &Communicator::Binary(ref b)  => b.peers(),
+//         }
+//     }
+//     pub fn new_channel<T:Send+Columnar+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+//         match self {
+//             &mut Communicator::Thread(ref mut t)  => t.new_channel(),
+//             &mut Communicator::Process(ref mut p) => p.new_channel(),
+//             &mut Communicator::Binary(ref mut b)  => b.new_channel(),
+//         }
+//     }
+// }
 
 // The simplest communicator remains worker-local and just queues sent messages.
 pub struct ThreadCommunicator;
-impl ThreadCommunicator {
+impl Communicator for ThreadCommunicator {
     fn index(&self) -> u64 { 0 }
     fn peers(&self) -> u64 { 1 }
     fn new_channel<T:Send+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
@@ -65,7 +65,7 @@ impl ThreadCommunicator {
 
 // A specific Communicator for inter-thread intra-process communication
 pub struct ProcessCommunicator {
-    inner:      Communicator,                   // inner ThreadCommunicator
+    inner:      ThreadCommunicator,             // inner ThreadCommunicator
     index:      u64,                            // number out of peers
     peers:      u64,                            // number of peer allocators (for typed channel allocation).
     allocated:  u64,                            // indicates how many have been allocated (locally).
@@ -73,9 +73,22 @@ pub struct ProcessCommunicator {
 }
 
 impl ProcessCommunicator {
+    pub fn inner<'a>(&'a mut self) -> &'a ThreadCommunicator { &mut self.inner }
+    pub fn new_vector(count: u64) -> Vec<ProcessCommunicator> {
+        let channels = Arc::new(Mutex::new(Vec::new()));
+        return (0 .. count).map(|index| ProcessCommunicator {
+            inner:      ThreadCommunicator,
+            index:      index,
+            peers:      count,
+            allocated:  0,
+            channels:   channels.clone(),
+        }).collect();
+    }
+}
+
+impl Communicator for ProcessCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
-    fn inner<'a>(&'a mut self) -> &'a Communicator { &mut self.inner }
     fn new_channel<T:Send+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         let mut channels = self.channels.lock().ok().expect("mutex error?");
         if self.allocated == channels.len() as u64 {  // we need a new channel ...
@@ -106,23 +119,12 @@ impl ProcessCommunicator {
             _ => { panic!("unable to cast channel correctly"); }
         }
     }
-
-    pub fn new_vector(count: u64) -> Vec<Communicator> {
-        let channels = Arc::new(Mutex::new(Vec::new()));
-        return (0 .. count).map(|index| Communicator::Process(Box::new(ProcessCommunicator {
-            inner:      Communicator::Thread(Box::new(ThreadCommunicator)),
-            index:      index,
-            peers:      count,
-            allocated:  0,
-            channels:   channels.clone(),
-        }))).collect();
-    }
 }
 
 
 // A communicator intended for binary channels (networking, pipes, shared memory)
 pub struct BinaryCommunicator {
-    pub inner:      Communicator,    // inner ProcessCommunicator (use for process-local channels)
+    pub inner:      ProcessCommunicator,    // inner ProcessCommunicator (use for process-local channels)
     pub index:      u64,             // index of this worker
     pub peers:      u64,             // number of peer workers
     pub graph:      u64,             // identifier for the current graph
@@ -134,11 +136,14 @@ pub struct BinaryCommunicator {
     pub senders:    Vec<Sender<(MessageHeader, Vec<u8>)>>                                // for sending bytes!
 }
 
-// A Communicator backed by Sender<Vec<u8>>/Receiver<Vec<u8>> pairs (e.g. networking, shared memory, files, pipes)
 impl BinaryCommunicator {
+    pub fn inner<'a>(&'a mut self) -> &'a ProcessCommunicator { &mut self.inner }
+}
+
+// A Communicator backed by Sender<Vec<u8>>/Receiver<Vec<u8>> pairs (e.g. networking, shared memory, files, pipes)
+impl Communicator for BinaryCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
-    fn inner<'a>(&'a mut self) -> &'a Communicator { &mut self.inner }
     fn new_channel<T:Send+Columnar+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         let mut pushers: Vec<Box<Pushable<T>>> = Vec::new(); // built-up vector of Box<Pushable<T>> to return
 

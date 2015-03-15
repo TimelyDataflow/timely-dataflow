@@ -11,7 +11,7 @@ pub struct Progcaster<T:Timestamp> {
 }
 
 impl<T:Timestamp+Send+Columnar> Progcaster<T> {
-    pub fn new(communicator: &mut Communicator) -> Progcaster<T> {
+    pub fn new<C: Communicator>(communicator: &mut C) -> Progcaster<T> {
         let (senders, receiver) = communicator.new_channel();
         Progcaster { senders: senders, receiver: receiver }
     }

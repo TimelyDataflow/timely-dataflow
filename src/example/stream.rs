@@ -15,19 +15,19 @@ use communication::channels::OutputPort;
 //     type Communicator: Communicator;
 // }
 
-pub struct Stream<G: Graph, D:Data> {
+pub struct Stream<G: Graph, D:Data, C: Communicator> {
     pub name:       Source,                         // used to name the source in the host graph.
     pub ports:      OutputPort<G::Timestamp, D>,    // used to register interest in the output.
     pub graph:      G,                              // graph builder for connecting edges, etc.
-    pub allocator:  Rc<RefCell<Communicator>>,      // for allocating communication channels
+    pub allocator:  Rc<RefCell<C>>,                 // for allocating communication channels
 }
 
-impl<G: Graph, D:Data> Stream<G, D> {
+impl<G: Graph, D:Data, C: Communicator> Stream<G, D, C> {
     pub fn add_observer<O: Observer<Time=G::Timestamp, Data=D>+'static>(&mut self, observer: O) {
         self.ports.shared.borrow_mut().push(Box::new(observer));
     }
 
-    pub fn clone_with<D2: Data>(&self, source: Source, targets: OutputPort<G::Timestamp, D2>) -> Stream<G, D2> {
+    pub fn clone_with<D2: Data>(&self, source: Source, targets: OutputPort<G::Timestamp, D2>) -> Stream<G, D2, C> {
         Stream {
             name: source,
             ports: targets,

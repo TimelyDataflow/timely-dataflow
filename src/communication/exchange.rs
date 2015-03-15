@@ -13,7 +13,8 @@ use columnar::Columnar;
 
 pub fn exchange_with<T: Timestamp,
                      D: Data+Columnar,
-                     F: Fn(&D)->u64>(allocator: &mut Communicator,
+                     C: Communicator,
+                     F: Fn(&D)->u64>(allocator: &mut C,
                                      hash_func: F) -> (ExchangeObserver<PushableObserver<T,D,Box<Pushable<(T,Vec<D>)>>>, F>,
                                                        ExchangeReceiver<T, D>) {
     let (senders, receiver) = allocator.new_channel();
