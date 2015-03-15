@@ -9,6 +9,12 @@ use communication::Communicator;
 use communication::Data;
 use communication::channels::OutputPort;
 
+// pub trait StreamTrait {
+//     type Data:         Data;
+//     type Graph:        Graph;
+//     type Communicator: Communicator;
+// }
+
 pub struct Stream<G: Graph, D:Data> {
     pub name:       Source,                         // used to name the source in the host graph.
     pub ports:      OutputPort<G::Timestamp, D>,    // used to register interest in the output.

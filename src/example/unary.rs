@@ -2,12 +2,34 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
+use progress::Graph;
+use progress::subgraph::Source::ScopeOutput;
+use progress::subgraph::Target::ScopeInput;
+
+use example::stream::Stream;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
 use communication::channels::Data;
 use communication::exchange::ExchangeReceiver;
 use communication::channels::{OutputPort, ObserverHelper};
+use communication::Observer;
+
+pub trait UnaryExt<G: Graph, D1: Data, D2: Data> {
+    fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2>)+'static,
+             O: Observer<Time=G::Timestamp, Data=D1>+'static>(&mut self, sender: O, receiver: ExchangeReceiver<G::Timestamp, D1>, logic: L) -> Stream<G, D2>;
+}
+
+impl<G: Graph, D1: Data, D2: Data> UnaryExt<G, D1, D2> for Stream<G, D1> {
+    fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2>)+'static,
+             O: Observer<Time=G::Timestamp, Data=D1>+'static>(&mut self, sender: O, receiver: ExchangeReceiver<G::Timestamp, D1>, logic: L) -> Stream<G, D2> {
+        let targets: OutputPort<G::Timestamp,D2> = Default::default();
+        let scope = UnaryScope::new(receiver, targets.clone(), logic);
+        let index = self.graph.add_scope(scope);
+        self.connect_to(ScopeInput(index, 0), sender);
+        self.clone_with(ScopeOutput(index, 0), targets)
+    }
+}
 
 pub struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data> {
     pub input:          ExchangeReceiver<T, D1>,
@@ -43,7 +65,6 @@ impl<T: Timestamp, D1: Data, D2: Data, L: FnMut(&mut UnaryScopeHandle<T, D1, D2>
     }
 
     fn push_external_progress(&mut self, external: &mut Vec<CountMap<T>>) -> () {
-        // println!("unary.pep: {:?}", external);
         self.handle.notificator.update_frontier_from_cm(&mut external[0]);
         external[0].clear();
     }
