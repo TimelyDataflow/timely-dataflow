@@ -7,28 +7,29 @@ use communication::Observer;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::default::Default;
 
 pub trait Data : Clone+Send+Debug+'static { }
 impl<T: Clone+Send+Debug+'static> Data for T { }
 
 
 pub struct OutputPort<T: Timestamp, D: Data> {
-    pub shared:    Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
+    shared:    Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
 }
 
 impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
     type Time = T;
     type Data = D;
-    #[inline(always)] fn push(&mut self, data: &D) { for target in self.shared.borrow_mut().iter_mut() { target.push(data);  } }
     #[inline(always)] fn open(&mut self, time: &T) { for target in self.shared.borrow_mut().iter_mut() { target.open(time); } }
+    #[inline(always)] fn push(&mut self, data: &D) { for target in self.shared.borrow_mut().iter_mut() { target.push(data); } }
     #[inline(always)] fn shut(&mut self, time: &T) { for target in self.shared.borrow_mut().iter_mut() { target.shut(time); } }
 }
 
-impl<T: Timestamp, D: Data> Default for OutputPort<T, D> {
-    fn default() -> OutputPort<T, D> {
-        let temp : Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>> = Rc::new(RefCell::new(Vec::new()));
-        OutputPort { shared: temp }
+impl<T: Timestamp, D: Data> OutputPort<T, D> {
+    pub fn new() -> OutputPort<T, D> {
+        OutputPort { shared: Rc::new(RefCell::new(Vec::new())) }
+    }
+    pub fn add_observer<O: Observer<Time=T, Data=D>+'static>(&mut self, observer: O) {
+        self.shared.borrow_mut().push(Box::new(observer));
     }
 }
 

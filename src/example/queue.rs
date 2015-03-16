@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::default::Default;
 
 use progress::frontier::Antichain;
 use progress::{Graph, Scope, Timestamp};
@@ -22,7 +21,7 @@ pub trait QueueExtensionTrait {
 impl<G: Graph, D: Data, C: Communicator> QueueExtensionTrait for Stream<G, D, C> {
     fn queue(&mut self) -> Stream<G, D, C> {
         let input = ScopeInputQueue::new_shared();
-        let output: OutputPort<G::Timestamp, D> = Default::default();
+        let output = OutputPort::<G::Timestamp, D>::new();
 
         let index = self.graph.add_scope(QueueScope {
             input:      input.clone(),
@@ -31,17 +30,8 @@ impl<G: Graph, D: Data, C: Communicator> QueueExtensionTrait for Stream<G, D, C>
             guarantee:  CountMap::new(),
         });
 
-        self.graph.connect(self.name, ScopeInput(index, 0));
-        self.add_observer(input);
-
-        // return self.copy_with(ScopeOutput(index, 0), output);
-        Stream {
-            name: ScopeOutput(index, 0),
-            ports: output,
-            graph: self.graph.clone(),
-            allocator: self.allocator.clone(),
-        }
-
+        self.connect_to(ScopeInput(index, 0), input);
+        self.clone_with(ScopeOutput(index, 0), output)
     }
 }
 

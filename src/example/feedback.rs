@@ -22,7 +22,7 @@ pub trait FeedbackExtensionTrait<G: Graph, D:Data, C: Communicator> {
 impl<G: Graph, D:Data, C: Communicator> FeedbackExtensionTrait<G, D, C> for Stream<G, D, C> {
     fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D, C>) {
 
-        let targets: OutputPort<G::Timestamp, D> = Default::default();
+        let targets = OutputPort::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
         let consumed: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
 
@@ -86,8 +86,7 @@ pub struct FeedbackHelper<O: Observer> {
 
 impl<O: Observer+'static> FeedbackHelper<O> where O::Time: Timestamp, O::Data : Data {
     pub fn connect_input<G:Graph<Timestamp=O::Time>, C: Communicator>(&mut self, source: &mut Stream<G, O::Data, C>) -> () {
-        source.graph.connect(source.name, ScopeInput(self.index, 0));
-        source.add_observer(self.target.take().unwrap());
+        source.connect_to(ScopeInput(self.index, 0), self.target.take().unwrap());
     }
 }
 

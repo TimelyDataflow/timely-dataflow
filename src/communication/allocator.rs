@@ -15,10 +15,16 @@ use std::default::Default;
 // The worker can see its index, the total number of peers, and acquire channels to and from the other workers.
 // There is an assumption that each worker performs the same channel allocation logic; things go wrong otherwise.
 // TODO : Commented out for now, due to boxing issues (new_channel has generic params, making Box<Communicator> bad for Rust).
-pub trait Communicator : Send+'static {
+pub trait Communicator : 'static {
     fn index(&self) -> u64;     // number out of peers
     fn peers(&self) -> u64;     // number of peers
     fn new_channel<T:Send+Columnar+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
+}
+
+impl<C: Communicator> Communicator for Rc<RefCell<C>> {
+    fn index(&self) -> u64 { self.borrow().index() }
+    fn peers(&self) -> u64 { self.borrow().peers() }
+    fn new_channel<T:Send+Columnar+'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) { self.borrow_mut().new_channel() }
 }
 
 // pub enum CommunicatorEnum {

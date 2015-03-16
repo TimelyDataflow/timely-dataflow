@@ -14,7 +14,7 @@ use std::thread;
 use progress::frontier::Antichain;
 use progress::{Scope, Graph, Timestamp};
 use progress::count_map::CountMap;
-use communication::channels::{Data};
+use communication::channels::{Data, OutputPort};
 use communication::{Observer, Communicator};
 use example::stream::Stream;
 
@@ -46,7 +46,7 @@ impl<G: Graph<Timestamp = ((), u64)>, D: Data, C: Communicator> CommandExtension
 
         Stream {
             name: ScopeOutput(index, 0),
-            ports: Default::default(),
+            ports: OutputPort::new(),
             graph: self.graph.clone(),
             allocator: self.allocator.clone(),
         }

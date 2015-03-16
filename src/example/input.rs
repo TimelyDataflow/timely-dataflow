@@ -19,7 +19,7 @@ pub trait InputExtensionTrait<G: Graph, C: Communicator> {
 
 impl<G: Graph, C: Communicator> InputExtensionTrait<G, C> for G {
     fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<C>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D, C>) {
-        let output: OutputPort<G::Timestamp, D> = Default::default();
+        let output = OutputPort::<G::Timestamp, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let helper = InputHelper {
@@ -70,8 +70,6 @@ impl<T:Timestamp> Scope<T> for InputScope<T> {
     {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
         self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
-        // for (ref key, val) in self.messages.borrow_mut().drain() { messages_produced[0].update(key, val); }
-        // for (ref key, val) in self.progress.borrow_mut().drain() { frontier_progress[0].update(key, val); }
         return false;
     }
 

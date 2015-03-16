@@ -1,6 +1,5 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::default::Default;
 
 use progress::{Timestamp, Graph, Scope};
 use progress::subgraph::Source::ScopeOutput;
@@ -16,24 +15,15 @@ pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }
 
 impl<G: Graph, D: Data, C: Communicator> ConcatExtensionTrait for Stream<G, D, C> {
     fn concat(&mut self, other: &mut Stream<G, D, C>) -> Stream<G, D, C> {
-        let outputs: OutputPort<G::Timestamp, D> = Default::default();
+        let outputs = OutputPort::<G::Timestamp, D>::new();
         let consumed = vec![Rc::new(RefCell::new(CountMap::new())),
                             Rc::new(RefCell::new(CountMap::new()))];
 
         let index = self.graph.add_scope(ConcatScope { consumed: consumed.clone() });
 
-        self.graph.connect(self.name, ScopeInput(index, 0));
-        other.graph.connect(other.name, ScopeInput(index, 1));
-
-        self.add_observer(ObserverHelper::new(outputs.clone(), consumed[0].clone()));
-        other.add_observer(ObserverHelper::new(outputs.clone(), consumed[1].clone()));
-
-        Stream {
-            name: ScopeOutput(index, 0),
-            ports: outputs,
-            graph: self.graph.clone(),
-            allocator: self.allocator.clone(),
-        }
+        self.connect_to(ScopeInput(index, 0), ObserverHelper::new(outputs.clone(), consumed[0].clone()));
+        other.connect_to(ScopeInput(index, 1), ObserverHelper::new(outputs.clone(), consumed[1].clone()));
+        self.clone_with(ScopeOutput(index, 0), outputs)
     }
 }
 
@@ -52,7 +42,6 @@ impl<T:Timestamp> Scope<T> for ConcatScope<T> where <T as Columnar>::Stack: 'sta
     {
         for (index, updates) in self.consumed.iter().enumerate() {
             while let Some((key, val)) = updates.borrow_mut().pop() {
-            // for (key, val) in updates.borrow_mut().drain() {
                 messages_consumed[index].update(&key, val);
                 messages_produced[0].update(&key, val);
             }

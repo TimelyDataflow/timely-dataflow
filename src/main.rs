@@ -44,7 +44,7 @@ use example::feedback::FeedbackExtensionTrait;
 use example::distinct::DistinctExtensionTrait;
 use example::command::CommandExtensionTrait;
 
-use example::graph_builder::GraphBoundary;
+use example::graph_builder::{EnterSubgraphExt, LeaveSubgraphExt};
 use example::barrier::BarrierScope;
 
 use std::rc::{Rc, try_unwrap};
@@ -112,7 +112,7 @@ fn main() {
 
 #[bench]
 fn distinct_bench(bencher: &mut Bencher) { _distinct(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
-fn _distinct_multi<C: Communicator>(communicators: Vec<C>) {
+fn _distinct_multi<C: Communicator+Send>(communicators: Vec<C>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
         guards.push(thread::Builder::new().name(format!("worker thread {}", communicator.index()))
@@ -123,7 +123,7 @@ fn _distinct_multi<C: Communicator>(communicators: Vec<C>) {
 
 // #[bench]
 // fn command_bench(bencher: &mut Bencher) { _command(ProcessCommunicator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
-fn _command_multi<C: Communicator>(communicators: Vec<C>) {
+fn _command_multi<C: Communicator+Send>(communicators: Vec<C>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
         guards.push(thread::scoped(move || _command(communicator, None)));
@@ -133,39 +133,25 @@ fn _command_multi<C: Communicator>(communicators: Vec<C>) {
 
 #[bench]
 fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
-fn _barrier_multi<C: Communicator>(communicators: Vec<C>) {
+fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
         guards.push(thread::scoped(move || _barrier(communicator, None)));
     }
 }
 
-fn _create_subgraph<G: Graph,
-                    C: Communicator,
-                    D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G,
+fn _create_subgraph<G: Graph, C: Communicator, D: Data+Hash+Eq+Debug+Columnar>(
+                                 graph: &mut G,
                                  source1: &mut Stream<G, D, C>,
-                                 source2: &mut Stream<G, D, C>,
-                                 progcaster: Progcaster<(G::Timestamp,u64)>)
+                                 source2: &mut Stream<G, D, C>)
                             -> (Stream<G, D, C>, Stream<G, D, C>) {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let mut subgraph = Rc::new(RefCell::new(graph.new_subgraph::<u64>(0, progcaster)));
+    let subgraph = Rc::new(RefCell::new(graph.new_subgraph::<u64>(0, Progcaster::new(&mut source1.allocator))));
 
-    let (sub_egress1, sub_egress2) = {
-        // create new ingress nodes, passing in a reference to the subgraph for them to use.
-        let mut sub_ingress1 = subgraph.add_input(source1);
-        let mut sub_ingress2 = subgraph.add_input(source2);
+    let sub_egress1 = source1.enter(&subgraph).distinct().leave(graph);
+    let sub_egress2 = source2.enter(&subgraph).leave(graph);
 
-        // putting a distinct'ing scope into the subgraph!
-        let mut distinct = sub_ingress1.distinct();
-
-        // egress each of the streams from the subgraph.
-        let sub_egress1 = subgraph.add_output_to_graph(&mut distinct, graph);
-        let sub_egress2 = subgraph.add_output_to_graph(&mut sub_ingress2, graph);
-
-        (sub_egress1, sub_egress2)
-    };
-
-    // sort of a mess, but the way to get the subgraph out of the Rc<RefCell<...>>.
+    // sort of a mess, but the way to get the subgraph out of the Rc<RefCell<_>>.
     // will explode if anyone else is still sitting on a reference to subgraph.
     graph.add_scope(try_unwrap(subgraph).ok().expect("hm").into_inner());
 
@@ -173,9 +159,10 @@ fn _create_subgraph<G: Graph,
 }
 
 fn _distinct<C: Communicator>(allocator: C, bencher: Option<&mut Bencher>) {
-    let allocator = Rc::new(RefCell::new(allocator));
+    let mut allocator = Rc::new(RefCell::new(allocator));
+
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph = new_graph(Progcaster::new(&mut (*allocator.borrow_mut())));
+    let mut graph = new_graph(Progcaster::new(&mut allocator));
 
     // try building some input scopes
     let (mut input1, mut stream1) = graph.new_input::<u64>(allocator.clone());
@@ -186,11 +173,9 @@ fn _distinct<C: Communicator>(allocator: C, bencher: Option<&mut Bencher>) {
     let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 100000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
-    let progcaster = Progcaster::new(&mut (*allocator.borrow_mut()));
     let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
                                                       &mut stream1.concat(&mut feedback1_output),
-                                                      &mut stream2.concat(&mut feedback2_output),
-                                                      progcaster);
+                                                      &mut stream2.concat(&mut feedback2_output));
 
     // connect feedback sources. notice that we have swapped indices ...
     feedback1.connect_input(&mut egress2);

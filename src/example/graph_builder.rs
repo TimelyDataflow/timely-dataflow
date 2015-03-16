@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use core::marker::PhantomData;
 
-use progress::{Timestamp, Graph, Scope, CountMap};
+use progress::{Timestamp, Graph, CountMap};
 use progress::subgraph::Source::{GraphInput, ScopeOutput};
 use progress::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::subgraph::Subgraph;
@@ -13,52 +13,50 @@ use example::stream::Stream;
 use communication::{Observer, Communicator};
 use communication::channels::{Data, OutputPort, ObserverHelper};
 
-pub trait GraphBoundary<G1: Graph, G2: Graph<Timestamp = (G1::Timestamp, T2)>, T2: Timestamp, C: Communicator>
-// where G2 :
-{
-    // adds an input to self, from source, contained in graph.
-    fn add_input<D:Data>(&mut self, source: &mut Stream<G1, D, C>) -> Stream<G2, D, C>;
-    fn add_output_to_graph<D:Data>(&mut self, source: &mut Stream<G2, D, C>, graph: &G1) -> Stream<G1, D, C>;
-
+pub trait EnterSubgraphExt<TOuter: Timestamp, GInner: Graph<Timestamp=(TOuter, TInner)>, TInner: Timestamp, D: Data, C: Communicator> {
+    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<TOuter, TInner>>>) -> Stream<GInner, D, C>;
 }
 
+impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> EnterSubgraphExt<GOuter::Timestamp, Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, TInner, D, C> for Stream<GOuter, D, C> {
+    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>) -> Stream<Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, D, C> {
 
-impl<GOuter: Graph, TInner: Timestamp, C: Communicator> GraphBoundary<GOuter, Self, TInner, C> for Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>> {
-    fn add_input<D: Data>(&mut self, source: &mut Stream<GOuter, D, C>) -> Stream<Self, D, C> {
-        let targets: OutputPort<(GOuter::Timestamp, TInner), D> = Default::default();
+        let targets = OutputPort::<(GOuter::Timestamp, TInner), D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
-
         let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
 
-        let mut borrow = self.borrow_mut();
-        let index = borrow.new_input(produced);
+        let scope_index = subgraph.borrow().index;
+        let input_index = subgraph.borrow_mut().new_input(produced);
 
-        source.graph.connect(source.name, ScopeInput(borrow.index, index));
-        source.add_observer(ingress);
+        self.connect_to(ScopeInput(scope_index, input_index), ingress);
 
         Stream {
-            name: GraphInput(index),
+            name: GraphInput(input_index),
             ports: targets,
-            graph: self.clone(),
-            allocator: source.allocator.clone()
+            graph: subgraph.clone(),
+            allocator: self.allocator.clone()
         }
     }
+}
 
-    fn add_output_to_graph<D: Data>(&mut self, source: &mut Stream<Self, D, C>, graph: &GOuter) -> Stream<GOuter, D, C> {
-        let mut borrow = self.borrow_mut();
-        let index = borrow.new_output();
+pub trait LeaveSubgraphExt<GOuter: Graph, D: Data, C: Communicator> {
+    fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D, C>;
+}
 
-        let targets: OutputPort<GOuter::Timestamp, D> = Default::default();
+impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> LeaveSubgraphExt<GOuter, D, C> for Stream<Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, D, C> {
+    fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D, C> {
 
-        borrow.connect(source.name, GraphOutput(index));
-        source.add_observer(EgressNub { targets: targets.clone(), phantom: PhantomData });
+        let index = self.graph.borrow_mut().new_output();
+        let targets = OutputPort::<GOuter::Timestamp, D>::new();
+
+        self.connect_to(GraphOutput(index), EgressNub { targets: targets.clone(), phantom: PhantomData });
 
         Stream {
-            name: ScopeOutput(borrow.index, index),
+            name: ScopeOutput(self.graph.borrow_mut().index, index),
             ports: targets,
             graph: graph.clone(),
-            allocator: source.allocator.clone()
+            allocator: self.allocator.clone()
         }
+
     }
 }
 

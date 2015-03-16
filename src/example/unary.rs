@@ -23,7 +23,7 @@ pub trait UnaryExt<G: Graph, D1: Data, D2: Data, C: Communicator> {
 impl<G: Graph, D1: Data, D2: Data, C: Communicator> UnaryExt<G, D1, D2, C> for Stream<G, D1, C> {
     fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2>)+'static,
              O: Observer<Time=G::Timestamp, Data=D1>+'static>(&mut self, sender: O, receiver: ExchangeReceiver<G::Timestamp, D1>, logic: L) -> Stream<G, D2, C> {
-        let targets: OutputPort<G::Timestamp,D2> = Default::default();
+        let targets = OutputPort::<G::Timestamp,D2>::new();
         let scope = UnaryScope::new(receiver, targets.clone(), logic);
         let index = self.graph.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);

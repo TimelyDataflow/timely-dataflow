@@ -1,5 +1,6 @@
 use std::mem;
 use std::sync::mpsc::Sender;
+use communication::Pushable;
 
 // TODO : Using an Observer requires a &mut reference, and should have the "No races!" property:
 // TODO : If you hold a &mut ref, no one else can call open/push/shut. Don't let go of that &mut!
