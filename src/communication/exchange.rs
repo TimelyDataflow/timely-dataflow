@@ -43,10 +43,8 @@ pub struct ExchangeReceiver<T:Timestamp, D:Data> {
     frontier:   CountMap<T>,                // retains un-claimed messages updates
 }
 
-impl<T:Timestamp, D:Data> Iterator for ExchangeReceiver<T, D> {
-    type Item = (T, Vec<D>);
-
-    fn next(&mut self) -> Option<(T, Vec<D>)> {
+impl<T:Timestamp, D:Data> Pullable<(T, Vec<D>)> for ExchangeReceiver<T, D> {
+    fn pull(&mut self) -> Option<(T, Vec<D>)> {
         let next_key = self.doubles.keys().next().map(|x| x.clone());
         if let Some(key) = next_key {
             let val = self.doubles.remove(&key).unwrap();

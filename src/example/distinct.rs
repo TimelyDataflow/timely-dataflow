@@ -5,7 +5,7 @@ use std::hash::{hash, Hash, SipHasher};
 use std::default::Default;
 
 use progress::Graph;
-use communication::Communicator;
+use communication::{Communicator, Pullable};
 use communication::channels::Data;
 use communication::exchange::exchange_with;
 use communication::observer::ObserverSessionExt;
@@ -21,7 +21,7 @@ impl<G: Graph, D: Data+Hash+Eq+Columnar, C: Communicator> DistinctExtensionTrait
         let (sender, receiver) = { exchange_with(&mut (*self.allocator.borrow_mut()), |x| hash::<_,SipHasher>(&x)) };
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         self.unary(sender, receiver, move |handle| {
-            while let Some((time, data)) = handle.input.next() {
+            while let Some((time, data)) = handle.input.pull() {
                 let set = match elements.entry(time) {
                     Occupied(x) => { x.into_mut() },
                     Vacant(x)   => { handle.notificator.notify_at(&time);
@@ -35,7 +35,6 @@ impl<G: Graph, D: Data+Hash+Eq+Columnar, C: Communicator> DistinctExtensionTrait
                 if let Some(data) = elements.remove(&time) {
                     let mut session = handle.output.session(&time);
                     for datum in &data {
-                        // println!("Sending {:?} at {:?}", datum, time);
                         session.push(datum);
                     }
                 }

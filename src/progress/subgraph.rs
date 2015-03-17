@@ -482,9 +482,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             while let Some((a, b, c, d)) = self.pointstamp_internal.pop() { self.pointstamp_internal_cm.update(&(a, b, c), d); }
             while let Some(((a, b, c), d)) = self.pointstamp_internal_cm.pop() { self.pointstamp_internal.push((a, b, c, d)); }
 
-            // println!("subgraph pointstamps exchanged:");
-            // println!("  messages: {:?}", self.pointstamp_messages);
-            // println!("  internal: {:?}", self.pointstamp_internal);
 
             let pointstamps = &mut self.pointstamps;
             for (scope, input, time, delta) in self.pointstamp_messages.drain() {

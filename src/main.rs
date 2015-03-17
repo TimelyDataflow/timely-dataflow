@@ -140,11 +140,7 @@ fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
     }
 }
 
-fn _create_subgraph<G: Graph, C: Communicator, D: Data+Hash+Eq+Debug+Columnar>(
-                                 graph: &mut G,
-                                 source1: &mut Stream<G, D, C>,
-                                 source2: &mut Stream<G, D, C>)
-                            -> (Stream<G, D, C>, Stream<G, D, C>) {
+fn _create_subgraph<G: Graph, C: Communicator, D: Data+Hash+Eq+Debug+Columnar>( graph: &mut G, source1: &mut Stream<G, D, C>, source2: &mut Stream<G, D, C>) -> (Stream<G, D, C>, Stream<G, D, C>) {
     // build up a subgraph using the concatenated inputs/feedbacks
     let subgraph = Rc::new(RefCell::new(graph.new_subgraph::<u64>(0, Progcaster::new(&mut source1.allocator))));
 
