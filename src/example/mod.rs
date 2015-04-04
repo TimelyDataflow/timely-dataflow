@@ -6,7 +6,7 @@ pub mod stream;
 pub mod barrier;
 pub mod graph_builder;
 // pub mod command;     // awaiting old_io -> io completion
-// pub mod select;
+pub mod select;
 
 pub mod distinct;
 pub mod unary;
