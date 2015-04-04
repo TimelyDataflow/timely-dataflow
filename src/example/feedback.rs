@@ -15,12 +15,12 @@ use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 
-pub trait FeedbackExtensionTrait<G: Graph, D:Data, C: Communicator> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D, C>);
+pub trait FeedbackExtensionTrait<G: Graph, D:Data> {
+    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>);
 }
 
-impl<G: Graph, D:Data, C: Communicator> FeedbackExtensionTrait<G, D, C> for Stream<G, D, C> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D, C>) {
+impl<G: Graph, D:Data> FeedbackExtensionTrait<G, D> for Stream<G, D> {
+    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>) {
 
         let targets = OutputPort::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
@@ -40,12 +40,7 @@ impl<G: Graph, D:Data, C: Communicator> FeedbackExtensionTrait<G, D, C> for Stre
             target: Some(feedback_input),
         };
 
-        let result = Stream {
-            name: ScopeOutput(index, 0),
-            ports: targets,
-            graph: self.graph.clone(),
-            allocator: self.allocator.clone(),
-        };
+        let result = self.clone_with(ScopeOutput(index, 0), targets);
 
         return (helper, result);
     }
@@ -85,7 +80,7 @@ pub struct FeedbackHelper<O: Observer> {
 }
 
 impl<O: Observer+'static> FeedbackHelper<O> where O::Time: Timestamp, O::Data : Data {
-    pub fn connect_input<G:Graph<Timestamp=O::Time>, C: Communicator>(&mut self, source: &mut Stream<G, O::Data, C>) -> () {
+    pub fn connect_input<G:Graph<Timestamp=O::Time>>(&mut self, source: &mut Stream<G, O::Data>) -> () {
         source.connect_to(ScopeInput(self.index, 0), self.target.take().unwrap());
     }
 }

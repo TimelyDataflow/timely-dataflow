@@ -5,9 +5,9 @@ use std::hash::{hash, Hash, SipHasher};
 use std::default::Default;
 
 use progress::Graph;
-use communication::{Communicator, Pullable};
+use communication::Pullable;
 use communication::channels::Data;
-use communication::exchange::exchange_with;
+use communication::exchange::{ParallelizationContract, Exchange};
 use communication::observer::ObserverSessionExt;
 use example::stream::Stream;
 use example::unary::UnaryExt;
@@ -16,11 +16,11 @@ use columnar::Columnar;
 
 pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
-impl<G: Graph, D: Data+Hash+Eq+Columnar, C: Communicator> DistinctExtensionTrait for Stream<G, D, C> {
-    fn distinct(&mut self) -> Stream<G, D, C> {
-        let (sender, receiver) = { exchange_with(&mut (*self.allocator.borrow_mut()), |x| hash::<_,SipHasher>(&x)) };
+impl<G: Graph, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for Stream<G, D> {
+    fn distinct(&mut self) -> Stream<G, D> {
+        let (sender, receiver) = Exchange::new(|x| hash::<_,SipHasher>(&x)).connect(&mut self.graph.communicator());
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
-        self.unary(sender, receiver, move |handle| {
+        self.unary(sender, receiver, format!("Distinct"), move |handle| {
             while let Some((time, data)) = handle.input.pull() {
                 let set = match elements.entry(time) {
                     Occupied(x) => { x.into_mut() },

@@ -1,6 +1,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
+use core::marker::PhantomData;
 
 use progress::Graph;
 use progress::subgraph::Source::ScopeOutput;
@@ -11,42 +12,72 @@ use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
 use communication::channels::Data;
-use communication::exchange::ExchangeReceiver;
+// use communication::exchange::ExchangeReceiver;
 use communication::channels::{OutputPort, ObserverHelper};
-use communication::{Observer, Communicator};
+use communication::{Observer, Pullable};
 
-pub trait UnaryExt<G: Graph, D1: Data, D2: Data, C: Communicator> {
-    fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2>)+'static,
-             O: Observer<Time=G::Timestamp, Data=D1>+'static>(&mut self, sender: O, receiver: ExchangeReceiver<G::Timestamp, D1>, logic: L) -> Stream<G, D2, C>;
+pub struct PullableHelper<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> {
+    receiver:   P,
+    consumed:   CountMap<T>,
+    phantom:    PhantomData<D>,
 }
 
-impl<G: Graph, D1: Data, D2: Data, C: Communicator> UnaryExt<G, D1, D2, C> for Stream<G, D1, C> {
-    fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2>)+'static,
-             O: Observer<Time=G::Timestamp, Data=D1>+'static>(&mut self, sender: O, receiver: ExchangeReceiver<G::Timestamp, D1>, logic: L) -> Stream<G, D2, C> {
+impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> Pullable<(T, Vec<D>)> for PullableHelper<T, D, P> {
+    fn pull(&mut self) -> Option<(T, Vec<D>)> {
+        if let Some((time, data)) = self.receiver.pull() {
+            if data.len() > 0 {
+                self.consumed.update(&time, data.len() as i64);
+                Some((time, data))
+            }
+            else { None }
+        }
+        else { None }
+    }
+}
+
+impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
+    pub fn pull_progress(&mut self, consumed: &mut CountMap<T>) {
+        while let Some((ref time, value)) = self.consumed.pop() { consumed.update(time, value); }
+    }
+}
+
+
+pub trait UnaryExt<G: Graph, D1: Data, D2: Data> {
+    fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P>)+'static,
+             O: Observer<Time=G::Timestamp, Data=D1>+'static,
+             P: Pullable<(G::Timestamp, Vec<D1>)>>(&mut self, sender: O, receiver: P, name: String, logic: L) -> Stream<G, D2>;
+}
+
+impl<G: Graph, D1: Data, D2: Data> UnaryExt<G, D1, D2> for Stream<G, D1> {
+    fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P>)+'static,
+             O: Observer<Time=G::Timestamp, Data=D1>+'static,
+             P: Pullable<(G::Timestamp, Vec<D1>)>+'static>(&mut self, sender: O, receiver: P, name: String, logic: L) -> Stream<G, D2> {
         let targets = OutputPort::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets.clone(), logic);
+        let scope = UnaryScope::new(receiver, targets.clone(), name, logic);
         let index = self.graph.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
         self.clone_with(ScopeOutput(index, 0), targets)
     }
 }
 
-pub struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data> {
-    pub input:          ExchangeReceiver<T, D1>,
+pub struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>> {
+    pub input:          PullableHelper<T, D1, P>,
     pub output:         ObserverHelper<OutputPort<T, D2>>,
     pub notificator:    Notificator<T>,
 }
 
-pub struct UnaryScope<T: Timestamp, D1: Data, D2: Data, L: FnMut(&mut UnaryScopeHandle<T, D1, D2>)> {
-    handle:         UnaryScopeHandle<T, D1, D2>,
+pub struct UnaryScope<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut UnaryScopeHandle<T, D1, D2, P>)> {
+    name:           String,
+    handle:         UnaryScopeHandle<T, D1, D2, P>,
     logic:          L,
 }
 
-impl<T: Timestamp, D1: Data, D2: Data, L: FnMut(&mut UnaryScopeHandle<T, D1, D2>)> UnaryScope<T, D1, D2, L> {
-    pub fn new(receiver: ExchangeReceiver<T, D1>, targets: OutputPort<T, D2>, logic: L) -> UnaryScope<T, D1, D2, L> {
+impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut UnaryScopeHandle<T, D1, D2, P>)> UnaryScope<T, D1, D2, P, L> {
+    pub fn new(receiver: P, targets: OutputPort<T, D2>, name: String, logic: L) -> UnaryScope<T, D1, D2, P, L> {
         UnaryScope {
+            name: name,
             handle: UnaryScopeHandle {
-                input: receiver,
+                input: PullableHelper { receiver: receiver, consumed: CountMap::new(), phantom: PhantomData },
                 output: ObserverHelper::new(targets.clone(), Rc::new(RefCell::new(CountMap::new()))),
                 notificator: Default::default(),
             },
@@ -55,7 +86,7 @@ impl<T: Timestamp, D1: Data, D2: Data, L: FnMut(&mut UnaryScopeHandle<T, D1, D2>
     }
 }
 
-impl<T: Timestamp, D1: Data, D2: Data, L: FnMut(&mut UnaryScopeHandle<T, D1, D2>)> Scope<T> for UnaryScope<T, D1, D2, L> {
+impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut UnaryScopeHandle<T, D1, D2, P>)> Scope<T> for UnaryScope<T, D1, D2, P, L> {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
@@ -83,6 +114,6 @@ impl<T: Timestamp, D1: Data, D2: Data, L: FnMut(&mut UnaryScopeHandle<T, D1, D2>
         return false;   // no unannounced internal work
     }
 
-    fn name(&self) -> String { format!("Unary") }
+    fn name(&self) -> String { format!("{}", self.name) }
     fn notify_me(&self) -> bool { true }
 }

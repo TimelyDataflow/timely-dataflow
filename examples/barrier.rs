@@ -2,7 +2,6 @@
 #![feature(test)]
 #![feature(unsafe_destructor)]
 
-
 /* Based on src/main.rs from timely-dataflow by Frank McSherry,
 *
 * The MIT License (MIT)
@@ -59,9 +58,9 @@ fn _barrier_multi(threads: u64) {
     }
 }
 
-fn _barrier(mut allocator: Communicator, bencher: Option<&mut Bencher>) {
+fn _barrier<C: Communicator>(mut allocator: C, bencher: Option<&mut Bencher>) {
     let mut graph = new_graph(Progcaster::new(&mut allocator));
-    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000 });
+    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 
     // start things up!
@@ -70,9 +69,8 @@ fn _barrier(mut allocator: Communicator, bencher: Option<&mut Bencher>) {
     graph.borrow_mut().push_external_progress(&mut Vec::new());
 
     // spin
-    match bencher
-    {
-        Some(bencher) => bencher.iter(|| { graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
-        None          => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
+    match bencher {
+        Some(b) => b.iter(|| { graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
+        None    => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
     }
 }

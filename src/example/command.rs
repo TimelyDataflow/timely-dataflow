@@ -5,8 +5,10 @@ use std::mem::replace;
 
 use std::os::unix::prelude::AsRawFd;
 
-use std::old_io::{MemWriter, MemReader, IoErrorKind};
+// use std::old_io::{MemWriter, MemReader, IoErrorKind};
 use std::old_io::process::{Command, Process};
+
+use std::io::{Read, Write};
 
 use std::default::Default;
 use std::thread;
@@ -88,9 +90,9 @@ impl Scope<((), u64)> for CommandScope {
         }
 
         let mut reader = MemReader::new(buffer);
-        for index in range(0, internal.len()) {
+        for index in (0..internal.len()) {
             let number = reader.read_le_u64().ok().expect("1");
-            for _ in range(0, number) {
+            for _ in (0..number) {
                 let time = reader.read_le_u64().ok().expect("2");
                 let delta = reader.read_le_i64().ok().expect("3");
                 println!("Command: intializing {} : {}", time, delta);
@@ -103,7 +105,7 @@ impl Scope<((), u64)> for CommandScope {
 
     fn push_external_progress(&mut self, external: &mut Vec<CountMap<((), u64)>>) -> () {
         let mut writer = MemWriter::new();
-        for index in range(0, external.len()) {
+        for index in (0..external.len()) {
             writer.write_le_uint(external[index].len()).ok().expect("a");
             while let Some((((), time), delta)) = external[index].pop() {
             // for &(((), time), delta) in external[index].iter() {

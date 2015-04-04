@@ -5,11 +5,12 @@ use progress::count_map::CountMap;
 
 use communication::Observer;
 
+use std::any::Any;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub trait Data : Clone+Send+Debug+'static { }
-impl<T: Clone+Send+Debug+'static> Data for T { }
+pub trait Data : Clone+Send+Debug+Any { }
+impl<T: Clone+Send+Debug+Any> Data for T { }
 
 
 pub struct OutputPort<T: Timestamp, D: Data> {

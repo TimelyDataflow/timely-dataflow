@@ -13,12 +13,12 @@ use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
 
 // returns both an input scope and a stream representing its output.
-pub trait InputExtensionTrait<G: Graph, C: Communicator> {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<C>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D, C>);
+pub trait InputExtensionTrait<G: Graph> {
+    fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G, D>);
 }
 
-impl<G: Graph, C: Communicator> InputExtensionTrait<G, C> for G {
-    fn new_input<D:Data>(&mut self, allocator: Rc<RefCell<C>>) -> (InputHelper<G::Timestamp, D>, Stream<G, D, C>) {
+impl<G: Graph> InputExtensionTrait<G> for G {
+    fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G, D>) {
         let output = OutputPort::<G::Timestamp, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
@@ -28,26 +28,25 @@ impl<G: Graph, C: Communicator> InputExtensionTrait<G, C> for G {
             output:   ObserverHelper::new(output.clone(), produced.clone()),
         };
 
+        // TODO : Ask borrow_ck why it has a hard time with this
+        let borrow = self.communicator();
+        let copies = borrow.borrow().peers();
+
         let index = self.add_scope(InputScope {
             frontier: helper.frontier.clone(),
             progress: helper.progress.clone(),
             messages: produced.clone(),
-            copies:   allocator.borrow().peers(),
+            copies:   copies,
         });
 
-        return (helper, Stream {
-            name: ScopeOutput(index, 0),
-            ports: output,
-            graph: self.clone(),
-            allocator: allocator.clone()
-        });
+        return (helper, Stream::new(ScopeOutput(index, 0), output, self.clone()));
     }
 }
 
 pub struct InputScope<T:Timestamp> {
-    frontier:   Rc<RefCell<MutableAntichain<T>>>,    // times available for sending
-    progress:   Rc<RefCell<CountMap<T>>>,          // times closed since last asked
-    messages:   Rc<RefCell<CountMap<T>>>,          // messages sent since last asked
+    frontier:   Rc<RefCell<MutableAntichain<T>>>,   // times available for sending
+    progress:   Rc<RefCell<CountMap<T>>>,           // times closed since last asked
+    messages:   Rc<RefCell<CountMap<T>>>,           // messages sent since last asked
     copies:     u64,
 }
 
@@ -77,8 +76,8 @@ impl<T:Timestamp> Scope<T> for InputScope<T> {
 }
 
 pub struct InputHelper<T: Timestamp, D: Data> {
-    frontier:   Rc<RefCell<MutableAntichain<T>>>,    // times available for sending
-    progress:   Rc<RefCell<CountMap<T>>>,          // times closed since last asked
+    frontier:   Rc<RefCell<MutableAntichain<T>>>,   // times available for sending
+    progress:   Rc<RefCell<CountMap<T>>>,           // times closed since last asked
     output:     ObserverHelper<OutputPort<T, D>>,
 }
 

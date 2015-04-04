@@ -14,7 +14,7 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
         // bail if any element exceeds the candidate
         if !self.elements.iter().any(|x| element.ge(x)) {
             let mut removed = 0;
-            for index in range(0, self.elements.len()) {
+            for index in (0..self.elements.len()) {
                 let new_index = index - removed;
                 if element.lt(&self.elements[new_index]) {
                     self.elements.swap_remove(new_index);
@@ -102,7 +102,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
                         if *val == 0 {
                             // find and remove key from elements
                             let mut found_index = 0;
-                            for i in range(0, self.elements.len()) { if self.elements[i].eq(key) { found_index = i; }}
+                            for i in (0..self.elements.len()) { if self.elements[i].eq(key) { found_index = i; }}
                             self.elements.swap_remove(found_index);
 
                             action(key, -1);
@@ -139,14 +139,14 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
                 if self.elements.contains(elem) {
                     //self.elements.remove(elem);
                     let mut found_index = 0;
-                    for i in range(0, self.elements.len()) { if self.elements[i].eq(elem) { found_index = i; }}
+                    for i in (0..self.elements.len()) { if self.elements[i].eq(elem) { found_index = i; }}
                     self.elements.swap_remove(found_index);
 
                     action(elem, -1);
                 }
 
                 let mut to_remove = -1;
-                for index in range(0, self.precedents.len()) {
+                for index in (0..self.precedents.len()) {
                     if self.precedents[index].0.eq(elem) { to_remove = index; }
                 }
 
@@ -184,7 +184,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
                         if *val == 0 {
                             // find and remove key from elements
                             let mut found_index = 0;
-                            for i in range(0, self.elements.len()) { if self.elements[i].eq(key) { found_index = i; }}
+                            for i in (0..self.elements.len()) { if self.elements[i].eq(key) { found_index = i; }}
                             self.elements.swap_remove(found_index);
 
                             action(key, -1);
@@ -220,14 +220,14 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
                 // remove elem if in elements
                 if self.elements.contains(elem) {
                     let mut found_index = 0;
-                    for i in range(0, self.elements.len()) { if self.elements[i].eq(elem) { found_index = i; }}
+                    for i in (0..self.elements.len()) { if self.elements[i].eq(elem) { found_index = i; }}
                     self.elements.swap_remove(found_index);
 
                     action(elem, -1);
                 }
 
                 let mut to_remove = -1;
-                for index in range(0, self.precedents.len()) {
+                for index in (0..self.precedents.len()) {
                     if self.precedents[index].0.eq(elem) { to_remove = index; }
                 }
 

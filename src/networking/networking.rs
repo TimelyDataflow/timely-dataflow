@@ -1,6 +1,6 @@
 // use std::old_io::{TcpListener, TcpStream};
 // use std::old_io::{Acceptor, Listener, IoResult, MemReader};
-use std::old_io::timer::sleep;
+use std::thread::sleep_ms;
 use std::io::{Read, Write, Result};
 
 use std::net::{TcpListener, TcpStream};
@@ -11,7 +11,6 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use std::sync::{Arc, Future};
 use std::mem;
-use std::time::duration::Duration;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
@@ -20,7 +19,7 @@ use communication::{Pushable, BinaryCommunicator, ProcessCommunicator};
 // TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.
 // TODO : Could be moved somewhere less networking-specific.
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct MessageHeader {
     pub graph:      u64,   // graph identifier
     pub channel:    u64,   // index of channel
@@ -180,7 +179,7 @@ impl<W: Write> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
-            buffers:    range(0, targets).map(|_| Vec::new()).collect(),
+            buffers:    vec![Vec::new(); targets as usize],
             channels:   channels,
         }
     }
@@ -241,7 +240,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
     let mut senders = Vec::new();   // destinations for serialized data (to send serialized data)
 
     // for each process, if a stream exists (i.e. not local) ...
-    for index in range(0, results.len()) {
+    for index in (0..results.len()) {
         if let Some(stream) = results[index].take() {
             let (writer_channels_s, writer_channels_r) = channel();
             let (reader_channels_s, reader_channels_r) = channel();
@@ -290,7 +289,7 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<O
     for index in (0..my_index) {
         let mut connected = false;
         while !connected {
-            match TcpStream::connect(addresses[index as usize].as_slice()) {
+            match TcpStream::connect(&addresses[index as usize][..]) {
                 Ok(mut stream) => {
                     try!(stream.write_u64::<LittleEndian>(my_index));
                     results[index as usize] = Some(stream);
@@ -299,7 +298,7 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<O
                 },
                 Err(error) => {
                     println!("worker {}:\terror connecting to worker {}: {}; retrying", my_index, index, error);
-                    sleep(Duration::seconds(1));
+                    sleep_ms(1000);
                 },
             }
         }
@@ -311,7 +310,7 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<O
 // result contains connections [my_index + 1, addresses.len() - 1].
 fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..(addresses.len() - my_index as usize - 1)).map(|_| None).collect();
-    let listener = try!(TcpListener::bind(addresses[my_index as usize].as_slice()));
+    let listener = try!(TcpListener::bind(&addresses[my_index as usize][..]));
 
     for _ in (my_index as usize + 1 .. addresses.len()) {
         let mut stream = try!(listener.accept()).0;

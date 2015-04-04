@@ -13,12 +13,12 @@ use example::stream::Stream;
 use communication::{Observer, Communicator};
 use communication::channels::{Data, OutputPort, ObserverHelper};
 
-pub trait EnterSubgraphExt<TOuter: Timestamp, GInner: Graph<Timestamp=(TOuter, TInner)>, TInner: Timestamp, D: Data, C: Communicator> {
-    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<TOuter, TInner>>>) -> Stream<GInner, D, C>;
+pub trait EnterSubgraphExt<TOuter: Timestamp, GInner: Graph<Timestamp=(TOuter, TInner), Communicator=C>, TInner: Timestamp, D: Data, C: Communicator> {
+    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<TOuter, TInner>>>, communicator: &Rc<RefCell<C>>) -> Stream<GInner, D>;
 }
 
-impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> EnterSubgraphExt<GOuter::Timestamp, Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, TInner, D, C> for Stream<GOuter, D, C> {
-    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>) -> Stream<Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, D, C> {
+impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> EnterSubgraphExt<GOuter::Timestamp, (Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, Rc<RefCell<C>>), TInner, D, C> for Stream<GOuter, D> {
+    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, communicator: &Rc<RefCell<C>>) -> Stream<(Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, Rc<RefCell<C>>), D> {
 
         let targets = OutputPort::<(GOuter::Timestamp, TInner), D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
@@ -29,34 +29,23 @@ impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> EnterSubgraphEx
 
         self.connect_to(ScopeInput(scope_index, input_index), ingress);
 
-        Stream {
-            name: GraphInput(input_index),
-            ports: targets,
-            graph: subgraph.clone(),
-            allocator: self.allocator.clone()
-        }
+        Stream::new(GraphInput(input_index), targets, (subgraph.clone(), communicator.clone()))
     }
 }
 
-pub trait LeaveSubgraphExt<GOuter: Graph, D: Data, C: Communicator> {
-    fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D, C>;
+pub trait LeaveSubgraphExt<GOuter: Graph, D: Data> {
+    fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D>;
 }
 
-impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> LeaveSubgraphExt<GOuter, D, C> for Stream<Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, D, C> {
-    fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D, C> {
+impl<GOuter: Graph, TInner: Timestamp, D: Data> LeaveSubgraphExt<GOuter, D> for Stream<(Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, Rc<RefCell<GOuter::Communicator>>), D> {
+    fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D> {
 
-        let index = self.graph.borrow_mut().new_output();
+        let index = self.graph.0.borrow_mut().new_output();
         let targets = OutputPort::<GOuter::Timestamp, D>::new();
 
         self.connect_to(GraphOutput(index), EgressNub { targets: targets.clone(), phantom: PhantomData });
 
-        Stream {
-            name: ScopeOutput(self.graph.borrow_mut().index, index),
-            ports: targets,
-            graph: graph.clone(),
-            allocator: self.allocator.clone()
-        }
-
+        Stream::new(ScopeOutput(self.graph.0.borrow_mut().index, index), targets, graph.clone())
     }
 }
 

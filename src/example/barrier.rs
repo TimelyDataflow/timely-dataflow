@@ -16,9 +16,8 @@ impl Scope<((), u64)> for BarrierScope {
     fn outputs(&self) -> u64 { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<Summary<(), u64>>>>, Vec<CountMap<((), u64)>>) {
-        let mut map = CountMap::new();
-        map.update(&((), self.epoch), self.degree as i64);
-        return (vec![vec![Antichain::from_elem(Local(1))]], vec![map]);
+        return (vec![vec![Antichain::from_elem(Local(1))]],
+                vec![CountMap::new_from(&((), self.epoch), self.degree as i64)]);
     }
 
     fn push_external_progress(&mut self, external: &mut Vec<CountMap<((), u64)>>) -> () {
@@ -31,8 +30,7 @@ impl Scope<((), u64)> for BarrierScope {
 
     fn pull_internal_progress(&mut self, internal: &mut Vec<CountMap<((), u64)>>,
                                         _consumed: &mut Vec<CountMap<((), u64)>>,
-                                        _produced: &mut Vec<CountMap<((), u64)>>) -> bool
-    {
+                                        _produced: &mut Vec<CountMap<((), u64)>>) -> bool {
         if self.ready {
             internal[0].update(&((), self.epoch), -1);
 

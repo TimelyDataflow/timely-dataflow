@@ -2,7 +2,7 @@ use progress::Timestamp;
 use communication::{Communicator, Pushable, Pullable};
 use columnar::Columnar;
 
-pub type ProgressVec<T> = Vec<(u64, u64, T, i64)>;  // (scope, [in/out]port, timestamp, delta)
+pub type ProgressVec<T> = Vec<(u64, u64, T, i64)>;  // (child_scope, [in/out]port, timestamp, delta)
 
 pub struct Progcaster<T:Timestamp> {
     senders:    Vec<Box<Pushable<(ProgressVec<T>, ProgressVec<T>)>>>,

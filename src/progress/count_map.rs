@@ -40,6 +40,11 @@ impl<T:Eq+Clone+'static> CountMap<T> {
     pub fn pop(&mut self) -> Option<(T, i64)> { self.updates.pop() }
 
     pub fn new() -> CountMap<T> { CountMap { updates: Vec::new() } }
+    pub fn new_from(key: &T, val: i64) -> CountMap<T> {
+        let mut result = CountMap::new();
+        result.update(key, val);
+        return result;
+    }
 
     pub fn drain_into(&mut self, other: &mut CountMap<T>) {
         while let Some((ref key, val)) = self.updates.pop() {
