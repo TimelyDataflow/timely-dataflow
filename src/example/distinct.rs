@@ -7,7 +7,7 @@ use std::default::Default;
 use progress::Graph;
 use communication::Pullable;
 use communication::channels::Data;
-use communication::exchange::{ParallelizationContract, Exchange};
+use communication::exchange::Exchange;
 use communication::observer::ObserverSessionExt;
 use example::stream::Stream;
 use example::unary::UnaryExt;
@@ -18,9 +18,8 @@ pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
 impl<G: Graph, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for Stream<G, D> {
     fn distinct(&mut self) -> Stream<G, D> {
-        let (sender, receiver) = Exchange::new(|x| hash::<_,SipHasher>(&x)).connect(&mut self.graph.communicator());
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
-        self.unary(sender, receiver, format!("Distinct"), move |handle| {
+        self.unary(Exchange::new(|x| hash::<_,SipHasher>(&x)), format!("Distinct"), move |handle| {
             while let Some((time, data)) = handle.input.pull() {
                 let set = match elements.entry(time) {
                     Occupied(x) => { x.into_mut() },

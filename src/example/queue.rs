@@ -1,7 +1,7 @@
 use progress::Graph;
 use communication::Pullable;
 use communication::channels::Data;
-use communication::exchange::{ParallelizationContract, Pipeline};
+use communication::exchange::Pipeline;
 use communication::observer::ObserverSessionExt;
 use example::stream::Stream;
 use example::unary::UnaryExt;
@@ -12,9 +12,8 @@ pub trait QueueExtensionTrait { fn queue(&mut self) -> Self; }
 
 impl<G: Graph, D: Data+Columnar> QueueExtensionTrait for Stream<G, D> {
     fn queue(&mut self) -> Stream<G, D> {
-        let (sender, receiver) = Pipeline.connect(&mut self.graph.communicator());
         let mut temp = Vec::new();
-        self.unary(sender, receiver, format!("Queue"), move |handle| {
+        self.unary(Pipeline, format!("Queue"), move |handle| {
             while let Some((time, data)) = handle.input.pull() {
                 temp.push((time, data));
             }

@@ -11,8 +11,8 @@ use columnar::Columnar;
 
 // A ParallelizationContract transforms the output of a Communicator, a (Vec<Pushable>, Pullable), to an (Observer, Pullable)
 pub trait ParallelizationContract<T: Timestamp, D: Data> {
-    type Observer: Observer<Time=T, Data=D>;
-    type Pullable: Pullable<(T, Vec<D>)>;
+    type Observer: Observer<Time=T, Data=D>+'static;
+    type Pullable: Pullable<(T, Vec<D>)>+'static;
     fn connect<C: Communicator>(self, communicator: &mut C) -> (Self::Observer, Self::Pullable);
 }
 
