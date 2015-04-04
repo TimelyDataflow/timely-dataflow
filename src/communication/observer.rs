@@ -25,7 +25,8 @@ pub trait ObserverSessionExt : Observer {
 
 impl<O: Observer> ObserverSessionExt for O {
     #[inline(always)] fn session<'a>(&'a mut self, time: &'a <O as Observer>::Time) -> ObserverSession<'a, O> {
-        ObserverSession::new(self, time)
+        self.open(time);
+        ObserverSession { observer: self, time: time }
     }
 }
 
@@ -40,16 +41,10 @@ impl<'a, O:Observer+'a> Drop for ObserverSession<'a, O> where <O as Observer>::T
 }
 
 impl<'a, O:Observer+'a> ObserverSession<'a, O> where <O as Observer>::Time : 'a {
-    #[inline(always)] fn new(obs: &'a mut O, time: &'a O::Time) -> ObserverSession<'a, O> {
-        obs.open(time);
-        ObserverSession { observer: obs, time: time }
-    }
-    #[inline(always)] pub fn push(&mut self, data: &O::Data) {
-        self.observer.push(data);
-    }
+    #[inline(always)] pub fn push(&mut self, data: &O::Data) { self.observer.push(data); }
 }
 
-// implementation for inter-thread queues
+// implementation for intra-thread queues (a Vec<D>)
 impl<T:Clone+'static, D:Clone+'static> Observer for (Vec<D>, Rc<RefCell<Vec<(T, Vec<D>)>>>) {
     type Time = T;
     type Data = D;
