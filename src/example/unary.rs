@@ -11,9 +11,7 @@ use example::stream::Stream;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
-use communication::channels::Data;
-// use communication::exchange::ExchangeReceiver;
-use communication::channels::{OutputPort, ObserverHelper};
+use communication::channels::{Data, OutputPort, ObserverHelper};
 use communication::{Observer, Pullable};
 
 pub struct PullableHelper<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> {
