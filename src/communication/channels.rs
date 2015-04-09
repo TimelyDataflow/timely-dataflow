@@ -1,11 +1,11 @@
 use core::fmt::Debug;
+use std::any::Any;
 
 use progress::Timestamp;
 use progress::count_map::CountMap;
 
 use communication::Observer;
 
-use std::any::Any;
 use std::rc::Rc;
 use std::cell::RefCell;
 

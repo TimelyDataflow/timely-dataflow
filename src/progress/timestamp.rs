@@ -4,8 +4,8 @@ use std::any::Any;
 use std::default::Default;
 use columnar::Columnar;
 
-// TODO : Remove Copy requirement; understand Columnar requirement (for serialization at the moment)
-pub trait Timestamp: Copy+Hash+Eq+PartialOrd+PartialEq+Default+Debug+Send+Clone+Columnar+Any {
+// TODO : Change Copy requirement to Clone; understand Columnar requirement (for serialization at the moment)
+pub trait Timestamp: Copy+Hash+Eq+PartialOrd+Default+Debug+Send+Columnar+Any {
     type Summary : PathSummary<Self> + 'static;   // summarizes cumulative action of Timestamp along a path
 }
 
@@ -13,8 +13,8 @@ impl Timestamp for () { type Summary = (); }
 impl Timestamp for u64 { type Summary = u64; }
 
 // summarized reachability from one location to another.
-// TODO : Remove Copy requirement
-pub trait PathSummary<T> : 'static+Copy+Clone+Eq+PartialOrd+Debug+Default {
+// TODO : Change Copy requirement to Clone
+pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrd+Debug+Default {
     fn results_in(&self, src: &T) -> T;             // advances a timestamp
     fn followed_by(&self, other: &Self) -> Self;    // composes two summaries
 }
