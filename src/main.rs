@@ -139,8 +139,8 @@ fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G, sou
     // build up a subgraph using the concatenated inputs/feedbacks
     let subgraph = Rc::new(RefCell::new(graph.new_subgraph::<u64>()));
 
-    let sub_egress1 = source1.enter(&subgraph, &graph.communicator()).distinct().leave(graph);
-    let sub_egress2 = source2.enter(&subgraph, &graph.communicator()).leave(graph);
+    let sub_egress1 = source1.enter(&subgraph, graph.communicator()).distinct().leave(graph);
+    let sub_egress2 = source2.enter(&subgraph, graph.communicator()).leave(graph);
 
     // sort of a mess, but the way to get the subgraph out of the Rc<RefCell<_>>.
     // would be nicer to have an RAII soluction, where Streams borrow references to a Subgraph,

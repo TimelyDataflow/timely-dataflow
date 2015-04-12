@@ -14,11 +14,11 @@ use communication::{Observer, Communicator};
 use communication::channels::{Data, OutputPort, ObserverHelper};
 
 pub trait EnterSubgraphExt<TOuter: Timestamp, GInner: Graph<Timestamp=(TOuter, TInner), Communicator=C>, TInner: Timestamp, D: Data, C: Communicator> {
-    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<TOuter, TInner>>>, communicator: &C) -> Stream<GInner, D>;
+    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<TOuter, TInner>>>, communicator: C) -> Stream<GInner, D>;
 }
 
 impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator + Clone> EnterSubgraphExt<GOuter::Timestamp, (Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, C), TInner, D, C> for Stream<GOuter, D> {
-    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, communicator: &C) -> Stream<(Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, C), D> {
+    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, communicator: C) -> Stream<(Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, C), D> {
 
         let targets = OutputPort::<(GOuter::Timestamp, TInner), D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
@@ -29,7 +29,7 @@ impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator + Clone> EnterSu
 
         self.connect_to(ScopeInput(scope_index, input_index), ingress);
 
-        Stream::new(GraphInput(input_index), targets, (subgraph.clone(), communicator.clone()))
+        Stream::new(GraphInput(input_index), targets, (subgraph.clone(), communicator))
     }
 }
 
