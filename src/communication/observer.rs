@@ -1,10 +1,3 @@
-use std::mem;
-use std::sync::mpsc::Sender;
-use std::rc::Rc;
-use std::cell::RefCell;
-
-use communication::Pushable;
-
 // TODO : Using an Observer requires a &mut reference, and should have the "No races!" property:
 // TODO : If you hold a &mut ref, no one else can call open/push/shut. Don't let go of that &mut!
 // TODO : Probably a good place to insist on RAII... (see ObserverSession)
@@ -43,25 +36,6 @@ impl<'a, O:Observer+'a> Drop for ObserverSession<'a, O> where <O as Observer>::T
 impl<'a, O:Observer+'a> ObserverSession<'a, O> where <O as Observer>::Time : 'a {
     #[inline(always)] pub fn push(&mut self, data: &O::Data) { self.observer.push(data); }
 }
-
-// implementation for intra-thread queues (a Vec<D>)
-impl<T:Clone+'static, D:Clone+'static> Observer for (Vec<D>, Rc<RefCell<Vec<(T, Vec<D>)>>>) {
-    type Time = T;
-    type Data = D;
-    #[inline(always)] fn open(&mut self,_time: &T) { }
-    #[inline(always)] fn push(&mut self, data: &D) { self.0.push(data.clone()); }
-    #[inline(always)] fn shut(&mut self, time: &T) { let vec = mem::replace(&mut self.0, Vec::new()); self.1.borrow_mut().push((time.clone(), vec)); }
-}
-
-// implementation for inter-thread queues
-impl<T:Clone+Send+'static, D:Clone+Send+'static> Observer for (Vec<D>, Sender<(T, Vec<D>)>) {
-    type Time = T;
-    type Data = D;
-    #[inline(always)] fn open(&mut self,_time: &T) { }
-    #[inline(always)] fn push(&mut self, data: &D) { self.0.push(data.clone()); }
-    #[inline(always)] fn shut(&mut self, time: &T) { let vec = mem::replace(&mut self.0, Vec::new()); self.1.send((time.clone(), vec)).ok().expect("send error"); }
-}
-
 
 // an observer broadcasting to many observers
 pub struct BroadcastObserver<O: Observer> {
