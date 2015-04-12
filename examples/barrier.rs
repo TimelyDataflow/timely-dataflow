@@ -33,7 +33,6 @@ extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};
 use timely::progress::subgraph::new_graph;
-use timely::progress::broadcast::Progcaster;
 use timely::progress::scope::Scope;
 use timely::progress::graph::Graph;
 use timely::progress::subgraph::Source::ScopeOutput;
@@ -58,19 +57,22 @@ fn _barrier_multi(threads: u64) {
     }
 }
 
-fn _barrier<C: Communicator>(mut allocator: C, bencher: Option<&mut Bencher>) {
-    let mut graph = new_graph(Progcaster::new(&mut allocator));
-    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: allocator.peers(), ttl: 1000000 });
+fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
+    let mut graph = new_graph(communicator);
+
+    let peers = graph.communicator().peers();
+
+    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
     graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
 
     // start things up!
-    graph.borrow_mut().get_internal_summary();
-    graph.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
-    graph.borrow_mut().push_external_progress(&mut Vec::new());
+    graph.0.borrow_mut().get_internal_summary();
+    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
+    graph.0.borrow_mut().push_external_progress(&mut Vec::new());
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
-        None    => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
+        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
+        None    => while graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
     }
 }
