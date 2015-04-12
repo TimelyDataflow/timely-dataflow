@@ -1,5 +1,4 @@
 #![feature(test)]
-#![feature(alloc)]
 #![feature(core)]
 #![feature(std_misc)]
 #![feature(collections)]
@@ -40,7 +39,6 @@ use example::distinct::DistinctExtensionTrait;
 use example::graph_builder::{EnterSubgraphExt, LeaveSubgraphExt};
 use example::barrier::BarrierScope;
 
-use std::rc::{Rc, try_unwrap};
 use std::cell::RefCell;
 
 use std::thread;
@@ -137,20 +135,18 @@ fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
 
 fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G, source1: &mut Stream<G, D>, source2: &mut Stream<G, D>) -> (Stream<G, D>, Stream<G, D>) {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let subgraph = Rc::new(RefCell::new(graph.new_subgraph::<u64>()));
+    let mut subgraph = graph.new_subgraph::<u64>();
 
-    let sub_egress1 = source1.enter(&subgraph, graph.communicator()).distinct().leave(graph);
-    let sub_egress2 = source2.enter(&subgraph, graph.communicator()).leave(graph);
+    let (sub_egress1, sub_egress2) = {
+        let shared_subgraph = RefCell::new(&mut subgraph);
 
-    // sort of a mess, but the way to get the subgraph out of the Rc<RefCell<_>>.
-    // would be nicer to have an RAII soluction, where Streams borrow references to a Subgraph,
-    // and Rust can statically determine that all references are released because the Streams go out of scope.
-    if let Ok(scope) = try_unwrap(subgraph) {
-        graph.add_scope(scope.into_inner());
-    }
-    else {
-        panic!("still holding a reference to Rc<RefCell<Subgraph>>!");
-    }
+        (
+            source1.enter(&shared_subgraph, graph.communicator()).distinct().leave(graph),
+            source2.enter(&shared_subgraph, graph.communicator()).leave(graph)
+        )
+    };
+
+    graph.add_scope(subgraph);
 
     return (sub_egress1, sub_egress2);
 }

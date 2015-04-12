@@ -544,6 +544,32 @@ impl<TOuter: Timestamp, TInner: Timestamp, C: Communicator + Clone> Graph for (R
     }
 }
 
+// TODO : Introduce a proper struct to wrap a pair of subgraph and communicator
+impl<'a, 'b, TOuter: Timestamp, TInner: Timestamp, C: Communicator + Clone> Graph for (&'a RefCell<&'b mut Subgraph<TOuter, TInner>>, C) {
+    type Timestamp = (TOuter, TInner);
+    type Communicator = C;
+
+    fn connect(&mut self, source: Source, target: Target) { self.0.borrow_mut().connect(source, target); }
+
+    fn add_boxed_scope(&mut self, scope: Box<Scope<(TOuter, TInner)>>) -> u64 {
+        let mut borrow = self.0.borrow_mut();
+        let index = borrow.children.len() as u64;
+        borrow.children.push(ScopeWrapper::new(scope, index));
+        return index;
+    }
+
+    fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<(TOuter, TInner), T> {
+        let progcaster = Progcaster::new(&mut self.1);
+        let mut result: Subgraph<(TOuter, TInner), T> = Subgraph::new_from(progcaster);
+        result.index = self.0.borrow().children() as u64;
+        return result;
+    }
+
+    fn communicator(&self) -> C {
+        self.1.clone()
+    }
+}
+
 
 
 impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
