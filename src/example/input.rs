@@ -28,9 +28,7 @@ impl<G: Graph> InputExtensionTrait<G> for G {
             output:   ObserverHelper::new(output.clone(), produced.clone()),
         };
 
-        // TODO : Ask borrow_ck why it has a hard time with this
-        let borrow = self.communicator();
-        let copies = borrow.borrow().peers();
+        let copies = self.communicator().peers();
 
         let index = self.add_scope(InputScope {
             frontier: helper.frontier.clone(),

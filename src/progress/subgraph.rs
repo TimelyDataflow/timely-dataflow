@@ -519,7 +519,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 }
 
 // TODO : Introduce a proper struct to wrap a pair of subgraph and communicator
-impl<TOuter: Timestamp, TInner: Timestamp, C: Communicator> Graph for (Rc<RefCell<Subgraph<TOuter, TInner>>>, Rc<RefCell<C>>) {
+impl<TOuter: Timestamp, TInner: Timestamp, C: Communicator + Clone> Graph for (Rc<RefCell<Subgraph<TOuter, TInner>>>, C) {
     type Timestamp = (TOuter, TInner);
     type Communicator = C;
 
@@ -533,13 +533,13 @@ impl<TOuter: Timestamp, TInner: Timestamp, C: Communicator> Graph for (Rc<RefCel
     }
 
     fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<(TOuter, TInner), T> {
-        let progcaster = Progcaster::new(&mut (*self.1.borrow_mut()));
+        let progcaster = Progcaster::new(&mut self.1);
         let mut result: Subgraph<(TOuter, TInner), T> = Subgraph::new_from(progcaster);
         result.index = self.0.borrow().children() as u64;
         return result;
     }
 
-    fn communicator(&self) -> Rc<RefCell<C>> {
+    fn communicator(&self) -> C {
         self.1.clone()
     }
 }
