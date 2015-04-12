@@ -19,12 +19,12 @@ pub trait ParallelizationContract<T: Timestamp, D: Data> {
 // direct connection
 pub struct Pipeline;
 impl<T: Timestamp, D: Data> ParallelizationContract<T, D> for Pipeline {
-    type Observer = (Vec<D>, Rc<RefCell<Vec<(T, Vec<D>)>>>);
+    type Observer = PushableObserver<T, D, Rc<RefCell<Vec<(T, Vec<D>)>>>>;
     type Pullable = Rc<RefCell<Vec<(T, Vec<D>)>>>;
     fn connect<C: Communicator>(self,_communicator: &mut C) -> (<Pipeline as ParallelizationContract<T, D>>::Observer,
                                                                 <Pipeline as ParallelizationContract<T, D>>::Pullable) {
         let shared = Rc::new(RefCell::new(Vec::new()));
-        return ((Vec::new(), shared.clone()), shared.clone());
+        return (PushableObserver { data: Vec::new(), pushable: shared.clone(), phantom: PhantomData }, shared);
     }
 }
 

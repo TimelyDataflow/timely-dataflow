@@ -13,12 +13,12 @@ use example::stream::Stream;
 use communication::{Observer, Communicator};
 use communication::channels::{Data, OutputPort, ObserverHelper};
 
-pub trait EnterSubgraphExt<TOuter: Timestamp, GInner: Graph<Timestamp=(TOuter, TInner), Communicator=C>, TInner: Timestamp, D: Data, C: Communicator> {
-    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<TOuter, TInner>>>, communicator: &Rc<RefCell<C>>) -> Stream<GInner, D>;
+pub trait EnterSubgraphExt<TOuter: Timestamp, TInner: Timestamp, D: Data, C: Communicator> {
+    fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut Subgraph<TOuter, TInner>>, communicator: C) -> Stream<(&'a RefCell<&'b mut Subgraph<TOuter, TInner>>, C), D>;
 }
 
-impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> EnterSubgraphExt<GOuter::Timestamp, (Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, Rc<RefCell<C>>), TInner, D, C> for Stream<GOuter, D> {
-    fn enter(&mut self, subgraph: &Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, communicator: &Rc<RefCell<C>>) -> Stream<(Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, Rc<RefCell<C>>), D> {
+impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator + Clone> EnterSubgraphExt<GOuter::Timestamp, TInner, D, C> for Stream<GOuter, D> {
+    fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut Subgraph<GOuter::Timestamp, TInner>>, communicator: C) -> Stream<(&'a RefCell<&'b mut Subgraph<GOuter::Timestamp, TInner>>, C), D> {
 
         let targets = OutputPort::<(GOuter::Timestamp, TInner), D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
@@ -29,7 +29,7 @@ impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> EnterSubgraphEx
 
         self.connect_to(ScopeInput(scope_index, input_index), ingress);
 
-        Stream::new(GraphInput(input_index), targets, (subgraph.clone(), communicator.clone()))
+        Stream::new(GraphInput(input_index), targets, (subgraph, communicator))
     }
 }
 
@@ -37,7 +37,7 @@ pub trait LeaveSubgraphExt<GOuter: Graph, D: Data> {
     fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D>;
 }
 
-impl<GOuter: Graph, TInner: Timestamp, D: Data> LeaveSubgraphExt<GOuter, D> for Stream<(Rc<RefCell<Subgraph<GOuter::Timestamp, TInner>>>, Rc<RefCell<GOuter::Communicator>>), D> {
+impl<'a, 'b, GOuter: Graph, TInner: Timestamp, D: Data> LeaveSubgraphExt<GOuter, D> for Stream<(&'a RefCell<&'b mut Subgraph<GOuter::Timestamp, TInner>>, GOuter::Communicator), D> {
     fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D> {
 
         let index = self.graph.0.borrow_mut().new_output();
