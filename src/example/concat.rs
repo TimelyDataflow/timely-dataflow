@@ -26,6 +26,26 @@ impl<G: Graph, D: Data> ConcatExtensionTrait for Stream<G, D> {
     }
 }
 
+pub trait ConcatVecExt<G: Graph, D: Data> { fn concatenate(&mut self) -> Stream<G, D>; }
+
+impl<G: Graph, D: Data> ConcatVecExt<G, D> for Vec<Stream<G, D>> {
+    fn concatenate(&mut self) -> Stream<G, D> {
+        if self.len() == 0 { panic!("must pass at least one stream to concat"); }
+
+        let outputs = OutputPort::<G::Timestamp, D>::new();
+        let mut consumed = Vec::new();
+        for _ in 0..self.len() { consumed.push(Rc::new(RefCell::new(CountMap::new()))); }
+
+        let index = self[0].graph.add_scope(ConcatScope { consumed: consumed.clone() });
+
+        for id in 0..self.len() {
+            self[id].connect_to(ScopeInput(index, id as u64), ObserverHelper::new(outputs.clone(), consumed[id].clone()));
+        }
+
+        self[0].clone_with(ScopeOutput(index, 0), outputs)
+    }
+}
+
 pub struct ConcatScope<T:Timestamp> {
     consumed:   Vec<Rc<RefCell<CountMap<T>>>>
 }
