@@ -32,8 +32,8 @@ impl<G: Graph, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for Stream<G, D>
             while let Some((time, _count)) = handle.notificator.next() {
                 if let Some(data) = elements.remove(&time) {
                     let mut session = handle.output.session(&time);
-                    for datum in &data {
-                        session.push(datum);
+                    for datum in data {
+                        session.give(datum);
                     }
                 }
             }

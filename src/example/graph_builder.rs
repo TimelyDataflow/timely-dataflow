@@ -57,8 +57,9 @@ pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
 impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<TOuter, TInner, TData> {
     type Time = TOuter;
     type Data = TData;
-    #[inline(always)] fn push(&mut self, data: &TData) { self.targets.push(data); }
     #[inline(always)] fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(time.clone(), Default::default())); }
+    #[inline(always)] fn show(&mut self, data: &TData) { self.targets.show(data); }
+    #[inline(always)] fn give(&mut self, data:  TData) { self.targets.give(data); }
     #[inline(always)] fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(time.clone(), Default::default())); }
 }
 
@@ -73,6 +74,7 @@ where TOuter: Timestamp, TInner: Timestamp, TData: Data {
     type Time = (TOuter, TInner);
     type Data = TData;
     #[inline(always)] fn open(&mut self, time: &(TOuter, TInner)) { self.targets.open(&time.0); }
-    #[inline(always)] fn push(&mut self, data: &TData) { self.targets.push(data); }
+    #[inline(always)] fn show(&mut self, data: &TData) { self.targets.show(data); }
+    #[inline(always)] fn give(&mut self, data:  TData) { self.targets.give(data); }
     #[inline(always)] fn shut(&mut self, time: &(TOuter, TInner)) { self.targets.shut(&time.0); }
 }

@@ -18,7 +18,7 @@ impl<G: Graph, D1: Data, D2: Data> SelectExt<G, D1, D2> for Stream<G, D1> {
             while let Some((time, data)) = handle.input.pull() {
                 let mut session = handle.output.session(&time);
                 for datum in data {
-                    session.push(&logic(datum));
+                    session.give(logic(datum));
                 }
             }
         })

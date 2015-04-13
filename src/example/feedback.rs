@@ -68,7 +68,8 @@ impl<G: Graph, D: Data> Observer for FeedbackObserver<G, D> {
         // println!("active: {}", self.active);
         if self.active { self.targets.open(&self.summary.results_in(time)); }
     }
-    #[inline(always)] fn push(&mut self, data: &D) { if self.active { self.targets.push(data); } }
+    #[inline(always)] fn show(&mut self, data: &D) { if self.active { self.targets.show(data); } }
+    #[inline(always)] fn give(&mut self, data:  D) { if self.active { self.targets.give(data); } }
     #[inline(always)] fn shut(&mut self, time: &G::Timestamp) { if self.active { self.targets.shut(&self.summary.results_in(time)); } }
 }
 

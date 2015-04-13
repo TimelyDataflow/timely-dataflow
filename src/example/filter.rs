@@ -19,7 +19,7 @@ impl<G: Graph, D: Data> FilterExt<D> for Stream<G, D> {
                 let mut session = handle.output.session(&time);
                 for datum in data {
                     if logic(&datum) {
-                        session.push(&datum);
+                        session.give(datum);
                     }
                 }
             }

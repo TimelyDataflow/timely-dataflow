@@ -7,7 +7,7 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use core::marker::PhantomData;
 
 use columnar::{Columnar, ColumnarStack};
-use communication::{Observer, Pushable, Pullable};
+use communication::{Pushable, Pullable};
 use networking::networking::MessageHeader;
 use std::default::Default;
 

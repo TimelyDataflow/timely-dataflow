@@ -82,7 +82,7 @@ pub struct InputHelper<T: Timestamp, D: Data> {
 impl<T:Timestamp, D: Data> InputHelper<T, D> {
     pub fn send_messages(&mut self, time: &T, data: Vec<D>) {
         self.output.open(time);
-        for datum in data.into_iter() { self.output.push(&datum); }
+        for datum in data.into_iter() { self.output.give(datum); }
         self.output.shut(time);
     }
 

@@ -20,7 +20,7 @@ impl<G: Graph, D: Data+Columnar> QueueExtensionTrait for Stream<G, D> {
 
             while let Some((time, data)) = temp.pop() {
                 let mut session = handle.output.session(&time);
-                for datum in &data { session.push(datum); }
+                for datum in data { session.give(datum); }
             }
         })
     }

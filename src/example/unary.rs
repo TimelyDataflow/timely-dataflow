@@ -44,16 +44,12 @@ impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
 pub trait UnaryExt<G: Graph, D1: Data, D2: Data> {
     fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            //  O: Observer<Time=G::Timestamp, Data=D1>+'static,
-            //  P: Pullable<(G::Timestamp, Vec<D1>)>>(&mut self, sender: O, receiver: P,
             (&mut self, pact: P, name: String, logic: L) -> Stream<G, D2>;
 }
 
 impl<G: Graph, D1: Data, D2: Data> UnaryExt<G, D1, D2> for Stream<G, D1> {
     fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            //  O: Observer<Time=G::Timestamp, Data=D1>+'static,
-            //  P: Pullable<(G::Timestamp, Vec<D1>)>+'static>
              (&mut self, pact: P, name: String, logic: L) -> Stream<G, D2> {
         let (sender, receiver) = pact.connect(&mut self.graph.communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
@@ -82,7 +78,7 @@ impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut 
             name: name,
             handle: UnaryScopeHandle {
                 input:       PullableHelper { receiver: receiver, consumed: CountMap::new(), phantom: PhantomData },
-                output:      ObserverHelper::new(targets.clone(), Rc::new(RefCell::new(CountMap::new()))),
+                output:      ObserverHelper::new(targets, Rc::new(RefCell::new(CountMap::new()))),
                 notificator: Default::default(),
             },
             logic: logic,
@@ -90,7 +86,11 @@ impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut 
     }
 }
 
-impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut UnaryScopeHandle<T, D1, D2, P>)> Scope<T> for UnaryScope<T, D1, D2, P, L> {
+impl<T, D1, D2, P, L> Scope<T> for UnaryScope<T, D1, D2, P, L> 
+where T: Timestamp,
+      D1: Data, D2: Data,
+      P: Pullable<(T, Vec<D1>)>,
+      L: FnMut(&mut UnaryScopeHandle<T, D1, D2, P>) {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 

@@ -32,7 +32,8 @@ impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for Pushable
     type Time = T;
     type Data = D;
     #[inline(always)] fn open(&mut self,_time: &T) { }
-    #[inline(always)] fn push(&mut self, data: &D) { self.data.push(data.clone()); }
+    #[inline(always)] fn show(&mut self, data: &D) { self.give(data.clone()); }
+    #[inline(always)] fn give(&mut self, data:  D) { self.data.push(data); }
     #[inline(always)] fn shut(&mut self, time: &T) {
         if self.data.len() > 0 {
             self.pushable.push((time.clone(), mem::replace(&mut self.data, Vec::new())));
