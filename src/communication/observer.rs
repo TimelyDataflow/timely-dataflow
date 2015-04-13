@@ -18,10 +18,8 @@ pub trait Observer {
 // extension trait for creating an RAII observer session from any observer
 pub trait ObserverSessionExt : Observer {
     fn session<'a>(&'a mut self, time: &'a Self::Time) -> ObserverSession<'a, Self>;
-    // TODO : Rust doesn't like this; "can't find show()/give()", so probably some type constraints not met?
-    // TODO : All those lifetime bounds are just things I put in to try to help, not actually clearly important.
-    fn show_at<'a, I: Iterator<Item=&'a Self::Data>>(&'a mut self, time: &'a Self::Time, iter: I) where Self: 'a, Self::Time : 'a;
-    fn give_at<'a, I: Iterator<Item=Self::Data>>(&'a mut self, time: &'a Self::Time, iter: I) where Self: 'a, Self::Time : 'a;
+    fn show_at<'a, I: Iterator<Item=&'a Self::Data>>(&mut self, time: &Self::Time, iter: I) where Self::Data: 'a;
+    fn give_at<I: Iterator<Item=Self::Data>>(&mut self, time: &Self::Time, iter: I);
 }
 
 impl<O: Observer> ObserverSessionExt for O {
@@ -29,13 +27,15 @@ impl<O: Observer> ObserverSessionExt for O {
         self.open(time);
         ObserverSession { observer: self, time: time }
     }
-    fn show_at<'a, I: Iterator<Item=&'a O::Data>>(&'a mut self, time: &'a O::Time, iter: I) where Self: 'a, O::Time : 'a, O::Data: 'a {
-        let mut session = self.session(time);
-        for item in iter { session.show(item); }
+    fn show_at<'a, I: Iterator<Item=&'a O::Data>>(&mut self, time: &O::Time, iter: I) where O::Data: 'a {
+        self.open(time);
+        for item in iter { self.show(item); }
+        self.shut(time);
     }
-    fn give_at<'a, I: Iterator<Item=O::Data>>(&'a mut self, time: &'a O::Time, iter: I) where O: 'a, O::Time : 'a {
-        let mut session = self.session(time);
-        for item in iter { session.give(item); }
+    fn give_at<I: Iterator<Item=O::Data>>(&mut self, time: &O::Time, iter: I) {
+        self.open(time);
+        for item in iter { self.give(item); }
+        self.shut(time);
     }}
 
 // Attempt at RAII for observers. Intended to prevent mis-sequencing of open/push/shut.
