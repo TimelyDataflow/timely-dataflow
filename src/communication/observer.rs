@@ -10,42 +10,45 @@ pub trait Observer {
     type Time;
     type Data;
     fn open(&mut self, time: &Self::Time);   // new punctuation, essentially ...
-    fn show(&mut self, data: &Self::Data);   // reveals data to the observer.
+    fn show(&mut self, data: &Self::Data);   // shows data to the observer.
     fn give(&mut self, data:  Self::Data);   // gives data to the observer.
     fn shut(&mut self, time: &Self::Time);   // indicates that we are done for now.
 }
 
 // extension trait for creating an RAII observer session from any observer
 pub trait ObserverSessionExt : Observer {
-    fn session<'a>(&'a mut self, time: &'a <Self as Observer>::Time) -> ObserverSession<'a, Self>;
-    // TODO : Rust doesn't like this; "can't find push()", so probably some type constraints not met?
-    // TODO : All those lifetime bounds are just things I put in to help, not actually clearly important.
-    // fn send_at<'a, I: Iterator<Item=<Self as Observer>::Data>>(&'a mut self, time: &'a <Self as Observer>::Time, iter: I) where Self: 'a {
-    //     let session = self.session(time);
-    //     for item in iter {
-    //         session.push(&item);
-    //     }
-    // }
+    fn session<'a>(&'a mut self, time: &'a Self::Time) -> ObserverSession<'a, Self>;
+    // TODO : Rust doesn't like this; "can't find show()/give()", so probably some type constraints not met?
+    // TODO : All those lifetime bounds are just things I put in to try to help, not actually clearly important.
+    fn show_at<'a, I: Iterator<Item=&'a Self::Data>>(&'a mut self, time: &'a Self::Time, iter: I) where Self: 'a, Self::Time : 'a;
+    fn give_at<'a, I: Iterator<Item=Self::Data>>(&'a mut self, time: &'a Self::Time, iter: I) where Self: 'a, Self::Time : 'a;
 }
 
 impl<O: Observer> ObserverSessionExt for O {
-    #[inline(always)] fn session<'a>(&'a mut self, time: &'a <O as Observer>::Time) -> ObserverSession<'a, O> {
+    #[inline(always)] fn session<'a>(&'a mut self, time: &'a O::Time) -> ObserverSession<'a, O> {
         self.open(time);
         ObserverSession { observer: self, time: time }
     }
-}
+    fn show_at<'a, I: Iterator<Item=&'a O::Data>>(&'a mut self, time: &'a O::Time, iter: I) where Self: 'a, O::Time : 'a, O::Data: 'a {
+        let mut session = self.session(time);
+        for item in iter { session.show(item); }
+    }
+    fn give_at<'a, I: Iterator<Item=O::Data>>(&'a mut self, time: &'a O::Time, iter: I) where O: 'a, O::Time : 'a {
+        let mut session = self.session(time);
+        for item in iter { session.give(item); }
+    }}
 
 // Attempt at RAII for observers. Intended to prevent mis-sequencing of open/push/shut.
-pub struct ObserverSession<'a, O:Observer+'a> where <O as Observer>::Time: 'a {
+pub struct ObserverSession<'a, O:Observer+'a> where O::Time: 'a {
     observer:   &'a mut O,
     time:       &'a O::Time,
 }
 
-impl<'a, O:Observer+'a> Drop for ObserverSession<'a, O> where <O as Observer>::Time: 'a {
+impl<'a, O:Observer> Drop for ObserverSession<'a, O> where O::Time: 'a {
     #[inline(always)] fn drop(&mut self) { self.observer.shut(self.time); }
 }
 
-impl<'a, O:Observer+'a> ObserverSession<'a, O> where <O as Observer>::Time : 'a {
+impl<'a, O:Observer> ObserverSession<'a, O> where O::Time: 'a {
     #[inline(always)] pub fn show(&mut self, data: &O::Data) { self.observer.show(data); }
     #[inline(always)] pub fn give(&mut self, data:  O::Data) { self.observer.give(data); }
 }
@@ -92,7 +95,6 @@ impl<O: Observer> Observer for BroadcastObserver<O> {
             let last = self.observers.len() - 1;
             self.observers[last].give(data);
         }
-        // for observer in self.observers.iter_mut() { observer.show(&data); }
     }
     #[inline(always)] fn shut(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.shut(time); } }
 }
