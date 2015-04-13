@@ -35,6 +35,7 @@ impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> Pullable<(T, Vec<D>)> for Pu
 }
 
 impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
+    pub fn new(input: P) -> PullableHelper<T, D, P> { PullableHelper { receiver: input, consumed: CountMap::new(), phantom: PhantomData }}
     pub fn pull_progress(&mut self, consumed: &mut CountMap<T>) {
         while let Some((ref time, value)) = self.consumed.pop() { consumed.update(time, value); }
     }
@@ -77,7 +78,7 @@ impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut 
         UnaryScope {
             name: name,
             handle: UnaryScopeHandle {
-                input:       PullableHelper { receiver: receiver, consumed: CountMap::new(), phantom: PhantomData },
+                input:       PullableHelper::new(receiver),
                 output:      ObserverHelper::new(targets, Rc::new(RefCell::new(CountMap::new()))),
                 notificator: Default::default(),
             },
@@ -86,7 +87,7 @@ impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut 
     }
 }
 
-impl<T, D1, D2, P, L> Scope<T> for UnaryScope<T, D1, D2, P, L> 
+impl<T, D1, D2, P, L> Scope<T> for UnaryScope<T, D1, D2, P, L>
 where T: Timestamp,
       D1: Data, D2: Data,
       P: Pullable<(T, Vec<D1>)>,
