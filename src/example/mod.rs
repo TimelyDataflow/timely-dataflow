@@ -11,3 +11,4 @@ pub mod filter;
 
 pub mod distinct;
 pub mod unary;
+pub mod partition;
