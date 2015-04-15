@@ -1,7 +1,6 @@
 use progress::Timestamp;
 use progress::frontier::MutableAntichain;
 use progress::count_map::CountMap;
-// use std::vec::Drain;
 
 #[derive(Default)]
 pub struct Notificator<T: Timestamp> {
@@ -14,7 +13,6 @@ pub struct Notificator<T: Timestamp> {
 
 impl<T: Timestamp> Notificator<T> {
     pub fn update_frontier_from_cm(&mut self, count_map: &mut CountMap<T>) {
-        // println!("notificator update: {:?}", count_map);
         while let Some((ref time, delta)) = count_map.pop() {
             self.frontier.update(time, delta);
         }
@@ -34,13 +32,17 @@ impl<T: Timestamp> Notificator<T> {
 
     pub fn notify_at(&mut self, time: &T) {
         self.changes.update(time, 1);
-        if self.frontier.le(time) {
-            self.pending.update(time, 1);
-        }
-        else {
+        self.pending.update(time, 1);
+
+        if !self.frontier.le(time) {
+            // TODO : Technically you should be permitted to send and notify at the current notification
+            // TODO : but this would panic because we have already removed it from the frontier.
+            // TODO : A RAII capability for sending/notifying would be good, but the time is almost
+            // TODO : exactly that.
+
             // println!("notificator error? notify_at called with time not le the frontier. {:?}", time);
-            println!("notificator error? {:?} vs {:?}", time, self.frontier);
-            panic!("");
+            // println!("notificator error? {:?} vs {:?}", time, self.frontier);
+            // panic!("");
             // self.available.update(time, 1);
         }
     }

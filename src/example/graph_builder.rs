@@ -5,9 +5,10 @@ use std::cell::RefCell;
 use core::marker::PhantomData;
 
 use progress::{Timestamp, Graph, CountMap};
-use progress::subgraph::Source::{GraphInput, ScopeOutput};
-use progress::subgraph::Target::{GraphOutput, ScopeInput};
-use progress::subgraph::Subgraph;
+use progress::nested::subgraph::Source::{GraphInput, ScopeOutput};
+use progress::nested::subgraph::Target::{GraphOutput, ScopeInput};
+use progress::nested::subgraph::Subgraph;
+use progress::nested::product::Product;
 
 use example::stream::Stream;
 use communication::{Observer, Communicator};
@@ -20,7 +21,7 @@ pub trait EnterSubgraphExt<TOuter: Timestamp, TInner: Timestamp, D: Data, C: Com
 impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator + Clone> EnterSubgraphExt<GOuter::Timestamp, TInner, D, C> for Stream<GOuter, D> {
     fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut Subgraph<GOuter::Timestamp, TInner>>, communicator: C) -> Stream<(&'a RefCell<&'b mut Subgraph<GOuter::Timestamp, TInner>>, C), D> {
 
-        let targets = OutputPort::<(GOuter::Timestamp, TInner), D>::new();
+        let targets = OutputPort::<Product<GOuter::Timestamp, TInner>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
         let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
 
@@ -51,16 +52,16 @@ impl<'a, 'b, GOuter: Graph, TInner: Timestamp, D: Data> LeaveSubgraphExt<GOuter,
 
 
 pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
-    targets: ObserverHelper<OutputPort<(TOuter, TInner), TData>>,
+    targets: ObserverHelper<OutputPort<Product<TOuter, TInner>, TData>>,
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<TOuter, TInner, TData> {
     type Time = TOuter;
     type Data = TData;
-    #[inline(always)] fn open(&mut self, time: &TOuter) -> () { self.targets.open(&(time.clone(), Default::default())); }
+    #[inline(always)] fn open(&mut self, time: &TOuter) -> () { self.targets.open(&Product::new(time.clone(), Default::default())); }
     #[inline(always)] fn show(&mut self, data: &TData) { self.targets.show(data); }
     #[inline(always)] fn give(&mut self, data:  TData) { self.targets.give(data); }
-    #[inline(always)] fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&(time.clone(), Default::default())); }
+    #[inline(always)] fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&Product::new(time.clone(), Default::default())); }
 }
 
 
@@ -71,10 +72,10 @@ pub struct EgressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
 
 impl<TOuter, TInner, TData> Observer for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp, TData: Data {
-    type Time = (TOuter, TInner);
+    type Time = Product<TOuter, TInner>;
     type Data = TData;
-    #[inline(always)] fn open(&mut self, time: &(TOuter, TInner)) { self.targets.open(&time.0); }
+    #[inline(always)] fn open(&mut self, time: &Product<TOuter, TInner>) { self.targets.open(&time.outer); }
     #[inline(always)] fn show(&mut self, data: &TData) { self.targets.show(data); }
     #[inline(always)] fn give(&mut self, data:  TData) { self.targets.give(data); }
-    #[inline(always)] fn shut(&mut self, time: &(TOuter, TInner)) { self.targets.shut(&time.0); }
+    #[inline(always)] fn shut(&mut self, time: &Product<TOuter, TInner>) { self.targets.shut(&time.outer); }
 }

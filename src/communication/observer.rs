@@ -89,7 +89,7 @@ impl<O: Observer> Observer for BroadcastObserver<O> {
     #[inline(always)] fn open(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.open(time); } }
     #[inline(always)] fn show(&mut self, data: &O::Data) { for observer in self.observers.iter_mut() { observer.show(data); } }
     #[inline(always)] fn give(&mut self, data:  O::Data) {
-        // TODO : Hand ownership to the last observer
+        // Hand ownership to the last observer
         for index in (0..self.observers.len() - 1) { self.observers[index].show(&data); }
         if self.observers.len() > 0 {
             let last = self.observers.len() - 1;
@@ -139,7 +139,6 @@ impl<D, O: Observer<Data = Vec<D>>> BufferedObserver<D, O> {
     }
 }
 
-// TODO : These clones are really expensive. Hard to avoid, because we can't stash references.
 impl<D: Clone+'static, O: Observer<Data = Vec<D>>> Observer for BufferedObserver<D, O> {
     type Time = O::Time;
     type Data = D;

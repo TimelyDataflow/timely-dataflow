@@ -2,8 +2,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::{Timestamp, Graph, Scope};
-use progress::subgraph::Source::ScopeOutput;
-use progress::subgraph::Target::ScopeInput;
+use progress::nested::Source::ScopeOutput;
+use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
 use communication::channels::{Data, OutputPort, ObserverHelper};

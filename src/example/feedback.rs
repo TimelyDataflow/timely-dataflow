@@ -4,8 +4,8 @@ use std::default::Default;
 
 use progress::{Timestamp, PathSummary, Graph, Scope};
 use progress::frontier::Antichain;
-use progress::subgraph::Source::ScopeOutput;
-use progress::subgraph::Target::ScopeInput;
+use progress::nested::Source::ScopeOutput;
+use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
 use communication::Communicator;

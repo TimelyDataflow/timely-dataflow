@@ -4,8 +4,8 @@ use std::default::Default;
 use core::marker::PhantomData;
 
 use progress::Graph;
-use progress::subgraph::Source::ScopeOutput;
-use progress::subgraph::Target::ScopeInput;
+use progress::nested::subgraph::Source::ScopeOutput;
+use progress::nested::subgraph::Target::ScopeInput;
 
 use communication::exchange::ParallelizationContract;
 use example::stream::Stream;
@@ -15,13 +15,13 @@ use progress::{Timestamp, Scope, Antichain};
 use communication::channels::{Data, OutputPort, ObserverHelper};
 use communication::Pullable;
 
-pub struct PullableHelper<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> {
+pub struct PullableHelper<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> {
     receiver:   P,
     consumed:   CountMap<T>,
     phantom:    PhantomData<D>,
 }
 
-impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> Pullable<(T, Vec<D>)> for PullableHelper<T, D, P> {
+impl<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> Pullable<(T, Vec<D>)> for PullableHelper<T, D, P> {
     fn pull(&mut self) -> Option<(T, Vec<D>)> {
         if let Some((time, data)) = self.receiver.pull() {
             if data.len() > 0 {
@@ -34,6 +34,11 @@ impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> Pullable<(T, Vec<D>)> for Pu
     }
 }
 
+impl<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> Iterator for PullableHelper<T, D, P> {
+    type Item = (T, Vec<D>);
+    fn next(&mut self) -> Option<(T, Vec<D>)> { self.pull() }
+}
+
 impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
     pub fn new(input: P) -> PullableHelper<T, D, P> { PullableHelper { receiver: input, consumed: CountMap::new(), phantom: PhantomData }}
     pub fn pull_progress(&mut self, consumed: &mut CountMap<T>) {
@@ -42,14 +47,16 @@ impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
 }
 
 
-pub trait UnaryExt<G: Graph, D1: Data, D2: Data> {
-    fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
+pub trait UnaryExt<G: Graph, D1: Data> {
+    fn unary<D2: Data,
+             L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
             (&mut self, pact: P, name: String, logic: L) -> Stream<G, D2>;
 }
 
-impl<G: Graph, D1: Data, D2: Data> UnaryExt<G, D1, D2> for Stream<G, D1> {
-    fn unary<L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
+impl<G: Graph, D1: Data> UnaryExt<G, D1> for Stream<G, D1> {
+    fn unary<D2: Data,
+             L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&mut self, pact: P, name: String, logic: L) -> Stream<G, D2> {
         let (sender, receiver) = pact.connect(&mut self.graph.communicator());

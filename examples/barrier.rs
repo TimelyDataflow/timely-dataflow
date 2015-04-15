@@ -32,11 +32,11 @@ extern crate core;
 extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};
-use timely::progress::subgraph::new_graph;
+use timely::progress::nested::subgraph::new_graph;
 use timely::progress::scope::Scope;
 use timely::progress::graph::Graph;
-use timely::progress::subgraph::Source::ScopeOutput;
-use timely::progress::subgraph::Target::ScopeInput;
+use timely::progress::nested::Source::ScopeOutput;
+use timely::progress::nested::Target::ScopeInput;
 use timely::example::barrier::BarrierScope;
 
 use test::Bencher;

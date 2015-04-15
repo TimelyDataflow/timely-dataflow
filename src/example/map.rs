@@ -6,14 +6,12 @@ use communication::observer::ObserverSessionExt;
 use example::stream::Stream;
 use example::unary::UnaryExt;
 
-// a trait enabling the "select" method
-pub trait SelectExt<G: Graph, D1: Data, D2: Data> {
-    fn select<L: Fn(D1)->D2+'static>(&mut self, logic: L) -> Stream<G, D2>;
+pub trait MapExt<G: Graph, D1: Data> {
+    fn map<D2: Data, L: Fn(D1)->D2+'static>(&mut self, logic: L) -> Stream<G, D2>;
 }
 
-// implement the extension trait for Streams
-impl<G: Graph, D1: Data, D2: Data> SelectExt<G, D1, D2> for Stream<G, D1> {
-    fn select<L: Fn(D1)->D2+'static>(&mut self, logic: L) -> Stream<G, D2> {
+impl<G: Graph, D1: Data> MapExt<G, D1> for Stream<G, D1> {
+    fn map<D2: Data, L: Fn(D1)->D2+'static>(&mut self, logic: L) -> Stream<G, D2> {
         self.unary(Pipeline, format!("Select"), move |handle| {
             while let Some((time, data)) = handle.input.pull() {
                 handle.output.give_at(&time, data.into_iter().map(|x| logic(x)));

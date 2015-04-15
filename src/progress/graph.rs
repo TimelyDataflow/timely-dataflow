@@ -1,5 +1,5 @@
 use progress::{Timestamp, Scope, Subgraph};
-use progress::subgraph::{Source, Target};
+use progress::nested::{Source, Target};
 use communication::Communicator;
 
 // cloneable so that we can make some copies, let different streams call connect.

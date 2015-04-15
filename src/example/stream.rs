@@ -1,5 +1,5 @@
 use progress::Graph;
-use progress::subgraph::{Source, Target};
+use progress::nested::subgraph::{Source, Target};
 
 use communication::Observer;
 use communication::Data;

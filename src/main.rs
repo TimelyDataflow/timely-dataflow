@@ -19,10 +19,11 @@ use test::Bencher;
 use columnar::Columnar;
 
 use progress::{Graph, Scope};
-use progress::subgraph::new_graph;
-use progress::subgraph::Summary::Local;
-use progress::subgraph::Source::ScopeOutput;
-use progress::subgraph::Target::ScopeInput;
+use progress::nested::subgraph::new_graph;
+use progress::nested::Summary::Local;
+use progress::nested::Source::ScopeOutput;
+use progress::nested::Target::ScopeInput;
+use progress::nested::product::Product;
 use communication::{ThreadCommunicator, ProcessCommunicator, Communicator};
 
 use communication::channels::Data;
@@ -160,8 +161,8 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     let (mut input2, mut stream2) = graph.new_input::<u64>();
 
     // prepare some feedback edges
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(((), 1000000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(((), 1000000), Local(1));
+    let (mut feedback1, mut feedback1_output) = stream1.feedback(Product::new((), 1000000), Local(1));
+    let (mut feedback2, mut feedback2_output) = stream2.feedback(Product::new((), 1000000), Local(1));
 
     // build up a subgraph using the concatenated inputs/feedbacks
     let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
@@ -181,16 +182,16 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
 
     // move some data into the dataflow graph.
-    input1.send_messages(&((), 0), vec![1u64]);
-    input2.send_messages(&((), 0), vec![2u64]);
+    input1.send_messages(&Product::new((), 0), vec![1u64]);
+    input2.send_messages(&Product::new((), 0), vec![2u64]);
 
     // see what everyone thinks about that ...
     graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
 
-    input1.advance(&((), 0), &((), 1000000));
-    input2.advance(&((), 0), &((), 1000000));
-    input1.close_at(&((), 1000000));
-    input2.close_at(&((), 1000000));
+    input1.advance(&Product::new((), 0), &Product::new((), 1000000));
+    input2.advance(&Product::new((), 0), &Product::new((), 1000000));
+    input1.close_at(&Product::new((), 1000000));
+    input2.close_at(&Product::new((), 1000000));
 
     // spin
     match bencher {

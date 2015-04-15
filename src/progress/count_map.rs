@@ -11,7 +11,7 @@ impl<T> Default for CountMap<T> {
     fn default() -> CountMap<T> { CountMap { updates: Vec::new() } }
 }
 
-impl<T:Eq+Clone+'static> CountMap<T> {
+impl<T:Eq+Clone> CountMap<T> {
     #[inline(always)]
     pub fn update(&mut self, key: &T, val: i64) -> i64 {
         // if self.updates.len() > 100 { println!("perf: self.len() = {}", self.len()); }
