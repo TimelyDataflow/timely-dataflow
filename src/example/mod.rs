@@ -1,6 +1,7 @@
 pub use self::stream::Stream;
 pub use self::input::InputExtensionTrait;
 pub use self::map::MapExt;
+pub use self::flat_map::FlatMapExt;
 pub use self::filter::FilterExt;
 pub use self::concat::{ConcatVecExt, ConcatExt};
 pub use self::feedback::FeedbackExt;

@@ -16,6 +16,8 @@ impl<T: Timestamp> Notificator<T> {
         while let Some((ref time, delta)) = count_map.pop() {
             self.frontier.update(time, delta);
         }
+        // TODO : CRITICAL that we only mark as available the times in the frontier + pending
+        // TODO : Not clear where this logic goes (here, on in the iterator; probably there).
         for pend in self.pending.elements.iter() {
             if !self.frontier.le(pend) {
                 if let Some(val) = self.pending.count(pend) {
@@ -57,6 +59,8 @@ impl<T: Timestamp> Notificator<T> {
 // TODO : This prevents notify_at mid-iteration
 impl<T: Timestamp> Iterator for Notificator<T> {
     type Item = (T, i64);
+    // TODO : CRITICAL that this method only return the leading edge of times,
+    // TODO : and probably good if in so doing it frees up other times.
     fn next(&mut self) -> Option<(T, i64)> {
         if let Some((time, delta)) =  self.available.pop() {
             self.changes.update(&time, -delta);

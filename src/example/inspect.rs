@@ -24,11 +24,11 @@ impl<G: Graph, D: Data> InspectExt<G, D> for Stream<G, D> {
 
 
 pub trait InspectBatchExt<G: Graph, D: Data> {
-    fn inspect<F: FnMut(&G::Timestamp, &Vec<D>)+'static>(&mut self, mut func: F) -> Self;
+    fn inspect_batch<F: FnMut(&G::Timestamp, &Vec<D>)+'static>(&mut self, mut func: F) -> Self;
 }
 
 impl<G: Graph, D: Data> InspectBatchExt<G, D> for Stream<G, D> {
-    fn inspect<F: FnMut(&G::Timestamp, &Vec<D>)+'static>(&mut self, mut func: F) -> Stream<G, D> {
+    fn inspect_batch<F: FnMut(&G::Timestamp, &Vec<D>)+'static>(&mut self, mut func: F) -> Stream<G, D> {
         self.unary(Pipeline, format!("Inspect"), move |handle| {
             while let Some((time, data)) = handle.input.pull() {
                 func(&time, &data);
