@@ -6,6 +6,7 @@ pub use self::concat::{ConcatVecExt, ConcatExt};
 pub use self::feedback::FeedbackExt;
 pub use self::graph_builder::{EnterSubgraphExt, LeaveSubgraphExt};
 pub use self::unary::UnaryExt;
+pub use self::inspect::{InspectExt, InspectBatchExt};
 
 pub mod input;
 pub mod concat;
