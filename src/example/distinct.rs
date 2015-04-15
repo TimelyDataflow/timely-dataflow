@@ -4,10 +4,8 @@ use std::hash::{hash, Hash, SipHasher};
 use std::default::Default;
 
 use progress::Graph;
-use communication::Pullable;
-use communication::channels::Data;
-use communication::exchange::Exchange;
-use communication::observer::ObserverSessionExt;
+use communication::*;
+use communication::pact::Exchange;
 use example::stream::Stream;
 use example::unary::UnaryExt;
 

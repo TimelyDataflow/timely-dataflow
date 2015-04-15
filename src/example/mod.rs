@@ -1,3 +1,12 @@
+pub use self::stream::Stream;
+pub use self::input::InputExtensionTrait;
+pub use self::map::MapExt;
+pub use self::filter::FilterExt;
+pub use self::concat::{ConcatVecExt, ConcatExt};
+pub use self::feedback::FeedbackExt;
+pub use self::graph_builder::{EnterSubgraphExt, LeaveSubgraphExt};
+pub use self::unary::UnaryExt;
+
 pub mod input;
 pub mod concat;
 pub mod feedback;
@@ -14,4 +23,3 @@ pub mod inspect;
 pub mod distinct;
 pub mod unary;
 pub mod partition;
-// pub mod iterate;     // having a hard time making usable.

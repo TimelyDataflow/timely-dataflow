@@ -30,14 +30,8 @@ use communication::channels::Data;
 use std::hash::Hash;
 use core::fmt::Debug;
 
-use example::stream::Stream;
-use example::input::InputExtensionTrait;
-use example::concat::ConcatExtensionTrait;
-use example::feedback::FeedbackExtensionTrait;
+use example::*;
 use example::distinct::DistinctExtensionTrait;
-// use example::command::CommandExtensionTrait;
-
-use example::graph_builder::{EnterSubgraphExt, LeaveSubgraphExt};
 use example::barrier::BarrierScope;
 
 use std::cell::RefCell;

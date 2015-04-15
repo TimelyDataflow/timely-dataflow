@@ -29,32 +29,26 @@ extern crate timely;
 extern crate core;
 extern crate columnar;
 
-use columnar::Columnar;
-
-use timely::communication::{Communicator, ThreadCommunicator};
-use timely::communication::channels::Data;
-use timely::progress::nested::subgraph::new_graph;
-use timely::progress::nested::Summary::Local;
-use timely::progress::scope::Scope;
-use timely::progress::graph::Graph;
-use timely::example::input::InputExtensionTrait;
-use timely::example::concat::ConcatExtensionTrait;
-use timely::example::feedback::FeedbackExtensionTrait;
-use timely::example::distinct::DistinctExtensionTrait;
-use timely::example::stream::Stream;
-use timely::example::graph_builder::{EnterSubgraphExt, LeaveSubgraphExt};
-
-use timely::progress::nested::product::Product;
-
 use core::fmt::Debug;
 
 use std::cell::RefCell;
 use std::hash::Hash;
 
+use timely::communication::{Communicator, ThreadCommunicator};
+use timely::communication::channels::Data;
+use timely::progress::nested::product::Product;
+use timely::progress::nested::subgraph::new_graph;
+use timely::progress::nested::Summary::Local;
+use timely::progress::scope::Scope;
+use timely::progress::graph::Graph;
+use timely::example::*;
+use timely::example::distinct::DistinctExtensionTrait;
+
+use columnar::Columnar;
+
 fn main() {
     _distinct(ThreadCommunicator);
 }
-
 
 fn _distinct<C: Communicator>(communicator: C) {
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.

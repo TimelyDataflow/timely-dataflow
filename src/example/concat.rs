@@ -10,9 +10,9 @@ use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
 use columnar::Columnar;
 
-pub trait ConcatExtensionTrait { fn concat(&mut self, &mut Self) -> Self; }
+pub trait ConcatExt { fn concat(&mut self, &mut Self) -> Self; }
 
-impl<G: Graph, D: Data> ConcatExtensionTrait for Stream<G, D> {
+impl<G: Graph, D: Data> ConcatExt for Stream<G, D> {
     fn concat(&mut self, other: &mut Stream<G, D>) -> Stream<G, D> {
         let outputs = OutputPort::<G::Timestamp, D>::new();
         let consumed = vec![Rc::new(RefCell::new(CountMap::new())),

@@ -6,13 +6,11 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communication::channels::{Data, OutputPort, ObserverHelper};
+use communication::*;
+use communication::pact::Pipeline;
+use communication::channels::{OutputPort, ObserverHelper};
 use example::stream::Stream;
-use communication::exchange::ParallelizationContract;
-use communication::exchange::Pipeline;
-use communication::Pullable;
 use example::unary::PullableHelper;
-use communication::observer::ObserverSessionExt;
 
 
 pub trait PartitionExt<G: Graph, D: Data, F: Fn(&D)->u64> {

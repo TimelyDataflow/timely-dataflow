@@ -15,11 +15,11 @@ use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 
-pub trait FeedbackExtensionTrait<G: Graph, D:Data> {
+pub trait FeedbackExt<G: Graph, D:Data> {
     fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>);
 }
 
-impl<G: Graph, D:Data> FeedbackExtensionTrait<G, D> for Stream<G, D> {
+impl<G: Graph, D:Data> FeedbackExt<G, D> for Stream<G, D> {
     fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>) {
 
         let targets = OutputPort::<G::Timestamp, D>::new();

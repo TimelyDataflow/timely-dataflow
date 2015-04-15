@@ -1,8 +1,6 @@
 use progress::Graph;
-use communication::Pullable;
-use communication::channels::Data;
-use communication::exchange::Pipeline;
-use communication::observer::ObserverSessionExt;
+use communication::*;
+use communication::pact::Pipeline;
 use example::stream::Stream;
 use example::unary::UnaryExt;
 

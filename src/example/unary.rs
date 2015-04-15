@@ -7,13 +7,12 @@ use progress::Graph;
 use progress::nested::subgraph::Source::ScopeOutput;
 use progress::nested::subgraph::Target::ScopeInput;
 
-use communication::exchange::ParallelizationContract;
+use communication::*;
 use example::stream::Stream;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
-use communication::channels::{Data, OutputPort, ObserverHelper};
-use communication::Pullable;
+use communication::channels::{OutputPort, ObserverHelper};
 
 pub struct PullableHelper<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> {
     receiver:   P,
