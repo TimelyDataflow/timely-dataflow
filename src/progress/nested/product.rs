@@ -21,7 +21,7 @@ impl<TOuter, TInner> Product<TOuter, TInner> {
     }
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp> PartialOrd for Product<TOuter, TInner> {
+impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInner> {
     fn partial_cmp(&self, other: &Product<TOuter, TInner>) -> Option<Ordering> {
         if let Some(cmp1) = self.outer.partial_cmp(&other.outer) {
             if let Some(cmp2) = self.inner.partial_cmp(&other.inner) {
@@ -45,6 +45,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner>
 }
 
 // columnar implementation because Product<T1, T2> : Copy.
-impl<TOuter: Timestamp+Columnar, TInner: Timestamp+Columnar> Columnar for Product<TOuter, TInner> {
+impl<TOuter: Copy+Columnar, TInner: Copy+Columnar> Columnar for Product<TOuter, TInner> {
     type Stack = Vec<Product<TOuter, TInner>>;
 }
