@@ -15,12 +15,13 @@ use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 
-pub trait FeedbackExt<G: Graph, D:Data> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>);
+pub trait FeedbackExt<'a, 'b: 'a, G: Graph+'b, D:Data> {
+    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) ->
+            (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<'a, 'b, G, D>);
 }
 
-impl<G: Graph, D:Data> FeedbackExt<G, D> for Stream<G, D> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<G, D>) {
+impl<'a, 'b: 'a, G: Graph+'b, D:Data> FeedbackExt<'a, 'b, G, D> for Stream<'a, 'b, G, D> {
+    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<'a, 'b, G, D>) {
 
         let targets = OutputPort::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
@@ -29,7 +30,7 @@ impl<G: Graph, D:Data> FeedbackExt<G, D> for Stream<G, D> {
         let feedback_output = ObserverHelper::new(targets.clone(), produced.clone());
         let feedback_input =  ObserverHelper::new(FeedbackObserver { limit: limit, summary: summary, targets: feedback_output, active: false }, consumed.clone());
 
-        let index = self.graph.add_scope(FeedbackScope {
+        let index = self.graph.borrow_mut().add_scope(FeedbackScope {
             consumed_messages:  consumed.clone(),
             produced_messages:  produced.clone(),
             summary:            summary,

@@ -13,8 +13,8 @@ use columnar::Columnar;
 
 pub trait DistinctExtensionTrait { fn distinct(&mut self) -> Self; }
 
-impl<G: Graph, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for Stream<G, D> {
-    fn distinct(&mut self) -> Stream<G, D> {
+impl<'a, 'b: 'a, G: Graph+'b, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for Stream<'a, 'b, G, D> {
+    fn distinct(&mut self) -> Stream<'a, 'b, G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         self.unary(Exchange::new(|x| hash::<_,SipHasher>(&x)), format!("Distinct"), move |handle| {
             // read input data into sets, request notifications

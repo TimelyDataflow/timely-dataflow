@@ -62,17 +62,20 @@ fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     let peers = graph.communicator().peers();
 
-    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
-    graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
+    {
+        let graph = &graph.builder();
 
+        graph.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
+        graph.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
+    }
     // start things up!
-    graph.0.borrow_mut().get_internal_summary();
-    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut []);
-    graph.0.borrow_mut().push_external_progress(&mut []);
+    graph.0.get_internal_summary();
+    graph.0.set_external_summary(Vec::new(), &mut []);
+    graph.0.push_external_progress(&mut []);
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []); }),
-        None    => while graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []) { },
+        Some(b) => b.iter(|| { graph.0.pull_internal_progress(&mut [], &mut [], &mut []); }),
+        None    => while graph.0.pull_internal_progress(&mut [], &mut [], &mut []) { },
     }
 }

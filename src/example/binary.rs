@@ -15,27 +15,27 @@ use communication::channels::{OutputPort, ObserverHelper};
 use example::unary::PullableHelper;
 
 
-pub trait BinaryExt<G: Graph, D1: Data> {
+pub trait BinaryExt<'a, 'b: 'a, G: Graph+'b, D1: Data> {
     fn binary<D2: Data, D3: Data,
              L: FnMut(&mut BinaryScopeHandle<G::Timestamp, D1, D2, D3, P1::Pullable, P2::Pullable>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-            (&mut self, &mut Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<G, D3>;
+            (&mut self, &mut Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<'a, 'b, G, D3>;
 }
 
-impl<G: Graph, D1: Data> BinaryExt<G, D1> for Stream<G, D1> {
+impl<'a, 'b: 'a, G: Graph+'b, D1: Data> BinaryExt<'a, 'b, G, D1> for Stream<'a, 'b, G, D1> {
     fn binary<
              D2: Data,
              D3: Data,
              L: FnMut(&mut BinaryScopeHandle<G::Timestamp, D1, D2, D3, P1::Pullable, P2::Pullable>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-             (&mut self, other: &mut Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<G, D3> {
-        let (sender1, receiver1) = pact1.connect(&mut self.graph.communicator());
-        let (sender2, receiver2) = pact2.connect(&mut self.graph.communicator());
+             (&mut self, other: &mut Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<'a, 'b, G, D3> {
+        let (sender1, receiver1) = pact1.connect(self.graph.borrow_mut().communicator());
+        let (sender2, receiver2) = pact2.connect(self.graph.borrow_mut().communicator());
         let targets = OutputPort::<G::Timestamp,D3>::new();
         let scope = BinaryScope::new(receiver1, receiver2, targets.clone(), name, logic);
-        let index = self.graph.add_scope(scope);
+        let index = self.graph.borrow_mut().add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender1);
         other.connect_to(ScopeInput(index, 1), sender2);
         self.clone_with(ScopeOutput(index, 0), targets)

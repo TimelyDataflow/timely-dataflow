@@ -12,13 +12,13 @@ use columnar::Columnar;
 
 pub trait ConcatExt { fn concat(&mut self, &mut Self) -> Self; }
 
-impl<G: Graph, D: Data> ConcatExt for Stream<G, D> {
-    fn concat(&mut self, other: &mut Stream<G, D>) -> Stream<G, D> {
+impl<'a, 'b: 'a, G: Graph+'b, D: Data> ConcatExt for Stream<'a, 'b, G, D> {
+    fn concat(&mut self, other: &mut Stream<G, D>) -> Stream<'a, 'b, G, D> {
         let outputs = OutputPort::<G::Timestamp, D>::new();
         let consumed = vec![Rc::new(RefCell::new(CountMap::new())),
                             Rc::new(RefCell::new(CountMap::new()))];
 
-        let index = self.graph.add_scope(ConcatScope { consumed: consumed.clone() });
+        let index = self.graph.borrow_mut().add_scope(ConcatScope { consumed: consumed.clone() });
 
         self.connect_to(ScopeInput(index, 0), ObserverHelper::new(outputs.clone(), consumed[0].clone()));
         other.connect_to(ScopeInput(index, 1), ObserverHelper::new(outputs.clone(), consumed[1].clone()));
@@ -26,17 +26,17 @@ impl<G: Graph, D: Data> ConcatExt for Stream<G, D> {
     }
 }
 
-pub trait ConcatVecExt<G: Graph, D: Data> { fn concatenate(&mut self) -> Stream<G, D>; }
+pub trait ConcatVecExt<'a, 'b: 'a, G: Graph+'b, D: Data> { fn concatenate(&mut self) -> Stream<'a, 'b, G, D>; }
 
-impl<G: Graph, D: Data> ConcatVecExt<G, D> for Vec<Stream<G, D>> {
-    fn concatenate(&mut self) -> Stream<G, D> {
+impl<'a, 'b: 'a, G: Graph+'b, D: Data> ConcatVecExt<'a, 'b, G, D> for Vec<Stream<'a, 'b, G, D>> {
+    fn concatenate(&mut self) -> Stream<'a, 'b, G, D> {
         if self.len() == 0 { panic!("must pass at least one stream to concat"); }
 
         let outputs = OutputPort::<G::Timestamp, D>::new();
         let mut consumed = Vec::new();
         for _ in 0..self.len() { consumed.push(Rc::new(RefCell::new(CountMap::new()))); }
 
-        let index = self[0].graph.add_scope(ConcatScope { consumed: consumed.clone() });
+        let index = self[0].graph.borrow_mut().add_scope(ConcatScope { consumed: consumed.clone() });
 
         for id in 0..self.len() {
             self[id].connect_to(ScopeInput(index, id as u64), ObserverHelper::new(outputs.clone(), consumed[id].clone()));

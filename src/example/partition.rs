@@ -13,19 +13,18 @@ use example::stream::Stream;
 use example::unary::PullableHelper;
 
 
-pub trait PartitionExt<G: Graph, D: Data, F: Fn(&D)->u64> {
-    fn partition(&mut self, parts: u64, func: F) -> Vec<Stream<G, D>>;
+pub trait PartitionExt<'a, 'b: 'a, G: Graph+'b, D: Data, F: Fn(&D)->u64> {
+    fn partition(&mut self, parts: u64, func: F) -> Vec<Stream<'a, 'b, G, D>>;
 }
 
-impl<G: Graph, D: Data, F: Fn(&D)->u64+'static> PartitionExt<G, D, F> for Stream<G, D> {
-    fn partition(&mut self, parts: u64, func: F) -> Vec<Stream<G, D>> {
+impl<'a, 'b: 'a, G: Graph+'b, D: Data, F: Fn(&D)->u64+'static> PartitionExt<'a, 'b, G, D, F> for Stream<'a, 'b, G, D> {
+    fn partition(&mut self, parts: u64, func: F) -> Vec<Stream<'a, 'b, G, D>> {
 
-        let (sender, receiver) = Pipeline.connect(&mut self.graph.communicator());
-        // let targets = vec![OutputPort::<G::Timestamp,D>::new(); parts as usize];
+        let (sender, receiver) = Pipeline.connect(self.graph.borrow_mut().communicator());
         let mut targets = Vec::new();
         for _ in 0..parts { targets.push(OutputPort::<G::Timestamp,D>::new()); }
         let scope = PartitionScope::new(receiver, targets.clone(), func);
-        let index = self.graph.add_scope(scope);
+        let index = self.graph.borrow_mut().add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
 
         let mut results = Vec::new();

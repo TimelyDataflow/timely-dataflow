@@ -39,29 +39,37 @@ impl<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> Iterator for PullableHelper<T, D, 
 }
 
 impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
-    pub fn new(input: P) -> PullableHelper<T, D, P> { PullableHelper { receiver: input, consumed: CountMap::new(), phantom: PhantomData }}
+    pub fn new(input: P) -> PullableHelper<T, D, P> {
+        PullableHelper {
+            receiver: input,
+            consumed: CountMap::new(),
+            phantom:  PhantomData
+        }
+    }
     pub fn pull_progress(&mut self, consumed: &mut CountMap<T>) {
-        while let Some((ref time, value)) = self.consumed.pop() { consumed.update(time, value); }
+        while let Some((ref time, value)) = self.consumed.pop() {
+            consumed.update(time, value);
+        }
     }
 }
 
 
-pub trait UnaryExt<G: Graph, D1: Data> {
+pub trait UnaryExt<'a, 'b: 'a, G: Graph+'b, D1: Data> {
     fn unary<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            (&mut self, pact: P, name: String, logic: L) -> Stream<G, D2>;
+            (&mut self, pact: P, name: String, logic: L) -> Stream<'a, 'b, G, D2>;
 }
 
-impl<G: Graph, D1: Data> UnaryExt<G, D1> for Stream<G, D1> {
+impl<'a, 'b: 'a, G: Graph+'b, D1: Data> UnaryExt<'a, 'b, G, D1> for Stream<'a, 'b, G, D1> {
     fn unary<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-             (&mut self, pact: P, name: String, logic: L) -> Stream<G, D2> {
-        let (sender, receiver) = pact.connect(&mut self.graph.communicator());
+             (&mut self, pact: P, name: String, logic: L) -> Stream<'a, 'b, G, D2> {
+        let (sender, receiver) = pact.connect(self.graph.borrow_mut().communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
         let scope = UnaryScope::new(receiver, targets.clone(), name, logic);
-        let index = self.graph.add_scope(scope);
+        let index = self.graph.borrow_mut().add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
         self.clone_with(ScopeOutput(index, 0), targets)
     }

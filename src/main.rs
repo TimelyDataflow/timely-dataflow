@@ -128,20 +128,21 @@ fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
     }
 }
 
-fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G, source1: &mut Stream<G, D>, source2: &mut Stream<G, D>) -> (Stream<G, D>, Stream<G, D>) {
+fn _create_subgraph<'a, 'b: 'a, G: Graph+'b, D: Data+Hash+Eq+Debug+Columnar>(graph: &'a RefCell<&'b mut G>, source1: &mut Stream<'a, 'b, G, D>, source2: &mut Stream<'a, 'b, G, D>) -> (Stream<'a, 'b, G, D>, Stream<'a, 'b, G, D>) {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let mut subgraph = graph.new_subgraph::<u64>();
+    let comm = graph.borrow_mut().communicator().clone();
+    let mut subgraph = (graph.borrow_mut().new_subgraph::<u64>(), comm);
 
     let (sub_egress1, sub_egress2) = {
         let shared_subgraph = RefCell::new(&mut subgraph);
 
         (
-            source1.enter(&shared_subgraph, graph.communicator()).distinct().leave(graph),
-            source2.enter(&shared_subgraph, graph.communicator()).leave(graph)
+            source1.enter(&shared_subgraph).distinct().leave(graph),
+            source2.enter(&shared_subgraph).leave(graph)
         )
     };
 
-    graph.add_scope(subgraph);
+    graph.borrow_mut().add_scope(subgraph.0);
 
     return (sub_egress1, sub_egress2);
 }
@@ -150,37 +151,43 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
     let mut graph = new_graph(communicator);
 
-    // try building some input scopes
-    let (mut input1, mut stream1) = graph.new_input::<u64>();
-    let (mut input2, mut stream2) = graph.new_input::<u64>();
+    let (mut input1, mut input2) = {
+        let graph = &graph.builder();
 
-    // prepare some feedback edges
-    let (mut feedback1, mut feedback1_output) = stream1.feedback(Product::new((), 1000000), Local(1));
-    let (mut feedback2, mut feedback2_output) = stream2.feedback(Product::new((), 1000000), Local(1));
+        // try building some input scopes
+        let (input1, mut stream1) = graph.new_input::<u64>();
+        let (input2, mut stream2) = graph.new_input::<u64>();
 
-    // build up a subgraph using the concatenated inputs/feedbacks
-    let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
-                                                      &mut stream1.concat(&mut feedback1_output),
-                                                      &mut stream2.concat(&mut feedback2_output));
+        // prepare some feedback edges
+        let (mut feedback1, mut feedback1_output) = stream1.feedback(Product::new((), 1000000), Local(1));
+        let (mut feedback2, mut feedback2_output) = stream2.feedback(Product::new((), 1000000), Local(1));
 
-    // connect feedback sources. notice that we have swapped indices ...
-    feedback1.connect_input(&mut egress2);
-    feedback2.connect_input(&mut egress1);
+        // build up a subgraph using the concatenated inputs/feedbacks
+        let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
+                                                          &mut stream1.concat(&mut feedback1_output),
+                                                          &mut stream2.concat(&mut feedback2_output));
+
+        // connect feedback sources. notice that we have swapped indices ...
+        feedback1.connect_input(&mut egress2);
+        feedback2.connect_input(&mut egress1);
+
+        (input1, input2)
+    };
 
     // finalize the graph/subgraph
-    graph.0.borrow_mut().get_internal_summary();
-    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut []);
+    graph.0.get_internal_summary();
+    graph.0.set_external_summary(Vec::new(), &mut []);
 
     // do one round of push progress, pull progress ...
-    graph.0.borrow_mut().push_external_progress(&mut []);
-    graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []);
+    graph.0.push_external_progress(&mut []);
+    graph.0.pull_internal_progress(&mut [], &mut [], &mut []);
 
     // move some data into the dataflow graph.
     input1.send_messages(&Product::new((), 0), vec![1u64]);
     input2.send_messages(&Product::new((), 0), vec![2u64]);
 
     // see what everyone thinks about that ...
-    graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []);
+    graph.0.pull_internal_progress(&mut [], &mut [], &mut []);
 
     input1.advance(&Product::new((), 0), &Product::new((), 1000000));
     input2.advance(&Product::new((), 0), &Product::new((), 1000000));
@@ -189,8 +196,8 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []); }),
-        None    => while graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []) { }
+        Some(b) => b.iter(|| { graph.0.pull_internal_progress(&mut [], &mut [], &mut []); }),
+        None    => while graph.0.pull_internal_progress(&mut [], &mut [], &mut []) { }
     }
 }
 
@@ -225,17 +232,20 @@ fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     let peers = graph.communicator().peers();
 
-    graph.add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
-    graph.connect(ScopeOutput(0, 0), ScopeInput(0, 0));
+    {
+        let graph = &graph.builder();
 
+        graph.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
+        graph.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
+    }
     // start things up!
-    graph.0.borrow_mut().get_internal_summary();
-    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut []);
-    graph.0.borrow_mut().push_external_progress(&mut []);
+    graph.0.get_internal_summary();
+    graph.0.set_external_summary(Vec::new(), &mut []);
+    graph.0.push_external_progress(&mut []);
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []); }),
-        None    => while graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []) { },
+        Some(b) => b.iter(|| { graph.0.pull_internal_progress(&mut [], &mut [], &mut []); }),
+        None    => while graph.0.pull_internal_progress(&mut [], &mut [], &mut []) { },
     }
 }

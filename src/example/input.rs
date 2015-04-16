@@ -16,12 +16,12 @@ use example::stream::Stream;
 // TODO : more like a harness, with direct access to its inputs.
 
 // returns both an input scope and a stream representing its output.
-pub trait InputExtensionTrait<G: Graph> {
-    fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G, D>);
+pub trait InputExtensionTrait<'b, G: Graph+'b> {
+    fn new_input<'a, D:Data>(&'a self) -> (InputHelper<G::Timestamp, D>, Stream<'a, 'b, G, D>) where 'b: 'a;
 }
 
-impl<G: Graph> InputExtensionTrait<G> for G {
-    fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G, D>) {
+impl<'b, G: Graph+'b> InputExtensionTrait<'b, G> for RefCell<&'b mut G> {
+    fn new_input<'a, D:Data>(&'a self) -> (InputHelper<G::Timestamp, D>, Stream<'a, 'b, G, D>) where 'b: 'a {
         let output = OutputPort::<G::Timestamp, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
@@ -31,16 +31,16 @@ impl<G: Graph> InputExtensionTrait<G> for G {
             output:   ObserverHelper::new(output.clone(), produced.clone()),
         };
 
-        let copies = self.communicator().peers();
+        let copies = self.borrow_mut().communicator().peers();
 
-        let index = self.add_scope(InputScope {
+        let index = self.borrow_mut().add_scope(InputScope {
             frontier: helper.frontier.clone(),
             progress: helper.progress.clone(),
             messages: produced.clone(),
             copies:   copies,
         });
 
-        return (helper, Stream::new(ScopeOutput(index, 0), output, self.clone()));
+        return (helper, Stream::new(ScopeOutput(index, 0), output, self));
     }
 }
 
