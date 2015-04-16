@@ -70,7 +70,7 @@ A `Scope` also receives information about the surrounding graph (which it can ig
 Once initialized, a `Scope` interacts with its parent through a narrow interface. It receives information about the external changes to capabilities on each of its inputs, and it reports to its parent internal changes to the capabilities of its outputs, as well as the numbers of messages it has consumed (on each input) and produced (on each output). The fundamental safety property that a `Scope` must obey is to report any new capabilities no later than it reports consumed messages, and to report produced messages no later than it reports retired capabilities.
 
 ```rust
-pub trait Scope<T: Timestamp> {
+pub trait Scope<T: Timestamp, S: Summary<T>> {
     fn inputs(&self) -> u64;   // number of inputs to the scope
     fn outputs(&self) -> u64;  // number of outputs from the scope
 
