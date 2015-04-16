@@ -21,7 +21,7 @@ impl Scope<Product<(), u64>> for BarrierScope {
                 vec![CountMap::new_from(&Product::new((), self.epoch), self.degree as i64)]);
     }
 
-    fn push_external_progress(&mut self, external: &mut Vec<CountMap<Product<(), u64>>>) -> () {
+    fn push_external_progress(&mut self, external: &mut [CountMap<Product<(), u64>>]) -> () {
         while let Some((time, val)) = external[0].pop() {
             if time.inner == self.epoch - 1 && val == -1 {
                 self.ready = true;
@@ -29,9 +29,9 @@ impl Scope<Product<(), u64>> for BarrierScope {
         }
     }
 
-    fn pull_internal_progress(&mut self, internal: &mut Vec<CountMap<Product<(), u64>>>,
-                                        _consumed: &mut Vec<CountMap<Product<(), u64>>>,
-                                        _produced: &mut Vec<CountMap<Product<(), u64>>>) -> bool {
+    fn pull_internal_progress(&mut self, internal: &mut [CountMap<Product<(), u64>>],
+                                        _consumed: &mut [CountMap<Product<(), u64>>],
+                                        _produced: &mut [CountMap<Product<(), u64>>]) -> bool {
         if self.ready {
             internal[0].update(&Product::new((), self.epoch), -1);
 

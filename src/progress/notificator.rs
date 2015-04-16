@@ -12,7 +12,7 @@ pub struct Notificator<T: Timestamp> {
 }
 
 impl<T: Timestamp> Notificator<T> {
-    pub fn update_frontier_from_cm(&mut self, count_map: &mut Vec<CountMap<T>>) {
+    pub fn update_frontier_from_cm(&mut self, count_map: &mut [CountMap<T>]) {
         for index in 0..count_map.len() {
             while self.frontier.len() < count_map.len() {
                 self.frontier.push(MutableAntichain::new());

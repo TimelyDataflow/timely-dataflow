@@ -103,7 +103,7 @@ impl Scope<((), u64)> for CommandScope {
         (vec![vec![Antichain::from_elem(Default::default())]], internal)
     }
 
-    fn push_external_progress(&mut self, external: &mut Vec<CountMap<((), u64)>>) -> () {
+    fn push_external_progress(&mut self, external: &mut [CountMap<((), u64)>]) -> () {
         let mut writer = MemWriter::new();
         for index in (0..external.len()) {
             writer.write_le_uint(external[index].len()).ok().expect("a");
@@ -125,9 +125,9 @@ impl Scope<((), u64)> for CommandScope {
         stdin.flush().ok().expect("flush failure");
     }
 
-    fn pull_internal_progress(&mut self,  internal: &mut Vec<CountMap<((), u64)>>,
-                                          consumed: &mut Vec<CountMap<((), u64)>>,
-                                          produced: &mut Vec<CountMap<((), u64)>>) -> bool
+    fn pull_internal_progress(&mut self,  internal: &mut [CountMap<((), u64)>],
+                                          consumed: &mut [CountMap<((), u64)>],
+                                          produced: &mut [CountMap<((), u64)>]) -> bool
     {
         let stdout = (&mut self.process.stdout).as_mut().unwrap();
 

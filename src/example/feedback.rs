@@ -103,9 +103,9 @@ impl<T:Timestamp> Scope<T> for FeedbackScope<T> {
         (vec![vec![Antichain::from_elem(self.summary)]], vec![CountMap::new()])
     }
 
-    fn pull_internal_progress(&mut self, _frontier_progress: &mut Vec<CountMap<T>>,
-                                          messages_consumed: &mut Vec<CountMap<T>>,
-                                          messages_produced: &mut Vec<CountMap<T>>) -> bool {
+    fn pull_internal_progress(&mut self, _frontier_progress: &mut [CountMap<T>],
+                                          messages_consumed: &mut [CountMap<T>],
+                                          messages_produced: &mut [CountMap<T>]) -> bool {
 
         self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
         self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);

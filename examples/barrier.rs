@@ -67,12 +67,12 @@ fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     // start things up!
     graph.0.borrow_mut().get_internal_summary();
-    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
-    graph.0.borrow_mut().push_external_progress(&mut Vec::new());
+    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut []);
+    graph.0.borrow_mut().push_external_progress(&mut []);
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
-        None    => while graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
+        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []); }),
+        None    => while graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []) { },
     }
 }
