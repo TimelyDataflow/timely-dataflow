@@ -25,7 +25,7 @@ pub trait EnterSubgraphExt<TOuter: Timestamp, TInner: Timestamp, D: Data, C: Com
     fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut (Subgraph<TOuter, TInner>, C)>) -> Stream<'a, 'b, (Subgraph<TOuter, TInner>, C), D>;
 }
 
-impl<'aa, 'bb, GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator + Clone> EnterSubgraphExt<GOuter::Timestamp, TInner, D, C> for Stream<'aa, 'bb, GOuter, D> {
+impl<'aa, 'bb, GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> EnterSubgraphExt<GOuter::Timestamp, TInner, D, C> for Stream<'aa, 'bb, GOuter, D> {
     fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut (Subgraph<GOuter::Timestamp, TInner>, C)>) -> Stream<'a, 'b, (Subgraph<GOuter::Timestamp, TInner>, C), D> {
 
         let targets = OutputPort::<Product<GOuter::Timestamp, TInner>, D>::new();
@@ -52,7 +52,7 @@ pub trait LeaveSubgraphExt<GOuter: Graph, D: Data> {
     fn leave<'a, 'b>(&mut self, graph: &'a RefCell<&'b mut GOuter>) -> Stream<'a, 'b, GOuter, D>  where 'b: 'a, GOuter: 'b ;
 }
 
-impl<'aa, 'bb, GOuter: Graph, TInner: Timestamp, D: Data> LeaveSubgraphExt<GOuter, D> for Stream<'aa, 'bb, (Subgraph<GOuter::Timestamp, TInner>, GOuter::Communicator), D> {
+impl<'aa, 'bb, 'comm,  GOuter: Graph, TInner: Timestamp, D: Data> LeaveSubgraphExt<GOuter, D> for Stream<'aa, 'bb, (Subgraph<GOuter::Timestamp, TInner>, &'comm mut GOuter::Communicator), D> where GOuter::Communicator: 'comm {
     fn leave<'a, 'b>(&mut self, graph: &'a RefCell<&'b mut GOuter>) -> Stream<'a, 'b, GOuter, D>  where 'b: 'a, GOuter: 'b  {
 
         let index = self.graph.borrow_mut().0.new_output();

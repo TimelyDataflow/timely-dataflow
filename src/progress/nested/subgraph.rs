@@ -587,9 +587,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 }
 
-pub fn new_graph<T: Timestamp, C: Communicator>(mut communicator: C) -> (Subgraph<(), T>, Rc<RefCell<C>>) {
+pub fn new_graph<T: Timestamp, C: Communicator>(mut communicator: C) -> (Subgraph<(), T>, C) {
     let progcaster = Progcaster::new(&mut communicator);
-    return (Subgraph::new_from(progcaster), Rc::new(RefCell::new(communicator)));
+    return (Subgraph::new_from(progcaster), communicator);
 }
 
 fn try_to_add_summary<S: PartialOrd+Eq+Copy+Debug>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool {

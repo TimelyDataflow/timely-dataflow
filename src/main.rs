@@ -3,6 +3,7 @@
 #![feature(std_misc)]
 #![feature(collections)]
 #![feature(hash)]
+#![feature(scoped)]
 
 #![allow(dead_code)]
 
@@ -134,24 +135,28 @@ fn _create_subgraph<'a, 'b, G, D>(graph: &'a RefCell<&'b mut G>,
                                                                           Stream<'a, 'b, G, D>)
 where 'b: 'a,
       G: Graph+'b,
-      G::Communicator: Clone,
       D: Data+Hash+Eq+Debug+Columnar {
     // build up a subgraph using the concatenated inputs/feedbacks
-    let comm = graph.borrow_mut().communicator().clone();
-    let mut subgraph = (graph.borrow_mut().new_subgraph::<u64>(), comm);
+    let mut graph_borrow = graph.borrow_mut();
 
-    let (sub_egress1, sub_egress2) = {
-        let subgraph_builder = subgraph.builder();//RefCell::new(&mut subgraph);
+    let (subscope, sub_egresses) = {
+        let mut subgraph = (graph_borrow.new_subgraph::<u64>(), graph_borrow.communicator());
 
-        (
-            source1.enter(&subgraph_builder).distinct().leave(graph),
-            source2.enter(&subgraph_builder).leave(graph)
-        )
+        let sub_egresses = {
+            let subgraph_builder = subgraph.builder();//RefCell::new(&mut subgraph);
+
+            (
+                source1.enter(&subgraph_builder).distinct().leave(graph),
+                source2.enter(&subgraph_builder).leave(graph)
+            )
+        };
+
+        (subgraph.0, sub_egresses)
     };
 
-    graph.borrow_mut().add_scope(subgraph.0);
+    graph_borrow.add_scope(subscope);
 
-    return (sub_egress1, sub_egress2);
+    sub_egresses
 }
 
 fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
