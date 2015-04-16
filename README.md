@@ -71,8 +71,8 @@ Once initialized, a `Scope` interacts with its parent through a narrow interface
 
 ```rust
 pub trait Scope<T: Timestamp> {
-    fn inputs(&self) -> uint;   // number of inputs to the scope
-    fn outputs(&self) -> uint;  // number of outputs from the scope
+    fn inputs(&self) -> u64;   // number of inputs to the scope
+    fn outputs(&self) -> u64;  // number of outputs from the scope
 
     // returns (input -> output) summaries and initial output message capabilities.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<T>>);
