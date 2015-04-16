@@ -74,17 +74,17 @@ pub trait Scope<T: Timestamp> {
     fn inputs(&self) -> uint;   // number of inputs to the scope
     fn outputs(&self) -> uint;  // number of outputs from the scope
 
-    // 1a. returns (input -> output) summaries and initial message capabilities on outputs.
+    // returns (input -> output) summaries and initial output message capabilities.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<T>>);
 
-    // 1b. receives (output -> input) summaries and initial messages capabilities on inputs.
+    // receives (output -> input) summaries and initial input messages capabilities.
     fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<S>>>,
                                        capabilities: &[CountMap<T>]) -> ();
 
-    // 2a. receives changes in the message capabilities from the external graph.
+    // receives changes in the message capabilities from the external graph.
     fn push_external_progress(&mut self, external: &mut [CountMap<T>]) -> ();
 
-    // 2b. describing changes internal to the scope, specifically:
+    // provides changes internal to the scope, specifically:
     //      * changes to messages capabilities for each output,
     //      * number of messages consumed on each input,
     //      * number of messages produced on each output.
@@ -111,4 +111,4 @@ stream.filter(|x| x.len() > 5)
       .inspect(|x| println!("observed: {}", x));
 ```
 
-Each set of extension functions acts as a new "language" on the `Stream` types, except that they are fully composable, as the functions all render down to timely dataflow logic. 
+Each set of extension functions acts as a new "language" on the `Stream` types, except that they are fully composable, as the functions all render down to timely dataflow logic.
