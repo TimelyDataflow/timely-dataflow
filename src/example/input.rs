@@ -64,9 +64,9 @@ impl<T:Timestamp> Scope<T> for InputScope<T> {
         (Vec::new(), vec![map])
     }
 
-    fn pull_internal_progress(&mut self, frontier_progress: &mut Vec<CountMap<T>>,
-                                        _messages_consumed: &mut Vec<CountMap<T>>,
-                                         messages_produced: &mut Vec<CountMap<T>>) -> bool
+    fn pull_internal_progress(&mut self, frontier_progress: &mut [CountMap<T>],
+                                        _messages_consumed: &mut [CountMap<T>],
+                                         messages_produced: &mut [CountMap<T>]) -> bool
     {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
         self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);

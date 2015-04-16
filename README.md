@@ -78,18 +78,18 @@ pub trait Scope<T: Timestamp, S: PathSummary<T>>
 
     // 1b. receives (output -> input) summaries, and initial messages capabilities on inputs.
     fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<S>>>,
-                                       frontier: &Vec<Vec<(T, i64)>>) -> ();
+                                       frontier: &[Vec<(T, i64)>]) -> ();
 
     // 2a. receives changes in the message capabilities from the external graph.
-    fn push_external_progress(&mut self, external_progress: &Vec<Vec<(T, i64)>>) -> ();
+    fn push_external_progress(&mut self, external_progress: &[Vec<(T, i64)>]) -> ();
 
     // 2b. describing changes internal to the scope, specifically:
     //      * changes to messages capabilities for each output,
     //      * number of messages consumed on each input,
     //      * number of messages produced on each output.
-    fn pull_internal_progress(&mut self, internal_progress: &mut Vec<Vec<(T, i64)>>,
-                                         messages_consumed: &mut Vec<Vec<(T, i64)>>,
-                                         messages_produced: &mut Vec<Vec<(T, i64)>>) -> ();
+    fn pull_internal_progress(&mut self, internal_progress: &mut [Vec<(T, i64)>],
+                                         messages_consumed: &mut [Vec<(T, i64)>],
+                                         messages_produced: &mut [Vec<(T, i64)>]) -> ();
 }
 ```
 

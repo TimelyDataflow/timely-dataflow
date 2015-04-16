@@ -169,18 +169,18 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     // finalize the graph/subgraph
     graph.0.borrow_mut().get_internal_summary();
-    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
+    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut []);
 
     // do one round of push progress, pull progress ...
-    graph.0.borrow_mut().push_external_progress(&mut Vec::new());
-    graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
+    graph.0.borrow_mut().push_external_progress(&mut []);
+    graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []);
 
     // move some data into the dataflow graph.
     input1.send_messages(&Product::new((), 0), vec![1u64]);
     input2.send_messages(&Product::new((), 0), vec![2u64]);
 
     // see what everyone thinks about that ...
-    graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
+    graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []);
 
     input1.advance(&Product::new((), 0), &Product::new((), 1000000));
     input2.advance(&Product::new((), 0), &Product::new((), 1000000));
@@ -189,8 +189,8 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
-        None    => while graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { }
+        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []); }),
+        None    => while graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []) { }
     }
 }
 
@@ -208,15 +208,15 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 //
 //     // start things up!
 //     graph.borrow_mut().get_internal_summary();
-//     graph.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
-//     graph.borrow_mut().push_external_progress(&mut Vec::new());
+//     graph.borrow_mut().set_external_summary(Vec::new(), &mut []);
+//     graph.borrow_mut().push_external_progress(&mut []);
 //
 //     input.0.close_at(&((), 0));
 //
 //     // spin
 //     match bencher {
-//         Some(b) => b.iter(|| { graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
-//         None    => while graph.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
+//         Some(b) => b.iter(|| { graph.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []); }),
+//         None    => while graph.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []) { },
 //     }
 // }
 
@@ -230,12 +230,12 @@ fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     // start things up!
     graph.0.borrow_mut().get_internal_summary();
-    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
-    graph.0.borrow_mut().push_external_progress(&mut Vec::new());
+    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut []);
+    graph.0.borrow_mut().push_external_progress(&mut []);
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()); }),
-        None    => while graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { },
+        Some(b) => b.iter(|| { graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []); }),
+        None    => while graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []) { },
     }
 }

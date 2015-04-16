@@ -73,18 +73,18 @@ fn _distinct<C: Communicator>(communicator: C) {
 
     // finalize the graph/subgraph
     graph.0.borrow_mut().get_internal_summary();
-    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut Vec::new());
+    graph.0.borrow_mut().set_external_summary(Vec::new(), &mut []);
 
     // do one round of push progress, pull progress ...
-    graph.0.borrow_mut().push_external_progress(&mut Vec::new());
-    graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
+    graph.0.borrow_mut().push_external_progress(&mut []);
+    graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []);
 
     // move some data into the dataflow graph.
     input1.send_messages(&Product::new((), 0), vec![1u64]);
     input2.send_messages(&Product::new((), 0), vec![2u64]);
 
     // see what everyone thinks about that ...
-    graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new());
+    graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []);
 
     input1.advance(&Product::new((), 0), &Product::new((), 1000000));
     input2.advance(&Product::new((), 0), &Product::new((), 1000000));
@@ -92,7 +92,7 @@ fn _distinct<C: Communicator>(communicator: C) {
     input2.close_at(&Product::new((), 1000000));
 
     // spin
-    while graph.0.borrow_mut().pull_internal_progress(&mut Vec::new(), &mut Vec::new(), &mut Vec::new()) { }
+    while graph.0.borrow_mut().pull_internal_progress(&mut [], &mut [], &mut []) { }
 }
 
 fn _create_subgraph<G: Graph, D: Data+Hash+Eq+Debug+Columnar>(graph: &mut G, source1: &mut Stream<G, D>, source2: &mut Stream<G, D>) -> (Stream<G, D>, Stream<G, D>) {

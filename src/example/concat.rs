@@ -55,9 +55,9 @@ impl<T:Timestamp> Scope<T> for ConcatScope<T> where <T as Columnar>::Stack: 'sta
     fn inputs(&self) -> u64 { self.consumed.len() as u64 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn pull_internal_progress(&mut self, _frontier_progress: &mut Vec<CountMap<T>>,
-                                          messages_consumed: &mut Vec<CountMap<T>>,
-                                          messages_produced: &mut Vec<CountMap<T>>) -> bool
+    fn pull_internal_progress(&mut self, _frontier_progress: &mut [CountMap<T>],
+                                          messages_consumed: &mut [CountMap<T>],
+                                          messages_produced: &mut [CountMap<T>]) -> bool
     {
         for (index, updates) in self.consumed.iter().enumerate() {
             while let Some((key, val)) = updates.borrow_mut().pop() {

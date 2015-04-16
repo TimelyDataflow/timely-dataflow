@@ -101,19 +101,19 @@ where T: Timestamp,
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut Vec<CountMap<T>>) -> () {
+    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [CountMap<T>]) -> () {
         self.handle.notificator.update_frontier_from_cm(frontier);
         frontier[0].clear();
     }
 
-    fn push_external_progress(&mut self, external: &mut Vec<CountMap<T>>) -> () {
+    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) -> () {
         self.handle.notificator.update_frontier_from_cm(external);
         external[0].clear();
     }
 
-    fn pull_internal_progress(&mut self, internal: &mut Vec<CountMap<T>>,
-                                         consumed: &mut Vec<CountMap<T>>,
-                                         produced: &mut Vec<CountMap<T>>) -> bool
+    fn pull_internal_progress(&mut self, internal: &mut [CountMap<T>],
+                                         consumed: &mut [CountMap<T>],
+                                         produced: &mut [CountMap<T>]) -> bool
     {
         (self.logic)(&mut self.handle);
 

@@ -58,9 +58,9 @@ impl<T:Timestamp, D: Data, F: Fn(&D)->u64, P: Pullable<(T, Vec<D>)>> Scope<T> fo
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { self.outputs.len() as u64 }
 
-    fn pull_internal_progress(&mut self,_internal: &mut Vec<CountMap<T>>,
-                                         consumed: &mut Vec<CountMap<T>>,
-                                         produced: &mut Vec<CountMap<T>>) -> bool {
+    fn pull_internal_progress(&mut self,_internal: &mut [CountMap<T>],
+                                         consumed: &mut [CountMap<T>],
+                                         produced: &mut [CountMap<T>]) -> bool {
 
         while let Some((time, data)) = self.input.pull() {
             let outputs = self.outputs.iter_mut();

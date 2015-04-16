@@ -143,7 +143,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
     }
 
     // receives (out -> in) summaries using only edges external to the vertex.
-    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut Vec<CountMap<TOuter>>) -> () {
+    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [CountMap<TOuter>]) -> () {
         self.external_summaries = summaries;
         self.set_summaries();
 
@@ -203,7 +203,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
     // information for the scope about progress in the outside world (updates to the input frontiers)
     // important to push this information on to subscopes.
-    fn push_external_progress(&mut self, external_progress: &mut Vec<CountMap<TOuter>>) -> () {
+    fn push_external_progress(&mut self, external_progress: &mut [CountMap<TOuter>]) -> () {
         // transform into pointstamps to use push_progress_to_target().
         for (input, progress) in external_progress.iter_mut().enumerate() {
             while let Some((time, val)) = progress.pop() {
@@ -222,9 +222,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
     }
 
     // information from the vertex about its progress (updates to the output frontiers, recv'd and sent message counts)
-    fn pull_internal_progress(&mut self, internal_progress: &mut Vec<CountMap<TOuter>>,
-                                         messages_consumed: &mut Vec<CountMap<TOuter>>,
-                                         messages_produced: &mut Vec<CountMap<TOuter>>) -> bool {
+    fn pull_internal_progress(&mut self, internal_progress: &mut [CountMap<TOuter>],
+                                         messages_consumed: &mut [CountMap<TOuter>],
+                                         messages_produced: &mut [CountMap<TOuter>]) -> bool {
         // should be false when there is nothing left to do
         let mut active = false;
 
