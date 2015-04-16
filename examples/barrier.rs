@@ -1,6 +1,7 @@
 #![feature(core)]
 #![feature(test)]
 #![feature(unsafe_destructor)]
+#![feature(scoped)]
 
 /* Based on src/main.rs from timely-dataflow by Frank McSherry,
 *

@@ -17,11 +17,11 @@ use example::stream::Stream;
 
 pub trait FeedbackExt<'b, G: Graph+'b> {
     fn feedback<'a, D:Data>(&'a self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) ->
-            (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<'a, 'b, G, D>) where 'b: 'a;
+            (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<'a, 'b, G, D>) where 'b: 'a;
 }
 
 impl<'b, G: Graph+'b> FeedbackExt<'b, G> for RefCell<&'b mut G> {
-    fn feedback<'a, D:Data>(&'a self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<'a, 'b, G, D>) where 'b : 'a {
+    fn feedback<'a, D:Data>(&'a self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<'a, 'b, G, D>) where 'b : 'a {
 
         let targets = OutputPort::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
@@ -54,25 +54,25 @@ enum FeedbackObserverStatus<T: Timestamp> {
 }
 
 // implementation of the feedback vertex, essentially, as an observer
-pub struct FeedbackObserver<G: Graph, D:Data> {
-    limit:      G::Timestamp,
-    summary:    <G::Timestamp as Timestamp>::Summary,
-    targets:    ObserverHelper<OutputPort<G::Timestamp, D>>,
+pub struct FeedbackObserver<T: Timestamp, D:Data> {
+    limit:      T,
+    summary:    T::Summary,
+    targets:    ObserverHelper<OutputPort<T, D>>,
     active:     bool,
     // status:     FeedbackObserverStatus<T>,  // for debugging ideally
 }
 
-impl<G: Graph, D: Data> Observer for FeedbackObserver<G, D> {
-    type Time = G::Timestamp;
+impl<T: Timestamp, D: Data> Observer for FeedbackObserver<T, D> {
+    type Time = T;
     type Data = D;
-    #[inline(always)] fn open(&mut self, time: &G::Timestamp) {
+    #[inline(always)] fn open(&mut self, time: &T) {
         self.active = time.le(&self.limit); // don't send if not less than limit
         // println!("active: {}", self.active);
         if self.active { self.targets.open(&self.summary.results_in(time)); }
     }
     #[inline(always)] fn show(&mut self, data: &D) { if self.active { self.targets.show(data); } }
     #[inline(always)] fn give(&mut self, data:  D) { if self.active { self.targets.give(data); } }
-    #[inline(always)] fn shut(&mut self, time: &G::Timestamp) { if self.active { self.targets.shut(&self.summary.results_in(time)); } }
+    #[inline(always)] fn shut(&mut self, time: &T) { if self.active { self.targets.shut(&self.summary.results_in(time)); } }
 }
 
 
