@@ -13,7 +13,7 @@ use communication::channels::{Data, OutputPort, ObserverHelper};
 use example::stream::Stream;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
-// TODO : more like a harness, with direct access to its inputs. 
+// TODO : more like a harness, with direct access to its inputs.
 
 // returns both an input scope and a stream representing its output.
 pub trait InputExtensionTrait<G: Graph> {

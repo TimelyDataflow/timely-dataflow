@@ -7,6 +7,7 @@ pub use self::concat::{ConcatVecExt, ConcatExt};
 pub use self::feedback::FeedbackExt;
 pub use self::graph_builder::{EnterSubgraphExt, LeaveSubgraphExt};
 pub use self::unary::UnaryExt;
+pub use self::binary::BinaryExt;
 pub use self::inspect::{InspectExt, InspectBatchExt};
 
 pub mod input;
@@ -24,4 +25,5 @@ pub mod inspect;
 
 pub mod distinct;
 pub mod unary;
+pub mod binary;
 pub mod partition;
