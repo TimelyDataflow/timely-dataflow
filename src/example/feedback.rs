@@ -15,13 +15,13 @@ use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 
-pub trait FeedbackExt<'a, 'b: 'a, G: Graph+'b, D:Data> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) ->
-            (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<'a, 'b, G, D>);
+pub trait FeedbackExt<'b, G: Graph+'b> {
+    fn feedback<'a, D:Data>(&'a self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) ->
+            (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<'a, 'b, G, D>) where 'b: 'a;
 }
 
-impl<'a, 'b: 'a, G: Graph+'b, D:Data> FeedbackExt<'a, 'b, G, D> for Stream<'a, 'b, G, D> {
-    fn feedback(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<'a, 'b, G, D>) {
+impl<'b, G: Graph+'b> FeedbackExt<'b, G> for RefCell<&'b mut G> {
+    fn feedback<'a, D:Data>(&'a self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G, D>>>, Stream<'a, 'b, G, D>) where 'b : 'a {
 
         let targets = OutputPort::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
@@ -30,7 +30,7 @@ impl<'a, 'b: 'a, G: Graph+'b, D:Data> FeedbackExt<'a, 'b, G, D> for Stream<'a, '
         let feedback_output = ObserverHelper::new(targets.clone(), produced.clone());
         let feedback_input =  ObserverHelper::new(FeedbackObserver { limit: limit, summary: summary, targets: feedback_output, active: false }, consumed.clone());
 
-        let index = self.graph.borrow_mut().add_scope(FeedbackScope {
+        let index = self.borrow_mut().add_scope(FeedbackScope {
             consumed_messages:  consumed.clone(),
             produced_messages:  produced.clone(),
             summary:            summary,
@@ -41,7 +41,8 @@ impl<'a, 'b: 'a, G: Graph+'b, D:Data> FeedbackExt<'a, 'b, G, D> for Stream<'a, '
             target: Some(feedback_input),
         };
 
-        let result = self.clone_with(ScopeOutput(index, 0), targets);
+        // let result = self.clone_with(ScopeOutput(index, 0), targets);
+        let result = Stream::new(ScopeOutput(index, 0), targets, self);
 
         return (helper, result);
     }

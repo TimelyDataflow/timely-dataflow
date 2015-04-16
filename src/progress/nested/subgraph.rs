@@ -352,7 +352,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 //     }
 // }
 
-impl<TOuter: Timestamp, TInner: Timestamp, C: Communicator+Clone> Graph for (Subgraph<TOuter, TInner>, C) {
+impl<TOuter: Timestamp, TInner: Timestamp, C: Communicator> Graph for (Subgraph<TOuter, TInner>, C) {
     type Timestamp = Product<TOuter, TInner>;
     type Communicator = C;
 

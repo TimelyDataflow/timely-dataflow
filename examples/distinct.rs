@@ -55,18 +55,18 @@ fn _distinct<C: Communicator>(communicator: C) {
     let mut graph = new_graph(communicator);
 
     let (mut input1, mut input2) = {
-        let graph = &graph.builder();
+        let shared_builder = &graph.builder();
 
         // try building some input scopes
-        let (input1, mut stream1) = graph.new_input::<u64>();
-        let (input2, mut stream2) = graph.new_input::<u64>();
+        let (input1, mut stream1) = shared_builder.new_input::<u64>();
+        let (input2, mut stream2) = shared_builder.new_input::<u64>();
 
         // prepare some feedback edges
-        let (mut feedback1, mut feedback1_output) = stream1.feedback(Product::new((), 1000000), Local(1));
-        let (mut feedback2, mut feedback2_output) = stream2.feedback(Product::new((), 1000000), Local(1));
+        let (mut feedback1, mut feedback1_output) = shared_builder.feedback(Product::new((), 1000000), Local(1));
+        let (mut feedback2, mut feedback2_output) = shared_builder.feedback(Product::new((), 1000000), Local(1));
 
         // build up a subgraph using the concatenated inputs/feedbacks
-        let (mut egress1, mut egress2) = _create_subgraph(&mut graph.clone(),
+        let (mut egress1, mut egress2) = _create_subgraph(shared_builder,
                                                           &mut stream1.concat(&mut feedback1_output),
                                                           &mut stream2.concat(&mut feedback2_output));
 
@@ -101,17 +101,24 @@ fn _distinct<C: Communicator>(communicator: C) {
     while graph.0.pull_internal_progress(&mut [], &mut [], &mut []) { }
 }
 
-fn _create_subgraph<'a, 'b: 'a, G: Graph+'b, D: Data+Hash+Eq+Debug+Columnar>(graph: &'a RefCell<&'b mut G>, source1: &mut Stream<'a, 'b, G, D>, source2: &mut Stream<'a, 'b, G, D>) -> (Stream<'a, 'b, G, D>, Stream<'a, 'b, G, D>) {
+fn _create_subgraph<'a, 'b, G, D>(graph: &'a RefCell<&'b mut G>,
+                                  source1: &mut Stream<'a, 'b, G, D>,
+                                  source2: &mut Stream<'a, 'b, G, D>) -> (Stream<'a, 'b, G, D>,
+                                                                          Stream<'a, 'b, G, D>)
+where 'b: 'a,
+      G: Graph+'b,
+      G::Communicator: Clone,
+      D: Data+Hash+Eq+Debug+Columnar {
     // build up a subgraph using the concatenated inputs/feedbacks
     let comm = graph.borrow_mut().communicator().clone();
     let mut subgraph = (graph.borrow_mut().new_subgraph::<u64>(), comm);
 
     let (sub_egress1, sub_egress2) = {
-        let shared_subgraph = RefCell::new(&mut subgraph);
+        let subgraph_builder = subgraph.builder();//RefCell::new(&mut subgraph);
 
         (
-            source1.enter(&shared_subgraph).distinct().leave(graph),
-            source2.enter(&shared_subgraph).leave(graph)
+            source1.enter(&subgraph_builder).distinct().leave(graph),
+            source2.enter(&subgraph_builder).leave(graph)
         )
     };
 
