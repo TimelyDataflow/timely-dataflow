@@ -79,7 +79,7 @@ pub trait Scope<T: Timestamp, S: Summary<T>> {
 
     // receives (output -> input) summaries and initial input messages capabilities.
     fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<S>>>,
-                                       capabilities: &[CountMap<T>]) -> ();
+                                       capabilities: &mut [CountMap<T>]) -> ();
 
     // receives changes in the message capabilities from the external graph.
     fn push_external_progress(&mut self, external: &mut [CountMap<T>]) -> ();
