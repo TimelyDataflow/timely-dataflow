@@ -5,21 +5,33 @@ use progress::count_map::CountMap;
 #[derive(Default)]
 pub struct Notificator<T: Timestamp> {
     pending:        MutableAntichain<T>,    // requests that have not yet been notified
-    frontier:       MutableAntichain<T>,    // outstanding work, preventing notification
+    frontier:       Vec<MutableAntichain<T>>,    // outstanding work, preventing notification
     available:      CountMap<T>,
     temp:           CountMap<T>,
     changes:        CountMap<T>,
 }
 
 impl<T: Timestamp> Notificator<T> {
-    pub fn update_frontier_from_cm(&mut self, count_map: &mut CountMap<T>) {
-        while let Some((ref time, delta)) = count_map.pop() {
-            self.frontier.update(time, delta);
+    pub fn update_frontier_from_cm(&mut self, count_map: &mut Vec<CountMap<T>>) {
+        for index in 0..count_map.len() {
+            while self.frontier.len() < count_map.len() {
+                self.frontier.push(MutableAntichain::new());
+            }
+            while let Some((time, delta)) = count_map[index].pop() {
+                self.frontier[index].update(&time, delta);
+            }
+            // TODO : If you swap these next three lines in for the above three,
+            // TODO : you get an ICE when building against this crate.
+            // while let Some((ref time, delta)) = count_map[index].pop() {
+            //     self.frontier[index].update(time, delta);
+            // }
         }
+
+
         // TODO : CRITICAL that we only mark as available the times in the frontier + pending
         // TODO : Not clear where this logic goes (here, on in the iterator; probably there).
         for pend in self.pending.elements.iter() {
-            if !self.frontier.le(pend) {
+            if !self.frontier.iter().any(|x| x.le(pend)) {
                 if let Some(val) = self.pending.count(pend) {
                     self.temp.update(pend, -val);
                     self.available.update(pend, val);
@@ -36,7 +48,7 @@ impl<T: Timestamp> Notificator<T> {
         self.changes.update(time, 1);
         self.pending.update(time, 1);
 
-        if !self.frontier.le(time) {
+        if !self.frontier.iter().any(|x| x.le(time)) {
             // TODO : Technically you should be permitted to send and notify at the current notification
             // TODO : but this would panic because we have already removed it from the frontier.
             // TODO : A RAII capability for sending/notifying would be good, but the time is almost

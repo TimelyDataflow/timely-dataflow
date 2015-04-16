@@ -102,12 +102,12 @@ where T: Timestamp,
     fn outputs(&self) -> u64 { 1 }
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut Vec<CountMap<T>>) -> () {
-        self.handle.notificator.update_frontier_from_cm(&mut frontier[0]);
+        self.handle.notificator.update_frontier_from_cm(frontier);
         frontier[0].clear();
     }
 
     fn push_external_progress(&mut self, external: &mut Vec<CountMap<T>>) -> () {
-        self.handle.notificator.update_frontier_from_cm(&mut external[0]);
+        self.handle.notificator.update_frontier_from_cm(external);
         external[0].clear();
     }
 
