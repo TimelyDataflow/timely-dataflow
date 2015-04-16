@@ -45,60 +45,70 @@ Two of the core concepts in timely dataflow are:
 * `Timestamp`:  An element of a partially ordered set, attached to messages to indicate a logical time of sending.
                 At any moment some number of messages are unprocessed, and their timestamps indicate unfinished work.
 
-* `PathSummary`:    Function from `Timestamp` to `Timestamp`, describing the minimal progress a timestamp must make when traveling
-                    from one location in the timely dataflow graph to another. In control structures like loops, coordinates of
-                    the timestamps are explicitly advanced to distinguish different loop iterations.
+* `Summary`:    A function from `Timestamp` to `Timestamp`, describing the minimal progress a timestamp must make when traveling
+                from one location in the timely dataflow graph to another. In control structures like loops, coordinates of
+                the timestamps are explicitly advanced to distinguish different loop iterations.
 
-From the set of outstanding timestamps and path summaries of the graph, one can reason about the possible future timestamps a location in the timely dataflow graph might receive. This allows us to deliver notifications of progress to timely dataflow elements who may await this information before acting.
+From the set of outstanding timestamps and summaries of paths in the dataflow graph, one can reason about the possible future timestamps a location in the timely dataflow graph might receive. This allows us to deliver notifications of progress to timely dataflow elements who may await this information before acting.
 
 ## Scope Interface ##
 
-We structure a timely dataflow graph as a collection of hierarchically nested `Scope`s, each of which has an associated `Timestamp` and `PathSummary` type, indicating the way in which its inputs and outputs understand progress. While scopes can be simple vertices, they may also contain other scopes, whose timestamps and path summaries can extend those of its parent.
+We structure a timely dataflow graph as a collection of hierarchically nested `Scope`s, each of which has an associated `Timestamp` and `Summary` type, indicating the way in which its inputs and outputs understand progress. While scopes can be simple vertices, they may also contain other nested scopes, whose timestamps and their summaries can extend those of its parent.
+
+The central features of the `Scope` interface involve methods for initialization, and methods for execution.
 
 Initially, a scope must both describe its internal structure (so the parent can reason about messages moving through it) and learn about the external structure connecting its outputs back to its inputs (so that it can reason about how its messages might return to it). At runtime a scope must be able to respond to progress in the external graph (perhaps changes in which timestamps it may see in the future), and communicate any resulting progress it makes (including messages consumed from the external scope, produced for the external scope, and messages as yet unprocessed).
 
-1. Initialization:
-  a. describing its internal path summary structure (inputs -> outputs) and initial message capabilities,
-  b. learning about the external path summary structure (outputs -> inputs) and initial message capabilities.
+### Initialization ###
 
-2. Execution:
-  a. receiving updates about progress in the external dataflow graph,
-  b. communicating updates about progress within the scope to the containing scope.
+Before computation begins a `Scope` must indicate its structure to its parent `Scope`. This includes indicating the number of its inputs and outputs (so that others may connect to it), but also the internal connectivity between these inputs and outputs, as well as any initial internal capabilities to send messages. The internal connectivity is described by a collection of summaries for each input-output pair; we use a collection (technically, an `Antichain<Summary>`) rather than one summary because there may be several paths with incomparable summaries. The initial internal capabilities are explained by a map from `Timestamp` to a count for each output.
 
-To complete the signature of the `Scope` trait, a scope must also present a number of inputs and outputs (as progress will be specific to the inputs and outputs of the scope, and must be separately indicated). To understanding the trait, the type `Antichain<T: PartialOrd>` indicates a set of partially ordered elements none of which are strictly less than any other.
+A `Scope` also receives information about the surrounding graph (which it can ignore, if it wishes). This information is roughly the dual of the information it supplies to its parent: for each output-input pair there is an `Antichain<Summary>` describing the possible paths from outputs to inputs, and for each input a map from `Timestamp` to a count, indicating initial message capabilities.
+
+### Execution ###
+
+Once initialized, a `Scope` interacts with its parent through a narrow interface. It receives information about the external changes to capabilities on each of its inputs, and it reports to its parent internal changes to the capabilities of its outputs, as well as the numbers of messages it has consumed (on each input) and produced (on each output). The fundamental safety property that a `Scope` must obey is to report any new capabilities no later than it reports consumed messages, and to report produced messages no later than it reports retired capabilities.
 
 ```rust
-pub trait Scope<T: Timestamp, S: PathSummary<T>>
-{
+pub trait Scope<T: Timestamp> {
     fn inputs(&self) -> uint;   // number of inputs to the scope
     fn outputs(&self) -> uint;  // number of outputs from the scope
 
-    // 1a. returns (input -> output) summaries, and initial message capabilities on outputs.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<Vec<(T, i64)>>);
+    // 1a. returns (input -> output) summaries and initial message capabilities on outputs.
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<S>>>, Vec<CountMap<T>>);
 
-    // 1b. receives (output -> input) summaries, and initial messages capabilities on inputs.
+    // 1b. receives (output -> input) summaries and initial messages capabilities on inputs.
     fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<S>>>,
-                                       frontier: &[Vec<(T, i64)>]) -> ();
+                                       capabilities: &[CountMap<T>]) -> ();
 
     // 2a. receives changes in the message capabilities from the external graph.
-    fn push_external_progress(&mut self, external_progress: &[Vec<(T, i64)>]) -> ();
+    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) -> ();
 
     // 2b. describing changes internal to the scope, specifically:
     //      * changes to messages capabilities for each output,
     //      * number of messages consumed on each input,
     //      * number of messages produced on each output.
-    fn pull_internal_progress(&mut self, internal_progress: &mut [Vec<(T, i64)>],
-                                         messages_consumed: &mut [Vec<(T, i64)>],
-                                         messages_produced: &mut [Vec<(T, i64)>]) -> ();
+    // return indicate unreported work still to do in the scope (e.g. IO, printing)
+    fn pull_internal_progress(&mut self, internal: &mut [CountMap<T>],
+                                         consumed: &mut [CountMap<T>],
+                                         produced: &mut [CountMap<T>]) -> bool;
 }
 ```
 
 One non-obivous design (there are several) is that `pull_internal_progress` should indicate what messages were accepted by the scope, rather than have `push_external_progress` assign responsibility. We found the former worked better in Naiad, in that the scheduler did not need to understand the routing of messages; workers simply picked up what they were delivered, and told the scheduler, who eventually concludes that all messages are accounted for.
 
-## Scope Implementation ##
+## A Data-parallel programming layer ##
 
-A scope must implement the trait above, but is otherwise unconstrained. Notice that the trait does not detail how data are moved around, only how a scope should acknowledge receipt of data, production of data, and any outstanding work. A concrete scope implementation will almost certainly (one hopes) describe how to process some data, including mechanisms for receiving, acting on, and transmiting this data. However, this is not part of the scope interface.
+The `Scope` interface is meant to be the bare-bones of timely dataflow, and it is important to present a higher level abstraction.
 
-The `Subgraph` struct implements the `Scope` trait, with a generic implementation as a container for other scopes.
+The project currently does this with a `Stream<Graph, Data>` type indicating a distributed stream of records of type `Data` living in some dataflow context indicated by `Graph`. By defining extension traits for the `Stream` type (new methods available to any instance of `Stream`) we can write programs in a more natural, declarative-ish style:
 
-The `src/example/` subdirectory has some example classes, likely to be cleaned up and included officially, implementing corresponding scopes and data movement for simple timely dataflow vertices, including `Input`, `Concat`, `Feedback`, and `Queue`. They are probably more complicated than they need to be, but as common patterns are extracted, custom vertices should become simpler.
+```rust
+let mut stream = Input::open_source("path/to/data");
+
+stream.filter(|x| x.len() > 5)
+      .distinct()
+      .inspect(|x| println!("observed: {}", x));
+```
+
+Each set of extension functions acts as a new "language" on the `Stream` types, except that they are fully composable, as the functions all render down to timely dataflow logic. 
