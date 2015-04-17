@@ -33,8 +33,8 @@ for Stream<'aa, 'bb, GOuter, D> {
         let produced = Rc::new(RefCell::new(CountMap::new()));
         let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
 
-        let scope_index = subgraph.borrow().subgraph.index;
-        let input_index = subgraph.borrow_mut().subgraph.new_input(produced);
+        let scope_index = subgraph.borrow().index();
+        let input_index = subgraph.borrow_mut().new_input(produced);
 
         self.connect_to(ScopeInput(scope_index, input_index), ingress);
 
@@ -51,12 +51,12 @@ impl<'aa, 'bb, 'a, 'b: 'a, GOuter: Graph+'b, TInner: Timestamp, D: Data> LeaveSu
 for Stream<'aa, 'bb, SubgraphBuilder<'a, 'b, GOuter, TInner>, D> {
     fn leave(&mut self) -> Stream<'a, 'b, GOuter, D> {
 
-        let index = self.graph.borrow_mut().subgraph.new_output();
+        let index = self.graph.borrow_mut().new_output();
         let targets = OutputPort::<GOuter::Timestamp, D>::new();
 
         self.connect_to(GraphOutput(index), EgressNub { targets: targets.clone(), phantom: PhantomData });
 
-        Stream::new(ScopeOutput(self.graph.borrow().subgraph.index, index), targets, self.graph.borrow().parent)
+        Stream::new(ScopeOutput(self.graph.borrow().index(), index), targets, self.graph.borrow().parent())
     }
 }
 

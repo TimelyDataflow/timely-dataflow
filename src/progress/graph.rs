@@ -18,29 +18,47 @@ pub trait Graph {
     fn builder(&mut self) -> RefCell<&mut Self>;
 }
 
-pub struct Root<T: Timestamp, C: Communicator> {
+pub struct Root<C: Communicator> {
     communicator:   C,
-    phantom:        PhantomData<T>,
+    graph:          Option<Box<Scope<()>>>,
 }
 
-impl<T: Timestamp, C: Communicator> Root<T, C> {
-    pub fn new(c: C) -> Root<T, C> {
+impl<C: Communicator> Root<C> {
+    pub fn new(c: C) -> Root<C> {
         Root {
             communicator: c,
-            phantom: PhantomData,
+            graph: None,
         }
+    }
+    pub fn step(&mut self) -> bool {
+        if let Some(ref mut scope) = self.graph {
+            scope.pull_internal_progress(&mut [], &mut [], &mut [])
+        }
+        else { panic!("Root empty; make sure to add a subgraph!") }
     }
 }
 
-impl<T: Timestamp, C: Communicator> Graph for Root<T, C> {
-    type Timestamp = T;
+impl<C: Communicator> Graph for Root<C> {
+    type Timestamp = ();
     type Communicator = C;
 
-    fn connect(&mut self, source: Source, target: Target) { panic!("no") }
-    fn add_boxed_scope(&mut self, scope: Box<Scope<Self::Timestamp>>) -> u64  { panic!("bad") }
-    fn add_scope<SC: Scope<Self::Timestamp>+'static>(&mut self, scope: SC) -> u64 { self.add_boxed_scope(Box::new(scope)) }
-    fn new_subgraph<T2: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T2>  {
-        Subgraph::<Self::Timestamp, T2>::new_from(&mut self.communicator, 0)
+    fn connect(&mut self, source: Source, target: Target) {
+        panic!("root doesn't maintain edges; who are you, how did you get here?")
+    }
+    fn add_boxed_scope(&mut self, mut scope: Box<Scope<()>>) -> u64  {
+        if self.graph.is_some() { panic!("added two scopes to root") }
+        else                    {
+            scope.get_internal_summary();
+            scope.set_external_summary(Vec::new(), &mut []);
+            self.graph = Some(scope);
+            0
+        }
+    }
+    fn add_scope<SC: Scope<()>+'static>(&mut self, scope: SC) -> u64 {
+        self.add_boxed_scope(Box::new(scope))
+    }
+    fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<(), T>  {
+        Subgraph::<(), T>::new_from(&mut self.communicator, 0)
     }
 
     fn with_communicator<R, F: FnOnce(&mut Self::Communicator)->R>(&mut self, mut func: F) -> R {
