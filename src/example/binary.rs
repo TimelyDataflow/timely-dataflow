@@ -31,8 +31,8 @@ impl<'a, 'b: 'a, G: Graph+'b, D1: Data> BinaryExt<'a, 'b, G, D1> for Stream<'a, 
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
              (&mut self, other: &mut Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<'a, 'b, G, D3> {
-        let (sender1, receiver1) = pact1.connect(self.graph.borrow_mut().communicator());
-        let (sender2, receiver2) = pact2.connect(self.graph.borrow_mut().communicator());
+        let (sender1, receiver1) = self.graph.borrow_mut().with_communicator(|x| pact1.connect(x));//self.graph.borrow_mut().communicator());
+        let (sender2, receiver2) = self.graph.borrow_mut().with_communicator(|x| pact2.connect(x));//self.graph.borrow_mut().communicator());
         let targets = OutputPort::<G::Timestamp,D3>::new();
         let scope = BinaryScope::new(receiver1, receiver2, targets.clone(), name, logic);
         let index = self.graph.borrow_mut().add_scope(scope);

@@ -352,27 +352,46 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 //     }
 // }
 
-impl<TOuter: Timestamp, TInner: Timestamp, C: Communicator> Graph for (Subgraph<TOuter, TInner>, C) {
-    type Timestamp = Product<TOuter, TInner>;
-    type Communicator = C;
+pub struct SubgraphBuilder<'a, 'b: 'a, G: Graph+'b, TInner: Timestamp> {
+    pub subgraph: Subgraph<G::Timestamp, TInner>,
+    pub parent:   &'a RefCell<&'b mut G>,
+}
 
-    fn connect(&mut self, source: Source, target: Target) { self.0.connect(source, target); }
+impl<'a, 'b: 'a, G: Graph+'b, TInner: Timestamp> SubgraphBuilder<'a, 'b, G, TInner> {
+    pub fn new(parent: &'a RefCell<&'b mut G>) -> SubgraphBuilder<'a, 'b, G, TInner> {
+        let subgraph = parent.borrow_mut().new_subgraph::<TInner>();
+        // let subgraph = Subgraph::new_from(parent.borrow_mut().with_communicator(|x| Progcaster::new(x)));
+        SubgraphBuilder {
+            subgraph: subgraph,
+            parent: parent,
+        }
+    }
+    pub fn seal(self) -> Subgraph<G::Timestamp, TInner> {
+        self.subgraph
+    }
+}
 
-    fn add_boxed_scope(&mut self, scope: Box<Scope<Product<TOuter, TInner>>>) -> u64 {
-        let index = self.0.children.len() as u64;
-        self.0.children.push(ScopeWrapper::new(scope, index));
+impl<'a, 'b: 'a, TInner: Timestamp, G: Graph+'b> Graph for SubgraphBuilder<'a, 'b, G, TInner> {
+    type Timestamp = Product<G::Timestamp, TInner>;
+    type Communicator = G::Communicator;
+
+    fn connect(&mut self, source: Source, target: Target) { self.subgraph.connect(source, target); }
+
+    fn add_boxed_scope(&mut self, scope: Box<Scope<Product<G::Timestamp, TInner>>>) -> u64 {
+        let index = self.subgraph.children.len() as u64;
+        self.subgraph.children.push(ScopeWrapper::new(scope, index));
         return index;
     }
 
-    fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<Product<TOuter, TInner>, T> {
-        let progcaster = Progcaster::new(&mut self.1);
-        let mut result: Subgraph<Product<TOuter, TInner>, T> = Subgraph::new_from(progcaster);
-        result.index = self.0.children() as u64;
-        return result;
+    fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, TInner>, T> {
+        let index = self.subgraph.children() as u64;
+        self.parent.borrow_mut().with_communicator(|x| Subgraph::new_from(x, index))
+        // result.index = self.subgraph.children() as u64;
+        // return result;
     }
 
-    fn communicator(&mut self) -> &mut C {
-        &mut self.1
+    fn with_communicator<R, F: FnOnce(&mut Self::Communicator)->R>(&mut self, func: F) -> R {
+        self.parent.borrow_mut().with_communicator(func)
     }
 
     fn builder(&mut self) -> RefCell<&mut Self> { RefCell::new(self) }
@@ -561,10 +580,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 
-    pub fn new_from(progcaster: Progcaster<Product<TOuter,TInner>>) -> Subgraph<TOuter, TInner> {
+    pub fn new_from<C: Communicator>(communicator: &mut C, index: u64) -> Subgraph<TOuter, TInner> {
+        let progcaster = Progcaster::new(communicator);
         Subgraph {
             name:                   Default::default(),
-            index:                  Default::default(),
+            index:                  index,
             default_summary:        Default::default(),
             inputs:                 Default::default(),
             outputs:                Default::default(),
@@ -587,10 +607,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 }
 
-pub fn new_graph<T: Timestamp, C: Communicator>(mut communicator: C) -> (Subgraph<(), T>, C) {
-    let progcaster = Progcaster::new(&mut communicator);
-    return (Subgraph::new_from(progcaster), communicator);
-}
+// pub fn new_graph<T: Timestamp, C: Communicator>(mut communicator: C) -> (Subgraph<(), T>, C) {
+//     let progcaster = Progcaster::new(&mut communicator);
+//     return (Subgraph::new_from(progcaster), communicator);
+// }
 
 fn try_to_add_summary<S: PartialOrd+Eq+Copy+Debug>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool {
     for &mut (ref t, ref mut antichain) in vector.iter_mut() {

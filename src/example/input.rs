@@ -31,7 +31,7 @@ impl<'b, G: Graph+'b> InputExtensionTrait<'b, G> for RefCell<&'b mut G> {
             output:   ObserverHelper::new(output.clone(), produced.clone()),
         };
 
-        let copies = self.borrow_mut().communicator().peers();
+        let copies = self.borrow_mut().with_communicator(|x| x.peers());
 
         let index = self.borrow_mut().add_scope(InputScope {
             frontier: helper.frontier.clone(),

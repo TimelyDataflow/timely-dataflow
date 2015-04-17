@@ -66,7 +66,7 @@ impl<'a, 'b: 'a, G: Graph+'b, D1: Data> UnaryExt<'a, 'b, G, D1> for Stream<'a, '
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&mut self, pact: P, name: String, logic: L) -> Stream<'a, 'b, G, D2> {
-        let (sender, receiver) = pact.connect(self.graph.borrow_mut().communicator());
+        let (sender, receiver) = self.graph.borrow_mut().with_communicator(|x| pact.connect(x));//self.graph.borrow_mut().communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
         let scope = UnaryScope::new(receiver, targets.clone(), name, logic);
         let index = self.graph.borrow_mut().add_scope(scope);

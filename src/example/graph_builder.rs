@@ -21,19 +21,20 @@ use communication::channels::{Data, OutputPort, ObserverHelper};
 // impl<GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator + Clone> EnterSubgraphExt<GOuter::Timestamp, TInner, D, C> for Stream<GOuter, D> {
 //     fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut Subgraph<GOuter::Timestamp, TInner>>, communicator: C) -> Stream<(&'a RefCell<&'b mut Subgraph<GOuter::Timestamp, TInner>>, C), D> {
 
-pub trait EnterSubgraphExt<TOuter: Timestamp, TInner: Timestamp, D: Data, C: Communicator> {
-    fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut (Subgraph<TOuter, TInner>, C)>) -> Stream<'a, 'b, (Subgraph<TOuter, TInner>, C), D>;
+pub trait EnterSubgraphExt<'aa, 'bb: 'aa, GOuter: Graph+'bb, TInner: Timestamp, D> {
+    fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut SubgraphBuilder<'aa, 'bb, GOuter, TInner>>) -> Stream<'a, 'b, SubgraphBuilder<'aa, 'bb, GOuter, TInner>, D> where 'b: 'a, 'aa: 'b, 'bb: 'aa;
 }
 
-impl<'aa, 'bb, GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> EnterSubgraphExt<GOuter::Timestamp, TInner, D, C> for Stream<'aa, 'bb, GOuter, D> {
-    fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut (Subgraph<GOuter::Timestamp, TInner>, C)>) -> Stream<'a, 'b, (Subgraph<GOuter::Timestamp, TInner>, C), D> {
+impl<'aa, 'bb: 'aa, GOuter: Graph+'bb, TInner: Timestamp, D: Data> EnterSubgraphExt<'aa, 'bb, GOuter, TInner, D>
+for Stream<'aa, 'bb, GOuter, D> {
+    fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut SubgraphBuilder<'aa, 'bb, GOuter, TInner>>) -> Stream<'a, 'b, SubgraphBuilder<'aa, 'bb, GOuter, TInner>, D> where 'b: 'a, 'aa: 'b, 'bb: 'aa {
 
         let targets = OutputPort::<Product<GOuter::Timestamp, TInner>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
         let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
 
-        let scope_index = subgraph.borrow().0.index;
-        let input_index = subgraph.borrow_mut().0.new_input(produced);
+        let scope_index = subgraph.borrow().subgraph.index;
+        let input_index = subgraph.borrow_mut().subgraph.new_input(produced);
 
         self.connect_to(ScopeInput(scope_index, input_index), ingress);
 
@@ -41,26 +42,21 @@ impl<'aa, 'bb, GOuter: Graph, TInner: Timestamp, D: Data, C: Communicator> Enter
     }
 }
 
-// pub trait LeaveSubgraphExt<GOuter: Graph, D: Data> {
-//     fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D>;
-// }
-//
-// impl<'a, 'b, GOuter: Graph, TInner: Timestamp, D: Data> LeaveSubgraphExt<GOuter, D> for Stream<(&'a RefCell<&'b mut Subgraph<GOuter::Timestamp, TInner>>, GOuter::Communicator), D> {
-//     fn leave(&mut self, graph: &GOuter) -> Stream<GOuter, D> {
-
-pub trait LeaveSubgraphExt<GOuter: Graph, D: Data> {
-    fn leave<'a, 'b>(&mut self, graph: &'a RefCell<&'b mut GOuter>) -> Stream<'a, 'b, GOuter, D>  where 'b: 'a, GOuter: 'b ;
+pub trait LeaveSubgraphExt<'a, 'b: 'a, GOuter: Graph+'b, D: Data> {
+    fn leave(&mut self) -> Stream<'a, 'b, GOuter, D>;
 }
 
-impl<'aa, 'bb, 'comm,  GOuter: Graph, TInner: Timestamp, D: Data> LeaveSubgraphExt<GOuter, D> for Stream<'aa, 'bb, (Subgraph<GOuter::Timestamp, TInner>, &'comm mut GOuter::Communicator), D> where GOuter::Communicator: 'comm {
-    fn leave<'a, 'b>(&mut self, graph: &'a RefCell<&'b mut GOuter>) -> Stream<'a, 'b, GOuter, D>  where 'b: 'a, GOuter: 'b  {
+use progress::nested::subgraph::SubgraphBuilder;
+impl<'aa, 'bb, 'a, 'b: 'a, GOuter: Graph+'b, TInner: Timestamp, D: Data> LeaveSubgraphExt<'a, 'b, GOuter, D>
+for Stream<'aa, 'bb, SubgraphBuilder<'a, 'b, GOuter, TInner>, D> {
+    fn leave(&mut self) -> Stream<'a, 'b, GOuter, D> {
 
-        let index = self.graph.borrow_mut().0.new_output();
+        let index = self.graph.borrow_mut().subgraph.new_output();
         let targets = OutputPort::<GOuter::Timestamp, D>::new();
 
         self.connect_to(GraphOutput(index), EgressNub { targets: targets.clone(), phantom: PhantomData });
 
-        Stream::new(ScopeOutput(self.graph.borrow_mut().0.index, index), targets, graph)
+        Stream::new(ScopeOutput(self.graph.borrow().subgraph.index, index), targets, self.graph.borrow().parent)
     }
 }
 

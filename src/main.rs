@@ -19,8 +19,10 @@ use test::Bencher;
 
 use columnar::Columnar;
 
+use progress::graph::Root;
 use progress::{Graph, Scope};
-use progress::nested::subgraph::new_graph;
+use progress::nested::subgraph::SubgraphBuilder;
+// use progress::nested::subgraph::new_graph;
 use progress::nested::Summary::Local;
 use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
@@ -133,38 +135,34 @@ fn _create_subgraph<'a, 'b, G, D>(graph: &'a RefCell<&'b mut G>,
                                   source1: &mut Stream<'a, 'b, G, D>,
                                   source2: &mut Stream<'a, 'b, G, D>) -> (Stream<'a, 'b, G, D>,
                                                                           Stream<'a, 'b, G, D>)
-where 'b: 'a,
-      G: Graph+'b,
-      D: Data+Hash+Eq+Debug+Columnar {
-    // build up a subgraph using the concatenated inputs/feedbacks
-    let mut graph_borrow = graph.borrow_mut();
+where 'b: 'a, G: Graph+'b, D: Data+Hash+Eq+Debug+Columnar {
 
-    let (subscope, sub_egresses) = {
-        let mut subgraph = (graph_borrow.new_subgraph::<u64>(), graph_borrow.communicator());
+    let mut subgraph = SubgraphBuilder::<_, u64>::new(graph);
 
-        let sub_egresses = {
-            let subgraph_builder = subgraph.builder();//RefCell::new(&mut subgraph);
+    let sub_egresses = {
+        let subgraph_builder = subgraph.builder();
 
-            (
-                source1.enter(&subgraph_builder).distinct().leave(graph),
-                source2.enter(&subgraph_builder).leave(graph)
-            )
-        };
-
-        (subgraph.0, sub_egresses)
+        (
+            source1.enter(&subgraph_builder).distinct().leave(),
+            source2.enter(&subgraph_builder).leave()
+        )
     };
 
-    graph_borrow.add_scope(subscope);
+    graph.borrow_mut().add_scope(subgraph.seal());
 
     sub_egresses
+    // (source1.distinct(), source2.distinct())
 }
 
 fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph = new_graph(communicator);
+    let mut root = Root::<(),_>::new(communicator);// { communicator: communicator, phantom: }
+    let borrow = root.builder();
+    let mut graph = SubgraphBuilder::new(&borrow);
+    // let mut graph = new_graph(communicator);
 
     let (mut input1, mut input2) = {
-        let builder = graph.builder();
+        let mut builder = graph.builder();
 
         // try building some input scopes
         let (input1, mut stream1) = builder.new_input::<u64>();
@@ -186,20 +184,22 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
         (input1, input2)
     };
 
+    let mut graph = graph.subgraph;
+
     // finalize the graph/subgraph
-    graph.0.get_internal_summary();
-    graph.0.set_external_summary(Vec::new(), &mut []);
+    graph.get_internal_summary();
+    graph.set_external_summary(Vec::new(), &mut []);
 
     // do one round of push progress, pull progress ...
-    graph.0.push_external_progress(&mut []);
-    graph.0.pull_internal_progress(&mut [], &mut [], &mut []);
+    graph.push_external_progress(&mut []);
+    graph.pull_internal_progress(&mut [], &mut [], &mut []);
 
     // move some data into the dataflow graph.
     input1.send_messages(&Product::new((), 0), vec![1u64]);
     input2.send_messages(&Product::new((), 0), vec![2u64]);
 
     // see what everyone thinks about that ...
-    graph.0.pull_internal_progress(&mut [], &mut [], &mut []);
+    graph.pull_internal_progress(&mut [], &mut [], &mut []);
 
     input1.advance(&Product::new((), 0), &Product::new((), 1000000));
     input2.advance(&Product::new((), 0), &Product::new((), 1000000));
@@ -208,8 +208,8 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.pull_internal_progress(&mut [], &mut [], &mut []); }),
-        None    => while graph.0.pull_internal_progress(&mut [], &mut [], &mut []) { }
+        Some(b) => b.iter(|| { graph.pull_internal_progress(&mut [], &mut [], &mut []); }),
+        None    => while graph.pull_internal_progress(&mut [], &mut [], &mut []) { }
     }
 }
 
@@ -240,9 +240,12 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 // }
 
 fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
-    let mut graph = new_graph(communicator);
 
-    let peers = graph.communicator().peers();
+    let mut root = Root::<(),_>::new(communicator);
+    let borrow = root.builder();
+    let mut graph = SubgraphBuilder::new(&borrow);
+
+    let peers = graph.with_communicator(|x| x.peers());
 
     {
         let graph = &graph.builder();
@@ -250,14 +253,17 @@ fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
         graph.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
         graph.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
     }
+
+    let mut graph = graph.subgraph;
+
     // start things up!
-    graph.0.get_internal_summary();
-    graph.0.set_external_summary(Vec::new(), &mut []);
-    graph.0.push_external_progress(&mut []);
+    graph.get_internal_summary();
+    graph.set_external_summary(Vec::new(), &mut []);
+    graph.push_external_progress(&mut []);
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.pull_internal_progress(&mut [], &mut [], &mut []); }),
-        None    => while graph.0.pull_internal_progress(&mut [], &mut [], &mut []) { },
+        Some(b) => b.iter(|| { graph.pull_internal_progress(&mut [], &mut [], &mut []); }),
+        None    => while graph.pull_internal_progress(&mut [], &mut [], &mut []) { },
     }
 }
