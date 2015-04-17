@@ -33,9 +33,9 @@ extern crate core;
 extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};
-use timely::progress::nested::subgraph::new_graph;
+use timely::progress::nested::builder::Builder as SubgraphBuilder;
 use timely::progress::scope::Scope;
-use timely::progress::graph::Graph;
+use timely::progress::graph::{Graph, Root};
 use timely::progress::nested::Source::ScopeOutput;
 use timely::progress::nested::Target::ScopeInput;
 use timely::example::barrier::BarrierScope;
@@ -59,24 +59,27 @@ fn _barrier_multi(threads: u64) {
 }
 
 fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
-    let mut graph = new_graph(communicator);
 
-    let peers = graph.communicator().peers();
+    let mut root = Root::new(communicator);
 
     {
-        let graph = &graph.builder();
+        let borrow = root.builder();
+        let mut graph = SubgraphBuilder::new(&borrow);
 
-        graph.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
-        graph.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
+        let peers = graph.with_communicator(|x| x.peers());
+        {
+            let builder = &graph.builder();
+
+            builder.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
+            builder.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
+        }
+
+        graph.seal();
     }
-    // start things up!
-    graph.0.get_internal_summary();
-    graph.0.set_external_summary(Vec::new(), &mut []);
-    graph.0.push_external_progress(&mut []);
 
     // spin
     match bencher {
-        Some(b) => b.iter(|| { graph.0.pull_internal_progress(&mut [], &mut [], &mut []); }),
-        None    => while graph.0.pull_internal_progress(&mut [], &mut [], &mut []) { },
+        Some(b) => b.iter(|| { root.step(); }),
+        None    => while root.step() { },
     }
 }

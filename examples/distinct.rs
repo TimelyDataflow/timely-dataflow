@@ -37,10 +37,10 @@ use std::hash::Hash;
 use timely::communication::{Communicator, ThreadCommunicator};
 use timely::communication::channels::Data;
 use timely::progress::nested::product::Product;
-use timely::progress::nested::subgraph::new_graph;
+use timely::progress::nested::builder::Builder as SubgraphBuilder;
 use timely::progress::nested::Summary::Local;
 use timely::progress::scope::Scope;
-use timely::progress::graph::Graph;
+use timely::progress::graph::{Graph, Root};
 use timely::example::*;
 use timely::example::distinct::DistinctExtensionTrait;
 
@@ -51,46 +51,46 @@ fn main() {
 }
 
 fn _distinct<C: Communicator>(communicator: C) {
-    // no "base scopes" yet, so the root pretends to be a subscope of some parent with a () timestamp type.
-    let mut graph = new_graph(communicator);
+
+    let mut root = Root::new(communicator);
 
     let (mut input1, mut input2) = {
-        let shared_builder = &graph.builder();
+        let borrow = root.builder();
+        let mut graph = SubgraphBuilder::new(&borrow);
+        let (input1, input2) = {
+            let builder = graph.builder();
 
-        // try building some input scopes
-        let (input1, mut stream1) = shared_builder.new_input::<u64>();
-        let (input2, mut stream2) = shared_builder.new_input::<u64>();
+            // try building some input scopes
+            let (input1, mut stream1) = builder.new_input::<u64>();
+            let (input2, mut stream2) = builder.new_input::<u64>();
 
-        // prepare some feedback edges
-        let (mut feedback1, mut feedback1_output) = shared_builder.feedback(Product::new((), 1000000), Local(1));
-        let (mut feedback2, mut feedback2_output) = shared_builder.feedback(Product::new((), 1000000), Local(1));
+            // prepare some feedback edges
+            let (mut feedback1, mut feedback1_output) = builder.feedback(Product::new((), 1000000), Local(1));
+            let (mut feedback2, mut feedback2_output) = builder.feedback(Product::new((), 1000000), Local(1));
 
-        // build up a subgraph using the concatenated inputs/feedbacks
-        let (mut egress1, mut egress2) = _create_subgraph(shared_builder,
-                                                          &mut stream1.concat(&mut feedback1_output),
-                                                          &mut stream2.concat(&mut feedback2_output));
+            // build up a subgraph using the concatenated inputs/feedbacks
+            let (mut egress1, mut egress2) = _create_subgraph(&mut stream1.concat(&mut feedback1_output),
+                                                              &mut stream2.concat(&mut feedback2_output));
 
-        // connect feedback sources. notice that we have swapped indices ...
-        feedback1.connect_input(&mut egress2);
-        feedback2.connect_input(&mut egress1);
+            // connect feedback sources. notice that we have swapped indices ...
+            feedback1.connect_input(&mut egress2);
+            feedback2.connect_input(&mut egress1);
+
+            (input1, input2)
+        };
+        graph.seal();
 
         (input1, input2)
     };
 
-    // finalize the graph/subgraph
-    graph.0.get_internal_summary();
-    graph.0.set_external_summary(Vec::new(), &mut []);
-
-    // do one round of push progress, pull progress ...
-    graph.0.push_external_progress(&mut []);
-    graph.0.pull_internal_progress(&mut [], &mut [], &mut []);
+    root.step();
 
     // move some data into the dataflow graph.
     input1.send_messages(&Product::new((), 0), vec![1u64]);
     input2.send_messages(&Product::new((), 0), vec![2u64]);
 
     // see what everyone thinks about that ...
-    graph.0.pull_internal_progress(&mut [], &mut [], &mut []);
+    root.step();
 
     input1.advance(&Product::new((), 0), &Product::new((), 1000000));
     input2.advance(&Product::new((), 0), &Product::new((), 1000000));
@@ -98,35 +98,23 @@ fn _distinct<C: Communicator>(communicator: C) {
     input2.close_at(&Product::new((), 1000000));
 
     // spin
-    while graph.0.pull_internal_progress(&mut [], &mut [], &mut []) { }
+    while root.step() { }
 }
 
-fn _create_subgraph<'a, 'b, G, D>(graph: &'a RefCell<&'b mut G>,
-                                  source1: &mut Stream<'a, 'b, G, D>,
-                                  source2: &mut Stream<'a, 'b, G, D>) -> (Stream<'a, 'b, G, D>,
-                                                                          Stream<'a, 'b, G, D>)
-where 'b: 'a,
-      G: Graph+'b,
-      D: Data+Hash+Eq+Debug+Columnar {
-    // build up a subgraph using the concatenated inputs/feedbacks
-    let mut graph_borrow = graph.borrow_mut();
+fn _create_subgraph<'a, G, D>(source1: &mut Stream<'a, G, D>, source2: &mut Stream<'a, G, D>) ->
+    (Stream<'a, G, D>, Stream<'a, G, D>)
+where G: Graph+'a, D: Data+Hash+Eq+Debug+Columnar {
 
-    let (subscope, sub_egresses) = {
-        let mut subgraph = (graph_borrow.new_subgraph::<u64>(), graph_borrow.communicator());
+    let mut subgraph = SubgraphBuilder::<_, u64>::new(source1.graph);
+    let result = {
+        let subgraph_builder = subgraph.builder();
 
-        let sub_egresses = {
-            let subgraph_builder = subgraph.builder();//RefCell::new(&mut subgraph);
-
-            (
-                source1.enter(&subgraph_builder).distinct().leave(graph),
-                source2.enter(&subgraph_builder).leave(graph)
-            )
-        };
-
-        (subgraph.0, sub_egresses)
+        (
+            source1.enter(&subgraph_builder).distinct().leave(),
+            source2.enter(&subgraph_builder).leave()
+        )
     };
+    subgraph.seal();
 
-    graph_borrow.add_scope(subscope);
-
-    sub_egresses
+    result
 }
