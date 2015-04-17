@@ -25,7 +25,7 @@ use progress::nested::*;
 // TODO : so that any .borrow_mut().method() would avoid runtime panics if we did not do the above.
 
 pub struct Builder<'a, G: Graph+'a, TInner: Timestamp> {
-    subgraph: Option<Subgraph<G::Timestamp, TInner>>,
+    subgraph: Subgraph<G::Timestamp, TInner>,
     parent:   &'a RefCell<G>,
 }
 
@@ -33,27 +33,28 @@ impl<'a, G: Graph+'a, TInner: Timestamp> Builder<'a, G, TInner> {
     pub fn new(parent: &'a RefCell<G>) -> Builder<'a, G, TInner> {
         let subgraph = parent.borrow_mut().new_subgraph::<TInner>();
         Builder {
-            subgraph: Some(subgraph),
+            subgraph: subgraph,
             parent: parent,
         }
     }
-    pub fn index(&self) -> u64 { self.subgraph.as_ref().unwrap().index }
+    pub fn index(&self) -> u64 { self.subgraph.index }
     pub fn parent(&self) -> &'a RefCell<G> { self.parent }
     pub fn new_input(&mut self, shared_counts: Rc<RefCell<CountMap<Product<G::Timestamp, TInner>>>>) -> u64 {
-        self.subgraph.as_mut().unwrap().inputs += 1;
-        self.subgraph.as_mut().unwrap().external_guarantee.push(MutableAntichain::new());
-        self.subgraph.as_mut().unwrap().input_messages.push(shared_counts);
-        return self.subgraph.as_mut().unwrap().inputs - 1;
+        self.subgraph.inputs += 1;
+        self.subgraph.external_guarantee.push(MutableAntichain::new());
+        self.subgraph.input_messages.push(shared_counts);
+        return self.subgraph.inputs - 1;
     }
 
     pub fn new_output(&mut self) -> u64 {
-        self.subgraph.as_mut().unwrap().outputs += 1;
-        self.subgraph.as_mut().unwrap().external_capability.push(MutableAntichain::new());
-        return self.subgraph.as_mut().unwrap().outputs - 1;
+        self.subgraph.outputs += 1;
+        self.subgraph.external_capability.push(MutableAntichain::new());
+        return self.subgraph.outputs - 1;
     }
-    pub fn seal(&mut self) {
+
+    pub fn seal(self) {
         // TODO : Comment me out for ICE (step 1/2)
-        self.parent.borrow_mut().add_scope(self.subgraph.take().unwrap());
+        self.parent.borrow_mut().add_scope(self.subgraph);
     }
 }
 
@@ -62,24 +63,22 @@ impl<'a, TInner: Timestamp, G: Graph+'a> Graph for Builder<'a, G, TInner> {
     type Communicator = G::Communicator;
 
     fn connect(&mut self, source: Source, target: Target) {
-        self.subgraph.as_mut().unwrap().connect(source, target);
+        self.subgraph.connect(source, target);
     }
     fn add_boxed_scope(&mut self, scope: Box<Scope<Product<G::Timestamp, TInner>>>) -> u64 {
-        let index = self.subgraph.as_ref().unwrap().children.len() as u64;
-        self.subgraph.as_mut().unwrap().children.push(ScopeWrapper::new(scope, index));
+        let index = self.subgraph.children.len() as u64;
+        self.subgraph.children.push(ScopeWrapper::new(scope, index));
         index
     }
 
     fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, TInner>, T> {
-        let index = self.subgraph.as_ref().unwrap().children() as u64;
+        let index = self.subgraph.children() as u64;
         self.parent.borrow_mut().with_communicator(|x| Subgraph::new_from(x, index))
     }
 
     fn with_communicator<R, F: FnOnce(&mut Self::Communicator)->R>(&mut self, func: F) -> R {
         self.parent.borrow_mut().with_communicator(func)
     }
-
-    fn builder(&mut self) -> RefCell<&mut Self> { RefCell::new(self) }
 }
 
 // TODO : Uncomment me for ICE (step 2/2)
