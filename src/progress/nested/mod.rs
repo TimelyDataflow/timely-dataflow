@@ -7,3 +7,4 @@ pub mod scope_wrapper;
 pub mod summary;
 pub mod product;
 pub mod subgraph;
+pub mod builder;

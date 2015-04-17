@@ -10,8 +10,8 @@ pub trait FilterExt<D: Data> {
 }
 
 // implement the extension trait for Streams
-impl<'a, 'b: 'a, G: Graph+'b, D: Data> FilterExt<D> for Stream<'a, 'b, G, D> {
-    fn filter<L: Fn(&D)->bool+'static>(&mut self, logic: L) -> Stream<'a, 'b, G, D> {
+impl<'a, G: Graph+'a, D: Data> FilterExt<D> for Stream<'a, G, D> {
+    fn filter<L: Fn(&D)->bool+'static>(&mut self, logic: L) -> Stream<'a, G, D> {
         // TODO : Would like the following (simplicity) but no works.
         // self.iterate(format!("Where"), move |x| x.into_iter().filter(|x| logic(x)))
         self.unary(Pipeline, format!("Where"), move |handle| {

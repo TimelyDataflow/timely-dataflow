@@ -21,8 +21,7 @@ use columnar::Columnar;
 
 use progress::graph::Root;
 use progress::{Graph, Scope};
-use progress::nested::subgraph::SubgraphBuilder;
-// use progress::nested::subgraph::new_graph;
+use progress::nested::builder::Builder as SubgraphBuilder;
 use progress::nested::Summary::Local;
 use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
@@ -36,8 +35,6 @@ use core::fmt::Debug;
 use example::*;
 use example::distinct::DistinctExtensionTrait;
 use example::barrier::BarrierScope;
-
-use std::cell::RefCell;
 
 use std::thread;
 
@@ -131,10 +128,9 @@ fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
     }
 }
 
-fn _create_subgraph<'a, 'b, G, D>(source1: &mut Stream<'a, 'b, G, D>,
-                                  source2: &mut Stream<'a, 'b, G, D>) -> (Stream<'a, 'b, G, D>,
-                                                                          Stream<'a, 'b, G, D>)
-where 'b: 'a, G: Graph+'b, D: Data+Hash+Eq+Debug+Columnar {
+fn _create_subgraph<'a, G, D>(source1: &mut Stream<'a, G, D>, source2: &mut Stream<'a, G, D>) ->
+    (Stream<'a, G, D>, Stream<'a, G, D>)
+where G: Graph+'a, D: Data+Hash+Eq+Debug+Columnar {
 
     let mut subgraph = SubgraphBuilder::<_, u64>::new(source1.graph);
     let result = {
@@ -158,7 +154,7 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
         let borrow = root.builder();
         let mut graph = SubgraphBuilder::new(&borrow);
         let (input1, input2) = {
-            let mut builder = graph.builder();
+            let builder = graph.builder();
 
             // try building some input scopes
             let (input1, mut stream1) = builder.new_input::<u64>();

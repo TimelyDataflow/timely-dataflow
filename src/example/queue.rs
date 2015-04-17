@@ -8,8 +8,8 @@ use columnar::Columnar;
 
 pub trait QueueExtensionTrait { fn queue(&mut self) -> Self; }
 
-impl<'a, 'b: 'a, G: Graph+'b, D: Data+Columnar> QueueExtensionTrait for Stream<'a, 'b, G, D> {
-    fn queue(&mut self) -> Stream<'a, 'b, G, D> {
+impl<'a, G: Graph+'a, D: Data+Columnar> QueueExtensionTrait for Stream<'a, G, D> {
+    fn queue(&mut self) -> Stream<'a, G, D> {
         let mut temp = Vec::new();
         self.unary(Pipeline, format!("Queue"), move |handle| {
             while let Some((time, data)) = handle.input.pull() {

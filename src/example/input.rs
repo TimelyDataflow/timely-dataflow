@@ -15,13 +15,17 @@ use example::stream::Stream;
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
 
+// NOTE : This only takes a &self, not a &mut self, which works but is a bit weird.
+// NOTE : Experiments with &mut indicate that the borrow of 'a lives for too long.
+// NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
+
 // returns both an input scope and a stream representing its output.
-pub trait InputExtensionTrait<'b, G: Graph+'b> {
-    fn new_input<'a, D:Data>(&'a self) -> (InputHelper<G::Timestamp, D>, Stream<'a, 'b, G, D>) where 'b: 'a;
+pub trait InputExtensionTrait<G: Graph> {
+    fn new_input<'a, D:Data>(&'a self) -> (InputHelper<G::Timestamp, D>, Stream<'a, G, D>) where G: 'a;
 }
 
-impl<'b, G: Graph+'b> InputExtensionTrait<'b, G> for RefCell<&'b mut G> {
-    fn new_input<'a, D:Data>(&'a self) -> (InputHelper<G::Timestamp, D>, Stream<'a, 'b, G, D>) where 'b: 'a {
+impl<G: Graph> InputExtensionTrait<G> for RefCell<G> {
+    fn new_input<'a, D:Data>(&'a self) -> (InputHelper<G::Timestamp, D>, Stream<'a, G, D>) where G: 'a {
         let output = OutputPort::<G::Timestamp, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 

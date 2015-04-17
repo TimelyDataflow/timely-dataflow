@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use communication::Communicator;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Timestamp, PathSummary, Graph, Scope};
+use progress::{Timestamp, PathSummary, Scope};
 use progress::nested::Source::{GraphInput, ScopeOutput};
 use progress::nested::Target::{GraphOutput, ScopeInput};
 
@@ -39,8 +39,8 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
 
     default_summary:        Summary<TOuter::Summary, TInner::Summary>,    // default summary to use for something TODO: figure out what.
 
-    inputs:                 u64,                        // number inputs into the scope
-    outputs:                u64,                        // number outputs from the scope
+    pub inputs:                 u64,                        // number inputs into the scope
+    pub outputs:                u64,                        // number outputs from the scope
 
     input_edges:            Vec<Vec<Target>>,           // edges as list of Targets for each input_port.
 
@@ -54,12 +54,12 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     input_summaries:        Vec<Vec<(Target, Antichain<Summary<TOuter::Summary, TInner::Summary>>)>>,
 
     // state reflecting work in and promises made to external scope.
-    external_capability:    Vec<MutableAntichain<TOuter>>,
-    external_guarantee:     Vec<MutableAntichain<TOuter>>,
+    pub external_capability:    Vec<MutableAntichain<TOuter>>,
+    pub external_guarantee:     Vec<MutableAntichain<TOuter>>,
 
-    children:               Vec<ScopeWrapper<Product<TOuter, TInner>>>,
+    pub children:               Vec<ScopeWrapper<Product<TOuter, TInner>>>,
 
-    input_messages:         Vec<Rc<RefCell<CountMap<Product<TOuter, TInner>>>>>,
+    pub input_messages:         Vec<Rc<RefCell<CountMap<Product<TOuter, TInner>>>>>,
 
     pointstamps:            PointstampCounter<Product<TOuter, TInner>>,
 
@@ -299,121 +299,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         return active;
     }
 }
-
-// // TODO : Introduce a proper struct to wrap a pair of subgraph and communicator
-// impl<TOuter: Timestamp, TInner: Timestamp, C: Communicator + Clone> Graph for (Rc<RefCell<Subgraph<TOuter, TInner>>>, C) {
-//     type Timestamp = Product<TOuter, TInner>;
-//     type Communicator = C;
-//
-//     fn connect(&mut self, source: Source, target: Target) { self.0.borrow_mut().connect(source, target); }
-//
-//     fn add_boxed_scope(&mut self, scope: Box<Scope<Product<TOuter, TInner>>>) -> u64 {
-//         let mut borrow = self.0.borrow_mut();
-//         let index = borrow.children.len() as u64;
-//         borrow.children.push(ScopeWrapper::new(scope, index));
-//         return index;
-//     }
-//
-//     fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<Product<TOuter, TInner>, T> {
-//         let progcaster = Progcaster::new(&mut self.1);
-//         let mut result: Subgraph<Product<TOuter, TInner>, T> = Subgraph::new_from(progcaster);
-//         result.index = self.0.borrow().children() as u64;
-//         return result;
-//     }
-//
-//     fn communicator(&self) -> C {
-//         self.1.clone()
-//     }
-// }
-//
-// // TODO : Introduce a proper struct to wrap a pair of subgraph and communicator
-// impl<'a, 'b, TOuter: Timestamp, TInner: Timestamp, C: Communicator + Clone> Graph for (&'a RefCell<&'b mut Subgraph<TOuter, TInner>>, C) {
-//     type Timestamp = Product<TOuter, TInner>;
-//     type Communicator = C;
-//
-//     fn connect(&mut self, source: Source, target: Target) { self.0.borrow_mut().connect(source, target); }
-//
-//     fn add_boxed_scope(&mut self, scope: Box<Scope<Product<TOuter, TInner>>>) -> u64 {
-//         let mut borrow = self.0.borrow_mut();
-//         let index = borrow.children.len() as u64;
-//         borrow.children.push(ScopeWrapper::new(scope, index));
-//         return index;
-//     }
-//
-//     fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<Product<TOuter, TInner>, T> {
-//         let progcaster = Progcaster::new(&mut self.1);
-//         let mut result: Subgraph<Product<TOuter, TInner>, T> = Subgraph::new_from(progcaster);
-//         result.index = self.0.borrow().children() as u64;
-//         return result;
-//     }
-//
-//     fn communicator(&self) -> C {
-//         self.1.clone()
-//     }
-// }
-
-pub struct SubgraphBuilder<'a, 'b: 'a, G: Graph+'b, TInner: Timestamp> {
-    subgraph: Option<Subgraph<G::Timestamp, TInner>>,
-    parent:   &'a RefCell<&'b mut G>,
-}
-
-impl<'a, 'b: 'a, G: Graph+'b, TInner: Timestamp> SubgraphBuilder<'a, 'b, G, TInner> {
-    pub fn new(parent: &'a RefCell<&'b mut G>) -> SubgraphBuilder<'a, 'b, G, TInner> {
-        let subgraph = parent.borrow_mut().new_subgraph::<TInner>();
-        SubgraphBuilder {
-            subgraph: Some(subgraph),
-            parent: parent,
-        }
-    }
-    pub fn index(&self) -> u64 { self.subgraph.as_ref().unwrap().index }
-    pub fn parent(&self) -> &'a RefCell<&'b mut G> { self.parent }
-    pub fn new_input(&mut self, shared_counts: Rc<RefCell<CountMap<Product<G::Timestamp, TInner>>>>) -> u64 {
-        self.subgraph.as_mut().unwrap().inputs += 1;
-        self.subgraph.as_mut().unwrap().external_guarantee.push(MutableAntichain::new());
-        self.subgraph.as_mut().unwrap().input_messages.push(shared_counts);
-        return self.subgraph.as_mut().unwrap().inputs - 1;
-    }
-
-    pub fn new_output(&mut self) -> u64 {
-        self.subgraph.as_mut().unwrap().outputs += 1;
-        self.subgraph.as_mut().unwrap().external_capability.push(MutableAntichain::new());
-        return self.subgraph.as_mut().unwrap().outputs - 1;
-    }
-    pub fn seal(&mut self) {
-        // TODO : Comment me out for ICE (step 1/2)
-        self.parent.borrow_mut().add_scope(self.subgraph.take().unwrap());
-    }
-}
-
-impl<'a, 'b: 'a, TInner: Timestamp, G: Graph+'b> Graph for SubgraphBuilder<'a, 'b, G, TInner> {
-    type Timestamp = Product<G::Timestamp, TInner>;
-    type Communicator = G::Communicator;
-
-    fn connect(&mut self, source: Source, target: Target) {
-        self.subgraph.as_mut().unwrap().connect(source, target);
-    }
-    fn add_boxed_scope(&mut self, scope: Box<Scope<Product<G::Timestamp, TInner>>>) -> u64 {
-        let index = self.subgraph.as_ref().unwrap().children.len() as u64;
-        self.subgraph.as_mut().unwrap().children.push(ScopeWrapper::new(scope, index));
-        index
-    }
-
-    fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, TInner>, T> {
-        let index = self.subgraph.as_ref().unwrap().children() as u64;
-        self.parent.borrow_mut().with_communicator(|x| Subgraph::new_from(x, index))
-    }
-
-    fn with_communicator<R, F: FnOnce(&mut Self::Communicator)->R>(&mut self, func: F) -> R {
-        self.parent.borrow_mut().with_communicator(func)
-    }
-
-    fn builder(&mut self) -> RefCell<&mut Self> { RefCell::new(self) }
-}
-
-// TODO : Uncomment me for ICE (step 2/2)
-// impl<'a, 'b: 'a, TInner: Timestamp, G: Graph+'b> Drop for SubgraphBuilder<'a, 'b, G, TInner> {
-//     fn drop(&mut self) { self.parent.borrow_mut().add_scope(self.subgraph.take().unwrap()); }
-// }
 
 impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     pub fn children(&self) -> usize { self.children.len() }

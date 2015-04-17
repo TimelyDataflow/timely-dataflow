@@ -12,8 +12,8 @@ use columnar::Columnar;
 
 pub trait ConcatExt { fn concat(&mut self, &mut Self) -> Self; }
 
-impl<'a, 'b: 'a, G: Graph+'b, D: Data> ConcatExt for Stream<'a, 'b, G, D> {
-    fn concat(&mut self, other: &mut Stream<G, D>) -> Stream<'a, 'b, G, D> {
+impl<'a, G: Graph+'a, D: Data> ConcatExt for Stream<'a, G, D> {
+    fn concat(&mut self, other: &mut Stream<G, D>) -> Stream<'a, G, D> {
         let outputs = OutputPort::<G::Timestamp, D>::new();
         let consumed = vec![Rc::new(RefCell::new(CountMap::new())),
                             Rc::new(RefCell::new(CountMap::new()))];
@@ -26,10 +26,10 @@ impl<'a, 'b: 'a, G: Graph+'b, D: Data> ConcatExt for Stream<'a, 'b, G, D> {
     }
 }
 
-pub trait ConcatVecExt<'a, 'b: 'a, G: Graph+'b, D: Data> { fn concatenate(&mut self) -> Stream<'a, 'b, G, D>; }
+pub trait ConcatVecExt<'a, G: Graph+'a, D: Data> { fn concatenate(&mut self) -> Stream<'a, G, D>; }
 
-impl<'a, 'b: 'a, G: Graph+'b, D: Data> ConcatVecExt<'a, 'b, G, D> for Vec<Stream<'a, 'b, G, D>> {
-    fn concatenate(&mut self) -> Stream<'a, 'b, G, D> {
+impl<'a, G: Graph+'a, D: Data> ConcatVecExt<'a, G, D> for Vec<Stream<'a, G, D>> {
+    fn concatenate(&mut self) -> Stream<'a, G, D> {
         if self.len() == 0 { panic!("must pass at least one stream to concat"); }
 
         let outputs = OutputPort::<G::Timestamp, D>::new();

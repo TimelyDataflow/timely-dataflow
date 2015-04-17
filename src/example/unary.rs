@@ -54,18 +54,18 @@ impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
 }
 
 
-pub trait UnaryExt<'a, 'b: 'a, G: Graph+'b, D1: Data> {
+pub trait UnaryExt<'a, G: Graph+'a, D1: Data> {
     fn unary<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            (&mut self, pact: P, name: String, logic: L) -> Stream<'a, 'b, G, D2>;
+            (&mut self, pact: P, name: String, logic: L) -> Stream<'a, G, D2>;
 }
 
-impl<'a, 'b: 'a, G: Graph+'b, D1: Data> UnaryExt<'a, 'b, G, D1> for Stream<'a, 'b, G, D1> {
+impl<'a, G: Graph+'a, D1: Data> UnaryExt<'a, G, D1> for Stream<'a, G, D1> {
     fn unary<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-             (&mut self, pact: P, name: String, logic: L) -> Stream<'a, 'b, G, D2> {
+             (&mut self, pact: P, name: String, logic: L) -> Stream<'a, G, D2> {
         let (sender, receiver) = self.graph.borrow_mut().with_communicator(|x| pact.connect(x));//self.graph.borrow_mut().communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
         let scope = UnaryScope::new(receiver, targets.clone(), name, logic);
