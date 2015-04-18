@@ -28,11 +28,11 @@ use example_static::builder::*;
 // }
 
 pub trait ConcatVecExt<G: GraphBuilder, D: Data> {
-    fn concatenate<'a>(&'a mut self, Vec<Stream<G::Timestamp, D>>) -> ActiveStream<&'a mut G, D>;
+    fn concatenate(self, Vec<Stream<G::Timestamp, D>>) -> ActiveStream<G, D>;
 }
 
 impl<G: GraphBuilder, D: Data> ConcatVecExt<G, D> for G {
-    fn concatenate<'a>(&'a mut self, sources: Vec<Stream<G::Timestamp, D>>) -> ActiveStream<&'a mut G, D> {
+    fn concatenate(mut self, sources: Vec<Stream<G::Timestamp, D>>) -> ActiveStream<G, D> {
 
         if sources.len() == 0 { panic!("must pass at least one stream to concat"); }
 
@@ -43,7 +43,7 @@ impl<G: GraphBuilder, D: Data> ConcatVecExt<G, D> for G {
         let index = self.add_scope(ConcatScope { consumed: consumed.clone() });
 
         for id in 0..sources.len() {
-            self.enable(&sources[id]).connect_to(ScopeInput(index, id as u64), ObserverHelper::new(outputs.clone(), consumed[id].clone()));
+            (&mut self).enable(&sources[id]).connect_to(ScopeInput(index, id as u64), ObserverHelper::new(outputs.clone(), consumed[id].clone()));
         }
 
         ActiveStream {

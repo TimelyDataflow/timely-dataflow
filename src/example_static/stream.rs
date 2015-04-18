@@ -14,21 +14,21 @@ pub struct Stream<T: Timestamp, D:Data> {
 }
 
 impl<T: Timestamp, D:Data> Stream<T, D> {
-    // pub fn enable<'a, G: GraphBuilder<Timestamp=T>+'a>(&self, builder: &'a mut G) -> ActiveStream<'a, G, D> {
-    //     ActiveStream { stream: self.clone(), builder: builder }
-    // }
+    pub fn enable<G: GraphBuilder<Timestamp=T>>(&self, builder: G) -> ActiveStream<G, D> {
+        ActiveStream { stream: self.clone(), builder: builder }
+    }
 
     pub fn new(source: Source, output: OutputPort<T, D>) -> Self {
         Stream { name: source, ports: output }
     }
 }
 
-pub trait EnableExt<'a, G: GraphBuilder+'a> {
-    fn enable<D: Data>(&'a mut self, stream: &Stream<G::Timestamp, D>) -> ActiveStream<&'a mut G, D>;
+pub trait EnableExt<G: GraphBuilder> {
+    fn enable<D: Data>(self, stream: &Stream<G::Timestamp, D>) -> ActiveStream<G, D>;
 }
 
-impl<'a, G: GraphBuilder+'a> EnableExt<'a, G> for G {
-    fn enable<D: Data>(&'a mut self, stream: &Stream<G::Timestamp, D>) -> ActiveStream<&'a mut G, D> {
+impl<'a, G: GraphBuilder> EnableExt<G> for G {
+    fn enable<D: Data>(self, stream: &Stream<G::Timestamp, D>) -> ActiveStream<G, D> {
         ActiveStream { stream: stream.clone(), builder: self }
     }
 }
