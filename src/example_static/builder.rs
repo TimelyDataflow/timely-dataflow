@@ -13,37 +13,37 @@ pub trait GraphBuilder {
     fn connect(&mut self, source: Source, target: Target);
     fn add_boxed_scope(&mut self, scope: Box<Scope<Self::Timestamp>>) -> u64;
     fn add_scope<SC: Scope<Self::Timestamp>+'static>(&mut self, scope: SC) -> u64 { self.add_boxed_scope(Box::new(scope)) }
-    fn new_subgraph<T: Timestamp>(&mut self) -> SubgraphBuilder<Self, T>;
+    fn new_subgraph<'a, T: Timestamp>(&'a mut self) -> SubgraphBuilder<'a, Self, T>;
 
     fn communicator(&mut self) -> &mut Self::Communicator;
 }
 
-pub struct Root<C: Communicator> {
+pub struct GraphRoot<C: Communicator> {
     communicator:   C,
     graph:          Option<Box<Scope<()>>>,
 }
 
-impl<C: Communicator> Root<C> {
-    pub fn new(c: C) -> Root<C> {
-        Root { communicator: c, graph: None }
+impl<C: Communicator> GraphRoot<C> {
+    pub fn new(c: C) -> GraphRoot<C> {
+        GraphRoot { communicator: c, graph: None }
     }
     pub fn step(&mut self) -> bool {
         if let Some(ref mut scope) = self.graph {
             scope.pull_internal_progress(&mut [], &mut [], &mut [])
         }
-        else { panic!("Root empty; make sure to add a subgraph!") }
+        else { panic!("GraphRoot::step(): empty; make sure to add a subgraph!") }
     }
 }
 
-impl<C: Communicator> GraphBuilder for Root<C> {
+impl<C: Communicator> GraphBuilder for GraphRoot<C> {
     type Timestamp = ();
     type Communicator = C;
 
     fn connect(&mut self, _source: Source, _target: Target) {
-        panic!("root doesn't maintain edges; who are you, how did you get here?")
+        panic!("GraphRoot::connect(): root doesn't maintain edges; who are you, how did you get here?")
     }
     fn add_boxed_scope(&mut self, mut scope: Box<Scope<()>>) -> u64  {
-        if self.graph.is_some() { panic!("added two scopes to root") }
+        if self.graph.is_some() { panic!("GraphRoot::add_boxed_scope(): added second scope to root") }
         else                    {
             scope.get_internal_summary();
             scope.set_external_summary(Vec::new(), &mut []);
@@ -51,10 +51,7 @@ impl<C: Communicator> GraphBuilder for Root<C> {
             0
         }
     }
-    fn add_scope<SC: Scope<()>+'static>(&mut self, scope: SC) -> u64 {
-        self.add_boxed_scope(Box::new(scope))
-    }
-    fn new_subgraph<T: Timestamp>(&mut self) -> SubgraphBuilder<Self, T>  {
+    fn new_subgraph<'a, T: Timestamp>(&'a mut self) -> SubgraphBuilder<'a, Self, T>  {
         SubgraphBuilder {
             subgraph: Subgraph::<(), T>::new_from(&mut self.communicator, 0),
             parent:   self,
@@ -71,16 +68,10 @@ pub struct SubgraphBuilder<'a, G: GraphBuilder+'a, T: Timestamp> {
     pub parent:   &'a mut G,
 }
 
-// impl<'a, G: GraphBuilder+'a, T: Timestamp> SubgraphBuilder<'a, G, T>{
-//     pub fn seal(self) {
-//         self.parent.add_scope(self.subgraph);
-//     }
-// }
-
 impl<'a, G: GraphBuilder+'a, T: Timestamp> Drop for SubgraphBuilder<'a, G, T> {
     fn drop(&mut self) {
+        // TODO : This is a pretty silly way to grab the subgraph. perhaps something more tasteful?
         let subgraph = mem::replace(&mut self.subgraph, Subgraph::new_from(&mut ThreadCommunicator, 0));
-        // println!("adding {} to parent", subgraph.name());
         self.parent.add_scope(subgraph);
     }
 }
@@ -98,7 +89,7 @@ impl<'a, G: GraphBuilder+'a, T: Timestamp> GraphBuilder for SubgraphBuilder<'a, 
         index
     }
 
-    fn new_subgraph<T2: Timestamp>(&mut self) -> SubgraphBuilder<Self, T2> {
+    fn new_subgraph<'b, T2: Timestamp>(&'b mut self) -> SubgraphBuilder<'b, Self, T2> {
         SubgraphBuilder {
             subgraph: Subgraph::new_from(self.parent.communicator(), self.subgraph.children() as u64),
             parent:   self,

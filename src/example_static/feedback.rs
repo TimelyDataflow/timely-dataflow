@@ -86,8 +86,8 @@ pub struct FeedbackHelper<O: Observer> {
 
 impl<O: Observer+'static> FeedbackHelper<O>
 where O::Time: Timestamp, O::Data : Data {
-    pub fn connect_input<G:GraphBuilder<Timestamp=O::Time>>(&mut self, source: &mut Stream<O::Time, O::Data>, builder: &mut G) -> () {
-        source.enable(builder).connect_to(ScopeInput(self.index, 0), self.target.take().unwrap());
+    pub fn connect_input<G:GraphBuilder<Timestamp=O::Time>>(&mut self, source: &Stream<O::Time, O::Data>, builder: &mut G) -> () {
+        builder.enable(source).connect_to(ScopeInput(self.index, 0), self.target.take().unwrap());
     }
 }
 

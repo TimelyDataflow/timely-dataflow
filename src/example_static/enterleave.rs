@@ -12,16 +12,16 @@ use communication::{Observer, Communicator};
 use communication::channels::{Data, OutputPort, ObserverHelper};
 
 use example_static::builder::{GraphBuilder, SubgraphBuilder};
-use example_static::stream::{Stream, ActiveStream};
+use example_static::stream::*;
 
 pub trait EnterSubgraphExt<'outer, G: GraphBuilder+'outer, T: Timestamp, D: Data> {
-    fn enter<'inner>(&'inner mut self, &mut Stream<G::Timestamp, D>) ->
+    fn enter<'inner>(&'inner mut self, &Stream<G::Timestamp, D>) ->
         ActiveStream<'inner, SubgraphBuilder<'outer, G, T>, D> where 'outer: 'inner;
 }
 
 impl<'outer, T: Timestamp, G: GraphBuilder+'outer, D: Data>
 EnterSubgraphExt<'outer, G, T, D> for SubgraphBuilder<'outer, G, T> {
-    fn enter<'inner>(&'inner mut self, stream: &mut Stream<G::Timestamp, D>) ->
+    fn enter<'inner>(&'inner mut self, stream: &Stream<G::Timestamp, D>) ->
         ActiveStream<'inner, SubgraphBuilder<'outer, G, T>, D> where 'outer: 'inner {
 
         let targets = OutputPort::<Product<G::Timestamp, T>, D>::new();
@@ -34,7 +34,7 @@ EnterSubgraphExt<'outer, G, T, D> for SubgraphBuilder<'outer, G, T> {
         self.parent.connect(stream.name, ScopeInput(scope_index, input_index));
         stream.ports.add_observer(ingress);
 
-        Stream::new(GraphInput(input_index), targets).enable(self)
+        self.enable(&Stream::new(GraphInput(input_index), targets))
     }
 }
 

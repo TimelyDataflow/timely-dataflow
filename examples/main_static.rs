@@ -19,18 +19,14 @@ use core::fmt::Debug;
 
 use columnar::Columnar;
 
-// use progress::graph::Root;
 use timely::progress::Scope;
-// use progress::nested::builder::Builder as SubgraphBuilder;
 use timely::progress::nested::Summary::Local;
-// use timely::progress::nested::Source::ScopeOutput;
-// use timely::progress::nested::Target::ScopeInput;
 use timely::progress::nested::product::Product;
 use timely::communication::{ThreadCommunicator, ProcessCommunicator, Communicator};
 use timely::communication::channels::Data;
 use timely::networking::initialize_networking;
 
-use timely::example_static::builder::{GraphBuilder, Root};
+use timely::example_static::builder::{GraphBuilder, GraphRoot};
 use timely::example_static::stream::Stream;
 use timely::example_static::enterleave::*;
 use timely::example_static::distinct::*;
@@ -121,23 +117,21 @@ fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
     }
 }
 
-fn _create_subgraph<G: GraphBuilder, D>(builder: &mut G,
-                                        source1: &mut Stream<G::Timestamp, D>,
-                                        source2: &mut Stream<G::Timestamp, D>) ->
+fn create_subgraph<G: GraphBuilder, D>(builder: &mut G,
+                                        source1: &Stream<G::Timestamp, D>,
+                                        source2: &Stream<G::Timestamp, D>) ->
                                             (Stream<G::Timestamp, D>, Stream<G::Timestamp, D>)
 where D: Data+Hash+Eq+Debug+Columnar {
 
     let mut subgraph = builder.new_subgraph::<u64>();
 
-    (
-        subgraph.enter(source1).distinct().leave(),
-        subgraph.enter(source2).leave()
-    )
+    (subgraph.enter(source1).distinct().leave(),
+     subgraph.enter(source2).leave())
 }
 
 fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
-    let mut root = Root::new(communicator);
+    let mut root = GraphRoot::new(communicator);
 
     let (mut input1, mut input2) = {
 
@@ -152,15 +146,15 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
         let (mut feedback1, feedback1_output) = graph.feedback(Product::new((), 100), Local(1));
         let (mut feedback2, feedback2_output) = graph.feedback(Product::new((), 100), Local(1));
 
-        let mut concat1 = graph.concatenate(vec![&stream1, &feedback1_output]).disable();
-        let mut concat2 = graph.concatenate(vec![&stream2, &feedback2_output]).disable();
+        let concat1 = graph.concatenate(vec![&stream1, &feedback1_output]).disable();
+        let concat2 = graph.concatenate(vec![&stream2, &feedback2_output]).disable();
 
         // build up a subgraph using the concatenated inputs/feedbacks
-        let (mut egress1, mut egress2) = _create_subgraph(&mut graph, &mut concat1, &mut concat2);
+        let (egress1, egress2) = create_subgraph(&mut graph, &concat1, &concat2);
 
         // connect feedback sources. notice that we have swapped indices ...
-        feedback1.connect_input(&mut egress2, &mut graph);
-        feedback2.connect_input(&mut egress1, &mut graph);
+        feedback1.connect_input(&egress2, &mut graph);
+        feedback2.connect_input(&egress1, &mut graph);
 
         (input1, input2)
     };
@@ -214,7 +208,7 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
 fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
-    // let mut root = Root::new(communicator);
+    let mut root = GraphRoot::new(communicator);
     //
     // {
     //     let borrow = root.builder();
@@ -232,8 +226,8 @@ fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     // }
     //
     // // spin
-    // match bencher {
-    //     Some(b) => b.iter(|| { root.step(); }),
-    //     None    => while root.step() { },
-    // }
+    match bencher {
+        Some(b) => b.iter(|| { root.step(); }),
+        None    => while root.step() { },
+    }
 }
