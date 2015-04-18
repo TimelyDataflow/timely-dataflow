@@ -1,5 +1,6 @@
 #![feature(test)]
 #![feature(core)]
+#![feature(scoped)]
 
 #![allow(dead_code)]
 
@@ -125,8 +126,8 @@ where D: Data+Hash+Eq+Debug+Columnar {
 
     let mut subgraph = builder.new_subgraph::<u64>();
 
-    (subgraph.enter(source1).distinct().leave(),
-     subgraph.enter(source2).leave())
+    ((&mut subgraph).enter(source1).distinct().leave(),
+     (&mut subgraph).enter(source2).leave())
 }
 
 fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
@@ -146,8 +147,8 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
         let (mut feedback1, feedback1_output) = graph.feedback(Product::new((), 100), Local(1));
         let (mut feedback2, feedback2_output) = graph.feedback(Product::new((), 100), Local(1));
 
-        let concat1 = graph.concatenate(vec![&stream1, &feedback1_output]).disable();
-        let concat2 = graph.concatenate(vec![&stream2, &feedback2_output]).disable();
+        let concat1 = (&mut graph).concatenate(vec![stream1, feedback1_output]).disable();
+        let concat2 = (&mut graph).concatenate(vec![stream2, feedback2_output]).disable();
 
         // build up a subgraph using the concatenated inputs/feedbacks
         let (egress1, egress2) = create_subgraph(&mut graph, &concat1, &concat2);
