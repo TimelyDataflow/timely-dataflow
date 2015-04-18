@@ -9,8 +9,8 @@ pub trait InspectExt<D: Data> {
     fn inspect<F: FnMut(&D)+'static>(self, func: F) -> Self;
 }
 
-impl<'a, G: GraphBuilder+'a, D: Data> InspectExt<D> for ActiveStream<'a, G, D> {
-    fn inspect<F: FnMut(&D)+'static>(self, mut func: F) -> ActiveStream<'a, G, D> {
+impl<G: GraphBuilder, D: Data> InspectExt<D> for ActiveStream<G, D> {
+    fn inspect<F: FnMut(&D)+'static>(self, mut func: F) -> ActiveStream<G, D> {
         self.unary(Pipeline, format!("Inspect"), move |handle| {
             while let Some((time, data)) = handle.input.pull() {
                 let mut session = handle.output.session(&time);
@@ -28,8 +28,8 @@ pub trait InspectBatchExt<G: GraphBuilder, D: Data> {
     fn inspect_batch<F: FnMut(&G::Timestamp, &Vec<D>)+'static>(self, mut func: F) -> Self;
 }
 
-impl<'a, G: GraphBuilder+'a, D: Data> InspectBatchExt<G, D> for ActiveStream<'a, G, D> {
-    fn inspect_batch<F: FnMut(&G::Timestamp, &Vec<D>)+'static>(self, mut func: F) -> ActiveStream<'a, G, D> {
+impl<G: GraphBuilder, D: Data> InspectBatchExt<G, D> for ActiveStream<G, D> {
+    fn inspect_batch<F: FnMut(&G::Timestamp, &Vec<D>)+'static>(self, mut func: F) -> ActiveStream<G, D> {
         self.unary(Pipeline, format!("Inspect"), move |handle| {
             while let Some((time, data)) = handle.input.pull() {
                 func(&time, &data);
