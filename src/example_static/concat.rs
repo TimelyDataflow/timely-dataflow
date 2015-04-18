@@ -28,11 +28,11 @@ use example_static::builder::*;
 // }
 
 pub trait ConcatVecExt<G: GraphBuilder, D: Data> {
-    fn concatenate<'a>(&'a mut self, Vec<Stream<G::Timestamp, D>>) -> ActiveStream<'a, G, D>;
+    fn concatenate<'a>(&'a mut self, Vec<Stream<G::Timestamp, D>>) -> ActiveStream<&'a mut G, D>;
 }
 
 impl<G: GraphBuilder, D: Data> ConcatVecExt<G, D> for G {
-    fn concatenate<'a>(&'a mut self, sources: Vec<Stream<G::Timestamp, D>>) -> ActiveStream<'a, G, D> {
+    fn concatenate<'a>(&'a mut self, sources: Vec<Stream<G::Timestamp, D>>) -> ActiveStream<&'a mut G, D> {
 
         if sources.len() == 0 { panic!("must pass at least one stream to concat"); }
 

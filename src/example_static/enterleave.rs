@@ -14,15 +14,15 @@ use communication::channels::{Data, OutputPort, ObserverHelper};
 use example_static::builder::{GraphBuilder, SubgraphBuilder};
 use example_static::stream::*;
 
-pub trait EnterSubgraphExt<'outer, G: GraphBuilder+'outer, T: Timestamp, D: Data> {
-    fn enter<'inner>(&'inner mut self, &Stream<G::Timestamp, D>) ->
-        ActiveStream<'inner, SubgraphBuilder<'outer, G, T>, D> where 'outer: 'inner;
+pub trait EnterSubgraphExt<G: GraphBuilder, T: Timestamp, D: Data> {
+    fn enter<'a>(&'a mut self, &Stream<G::Timestamp, D>) ->
+        ActiveStream<&'a mut SubgraphBuilder<G, T>, D>;
 }
 
-impl<'outer, T: Timestamp, G: GraphBuilder+'outer, D: Data>
-EnterSubgraphExt<'outer, G, T, D> for SubgraphBuilder<'outer, G, T> {
-    fn enter<'inner>(&'inner mut self, stream: &Stream<G::Timestamp, D>) ->
-        ActiveStream<'inner, SubgraphBuilder<'outer, G, T>, D> where 'outer: 'inner {
+impl<T: Timestamp, G: GraphBuilder, D: Data>
+EnterSubgraphExt<G, T, D> for SubgraphBuilder<G, T> {
+    fn enter<'a>(&'a mut self, stream: &Stream<G::Timestamp, D>) ->
+        ActiveStream<&'a mut SubgraphBuilder<G, T>, D> {
 
         let targets = OutputPort::<Product<G::Timestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
@@ -38,12 +38,12 @@ EnterSubgraphExt<'outer, G, T, D> for SubgraphBuilder<'outer, G, T> {
     }
 }
 
-pub trait LeaveSubgraphExt<'outer, G: GraphBuilder+'outer, D: Data> {
+pub trait LeaveSubgraphExt<G: GraphBuilder, D: Data> {
     fn leave(&mut self) -> Stream<G::Timestamp, D>;
 }
 
-impl<'inner, 'outer: 'inner, G: GraphBuilder+'outer, D: Data, TInner: Timestamp> LeaveSubgraphExt<'outer, G, D>
-for ActiveStream<'inner, SubgraphBuilder<'outer, G, TInner>, D> {
+impl<'a, G: GraphBuilder+'a, D: Data, TInner: Timestamp> LeaveSubgraphExt<G, D>
+for ActiveStream<&'a mut SubgraphBuilder<G, TInner>, D> where G::Communicator: 'a {
     fn leave(&mut self) -> Stream<G::Timestamp, D> {
 
         let output_index = self.builder.subgraph.new_output();

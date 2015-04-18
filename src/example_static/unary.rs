@@ -56,18 +56,18 @@ impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
 }
 
 
-pub trait UnaryNotifyExt<'a, G: GraphBuilder, D1: Data> {
+pub trait UnaryNotifyExt<G: GraphBuilder, D1: Data> {
     fn unary_notify<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            (self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<'a, G, D2>;
+            (self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<G, D2>;
 }
 
-impl<'a, G: GraphBuilder+'a, D1: Data> UnaryNotifyExt<'a, G, D1> for ActiveStream<'a, G, D1> {
+impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for ActiveStream<G, D1> {
     fn unary_notify<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-             (mut self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<'a, G, D2> {
+             (mut self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<G, D2> {
         let (sender, receiver) = pact.connect(self.builder.communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
         let scope = UnaryScope::new(receiver, targets.clone(), name, logic, init, true);
@@ -78,18 +78,18 @@ impl<'a, G: GraphBuilder+'a, D1: Data> UnaryNotifyExt<'a, G, D1> for ActiveStrea
 }
 
 
-pub trait UnaryExt<'a, G: GraphBuilder, D1: Data> {
+pub trait UnaryExt<G: GraphBuilder, D1: Data> {
     fn unary<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            (self, pact: P, name: String, logic: L) -> ActiveStream<'a, G, D2>;
+            (self, pact: P, name: String, logic: L) -> ActiveStream<G, D2>;
 }
 
-impl<'a, G: GraphBuilder+'a, D1: Data> UnaryExt<'a, G, D1> for ActiveStream<'a, G, D1> {
+impl<G: GraphBuilder, D1: Data> UnaryExt<G, D1> for ActiveStream<G, D1> {
     fn unary<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-             (mut self, pact: P, name: String, logic: L) -> ActiveStream<'a, G, D2> {
+             (mut self, pact: P, name: String, logic: L) -> ActiveStream<G, D2> {
         let (sender, receiver) = pact.connect(self.builder.communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
         let scope = UnaryScope::new(receiver, targets.clone(), name, logic, vec![], false);

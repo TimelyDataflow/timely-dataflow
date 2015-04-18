@@ -24,21 +24,21 @@ impl<T: Timestamp, D:Data> Stream<T, D> {
 }
 
 pub trait EnableExt<'a, G: GraphBuilder+'a> {
-    fn enable<D: Data>(&'a mut self, stream: &Stream<G::Timestamp, D>) -> ActiveStream<'a, G, D>;
+    fn enable<D: Data>(&'a mut self, stream: &Stream<G::Timestamp, D>) -> ActiveStream<&'a mut G, D>;
 }
 
 impl<'a, G: GraphBuilder+'a> EnableExt<'a, G> for G {
-    fn enable<D: Data>(&'a mut self, stream: &Stream<G::Timestamp, D>) -> ActiveStream<'a, G, D> {
+    fn enable<D: Data>(&'a mut self, stream: &Stream<G::Timestamp, D>) -> ActiveStream<&'a mut G, D> {
         ActiveStream { stream: stream.clone(), builder: self }
     }
 }
 
-pub struct ActiveStream<'a, G: GraphBuilder+'a, D: Data> {
+pub struct ActiveStream<G: GraphBuilder, D: Data> {
     pub stream:  Stream<G::Timestamp, D>,
-    pub builder: &'a mut G,
+    pub builder: G,
 }
 
-impl<'a, G: GraphBuilder+'a, D: Data> ActiveStream<'a, G, D> {
+impl<G: GraphBuilder, D: Data> ActiveStream<G, D> {
     pub fn disable(self) -> Stream<G::Timestamp, D> {
         self.stream
     }
@@ -48,7 +48,8 @@ impl<'a, G: GraphBuilder+'a, D: Data> ActiveStream<'a, G, D> {
         self.builder.connect(self.stream.name, target);
         self.stream.ports.add_observer(observer);
     }
-    pub fn transfer_borrow_to<D2: Data>(self, source: Source, ports: OutputPort<G::Timestamp, D2>) -> ActiveStream<'a, G, D2> {
+
+    pub fn transfer_borrow_to<D2: Data>(self, source: Source, ports: OutputPort<G::Timestamp, D2>) -> ActiveStream<G, D2> {
         ActiveStream {
             stream: Stream {
                 name: source,
