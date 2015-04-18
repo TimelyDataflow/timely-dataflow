@@ -17,7 +17,7 @@ pub trait GraphBuilder: Sized {
 
     fn communicator(&mut self) -> &mut Self::Communicator;
 
-    fn new_subgraph<'a, T: Timestamp>(&'a mut self) -> SubgraphBuilder<'a, Self, T> {
+    fn new_subgraph<'a, T: Timestamp>(&'a mut self) -> SubgraphBuilder<&'a mut Self, T> {
         let subscope = self.new_subscope();
         SubgraphBuilder {
             subgraph: subscope,
@@ -81,12 +81,12 @@ impl<C: Communicator> GraphBuilder for GraphRoot<C> {
 
 
 
-pub struct SubgraphBuilder<'a, G: GraphBuilder+'a, T: Timestamp> {
+pub struct SubgraphBuilder<G: GraphBuilder, T: Timestamp> {
     pub subgraph: Subgraph<G::Timestamp, T>,
-    pub parent:   &'a mut G,
+    pub parent:   G,
 }
 
-impl<'a, G: GraphBuilder+'a, T: Timestamp> Drop for SubgraphBuilder<'a, G, T> {
+impl<G: GraphBuilder, T: Timestamp> Drop for SubgraphBuilder<G, T> {
     fn drop(&mut self) {
         // TODO : This is a pretty silly way to grab the subgraph. perhaps something more tasteful?
         let subgraph = mem::replace(&mut self.subgraph, Subgraph::new_from(&mut ThreadCommunicator, 0));
@@ -94,7 +94,7 @@ impl<'a, G: GraphBuilder+'a, T: Timestamp> Drop for SubgraphBuilder<'a, G, T> {
     }
 }
 
-impl<'a, G: GraphBuilder+'a, T: Timestamp> GraphBuilder for SubgraphBuilder<'a, G, T>{
+impl<G: GraphBuilder, T: Timestamp> GraphBuilder for SubgraphBuilder<G, T>{
     type Timestamp = Product<G::Timestamp, T>;
     type Communicator = G::Communicator;
 
