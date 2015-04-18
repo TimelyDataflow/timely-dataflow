@@ -56,6 +56,28 @@ impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
 }
 
 
+pub trait UnaryNotifyExt<'a, G: GraphBuilder, D1: Data> {
+    fn unary_notify<D2: Data,
+             L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
+             P: ParallelizationContract<G::Timestamp, D1>>
+            (self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<'a, G, D2>;
+}
+
+impl<'a, G: GraphBuilder+'a, D1: Data> UnaryNotifyExt<'a, G, D1> for ActiveStream<'a, G, D1> {
+    fn unary_notify<D2: Data,
+             L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
+             P: ParallelizationContract<G::Timestamp, D1>>
+             (mut self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<'a, G, D2> {
+        let (sender, receiver) = pact.connect(self.builder.communicator());
+        let targets = OutputPort::<G::Timestamp,D2>::new();
+        let scope = UnaryScope::new(receiver, targets.clone(), name, logic, init, true);
+        let index = self.builder.add_scope(scope);
+        self.connect_to(ScopeInput(index, 0), sender);
+        self.transfer_borrow_to(ScopeOutput(index, 0), targets)
+    }
+}
+
+
 pub trait UnaryExt<'a, G: GraphBuilder, D1: Data> {
     fn unary<D2: Data,
              L: FnMut(&mut UnaryScopeHandle<G::Timestamp, D1, D2, P::Pullable>)+'static,
@@ -70,7 +92,7 @@ impl<'a, G: GraphBuilder+'a, D1: Data> UnaryExt<'a, G, D1> for ActiveStream<'a, 
              (mut self, pact: P, name: String, logic: L) -> ActiveStream<'a, G, D2> {
         let (sender, receiver) = pact.connect(self.builder.communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets.clone(), name, logic);
+        let scope = UnaryScope::new(receiver, targets.clone(), name, logic, vec![], false);
         let index = self.builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
         self.transfer_borrow_to(ScopeOutput(index, 0), targets)
@@ -87,18 +109,22 @@ pub struct UnaryScope<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)
     name:           String,
     handle:         UnaryScopeHandle<T, D1, D2, P>,
     logic:          L,
+    initial:        Vec<T>,  // initial notifications
+    notify:         bool,
 }
 
 impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut UnaryScopeHandle<T, D1, D2, P>)> UnaryScope<T, D1, D2, P, L> {
-    pub fn new(receiver: P, targets: OutputPort<T, D2>, name: String, logic: L) -> UnaryScope<T, D1, D2, P, L> {
+    pub fn new(receiver: P, targets: OutputPort<T, D2>, name: String, logic: L, init: Vec<T>, notify: bool) -> UnaryScope<T, D1, D2, P, L> {
         UnaryScope {
-            name: name,
-            handle: UnaryScopeHandle {
+            name:    name,
+            handle:  UnaryScopeHandle {
                 input:       PullableHelper::new(receiver),
                 output:      ObserverHelper::new(targets, Rc::new(RefCell::new(CountMap::new()))),
                 notificator: Default::default(),
             },
-            logic: logic,
+            logic:   logic,
+            initial: init,
+            notify:  notify,
         }
     }
 }
@@ -110,6 +136,15 @@ where T: Timestamp,
       L: FnMut(&mut UnaryScopeHandle<T, D1, D2, P>) {
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { 1 }
+
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
+        let mut internal = vec![CountMap::new()];
+
+        for time in self.initial.drain() { for _ in (0..1) { self.handle.notificator.notify_at(&time); } }
+        self.handle.notificator.pull_progress(&mut internal[0]);
+
+        (vec![vec![Antichain::from_elem(Default::default())]], internal)
+    }
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [CountMap<T>]) -> () {
         self.handle.notificator.update_frontier_from_cm(frontier);
@@ -134,5 +169,5 @@ where T: Timestamp,
     }
 
     fn name(&self) -> String { format!("{}", self.name) }
-    fn notify_me(&self) -> bool { true }
+    fn notify_me(&self) -> bool { self.notify }
 }

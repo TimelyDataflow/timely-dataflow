@@ -10,6 +10,7 @@ pub use self::partition::*;
 pub use self::map::*;
 pub use self::inspect::*;
 pub use self::flat_map::*;
+pub use self::filter::*;
 
 pub mod stream;
 pub mod builder;
@@ -23,3 +24,4 @@ pub mod partition;
 pub mod map;
 pub mod inspect;
 pub mod flat_map;
+pub mod filter;

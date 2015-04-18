@@ -8,7 +8,7 @@ use communication::*;
 use communication::pact::Exchange;
 
 use example_static::stream::ActiveStream;
-use example_static::unary::UnaryExt;
+use example_static::unary::*;
 use example_static::builder::*;
 
 use columnar::Columnar;
@@ -18,7 +18,7 @@ pub trait DistinctExtensionTrait { fn distinct(self) -> Self; }
 impl<'a, G: GraphBuilder+'a, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for ActiveStream<'a, G, D> {
     fn distinct(self) -> ActiveStream<'a, G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
-        self.unary(Exchange::new(|x| hash::<_,SipHasher>(&x)), format!("Distinct"), move |handle| {
+        self.unary_notify(Exchange::new(|x| hash::<_,SipHasher>(&x)), format!("Distinct"), vec![], move |handle| {
             // read input data into sets, request notifications
             while let Some((time, data)) = handle.input.pull() {
                 let set = elements.entry(time).or_insert_with(|| {
