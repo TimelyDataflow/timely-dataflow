@@ -32,7 +32,7 @@ impl<T: Timestamp, D: Data> OutputPort<T, D> {
     pub fn new() -> OutputPort<T, D> {
         OutputPort { shared: BufferedObserver::new(256, Rc::new(RefCell::new(BroadcastObserver::new()))) }
     }
-    pub fn add_observer<O: Observer<Time=T, Data=D>+'static>(&mut self, observer: O) {
+    pub fn add_observer<O: Observer<Time=T, Data=D>+'static>(&self, observer: O) {
         self.shared.inner().borrow_mut().add(Box::new(FlattenedObserver::new(observer)));
     }
 }
