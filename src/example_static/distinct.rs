@@ -15,8 +15,8 @@ use columnar::Columnar;
 
 pub trait DistinctExtensionTrait { fn distinct(self) -> Self; }
 
-impl<'a, G: GraphBuilder+'a, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for ActiveStream<'a, G, D> {
-    fn distinct(self) -> ActiveStream<'a, G, D> {
+impl<G: GraphBuilder, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for ActiveStream<G, D> {
+    fn distinct(self) -> ActiveStream<G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         self.unary(Exchange::new(|x| hash::<_,SipHasher>(&x)), format!("Distinct"), move |handle| {
             // read input data into sets, request notifications

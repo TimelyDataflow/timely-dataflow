@@ -15,12 +15,12 @@ use example_static::stream::{Stream, ActiveStream};
 use example_static::unary::PullableHelper;
 
 
-pub trait PartitionExt<'a, G: GraphBuilder+'a, D: Data, F: Fn(&D)->u64> {
-    fn partition(self, parts: u64, func: F) -> (Vec<Stream<G::Timestamp, D>>, &'a mut G);
+pub trait PartitionExt<G: GraphBuilder, D: Data, F: Fn(&D)->u64> {
+    fn partition(self, parts: u64, func: F) -> (Vec<Stream<G::Timestamp, D>>, G);
 }
 
-impl<'a, G: GraphBuilder+'a, D: Data, F: Fn(&D)->u64+'static> PartitionExt<'a, G, D, F> for ActiveStream<'a, G, D> {
-    fn partition(mut self, parts: u64, func: F) -> (Vec<Stream<G::Timestamp, D>>, &'a mut G) {
+impl<G: GraphBuilder, D: Data, F: Fn(&D)->u64+'static> PartitionExt<G, D, F> for ActiveStream<G, D> {
+    fn partition(mut self, parts: u64, func: F) -> (Vec<Stream<G::Timestamp, D>>, G) {
 
         let (sender, receiver) = Pipeline.connect(self.builder.communicator());
         let mut targets = Vec::new();
