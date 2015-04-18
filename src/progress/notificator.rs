@@ -19,7 +19,7 @@ pub struct Notificator<T: Timestamp> {
 
 impl<T: Timestamp> Notificator<T> {
     pub fn update_frontier_from_cm(&mut self, count_map: &mut [CountMap<T>]) {
-
+        // println!("notificator: frontier update {:?}", count_map);
         while self.frontier.len() < count_map.len() {
             self.frontier.push(MutableAntichain::new());
         }
@@ -32,7 +32,7 @@ impl<T: Timestamp> Notificator<T> {
     }
 
     pub fn notify_at(&mut self, time: &T) {
-        // println!("notify at: {:?}", time);
+        // println!("notificator: notify at: {:?}", time);
         self.changes.update(time, 1);
         self.pending.update(time, 1);
 
@@ -74,7 +74,7 @@ impl<T: Timestamp> Iterator for Notificator<T> {
 
         // return an available notification, after cleaning up
         if let Some((time, delta)) =  self.available.pop() {
-            // println!("serving notification at {:?}", time);
+            // println!("notificator: serving notification at {:?}", time);
             self.changes.update(&time, -delta);
             self.pending.update(&time, -delta);
             Some((time, delta))
