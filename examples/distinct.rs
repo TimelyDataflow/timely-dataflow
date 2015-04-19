@@ -31,7 +31,6 @@ extern crate columnar;
 
 use core::fmt::Debug;
 
-use std::cell::RefCell;
 use std::hash::Hash;
 
 use timely::communication::{Communicator, ThreadCommunicator};
@@ -39,7 +38,6 @@ use timely::communication::channels::Data;
 use timely::progress::nested::product::Product;
 use timely::progress::nested::builder::Builder as SubgraphBuilder;
 use timely::progress::nested::Summary::Local;
-use timely::progress::scope::Scope;
 use timely::progress::graph::{Graph, Root};
 use timely::example::*;
 use timely::example::distinct::DistinctExtensionTrait;

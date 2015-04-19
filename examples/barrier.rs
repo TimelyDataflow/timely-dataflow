@@ -34,7 +34,6 @@ extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};
 use timely::progress::nested::builder::Builder as SubgraphBuilder;
-use timely::progress::scope::Scope;
 use timely::progress::graph::{Graph, Root};
 use timely::progress::nested::Source::ScopeOutput;
 use timely::progress::nested::Target::ScopeInput;
