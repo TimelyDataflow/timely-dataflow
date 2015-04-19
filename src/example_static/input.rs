@@ -24,11 +24,11 @@ use example_static::builder::*;
 
 // returns both an input scope and a stream representing its output.
 pub trait InputExtensionTrait<G: GraphBuilder> {
-    fn new_input<'a, D:Data>(&'a mut self) -> (InputHelper<G::Timestamp, D>, Stream<G::Timestamp, D>) where G: 'a;
+    fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G::Timestamp, D>);
 }
 
 impl<G: GraphBuilder> InputExtensionTrait<G> for G {
-    fn new_input<'a, D:Data>(&'a mut self) -> (InputHelper<G::Timestamp, D>, Stream<G::Timestamp, D>) where G: 'a {
+    fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G::Timestamp, D>) {
         let output = OutputPort::<G::Timestamp, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 

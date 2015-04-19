@@ -140,7 +140,8 @@ where T: Timestamp,
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut internal = vec![CountMap::new()];
 
-        for time in self.initial.drain() { for _ in (0..1) { self.handle.notificator.notify_at(&time); } }
+        // TODO : this 256 number... it should really be communicator.peers().
+        for time in self.initial.drain() { for _ in (0..256) { self.handle.notificator.notify_at(&time); } }
         self.handle.notificator.pull_progress(&mut internal[0]);
 
         (vec![vec![Antichain::from_elem(Default::default())]], internal)
