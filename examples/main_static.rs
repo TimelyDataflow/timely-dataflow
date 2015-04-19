@@ -27,13 +27,7 @@ use timely::communication::{ThreadCommunicator, ProcessCommunicator, Communicato
 use timely::communication::channels::Data;
 use timely::networking::initialize_networking;
 
-use timely::example_static::builder::{GraphBuilder, GraphRoot};
-use timely::example_static::stream::Stream;
-use timely::example_static::enterleave::*;
-use timely::example_static::distinct::*;
-use timely::example_static::input::*;
-use timely::example_static::feedback::*;
-use timely::example_static::concat::*;
+use timely::example_static::*;
 
 static USAGE: &'static str = "
 Usage: timely distinct [options] [<arguments>...]
@@ -144,18 +138,18 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
         let (input2, stream2) = graph.new_input::<u64>();
 
         // prepare some feedback edges
-        let (mut feedback1, feedback1_output) = graph.feedback(Product::new((), 100), Local(1));
-        let (mut feedback2, feedback2_output) = graph.feedback(Product::new((), 100), Local(1));
+        let (loop1_source, loop1) = graph.loop_variable(Product::new((), 100), Local(1));
+        let (loop2_source, loop2) = graph.loop_variable(Product::new((), 100), Local(1));
 
-        let concat1 = (&mut graph).concatenate(vec![stream1, feedback1_output]).disable();
-        let concat2 = (&mut graph).concatenate(vec![stream2, feedback2_output]).disable();
+        let concat1 = (&mut graph).concatenate(vec![stream1, loop1]).disable();
+        let concat2 = (&mut graph).concatenate(vec![stream2, loop2]).disable();
 
         // build up a subgraph using the concatenated inputs/feedbacks
         let (egress1, egress2) = create_subgraph(&mut graph, &concat1, &concat2);
 
         // connect feedback sources. notice that we have swapped indices ...
-        feedback1.connect_input(&egress2, &mut graph);
-        feedback2.connect_input(&egress1, &mut graph);
+        egress1.enable(&mut graph).connect_loop(loop2_source);
+        egress2.enable(&mut graph).connect_loop(loop1_source);
 
         (input1, input2)
     };

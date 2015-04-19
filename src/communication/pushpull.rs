@@ -28,6 +28,16 @@ pub struct PushableObserver<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> {
     pub phantom:    PhantomData<T>,
 }
 
+impl<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PushableObserver<T, D, P> {
+    pub fn new(pushable: P) -> PushableObserver<T, D, P> {
+        PushableObserver {
+            data:       Vec::new(),
+            pushable:   pushable,
+            phantom:    PhantomData,
+        }
+    }
+}
+
 impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PushableObserver<T,D,P> {
     type Time = T;
     type Data = D;

@@ -21,8 +21,7 @@ pub struct Pipeline;
 impl<T: Timestamp, D: Data> ParallelizationContract<T, D> for Pipeline {
     type Observer = PushableObserver<T, D, Rc<RefCell<Vec<(T, Vec<D>)>>>>;
     type Pullable = Rc<RefCell<Vec<(T, Vec<D>)>>>;
-    fn connect<C: Communicator>(self,_communicator: &mut C) -> (<Pipeline as ParallelizationContract<T, D>>::Observer,
-                                                                <Pipeline as ParallelizationContract<T, D>>::Pullable) {
+    fn connect<C: Communicator>(self,_communicator: &mut C) -> (Self::Observer, Self::Pullable) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         return (PushableObserver { data: Vec::new(), pushable: shared.clone(), phantom: PhantomData }, shared);
     }
@@ -39,15 +38,17 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
     }
 }
 
+// Exchange uses a Box<Pushable> because it cannot know what type of pushable will return from the communicator.
+// The PushableObserver will do some buffering for Exchange, cutting down on the virtual calls, but we still
+// would like to get the vectors it sends back, so that they can be re-used if possible (given that they are 1:1)
 impl<T: Timestamp, D: Data+Columnar, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
     type Observer = ExchangeObserver<PushableObserver<T,D,Box<Pushable<(T,Vec<D>)>>>, F>;
     type Pullable = Box<Pullable<(T, Vec<D>)>>;
-    fn connect<C: Communicator>(self, communicator: &mut C) -> (<Exchange<D, F> as ParallelizationContract<T, D>>::Observer,
-                                                                <Exchange<D, F> as ParallelizationContract<T, D>>::Pullable) {
+    fn connect<C: Communicator>(self, communicator: &mut C) -> (Self::Observer, Self::Pullable) {
         let (senders, receiver) = communicator.new_channel();
 
         let exchange_sender = ExchangeObserver {
-            observers:  senders.into_iter().map(|x| PushableObserver { data: Vec::new(), pushable: x, phantom: PhantomData }).collect(),
+            observers:  senders.into_iter().map(|x| PushableObserver::new(x)).collect(),
             hash_func:  self.hash_func,
         };
 
@@ -55,7 +56,9 @@ impl<T: Timestamp, D: Data+Columnar, F: Fn(&D)->u64+'static> ParallelizationCont
     }
 }
 
-// // broadcasts to all observers
+// broadcasts to all observers
+// TODO : This needs support from the progress tracking protocol;
+// TODO : we don't know/report how many messages are actually created.
 // pub struct Broadcast;
 // impl<T: Timestamp, D: Data+Columnar> ParallelizationContract<T, D> for Broadcast {
 //     type Observer = BroadcastObserver<PushableObserver<T,D,Box<Pushable<(T,Vec<D>)>>>>;

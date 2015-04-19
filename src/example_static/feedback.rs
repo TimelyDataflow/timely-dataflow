@@ -18,13 +18,13 @@ use example_static::stream::*;
 use example_static::builder::*;
 
 pub trait FeedbackExt<G: GraphBuilder> {
-    fn feedback<D:Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) ->
-            (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<G::Timestamp, D>);
+    fn loop_variable<D:Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
+        -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<G::Timestamp, D>);
 }
 
 impl<G: GraphBuilder> FeedbackExt<G> for G {
-    fn feedback<D:Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) ->
-            (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<G::Timestamp, D>) {
+    fn loop_variable<D:Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
+        -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<G::Timestamp, D>) {
 
         let targets = OutputPort::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
@@ -43,16 +43,11 @@ impl<G: GraphBuilder> FeedbackExt<G> for G {
 
         let helper = FeedbackHelper {
             index:  index,
-            target: Some(feedback_input),
+            target: feedback_input,
         };
 
         (helper, Stream::new(ScopeOutput(index, 0), targets))
     }
-}
-
-enum FeedbackObserverStatus<T: Timestamp> {
-    Active(T),
-    Inactive,
 }
 
 // implementation of the feedback vertex, essentially, as an observer
@@ -61,7 +56,6 @@ pub struct FeedbackObserver<T: Timestamp, D:Data> {
     summary:    T::Summary,
     targets:    ObserverHelper<OutputPort<T, D>>,
     active:     bool,
-    // status:     FeedbackObserverStatus<T>,  // for debugging ideally
 }
 
 impl<T: Timestamp, D: Data> Observer for FeedbackObserver<T, D> {
@@ -69,7 +63,6 @@ impl<T: Timestamp, D: Data> Observer for FeedbackObserver<T, D> {
     type Data = D;
     #[inline(always)] fn open(&mut self, time: &T) {
         self.active = time.le(&self.limit); // don't send if not less than limit
-        // println!("active: {}", self.active);
         if self.active { self.targets.open(&self.summary.results_in(time)); }
     }
     #[inline(always)] fn show(&mut self, data: &D) { if self.active { self.targets.show(data); } }
@@ -78,18 +71,30 @@ impl<T: Timestamp, D: Data> Observer for FeedbackObserver<T, D> {
 }
 
 
+pub trait FeedbackConnectExt<G: GraphBuilder, D: Data> {
+    fn connect_loop(self, FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>) -> G;
+}
+
+impl<G: GraphBuilder, D: Data> FeedbackConnectExt<G, D> for ActiveStream<G, D> {
+    fn connect_loop(mut self, helper: FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>) -> G {
+        self.connect_to(ScopeInput(helper.index, 0), helper.target);
+        self.builder
+    }
+
+}
+
 // a handy widget for connecting feedback edges
 pub struct FeedbackHelper<O: Observer> {
     index:  u64,
-    target: Option<O>,
+    target: O,
 }
 
-impl<O: Observer+'static> FeedbackHelper<O>
-where O::Time: Timestamp, O::Data : Data {
-    pub fn connect_input<G:GraphBuilder<Timestamp=O::Time>>(&mut self, source: &Stream<O::Time, O::Data>, builder: &mut G) -> () {
-        builder.enable(source).connect_to(ScopeInput(self.index, 0), self.target.take().unwrap());
-    }
-}
+// impl<O: Observer+'static> FeedbackHelper<O>
+// where O::Time: Timestamp, O::Data : Data {
+//     pub fn connect_input<G:GraphBuilder<Timestamp=O::Time>>(self, source: &Stream<O::Time, O::Data>, builder: &mut G) {
+//         builder.enable(source).connect_to(ScopeInput(self.index, 0), self.target);
+//     }
+// }
 
 // the scope that the progress tracker interacts with
 pub struct FeedbackScope<T:Timestamp> {
@@ -97,6 +102,7 @@ pub struct FeedbackScope<T:Timestamp> {
     produced_messages:  Rc<RefCell<CountMap<T>>>,
     summary:            T::Summary,
 }
+
 
 impl<T:Timestamp> Scope<T> for FeedbackScope<T> {
     fn name(&self) -> String { format!("Feedback") }
@@ -113,7 +119,6 @@ impl<T:Timestamp> Scope<T> for FeedbackScope<T> {
 
         self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
         self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);
-        // println!("feedback pulled: c: {:?}, p: {:?}", messages_consumed[0], messages_produced[0]);
         return false;
     }
 

@@ -6,7 +6,7 @@ use progress::Timestamp;
 use progress::count_map::CountMap;
 
 use communication::Observer;
-use communication::observer::{BufferedObserver, FlattenedObserver, BroadcastObserver};
+// use communication::observer::{BufferedObserver, FlattenedObserver, BroadcastObserver};
 
 use std::rc::Rc;
 use std::cell::RefCell;
