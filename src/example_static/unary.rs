@@ -3,7 +3,6 @@ use std::cell::RefCell;
 use std::default::Default;
 use core::marker::PhantomData;
 
-// use progress::Graph;
 use progress::nested::subgraph::Source::ScopeOutput;
 use progress::nested::subgraph::Target::ScopeInput;
 
@@ -70,7 +69,7 @@ impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for ActiveStream<G, D1> {
              (mut self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<G, D2> {
         let (sender, receiver) = pact.connect(self.builder.communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets.clone(), name, logic, init, true);
+        let scope = UnaryScope::new(receiver, targets.clone(), name, logic, init, true, self.builder.communicator().peers());
         let index = self.builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
         self.transfer_borrow_to(ScopeOutput(index, 0), targets)
@@ -92,7 +91,7 @@ impl<G: GraphBuilder, D1: Data> UnaryExt<G, D1> for ActiveStream<G, D1> {
              (mut self, pact: P, name: String, logic: L) -> ActiveStream<G, D2> {
         let (sender, receiver) = pact.connect(self.builder.communicator());
         let targets = OutputPort::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets.clone(), name, logic, vec![], false);
+        let scope = UnaryScope::new(receiver, targets.clone(), name, logic, vec![], false, self.builder.communicator().peers());
         let index = self.builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
         self.transfer_borrow_to(ScopeOutput(index, 0), targets)
@@ -111,10 +110,11 @@ pub struct UnaryScope<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)
     logic:          L,
     initial:        Vec<T>,  // initial notifications
     notify:         bool,
+    peers:          u64,
 }
 
 impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut UnaryScopeHandle<T, D1, D2, P>)> UnaryScope<T, D1, D2, P, L> {
-    pub fn new(receiver: P, targets: OutputPort<T, D2>, name: String, logic: L, init: Vec<T>, notify: bool) -> UnaryScope<T, D1, D2, P, L> {
+    pub fn new(receiver: P, targets: OutputPort<T, D2>, name: String, logic: L, init: Vec<T>, notify: bool, peers: u64) -> UnaryScope<T, D1, D2, P, L> {
         UnaryScope {
             name:    name,
             handle:  UnaryScopeHandle {
@@ -125,6 +125,7 @@ impl<T: Timestamp, D1: Data, D2: Data, P: Pullable<(T, Vec<D1>)>, L: FnMut(&mut 
             logic:   logic,
             initial: init,
             notify:  notify,
+            peers:   peers,
         }
     }
 }
@@ -140,8 +141,7 @@ where T: Timestamp,
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut internal = vec![CountMap::new()];
 
-        // TODO : this 256 number... it should really be communicator.peers().
-        for time in self.initial.drain() { for _ in (0..256) { self.handle.notificator.notify_at(&time); } }
+        for time in self.initial.drain() { for _ in (0..self.peers) { self.handle.notificator.notify_at(&time); } }
         self.handle.notificator.pull_progress(&mut internal[0]);
 
         (vec![vec![Antichain::from_elem(Default::default())]], internal)
