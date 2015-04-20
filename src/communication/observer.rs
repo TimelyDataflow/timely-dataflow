@@ -83,6 +83,7 @@ impl<O: Observer> BroadcastObserver<O> {
     pub fn add(&mut self, observer: O) { self.observers.push(observer); }
 }
 
+
 impl<O: Observer> Observer for BroadcastObserver<O> {
     type Time = O::Time;
     type Data = O::Data;
@@ -90,7 +91,7 @@ impl<O: Observer> Observer for BroadcastObserver<O> {
     #[inline(always)] fn show(&mut self, data: &O::Data) { for observer in self.observers.iter_mut() { observer.show(data); } }
     #[inline(always)] fn give(&mut self, data:  O::Data) {
         // Hand ownership to the last observer
-        for index in (0..self.observers.len() - 1) { self.observers[index].show(&data); }
+        for index in (1..self.observers.len()) { self.observers[index - 1].show(&data); }
         if self.observers.len() > 0 {
             let last = self.observers.len() - 1;
             self.observers[last].give(data);
@@ -122,7 +123,7 @@ impl<O: Observer, H: Fn(&O::Data) -> u64+'static> Observer for ExchangeObserver<
 
 // an observer buffering records before sending
 pub struct BufferedObserver<D, O: Observer> {
-    limit:      u64,
+    limit:      usize,
     buffer:     Vec<D>,
     observer:   O,
 }
@@ -130,7 +131,7 @@ pub struct BufferedObserver<D, O: Observer> {
 impl<D, O: Observer<Data = Vec<D>>> BufferedObserver<D, O> {
     pub fn inner(&self) -> &O { &self.observer }
     pub fn inner_mut(&mut self) -> &mut O { &mut self.observer }
-    pub fn new(limit: u64, observer: O) -> BufferedObserver<D, O> {
+    pub fn new(limit: usize, observer: O) -> BufferedObserver<D, O> {
         BufferedObserver {
             limit: limit,
             buffer: Vec::with_capacity(limit as usize),
@@ -146,7 +147,7 @@ impl<D: Clone+'static, O: Observer<Data = Vec<D>>> Observer for BufferedObserver
     #[inline(always)] fn show(&mut self, data: &D) { self.give(data.clone()); }
     #[inline(always)] fn give(&mut self, data:  D) {
         self.buffer.push(data);
-        if self.buffer.len() as u64 > self.limit {
+        if self.buffer.len() > self.limit {
             self.observer.show(&mut self.buffer);
             self.buffer.clear();
         }
