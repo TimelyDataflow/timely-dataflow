@@ -36,7 +36,8 @@ impl<O: Observer> ObserverSessionExt for O {
         self.open(time);
         for item in iter { self.give(item); }
         self.shut(time);
-    }}
+    }
+}
 
 // Attempt at RAII for observers. Intended to prevent mis-sequencing of open/push/shut.
 pub struct ObserverSession<'a, O:Observer+'a> where O::Time: 'a {
@@ -73,32 +74,33 @@ impl<O: ?Sized + Observer> Observer for Box<O> {
     #[inline(always)] fn give(&mut self, data:  O::Data) { (**self).give(data); }
     #[inline(always)] fn shut(&mut self, time: &O::Time) { (**self).shut(time); }
 }
-// an observer broadcasting to many observers
-pub struct BroadcastObserver<O: Observer> {
-    observers:  Vec<O>,
-}
 
-impl<O: Observer> BroadcastObserver<O> {
-    pub fn new() -> BroadcastObserver<O> { BroadcastObserver { observers: Vec::new() }}
-    pub fn add(&mut self, observer: O) { self.observers.push(observer); }
-}
-
-
-impl<O: Observer> Observer for BroadcastObserver<O> {
-    type Time = O::Time;
-    type Data = O::Data;
-    #[inline(always)] fn open(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.open(time); } }
-    #[inline(always)] fn show(&mut self, data: &O::Data) { for observer in self.observers.iter_mut() { observer.show(data); } }
-    #[inline(always)] fn give(&mut self, data:  O::Data) {
-        // Hand ownership to the last observer
-        for index in (1..self.observers.len()) { self.observers[index - 1].show(&data); }
-        if self.observers.len() > 0 {
-            let last = self.observers.len() - 1;
-            self.observers[last].give(data);
-        }
-    }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.shut(time); } }
-}
+// // an observer broadcasting to many observers
+// pub struct BroadcastObserver<O: Observer> {
+//     observers:  Vec<O>,
+// }
+//
+// impl<O: Observer> BroadcastObserver<O> {
+//     pub fn new() -> BroadcastObserver<O> { BroadcastObserver { observers: Vec::new() }}
+//     pub fn add(&mut self, observer: O) { self.observers.push(observer); }
+// }
+//
+//
+// impl<O: Observer> Observer for BroadcastObserver<O> {
+//     type Time = O::Time;
+//     type Data = O::Data;
+//     #[inline(always)] fn open(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.open(time); } }
+//     #[inline(always)] fn show(&mut self, data: &O::Data) { for observer in self.observers.iter_mut() { observer.show(data); } }
+//     #[inline(always)] fn give(&mut self, data:  O::Data) {
+//         // Hand ownership to the last observer
+//         for index in (1..self.observers.len()) { self.observers[index - 1].show(&data); }
+//         if self.observers.len() > 0 {
+//             let last = self.observers.len() - 1;
+//             self.observers[last].give(data);
+//         }
+//     }
+//     #[inline(always)] fn shut(&mut self, time: &O::Time) { for observer in self.observers.iter_mut() { observer.shut(time); } }
+// }
 
 // an observer routing between many observers
 pub struct ExchangeObserver<O: Observer, H: Fn(&O::Data) -> u64> {
@@ -121,63 +123,63 @@ impl<O: Observer, H: Fn(&O::Data) -> u64+'static> Observer for ExchangeObserver<
     #[inline(always)] fn shut(&mut self, time: &O::Time) -> () { for observer in self.observers.iter_mut() { observer.shut(time); } }
 }
 
-// an observer buffering records before sending
-pub struct BufferedObserver<D, O: Observer> {
-    limit:      usize,
-    buffer:     Vec<D>,
-    observer:   O,
-}
+// // an observer buffering records before sending
+// pub struct BufferedObserver<D, O: Observer> {
+//     limit:      usize,
+//     buffer:     Vec<D>,
+//     observer:   O,
+// }
+//
+// impl<D, O: Observer<Data = Vec<D>>> BufferedObserver<D, O> {
+//     pub fn inner(&self) -> &O { &self.observer }
+//     pub fn inner_mut(&mut self) -> &mut O { &mut self.observer }
+//     pub fn new(limit: usize, observer: O) -> BufferedObserver<D, O> {
+//         BufferedObserver {
+//             limit: limit,
+//             buffer: Vec::with_capacity(limit as usize),
+//             observer: observer,
+//         }
+//     }
+// }
+//
+// impl<D: Clone+'static, O: Observer<Data = Vec<D>>> Observer for BufferedObserver<D, O> {
+//     type Time = O::Time;
+//     type Data = D;
+//     #[inline(always)] fn open(&mut self, time: &O::Time) { self.observer.open(time); }
+//     #[inline(always)] fn show(&mut self, data: &D) { self.give(data.clone()); }
+//     #[inline(always)] fn give(&mut self, data:  D) {
+//         self.buffer.push(data);
+//         if self.buffer.len() > self.limit {
+//             self.observer.show(&mut self.buffer);
+//             self.buffer.clear();
+//         }
+//     }
+//     #[inline(always)] fn shut(&mut self, time: &O::Time) {
+//         if self.buffer.len() > 0 {
+//             self.observer.show(&self.buffer);
+//             self.buffer.clear();
+//         }
+//         self.observer.shut(time);
+//     }
+// }
 
-impl<D, O: Observer<Data = Vec<D>>> BufferedObserver<D, O> {
-    pub fn inner(&self) -> &O { &self.observer }
-    pub fn inner_mut(&mut self) -> &mut O { &mut self.observer }
-    pub fn new(limit: usize, observer: O) -> BufferedObserver<D, O> {
-        BufferedObserver {
-            limit: limit,
-            buffer: Vec::with_capacity(limit as usize),
-            observer: observer,
-        }
-    }
-}
-
-impl<D: Clone+'static, O: Observer<Data = Vec<D>>> Observer for BufferedObserver<D, O> {
-    type Time = O::Time;
-    type Data = D;
-    #[inline(always)] fn open(&mut self, time: &O::Time) { self.observer.open(time); }
-    #[inline(always)] fn show(&mut self, data: &D) { self.give(data.clone()); }
-    #[inline(always)] fn give(&mut self, data:  D) {
-        self.buffer.push(data);
-        if self.buffer.len() > self.limit {
-            self.observer.show(&mut self.buffer);
-            self.buffer.clear();
-        }
-    }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) {
-        if self.buffer.len() > 0 {
-            self.observer.show(&self.buffer);
-            self.buffer.clear();
-        }
-        self.observer.shut(time);
-    }
-}
-
-// dual to BufferedObserver, flattens out buffers
-pub struct FlattenedObserver<O: Observer> {
-    observer:   O,
-}
-
-impl<O: Observer> FlattenedObserver<O> {
-    pub fn new(observer: O) -> FlattenedObserver<O> { FlattenedObserver { observer: observer }}
-}
-
-impl<O: Observer> Observer for FlattenedObserver<O> {
-    type Time = O::Time;
-    type Data = Vec<O::Data>;
-    #[inline(always)] fn open(&mut self, time: &O::Time) -> () { self.observer.open(time); }
-    #[inline(always)] fn show(&mut self, data: &Vec<O::Data>) -> () { for datum in data { self.observer.show(datum); } }
-    #[inline(always)] fn give(&mut self, data:  Vec<O::Data>) -> () { for datum in data { self.observer.give(datum); } }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () { self.observer.shut(time); }
-}
+// // dual to BufferedObserver, flattens out buffers
+// pub struct FlattenedObserver<O: Observer> {
+//     observer:   O,
+// }
+//
+// impl<O: Observer> FlattenedObserver<O> {
+//     pub fn new(observer: O) -> FlattenedObserver<O> { FlattenedObserver { observer: observer }}
+// }
+//
+// impl<O: Observer> Observer for FlattenedObserver<O> {
+//     type Time = O::Time;
+//     type Data = Vec<O::Data>;
+//     #[inline(always)] fn open(&mut self, time: &O::Time) -> () { self.observer.open(time); }
+//     #[inline(always)] fn show(&mut self, data: &Vec<O::Data>) -> () { for datum in data { self.observer.show(datum); } }
+//     #[inline(always)] fn give(&mut self, data:  Vec<O::Data>) -> () { for datum in data { self.observer.give(datum); } }
+//     #[inline(always)] fn shut(&mut self, time: &O::Time) -> () { self.observer.shut(time); }
+// }
 
 
 // // discriminated union of two observers
