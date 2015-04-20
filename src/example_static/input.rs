@@ -10,7 +10,6 @@ use communication::Communicator;
 
 use communication::Observer;
 use communication::channels::{Data, OutputPort, ObserverHelper};
-// use example::stream::Stream;
 
 use example_static::stream::Stream;
 use example_static::builder::*;

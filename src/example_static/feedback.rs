@@ -12,7 +12,6 @@ use communication::Communicator;
 use communication::Observer;
 use communication::channels::ObserverHelper;
 use communication::channels::{Data, OutputPort};
-// use example::stream::Stream;
 
 use example_static::stream::*;
 use example_static::builder::*;

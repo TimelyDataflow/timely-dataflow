@@ -10,6 +10,10 @@ use communication::observer::ExchangeObserver;
 use columnar::Columnar;
 
 // A ParallelizationContract transforms the output of a Communicator, a (Vec<Pushable>, Pullable), to an (Observer, Pullable)
+// TODO : There is an asymmetry with the Observer/Pullable interface at the moment in that the Pullable
+// TODO : yields (and loses) vectors, which need to be continually allocated on the Observer side. It would
+// TODO : be better if there were a way to recycle them, perhaps by having the Pullable only show them,
+// TODO : or be a Pullable<(&T, &mut Vec<D>)>, or Pullable<(T, Iterator<D>)>, or who knows what...
 pub trait ParallelizationContract<T: Timestamp, D: Data> {
     type Observer: Observer<Time=T, Data=D>+'static;
     type Pullable: Pullable<(T, Vec<D>)>+'static;
