@@ -120,8 +120,8 @@ where D: Data+Hash+Eq+Debug+Columnar {
 
     let mut subgraph = builder.new_subgraph::<u64>();
 
-    ((&mut subgraph).enter(source1).distinct().leave(),
-     (&mut subgraph).enter(source2).leave())
+    (subgraph.enter(source1).distinct().leave(),
+     subgraph.enter(source2).leave())
 }
 
 fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
