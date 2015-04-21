@@ -6,7 +6,8 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communication::channels::{Data, OutputPort, ObserverHelper};
+use communication::*;
+use communication::channels::ObserverHelper;
 use columnar::Columnar;
 
 use example_static::stream::*;
@@ -36,7 +37,7 @@ impl<G: GraphBuilder, D: Data> ConcatVecExt<G, D> for G {
 
         if sources.len() == 0 { panic!("must pass at least one stream to concat"); }
 
-        let outputs = OutputPort::<G::Timestamp, D>::new();
+        let (outputs, registrar) = OutputPort::<G::Timestamp, D>::new();
         let mut consumed = Vec::new();
         for _ in 0..sources.len() { consumed.push(Rc::new(RefCell::new(CountMap::new()))); }
 
@@ -49,7 +50,7 @@ impl<G: GraphBuilder, D: Data> ConcatVecExt<G, D> for G {
         ActiveStream {
             stream: Stream {
                 name: ScopeOutput(index, 0),
-                ports: outputs,
+                ports: registrar,
             },
             builder: self,
         }

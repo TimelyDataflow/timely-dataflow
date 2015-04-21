@@ -11,6 +11,7 @@ pub use self::map::*;
 pub use self::inspect::*;
 pub use self::flat_map::*;
 pub use self::filter::*;
+pub use self::binary::*;
 
 pub mod stream;
 pub mod builder;
@@ -25,3 +26,4 @@ pub mod map;
 pub mod inspect;
 pub mod flat_map;
 pub mod filter;
+pub mod binary;

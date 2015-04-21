@@ -10,7 +10,7 @@ use communication::*;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
-use communication::channels::{OutputPort, ObserverHelper};
+use communication::channels::ObserverHelper;
 
 use example_static::stream::ActiveStream;
 use example_static::builder::*;
@@ -68,11 +68,11 @@ impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for ActiveStream<G, D1> {
              P: ParallelizationContract<G::Timestamp, D1>>
              (mut self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<G, D2> {
         let (sender, receiver) = pact.connect(self.builder.communicator());
-        let targets = OutputPort::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets.clone(), name, logic, init, true, self.builder.communicator().peers());
+        let (targets, registrar) = OutputPort::<G::Timestamp,D2>::new();
+        let scope = UnaryScope::new(receiver, targets, name, logic, init, true, self.builder.communicator().peers());
         let index = self.builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
-        self.transfer_borrow_to(ScopeOutput(index, 0), targets)
+        self.transfer_borrow_to(ScopeOutput(index, 0), registrar)
     }
 }
 
@@ -90,11 +90,11 @@ impl<G: GraphBuilder, D1: Data> UnaryExt<G, D1> for ActiveStream<G, D1> {
              P: ParallelizationContract<G::Timestamp, D1>>
              (mut self, pact: P, name: String, logic: L) -> ActiveStream<G, D2> {
         let (sender, receiver) = pact.connect(self.builder.communicator());
-        let targets = OutputPort::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets.clone(), name, logic, vec![], false, self.builder.communicator().peers());
+        let (targets, registrar) = OutputPort::<G::Timestamp,D2>::new();
+        let scope = UnaryScope::new(receiver, targets, name, logic, vec![], false, self.builder.communicator().peers());
         let index = self.builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
-        self.transfer_borrow_to(ScopeOutput(index, 0), targets)
+        self.transfer_borrow_to(ScopeOutput(index, 0), registrar)
     }
 }
 

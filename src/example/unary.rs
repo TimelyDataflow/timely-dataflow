@@ -8,11 +8,12 @@ use progress::nested::subgraph::Source::ScopeOutput;
 use progress::nested::subgraph::Target::ScopeInput;
 
 use communication::*;
+use communication::channels::ObserverHelper;
+
 use example::stream::Stream;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
-use communication::channels::{OutputPort, ObserverHelper};
 
 pub struct PullableHelper<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> {
     receiver:   P,
@@ -67,11 +68,11 @@ impl<'a, G: Graph+'a, D1: Data> UnaryExt<'a, G, D1> for Stream<'a, G, D1> {
              P: ParallelizationContract<G::Timestamp, D1>>
              (&mut self, pact: P, name: String, logic: L) -> Stream<'a, G, D2> {
         let (sender, receiver) = self.graph.borrow_mut().with_communicator(|x| pact.connect(x));
-        let targets = OutputPort::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets.clone(), name, logic);
+        let (port, registrar) = OutputPort::<G::Timestamp,D2>::new();
+        let scope = UnaryScope::new(receiver, port, name, logic);
         let index = self.graph.borrow_mut().add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
-        self.clone_with(ScopeOutput(index, 0), targets)
+        self.clone_with(ScopeOutput(index, 0), registrar)
     }
 }
 

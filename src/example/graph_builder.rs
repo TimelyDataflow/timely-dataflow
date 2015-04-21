@@ -12,8 +12,8 @@ use progress::nested::product::Product;
 use progress::nested::builder::Builder as SubgraphBuilder;
 
 use example::stream::Stream;
-use communication::{Observer, Communicator};
-use communication::channels::{Data, OutputPort, ObserverHelper};
+use communication::*;
+use communication::channels::ObserverHelper;
 
 // TODO : Make this trait implemented only by SubgraphBuilder, so that outer streams
 // TODO : are not tempted to try and use a possible busy RefCell<&mut GOuter>.
@@ -27,9 +27,9 @@ for Stream<'aa, GOuter, D> {
     fn enter<'a, 'b>(&mut self, subgraph: &'a RefCell<&'b mut SubgraphBuilder<'aa, GOuter, TInner>>) ->
         Stream<'a, &'b mut SubgraphBuilder<'aa, GOuter, TInner>, D> where 'b: 'a, 'aa: 'b {
 
-        let targets = OutputPort::<Product<GOuter::Timestamp, TInner>, D>::new();
+        let (targets, registrar) = OutputPort::<Product<GOuter::Timestamp, TInner>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
-        let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
+        let ingress = IngressNub { targets: ObserverHelper::new(targets, produced.clone()) };
 
         let scope_index = subgraph.borrow().index();
         let input_index = subgraph.borrow_mut().new_input(produced);
@@ -40,7 +40,7 @@ for Stream<'aa, GOuter, D> {
         subgraph.borrow_mut().parent().borrow_mut().connect(self.name, ScopeInput(scope_index, input_index));
         self.ports.add_observer(ingress);
 
-        Stream::new(GraphInput(input_index), targets, subgraph)
+        Stream::new(GraphInput(input_index), registrar, subgraph)
     }
 }
 
@@ -54,11 +54,11 @@ where GOuter::Communicator : 'b {
     fn leave(&mut self) -> Stream<'a, GOuter, D> {
 
         let output_index = self.graph.borrow_mut().new_output();
-        let targets = OutputPort::<GOuter::Timestamp, D>::new();
+        let (targets, registrar) = OutputPort::<GOuter::Timestamp, D>::new();
 
-        self.connect_to(GraphOutput(output_index), EgressNub { targets: targets.clone(), phantom: PhantomData });
+        self.connect_to(GraphOutput(output_index), EgressNub { targets: targets, phantom: PhantomData });
 
-        Stream::new(ScopeOutput(self.graph.borrow().index(), output_index), targets, self.graph.borrow().parent())
+        Stream::new(ScopeOutput(self.graph.borrow().index(), output_index), registrar, self.graph.borrow().parent())
     }
 }
 

@@ -5,12 +5,12 @@ use progress::nested::subgraph::{Source, Target};
 
 use communication::Observer;
 use communication::Data;
-use communication::channels::OutputPort;
+use communication::output_port::Registrar;
 
 #[derive(Clone)]
 pub struct Stream<T: Timestamp, D:Data> {
     pub name:   Source,                 // used to name the source in the host graph.
-    pub ports:  OutputPort<T, D>,       // used to register interest in the output.
+    pub ports:  Registrar<T, D>,        // used to register interest in the output.
 }
 
 impl<T: Timestamp, D:Data> Stream<T, D> {
@@ -18,7 +18,7 @@ impl<T: Timestamp, D:Data> Stream<T, D> {
         ActiveStream { stream: self.clone(), builder: builder }
     }
 
-    pub fn new(source: Source, output: OutputPort<T, D>) -> Self {
+    pub fn new(source: Source, output: Registrar<T, D>) -> Self {
         Stream { name: source, ports: output }
     }
 }
@@ -49,7 +49,7 @@ impl<G: GraphBuilder, D: Data> ActiveStream<G, D> {
         self.stream.ports.add_observer(observer);
     }
 
-    pub fn transfer_borrow_to<D2: Data>(self, source: Source, ports: OutputPort<G::Timestamp, D2>) -> ActiveStream<G, D2> {
+    pub fn transfer_borrow_to<D2: Data>(self, source: Source, ports: Registrar<G::Timestamp, D2>) -> ActiveStream<G, D2> {
         ActiveStream {
             stream: Stream {
                 name: source,

@@ -8,7 +8,7 @@ use progress::count_map::CountMap;
 
 use communication::*;
 use communication::pact::Pipeline;
-use communication::channels::{OutputPort, ObserverHelper};
+use communication::channels::ObserverHelper;
 use example::stream::Stream;
 use example::unary::PullableHelper;
 
@@ -21,15 +21,22 @@ impl<'a, G: Graph+'a, D: Data, F: Fn(&D)->u64+'static> PartitionExt<'a, G, D, F>
     fn partition(&mut self, parts: u64, func: F) -> Vec<Stream<'a, G, D>> {
 
         let (sender, receiver) = self.graph.borrow_mut().with_communicator(|x| Pipeline.connect(x));
-        let mut targets = Vec::new();
-        for _ in 0..parts { targets.push(OutputPort::<G::Timestamp,D>::new()); }
-        let scope = PartitionScope::new(receiver, targets.clone(), func);
+
+        let mut ports = Vec::new();
+        let mut registrars = Vec::new();
+        for _ in 0..parts {
+            let (port, registrar) = OutputPort::<G::Timestamp,D>::new();
+            ports.push(port);
+            registrars.push(registrar);
+            // targets.push(OutputPort::<G::Timestamp,D>::new());
+        }
+        let scope = PartitionScope::new(receiver, ports, func);
         let index = self.graph.borrow_mut().add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
 
         let mut results = Vec::new();
-        for (output, target) in targets.into_iter().enumerate() {
-            results.push(self.clone_with(ScopeOutput(index, output as u64), target));
+        for (output, registrar) in registrars.into_iter().enumerate() {
+            results.push(self.clone_with(ScopeOutput(index, output as u64), registrar));
         }
 
         results

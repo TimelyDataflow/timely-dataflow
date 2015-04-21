@@ -6,10 +6,9 @@ use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Scope, Timestamp};
 use progress::nested::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
-use communication::Communicator;
 
-use communication::Observer;
-use communication::channels::{Data, OutputPort, ObserverHelper};
+use communication::*;
+use communication::channels::ObserverHelper;
 
 use example_static::stream::Stream;
 use example_static::builder::*;
@@ -28,13 +27,13 @@ pub trait InputExtensionTrait<G: GraphBuilder> {
 
 impl<G: GraphBuilder> InputExtensionTrait<G> for G {
     fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G::Timestamp, D>) {
-        let output = OutputPort::<G::Timestamp, D>::new();
+        let (output, registrar) = OutputPort::<G::Timestamp, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let helper = InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
-            output:   ObserverHelper::new(output.clone(), produced.clone()),
+            output:   ObserverHelper::new(output, produced.clone()),
         };
 
         let copies = self.communicator().peers();
@@ -46,7 +45,7 @@ impl<G: GraphBuilder> InputExtensionTrait<G> for G {
             copies:   copies,
         });
 
-        return (helper, Stream::new(ScopeOutput(index, 0), output));
+        return (helper, Stream::new(ScopeOutput(index, 0), registrar));
     }
 }
 

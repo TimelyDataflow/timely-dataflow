@@ -6,10 +6,9 @@ use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Graph, Scope, Timestamp};
 use progress::nested::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
-use communication::Communicator;
 
-use communication::Observer;
-use communication::channels::{Data, OutputPort, ObserverHelper};
+use communication::*;
+use communication::channels::ObserverHelper;
 use example::stream::Stream;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
@@ -26,13 +25,13 @@ pub trait InputExtensionTrait<G: Graph> {
 
 impl<G: Graph> InputExtensionTrait<G> for RefCell<G> {
     fn new_input<'a, D:Data>(&'a self) -> (InputHelper<G::Timestamp, D>, Stream<'a, G, D>) where G: 'a {
-        let output = OutputPort::<G::Timestamp, D>::new();
+        let (output, registrar) = OutputPort::<G::Timestamp, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let helper = InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
-            output:   ObserverHelper::new(output.clone(), produced.clone()),
+            output:   ObserverHelper::new(output, produced.clone()),
         };
 
         let copies = self.borrow_mut().with_communicator(|x| x.peers());
@@ -44,7 +43,7 @@ impl<G: Graph> InputExtensionTrait<G> for RefCell<G> {
             copies:   copies,
         });
 
-        return (helper, Stream::new(ScopeOutput(index, 0), output, self));
+        return (helper, Stream::new(ScopeOutput(index, 0), registrar, self));
     }
 }
 

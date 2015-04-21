@@ -6,23 +6,26 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communication::channels::{Data, OutputPort, ObserverHelper};
+use communication::*;
+use communication::channels::ObserverHelper;
 use example::stream::Stream;
 use columnar::Columnar;
+
+// TODO : This is the only place that OutputPort::clone is used.
 
 pub trait ConcatExt { fn concat(&mut self, &mut Self) -> Self; }
 
 impl<'a, G: Graph+'a, D: Data> ConcatExt for Stream<'a, G, D> {
     fn concat(&mut self, other: &mut Stream<G, D>) -> Stream<'a, G, D> {
-        let outputs = OutputPort::<G::Timestamp, D>::new();
+        let (outputs, registrar) = OutputPort::<G::Timestamp, D>::new();
         let consumed = vec![Rc::new(RefCell::new(CountMap::new())),
                             Rc::new(RefCell::new(CountMap::new()))];
 
         let index = self.graph.borrow_mut().add_scope(ConcatScope { consumed: consumed.clone() });
 
         self.connect_to(ScopeInput(index, 0), ObserverHelper::new(outputs.clone(), consumed[0].clone()));
-        other.connect_to(ScopeInput(index, 1), ObserverHelper::new(outputs.clone(), consumed[1].clone()));
-        self.clone_with(ScopeOutput(index, 0), outputs)
+        other.connect_to(ScopeInput(index, 1), ObserverHelper::new(outputs, consumed[1].clone()));
+        self.clone_with(ScopeOutput(index, 0), registrar)
     }
 }
 
@@ -32,17 +35,17 @@ impl<'a, G: Graph+'a, D: Data> ConcatVecExt<'a, G, D> for Vec<Stream<'a, G, D>> 
     fn concatenate(&mut self) -> Stream<'a, G, D> {
         if self.len() == 0 { panic!("must pass at least one stream to concat"); }
 
-        let outputs = OutputPort::<G::Timestamp, D>::new();
+        let (target, registrar) = OutputPort::<G::Timestamp, D>::new();
         let mut consumed = Vec::new();
         for _ in 0..self.len() { consumed.push(Rc::new(RefCell::new(CountMap::new()))); }
 
         let index = self[0].graph.borrow_mut().add_scope(ConcatScope { consumed: consumed.clone() });
 
         for id in 0..self.len() {
-            self[id].connect_to(ScopeInput(index, id as u64), ObserverHelper::new(outputs.clone(), consumed[id].clone()));
+            self[id].connect_to(ScopeInput(index, id as u64), ObserverHelper::new(target.clone(), consumed[id].clone()));
         }
 
-        self[0].clone_with(ScopeOutput(index, 0), outputs)
+        self[0].clone_with(ScopeOutput(index, 0), registrar)
     }
 }
 

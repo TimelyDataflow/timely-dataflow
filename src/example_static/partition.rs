@@ -8,7 +8,7 @@ use progress::count_map::CountMap;
 
 use communication::*;
 use communication::pact::Pipeline;
-use communication::channels::{OutputPort, ObserverHelper};
+use communication::channels::ObserverHelper;
 
 use example_static::builder::*;
 use example_static::stream::{Stream, ActiveStream};
@@ -23,15 +23,22 @@ impl<G: GraphBuilder, D: Data, F: Fn(&D)->u64+'static> PartitionExt<G, D, F> for
     fn partition(mut self, parts: u64, func: F) -> (Vec<Stream<G::Timestamp, D>>, G) {
 
         let (sender, receiver) = Pipeline.connect(self.builder.communicator());
+
         let mut targets = Vec::new();
-        for _ in 0..parts { targets.push(OutputPort::<G::Timestamp,D>::new()); }
-        let scope = PartitionScope::new(receiver, targets.clone(), func);
+        let mut registrars = Vec::new();
+        for _ in 0..parts {
+            let (target, registrar) = OutputPort::<G::Timestamp,D>::new();
+            targets.push(target);
+            registrars.push(registrar);
+        }
+
+        let scope = PartitionScope::new(receiver, targets, func);
         let index = self.builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
 
         let mut results = Vec::new();
-        for (output, target) in targets.into_iter().enumerate() {
-            results.push(Stream::new(ScopeOutput(index, output as u64), target));
+        for (output, registrar) in registrars.into_iter().enumerate() {
+            results.push(Stream::new(ScopeOutput(index, output as u64), registrar));
         }
 
         (results, self.builder)

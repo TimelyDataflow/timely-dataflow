@@ -8,8 +8,8 @@ use progress::{Timestamp, Graph, CountMap};
 use progress::nested::subgraph::Source::{GraphInput, ScopeOutput};
 use progress::nested::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::nested::product::Product;
-use communication::{Observer, Communicator};
-use communication::channels::{Data, OutputPort, ObserverHelper};
+use communication::*;
+use communication::channels::ObserverHelper;
 
 use example_static::builder::{GraphBuilder, SubgraphBuilder};
 use example_static::stream::*;
@@ -24,9 +24,9 @@ EnterSubgraphExt<G, T, D> for SubgraphBuilder<G, T> {
     fn enter<'a>(&'a mut self, stream: &Stream<G::Timestamp, D>) ->
         ActiveStream<&'a mut SubgraphBuilder<G, T>, D> {
 
-        let targets = OutputPort::<Product<G::Timestamp, T>, D>::new();
+        let (targets, registrar) = OutputPort::<Product<G::Timestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
-        let ingress = IngressNub { targets: ObserverHelper::new(targets.clone(), produced.clone()) };
+        let ingress = IngressNub { targets: ObserverHelper::new(targets, produced.clone()) };
 
         let scope_index = self.subgraph.index;
         let input_index = self.subgraph.new_input(produced);
@@ -34,7 +34,7 @@ EnterSubgraphExt<G, T, D> for SubgraphBuilder<G, T> {
         self.parent.connect(stream.name, ScopeInput(scope_index, input_index));
         stream.ports.add_observer(ingress);
 
-        self.enable(&Stream::new(GraphInput(input_index), targets))
+        self.enable(&Stream::new(GraphInput(input_index), registrar))
     }
 }
 
@@ -47,9 +47,9 @@ for ActiveStream<&'a mut SubgraphBuilder<G, TInner>, D> where G::Communicator: '
     fn leave(&mut self) -> Stream<G::Timestamp, D> {
 
         let output_index = self.builder.subgraph.new_output();
-        let targets = OutputPort::<G::Timestamp, D>::new();
-        self.connect_to(GraphOutput(output_index), EgressNub { targets: targets.clone(), phantom: PhantomData });
-        Stream::new(ScopeOutput(self.builder.subgraph.index, output_index), targets)
+        let (targets, registrar) = OutputPort::<G::Timestamp, D>::new();
+        self.connect_to(GraphOutput(output_index), EgressNub { targets: targets, phantom: PhantomData });
+        Stream::new(ScopeOutput(self.builder.subgraph.index, output_index), registrar)
     }
 }
 

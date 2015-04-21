@@ -2,43 +2,48 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::Graph;
 use progress::nested::subgraph::Source::ScopeOutput;
 use progress::nested::subgraph::Target::ScopeInput;
 
 use communication::*;
-use example::stream::Stream;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
 use communication::channels::ObserverHelper;
-use example::unary::PullableHelper;
+
+use example_static::builder::*;
+use example_static::unary::PullableHelper;
+use example_static::stream::{ActiveStream, Stream};
 
 
-pub trait BinaryExt<'a, G: Graph+'a, D1: Data> {
+pub trait BinaryExt<G: GraphBuilder, D1: Data> {
     fn binary<D2: Data, D3: Data,
              L: FnMut(&mut BinaryScopeHandle<G::Timestamp, D1, D2, D3, P1::Pullable, P2::Pullable>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-            (&mut self, &mut Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<'a, G, D3>;
+            (self, Stream<G::Timestamp, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> ActiveStream<G, D3>;
 }
 
-impl<'a, G: Graph+'a, D1: Data> BinaryExt<'a, G, D1> for Stream<'a, G, D1> {
+impl<G: GraphBuilder, D1: Data> BinaryExt<G, D1> for ActiveStream<G, D1> {
     fn binary<
              D2: Data,
              D3: Data,
              L: FnMut(&mut BinaryScopeHandle<G::Timestamp, D1, D2, D3, P1::Pullable, P2::Pullable>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-             (&mut self, other: &mut Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<'a, G, D3> {
-        let (sender1, receiver1) = self.graph.borrow_mut().with_communicator(|x| pact1.connect(x));
-        let (sender2, receiver2) = self.graph.borrow_mut().with_communicator(|x| pact2.connect(x));
+             (mut self, other: Stream<G::Timestamp, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> ActiveStream<G, D3> {
+        let (sender1, receiver1) = pact1.connect(self.builder.communicator());
+        let (sender2, receiver2) = pact2.connect(self.builder.communicator());;
         let (targets, registrar) = OutputPort::<G::Timestamp,D3>::new();
         let scope = BinaryScope::new(receiver1, receiver2, targets, name, logic);
-        let index = self.graph.borrow_mut().add_scope(scope);
+        let index = self.builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender1);
-        other.connect_to(ScopeInput(index, 1), sender2);
-        self.clone_with(ScopeOutput(index, 0), registrar)
+
+        // other.connect_to(ScopeInput(index, 1), sender2);
+        self.builder.connect(other.name, ScopeInput(index, 1));
+        other.ports.add_observer(sender2);
+
+        self.transfer_borrow_to(ScopeOutput(index, 0), registrar)
     }
 }
 

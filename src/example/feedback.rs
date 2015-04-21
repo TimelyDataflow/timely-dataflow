@@ -8,10 +8,11 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communication::Communicator;
-use communication::Observer;
+use communication::*;
+// use communication::Communicator;
+// use communication::Observer;
 use communication::channels::ObserverHelper;
-use communication::channels::{Data, OutputPort};
+// use communication::channels::{Data, OutputPort};
 use example::stream::Stream;
 
 
@@ -24,11 +25,11 @@ impl<G: Graph> FeedbackExt<G> for RefCell<G> {
     fn feedback<'a, D:Data>(&'a self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) ->
             (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<'a, G, D>) where G: 'a {
 
-        let targets = OutputPort::<G::Timestamp, D>::new();
+        let (targets, registrar) = OutputPort::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
         let consumed: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
 
-        let feedback_output = ObserverHelper::new(targets.clone(), produced.clone());
+        let feedback_output = ObserverHelper::new(targets, produced.clone());
         let feedback_input =  ObserverHelper::new(FeedbackObserver {
             limit: limit, summary: summary, targets: feedback_output, active: false
         }, consumed.clone());
@@ -45,7 +46,7 @@ impl<G: Graph> FeedbackExt<G> for RefCell<G> {
         };
 
         // let result = self.clone_with(ScopeOutput(index, 0), targets);
-        let result = Stream::new(ScopeOutput(index, 0), targets, self);
+        let result = Stream::new(ScopeOutput(index, 0), registrar, self);
 
         return (helper, result);
     }

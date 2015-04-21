@@ -8,10 +8,8 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communication::Communicator;
-use communication::Observer;
+use communication::*;
 use communication::channels::ObserverHelper;
-use communication::channels::{Data, OutputPort};
 
 use example_static::stream::*;
 use example_static::builder::*;
@@ -25,11 +23,11 @@ impl<G: GraphBuilder> FeedbackExt<G> for G {
     fn loop_variable<D:Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
         -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<G::Timestamp, D>) {
 
-        let targets = OutputPort::<G::Timestamp, D>::new();
+        let (targets, registrar) = OutputPort::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
         let consumed: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
 
-        let feedback_output = ObserverHelper::new(targets.clone(), produced.clone());
+        let feedback_output = ObserverHelper::new(targets, produced.clone());
         let feedback_input =  ObserverHelper::new(FeedbackObserver {
             limit: limit, summary: summary, targets: feedback_output, active: false
         }, consumed.clone());
@@ -45,7 +43,7 @@ impl<G: GraphBuilder> FeedbackExt<G> for G {
             target: feedback_input,
         };
 
-        (helper, Stream::new(ScopeOutput(index, 0), targets))
+        (helper, Stream::new(ScopeOutput(index, 0), registrar))
     }
 }
 
