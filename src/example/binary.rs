@@ -2,11 +2,11 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::Graph;
 use progress::nested::subgraph::Source::ScopeOutput;
 use progress::nested::subgraph::Target::ScopeInput;
 
 use communication::*;
+use example::builder::Graph;
 use example::stream::Stream;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;

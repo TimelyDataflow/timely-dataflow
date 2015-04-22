@@ -1,4 +1,5 @@
-use progress::Graph;
+use example::builder::Graph;
+
 use progress::nested::subgraph::{Source, Target};
 
 use communication::Observer;

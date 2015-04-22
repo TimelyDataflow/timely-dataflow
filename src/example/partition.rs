@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::{Timestamp, Graph, Scope};
+use progress::{Timestamp, Scope};
 use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
@@ -9,6 +9,7 @@ use progress::count_map::CountMap;
 use communication::*;
 use communication::pact::Pipeline;
 use communication::channels::ObserverHelper;
+use example::builder::Graph;
 use example::stream::Stream;
 use example::unary::PullableHelper;
 

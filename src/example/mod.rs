@@ -10,6 +10,8 @@ pub use self::unary::UnaryExt;
 pub use self::binary::BinaryExt;
 pub use self::inspect::{InspectExt, InspectBatchExt};
 
+pub mod builder;
+
 pub mod input;
 pub mod concat;
 pub mod feedback;

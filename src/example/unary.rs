@@ -3,13 +3,13 @@ use std::cell::RefCell;
 use std::default::Default;
 use std::marker::PhantomData;
 
-use progress::Graph;
 use progress::nested::subgraph::Source::ScopeOutput;
 use progress::nested::subgraph::Target::ScopeInput;
 
 use communication::*;
 use communication::channels::ObserverHelper;
 
+use example::builder::Graph;
 use example::stream::Stream;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;

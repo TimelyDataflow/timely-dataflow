@@ -1,6 +1,6 @@
-use progress::Graph;
 use communication::*;
 use communication::pact::Pipeline;
+use example::builder::Graph;
 use example::stream::Stream;
 use example::unary::UnaryExt;
 
