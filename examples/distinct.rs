@@ -6,11 +6,10 @@ use std::hash::Hash;
 
 use timely::communication::{Data, Communicator, ThreadCommunicator};
 use timely::progress::timestamp::RootTimestamp;
-use timely::progress::nested::builder::Builder as SubgraphBuilder;
 use timely::progress::nested::Summary::Local;
-use timely::progress::graph::{Graph, Root};
 use timely::example::*;
 use timely::example::distinct::DistinctExtensionTrait;
+use timely::example::builder::{Graph, Root, SubgraphBuilder};
 
 use columnar::Columnar;
 
