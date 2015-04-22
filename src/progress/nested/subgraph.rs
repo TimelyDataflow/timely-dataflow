@@ -147,7 +147,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         self.external_summaries = summaries;
         self.set_summaries();
 
-        self.print_reachability_summaries();
+        // self.print_reachability_summaries();
 
         // change frontier to local times; introduce as pointstamps
         for graph_input in (0..self.inputs) {
@@ -187,15 +187,19 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             for output in (0..summaries.len()) {
                 for &(target, ref antichain) in self.source_summaries[subscope][output].iter() {
                     if let ScopeInput(target_scope, target_input) = target {
-                        if target_scope == subscope as u64 { summaries[output][target_input as usize] = antichain.clone()}
+                        if target_scope == subscope as u64 { summaries[output][target_input as usize] = antichain.clone() }
                     }
                 }
             }
 
             self.children[subscope].scope.set_external_summary(summaries, &mut changes);
 
-            // TODO : Shouldn't be necessary ...
-            for change in changes.iter_mut() { change.clear(); }
+            // TODO : Shouldn't be necesasary ...
+            // debug_assert!(!changes.iter().any(|x| x.len() > 0));
+            if changes.iter().any(|x| x.len() > 0) {
+                println!("Someone ({}) didn't take their medicine...", self.children[subscope].scope.name());
+                for change in changes.iter_mut() { change.clear(); }
+            }
 
             mem::replace(&mut self.children[subscope].guarantee_changes, changes);
         }
@@ -257,6 +261,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
         // Intermission: exchange pointstamp updates, and then move them to the pointstamps structure.
         self.progcaster.send_and_recv(&mut self.pointstamp_messages, &mut self.pointstamp_internal);
+
         {
             // this aggregates down the pointstamps, removing any cancelled updates
             while let Some((a, b, c, d)) = self.pointstamp_messages.pop() { self.pointstamp_messages_cm.update(&(a, b, c), d); }
@@ -265,12 +270,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             while let Some(((a, b, c), d)) = self.pointstamp_internal_cm.pop() { self.pointstamp_internal.push((a, b, c, d)); }
 
             let pointstamps = &mut self.pointstamps;    // clarify to Rust that we don't need &mut self for the closures.
+            // println!("ps_msg: {:?}", self.pointstamp_internal);
             for (scope, input, time, delta) in self.pointstamp_messages.drain() {
                 self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
                     pointstamps.update_target(ScopeInput(scope, input), time, delta);
                 });
             }
 
+            // println!("ps_int: {:?}", self.pointstamp_internal);
             for (scope, output, time, delta) in self.pointstamp_internal.drain() {
                 self.children[scope as usize].capabilities[output as usize].update_and(&time, delta, |time, delta| {
                     pointstamps.update_source(ScopeOutput(scope, output), time, delta);
@@ -321,7 +328,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
                             GraphOutput(output)      => &mut self.pointstamps.output_pushed[output as usize],
                         };
-                        for summary in antichain.elements.iter() { dest.update(&summary.results_in(&time), value); }
+                        for summary in antichain.elements.iter() {
+                            dest.update(&summary.results_in(&time), value);
+                        }
                     }
                 }
             }
@@ -333,7 +342,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
                             GraphOutput(output)      => &mut self.pointstamps.output_pushed[output as usize],
                         };
-                        for summary in antichain.elements.iter() { dest.update(&summary.results_in(&time), value); }
+                        for summary in antichain.elements.iter() {
+                            dest.update(&summary.results_in(&time), value);
+                        }
                     }
                 }
             }
@@ -565,11 +576,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 }
-
-// pub fn new_graph<T: Timestamp, C: Communicator>(mut communicator: C) -> (Subgraph<(), T>, C) {
-//     let progcaster = Progcaster::new(&mut communicator);
-//     return (Subgraph::new_from(progcaster), communicator);
-// }
 
 fn try_to_add_summary<S: PartialOrd+Eq+Copy+Debug>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool {
     for &mut (ref t, ref mut antichain) in vector.iter_mut() {

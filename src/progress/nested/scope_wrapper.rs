@@ -75,12 +75,8 @@ impl<T: Timestamp> ScopeWrapper<T> {
     }
 
     pub fn push_pointstamps(&mut self, external_progress: &Vec<CountMap<T>>) {
-        if self.notify {
-            // println!("pushing to {}: {:?}", self.index, external_progress);
-            // println!("currently: {:?}", self.guarantees);
-
+        if self.notify && external_progress.iter().any(|x| x.len() > 0) {
             for input_port in (0..self.inputs as usize) {
-                // self.guarantees[input_port].test_size(50, "self.guarantees");
                 self.guarantees[input_port]
                     .update_into_cm(&external_progress[input_port], &mut self.guarantee_changes[input_port]);
             }
@@ -90,7 +86,8 @@ impl<T: Timestamp> ScopeWrapper<T> {
                 self.scope.push_external_progress(&mut self.guarantee_changes);
 
                 // TODO : Shouldn't be necessary
-                for change in self.guarantee_changes.iter_mut() { change.clear(); }
+                // for change in self.guarantee_changes.iter_mut() { change.clear(); }
+                debug_assert!(!self.guarantee_changes.iter().any(|x| x.len() > 0));
             }
         }
     }

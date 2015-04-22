@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::fmt::{Formatter, Display, Error};
+use std::fmt::{Formatter, Display, Error, Debug};
 
 use progress::Timestamp;
 use progress::nested::summary::Summary;
@@ -7,7 +7,7 @@ use progress::nested::summary::Summary;
 use columnar::Columnar;
 
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Debug)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Default)]
 pub struct Product<TOuter, TInner> {
     pub outer: TOuter,
     pub inner: TInner,
@@ -24,7 +24,13 @@ impl<TOuter, TInner> Product<TOuter, TInner> {
 
 impl<TOuter: Display, TInner: Display> Display for Product<TOuter, TInner> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        f.write_str(&format!("({}, {})", self.inner, self.outer))
+        f.write_str(&format!("({}, {})", self.outer, self.inner))
+    }
+}
+
+impl<TOuter: Debug, TInner: Debug> Debug for Product<TOuter, TInner> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        f.write_str(&format!("({:?}, {:?})", self.outer, self.inner))
     }
 }
 

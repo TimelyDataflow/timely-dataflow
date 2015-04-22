@@ -1,10 +1,9 @@
 use std::default::Default;
-// use core::fmt::Debug;
 
 // could be updated to be an Enum { Vec<(T, i64)>, HashMap<T, i64> } in the fullness of time
 #[derive(Clone, Debug)]
 pub struct CountMap<T> {
-    updates: Vec<(T, i64)>
+    pub updates: Vec<(T, i64)>
 }
 
 impl<T> Default for CountMap<T> {

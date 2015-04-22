@@ -22,6 +22,10 @@ impl Scope<Product<RootTimestamp, u64>> for BarrierScope {
                 vec![CountMap::new_from(&Product::new(RootTimestamp, self.epoch), self.degree as i64)]);
     }
 
+    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<Summary<RootSummary, u64>>>>, _frontier: &mut [CountMap<Product<RootTimestamp, u64>>]) -> () {
+        for x in _frontier { x.clear(); }
+    }
+
     fn push_external_progress(&mut self, external: &mut [CountMap<Product<RootTimestamp, u64>>]) -> () {
         while let Some((time, val)) = external[0].pop() {
             if time.inner == self.epoch - 1 && val == -1 {

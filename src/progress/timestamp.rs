@@ -24,10 +24,15 @@ pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrd+Debug+Default+Display {
     fn followed_by(&self, other: &Self) -> Self;    // composes two summaries
 }
 
-#[derive(Copy, Clone, Hash, Eq, PartialOrd, PartialEq, Default, Debug)]
+#[derive(Copy, Clone, Hash, Eq, PartialOrd, PartialEq, Default)]
 pub struct RootTimestamp;
 impl Timestamp for RootTimestamp { type Summary = RootSummary; }
 impl Display for RootTimestamp {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        f.write_str(&format!("Root"))
+    }
+}
+impl Debug for RootTimestamp {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.write_str(&format!("Root"))
     }

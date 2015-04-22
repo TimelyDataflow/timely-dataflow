@@ -1,4 +1,5 @@
 #![feature(test)]
+#![feature(scoped)]
 #![allow(dead_code)]
 
 extern crate test;

@@ -72,7 +72,7 @@ impl<T:Timestamp> Scope<T> for InputScope<T> {
     fn pull_internal_progress(&mut self, frontier_progress: &mut [CountMap<T>],
                                         _messages_consumed: &mut [CountMap<T>],
                                          messages_produced: &mut [CountMap<T>]) -> bool
-    {        
+    {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
         self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
         return false;

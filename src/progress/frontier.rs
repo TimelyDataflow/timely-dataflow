@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::default::Default;
+use std::cmp::Ordering;
 
 use progress::CountMap;
 
@@ -37,7 +38,7 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
 #[derive(Default, Debug, Clone)]
 pub struct MutableAntichain<T:Eq> {
     pub occurrences:    CountMap<T>,    // occurrence count of each time
-    precedents:         Vec<(T, i64)>,    // precedent count of each time with occurrence count > 0
+    pub precedents:     Vec<(T, i64)>,  // counts number of distinct times in occurences strictly less than element
     pub elements:       Vec<T>,         // the set of times with precedent count == 0
 }
 
@@ -84,74 +85,13 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
         self.update_and(elem, delta, |time, delta| { results.update(time, delta); });
     }
 
+    #[inline] pub fn update(&mut self, elem: &T, delta: i64) { self.update_and(elem, delta, |_,_| {}); }
 
     //#[inline(always)]
-    pub fn update_iter_and<I: Iterator<Item = (T, i64)>, A: FnMut(&T, i64) -> ()>(&mut self, updates: I, mut action: A) -> () {
+    pub fn update_iter_and<I: Iterator<Item = (T, i64)>,
+                           A: FnMut(&T, i64) -> ()>(&mut self, updates: I, mut action: A) -> () {
         for (ref elem, delta) in updates {
-            // self.update_and(elem, delta, action);
-            let new_value = self.occurrences.update(elem, delta);
-            let old_value = new_value - delta;
-
-            // introducing the time to the set
-            if old_value <= 0 && new_value > 0 {
-                let mut preceded_by = 0;
-
-                // maintain precedent counts relative to the set
-                for &mut (ref key, ref mut val) in self.precedents.iter_mut() {
-                    if key.gt(elem) {
-                        if *val == 0 {
-                            // find and remove key from elements
-                            let mut found_index = 0;
-                            for i in (0..self.elements.len()) { if self.elements[i].eq(key) { found_index = i; }}
-                            self.elements.swap_remove(found_index);
-
-                            action(key, -1);
-                        }
-                        *val += 1;
-                    }
-                    else {
-                        preceded_by += 1;
-                    }
-                }
-
-                // insert count always; maybe put in elements
-                self.precedents.push((elem.clone(), preceded_by));
-                if preceded_by == 0 {
-                    self.elements.push(elem.clone());
-                    action(elem, 1);
-                }
-            }
-
-            // removing the time from the set
-            if old_value > 0 && new_value <= 0 {
-                // maintain precedent counts relative to the set
-                for &mut (ref key, ref mut val) in self.precedents.iter_mut() {
-                    if key.gt(elem) {
-                        *val -= 1;
-                        if *val == 0 {
-                            self.elements.push(key.clone());
-                            action(key, 1);
-                        }
-                    }
-                }
-
-                // remove elem if in elements
-                if self.elements.contains(elem) {
-                    //self.elements.remove(elem);
-                    let mut found_index = 0;
-                    for i in (0..self.elements.len()) { if self.elements[i].eq(elem) { found_index = i; }}
-                    self.elements.swap_remove(found_index);
-
-                    action(elem, -1);
-                }
-
-                let mut to_remove = -1;
-                for index in (0..self.precedents.len()) {
-                    if self.precedents[index].0.eq(elem) { to_remove = index; }
-                }
-
-                self.precedents.swap_remove(to_remove);
-            }
+            self.update_and(elem, delta, |t,d| action(t,d));
         }
     }
 
@@ -174,25 +114,24 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
             let new_value = self.occurrences.update(elem, delta);
             let old_value = new_value - delta;
 
-            // introducing the time to the set
+            // if the value went from non-positive to positive we need to update self.precedents
             if old_value <= 0 && new_value > 0 {
                 let mut preceded_by = 0;
 
                 // maintain precedent counts relative to the set
                 for &mut (ref key, ref mut val) in self.precedents.iter_mut() {
-                    if key.gt(elem) {
-                        if *val == 0 {
-                            // find and remove key from elements
-                            let mut found_index = 0;
-                            for i in (0..self.elements.len()) { if self.elements[i].eq(key) { found_index = i; }}
-                            self.elements.swap_remove(found_index);
-
-                            action(key, -1);
+                    if let Some(comparison) = elem.partial_cmp(key) {
+                        match comparison {
+                            Ordering::Less    => {
+                                if *val == 0 {
+                                    self.elements.retain(|x| x != key);
+                                    action(key, -1);
+                                }
+                                *val += 1;
+                            },
+                            Ordering::Equal   => { panic!("surprising!"); },
+                            Ordering::Greater => { preceded_by += 1; },
                         }
-                        *val += 1;
-                    }
-                    else {
-                        preceded_by += 1;
                     }
                 }
 
@@ -204,11 +143,11 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
                 }
             }
 
-            // removing the time from the set
+            // if the value went from positive to non-positive we need to update self.precedents.
             if old_value > 0 && new_value <= 0 {
                 // maintain precedent counts relative to the set
                 for &mut (ref key, ref mut val) in self.precedents.iter_mut() {
-                    if key.gt(elem) {
+                    if elem < key {
                         *val -= 1;
                         if *val == 0 {
                             self.elements.push(key.clone());
@@ -217,24 +156,16 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
                     }
                 }
 
-                // remove elem if in elements
-                if self.elements.contains(elem) {
-                    let mut found_index = 0;
-                    for i in (0..self.elements.len()) { if self.elements[i].eq(elem) { found_index = i; }}
-                    self.elements.swap_remove(found_index);
-
+                if let Some(position) = self.elements.iter().position(|x| x == elem) {
                     action(elem, -1);
+                    self.elements.swap_remove(position);
                 }
 
-                let mut to_remove = -1;
-                for index in (0..self.precedents.len()) {
-                    if self.precedents[index].0.eq(elem) { to_remove = index; }
-                }
-
-                self.precedents.swap_remove(to_remove);
+                self.precedents.retain(|x| &x.0 != elem);
             }
         }
+
+        debug_assert!(self.occurrences.len() == 0 || self.elements.len() > 0);
     }
 
-    #[inline] pub fn update(&mut self, elem: &T, delta: i64) { self.update_and(elem, delta, |_,_| {}); }
 }
