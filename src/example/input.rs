@@ -3,12 +3,13 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Graph, Scope, Timestamp};
+use progress::{Scope, Timestamp};
 use progress::nested::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
 
 use communication::*;
 use communication::channels::ObserverHelper;
+use example::builder::Graph;
 use example::stream::Stream;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something

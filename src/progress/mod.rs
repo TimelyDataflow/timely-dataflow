@@ -1,4 +1,3 @@
-pub use self::graph::Graph;
 pub use self::scope::Scope;
 pub use self::nested::{Subgraph, Source, Target};
 pub use self::timestamp::{Timestamp, PathSummary};
@@ -7,7 +6,6 @@ pub use self::frontier::Antichain;
 
 pub mod count_map;
 pub mod frontier;
-pub mod graph;
 pub mod nested;
 pub mod timestamp;
 pub mod scope;

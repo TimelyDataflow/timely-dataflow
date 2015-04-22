@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::{Timestamp, PathSummary, Graph, Scope};
+use progress::{Timestamp, PathSummary, Scope};
 use progress::frontier::Antichain;
 use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
@@ -13,6 +13,7 @@ use communication::*;
 // use communication::Observer;
 use communication::channels::ObserverHelper;
 // use communication::channels::{Data, OutputPort};
+use example::builder::Graph;
 use example::stream::Stream;
 
 
