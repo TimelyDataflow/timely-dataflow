@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
-use core::marker::PhantomData;
+use std::marker::PhantomData;
 
 use progress::Graph;
 use progress::nested::subgraph::Source::ScopeOutput;

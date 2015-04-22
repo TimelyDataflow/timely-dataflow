@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-use core::marker::PhantomData;
+use std::marker::PhantomData;
 
 use columnar::{Columnar, ColumnarStack};
 use communication::{Pushable, Pullable};

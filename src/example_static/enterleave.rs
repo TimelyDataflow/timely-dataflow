@@ -2,7 +2,7 @@ use std::default::Default;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use core::marker::PhantomData;
+use std::marker::PhantomData;
 
 use progress::{Timestamp, Graph, CountMap};
 use progress::nested::subgraph::Source::{GraphInput, ScopeOutput};

@@ -1,4 +1,4 @@
-use core::fmt::Debug;
+use std::fmt::Debug;
 use std::any::Any;
 
 use progress::Timestamp;

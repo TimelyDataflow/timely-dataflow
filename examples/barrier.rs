@@ -1,7 +1,4 @@
-#![feature(core)]
 #![feature(test)]
-#![feature(unsafe_destructor)]
-#![feature(scoped)]
 
 /* Based on src/main.rs from timely-dataflow by Frank McSherry,
 *
@@ -29,7 +26,6 @@
 */
 
 extern crate timely;
-extern crate core;
 extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};

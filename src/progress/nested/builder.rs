@@ -73,7 +73,7 @@ impl<'a, TInner: Timestamp, G: Graph+'a> Graph for Builder<'a, G, TInner> {
 
     fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, TInner>, T> {
         let index = self.subgraph.children() as u64;
-        self.parent.borrow_mut().with_communicator(|x| Subgraph::new_from(x, index))
+        self.parent.borrow_mut().with_communicator(|x| Subgraph::new_from(x, index, format!("Subgraph-{}", index)))
     }
 
     fn with_communicator<R, F: FnOnce(&mut Self::Communicator)->R>(&mut self, func: F) -> R {

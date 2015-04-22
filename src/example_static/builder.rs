@@ -5,6 +5,7 @@ use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use progress::nested::scope_wrapper::ScopeWrapper;
 use communication::{Communicator, ThreadCommunicator};
+use progress::timestamp::RootTimestamp;
 
 pub trait GraphBuilder: Sized {
     type Timestamp : Timestamp;
@@ -16,6 +17,7 @@ pub trait GraphBuilder: Sized {
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T>;
 
     fn communicator(&mut self) -> &mut Self::Communicator;
+    fn name(&self) -> String;
 
     fn new_subgraph<'a, T: Timestamp>(&'a mut self) -> SubgraphBuilder<&'a mut Self, T> {
         let subscope = self.new_subscope();
@@ -26,7 +28,7 @@ pub trait GraphBuilder: Sized {
     }
 }
 
-impl<'a, G: GraphBuilder+'a> GraphBuilder for &'a mut G {
+impl<'a, G: GraphBuilder> GraphBuilder for &'a mut G {
     type Timestamp = G::Timestamp;
     type Communicator = G::Communicator;
 
@@ -34,13 +36,14 @@ impl<'a, G: GraphBuilder+'a> GraphBuilder for &'a mut G {
     fn add_boxed_scope(&mut self, scope: Box<Scope<Self::Timestamp>>) -> u64 { (**self).add_boxed_scope(scope) }
     fn add_scope<SC: Scope<Self::Timestamp>+'static>(&mut self, scope: SC) -> u64 { self.add_boxed_scope(Box::new(scope)) }
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T> { (**self).new_subscope() }
+    fn name(&self) -> String { (**self).name() }
 
     fn communicator(&mut self) -> &mut Self::Communicator { (**self).communicator() }
 }
 
 pub struct GraphRoot<C: Communicator> {
     communicator:   C,
-    graph:          Option<Box<Scope<()>>>,
+    graph:          Option<Box<Scope<RootTimestamp>>>,
 }
 
 impl<C: Communicator> GraphRoot<C> {
@@ -56,13 +59,13 @@ impl<C: Communicator> GraphRoot<C> {
 }
 
 impl<C: Communicator> GraphBuilder for GraphRoot<C> {
-    type Timestamp = ();
+    type Timestamp = RootTimestamp;
     type Communicator = C;
 
     fn connect(&mut self, _source: Source, _target: Target) {
         panic!("GraphRoot::connect(): root doesn't maintain edges; who are you, how did you get here?")
     }
-    fn add_boxed_scope(&mut self, mut scope: Box<Scope<()>>) -> u64  {
+    fn add_boxed_scope(&mut self, mut scope: Box<Scope<RootTimestamp>>) -> u64  {
         if self.graph.is_some() { panic!("GraphRoot::add_boxed_scope(): added second scope to root") }
         else                    {
             scope.get_internal_summary();
@@ -72,11 +75,13 @@ impl<C: Communicator> GraphBuilder for GraphRoot<C> {
         }
     }
 
-    fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<(), T>  {
-        Subgraph::<(), T>::new_from(&mut self.communicator, 0)
+    fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
+        let name = format!("{}::Subgraph[0]", self.name());
+        Subgraph::new_from(&mut self.communicator, 0, name)
     }
 
     fn communicator(&mut self) -> &mut C { &mut self.communicator }
+    fn name(&self) -> String { format!("Root") }
 }
 
 
@@ -89,7 +94,7 @@ pub struct SubgraphBuilder<G: GraphBuilder, T: Timestamp> {
 impl<G: GraphBuilder, T: Timestamp> Drop for SubgraphBuilder<G, T> {
     fn drop(&mut self) {
         // TODO : This is a pretty silly way to grab the subgraph. perhaps something more tasteful?
-        let subgraph = mem::replace(&mut self.subgraph, Subgraph::new_from(&mut ThreadCommunicator, 0));
+        let subgraph = mem::replace(&mut self.subgraph, Subgraph::new_from(&mut ThreadCommunicator, 0, format!("Empty")));
         self.parent.add_scope(subgraph);
     }
 }
@@ -108,8 +113,10 @@ impl<G: GraphBuilder, T: Timestamp> GraphBuilder for SubgraphBuilder<G, T>{
     }
 
     fn new_subscope<T2: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, T>, T2> {
-        Subgraph::new_from(self.parent.communicator(), self.subgraph.children() as u64)
+        let name = format!("{}::Subgraph[{}]", self.name(), self.subgraph.children());
+        Subgraph::new_from(self.parent.communicator(), self.subgraph.children() as u64, name)
     }
 
     fn communicator(&mut self) -> &mut G::Communicator { self.parent.communicator() }
+    fn name(&self) -> String { self.subgraph.name() }
 }

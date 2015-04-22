@@ -1,10 +1,6 @@
 #![feature(test)]
-#![feature(core)]
-#![feature(scoped)]
-
 #![allow(dead_code)]
 
-extern crate core;
 extern crate test;
 extern crate columnar;
 extern crate byteorder;
@@ -16,13 +12,13 @@ use docopt::Docopt;
 use test::Bencher;
 use std::thread;
 use std::hash::Hash;
-use core::fmt::Debug;
+use std::fmt::Debug;
 
 use columnar::Columnar;
 
 use timely::progress::Scope;
 use timely::progress::nested::Summary::Local;
-use timely::progress::nested::product::Product;
+use timely::progress::timestamp::RootTimestamp;
 use timely::communication::{ThreadCommunicator, ProcessCommunicator, Communicator};
 use timely::communication::channels::Data;
 use timely::networking::initialize_networking;
@@ -138,8 +134,8 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
         let (input2, stream2) = graph.new_input::<u64>();
 
         // prepare some feedback edges
-        let (loop1_source, loop1) = graph.loop_variable(Product::new((), 100), Local(1));
-        let (loop2_source, loop2) = graph.loop_variable(Product::new((), 100), Local(1));
+        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(100), Local(1));
+        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(100), Local(1));
 
         let concat1 = (&mut graph).concatenate(vec![stream1, loop1]).disable();
         let concat2 = (&mut graph).concatenate(vec![stream2, loop2]).disable();
@@ -157,16 +153,16 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     root.step();
 
     // move some data into the dataflow graph.
-    input1.send_messages(&Product::new((), 0), vec![1u64]);
-    input2.send_messages(&Product::new((), 0), vec![2u64]);
+    input1.send_messages(&RootTimestamp::new(0), vec![1u64]);
+    input2.send_messages(&RootTimestamp::new(0), vec![2u64]);
 
     // see what everyone thinks about that ...
     root.step();
 
-    input1.advance(&Product::new((), 0), &Product::new((), 1000000));
-    input2.advance(&Product::new((), 0), &Product::new((), 1000000));
-    input1.close_at(&Product::new((), 1000000));
-    input2.close_at(&Product::new((), 1000000));
+    input1.advance(&RootTimestamp::new(0), &RootTimestamp::new(1000000));
+    input2.advance(&RootTimestamp::new(0), &RootTimestamp::new(1000000));
+    input1.close_at(&RootTimestamp::new(1000000));
+    input2.close_at(&RootTimestamp::new(1000000));
 
     // spin
     match bencher {

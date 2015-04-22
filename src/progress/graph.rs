@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use progress::{Timestamp, Scope, Subgraph};
 use progress::nested::{Source, Target};
 use communication::Communicator;
+use progress::timestamp::RootTimestamp;
 
 pub trait Graph {
     type Timestamp : Timestamp;
@@ -32,7 +33,7 @@ impl<'a, G: Graph+'a> Graph for &'a mut G {
 
 pub struct Root<C: Communicator> {
     communicator:   C,
-    graph:          Option<Box<Scope<()>>>,
+    graph:          Option<Box<Scope<RootTimestamp>>>,
 }
 
 impl<C: Communicator> Root<C> {
@@ -51,13 +52,13 @@ impl<C: Communicator> Root<C> {
 }
 
 impl<C: Communicator> Graph for Root<C> {
-    type Timestamp = ();
+    type Timestamp = RootTimestamp;
     type Communicator = C;
 
     fn connect(&mut self, _source: Source, _target: Target) {
         panic!("root doesn't maintain edges; who are you, how did you get here?")
     }
-    fn add_boxed_scope(&mut self, mut scope: Box<Scope<()>>) -> u64  {
+    fn add_boxed_scope(&mut self, mut scope: Box<Scope<RootTimestamp>>) -> u64  {
         if self.graph.is_some() { panic!("added two scopes to root") }
         else                    {
             scope.get_internal_summary();
@@ -66,11 +67,11 @@ impl<C: Communicator> Graph for Root<C> {
             0
         }
     }
-    fn add_scope<SC: Scope<()>+'static>(&mut self, scope: SC) -> u64 {
+    fn add_scope<SC: Scope<RootTimestamp>+'static>(&mut self, scope: SC) -> u64 {
         self.add_boxed_scope(Box::new(scope))
     }
-    fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<(), T>  {
-        Subgraph::<(), T>::new_from(&mut self.communicator, 0)
+    fn new_subgraph<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
+        Subgraph::<RootTimestamp, T>::new_from(&mut self.communicator, 0, format!("Root"))
     }
 
     fn with_communicator<R, F: FnOnce(&mut Self::Communicator)->R>(&mut self, func: F) -> R {

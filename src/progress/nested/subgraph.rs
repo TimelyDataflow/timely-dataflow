@@ -1,5 +1,5 @@
 use std::default::Default;
-use core::fmt::Debug;
+use std::fmt::Debug;
 
 use std::mem;
 
@@ -147,6 +147,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         self.external_summaries = summaries;
         self.set_summaries();
 
+        self.print_reachability_summaries();
+
         // change frontier to local times; introduce as pointstamps
         for graph_input in (0..self.inputs) {
             while let Some((time, val)) = frontier[graph_input as usize].pop() {
@@ -247,12 +249,16 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
                                                    &mut self.pointstamp_internal,
                                                    |out, time, delta| { messages_produced[out as usize].update(&time.outer, delta); });
 
-            if subactive { active = true; }
+            if subactive {
+                active = true;
+                // println!("{}: not done because child {} said so", self.name, child.scope.name());
+            }
         }
 
         // Intermission: exchange pointstamp updates, and then move them to the pointstamps structure.
         self.progcaster.send_and_recv(&mut self.pointstamp_messages, &mut self.pointstamp_internal);
         {
+            // this aggregates down the pointstamps, removing any cancelled updates
             while let Some((a, b, c, d)) = self.pointstamp_messages.pop() { self.pointstamp_messages_cm.update(&(a, b, c), d); }
             while let Some(((a, b, c), d)) = self.pointstamp_messages_cm.pop() { self.pointstamp_messages.push((a, b, c, d)); }
             while let Some((a, b, c, d)) = self.pointstamp_internal.pop() { self.pointstamp_internal_cm.update(&(a, b, c), d); }
@@ -292,9 +298,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         self.pointstamps.clear_pushed();
 
         for child in self.children.iter() {
-            if child.outstanding_messages.iter().any(|x| x.elements.len() > 0) { active = true; }
-            if child.capabilities.iter().any(|x| x.elements.len() > 0) { active = true; }
+            active = active || child.outstanding_messages.iter().any(|x| x.elements.len() > 0);
+            active = active || child.capabilities.iter().any(|x| x.elements.len() > 0);
         }
+
+        // if we want to see why we are active
+        // if active { self.print_status(); }
 
         return active;
     }
@@ -483,10 +492,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 
-    pub fn new_from<C: Communicator>(communicator: &mut C, index: u64) -> Subgraph<TOuter, TInner> {
+    pub fn new_from<C: Communicator>(communicator: &mut C, index: u64, name: String) -> Subgraph<TOuter, TInner> {
         let progcaster = Progcaster::new(communicator);
         Subgraph {
-            name:                   Default::default(),
+            name:                   name,
             index:                  index,
             default_summary:        Default::default(),
             inputs:                 Default::default(),
@@ -506,6 +515,53 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             pointstamp_messages:    Default::default(),
             pointstamp_internal:    Default::default(),
             progcaster:             progcaster,
+        }
+    }
+
+    fn print_reachability_summaries(&self)
+    {
+        println!("Reachability summary for subscope {}", self.name());
+        println!("Scope outputs -> targets:");
+
+        for i in 0..self.source_summaries.len() {
+            for j in 0..self.source_summaries[i].len() {
+                println!("\t{}.{} {}(output[{}]) ->", i, j, self.children[i].scope.name(), j);
+                for &(ref target, ref chain) in self.source_summaries[i][j].iter() {
+                    println!("\t\t{}:\t{:?}", match target {
+                        &ScopeInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].scope.name(), scope, input),
+                        x => format!("{:?} ", x),
+                    }, chain.elements);
+                }
+            }
+        }
+
+        println!("Scope inputs -> targets:");
+        for i in 0..self.target_summaries.len() {
+            for j in 0..self.target_summaries[i].len() {
+                println!("\t{}.{} {}(input[{}]) ->", i, j, self.children[i].scope.name(), j);
+                for &(ref target, ref chain) in self.target_summaries[i][j].iter() {
+                    println!("\t\t{}:\t{:?}", match target {
+                        &ScopeInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].scope.name(), scope, input),
+                        x => format!("{:?} ", x),
+                        }, chain.elements);
+                }
+            }
+        }
+    }
+
+    fn print_status(&self) {
+        for child in self.children.iter() {
+            for (index, messages) in child.outstanding_messages.iter().enumerate() {
+                if messages.elements.len() > 0 {
+                    println!("{}::{}.messages[{}]: {:?}", self.name(), child.scope.name(), index, messages.elements);
+                }
+            }
+
+            for (index, internal) in child.capabilities.iter().enumerate() {
+                if internal.elements.len() > 0 {
+                    println!("{}::{}.internal[{}]: {:?}", self.name(), child.scope.name(), index, internal.elements);
+                }
+            }
         }
     }
 }

@@ -2,7 +2,7 @@ use std::mem;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::mpsc::{Sender, Receiver};
-use core::marker::PhantomData;
+use std::marker::PhantomData;
 
 use communication::Observer;
 

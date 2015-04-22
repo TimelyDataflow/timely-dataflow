@@ -1,5 +1,3 @@
-#![feature(core)]
-
 /* Based on src/main.rs from timely-dataflow by Frank McSherry,
 *
 * The MIT License (MIT)
@@ -26,16 +24,14 @@
 */
 
 extern crate timely;
-extern crate core;
 extern crate columnar;
 
-use core::fmt::Debug;
+use std::fmt::Debug;
 
 use std::hash::Hash;
 
-use timely::communication::{Communicator, ThreadCommunicator};
-use timely::communication::channels::Data;
-use timely::progress::nested::product::Product;
+use timely::communication::{Data, Communicator, ThreadCommunicator};
+use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::builder::Builder as SubgraphBuilder;
 use timely::progress::nested::Summary::Local;
 use timely::progress::graph::{Graph, Root};
@@ -63,8 +59,8 @@ fn _distinct<C: Communicator>(communicator: C) {
             let (input2, mut stream2) = builder.new_input::<u64>();
 
             // prepare some feedback edges
-            let (mut feedback1, mut feedback1_output) = builder.feedback(Product::new((), 1000000), Local(1));
-            let (mut feedback2, mut feedback2_output) = builder.feedback(Product::new((), 1000000), Local(1));
+            let (mut feedback1, mut feedback1_output) = builder.feedback(RootTimestamp::new(1000000), Local(1));
+            let (mut feedback2, mut feedback2_output) = builder.feedback(RootTimestamp::new(1000000), Local(1));
 
             // build up a subgraph using the concatenated inputs/feedbacks
             let (mut egress1, mut egress2) = _create_subgraph(&mut stream1.concat(&mut feedback1_output),
@@ -84,16 +80,16 @@ fn _distinct<C: Communicator>(communicator: C) {
     root.step();
 
     // move some data into the dataflow graph.
-    input1.send_messages(&Product::new((), 0), vec![1u64]);
-    input2.send_messages(&Product::new((), 0), vec![2u64]);
+    input1.send_messages(&RootTimestamp::new(0), vec![1u64]);
+    input2.send_messages(&RootTimestamp::new(0), vec![2u64]);
 
     // see what everyone thinks about that ...
     root.step();
 
-    input1.advance(&Product::new((), 0), &Product::new((), 1000000));
-    input2.advance(&Product::new((), 0), &Product::new((), 1000000));
-    input1.close_at(&Product::new((), 1000000));
-    input2.close_at(&Product::new((), 1000000));
+    input1.advance(&RootTimestamp::new(0), &RootTimestamp::new(1000000));
+    input2.advance(&RootTimestamp::new(0), &RootTimestamp::new(1000000));
+    input1.close_at(&RootTimestamp::new(1000000));
+    input2.close_at(&RootTimestamp::new(1000000));
 
     // spin
     while root.step() { }

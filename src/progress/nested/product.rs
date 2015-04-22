@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::fmt::{Formatter, Display, Error};
 
 use progress::Timestamp;
 use progress::nested::summary::Summary;
@@ -18,6 +19,12 @@ impl<TOuter, TInner> Product<TOuter, TInner> {
             outer: outer,
             inner: inner,
         }
+    }
+}
+
+impl<TOuter: Display, TInner: Display> Display for Product<TOuter, TInner> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        f.write_str(&format!("({}, {})", self.inner, self.outer))
     }
 }
 

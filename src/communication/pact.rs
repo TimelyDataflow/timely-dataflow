@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use core::marker::PhantomData;
+use std::marker::PhantomData;
 
 use progress::Timestamp;
 use communication::Data;

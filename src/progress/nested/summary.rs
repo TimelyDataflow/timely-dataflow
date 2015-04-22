@@ -1,5 +1,8 @@
 use std::cmp::Ordering;
 use std::default::Default;
+use std::fmt::{Display, Formatter};
+use std::fmt::Error;
+
 
 use progress::{Timestamp, PathSummary};
 use progress::nested::product::Product;
@@ -55,6 +58,15 @@ where TOuter: Timestamp,
             (Local(_), Outer(_, _))                    => *other,
             (Outer(outer1, inner1), Local(inner2))     => Outer(outer1, inner1.followed_by(&inner2)),
             (Outer(outer1, _), Outer(outer2, inner2))  => Outer(outer1.followed_by(&outer2), inner2),
+        }
+    }
+}
+
+impl<SOuter: Display, SInner: Display> Display for Summary<SOuter, SInner> {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            &Local(ref s) => f.write_str(&format!("Local({})", s)),
+            &Outer(ref s, ref t) => f.write_str(&format!("Outer({}, {})", s, t))
         }
     }
 }
