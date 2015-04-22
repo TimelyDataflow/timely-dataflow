@@ -3,7 +3,6 @@ use std::default::Default;
 
 use progress::{Timestamp, PathSummary};
 use progress::nested::product::Product;
-
 use progress::nested::summary::Summary::{Local, Outer};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -19,17 +18,25 @@ impl<S, T: Default> Default for Summary<S, T> {
 impl<S:PartialOrd+Copy, T:PartialOrd+Copy> PartialOrd for Summary<S, T> {
     fn partial_cmp(&self, other: &Summary<S, T>) -> Option<Ordering> {
         match (*self, *other) {
-            (Local(t1), Local(t2))       => t1.partial_cmp(&t2),
-            (Local(_), Outer(_,_))       => Some(Ordering::Less),
+            (Local(t1),    Local(t2))    => t1.partial_cmp(&t2),
+            (Local(t1),    Outer(_,t2))  => match t1.partial_cmp(&t2) {
+                Some(Ordering::Less)    => Some(Ordering::Less),
+                Some(Ordering::Equal)   => Some(Ordering::Less), // might not be strict if s2~=0, but lets break ties
+                Some(Ordering::Greater) => None,                 // if s2 = 0 we could be leaving something else out
+                None                    => None,
+            },
             (Outer(s1,t1), Outer(s2,t2)) => (s1,t1).partial_cmp(&(s2,t2)),
-            (Outer(_,_), Local(_))       => Some(Ordering::Greater),
+            (Outer(_,t1),   Local(t2))   => match t1.partial_cmp(&t2) {
+                Some(Ordering::Less)    => None,
+                Some(Ordering::Equal)   => Some(Ordering::Greater), // might not be strict if s2~=0, but lets break ties
+                Some(Ordering::Greater) => Some(Ordering::Greater), // if s2 = 0 we could be leaving something else out
+                None                    => None,
+            },
         }
     }
 }
 
-impl<TOuter, SOuter, TInner, SInner>
-PathSummary<Product<TOuter, TInner>>
-for Summary<SOuter, SInner>
+impl<TOuter, SOuter, TInner, SInner> PathSummary<Product<TOuter, TInner>> for Summary<SOuter, SInner>
 where TOuter: Timestamp,
       TInner: Timestamp,
       SOuter: PathSummary<TOuter>,
@@ -51,23 +58,3 @@ where TOuter: Timestamp,
         }
     }
 }
-
-// TODO : Would prefer this version, but something breaks down wrt type inference ...
-// impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<(TOuter, TInner)> for Summary<TOuter::Summary, TInner::Summary> {
-//     // this makes sense for a total order, but less clear for a partial order.
-//     fn results_in(&self, &(ref outer, ref inner): &(TOuter, TInner)) -> (TOuter, TInner) {
-//         match *self {
-//             Local(ref iters)              => (outer.clone(), iters.results_in(inner)),
-//             Outer(ref summary, ref iters) => (summary.results_in(outer), iters.results_in(&Default::default())),
-//         }
-//     }
-//     fn followed_by(&self, other: &Summary<TOuter::Summary, TInner::Summary>) -> Summary<TOuter::Summary, TInner::Summary>
-//     {
-//         match (*self, *other) {
-//             (Local(inner1), Local(inner2))             => Local(inner1.followed_by(&inner2)),
-//             (Local(_), Outer(_, _))                    => *other,
-//             (Outer(outer1, inner1), Local(inner2))     => Outer(outer1, inner1.followed_by(&inner2)),
-//             (Outer(outer1, _), Outer(outer2, inner2))  => Outer(outer1.followed_by(&outer2), inner2),
-//         }
-//     }
-// }
