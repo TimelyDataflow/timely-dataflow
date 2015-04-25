@@ -17,19 +17,20 @@ pub trait DistinctExtensionTrait { fn distinct(self) -> Self; }
 impl<G: GraphBuilder, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for ActiveStream<G, D> {
     fn distinct(self) -> ActiveStream<G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
-        self.unary_notify(Exchange::new(|x| hash::<_,SipHasher>(&x)), format!("Distinct"), vec![], move |handle| {
-            while let Some((time, data)) = handle.input.pull() {            // read inputs
+        let exch = Exchange::new(|x| hash::<_,SipHasher>(&x));
+        self.unary_notify(exch, format!("Distinct"), vec![], move |input, output, notificator| {
+            while let Some((time, data)) = input.pull() {            // read inputs
                 let set = elements.entry(time).or_insert_with(|| {          // look up time
-                    handle.notificator.notify_at(&time);                    // notify if new
+                    notificator.notify_at(&time);                           // notify if new
                     Default::default()                                      // default HashSet
                 });
 
-                for datum in data.into_iter() { set.insert(datum); }        // add data to set
+                for datum in data.drain() { set.insert(datum); }            // add data to set
             }
             // for each available notification, send corresponding set
-            while let Some((time, _count)) = handle.notificator.next() {    // pull notifications
+            while let Some((time, _count)) = notificator.next() {           // pull notifications
                 if let Some(data) = elements.remove(&time) {                // find the set
-                    handle.output.give_at(&time, data.into_iter());         // send the records
+                    output.give_at(&time, data.into_iter());         // send the records
                 }
             }
         })

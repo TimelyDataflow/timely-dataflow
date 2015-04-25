@@ -19,10 +19,9 @@ use test::Bencher;
 
 use columnar::Columnar;
 
-use timely::progress::graph::Root;
-use timely::progress::{Graph, Scope};
+use timely::example::builder::{Graph, Root, SubgraphBuilder};
+use timely::progress::Scope;
 use timely::progress::timestamp::RootTimestamp;
-use timely::progress::nested::builder::Builder as SubgraphBuilder;
 use timely::progress::nested::Summary::Local;
 use timely::progress::nested::Source::ScopeOutput;
 use timely::progress::nested::Target::ScopeInput;

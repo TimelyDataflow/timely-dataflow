@@ -74,7 +74,7 @@ impl<T:Timestamp, D: Data, F: Fn(&D)->u64, P: Pullable<(T, Vec<D>)>> Scope<T> fo
             let outputs = self.outputs.iter_mut();
             let mut sessions: Vec<_> = outputs.map(|x| x.session(&time)).collect();
 
-            for datum in data {
+            for datum in data.drain() {
                 let output = (self.func)(&datum);
                 sessions[output as usize].give(datum);
             }
