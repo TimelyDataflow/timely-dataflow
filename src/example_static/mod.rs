@@ -12,6 +12,7 @@ pub use self::inspect::*;
 pub use self::flat_map::*;
 pub use self::filter::*;
 pub use self::binary::*;
+pub use self::delay::*;
 
 pub mod stream;
 pub mod builder;
@@ -27,3 +28,4 @@ pub mod inspect;
 pub mod flat_map;
 pub mod filter;
 pub mod binary;
+pub mod delay;
