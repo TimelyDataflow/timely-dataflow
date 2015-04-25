@@ -13,10 +13,15 @@ use communication::channels::ObserverHelper;
 
 use example_static::builder::{GraphBuilder, SubgraphBuilder};
 use example_static::stream::*;
+use example_static::delay::*;
 
 pub trait EnterSubgraphExt<G: GraphBuilder, T: Timestamp, D: Data> {
     fn enter<'a>(&'a mut self, &Stream<G::Timestamp, D>) ->
         ActiveStream<&'a mut SubgraphBuilder<G, T>, D>;
+    fn enter_at<'a, F:Fn(&D)->T+'static>(&'a mut self, stream: &Stream<G::Timestamp, D>, initial: F) ->
+        ActiveStream<&'a mut SubgraphBuilder<G, T>, D> where  G::Communicator: 'a {
+            self.enter(stream).delay(move |datum, time| Product::new(time.outer, initial(datum)))
+        }
 }
 
 impl<T: Timestamp, G: GraphBuilder, D: Data>
