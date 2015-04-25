@@ -66,6 +66,9 @@ impl<T: Timestamp> ScopeWrapper<T> {
 
         result.summary = summary;
 
+        assert!(result.summary.len() as u64 == result.inputs);
+        assert!(!result.summary.iter().any(|x| x.len() as u64 != result.outputs));
+
         // TODO : Gross. Fix.
         for (index, capability) in result.capabilities.iter_mut().enumerate() {
             capability.update_iter_and(work[index].elements().iter().map(|x|x.clone()), |_, _| {});
