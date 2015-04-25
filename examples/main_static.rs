@@ -113,7 +113,7 @@ fn create_subgraph<G: GraphBuilder, D>(builder: &mut G,
                                         source1: &Stream<G::Timestamp, D>,
                                         source2: &Stream<G::Timestamp, D>) ->
                                             (Stream<G::Timestamp, D>, Stream<G::Timestamp, D>)
-where D: Data+Hash+Eq+Debug+Columnar {
+where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
 
     let mut subgraph = builder.new_subgraph::<u64>();
 

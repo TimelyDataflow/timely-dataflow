@@ -4,6 +4,8 @@
 
 #![allow(dead_code)]
 
+//! Information about timely dataflow!
+
 extern crate columnar;
 extern crate byteorder;
 

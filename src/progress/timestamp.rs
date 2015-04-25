@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::hash::Hash;
 use std::any::Any;
 use std::default::Default;
 use std::fmt::{Display, Formatter};
@@ -13,7 +12,7 @@ use columnar::{Columnar, ColumnarStack};
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 
 // TODO : Change Copy requirement to Clone; understand Columnar requirement (for serialization at the moment)
-pub trait Timestamp: Copy+Hash+Eq+PartialOrd+Default+Debug+Send+Columnar+Any+Display {
+pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Columnar+Any+Display {
     type Summary : PathSummary<Self> + 'static;   // summarizes cumulative action of Timestamp along a path
 }
 

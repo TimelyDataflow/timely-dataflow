@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::default::Default;
 
 use std::rc::Rc;
@@ -18,10 +19,19 @@ use example_static::delay::*;
 pub trait EnterSubgraphExt<G: GraphBuilder, T: Timestamp, D: Data> {
     fn enter<'a>(&'a mut self, &Stream<G::Timestamp, D>) ->
         ActiveStream<&'a mut SubgraphBuilder<G, T>, D>;
+}
+
+pub trait EnterSubgraphAtExt<G: GraphBuilder, T: Timestamp, D: Data>  where  G::Timestamp: Hash, T: Hash {
     fn enter_at<'a, F:Fn(&D)->T+'static>(&'a mut self, stream: &Stream<G::Timestamp, D>, initial: F) ->
-        ActiveStream<&'a mut SubgraphBuilder<G, T>, D> where  G::Communicator: 'a {
+        ActiveStream<&'a mut SubgraphBuilder<G, T>, D> ;
+}
+
+impl<G: GraphBuilder, T: Timestamp, D: Data, E: EnterSubgraphExt<G, T, D>> EnterSubgraphAtExt<G, T, D> for E
+where G::Timestamp: Hash, T: Hash {
+    fn enter_at<'a, F:Fn(&D)->T+'static>(&'a mut self, stream: &Stream<G::Timestamp, D>, initial: F) ->
+        ActiveStream<&'a mut SubgraphBuilder<G, T>, D> {
             self.enter(stream).delay(move |datum, time| Product::new(time.outer, initial(datum)))
-        }
+    }
 }
 
 impl<T: Timestamp, G: GraphBuilder, D: Data>

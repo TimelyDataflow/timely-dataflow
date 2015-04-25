@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::collections::HashMap;
 
 use communication::*;
@@ -9,7 +10,8 @@ use example_static::builder::*;
 
 pub trait DelayExt<G: GraphBuilder, D: Data> { fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(self, F) -> Self; }
 
-impl<G: GraphBuilder, D: Data> DelayExt<G, D> for ActiveStream<G, D> {
+impl<G: GraphBuilder, D: Data> DelayExt<G, D> for ActiveStream<G, D>
+where G::Timestamp: Hash {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(self, func: F) -> ActiveStream<G, D> {
         let _threshold = 256; // TODO : make more "streaming" by flushing
         let mut elements = HashMap::new();

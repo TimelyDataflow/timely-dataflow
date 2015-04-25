@@ -70,7 +70,8 @@ fn _distinct<C: Communicator>(communicator: C) {
 
 fn _create_subgraph<'a, G, D>(source1: &mut Stream<'a, G, D>, source2: &mut Stream<'a, G, D>) ->
     (Stream<'a, G, D>, Stream<'a, G, D>)
-where G: Graph+'a, D: Data+Hash+Eq+Debug+Columnar {
+where G: Graph+'a, D: Data+Hash+Eq+Debug+Columnar,
+      G::Timestamp: Hash {
 
     let mut subgraph = SubgraphBuilder::<_, u64>::new(source1.graph);
     let result = {

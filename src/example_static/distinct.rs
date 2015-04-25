@@ -14,7 +14,8 @@ use columnar::Columnar;
 
 pub trait DistinctExtensionTrait { fn distinct(self) -> Self; }
 
-impl<G: GraphBuilder, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for ActiveStream<G, D> {
+impl<G: GraphBuilder, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for ActiveStream<G, D>
+where G::Timestamp: Hash {
     fn distinct(self) -> ActiveStream<G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         let exch = Exchange::new(|x| hash::<_,SipHasher>(&x));
