@@ -160,7 +160,8 @@ where T: Timestamp,
 
             self.handle.notificator.pull_progress(&mut internal[0]);
         }
-        (vec![vec![Antichain::from_elem(Default::default())]], internal)
+        (vec![vec![Antichain::from_elem(Default::default())],
+              vec![Antichain::from_elem(Default::default())]], internal)
     }
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [CountMap<T>]) -> () {
