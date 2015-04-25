@@ -270,9 +270,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             while let Some(((a, b, c), d)) = self.pointstamp_internal_cm.pop() { self.pointstamp_internal.push((a, b, c, d)); }
 
             let pointstamps = &mut self.pointstamps;    // clarify to Rust that we don't need &mut self for the closures.
-            // println!("ps_msg: {:?}", self.pointstamp_internal);
+            // println!("ps_msg: {:?}", self.pointstamp_messages);
             for (scope, input, time, delta) in self.pointstamp_messages.drain() {
+                // println!("  {}  {:?}  {:?}  {:?}", self.children[scope as usize].scope.name(), input, time, delta);
                 self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
+                    // println!("    update passed: {:?} {}", time, delta);
                     pointstamps.update_target(ScopeInput(scope, input), time, delta);
                 });
             }
@@ -295,11 +297,16 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         // Step 4: push progress to each graph output ...
         for output in (0..self.outputs) {
             while let Some((time, val)) = self.pointstamps.output_pushed[output as usize].pop() {
+                // println!("Output pushed: {:?} {}", time, val);
                 self.external_capability[output as usize].update_and(&time.outer, val, |t,v| {
                     internal_progress[output as usize].update(t, v);
                 });
             }
         }
+
+        // println!("returning with internal_progress: {:?}", internal_progress);
+        // println!("               messages_consumed: {:?}", messages_consumed);
+        // println!("               messages_produced: {:?}", messages_produced);
 
         // pointstamps should be cleared in push_to_targets()
         self.pointstamps.clear_pushed();
@@ -323,12 +330,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for index in (0..self.children.len()) {
             for input in (0..self.pointstamps.target_counts[index].len()) {
                 while let Some((time, value)) = self.pointstamps.target_counts[index][input as usize].pop() {
+                    // println!("propagating: {}[{}]: {}", self.children[index].scope.name(), input, value);
                     for &(target, ref antichain) in self.target_summaries[index][input as usize].iter() {
                         let mut dest = match target {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
                             GraphOutput(output)      => &mut self.pointstamps.output_pushed[output as usize],
                         };
                         for summary in antichain.elements.iter() {
+                            // println!("\ttarget: {:?} updated with {:?}", target, summary.results_in(&time));
                             dest.update(&summary.results_in(&time), value);
                         }
                     }
@@ -337,12 +346,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
             for output in (0..self.pointstamps.source_counts[index].len()) {
                 while let Some((time, value)) = self.pointstamps.source_counts[index][output as usize].pop() {
+                    // println!("propagating: {}[{}]: {}", self.children[index].scope.name(), output, value);
                     for &(target, ref antichain) in self.source_summaries[index][output as usize].iter() {
                         let mut dest = match target {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
                             GraphOutput(output)      => &mut self.pointstamps.output_pushed[output as usize],
                         };
                         for summary in antichain.elements.iter() {
+                            // println!("\ttarget: {:?} updated with {:?}", target, summary.results_in(&time));
                             dest.update(&summary.results_in(&time), value);
                         }
                     }
