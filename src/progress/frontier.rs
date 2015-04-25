@@ -165,7 +165,13 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
             }
         }
 
-        debug_assert!(self.occurrences.len() == 0 || self.elements.len() > 0);
+        // TODO : Not actually an invariant violation if negative counts
+        // TODO : Negative counts are surprising, but not impossible
+        // if self.occurrences.len() > 0 && self.elements.len() == 0 {
+        //     println!("invariant messed?: {:?}", self);
+        // }
+
+        // debug_assert!(self.occurrences.len() == 0 || self.elements.len() > 0);
     }
 
 }
