@@ -23,11 +23,9 @@ where G::Timestamp: Hash {
                         new_time = time;
                     }
 
-                    let mut list = elements.entry(new_time.clone()).or_insert_with(|| {
-                        notificator.notify_at(&new_time);
-                        Vec::new()
-                    });
-                    list.push(datum);
+                    elements.entry(new_time.clone())
+                            .or_insert_with(|| { notificator.notify_at(&new_time); Vec::new() })
+                            .push(datum);
                 }
             }
             // for each available notification, send corresponding set
