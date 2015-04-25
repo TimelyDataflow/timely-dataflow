@@ -14,7 +14,7 @@ use std::default::Default;
 // The Communicator trait presents the interface a worker has to the outside world.
 // The worker can see its index, the total number of peers, and acquire channels to and from the other workers.
 // There is an assumption that each worker performs the same channel allocation logic; things go wrong otherwise.
-pub trait Communicator {
+pub trait Communicator: 'static {
     fn index(&self) -> u64;     // number out of peers
     fn peers(&self) -> u64;     // number of peers
     fn new_channel<T:Send+Columnar+Any>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
@@ -23,11 +23,11 @@ pub trait Communicator {
 // TODO : Would be nice if Communicator had associated types for its Pushable and Pullable types,
 // TODO : but they would have to be generic over T, with the current set-up. Might require HKT?
 
-impl<'a, C: Communicator + 'a> Communicator for &'a mut C {
-    fn index(&self) -> u64 { (**self).index() }
-    fn peers(&self) -> u64 { (**self).peers() }
-    fn new_channel<T:Send+Columnar+Any>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) { (**self).new_channel() }
-}
+// impl<'a, C: Communicator + 'a> Communicator for &'a mut C {
+//     fn index(&self) -> u64 { (**self).index() }
+//     fn peers(&self) -> u64 { (**self).peers() }
+//     fn new_channel<T:Send+Columnar+Any>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) { (**self).new_channel() }
+// }
 
 // The simplest communicator remains worker-local and just queues sent messages.
 pub struct ThreadCommunicator;
