@@ -5,26 +5,34 @@
 extern crate test;
 extern crate columnar;
 extern crate byteorder;
+extern crate docopt;
+
 extern crate timely;
 
-extern crate docopt;
 use docopt::Docopt;
 
-use test::Bencher;
-use std::thread;
 use std::hash::Hash;
 use std::fmt::Debug;
+use std::thread;
+
+use test::Bencher;
 
 use columnar::Columnar;
 
+use timely::example::builder::{Graph, Root, SubgraphBuilder};
 use timely::progress::Scope;
-use timely::progress::nested::Summary::Local;
 use timely::progress::timestamp::RootTimestamp;
-use timely::communication::{ThreadCommunicator, ProcessCommunicator, Communicator};
-use timely::communication::channels::Data;
-use timely::networking::initialize_networking;
+use timely::progress::nested::Summary::Local;
+use timely::progress::nested::Source::ScopeOutput;
+use timely::progress::nested::Target::ScopeInput;
 
-use timely::example_static::*;
+use timely::communication::{Data, ThreadCommunicator, ProcessCommunicator, Communicator};
+
+use timely::example::*;
+use timely::example::distinct::DistinctExtensionTrait;
+use timely::example::barrier::BarrierScope;
+
+use timely::networking::initialize_networking;
 
 static USAGE: &'static str = "
 Usage: timely distinct [options] [<arguments>...]
@@ -109,44 +117,53 @@ fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
     }
 }
 
-fn create_subgraph<G: GraphBuilder, D>(builder: &mut G,
-                                        source1: &Stream<G::Timestamp, D>,
-                                        source2: &Stream<G::Timestamp, D>) ->
-                                            (Stream<G::Timestamp, D>, Stream<G::Timestamp, D>)
-where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
+fn _create_subgraph<'a, G, D>(source1: &mut Stream<'a, G, D>, source2: &mut Stream<'a, G, D>) ->
+    (Stream<'a, G, D>, Stream<'a, G, D>)
+where G: Graph+'a, D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
 
-    let mut subgraph = builder.new_subgraph::<u64>();
+    let mut subgraph = SubgraphBuilder::<_, u64>::new(source1.graph);
+    let result = {
+        let subgraph_builder = subgraph.builder();
 
-    (subgraph.enter(source1).distinct().leave(),
-     subgraph.enter(source2).leave())
+        (
+            source1.enter(&subgraph_builder).distinct().leave(),
+            source2.enter(&subgraph_builder).leave()
+        )
+    };
+    subgraph.seal();
+
+    result
 }
 
 fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
-    let mut root = GraphRoot::new(communicator);
+    let mut root = Root::new(communicator);
 
     let (mut input1, mut input2) = {
+        let borrow = root.builder();
+        let mut graph = SubgraphBuilder::new(&borrow);
+        let (input1, input2) = {
+            let builder = graph.builder();
 
-        // allocate a new graph builder
-        let mut graph = root.new_subgraph();
+            // try building some input scopes
+            let (input1, mut stream1) = builder.new_input::<u64>();
+            let (input2, mut stream2) = builder.new_input::<u64>();
 
-        // try building some input scopes
-        let (input1, stream1) = graph.new_input::<u64>();
-        let (input2, stream2) = graph.new_input::<u64>();
+            // prepare some feedback edges
+            let (mut feedback1, mut feedback1_output) = builder.feedback(RootTimestamp::new(1000000), Local(1));
+            let (mut feedback2, mut feedback2_output) = builder.feedback(RootTimestamp::new(1000000), Local(1));
 
-        // prepare some feedback edges
-        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(100), Local(1));
-        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(100), Local(1));
+            // build up a subgraph using the concatenated inputs/feedbacks
+            let (mut egress1, mut egress2) = _create_subgraph(&mut stream1.concat(&mut feedback1_output),
+                                                              &mut stream2.concat(&mut feedback2_output));
 
-        let concat1 = (&mut graph).concatenate(vec![stream1, loop1]).disable();
-        let concat2 = (&mut graph).concatenate(vec![stream2, loop2]).disable();
+            // connect feedback sources. notice that we have swapped indices ...
+            feedback1.connect_input(&mut egress2);
+            feedback2.connect_input(&mut egress1);
 
-        // build up a subgraph using the concatenated inputs/feedbacks
-        let (egress1, egress2) = create_subgraph(&mut graph, &concat1, &concat2);
-
-        // connect feedback sources. notice that we have swapped indices ...
-        egress1.enable(&mut graph).connect_loop(loop2_source);
-        egress2.enable(&mut graph).connect_loop(loop1_source);
+            (input1, input2)
+        };
+        graph.seal();
 
         (input1, input2)
     };
@@ -200,24 +217,24 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
 fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
-    let mut root = GraphRoot::new(communicator);
-    //
-    // {
-    //     let borrow = root.builder();
-    //     let mut graph = SubgraphBuilder::new(&borrow);
-    //
-    //     let peers = graph.with_communicator(|x| x.peers());
-    //     {
-    //         let builder = &graph.builder();
-    //
-    //         builder.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
-    //         builder.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
-    //     }
-    //
-    //     graph.seal();
-    // }
-    //
-    // // spin
+    let mut root = Root::new(communicator);
+
+    {
+        let borrow = root.builder();
+        let mut graph = SubgraphBuilder::new(&borrow);
+
+        let peers = graph.with_communicator(|x| x.peers());
+        {
+            let builder = &graph.builder();
+
+            builder.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
+            builder.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
+        }
+
+        graph.seal();
+    }
+
+    // spin
     match bencher {
         Some(b) => b.iter(|| { root.step(); }),
         None    => while root.step() { },

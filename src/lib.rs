@@ -11,6 +11,6 @@ extern crate byteorder;
 
 pub mod networking;
 pub mod progress;
-pub mod example;
+// pub mod example;
 pub mod example_static;
 pub mod communication;
