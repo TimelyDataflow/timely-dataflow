@@ -57,6 +57,8 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
         return result;
     }
 
+    pub fn empty(&self) -> bool { self.elements.len() == 0 }
+
     #[inline]
     pub fn lt(&self, time: &T) -> bool {
         self.elements.iter().any(|x| x.lt(time))

@@ -192,12 +192,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
                 }
             }
 
-            self.children[subscope].scope.set_external_summary(summaries, &mut changes);
+            self.children[subscope].set_external_summary(summaries, &mut changes);
 
             // TODO : Shouldn't be necesasary ...
-            // debug_assert!(!changes.iter().any(|x| x.len() > 0));
             if changes.iter().any(|x| x.len() > 0) {
-                println!("Someone ({}) didn't take their medicine...", self.children[subscope].scope.name());
+                println!("Someone ({}) didn't take their medicine...", self.children[subscope].name());
                 for change in changes.iter_mut() { change.clear(); }
             }
 
@@ -547,10 +546,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
         for i in 0..self.source_summaries.len() {
             for j in 0..self.source_summaries[i].len() {
-                println!("\t{}.{} {}(output[{}]) ->", i, j, self.children[i].scope.name(), j);
+                println!("\t{}.{} {}(output[{}]) ->", i, j, self.children[i].name(), j);
                 for &(ref target, ref chain) in self.source_summaries[i][j].iter() {
                     println!("\t\t{}:\t{:?}", match target {
-                        &ScopeInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].scope.name(), scope, input),
+                        &ScopeInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].name(), scope, input),
                         x => format!("{:?} ", x),
                     }, chain.elements);
                 }
@@ -560,10 +559,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         println!("Scope inputs -> targets:");
         for i in 0..self.target_summaries.len() {
             for j in 0..self.target_summaries[i].len() {
-                println!("\t{}.{} {}(input[{}]) ->", i, j, self.children[i].scope.name(), j);
+                println!("\t{}.{} {}(input[{}]) ->", i, j, self.children[i].name(), j);
                 for &(ref target, ref chain) in self.target_summaries[i][j].iter() {
                     println!("\t\t{}:\t{:?}", match target {
-                        &ScopeInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].scope.name(), scope, input),
+                        &ScopeInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].name(), scope, input),
                         x => format!("{:?} ", x),
                         }, chain.elements);
                 }
@@ -575,13 +574,13 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for child in self.children.iter() {
             for (index, messages) in child.outstanding_messages.iter().enumerate() {
                 if messages.elements.len() > 0 {
-                    println!("{}::{}.messages[{}]: {:?}", self.name(), child.scope.name(), index, messages.elements);
+                    println!("{}::{}.messages[{}]: {:?}", self.name(), child.name(), index, messages.elements);
                 }
             }
 
             for (index, internal) in child.capabilities.iter().enumerate() {
                 if internal.elements.len() > 0 {
-                    println!("{}::{}.internal[{}]: {:?}", self.name(), child.scope.name(), index, internal.elements);
+                    println!("{}::{}.internal[{}]: {:?}", self.name(), child.name(), index, internal.elements);
                 }
             }
         }

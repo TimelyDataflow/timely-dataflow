@@ -12,9 +12,9 @@ use progress::count_map::CountMap;
 use progress::broadcast::ProgressVec;
 
 pub struct ScopeWrapper<T: Timestamp> {
-    pub scope:                  Box<Scope<T>>,          // the scope itself
+    pub scope:                  Option<Box<Scope<T>>>,          // the scope itself
 
-    index:                  u64,
+    index:                      u64,
 
     pub inputs:                 u64,                       // cached information about inputs
     pub outputs:                u64,                       // cached information about outputs
@@ -28,28 +28,33 @@ pub struct ScopeWrapper<T: Timestamp> {
     pub capabilities:           Vec<MutableAntichain<T>>,   // per-output:  capabilities retained by scope on outputs
     pub outstanding_messages:   Vec<MutableAntichain<T>>,   // per-input:   counts of messages on each input
 
-    internal_progress:      Vec<CountMap<T>>,         // per-output:  temp buffer used to ask about internal progress
-    consumed_messages:      Vec<CountMap<T>>,         // per-input:   temp buffer used to ask about consumed messages
-    produced_messages:      Vec<CountMap<T>>,         // per-output:  temp buffer used to ask about produced messages
+    internal_progress:          Vec<CountMap<T>>,         // per-output:  temp buffer used to ask about internal progress
+    consumed_messages:          Vec<CountMap<T>>,         // per-input:   temp buffer used to ask about consumed messages
+    produced_messages:          Vec<CountMap<T>>,         // per-output:  temp buffer used to ask about produced messages
 
     pub guarantee_changes:      Vec<CountMap<T>>,         // per-input:   temp storage for changes in some guarantee...
 }
 
 impl<T: Timestamp> ScopeWrapper<T> {
-    pub fn new(scope: Box<Scope<T>>, index: u64) -> ScopeWrapper<T> {
+    pub fn new(mut scope: Box<Scope<T>>, index: u64) -> ScopeWrapper<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
 
+        let (summary, work) = scope.get_internal_summary();
+
+        assert!(summary.len() as u64 == inputs);
+        assert!(!summary.iter().any(|x| x.len() as u64 != outputs));
+
         let mut result = ScopeWrapper {
-            scope:      scope,
+            scope:      Some(scope),
             index:      index,
             inputs:     inputs,
             outputs:    outputs,
             edges:      vec![Default::default(); outputs as usize],
 
             notify:     notify,
-            summary:    Vec::new(),
+            summary:    summary,
 
             guarantees:             vec![Default::default(); inputs as usize],
             capabilities:           vec![Default::default(); outputs as usize],
@@ -62,13 +67,6 @@ impl<T: Timestamp> ScopeWrapper<T> {
             guarantee_changes: vec![CountMap::new(); inputs as usize],
         };
 
-        let (summary, work) = result.scope.get_internal_summary();
-
-        result.summary = summary;
-
-        assert!(result.summary.len() as u64 == result.inputs);
-        assert!(!result.summary.iter().any(|x| x.len() as u64 != result.outputs));
-
         // TODO : Gross. Fix.
         for (index, capability) in result.capabilities.iter_mut().enumerate() {
             capability.update_iter_and(work[index].elements().iter().map(|x|x.clone()), |_, _| {});
@@ -77,7 +75,15 @@ impl<T: Timestamp> ScopeWrapper<T> {
         return result;
     }
 
+    pub fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [CountMap<T>]) {
+        self.scope.as_mut().map(|scope| scope.set_external_summary(summaries, frontier));
+    }
+
+
     pub fn push_pointstamps(&mut self, external_progress: &Vec<CountMap<T>>) {
+
+        assert!(self.scope.is_some() || external_progress.iter().all(|x| x.len() == 0));
+
         if self.notify && external_progress.iter().any(|x| x.len() > 0) {
             for input_port in (0..self.inputs as usize) {
                 self.guarantees[input_port]
@@ -86,11 +92,12 @@ impl<T: Timestamp> ScopeWrapper<T> {
 
             // push any changes to the frontier to the subgraph.
             if self.guarantee_changes.iter().any(|x| x.len() > 0) {
-                self.scope.push_external_progress(&mut self.guarantee_changes);
+                let changes = &mut self.guarantee_changes;
+                self.scope.as_mut().map(|scope| scope.push_external_progress(changes));
 
                 // TODO : Shouldn't be necessary
                 // for change in self.guarantee_changes.iter_mut() { change.clear(); }
-                debug_assert!(!self.guarantee_changes.iter().any(|x| x.len() > 0));
+                debug_assert!(!changes.iter().any(|x| x.len() > 0));
             }
         }
     }
@@ -100,9 +107,24 @@ impl<T: Timestamp> ScopeWrapper<T> {
                                                   pointstamp_internal: &mut ProgressVec<T>,
                                                   mut output_action:   A) -> bool {
 
-        let active = self.scope.pull_internal_progress(&mut self.internal_progress,
-                                                       &mut self.consumed_messages,
-                                                       &mut self.produced_messages);
+        let active = {
+            if let &mut Some(ref mut scope) = &mut self.scope {
+                scope.pull_internal_progress(&mut self.internal_progress,
+                                             &mut self.consumed_messages,
+                                             &mut self.produced_messages)
+            }
+            else { false }
+        };
+
+        // shutting down if nothing left to do
+        if self.scope.is_some() &&
+           !active &&
+           self.notify && // we don't track guarantees and capabilities for non-notify scopes. bug?
+           self.guarantees.iter().all(|guarantee| guarantee.empty()) &&
+           self.capabilities.iter().all(|capability| capability.empty()) {
+               println!("Shutting down {}", self.name());
+               self.scope = None;
+           }
 
         // for each output: produced messages and internal progress
         for output in (0..self.outputs as usize) {
@@ -131,4 +153,6 @@ impl<T: Timestamp> ScopeWrapper<T> {
     }
 
     pub fn add_edge(&mut self, output: u64, target: Target) { self.edges[output as usize].push(target); }
+
+    pub fn name(&self) -> String { self.scope.as_ref().map_or(format!("Tombstone"), |x| x.name()) }
 }
