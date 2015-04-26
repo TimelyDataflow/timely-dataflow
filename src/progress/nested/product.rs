@@ -51,6 +51,12 @@ impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInn
         }
         else { None }
     }
+    fn le(&self, other: &Product<TOuter, TInner>) -> bool {
+        self.outer <= other.outer && self.inner <= other.inner
+    }
+    fn ge(&self, other: &Product<TOuter, TInner>) -> bool {
+        self.outer >= other.outer && self.inner >= other.inner
+    }
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner> {
