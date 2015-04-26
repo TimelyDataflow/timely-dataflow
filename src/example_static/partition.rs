@@ -7,7 +7,7 @@ use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
 use communication::*;
-use communication::pact::Pipeline;
+use communication::pact::{Pipeline, PactPullable};
 use communication::channels::ObserverHelper;
 
 use example_static::builder::*;
@@ -52,7 +52,7 @@ pub struct PartitionScope<T:Timestamp, D: Data, F: Fn(&D)->u64, P: Pullable<(T, 
 }
 
 impl<T:Timestamp, D: Data, F: Fn(&D)->u64, P: Pullable<(T, Vec<D>)>> PartitionScope<T, D, F, P> {
-    pub fn new(input: P, outputs: Vec<OutputPort<T, D>>, func: F) -> PartitionScope<T, D, F, P> {
+    pub fn new(input: PactPullable<T, D, P>, outputs: Vec<OutputPort<T, D>>, func: F) -> PartitionScope<T, D, F, P> {
         PartitionScope {
             input:      PullableHelper::new(input),
             outputs:    outputs.into_iter().map(|x| ObserverHelper::new(x, Rc::new(RefCell::new(CountMap::new())))).collect(),

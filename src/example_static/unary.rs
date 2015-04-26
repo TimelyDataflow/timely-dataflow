@@ -11,24 +11,23 @@ use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
 use communication::channels::ObserverHelper;
+use communication::pact::PactPullable;
 
 use example_static::stream::ActiveStream;
 use example_static::builder::*;
 
-pub struct PullableHelper<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> {
-    receiver:   P,
+pub struct PullableHelper<T:Timestamp, D: Data, P: Pullable<(T, Vec<D>)>> {
+    receiver:   PactPullable<T, D, P>,
     consumed:   CountMap<T>,
     phantom:    PhantomData<D>,
-    stashed:    Vec<D>,
 }
 
-impl<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
+impl<T:Timestamp, D: Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
     pub fn pull(&mut self) -> Option<(T, &mut Vec<D>)> {
         if let Some((time, data)) = self.receiver.pull() {
             if data.len() > 0 {
-                self.stashed = data; // TODO : Hand self.stashed back rather than drop
-                self.consumed.update(&time, self.stashed.len() as i64);
-                Some((time, &mut self.stashed))
+                self.consumed.update(&time, data.len() as i64);
+                Some((time, data))
             }
             else { None }
         }
@@ -36,18 +35,12 @@ impl<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
     }
 }
 
-// impl<T:Eq+Clone, D, P: Pullable<(T, Vec<D>)>> Iterator for PullableHelper<T, D, P> {
-//     type Item = (T, Vec<D>);
-//     fn next(&mut self) -> Option<(T, Vec<D>)> { self.pull() }
-// }
-
 impl<T:Timestamp, D:Data, P: Pullable<(T, Vec<D>)>> PullableHelper<T, D, P> {
-    pub fn new(input: P) -> PullableHelper<T, D, P> {
+    pub fn new(input: PactPullable<T, D, P>) -> PullableHelper<T, D, P> {
         PullableHelper {
             receiver: input,
             consumed: CountMap::new(),
             phantom:  PhantomData,
-            stashed:  Vec::new(),
         }
     }
     pub fn pull_progress(&mut self, consumed: &mut CountMap<T>) {
@@ -128,18 +121,20 @@ pub struct UnaryScope
     notify:         Option<(Vec<T>, u64)>,    // initial notifications and peers
 }
 
-impl<T: Timestamp,
+impl<T:  Timestamp,
      D1: Data,
      D2: Data,
-     P: Pullable<(T, Vec<D1>)>,
-     L: FnMut(&mut PullableHelper<T, D1, P>,
-              &mut ObserverHelper<OutputPort<T, D2>>,
-              &mut Notificator<T>)> UnaryScope<T, D1, D2, P, L> {
-    pub fn new(receiver: P,
-               targets: OutputPort<T, D2>,
-               name: String,
-               logic: L,
-               notify: Option<(Vec<T>, u64)>) -> UnaryScope<T, D1, D2, P, L> {
+     P:  Pullable<(T, Vec<D1>)>,
+     L:  FnMut(&mut PullableHelper<T, D1, P>,
+               &mut ObserverHelper<OutputPort<T, D2>>,
+               &mut Notificator<T>)>
+UnaryScope<T, D1, D2, P, L> {
+    pub fn new(receiver: PactPullable<T, D1, P>,
+               targets:  OutputPort<T, D2>,
+               name:     String,
+               logic:    L,
+               notify:   Option<(Vec<T>, u64)>)
+           -> UnaryScope<T, D1, D2, P, L> {
         UnaryScope {
             name:    name,
             handle:  UnaryScopeHandle {

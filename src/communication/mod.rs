@@ -5,7 +5,7 @@ pub use communication::allocator::BinaryCommunicator;
 pub use communication::pact::ParallelizationContract;
 pub use communication::observer::{Observer, ObserverSessionExt};
 pub use communication::allocator::{Communicator};
-pub use communication::pushpull::{Pushable, Pullable, PushableObserver};
+pub use communication::pushpull::{Pushable, Pullable};
 
 pub use communication::output_port::{OutputPort, Registrar};
 

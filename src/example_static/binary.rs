@@ -10,6 +10,7 @@ use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
 use communication::channels::ObserverHelper;
+use communication::pact::PactPullable;
 
 use example_static::builder::*;
 use example_static::unary::PullableHelper;
@@ -121,8 +122,13 @@ impl<T: Timestamp,
               &mut ObserverHelper<OutputPort<T, D3>>,
               &mut Notificator<T>)+'static>
 BinaryScope<T, D1, D2, D3, P1, P2, L> {
-    pub fn new(receiver1: P1, receiver2: P2, targets: OutputPort<T, D3>, name: String, notify: Option<(Vec<T>, u64)>, logic: L)
-            -> BinaryScope<T, D1, D2, D3, P1, P2, L> {
+    pub fn new(receiver1: PactPullable<T, D1, P1>,
+               receiver2: PactPullable<T, D2, P2>,
+               targets: OutputPort<T, D3>,
+               name: String,
+               notify: Option<(Vec<T>, u64)>,
+               logic: L)
+        -> BinaryScope<T, D1, D2, D3, P1, P2, L> {
         BinaryScope {
             name: name,
             handle: BinaryScopeHandle {
