@@ -5,10 +5,11 @@ extern crate timely;
 extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};
-use timely::progress::nested::Source::ScopeOutput;
-use timely::progress::nested::Target::ScopeInput;
-use timely::example::barrier::BarrierScope;
-use timely::example::builder::{Graph, Root, SubgraphBuilder};
+use timely::communication::pact::Pipeline;
+use timely::progress::timestamp::RootTimestamp;
+use timely::progress::nested::Summary::Local;
+use timely::example_static::*;
+
 
 use test::Bencher;
 
@@ -30,21 +31,22 @@ fn _barrier_multi(threads: u64) {
 
 fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
-    let mut root = Root::new(communicator);
-
+    let mut root = GraphRoot::new(communicator);
     {
-        let borrow = root.builder();
-        let mut graph = SubgraphBuilder::new(&borrow);
-
-        let peers = graph.with_communicator(|x| x.peers());
-        {
-            let builder = &graph.builder();
-
-            builder.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000 });
-            builder.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
-        }
-
-        graph.seal();
+        let mut graph = root.new_subgraph();
+        let (handle, stream) = graph.loop_variable::<u64>(RootTimestamp::new(1_000_000), Local(1));
+        stream.enable(graph)
+              .unary_notify(Pipeline,
+                            format!("Barrier"),
+                            vec![RootTimestamp::new(0u64)],
+                            |_, _, notificator| {
+                  while let Some((mut time, _count)) = notificator.next() {
+                      println!("iterating");
+                      time.inner += 1;
+                      notificator.notify_at(&time);
+                  }
+              })
+              .connect_loop(handle);
     }
 
     // spin

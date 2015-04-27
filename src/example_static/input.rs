@@ -6,6 +6,8 @@ use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Scope, Timestamp};
 use progress::nested::subgraph::Source::{ScopeOutput};
 use progress::count_map::CountMap;
+use progress::timestamp::RootTimestamp;
+use progress::nested::product::Product;
 
 use communication::*;
 use communication::channels::ObserverHelper;
@@ -21,19 +23,22 @@ use example_static::builder::*;
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 // returns both an input scope and a stream representing its output.
-pub trait InputExtensionTrait<G: GraphBuilder> {
-    fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G::Timestamp, D>);
+pub trait InputExtensionTrait<T: Timestamp+Ord> {
+    fn new_input<D:Data>(&mut self) -> (InputHelper<T, D>, Stream<Product<RootTimestamp, T>, D>);
 }
 
-impl<G: GraphBuilder> InputExtensionTrait<G> for G {
-    fn new_input<D:Data>(&mut self) -> (InputHelper<G::Timestamp, D>, Stream<G::Timestamp, D>) {
-        let (output, registrar) = OutputPort::<G::Timestamp, D>::new();
+impl<'a, C: Communicator, T: Timestamp+Ord> InputExtensionTrait<T> for SubgraphBuilder<&'a mut GraphRoot<C>, T> {
+    fn new_input<D:Data>(&mut self) -> (InputHelper<T, D>,
+                                        Stream<Product<RootTimestamp, T>, D>) {
+        let (output, registrar) = OutputPort::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let helper = InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
             output:   ObserverHelper::new(output, produced.clone()),
+            now_at:   Default::default(),
+            closed:   false,
         };
 
         let copies = self.communicator().peers();
@@ -49,19 +54,20 @@ impl<G: GraphBuilder> InputExtensionTrait<G> for G {
     }
 }
 
-pub struct InputScope<T:Timestamp> {
-    frontier:   Rc<RefCell<MutableAntichain<T>>>,   // times available for sending
-    progress:   Rc<RefCell<CountMap<T>>>,           // times closed since last asked
-    messages:   Rc<RefCell<CountMap<T>>>,           // messages sent since last asked
+pub struct InputScope<T:Timestamp+Ord> {
+    frontier:   Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
+    progress:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
+    messages:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // messages sent since last asked
     copies:     u64,
 }
 
-impl<T:Timestamp> Scope<T> for InputScope<T> {
+impl<T:Timestamp+Ord> Scope<Product<RootTimestamp, T>> for InputScope<T> {
     fn name(&self) -> String { format!("Input") }
     fn inputs(&self) -> u64 { 0 }
     fn outputs(&self) -> u64 { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<Product<RootTimestamp, T> as Timestamp>::Summary>>>,
+                                           Vec<CountMap<Product<RootTimestamp, T>>>) {
         let mut map = CountMap::new();
         for x in self.frontier.borrow().elements.iter() {
             map.update(x, self.copies as i64);
@@ -69,9 +75,9 @@ impl<T:Timestamp> Scope<T> for InputScope<T> {
         (Vec::new(), vec![map])
     }
 
-    fn pull_internal_progress(&mut self, frontier_progress: &mut [CountMap<T>],
-                                        _messages_consumed: &mut [CountMap<T>],
-                                         messages_produced: &mut [CountMap<T>]) -> bool
+    fn pull_internal_progress(&mut self, frontier_progress: &mut [CountMap<Product<RootTimestamp, T>>],
+                                        _messages_consumed: &mut [CountMap<Product<RootTimestamp, T>>],
+                                         messages_produced: &mut [CountMap<Product<RootTimestamp, T>>]) -> bool
     {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
         self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
@@ -81,25 +87,42 @@ impl<T:Timestamp> Scope<T> for InputScope<T> {
     fn notify_me(&self) -> bool { false }
 }
 
-pub struct InputHelper<T: Timestamp, D: Data> {
-    frontier:   Rc<RefCell<MutableAntichain<T>>>,   // times available for sending
-    progress:   Rc<RefCell<CountMap<T>>>,           // times closed since last asked
-    output:     ObserverHelper<OutputPort<T, D>>,
+pub struct InputHelper<T: Timestamp+Ord, D: Data> {
+    frontier:   Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
+    progress:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
+    output:     ObserverHelper<OutputPort<Product<RootTimestamp, T>, D>>,
+
+    now_at:     T,
+    closed:     bool,
 }
 
-impl<T:Timestamp, D: Data> InputHelper<T, D> {
-    pub fn send_messages(&mut self, time: &T, data: Vec<D>) {
-        self.output.open(time);
-        for datum in data.into_iter() { self.output.give(datum); }
-        self.output.shut(time);
+impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
+    pub fn send_at<I: Iterator<Item=D>>(&mut self, time: T, items: I) {
+        if time >= self.now_at {
+            self.output.open(&Product::new(RootTimestamp, time));
+            for item in items { self.output.give(item); }
+            self.output.shut(&Product::new(RootTimestamp, time));
+        }
     }
 
-    pub fn advance(&self, start: &T, end: &T) {
-        self.frontier.borrow_mut().update_weight(start, -1, &mut (*self.progress.borrow_mut()));
-        self.frontier.borrow_mut().update_weight(end,  1, &mut (*self.progress.borrow_mut()));
+    pub fn advance_to(&mut self, next: T) {
+        if next > self.now_at {
+            self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, self.now_at.clone()), -1, &mut (*self.progress.borrow_mut()));
+            self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, next.clone()),  1, &mut (*self.progress.borrow_mut()));
+            self.now_at = next;
+        }
     }
 
-    pub fn close_at(&self, time: &T) {
-        self.frontier.borrow_mut().update_weight(time, -1, &mut (*self.progress.borrow_mut()));
+    pub fn close(self) { }
+    //     if !self.closed {
+    //         self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, self.now_at.clone()), -1, &mut (*self.progress.borrow_mut()));
+    //         self.closed = true;
+    //     }
+    // }
+}
+
+impl<T:Timestamp+Ord, D: Data> Drop for InputHelper<T, D> {
+    fn drop(&mut self) {
+        self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, self.now_at.clone()), -1, &mut (*self.progress.borrow_mut()));
     }
 }

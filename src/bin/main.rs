@@ -20,8 +20,8 @@ use columnar::Columnar;
 use timely::progress::Scope;
 use timely::progress::nested::Summary::Local;
 use timely::progress::timestamp::RootTimestamp;
-use timely::communication::{ThreadCommunicator, ProcessCommunicator, Communicator};
-use timely::communication::channels::Data;
+use timely::communication::*;
+use timely::communication::pact::Pipeline;
 use timely::networking::initialize_networking;
 
 use timely::example_static::*;
@@ -117,7 +117,7 @@ where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
 
     let mut subgraph = builder.new_subgraph::<u64>();
 
-    (subgraph.enter(source1).distinct().leave(),
+    (subgraph.enter(source1).distinct_batch().leave(),
      subgraph.enter(source2).leave())
 }
 
@@ -135,8 +135,8 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
         let (input2, stream2) = graph.new_input::<u64>();
 
         // prepare some feedback edges
-        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(100), Local(1));
-        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(100), Local(1));
+        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(1_000_000), Local(1));
+        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(1_000_000), Local(1));
 
         let concat1 = (&mut graph).concatenate(vec![stream1, loop1]).disable();
         let concat2 = (&mut graph).concatenate(vec![stream2, loop2]).disable();
@@ -154,16 +154,16 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     root.step();
 
     // move some data into the dataflow graph.
-    input1.send_messages(&RootTimestamp::new(0), vec![1u64]);
-    input2.send_messages(&RootTimestamp::new(0), vec![2u64]);
+    input1.send_at(0, 0..10);
+    input2.send_at(0, 1..11);
 
     // see what everyone thinks about that ...
     root.step();
 
-    input1.advance(&RootTimestamp::new(0), &RootTimestamp::new(1000000));
-    input2.advance(&RootTimestamp::new(0), &RootTimestamp::new(1000000));
-    input1.close_at(&RootTimestamp::new(1000000));
-    input2.close_at(&RootTimestamp::new(1000000));
+    input1.advance_to(1000000);
+    input2.advance_to(1000000);
+    input1.close();
+    input2.close();
 
     // spin
     match bencher {
@@ -201,23 +201,23 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 
     let mut root = GraphRoot::new(communicator);
-    //
-    // {
-    //     let borrow = root.builder();
-    //     let mut graph = SubgraphBuilder::new(&borrow);
-    //
-    //     let peers = graph.with_communicator(|x| x.peers());
-    //     {
-    //         let builder = &graph.builder();
-    //
-    //         builder.borrow_mut().add_scope(BarrierScope { epoch: 0, ready: true, degree: peers, ttl: 1000000 });
-    //         builder.borrow_mut().connect(ScopeOutput(0, 0), ScopeInput(0, 0));
-    //     }
-    //
-    //     graph.seal();
-    // }
-    //
-    // // spin
+    {
+        let mut graph = root.new_subgraph();
+        let (handle, stream) = graph.loop_variable::<u64>(RootTimestamp::new(1_000_000), Local(1));
+        stream.enable(graph)
+              .unary_notify(Pipeline,
+                            format!("Barrier"),
+                            vec![RootTimestamp::new(0u64)],
+                            |_, _, notificator| {
+                  while let Some((mut time, _count)) = notificator.next() {
+                      time.inner += 1;
+                      notificator.notify_at(&time);
+                  }
+              })
+              .connect_loop(handle);
+    }
+
+    // spin
     match bencher {
         Some(b) => b.iter(|| { root.step(); }),
         None    => while root.step() { },

@@ -7,9 +7,9 @@ use std::hash::Hash;
 use timely::communication::{Data, Communicator, ThreadCommunicator};
 use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
-use timely::example::*;
-use timely::example::distinct::DistinctExtensionTrait;
-use timely::example::builder::{Graph, Root, SubgraphBuilder};
+use timely::example_static::*;
+// use timely::example::distinct::DistinctExtensionTrait;
+// use timely::example::builder::{Graph, Root, SubgraphBuilder};
 
 use columnar::Columnar;
 
@@ -19,33 +19,30 @@ fn main() {
 
 fn _distinct<C: Communicator>(communicator: C) {
 
-    let mut root = Root::new(communicator);
+    let mut root = GraphRoot::new(communicator);
 
     let (mut input1, mut input2) = {
-        let borrow = root.builder();
-        let mut graph = SubgraphBuilder::new(&borrow);
-        let (input1, input2) = {
-            let builder = graph.builder();
 
-            // try building some input scopes
-            let (input1, mut stream1) = builder.new_input::<u64>();
-            let (input2, mut stream2) = builder.new_input::<u64>();
+        // allocate a new graph builder
+        let mut graph = root.new_subgraph();
 
-            // prepare some feedback edges
-            let (mut feedback1, mut feedback1_output) = builder.feedback(RootTimestamp::new(1000000), Local(1));
-            let (mut feedback2, mut feedback2_output) = builder.feedback(RootTimestamp::new(1000000), Local(1));
+        // try building some input scopes
+        let (input1, stream1) = graph.new_input::<u64>();
+        let (input2, stream2) = graph.new_input::<u64>();
 
-            // build up a subgraph using the concatenated inputs/feedbacks
-            let (mut egress1, mut egress2) = _create_subgraph(&mut stream1.concat(&mut feedback1_output),
-                                                              &mut stream2.concat(&mut feedback2_output));
+        // prepare some feedback edges
+        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(100), Local(1));
+        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(100), Local(1));
 
-            // connect feedback sources. notice that we have swapped indices ...
-            feedback1.connect_input(&mut egress2);
-            feedback2.connect_input(&mut egress1);
+        let concat1 = (&mut graph).concatenate(vec![stream1, loop1]).disable();
+        let concat2 = (&mut graph).concatenate(vec![stream2, loop2]).disable();
 
-            (input1, input2)
-        };
-        graph.seal();
+        // build up a subgraph using the concatenated inputs/feedbacks
+        let (egress1, egress2) = create_subgraph(&mut graph, &concat1, &concat2);
+
+        // connect feedback sources. notice that we have swapped indices ...
+        egress1.enable(&mut graph).connect_loop(loop2_source);
+        egress2.enable(&mut graph).connect_loop(loop1_source);
 
         (input1, input2)
     };
@@ -53,36 +50,29 @@ fn _distinct<C: Communicator>(communicator: C) {
     root.step();
 
     // move some data into the dataflow graph.
-    input1.send_messages(&RootTimestamp::new(0), vec![1u64]);
-    input2.send_messages(&RootTimestamp::new(0), vec![2u64]);
+    input1.send_at(0, 0..10);
+    input2.send_at(0, 1..11);
 
     // see what everyone thinks about that ...
     root.step();
 
-    input1.advance(&RootTimestamp::new(0), &RootTimestamp::new(1000000));
-    input2.advance(&RootTimestamp::new(0), &RootTimestamp::new(1000000));
-    input1.close_at(&RootTimestamp::new(1000000));
-    input2.close_at(&RootTimestamp::new(1000000));
+    input1.advance_to(1000000);
+    input2.advance_to(1000000);
+    input1.close();
+    input2.close();
 
     // spin
     while root.step() { }
 }
 
-fn _create_subgraph<'a, G, D>(source1: &mut Stream<'a, G, D>, source2: &mut Stream<'a, G, D>) ->
-    (Stream<'a, G, D>, Stream<'a, G, D>)
-where G: Graph+'a, D: Data+Hash+Eq+Debug+Columnar,
-      G::Timestamp: Hash {
+fn create_subgraph<G: GraphBuilder, D>(builder: &mut G,
+                                        source1: &Stream<G::Timestamp, D>,
+                                        source2: &Stream<G::Timestamp, D>) ->
+                                            (Stream<G::Timestamp, D>, Stream<G::Timestamp, D>)
+where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
 
-    let mut subgraph = SubgraphBuilder::<_, u64>::new(source1.graph);
-    let result = {
-        let subgraph_builder = subgraph.builder();
+    let mut subgraph = builder.new_subgraph::<u64>();
 
-        (
-            source1.enter(&subgraph_builder).distinct().leave(),
-            source2.enter(&subgraph_builder).leave()
-        )
-    };
-    subgraph.seal();
-
-    result
+    (subgraph.enter(source1).distinct().leave(),
+     subgraph.enter(source2).leave())
 }

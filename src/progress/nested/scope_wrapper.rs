@@ -122,7 +122,7 @@ impl<T: Timestamp> ScopeWrapper<T> {
            self.notify && // we don't track guarantees and capabilities for non-notify scopes. bug?
            self.guarantees.iter().all(|guarantee| guarantee.empty()) &&
            self.capabilities.iter().all(|capability| capability.empty()) {
-               println!("Shutting down {}", self.name());
+            //    println!("Shutting down {}", self.name());
                self.scope = None;
            }
 

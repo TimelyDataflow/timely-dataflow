@@ -12,26 +12,50 @@ use example_static::builder::*;
 
 use columnar::Columnar;
 
-pub trait DistinctExtensionTrait { fn distinct(self) -> Self; }
+pub trait DistinctExtensionTrait {
+    fn distinct(self) -> Self;
+    fn distinct_batch(self) -> Self;
+}
 
 impl<G: GraphBuilder, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for ActiveStream<G, D>
 where G::Timestamp: Hash {
+
     fn distinct(self) -> ActiveStream<G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         let exch = Exchange::new(|x| hash::<_,SipHasher>(&x));
         self.unary_notify(exch, format!("Distinct"), vec![], move |input, output, notificator| {
-            while let Some((time, data)) = input.pull() {            // read inputs
-                let set = elements.entry(time).or_insert_with(|| {          // look up time
-                    notificator.notify_at(&time);                           // notify if new
-                    Default::default()                                      // default HashSet
-                });
+            while let Some((time, data)) = input.pull() {
+                let set = elements.entry(time).or_insert(Default::default());
+                let mut session = output.session(&time);
+                for datum in data.drain() {
+                    if set.insert(datum.clone()) {
+                        session.give(datum);
+                    }
+                }
 
-                for datum in data.drain() { set.insert(datum); }            // add data to set
+                notificator.notify_at(&time);
             }
-            // for each available notification, send corresponding set
-            while let Some((time, _count)) = notificator.next() {           // pull notifications
-                if let Some(data) = elements.remove(&time) {                // find the set
-                    output.give_at(&time, data.into_iter());         // send the records
+
+            while let Some((time, _count)) = notificator.next() {
+                elements.remove(&time);
+            }
+        })
+    }
+
+    fn distinct_batch(self) -> ActiveStream<G, D> {
+        let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
+        let exch = Exchange::new(|x| hash::<_,SipHasher>(&x));
+        self.unary_notify(exch, format!("DistinctBlock"), vec![], move |input, output, notificator| {
+            while let Some((time, data)) = input.pull() {
+                let set = elements.entry(time).or_insert(Default::default());
+                for datum in data.drain() { set.insert(datum); }
+
+                notificator.notify_at(&time);
+            }
+
+            while let Some((time, _count)) = notificator.next() {
+                if let Some(mut data) = elements.remove(&time) {
+                    output.give_at(&time, data.drain());
                 }
             }
         })
