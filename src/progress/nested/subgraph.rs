@@ -572,16 +572,18 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 
     fn print_status(&self) {
+
+        println!("printing status for {}", self.name());
         for child in self.children.iter() {
             for (index, messages) in child.outstanding_messages.iter().enumerate() {
                 if messages.elements().len() > 0 {
-                    println!("{}::{}.messages[{}]: {:?}", self.name(), child.name(), index, messages.elements());
+                    println!("  {}::{}.messages[{}]: {:?}", self.name(), child.name(), index, messages.elements());
                 }
             }
 
             for (index, internal) in child.capabilities.iter().enumerate() {
                 if internal.elements().len() > 0 {
-                    println!("{}::{}.internal[{}]: {:?}", self.name(), child.name(), index, internal.elements());
+                    println!("  {}::{}.internal[{}]: {:?}", self.name(), child.name(), index, internal.elements());
                 }
             }
         }

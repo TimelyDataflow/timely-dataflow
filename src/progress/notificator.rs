@@ -72,6 +72,12 @@ impl<T: Timestamp> Iterator for Notificator<T> {
             }
         }
 
+        // if self.available.len() == 0 {
+        //     println!("no notifications available:");
+        //     println!("  frontier: {:?}", self.frontier);
+        //     println!("  pending:  {:?}", self.pending);
+        // }
+
         // return an available notification, after cleaning up
         if let Some(time) = self.available.pop_front() {
             if let Some(delta) = self.pending.count(&time) {
