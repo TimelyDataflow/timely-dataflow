@@ -2,6 +2,7 @@ use std::mem;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::marker::PhantomData;
+use std::collections::VecDeque;
 
 use progress::Timestamp;
 use communication::Data;
@@ -24,10 +25,10 @@ pub trait ParallelizationContract<T: Timestamp, D: Data> {
 // direct connection
 pub struct Pipeline;
 impl<T: Timestamp, D: Data> ParallelizationContract<T, D> for Pipeline {
-    type Observer = PactObserver<T, D, Rc<RefCell<Vec<(T, Vec<D>)>>>>;
-    type Pullable = Rc<RefCell<Vec<(T, Vec<D>)>>>;
+    type Observer = PactObserver<T, D, Rc<RefCell<VecDeque<(T, Vec<D>)>>>>;
+    type Pullable = Rc<RefCell<VecDeque<(T, Vec<D>)>>>;
     fn connect<C: Communicator>(self,_communicator: &mut C) -> (Self::Observer, PactPullable<T, D, Self::Pullable>) {
-        let shared1 = Rc::new(RefCell::new(Vec::new()));
+        let shared1 = Rc::new(RefCell::new(VecDeque::new()));
         let shared2 = Rc::new(RefCell::new(Vec::new()));
         return (PactObserver::new(shared1.clone(), shared2.clone()), PactPullable::new(shared1, shared2));
     }
@@ -120,6 +121,7 @@ impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PactObse
     #[inline(always)] fn shut(&mut self, time: &T) {
         if self.data.len() > 0 {
             let empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
+            // if empty.capacity() == 0 { println!("empty buffer!"); }
             self.pushable.push((time.clone(), mem::replace(&mut self.data, empty)));
         }
     }

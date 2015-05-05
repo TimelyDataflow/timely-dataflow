@@ -13,8 +13,7 @@ use progress::{Timestamp, Scope, Antichain};
 use communication::channels::ObserverHelper;
 use communication::pact::PactPullable;
 
-use example_static::stream::ActiveStream;
-use example_static::builder::*;
+use example_shared::*;
 
 pub struct PullableHelper<T:Timestamp, D: Data, P: Pullable<(T, Vec<D>)>> {
     receiver:   PactPullable<T, D, P>,
@@ -57,22 +56,27 @@ pub trait UnaryNotifyExt<G: GraphBuilder, D1: Data> {
                      &mut ObserverHelper<OutputPort<G::Timestamp, D2>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            (self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<G, D2>;
+            (&self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>;
 }
 
-impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for ActiveStream<G, D1> {
+impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for Stream<G, D1> {
     fn unary_notify<D2: Data,
             L: FnMut(&mut PullableHelper<G::Timestamp, D1, P::Pullable>,
                      &mut ObserverHelper<OutputPort<G::Timestamp, D2>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-             (mut self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> ActiveStream<G, D2> {
-        let (sender, receiver) = pact.connect(self.builder.communicator());
+             (&self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2> {
+
+        let mut builder = self.builder();   // clones the builder
+
+        let (sender, receiver) = pact.connect(&mut builder);
         let (targets, registrar) = OutputPort::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets, name, logic, Some((init, self.builder.communicator().peers())));
-        let index = self.builder.add_scope(scope);
+        let scope = UnaryScope::new(receiver, targets, name, logic, Some((init, builder.peers())));
+        let index = builder.add_scope(scope);
+
         self.connect_to(ScopeInput(index, 0), sender);
-        self.transfer_borrow_to(ScopeOutput(index, 0), registrar)
+
+        Stream::new(ScopeOutput(index, 0), registrar, builder)
     }
 }
 
@@ -82,21 +86,25 @@ pub trait UnaryStreamExt<G: GraphBuilder, D1: Data> {
              L: FnMut(&mut PullableHelper<G::Timestamp, D1, P::Pullable>,
                       &mut ObserverHelper<OutputPort<G::Timestamp, D2>>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            (self, pact: P, name: String, logic: L) -> ActiveStream<G, D2>;
+            (&self, pact: P, name: String, logic: L) -> Stream<G, D2>;
 }
 
-impl<G: GraphBuilder, D1: Data> UnaryStreamExt<G, D1> for ActiveStream<G, D1> {
+impl<G: GraphBuilder, D1: Data> UnaryStreamExt<G, D1> for Stream<G, D1> {
     fn unary_stream<D2: Data,
              L: FnMut(&mut PullableHelper<G::Timestamp, D1, P::Pullable>,
                       &mut ObserverHelper<OutputPort<G::Timestamp, D2>>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-             (mut self, pact: P, name: String, mut logic: L) -> ActiveStream<G, D2> {
-        let (sender, receiver) = pact.connect(self.builder.communicator());
+             (&self, pact: P, name: String, mut logic: L) -> Stream<G, D2> {
+
+        let mut builder = self.builder();
+
+        let (sender, receiver) = pact.connect(&mut builder);
         let (targets, registrar) = OutputPort::<G::Timestamp,D2>::new();
         let scope = UnaryScope::new(receiver, targets, name, move |i,o,_| logic(i,o), None);
-        let index = self.builder.add_scope(scope);
+        let index = builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
-        self.transfer_borrow_to(ScopeOutput(index, 0), registrar)
+
+        Stream::new(ScopeOutput(index, 0), registrar, builder)
     }
 }
 

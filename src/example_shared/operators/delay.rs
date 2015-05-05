@@ -4,15 +4,16 @@ use std::collections::HashMap;
 use communication::*;
 use communication::pact::Pipeline;
 
-use example_static::stream::ActiveStream;
-use example_static::unary::*;
-use example_static::builder::*;
+use example_shared::*;
+use example_shared::operators::unary::UnaryNotifyExt;
 
-pub trait DelayExt<G: GraphBuilder, D: Data> { fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(self, F) -> Self; }
+pub trait DelayExt<G: GraphBuilder, D: Data> {
+    fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
+}
 
-impl<G: GraphBuilder, D: Data> DelayExt<G, D> for ActiveStream<G, D>
+impl<G: GraphBuilder, D: Data> DelayExt<G, D> for Stream<G, D>
 where G::Timestamp: Hash {
-    fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(self, func: F) -> ActiveStream<G, D> {
+    fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
         let _threshold = 256; // TODO : make more "streaming" by flushing
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, format!("Delay"), vec![], move |input, output, notificator| {

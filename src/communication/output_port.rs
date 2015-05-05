@@ -118,6 +118,6 @@ impl<O: Observer> Flattener<O> {
 
 impl<O: Observer> FlattenerTrait<O::Time, O::Data> for Flattener<O> {
     fn open(&mut self, time: &O::Time) { self.observer.open(time); }
-    fn give(&mut self, data: &mut Vec<O::Data>) { for datum in data.drain() { self.observer.give(datum); }}
+    fn give(&mut self, data: &mut Vec<O::Data>) { for datum in data.drain(..) { self.observer.give(datum); }}
     fn shut(&mut self, time: &O::Time) { self.observer.shut(time); }
 }

@@ -108,7 +108,8 @@ impl<G: GraphBuilder, T: Timestamp> GraphBuilder for SubgraphBuilder<G, T>{
     }
     fn add_boxed_scope(&mut self, scope: Box<Scope<Product<G::Timestamp, T>>>) -> u64 {
         let index = self.subgraph.children.len() as u64;
-        self.subgraph.children.push(ScopeWrapper::new(scope, index));
+        let name = self.name();
+        self.subgraph.children.push(ScopeWrapper::new(scope, index, name));
         index
     }
 

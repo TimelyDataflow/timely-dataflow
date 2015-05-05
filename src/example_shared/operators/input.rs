@@ -12,8 +12,8 @@ use progress::nested::product::Product;
 use communication::*;
 use communication::channels::ObserverHelper;
 
-use example_static::stream::Stream;
-use example_static::builder::*;
+use example_shared::stream::Stream;
+use example_shared::builder::*;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
@@ -23,13 +23,13 @@ use example_static::builder::*;
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 // returns both an input scope and a stream representing its output.
-pub trait InputExtensionTrait<T: Timestamp+Ord> {
-    fn new_input<D:Data>(&mut self) -> (InputHelper<T, D>, Stream<Product<RootTimestamp, T>, D>);
+pub trait InputExtensionTrait<C: Communicator, T: Timestamp+Ord> {
+    fn new_input<D:Data>(&self) -> (InputHelper<T, D>, Stream<SubgraphBuilder<GraphRoot<C>, T>, D>);
 }
 
-impl<'a, C: Communicator, T: Timestamp+Ord> InputExtensionTrait<T> for SubgraphBuilder<&'a mut GraphRoot<C>, T> {
-    fn new_input<D:Data>(&mut self) -> (InputHelper<T, D>,
-                                        Stream<Product<RootTimestamp, T>, D>) {
+impl<C: Communicator, T: Timestamp+Ord> InputExtensionTrait<C, T> for SubgraphBuilder<GraphRoot<C>, T> {
+    fn new_input<D:Data>(&self) -> (InputHelper<T, D>, Stream<SubgraphBuilder<GraphRoot<C>, T>, D>) {
+
         let (output, registrar) = OutputPort::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
@@ -41,7 +41,7 @@ impl<'a, C: Communicator, T: Timestamp+Ord> InputExtensionTrait<T> for SubgraphB
             closed:   false,
         };
 
-        let copies = self.communicator().peers();
+        let copies = self.peers();
 
         let index = self.add_scope(InputScope {
             frontier: helper.frontier.clone(),
@@ -50,7 +50,7 @@ impl<'a, C: Communicator, T: Timestamp+Ord> InputExtensionTrait<T> for SubgraphB
             copies:   copies,
         });
 
-        return (helper, Stream::new(ScopeOutput(index, 0), registrar));
+        return (helper, Stream::new(ScopeOutput(index, 0), registrar, self.clone()));
     }
 }
 

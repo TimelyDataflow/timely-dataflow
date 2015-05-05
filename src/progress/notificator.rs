@@ -1,19 +1,24 @@
+use std::collections::VecDeque;
+
 use progress::Timestamp;
 use progress::frontier::MutableAntichain;
 use progress::count_map::CountMap;
 
-// Notificator is meant to manage the delivery of requested notifications in the presence of
-// inputs that may have outstanding messages to deliver. The notificator tracks the frontiers,
-// as presented from the outside, for each input. Requested notifications can be served only
-// once there are no frontier elements less-or-equal to them, and there are no other pending
-// notification requests less than them. Each with be less-or-equal to itself, so we want to
-// dodge that corner case.
+/// A Notificator manages outstanding capabilities on several inputs as well as notification
+/// requests that may be blocked by them.
+///
+/// Notificator is meant to manage the delivery of requested notifications in the presence of
+/// inputs that may have outstanding messages to deliver. The notificator tracks the frontiers,
+/// as presented from the outside, for each input. Requested notifications can be served only
+/// once there are no frontier elements less-or-equal to them, and there are no other pending
+/// notification requests less than them. Each with be less-or-equal to itself, so we want to
+/// dodge that corner case.
 
 #[derive(Default)]
 pub struct Notificator<T: Timestamp> {
     pending:        MutableAntichain<T>,        // notification requests not yet been delivered
     frontier:       Vec<MutableAntichain<T>>,   // outstanding input, preventing notification
-    available:      CountMap<T>,                // notifications available for delivery
+    available:      VecDeque<T>,                // notifications available for delivery
     changes:        CountMap<T>,                // change to report through pull_progress
 }
 
@@ -28,6 +33,10 @@ impl<T: Timestamp> Notificator<T> {
                 self.frontier[index].update(&time, delta);
             }
         }
+    }
+
+    pub fn frontier(&self, input: usize) -> &[T] {
+        self.frontier[input].elements()
     }
 
     pub fn notify_at(&mut self, time: &T) {
@@ -56,21 +65,21 @@ impl<T: Timestamp> Iterator for Notificator<T> {
 
         // if nothing obvious available, scan for options
         if self.available.len() == 0 {
-            for pend in self.pending.elements.iter() {
-                if !self.frontier.iter().any(|x| {
-                    x.le(pend)}) {
-                    if let Some(val) = self.pending.count(pend) {
-                        self.available.update(pend, val);
-                    }
+            for pend in self.pending.elements().iter() {
+                if !self.frontier.iter().any(|x| x.le(pend) ) {
+                    self.available.push_back(pend.clone());
                 }
             }
         }
 
         // return an available notification, after cleaning up
-        if let Some((time, delta)) =  self.available.pop() {
-            self.changes.update(&time, -delta);
-            self.pending.update(&time, -delta);
-            Some((time, delta))
+        if let Some(time) = self.available.pop_front() {
+            if let Some(delta) = self.pending.count(&time) {
+                self.changes.update(&time, -delta);
+                self.pending.update(&time, -delta);
+                Some((time, delta))
+            }
+            else { None }
         }
         else { None }
     }

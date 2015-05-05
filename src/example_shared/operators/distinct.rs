@@ -6,21 +6,20 @@ use std::default::Default;
 use communication::*;
 use communication::pact::Exchange;
 
-use example_static::stream::ActiveStream;
-use example_static::unary::*;
-use example_static::builder::*;
+use example_shared::*;
+use example_shared::operators::unary::UnaryNotifyExt;
 
 use columnar::Columnar;
 
 pub trait DistinctExtensionTrait {
-    fn distinct(self) -> Self;
-    fn distinct_batch(self) -> Self;
+    fn distinct(&self) -> Self;
+    fn distinct_batch(&self) -> Self;
 }
 
-impl<G: GraphBuilder, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for ActiveStream<G, D>
+impl<G: GraphBuilder, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for Stream<G, D>
 where G::Timestamp: Hash {
 
-    fn distinct(self) -> ActiveStream<G, D> {
+    fn distinct(&self) -> Stream<G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         let exch = Exchange::new(|x| hash::<_,SipHasher>(&x));
         self.unary_notify(exch, format!("Distinct"), vec![], move |input, output, notificator| {
@@ -42,7 +41,7 @@ where G::Timestamp: Hash {
         })
     }
 
-    fn distinct_batch(self) -> ActiveStream<G, D> {
+    fn distinct_batch(&self) -> Stream<G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         let exch = Exchange::new(|x| hash::<_,SipHasher>(&x));
         self.unary_notify(exch, format!("DistinctBlock"), vec![], move |input, output, notificator| {

@@ -39,7 +39,7 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
 pub struct MutableAntichain<T:Eq> {
     pub occurrences:    CountMap<T>,    // occurrence count of each time
     pub precedents:     Vec<(T, i64)>,  // counts number of distinct times in occurences strictly less than element
-    pub elements:       Vec<T>,         // the set of times with precedent count == 0
+    elements:       Vec<T>,         // the set of times with precedent count == 0
 }
 
 impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
@@ -50,6 +50,8 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
             elements:       Vec::new(),
         }
     }
+
+    pub fn elements(&self) -> &[T] { &self.elements }
 
     pub fn new_bottom(bottom: T) -> MutableAntichain<T> {
         let mut result = MutableAntichain::new();

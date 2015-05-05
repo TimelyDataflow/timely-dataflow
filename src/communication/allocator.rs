@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
-
+use std::collections::VecDeque;
 use std::marker::PhantomData;
 
 use columnar::{Columnar, ColumnarStack};
@@ -35,7 +35,7 @@ impl Communicator for ThreadCommunicator {
     fn index(&self) -> u64 { 0 }
     fn peers(&self) -> u64 { 1 }
     fn new_channel<T:'static>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
-        let shared = Rc::new(RefCell::new(Vec::<T>::new()));
+        let shared = Rc::new(RefCell::new(VecDeque::<T>::new()));
         return (vec![Box::new(shared.clone()) as Box<Pushable<T>>], Box::new(shared.clone()) as Box<Pullable<T>>)
     }
 }
@@ -79,7 +79,7 @@ impl Communicator for ProcessCommunicator {
             }
 
             let mut to_box = Vec::new();
-            for recv in receivers.drain() {
+            for recv in receivers.drain(..) {
                 to_box.push(Some((senders.clone(), recv)));
             }
 
@@ -91,7 +91,7 @@ impl Communicator for ProcessCommunicator {
                 self.allocated += 1;
                 let (mut send, recv) = vector[self.index as usize].take().unwrap();
                 let mut temp = Vec::new();
-                for s in send.drain() { temp.push(Box::new(s) as Box<Pushable<T>>); }
+                for s in send.drain(..) { temp.push(Box::new(s) as Box<Pushable<T>>); }
                 return (temp, Box::new(recv) as Box<Pullable<T>>)
             }
             _ => { panic!("unable to cast channel correctly"); }

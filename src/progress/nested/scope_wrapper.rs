@@ -12,6 +12,7 @@ use progress::count_map::CountMap;
 use progress::broadcast::ProgressVec;
 
 pub struct ScopeWrapper<T: Timestamp> {
+    pub name:                   String,
     pub scope:                  Option<Box<Scope<T>>>,          // the scope itself
 
     index:                      u64,
@@ -36,7 +37,7 @@ pub struct ScopeWrapper<T: Timestamp> {
 }
 
 impl<T: Timestamp> ScopeWrapper<T> {
-    pub fn new(mut scope: Box<Scope<T>>, index: u64) -> ScopeWrapper<T> {
+    pub fn new(mut scope: Box<Scope<T>>, index: u64, parent_name: String) -> ScopeWrapper<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
@@ -47,6 +48,7 @@ impl<T: Timestamp> ScopeWrapper<T> {
         assert!(!summary.iter().any(|x| x.len() as u64 != outputs));
 
         let mut result = ScopeWrapper {
+            name:       format!("{}::{}[{}]", parent_name, scope.name(), index),
             scope:      Some(scope),
             index:      index,
             inputs:     inputs,
@@ -124,6 +126,7 @@ impl<T: Timestamp> ScopeWrapper<T> {
            self.capabilities.iter().all(|capability| capability.empty()) {
             //    println!("Shutting down {}", self.name());
                self.scope = None;
+               self.name = format!("{}(tombstone)", self.name);
            }
 
         // for each output: produced messages and internal progress
@@ -154,5 +157,5 @@ impl<T: Timestamp> ScopeWrapper<T> {
 
     pub fn add_edge(&mut self, output: u64, target: Target) { self.edges[output as usize].push(target); }
 
-    pub fn name(&self) -> String { self.scope.as_ref().map_or(format!("Tombstone"), |x| x.name()) }
+    pub fn name(&self) -> String { self.name.clone() }
 }

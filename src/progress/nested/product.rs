@@ -35,27 +35,22 @@ impl<TOuter: Debug, TInner: Debug> Debug for Product<TOuter, TInner> {
 }
 
 impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInner> {
+    #[inline(always)]
     fn partial_cmp(&self, other: &Product<TOuter, TInner>) -> Option<Ordering> {
-        if let Some(cmp1) = self.outer.partial_cmp(&other.outer) {
-            if let Some(cmp2) = self.inner.partial_cmp(&other.inner) {
-
-                // if both are comparable we may have a result, as long as not LT and GT
-                if cmp1 == cmp2 { Some(cmp1) }
-                else {
-                    if cmp1 == Ordering::Equal { Some(cmp2) } else
-                    if cmp2 == Ordering::Equal { Some(cmp1) } else
-                    { None }
-                }
-            }
-            else { None }
+        match (self <= other, self >= other) {
+            (true, true)   => Some(Ordering::Equal),
+            (true, false)  => Some(Ordering::Less),
+            (false, true)  => Some(Ordering::Greater),
+            (false, false) => None,
         }
-        else { None }
     }
+    #[inline(always)]
     fn le(&self, other: &Product<TOuter, TInner>) -> bool {
-        self.outer <= other.outer && self.inner <= other.inner
+        self.inner <= other.inner && self.outer <= other.outer
     }
+    #[inline(always)]
     fn ge(&self, other: &Product<TOuter, TInner>) -> bool {
-        self.outer >= other.outer && self.inner >= other.inner
+        self.inner >= other.inner && self.outer >= other.outer 
     }
 }
 

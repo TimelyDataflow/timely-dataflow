@@ -10,19 +10,20 @@ use communication::*;
 use communication::pact::{Pipeline, PactPullable};
 use communication::channels::ObserverHelper;
 
-use example_static::builder::*;
-use example_static::stream::{Stream, ActiveStream};
-use example_static::unary::PullableHelper;
+use example_shared::*;
+use example_shared::operators::unary::PullableHelper;
 
 
 pub trait PartitionExt<G: GraphBuilder, D: Data, F: Fn(&D)->u64> {
-    fn partition(self, parts: u64, func: F) -> (Vec<Stream<G::Timestamp, D>>, G);
+    fn partition(&self, parts: u64, func: F) -> Vec<Stream<G, D>>;
 }
 
-impl<G: GraphBuilder, D: Data, F: Fn(&D)->u64+'static> PartitionExt<G, D, F> for ActiveStream<G, D> {
-    fn partition(mut self, parts: u64, func: F) -> (Vec<Stream<G::Timestamp, D>>, G) {
+impl<G: GraphBuilder, D: Data, F: Fn(&D)->u64+'static> PartitionExt<G, D, F> for Stream<G, D> {
+    fn partition(&self, parts: u64, func: F) -> Vec<Stream<G, D>> {
 
-        let (sender, receiver) = Pipeline.connect(self.builder.communicator());
+        let mut builder = self.builder();
+
+        let (sender, receiver) = Pipeline.connect(&mut builder);
 
         let mut targets = Vec::new();
         let mut registrars = Vec::new();
@@ -33,15 +34,15 @@ impl<G: GraphBuilder, D: Data, F: Fn(&D)->u64+'static> PartitionExt<G, D, F> for
         }
 
         let scope = PartitionScope::new(receiver, targets, func);
-        let index = self.builder.add_scope(scope);
+        let index = builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
 
         let mut results = Vec::new();
         for (output, registrar) in registrars.into_iter().enumerate() {
-            results.push(Stream::new(ScopeOutput(index, output as u64), registrar));
+            results.push(Stream::new(ScopeOutput(index, output as u64), registrar, builder.clone()));
         }
 
-        (results, self.builder)
+        results
     }
 }
 

@@ -12,11 +12,8 @@ use progress::{Timestamp, Scope, Antichain};
 use communication::channels::ObserverHelper;
 use communication::pact::PactPullable;
 
-use example_static::builder::*;
-use example_static::unary::PullableHelper;
-use example_static::stream::{ActiveStream, Stream};
-
-
+use example_shared::*;
+use example_shared::operators::unary::PullableHelper;
 
 pub trait BinaryStreamExt<G: GraphBuilder, D1: Data> {
     fn binary_stream<D2: Data,
@@ -26,10 +23,10 @@ pub trait BinaryStreamExt<G: GraphBuilder, D1: Data> {
                        &mut ObserverHelper<OutputPort<G::Timestamp, D3>>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
-            (self, Stream<G::Timestamp, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> ActiveStream<G, D3>;
+            (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<G, D3>;
 }
 
-impl<G: GraphBuilder, D1: Data> BinaryStreamExt<G, D1> for ActiveStream<G, D1> {
+impl<G: GraphBuilder, D1: Data> BinaryStreamExt<G, D1> for Stream<G, D1> {
     fn binary_stream<
              D2: Data,
              D3: Data,
@@ -38,19 +35,21 @@ impl<G: GraphBuilder, D1: Data> BinaryStreamExt<G, D1> for ActiveStream<G, D1> {
                       &mut ObserverHelper<OutputPort<G::Timestamp, D3>>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-             (mut self, other: Stream<G::Timestamp, D2>, pact1: P1, pact2: P2, name: String, mut logic: L) -> ActiveStream<G, D3> {
-        let (sender1, receiver1) = pact1.connect(self.builder.communicator());
-        let (sender2, receiver2) = pact2.connect(self.builder.communicator());;
+             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: String, mut logic: L) -> Stream<G, D3> {
+
+        let mut builder = self.builder();
+
+        let (sender1, receiver1) = pact1.connect(&mut builder);
+        let (sender2, receiver2) = pact2.connect(&mut builder);;
         let (targets, registrar) = OutputPort::<G::Timestamp,D3>::new();
         let scope = BinaryScope::new(receiver1, receiver2, targets, name, None, move |i1, i2, o, _| logic(i1, i2, o));
-        let index = self.builder.add_scope(scope);
+        let index = builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender1);
+        other.connect_to(ScopeInput(index, 1), sender2);
+        // self.builder.connect(other.name, ScopeInput(index, 1));
+        // other.ports.add_observer(sender2);
 
-        // other.connect_to(ScopeInput(index, 1), sender2);
-        self.builder.connect(other.name, ScopeInput(index, 1));
-        other.ports.add_observer(sender2);
-
-        self.transfer_borrow_to(ScopeOutput(index, 0), registrar)
+        Stream::new(ScopeOutput(index, 0), registrar, builder)
     }
 }
 
@@ -63,10 +62,10 @@ pub trait BinaryNotifyExt<G: GraphBuilder, D1: Data> {
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
-            (self, Stream<G::Timestamp, D2>, pact1: P1, pact2: P2, name: String, notify: Vec<G::Timestamp>, logic: L) -> ActiveStream<G, D3>;
+            (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: String, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3>;
 }
 
-impl<G: GraphBuilder, D1: Data> BinaryNotifyExt<G, D1> for ActiveStream<G, D1> {
+impl<G: GraphBuilder, D1: Data> BinaryNotifyExt<G, D1> for Stream<G, D1> {
     fn binary_notify<
              D2: Data,
              D3: Data,
@@ -76,19 +75,21 @@ impl<G: GraphBuilder, D1: Data> BinaryNotifyExt<G, D1> for ActiveStream<G, D1> {
                       &mut Notificator<G::Timestamp>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-             (mut self, other: Stream<G::Timestamp, D2>, pact1: P1, pact2: P2, name: String, notify: Vec<G::Timestamp>, logic: L) -> ActiveStream<G, D3> {
-        let (sender1, receiver1) = pact1.connect(self.builder.communicator());
-        let (sender2, receiver2) = pact2.connect(self.builder.communicator());;
+             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: String, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3> {
+
+        let mut builder = self.builder();
+
+        let (sender1, receiver1) = pact1.connect(&mut builder);
+        let (sender2, receiver2) = pact2.connect(&mut builder);;
         let (targets, registrar) = OutputPort::<G::Timestamp,D3>::new();
-        let scope = BinaryScope::new(receiver1, receiver2, targets, name, Some((notify, self.builder.communicator().peers())), logic);
-        let index = self.builder.add_scope(scope);
+        let scope = BinaryScope::new(receiver1, receiver2, targets, name, Some((notify, builder.peers())), logic);
+        let index = builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender1);
+        other.connect_to(ScopeInput(index, 1), sender2);
+        // self.builder.connect(other.name, ScopeInput(index, 1));
+        // other.ports.add_observer(sender2);
 
-        // other.connect_to(ScopeInput(index, 1), sender2);
-        self.builder.connect(other.name, ScopeInput(index, 1));
-        other.ports.add_observer(sender2);
-
-        self.transfer_borrow_to(ScopeOutput(index, 0), registrar)
+        Stream::new(ScopeOutput(index, 0), registrar, builder)
     }
 }
 

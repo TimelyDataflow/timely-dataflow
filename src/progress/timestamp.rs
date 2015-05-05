@@ -80,3 +80,15 @@ impl PathSummary<u64> for u64 {
     fn results_in(&self, src: &u64) -> u64 { *self + *src }
     fn followed_by(&self, other: &u64) -> u64 { *self + *other }
 }
+
+impl Timestamp for u32 { type Summary = u32; }
+impl PathSummary<u32> for u32 {
+    fn results_in(&self, src: &u32) -> u32 { *self + *src }
+    fn followed_by(&self, other: &u32) -> u32 { *self + *other }
+}
+
+impl Timestamp for i32 { type Summary = i32; }
+impl PathSummary<i32> for i32 {
+    fn results_in(&self, src: &i32) -> i32 { *self + *src }
+    fn followed_by(&self, other: &i32) -> i32 { *self + *other }
+}

@@ -79,6 +79,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
     // produces (in -> out) summaries using only edges internal to the vertex.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Vec<CountMap<TOuter>>) {
+
         // seal subscopes; prepare per-scope state/buffers
         for index in (0..self.children.len()) {
             let inputs  = self.children[index].inputs as usize;
@@ -94,7 +95,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
             // take capabilities as pointstamps
             for output in (0..outputs) {
-                for time in self.children[index].capabilities[output].elements.iter(){
+                for time in self.children[index].capabilities[output].elements().iter(){
                     self.pointstamps.update_source(ScopeOutput(index as u64, output as u64), time, 1);
                 }
             }
@@ -159,7 +160,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         // identify all capabilities expressed locally
         for scope in (0..self.children.len()) {
             for output in (0..self.children[scope].outputs) {
-                for time in self.children[scope].capabilities[output as usize].elements.iter() {
+                for time in self.children[scope].capabilities[output as usize].elements().iter() {
                     self.pointstamps.update_source(ScopeOutput(scope as u64, output), time, 1);
                 }
             }
@@ -270,7 +271,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
             let pointstamps = &mut self.pointstamps;    // clarify to Rust that we don't need &mut self for the closures.
             // println!("ps_msg: {:?}", self.pointstamp_messages);
-            for (scope, input, time, delta) in self.pointstamp_messages.drain() {
+            for (scope, input, time, delta) in self.pointstamp_messages.drain(..) {
                 // println!("  {}  {:?}  {:?}  {:?}", self.children[scope as usize].scope.name(), input, time, delta);
                 self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
                     // println!("    update passed: {:?} {}", time, delta);
@@ -279,7 +280,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             }
 
             // println!("ps_int: {:?}", self.pointstamp_internal);
-            for (scope, output, time, delta) in self.pointstamp_internal.drain() {
+            for (scope, output, time, delta) in self.pointstamp_internal.drain(..) {
                 self.children[scope as usize].capabilities[output as usize].update_and(&time, delta, |time, delta| {
                     pointstamps.update_source(ScopeOutput(scope, output), time, delta);
                 });
@@ -311,8 +312,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         self.pointstamps.clear_pushed();
 
         for child in self.children.iter() {
-            active = active || child.outstanding_messages.iter().any(|x| x.elements.len() > 0);
-            active = active || child.capabilities.iter().any(|x| x.elements.len() > 0);
+            active = active || child.outstanding_messages.iter().any(|x| x.elements().len() > 0);
+            active = active || child.capabilities.iter().any(|x| x.elements().len() > 0);
         }
 
         // if we want to see why we are active
@@ -329,7 +330,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for index in (0..self.children.len()) {
             for input in (0..self.pointstamps.target_counts[index].len()) {
                 while let Some((time, value)) = self.pointstamps.target_counts[index][input as usize].pop() {
-                    // println!("propagating: {}[{}]: {}", self.children[index].scope.name(), input, value);
+                    // println!("propagating: {}[{}]: {}", self.children[index].name(), input, value);
                     for &(target, ref antichain) in self.target_summaries[index][input as usize].iter() {
                         let mut dest = match target {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
@@ -345,7 +346,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
             for output in (0..self.pointstamps.source_counts[index].len()) {
                 while let Some((time, value)) = self.pointstamps.source_counts[index][output as usize].pop() {
-                    // println!("propagating: {}[{}]: {}", self.children[index].scope.name(), output, value);
+                    // println!("propagating: {}[{}]: {}", self.children[index].name(), output, value);
                     for &(target, ref antichain) in self.source_summaries[index][output as usize].iter() {
                         let mut dest = match target {
                             ScopeInput(scope, input) => &mut self.pointstamps.target_pushed[scope as usize][input as usize],
@@ -573,14 +574,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     fn print_status(&self) {
         for child in self.children.iter() {
             for (index, messages) in child.outstanding_messages.iter().enumerate() {
-                if messages.elements.len() > 0 {
-                    println!("{}::{}.messages[{}]: {:?}", self.name(), child.name(), index, messages.elements);
+                if messages.elements().len() > 0 {
+                    println!("{}::{}.messages[{}]: {:?}", self.name(), child.name(), index, messages.elements());
                 }
             }
 
             for (index, internal) in child.capabilities.iter().enumerate() {
-                if internal.elements.len() > 0 {
-                    println!("{}::{}.internal[{}]: {:?}", self.name(), child.name(), index, internal.elements);
+                if internal.elements().len() > 0 {
+                    println!("{}::{}.internal[{}]: {:?}", self.name(), child.name(), index, internal.elements());
                 }
             }
         }
