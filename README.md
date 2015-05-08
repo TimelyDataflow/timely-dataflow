@@ -4,7 +4,7 @@ Timely dataflow is a low-latency cyclic dataflow computational model, introduced
 
 This project is a flexible implementation of timely dataflow in [Rust](http://www.rust-lang.org). It's main feature is that it takes a new, much more modular approach to coordinating the timely dataflow computation. Naiad threw the entire dataflow graph in a big pile and, with enough restrictions and bits of tape, it all worked.
 
-Our approach here is to organize things a bit more. While a dataflow graph may have vertices in it (where computation happens), these vertices can be backed by other timely dataflow graphs. There is relatively little information the parent scope needs to have about the child, and by maintaining that abstraction, we make several new things possible:
+Our approach here is to organize things a bit more. While a dataflow graph may have operators in it (where computation happens), these operators can be backed by other timely dataflow graphs. There is relatively little information a parent scope needs to have about its children, and by maintaining that abstraction, we make several new things possible:
 
 * subgraphs may use notions of progress other than ''iteration count'' as used in Naiad.
 * subgraphs may coordinate among varying sets of workers, allowing tighter coordination when desired.
@@ -15,7 +15,7 @@ There are other less-qualitative benefits, including improving performance due b
 
 ## Starting Out ##
 
-After `git clone`-ing the repository, if you have [Rust](http://www.rust-lang.org) and [Cargo](https://crates.io) installed (Cargo comes with a Rust install), you should be able to type `cargo bench`. The examples currently assemble and "run" both a barrier micro-benchmark and a queueing micro-benchmark. The examples don't do anything useful!
+After `git clone`-ing the repository, if you have [Rust](http://www.rust-lang.org) installed, you should be able to type `cargo bench`. The examples currently assemble and "run" both a barrier micro-benchmark and an iterative distinct micro-benchmark. The examples don't do anything useful!
 
 On my laptop, eliding some whining about unused methods, it looks like this:
 ```
@@ -99,9 +99,7 @@ One non-obivous design (there are several) is that `pull_internal_progress` shou
 
 ## A Data-parallel programming layer ##
 
-The `Scope` interface is meant to be the bare-bones of timely dataflow, and it is important to present a higher level abstraction.
-
-The project currently does this with a `Stream<Graph, Data>` type indicating a distributed stream of records of type `Data` living in some dataflow context indicated by `Graph`. By defining extension traits for the `Stream` type (new methods available to any instance of `Stream`) we can write programs in a more natural, declarative-ish style:
+The `Scope` interface is meant to be the bare-bones of timely dataflow coordination, and it is important to support higher-level abstractions. One example is provided in the `src/example_shared/` directory, where a `Stream<Graph, Data>` type describes a distributed stream of records of type `Data` living in some timely dataflow context indicated by `Graph`. By defining extension traits for the `Stream` type (new methods available to any instance of `Stream`) we can write programs in a more natural, declarative-ish style:
 
 ```rust
 let mut stream = Input::open_source("path/to/data");
@@ -112,3 +110,5 @@ stream.filter(|x| x.len() > 5)
 ```
 
 Each set of extension functions acts as a new "language" on the `Stream` types, except that they are fully composable, as the functions all render down to timely dataflow logic.
+
+These higher-level languages should compose, being built out of the same parts. Some examples of extensions to *even higher*-level languages are [differential dataflow](https://github.com/frankmcsherry/differential-dataflow) and a project to perform [relational joins in timely dataflow](https://github.com/frankmcsherry/dataflow_join).
