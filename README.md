@@ -11,7 +11,9 @@ Our approach here is to organize things a bit more. While a dataflow graph may h
 * subgraphs may be implementated in other languages and on other runtimes.
 * subgraph progress is decoupled from the data plane, which may now be backed by other media and implementations.
 
-There are other less-qualitative benefits, including improving performance due by removing the hash maps required (by Naiad) when the timely dataflow graph was not as structured. It is possible that there will be drawbacks to this design, though so far they have been restricted to having to think harder as part of designing the interface.
+There are other less-qualitative benefits: for example, the quadratic nature of the reachability relationship is much less painful when used within multiple small scopes as compared to the single flat namespace used by Naiad when the dataflow graph was not as well structured.
+
+It is possible that there will be drawbacks to this design, though so far they have been restricted to having to think harder as part of designing the interface.
 
 ## Starting Out ##
 
