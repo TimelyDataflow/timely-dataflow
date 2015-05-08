@@ -32,17 +32,34 @@ impl MessageHeader {
     // returns a header when there is enough supporting data
     fn try_read(bytes: &mut &[u8]) -> Option<MessageHeader> {
         if bytes.len() > size_of::<MessageHeader>() {
-            let headers: &[MessageHeader] = unsafe { mem::transmute((*bytes).clone()) };
-            let header = headers[0];
-            if bytes.len() >= size_of::<MessageHeader>() + header.length as usize {
-                *bytes = &(*bytes)[size_of::<MessageHeader>()..];
-                return Some(header);
+            // capture original in case we need to rewind
+            let original = *bytes;
+
+            // unclear what order struct initializers run in, so ...
+            let graph = bytes.read_u64::<LittleEndian>().unwrap();
+            let channel = bytes.read_u64::<LittleEndian>().unwrap();
+            let source = bytes.read_u64::<LittleEndian>().unwrap();
+            let target = bytes.read_u64::<LittleEndian>().unwrap();
+            let length = bytes.read_u64::<LittleEndian>().unwrap();
+
+            let header = MessageHeader {
+                graph: graph,
+                channel: channel,
+                source: source,
+                target: target,
+                length: length,
+            };
+
+            if bytes.len() >= header.length as usize {
+                Some(header)
             }
             else {
-                println!("bytes.len() = {}, needed = {}", bytes.len(), size_of::<MessageHeader>() + header.length as usize);
+                // rewind the reader
+                *bytes = original;
+                None
             }
         }
-        return None;
+        else { None }
     }
 
     fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
@@ -65,6 +82,8 @@ struct BinaryReceiver<R: Read> {
     buffer:     Vec<u8>,    // current working buffer
     double:     Vec<u8>,    // second working buffer
 
+    staging:    Vec<u8>,    // 1 << 20 of buffer to read into
+
     // how a BinaryReceiver learns about new channels; indices and corresponding channel pairs
     channels:   Receiver<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>,
 }
@@ -77,6 +96,8 @@ impl<R: Read> BinaryReceiver<R> {
             buffer:     Vec::new(),
             double:     Vec::new(),
             channels:   channels,
+
+            staging:    vec![0u8; 1 << 20],
         }
     }
 
@@ -84,14 +105,10 @@ impl<R: Read> BinaryReceiver<R> {
         loop {
 
             // attempt to read some more bytes into our buffer
-            let valid = self.buffer.len();
-            self.buffer.reserve(1 << 20);
-            unsafe { self.buffer.set_len(valid + (1 << 20)); }
-            // println!("reading");
-            let read = self.reader.read(&mut self.buffer[valid..(valid + (1 << 20))]).unwrap_or(0);
-            // println!("read: {}", read);
-
-            unsafe { self.buffer.set_len(valid + read); }
+            // TODO : We read in to self.staging because extending a Vec<u8> is hard without
+            // TODO : using set_len, which is unsafe.
+            let read = self.reader.read(&mut self.staging[..]).unwrap_or(0);
+            self.buffer.push_all(&self.staging[..read]);
 
             {
                 // get a view of available bytes
@@ -187,9 +204,7 @@ impl<W: Write> BinarySender<W> {
     fn send_loop(&mut self) {
         println!("send loop:\tstarting");
         for (mut header, mut buffer) in self.sources.iter() {
-            // println!("send loop:\treceived data");
             header.length = buffer.len() as u64;
-            // println!("sending {} bytes", header.length);
             header.write_to(&mut self.writer).unwrap();
             self.writer.write_all(&buffer[..]).unwrap();
             buffer.clear();
