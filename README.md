@@ -102,11 +102,38 @@ One non-obivous design (there are several) is that `pull_internal_progress` shou
 The `Scope` interface is meant to be the bare-bones of timely dataflow coordination, and it is important to support higher-level abstractions. One example is provided in the `src/example_shared/` directory, where a `Stream<Graph, Data>` type describes a distributed stream of records of type `Data` living in some timely dataflow context indicated by `Graph`. By defining extension traits for the `Stream` type (new methods available to any instance of `Stream`) we can write programs in a more natural, declarative-ish style:
 
 ```rust
-let mut stream = Input::open_source("path/to/data");
+extern crate timely;
+use timely::*;
+use timely::example_static::inspect::InspectExt;
 
-stream.filter(|x| x.len() > 5)
-      .distinct()
-      .inspect(|x| println!("observed: {}", x));
+fn main() {
+    // initialize a new computation root
+    let mut computation = GraphRoot::new(ThreadCommunicator);
+
+    let mut input = {
+
+        // allocate and use a scoped subgraph builder
+        let mut builder = computation.new_subgraph();
+        let (input, stream) = builder.new_input();
+        stream.enable(builder)
+              .inspect(|x| println!("hello {:?}", x));
+
+        input
+    };
+
+    // inject data! advance epochs! see printlns!
+    for round in 0..10 {
+        input.send_at(round, round..round+1);
+        input.advance_to(round + 1);
+        computation.step();
+    }
+
+    // seal input
+    input.close();
+
+    // finish off any remaining work
+    while computation.step() { }
+}
 ```
 
 Each set of extension functions acts as a new "language" on the `Stream` types, except that they are fully composable, as the functions all render down to timely dataflow logic.
