@@ -1,4 +1,3 @@
-// use progress::Graph;
 use communication::*;
 use communication::pact::Pipeline;
 

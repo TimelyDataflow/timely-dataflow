@@ -78,7 +78,7 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
             if data.len() > 0 {
                 mem::swap(&mut data, &mut self.buffer);
                 data.clear();
-                self.shared.borrow_mut().push(data);
+                // self.shared.borrow_mut().push(data);
                 Some((time, &mut self.buffer))
             } else { None }
         } else { None }
