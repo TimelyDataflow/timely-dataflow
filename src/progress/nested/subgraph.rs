@@ -21,6 +21,8 @@ use progress::nested::scope_wrapper::ScopeWrapper;
 use progress::nested::pointstamp_counter::PointstampCounter;
 use progress::nested::product::Product;
 
+use drain::DrainExt;
+
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Source {
     GraphInput(u64),        // from outer scope
@@ -271,7 +273,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
             let pointstamps = &mut self.pointstamps;    // clarify to Rust that we don't need &mut self for the closures.
             // println!("ps_msg: {:?}", self.pointstamp_messages);
-            for (scope, input, time, delta) in self.pointstamp_messages.drain(..) {
+            for (scope, input, time, delta) in self.pointstamp_messages.drain_temp() {
                 // println!("  {}  {:?}  {:?}  {:?}", self.children[scope as usize].scope.name(), input, time, delta);
                 self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
                     // println!("    update passed: {:?} {}", time, delta);
@@ -280,7 +282,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             }
 
             // println!("ps_int: {:?}", self.pointstamp_internal);
-            for (scope, output, time, delta) in self.pointstamp_internal.drain(..) {
+            for (scope, output, time, delta) in self.pointstamp_internal.drain_temp() {
                 self.children[scope as usize].capabilities[output as usize].update_and(&time, delta, |time, delta| {
                     pointstamps.update_source(ScopeOutput(scope, output), time, delta);
                 });

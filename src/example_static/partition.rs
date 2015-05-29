@@ -14,6 +14,7 @@ use example_static::builder::*;
 use example_static::stream::{Stream, ActiveStream};
 use example_static::unary::PullableHelper;
 
+use drain::DrainExt;
 
 pub trait PartitionExt<G: GraphBuilder, D: Data, F: Fn(&D)->u64> {
     fn partition(self, parts: u64, func: F) -> (Vec<Stream<G::Timestamp, D>>, G);
@@ -74,7 +75,7 @@ impl<T:Timestamp, D: Data, F: Fn(&D)->u64, P: Pullable<(T, Vec<D>)>> Scope<T> fo
             let outputs = self.outputs.iter_mut();
             let mut sessions: Vec<_> = outputs.map(|x| x.session(&time)).collect();
 
-            for datum in data.drain(..) {
+            for datum in data.drain_temp() {
                 let output = (self.func)(&datum);
                 sessions[output as usize].give(datum);
             }

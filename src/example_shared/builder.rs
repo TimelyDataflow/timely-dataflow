@@ -1,4 +1,4 @@
-use std::rc::{Rc, try_unwrap};
+use std::rc::Rc;
 use std::cell::RefCell;
 use std::any::Any;
 
@@ -40,13 +40,18 @@ pub trait GraphBuilder : Communicator+Clone {
 
         let result = func(&builder);
 
-        if let Ok(subgraph) = try_unwrap(builder.subgraph) {
-            self.add_scope(subgraph.into_inner());
-            result
-        }
-        else {
-            panic!("subcomputation failed to get unique handle to subgraph builder");
-        }
+        self.add_scope(builder.subgraph);
+
+        result
+        //
+        //
+        // if let Ok(subgraph) = try_unwrap(builder.subgraph) {
+        //     self.add_scope(subgraph.into_inner());
+        //     result
+        // }
+        // else {
+        //     panic!("subcomputation failed to get unique handle to subgraph builder");
+        // }
     }
 }
 

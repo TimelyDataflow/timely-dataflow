@@ -1,6 +1,7 @@
 pub use self::enterleave::*;
 pub use self::unary::*;
-pub use self::distinct::*;
+// pub use self::distinct::*;
+pub use self::queue::*;
 pub use self::input::*;
 pub use self::feedback::*;
 pub use self::concat::*;
@@ -14,7 +15,8 @@ pub use self::delay::*;
 
 pub mod enterleave;
 pub mod unary;
-pub mod distinct;
+// pub mod distinct;
+pub mod queue;
 pub mod input;
 pub mod feedback;
 pub mod concat;

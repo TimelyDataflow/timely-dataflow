@@ -11,6 +11,8 @@ use communication::{Pushable, Pullable};
 use networking::networking::MessageHeader;
 use std::default::Default;
 
+use drain::DrainExt;
+
 // The Communicator trait presents the interface a worker has to the outside world.
 // The worker can see its index, the total number of peers, and acquire channels to and from the other workers.
 // There is an assumption that each worker performs the same channel allocation logic; things go wrong otherwise.
@@ -79,7 +81,7 @@ impl Communicator for ProcessCommunicator {
             }
 
             let mut to_box = Vec::new();
-            for recv in receivers.drain(..) {
+            for recv in receivers.drain_temp() {
                 to_box.push(Some((senders.clone(), recv)));
             }
 
@@ -91,7 +93,7 @@ impl Communicator for ProcessCommunicator {
                 self.allocated += 1;
                 let (mut send, recv) = vector[self.index as usize].take().unwrap();
                 let mut temp = Vec::new();
-                for s in send.drain(..) { temp.push(Box::new(s) as Box<Pushable<T>>); }
+                for s in send.drain_temp() { temp.push(Box::new(s) as Box<Pushable<T>>); }
                 return (temp, Box::new(recv) as Box<Pullable<T>>)
             }
             _ => { panic!("unable to cast channel correctly"); }

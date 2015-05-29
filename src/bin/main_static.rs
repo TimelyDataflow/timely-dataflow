@@ -1,8 +1,8 @@
-#![feature(test)]
-#![feature(scoped)]
+// #![feature(test)]
+// #![feature(scoped)]
 #![allow(dead_code)]
 
-extern crate test;
+// extern crate test;
 extern crate columnar;
 extern crate byteorder;
 extern crate timely;
@@ -10,7 +10,6 @@ extern crate timely;
 extern crate docopt;
 use docopt::Docopt;
 
-use test::Bencher;
 use std::thread;
 use std::hash::Hash;
 use std::fmt::Debug;
@@ -78,15 +77,17 @@ fn main() {
     };
 }
 
-#[bench]
-fn distinct_bench(bencher: &mut Bencher) { _distinct(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
+// #[bench]
+// fn distinct_bench(bencher: &mut Bencher) { _distinct(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
 fn _distinct_multi<C: Communicator+Send>(communicators: Vec<C>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
         guards.push(thread::Builder::new().name(format!("worker thread {}", communicator.index()))
-                                          .scoped(move || _distinct(communicator, None))
+                                          .spawn(move || _distinct(communicator))
                                           .unwrap());
     }
+
+    for guard in guards { guard.join().unwrap(); }
 }
 
 // #[bench]
@@ -100,13 +101,15 @@ fn _command_multi<C: Communicator+Send>(_communicators: Vec<C>) {
 }
 
 
-#[bench]
-fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
+// #[bench]
+// fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
 fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
     let mut guards = Vec::new();
     for communicator in communicators.into_iter() {
-        guards.push(thread::scoped(move || _barrier(communicator, None)));
+        guards.push(thread::spawn(move || _barrier(communicator)));
     }
+
+    for guard in guards { guard.join().unwrap(); }
 }
 
 fn create_subgraph<G: GraphBuilder, D>(builder: &mut G,
@@ -117,11 +120,11 @@ where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
 
     let mut subgraph = builder.new_subgraph::<u64>();
 
-    (subgraph.enter(source1).distinct_batch().leave(),
+    (subgraph.enter(source1).leave(),
      subgraph.enter(source2).leave())
 }
 
-fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
+fn _distinct<C: Communicator>(communicator: C) {
 
     let mut root = GraphRoot::new(communicator);
 
@@ -166,10 +169,7 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     input2.close();
 
     // spin
-    match bencher {
-        Some(b) => b.iter(|| { root.step(); }),
-        None    => while root.step() { }
-    }
+    while root.step() { }
 }
 
 // fn _command<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
@@ -198,7 +198,7 @@ fn _distinct<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
 //     }
 // }
 
-fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
+fn _barrier<C: Communicator>(communicator: C) {
 
     let mut root = GraphRoot::new(communicator);
     {
@@ -218,8 +218,5 @@ fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     }
 
     // spin
-    match bencher {
-        Some(b) => b.iter(|| { root.step(); }),
-        None    => while root.step() { },
-    }
+    while root.step() { }
 }

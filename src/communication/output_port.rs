@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use progress::Timestamp;
 use communication::{Data, Observer};
 
-
+use drain::DrainExt;
 
 // half of output_port for observing data
 pub struct OutputPort<T: Timestamp, D: Data> {
@@ -62,7 +62,8 @@ impl<T: Timestamp, D: Data> OutputPort<T, D> {
         // at the beginning of each iteration, self.buffer is valid and self.spare is empty.
         for index in (0..observers.len()) {
             mem::swap(&mut self.buffer, &mut self.spare); // spare valid, buffer empty
-            if index < observers.len() - 1 { self.buffer.push_all(&self.spare); }
+            // TODO : was push_all, now extend. currently extend is slow. watch.
+            if index < observers.len() - 1 { self.buffer.extend(self.spare.iter().cloned()); }
             observers[index].give(&mut self.spare);
             self.spare.clear();
         }
@@ -118,6 +119,6 @@ impl<O: Observer> Flattener<O> {
 
 impl<O: Observer> FlattenerTrait<O::Time, O::Data> for Flattener<O> {
     fn open(&mut self, time: &O::Time) { self.observer.open(time); }
-    fn give(&mut self, data: &mut Vec<O::Data>) { for datum in data.drain(..) { self.observer.give(datum); }}
+    fn give(&mut self, data: &mut Vec<O::Data>) { for datum in data.drain_temp() { self.observer.give(datum); }}
     fn shut(&mut self, time: &O::Time) { self.observer.shut(time); }
 }

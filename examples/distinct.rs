@@ -8,8 +8,6 @@ use timely::communication::{Data, Communicator, ThreadCommunicator};
 use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
 use timely::example_static::*;
-// use timely::example::distinct::DistinctExtensionTrait;
-// use timely::example::builder::{Graph, Root, SubgraphBuilder};
 
 use columnar::Columnar;
 
@@ -73,6 +71,6 @@ where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
 
     let mut subgraph = builder.new_subgraph::<u64>();
 
-    (subgraph.enter(source1).distinct().leave(),
+    (subgraph.enter(source1).leave(),
      subgraph.enter(source2).leave())
 }

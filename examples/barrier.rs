@@ -1,17 +1,10 @@
-#![feature(scoped)]
-#![feature(test)]
-
 extern crate timely;
-extern crate test;
 
 use timely::communication::{ProcessCommunicator, Communicator};
 use timely::communication::pact::Pipeline;
 use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
 use timely::example_static::*;
-
-
-use test::Bencher;
 
 use std::thread;
 
@@ -20,16 +13,18 @@ fn main() {
     _barrier_multi(1);
 }
 
-#[bench]
-fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
+// #[bench]
+// fn barrier_bench(bencher: &mut Bencher) { _barrier(ProcessCommunicator::new_vector(1).swap_remove(0), Some(bencher)); }
 fn _barrier_multi(threads: u64) {
     let mut guards = Vec::new();
     for communicator in ProcessCommunicator::new_vector(threads).into_iter() {
-        guards.push(thread::scoped(move || _barrier(communicator, None)));
+        guards.push(thread::spawn(move || _barrier(communicator)));
     }
+
+    for guard in guards { guard.join().unwrap(); }
 }
 
-fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
+fn _barrier<C: Communicator>(communicator: C) {
 
     let mut root = GraphRoot::new(communicator);
     {
@@ -50,8 +45,5 @@ fn _barrier<C: Communicator>(communicator: C, bencher: Option<&mut Bencher>) {
     }
 
     // spin
-    match bencher {
-        Some(b) => b.iter(|| { root.step(); }),
-        None    => while root.step() { },
-    }
+    while root.step() { }
 }

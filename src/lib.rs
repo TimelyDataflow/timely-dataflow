@@ -1,8 +1,5 @@
-#![feature(alloc)]
-#![feature(std_misc)]
-#![feature(collections_drain)]
-#![feature(collections)]
-#![feature(hash)]
+// #![feature(alloc)]
+// #![feature(collections_drain)]
 
 #![allow(dead_code)]
 
@@ -81,3 +78,5 @@ pub mod progress;
 pub mod example_shared;
 pub mod example_static;
 pub mod communication;
+
+pub mod drain;

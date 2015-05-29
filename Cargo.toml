@@ -4,6 +4,15 @@ name = "timely"
 version = "0.0.4"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
+description = "A low-latency data-parallel dataflow system in Rust"
+
+# These URLs point to more information about the repository
+documentation = "https://github.com/frankmcsherry/timely-dataflow"
+homepage = "https://github.com/frankmcsherry/timely-dataflow"
+repository = "https://github.com/frankmcsherry/timely-dataflow.git"
+keywords = ["timely", "dataflow"]
+license = "MIT"
+
 [dependencies]
 columnar="*"
 byteorder="*"

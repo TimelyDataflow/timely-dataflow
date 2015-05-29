@@ -16,6 +16,7 @@ use example_static::builder::*;
 use example_static::unary::PullableHelper;
 use example_static::stream::{ActiveStream, Stream};
 
+use drain::DrainExt;
 
 
 pub trait BinaryStreamExt<G: GraphBuilder, D1: Data> {
@@ -158,7 +159,7 @@ where T: Timestamp,
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut internal = vec![CountMap::new()];
         if let Some((ref mut initial, peers)) = self.notify {
-            for time in initial.drain(..) {
+            for time in initial.drain_temp() {
                 for _ in (0..peers) {
                     self.handle.notificator.notify_at(&time);
                 }

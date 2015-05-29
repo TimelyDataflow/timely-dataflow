@@ -2,6 +2,8 @@ use progress::Timestamp;
 use communication::{Communicator, Pushable, Pullable};
 use columnar::Columnar;
 
+use drain::DrainExt;
+
 pub type ProgressVec<T> = Vec<(u64, u64, T, i64)>;  // (child_scope, [in/out]port, timestamp, delta)
 
 pub struct Progcaster<T:Timestamp> {
@@ -26,8 +28,10 @@ impl<T:Timestamp+Send+Columnar> Progcaster<T> {
             }
 
             while let Some((mut recv_messages, mut recv_internal)) = self.receiver.pull() {
-                messages.append(&mut recv_messages);
-                internal.append(&mut recv_internal);
+                // messages.append(&mut recv_messages);
+                // internal.append(&mut recv_internal);
+                messages.extend(recv_messages.drain_temp());
+                internal.extend(recv_internal.drain_temp());
             }
         }
     }

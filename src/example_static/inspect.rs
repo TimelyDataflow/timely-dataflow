@@ -5,6 +5,8 @@ use example_static::builder::GraphBuilder;
 use example_static::stream::ActiveStream;
 use example_static::unary::UnaryStreamExt;
 
+use drain::DrainExt;
+
 pub trait InspectExt<D: Data> {
     fn inspect<F: FnMut(&D)+'static>(self, func: F) -> Self;
 }
@@ -14,7 +16,7 @@ impl<G: GraphBuilder, D: Data> InspectExt<D> for ActiveStream<G, D> {
         self.unary_stream(Pipeline, format!("Inspect"), move |input, output| {
             while let Some((time, data)) = input.pull() {
                 let mut session = output.session(&time);
-                for datum in data.drain(..) {
+                for datum in data.drain_temp() {
                     func(&datum);
                     session.give(datum);
                 }
@@ -33,7 +35,7 @@ impl<G: GraphBuilder, D: Data> InspectBatchExt<G, D> for ActiveStream<G, D> {
         self.unary_stream(Pipeline, format!("Inspect"), move |input, output| {
             while let Some((time, data)) = input.pull() {
                 func(&time, data);
-                output.give_at(&time, data.drain(..));
+                output.give_at(&time, data.drain_temp());
             }
         })
     }

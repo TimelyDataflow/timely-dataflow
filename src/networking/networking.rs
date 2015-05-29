@@ -9,12 +9,13 @@ use std::mem::size_of;
 use std::sync::mpsc::{Sender, Receiver, channel};
 
 use std::thread;
-use std::sync::{Arc, Future};
+use std::sync::Arc;
 use std::mem;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use communication::{Pushable, BinaryCommunicator, ProcessCommunicator};
+use drain::DrainExt;
 
 // TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.
 // TODO : Could be moved somewhere less networking-specific.
@@ -108,7 +109,9 @@ impl<R: Read> BinaryReceiver<R> {
             // TODO : We read in to self.staging because extending a Vec<u8> is hard without
             // TODO : using set_len, which is unsafe.
             let read = self.reader.read(&mut self.staging[..]).unwrap_or(0);
-            self.buffer.push_all(&self.staging[..read]);
+
+            // writing to a Vec<u8> isn't supposed to fail.
+            self.buffer.write_all(&self.staging[..read]).unwrap();
 
             {
                 // get a view of available bytes
@@ -141,7 +144,7 @@ impl<R: Read> BinaryReceiver<R> {
                                      else { Vec::new() };
 
                     buffer.clear();
-                    buffer.push_all(&slice[..h_len]);
+                    buffer.write_all(&slice[..h_len]).unwrap();
 
                     slice = &slice[h_len..];
 
@@ -150,7 +153,7 @@ impl<R: Read> BinaryReceiver<R> {
 
                 // TODO: way inefficient... =/ Fix! :D
                 self.double.clear();
-                self.double.push_all(slice);
+                self.double.write_all(slice).unwrap();
             }
 
             mem::swap(&mut self.buffer, &mut self.double);
@@ -240,13 +243,14 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
     let hosts1 = Arc::new(addresses);
     let hosts2 = hosts1.clone();
 
-    let start_task = Future::spawn(move || start_connections(hosts1, my_index));
-    let await_task = Future::spawn(move || await_connections(hosts2, my_index));
+    let start_task = thread::spawn(move || start_connections(hosts1, my_index));
+    let await_task = thread::spawn(move || await_connections(hosts2, my_index));
 
-    let mut results = try!(await_task.into_inner());
+    let mut results = try!(await_task.join().unwrap());
 
     results.push(None);
-    results.append(&mut try!(start_task.into_inner()));
+    let mut to_extend = try!(start_task.join().unwrap());
+    results.extend(to_extend.drain_temp());
 
     println!("worker {}:\tinitialization complete", my_index);
 

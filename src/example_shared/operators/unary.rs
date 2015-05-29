@@ -15,6 +15,8 @@ use communication::pact::PactPullable;
 
 use example_shared::*;
 
+use drain::DrainExt;
+
 pub struct PullableHelper<T:Timestamp, D: Data, P: Pullable<(T, Vec<D>)>> {
     receiver:   PactPullable<T, D, P>,
     consumed:   CountMap<T>,
@@ -169,7 +171,7 @@ where T: Timestamp,
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut internal = vec![CountMap::new()];
         if let Some((ref mut initial, peers)) = self.notify {
-            for time in initial.drain(..) {
+            for time in initial.drain_temp() {
                 for _ in (0..peers) {
                     self.handle.notificator.notify_at(&time);
                 }
