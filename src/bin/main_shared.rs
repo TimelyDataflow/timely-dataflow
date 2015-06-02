@@ -22,6 +22,7 @@ use timely::progress::timestamp::RootTimestamp;
 use timely::communication::*;
 use timely::communication::pact::Pipeline;
 use timely::networking::initialize_networking;
+use timely::networking::initialize_networking_from_file;
 
 use timely::example_shared::*;
 use timely::example_shared::operators::*;
@@ -35,6 +36,7 @@ Options:
     -w <arg>, --workers <arg>    number of workers per process [default: 1]
     -p <arg>, --processid <arg>  identity of this process      [default: 0]
     -n <arg>, --processes <arg>  number of processes involved  [default: 1]
+    -h <arg>, --hosts <arg>      list of host:port for workers
 ";
 
 fn main() {
@@ -56,8 +58,16 @@ fn main() {
     // vector holding communicators to use; one per local worker.
     if processes > 1 {
         println!("Initializing BinaryCommunicator");
-        let addresses = (0..processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
-        let communicators = initialize_networking(addresses, process_id, workers).ok().expect("error initializing networking");
+
+        let hosts = args.get_str("-h");
+        let communicators = if hosts != "" {
+            initialize_networking_from_file(hosts, process_id, workers).ok().expect("error initializing networking")
+        }
+        else {
+            let addresses = (0..processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
+            initialize_networking(addresses, process_id, workers).ok().expect("error initializing networking")
+        };
+
         if args.get_bool("distinct") { _distinct_multi(communicators); }
         else if args.get_bool("barrier") { _barrier_multi(communicators); }
         else if args.get_bool("command") { _command_multi(communicators); }
@@ -134,8 +144,8 @@ fn _distinct<C: Communicator>(communicator: C) {
         let (input2, stream2) = graph.new_input::<u64>();
 
         // prepare some feedback edges
-        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(1_000_000), Local(1));
-        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(1_000_000), Local(1));
+        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(100_000), Local(1));
+        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(100_000), Local(1));
 
         let concat1 = stream1.concat(&loop1);
         let concat2 = stream2.concat(&loop2);
@@ -159,8 +169,8 @@ fn _distinct<C: Communicator>(communicator: C) {
     // see what everyone thinks about that ...
     root.step();
 
-    input1.advance_to(1000000);
-    input2.advance_to(1000000);
+    input1.advance_to(1_000_000);
+    input2.advance_to(1_000_000);
     input1.close();
     input2.close();
 

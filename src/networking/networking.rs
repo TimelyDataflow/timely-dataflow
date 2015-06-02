@@ -1,7 +1,9 @@
 // use std::old_io::{TcpListener, TcpStream};
 // use std::old_io::{Acceptor, Listener, IoResult, MemReader};
 use std::thread::sleep_ms;
-use std::io::{Read, Write, Result};
+use std::io::{Read, Write, Result, BufRead, BufReader};
+use std::fs::File;
+
 
 use std::net::{TcpListener, TcpStream};
 use std::mem::size_of;
@@ -235,6 +237,20 @@ impl<W: Write> BinarySender<W> {
             self.buffers[source][graph][channel].as_ref().unwrap().send(buffer).unwrap();
         }
     }
+}
+
+pub fn initialize_networking_from_file(filename: &str, my_index: u64, workers: u64) -> Result<Vec<BinaryCommunicator>> {
+
+    let reader = BufReader::new(try!(File::open(filename)));
+    let mut addresses = Vec::new();
+
+    for line in reader.lines() {
+        addresses.push(try!(line));
+    }
+
+    // println!("addresses.len() : {} vs workers : {}", addresses.len(), workers);
+    // assert!(addresses.len() as u64 == workers);
+    initialize_networking(addresses, my_index, workers)
 }
 
 pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> Result<Vec<BinaryCommunicator>> {
