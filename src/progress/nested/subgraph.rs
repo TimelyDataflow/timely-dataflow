@@ -271,21 +271,28 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             while let Some((a, b, c, d)) = self.pointstamp_internal.pop() { self.pointstamp_internal_cm.update(&(a, b, c), d); }
             while let Some(((a, b, c), d)) = self.pointstamp_internal_cm.pop() { self.pointstamp_internal.push((a, b, c, d)); }
 
+            // let name = self.name();
+
             let pointstamps = &mut self.pointstamps;    // clarify to Rust that we don't need &mut self for the closures.
-            // println!("ps_msg: {:?}", self.pointstamp_messages);
-            for (scope, input, time, delta) in self.pointstamp_messages.drain_temp() {
-                // println!("  {}  {:?}  {:?}  {:?}", self.children[scope as usize].scope.name(), input, time, delta);
-                self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
-                    // println!("    update passed: {:?} {}", time, delta);
-                    pointstamps.update_target(ScopeInput(scope, input), time, delta);
-                });
+            if self.pointstamp_messages.len() > 0 {
+                // println!("{}: \tps_msg: {:?}", name, self.pointstamp_messages);
+                for (scope, input, time, delta) in self.pointstamp_messages.drain_temp() {
+                    // println!("  {}  {:?}  {:?}  {:?}", scope, input, time, delta);
+                    self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
+                        // println!("    update passed: {:?} {}", time, delta);
+                        pointstamps.update_target(ScopeInput(scope, input), time, delta);
+                    });
+                }
             }
 
-            // println!("ps_int: {:?}", self.pointstamp_internal);
-            for (scope, output, time, delta) in self.pointstamp_internal.drain_temp() {
-                self.children[scope as usize].capabilities[output as usize].update_and(&time, delta, |time, delta| {
-                    pointstamps.update_source(ScopeOutput(scope, output), time, delta);
-                });
+            if self.pointstamp_internal.len() > 0 {
+                // println!("{}: \tps_int: {:?}", name, self.pointstamp_internal);
+                for (scope, output, time, delta) in self.pointstamp_internal.drain_temp() {
+                    // println!("  {}  {:?}  {:?}  {:?}", scope, output, time, delta);
+                    self.children[scope as usize].capabilities[output as usize].update_and(&time, delta, |time, delta| {
+                        pointstamps.update_source(ScopeOutput(scope, output), time, delta);
+                    });
+                }
             }
         }
 

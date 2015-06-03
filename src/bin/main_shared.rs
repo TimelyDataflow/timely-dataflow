@@ -31,6 +31,7 @@ static USAGE: &'static str = "
 Usage: timely distinct [options] [<arguments>...]
        timely barrier [options] [<arguments>...]
        timely command [options] [<arguments>...]
+       timely empty [options] [<arguments>...]
 
 Options:
     -w <arg>, --workers <arg>    number of workers per process [default: 1]
@@ -71,6 +72,7 @@ fn main() {
         if args.get_bool("distinct") { _distinct_multi(communicators); }
         else if args.get_bool("barrier") { _barrier_multi(communicators); }
         else if args.get_bool("command") { _command_multi(communicators); }
+        else if args.get_bool("empty") { _empty_multi(communicators); }
     }
     else if workers > 1 {
         println!("Initializing ProcessCommunicator");
@@ -78,6 +80,7 @@ fn main() {
         if args.get_bool("distinct") { _distinct_multi(communicators); }
         else if args.get_bool("barrier") { _barrier_multi(communicators); }
         else if args.get_bool("command") { _command_multi(communicators); }
+        else if args.get_bool("empty") { _empty_multi(communicators); }
     }
     else {
         println!("Initializing ThreadCommunicator");
@@ -85,6 +88,7 @@ fn main() {
         if args.get_bool("distinct") { _distinct_multi(communicators); }
         else if args.get_bool("barrier") { _barrier_multi(communicators); }
         else if args.get_bool("command") { _command_multi(communicators); }
+        else if args.get_bool("empty") { _empty_multi(communicators); }
     };
 }
 
@@ -100,6 +104,18 @@ fn _distinct_multi<C: Communicator+Send>(communicators: Vec<C>) {
 
     for guard in guards { guard.join().unwrap(); }
 }
+
+fn _empty_multi<C: Communicator+Send>(communicators: Vec<C>) {
+    let mut guards = Vec::new();
+    for communicator in communicators.into_iter() {
+        guards.push(thread::Builder::new().name(format!("worker thread {}", communicator.index()))
+                                          .spawn(move || _empty(communicator))
+                                          .unwrap());
+    }
+
+    for guard in guards { guard.join().unwrap(); }
+}
+
 
 // #[bench]
 // fn command_bench(bencher: &mut Bencher) { _command(ProcessCommunicator::new_vector(1).swap_remove(0).unwrap(), Some(bencher)); }
@@ -133,6 +149,30 @@ where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
     })
 }
 
+fn _empty<C: Communicator>(communicator: C) {
+
+    let mut root = GraphRoot::new(communicator);
+
+    let mut input = root.subcomputation(|graph| {
+        graph.new_input::<u64>().0
+    });
+
+    root.step();
+
+    // move some data into the dataflow graph.
+    // input1.send_at(0, 0..10);
+    // input2.send_at(0, 1..11);
+
+    // see what everyone thinks about that ...
+    root.step();
+
+    input.advance_to(1_000_000);
+    input.close();
+
+    // spin
+    while root.step() { }
+}
+
 fn _distinct<C: Communicator>(communicator: C) {
 
     let mut root = GraphRoot::new(communicator);
@@ -144,8 +184,8 @@ fn _distinct<C: Communicator>(communicator: C) {
         let (input2, stream2) = graph.new_input::<u64>();
 
         // prepare some feedback edges
-        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(100_000), Local(1));
-        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(100_000), Local(1));
+        let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(1_000), Local(1));
+        let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(1_000), Local(1));
 
         let concat1 = stream1.concat(&loop1);
         let concat2 = stream2.concat(&loop2);

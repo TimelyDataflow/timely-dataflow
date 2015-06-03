@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 
 use columnar::{Columnar, ColumnarStack};
-use communication::{Pushable, Pullable};
+use communication::{Pushable, Pullable, Data};
 use networking::networking::MessageHeader;
 use std::default::Default;
 
@@ -19,7 +19,7 @@ use drain::DrainExt;
 pub trait Communicator: 'static {
     fn index(&self) -> u64;     // number out of peers
     fn peers(&self) -> u64;     // number of peers
-    fn new_channel<T:Send+Columnar+Any>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
+    fn new_channel<T:Send+Columnar+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
 }
 
 // TODO : Would be nice if Communicator had associated types for its Pushable and Pullable types,
@@ -69,7 +69,7 @@ impl ProcessCommunicator {
 impl Communicator for ProcessCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
-    fn new_channel<T:Send+Any>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    fn new_channel<T:Send+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         let mut channels = self.channels.lock().ok().expect("mutex error?");
         if self.allocated == channels.len() as u64 {  // we need a new channel ...
             let mut senders = Vec::new();
@@ -124,25 +124,35 @@ impl BinaryCommunicator {
 impl Communicator for BinaryCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
-    fn new_channel<T:Send+Columnar+Any>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    fn new_channel<T:Send+Columnar+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         let mut pushers: Vec<Box<Pushable<T>>> = Vec::new(); // built-up vector of Box<Pushable<T>> to return
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
         let inner_peers = self.inner.peers();
         let (inner_sends, inner_recv) = self.inner.new_channel();
 
+        // println!("inner_peers: {}", inner_peers);
+
         // prep a pushable for each endpoint, multiplied by inner_peers
         for (index, writer) in self.writers.iter().enumerate() {
-            for _ in (0..inner_peers) {
+            for counter in (0..inner_peers) {
                 let (s,r) = channel();  // generate a binary (Vec<u8>) channel pair of (back_to_worker, back_from_net)
-                let target_index = if index as u64 >= (self.index * inner_peers) { index as u64 + inner_peers } else { index as u64 };
-                println!("init'ing send channel: ({} {} {})", self.index, self.graph, self.allocated);
+
+                // TODO : This logic is all wrong and should be ripped out and beaten soundly.
+                let mut target_index = index as u64 * inner_peers + counter as u64;
+
+                // we may need to increment target_index by inner_peers;
+                if index as u64 >= self.index / inner_peers { target_index += inner_peers; }
+                // let target_index = if index as u64 >= (self.index * inner_peers) { inner_peers * index as u64 + inner_peers }
+                //                                                             else { inner_peers * index as u64 } + counter;
+
+                // println!("init'ing send channel: ({} {} {}) -> {}", self.index, self.graph, self.allocated, target_index);
                 writer.send(((self.index, self.graph, self.allocated), s)).unwrap();
                 let header = MessageHeader {
-                    graph:      self.graph,
-                    channel:    self.allocated,
-                    source:     self.index,
-                    target:     target_index,
+                    graph:      self.graph,     // should be
+                    channel:    self.allocated, //
+                    source:     self.index,     //
+                    target:     target_index,   //
                     length:     0,
                 };
                 pushers.push(Box::new(BinaryPushable::new(header, self.senders[index].clone(), r)));
@@ -151,7 +161,8 @@ impl Communicator for BinaryCommunicator {
 
         // splice inner_sends into the vector of pushables
         for (index, writer) in inner_sends.into_iter().enumerate() {
-            pushers.insert((self.index * inner_peers) as usize + index, writer);
+            // println!("pushing index {} into length {}", ((self.index / inner_peers) * inner_peers) as usize + index, pushers.len());
+            pushers.insert(((self.index / inner_peers) * inner_peers) as usize + index, writer);
         }
 
         // prep a Box<Pullable<T>> using inner_recv and fresh registered pullables
@@ -160,7 +171,7 @@ impl Communicator for BinaryCommunicator {
         for reader in self.readers.iter() {
             let (s,r) = channel();
             pullsends.push(s);
-            println!("init'ing recv channel: ({} {} {})", self.index, self.graph, self.allocated);
+            // println!("init'ing recv channel: ({} {} {})", self.index, self.graph, self.allocated);
             reader.send(((self.index, self.graph, self.allocated), send.clone(), r)).unwrap();
         }
 
@@ -199,9 +210,11 @@ impl<T: Columnar> BinaryPushable<T> {
     }
 }
 
-impl<T:Columnar+'static> Pushable<T> for BinaryPushable<T> {
+impl<T:Columnar+Data> Pushable<T> for BinaryPushable<T> {
     #[inline]
     fn push(&mut self, data: T) {
+        // println!("pushed: {:?}", data);
+
         let mut bytes = if let Some(buffer) = self.receiver.try_recv().ok() { buffer } else { Vec::new() };
         bytes.clear();
 
@@ -222,14 +235,19 @@ struct BinaryPullable<T: Columnar> {
     stack:      <T as Columnar>::Stack,
 }
 
-impl<T:Columnar+'static> Pullable<T> for BinaryPullable<T> {
+impl<T:Columnar+Data> Pullable<T> for BinaryPullable<T> {
     #[inline]
     fn pull(&mut self) -> Option<T> {
-        if let Some(data) = self.inner.pull() { Some(data) }
+        if let Some(data) = self.inner.pull() {
+            // println!("pulled from inner: {:?}", data);
+            Some(data)
+        }
         else if let Some(bytes) = self.receiver.try_recv().ok() {
             self.stack.decode(&mut &bytes[..]).unwrap();
             self.senders[0].send(bytes).unwrap();                   // TODO : Not clear where bytes came from; find out!
-            self.stack.pop()
+            let data = self.stack.pop();
+            // println!("pulled from stack: {:?}", data);
+            data
         }
         else { None }
     }

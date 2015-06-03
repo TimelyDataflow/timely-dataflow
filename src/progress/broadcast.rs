@@ -28,6 +28,7 @@ impl<T:Timestamp+Send+Columnar> Progcaster<T> {
             }
 
             while let Some((mut recv_messages, mut recv_internal)) = self.receiver.pull() {
+                // println!("recv'd: {:?}, {:?}", recv_messages, recv_internal);
                 // messages.append(&mut recv_messages);
                 // internal.append(&mut recv_internal);
                 messages.extend(recv_messages.drain_temp());

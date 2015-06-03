@@ -187,6 +187,7 @@ impl<R: Read> BinaryReceiver<R> {
 
 // structure in charge of sending data to a Writer, for example the network
 struct BinarySender<W: Write> {
+    id:         u64,    // destination process
     writer:     W,
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
     buffers:    Vec<Vec<Vec<Option<Sender<Vec<u8>>>>>>,
@@ -194,11 +195,13 @@ struct BinarySender<W: Write> {
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(writer: W,
+    fn new(id: u64,
+           writer: W,
            targets: u64,
            sources: Receiver<(MessageHeader, Vec<u8>)>,
            channels: Receiver<((u64, u64, u64), Sender<Vec<u8>>)>) -> BinarySender<W> {
         BinarySender {
+            id:         id,
             writer:     writer,
             sources:    sources,
             buffers:    vec![Vec::new(); targets as usize],
@@ -207,12 +210,13 @@ impl<W: Write> BinarySender<W> {
     }
 
     fn send_loop(&mut self) {
-        println!("send loop:\tstarting");
+        // println!("send loop to process {}:\tstarting", self.id);
         for (mut header, mut buffer) in self.sources.iter() {
             header.length = buffer.len() as u64;
             header.write_to(&mut self.writer).unwrap();
             self.writer.write_all(&buffer[..]).unwrap();
             buffer.clear();
+
 
             // inline because borrow-checker hates me
             let source = header.source as usize;
@@ -234,6 +238,7 @@ impl<W: Write> BinarySender<W> {
             }
             // end-inline
 
+            // println!("sending to process {}, worker: {}", self.id, header.target);
             self.buffers[source][graph][channel].as_ref().unwrap().send(buffer).unwrap();
         }
     }
@@ -262,10 +267,10 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
     let start_task = thread::spawn(move || start_connections(hosts1, my_index));
     let await_task = thread::spawn(move || await_connections(hosts2, my_index));
 
-    let mut results = try!(await_task.join().unwrap());
+    let mut results = try!(start_task.join().unwrap());
 
     results.push(None);
-    let mut to_extend = try!(start_task.join().unwrap());
+    let mut to_extend = try!(await_task.join().unwrap());
     results.extend(to_extend.drain_temp());
 
     println!("worker {}:\tinitialization complete", my_index);
@@ -277,6 +282,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
     // for each process, if a stream exists (i.e. not local) ...
     for index in (0..results.len()) {
         if let Some(stream) = results[index].take() {
+            // println!("process {} starting connection to process {}", my_index, index);
             let (writer_channels_s, writer_channels_r) = channel();
             let (reader_channels_s, reader_channels_r) = channel();
             let (sender_channels_s, sender_channels_r) = channel();
@@ -285,7 +291,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             readers.push(reader_channels_s);    //
             senders.push(sender_channels_s);    //
 
-            let mut sender = BinarySender::new(stream.try_clone().unwrap(), workers, sender_channels_r, writer_channels_r);
+            let mut sender = BinarySender::new(index as u64, stream.try_clone().unwrap(), workers, sender_channels_r, writer_channels_r);
             let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), workers, reader_channels_r);
 
             // start senders and receivers associated with this stream
