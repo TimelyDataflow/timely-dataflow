@@ -7,7 +7,7 @@ use std::hash::Hash;
 use timely::communication::{Data, Communicator, ThreadCommunicator};
 use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
-use timely::example_shared::*;
+use timely::example_static::*;
 
 use columnar::Columnar;
 
