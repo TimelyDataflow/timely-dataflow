@@ -239,14 +239,12 @@ impl<T:Columnar+Data> Pullable<T> for BinaryPullable<T> {
     #[inline]
     fn pull(&mut self) -> Option<T> {
         if let Some(data) = self.inner.pull() {
-            // println!("pulled from inner: {:?}", data);
             Some(data)
         }
         else if let Some(bytes) = self.receiver.try_recv().ok() {
             self.stack.decode(&mut &bytes[..]).unwrap();
             self.senders[0].send(bytes).unwrap();                   // TODO : Not clear where bytes came from; find out!
             let data = self.stack.pop();
-            // println!("pulled from stack: {:?}", data);
             data
         }
         else { None }

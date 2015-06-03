@@ -1,7 +1,7 @@
 // use std::old_io::{TcpListener, TcpStream};
 // use std::old_io::{Acceptor, Listener, IoResult, MemReader};
 use std::thread::sleep_ms;
-use std::io::{Read, Write, Result, BufRead, BufReader};
+use std::io::{Read, Write, Result, BufRead, BufReader, BufWriter};
 use std::fs::File;
 
 
@@ -209,37 +209,86 @@ impl<W: Write> BinarySender<W> {
         }
     }
 
+    // fn send_loop(&mut self) {
+    //     // println!("send loop to process {}:\tstarting", self.id);
+    //     for (mut header, mut buffer) in self.sources.iter() {
+    //         header.length = buffer.len() as u64;
+    //         header.write_to(&mut self.writer).unwrap();
+    //         self.writer.write_all(&buffer[..]).unwrap();
+    //         self.writer.flush().unwrap();    // <-- because writer is buffered
+    //         buffer.clear();
+    //
+    //
+    //         // inline because borrow-checker hates me
+    //         let source = header.source as usize;
+    //         let graph = header.graph as usize;
+    //         let channel = header.channel as usize;
+    //
+    //         while self.buffers.len() <= source { self.buffers.push(Vec::new()); }
+    //         while self.buffers[source].len() <= graph { self.buffers[source].push(Vec::new()); }
+    //         while self.buffers[source][graph].len() <= channel {
+    //             self.buffers[source][graph].push(None);
+    //         }
+    //
+    //         while let None = self.buffers[source][graph][channel] {
+    //             let ((t, g, c), s) = self.channels.recv().unwrap();
+    //             while self.buffers.len() as u64 <= t { self.buffers.push(Vec::new()); }
+    //             while self.buffers[t as usize].len() as u64 <= g { self.buffers[t as usize].push(Vec::new()); }
+    //             while self.buffers[t as usize][g as usize].len() as u64 <= c { self.buffers[t as usize][g as usize].push(None); }
+    //             self.buffers[t as usize][g as usize][c as usize] = Some(s);
+    //         }
+    //         // end-inline
+    //
+    //         // println!("sending to process {}, worker: {}", self.id, header.target);
+    //         self.buffers[source][graph][channel].as_ref().unwrap().send(buffer).unwrap();
+    //     }
+    // }
+
     fn send_loop(&mut self) {
-        // println!("send loop to process {}:\tstarting", self.id);
-        for (mut header, mut buffer) in self.sources.iter() {
-            header.length = buffer.len() as u64;
-            header.write_to(&mut self.writer).unwrap();
-            self.writer.write_all(&buffer[..]).unwrap();
-            buffer.clear();
+        let mut stash = Vec::new();
 
+        while let Ok((header, buffer)) = self.sources.recv() {
 
-            // inline because borrow-checker hates me
-            let source = header.source as usize;
-            let graph = header.graph as usize;
-            let channel = header.channel as usize;
+            stash.push((header, buffer));
 
-            while self.buffers.len() <= source { self.buffers.push(Vec::new()); }
-            while self.buffers[source].len() <= graph { self.buffers[source].push(Vec::new()); }
-            while self.buffers[source][graph].len() <= channel {
-                self.buffers[source][graph].push(None);
+            // collect any additional outstanding data to send
+            while let Ok((header, buffer)) = self.sources.try_recv() {
+                stash.push((header, buffer));
             }
 
-            while let None = self.buffers[source][graph][channel] {
-                let ((t, g, c), s) = self.channels.recv().unwrap();
-                while self.buffers.len() as u64 <= t { self.buffers.push(Vec::new()); }
-                while self.buffers[t as usize].len() as u64 <= g { self.buffers[t as usize].push(Vec::new()); }
-                while self.buffers[t as usize][g as usize].len() as u64 <= c { self.buffers[t as usize][g as usize].push(None); }
-                self.buffers[t as usize][g as usize][c as usize] = Some(s);
-            }
-            // end-inline
+            // println!("send loop to process {}:\tstarting", self.id);
+            for (mut header, mut buffer) in stash.drain_temp() {
+                header.length = buffer.len() as u64;
+                header.write_to(&mut self.writer).unwrap();
+                self.writer.write_all(&buffer[..]).unwrap();
+                buffer.clear();
 
-            // println!("sending to process {}, worker: {}", self.id, header.target);
-            self.buffers[source][graph][channel].as_ref().unwrap().send(buffer).unwrap();
+
+                // inline because borrow-checker hates me
+                let source = header.source as usize;
+                let graph = header.graph as usize;
+                let channel = header.channel as usize;
+
+                while self.buffers.len() <= source { self.buffers.push(Vec::new()); }
+                while self.buffers[source].len() <= graph { self.buffers[source].push(Vec::new()); }
+                while self.buffers[source][graph].len() <= channel {
+                    self.buffers[source][graph].push(None);
+                }
+
+                while let None = self.buffers[source][graph][channel] {
+                    let ((t, g, c), s) = self.channels.recv().unwrap();
+                    while self.buffers.len() as u64 <= t { self.buffers.push(Vec::new()); }
+                    while self.buffers[t as usize].len() as u64 <= g { self.buffers[t as usize].push(Vec::new()); }
+                    while self.buffers[t as usize][g as usize].len() as u64 <= c { self.buffers[t as usize][g as usize].push(None); }
+                    self.buffers[t as usize][g as usize][c as usize] = Some(s);
+                }
+                // end-inline
+
+                // println!("sending to process {}, worker: {}", self.id, header.target);
+                self.buffers[source][graph][channel].as_ref().unwrap().send(buffer).unwrap();
+            }
+
+            self.writer.flush().unwrap();    // <-- because writer is buffered
         }
     }
 }
@@ -291,7 +340,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             readers.push(reader_channels_s);    //
             senders.push(sender_channels_s);    //
 
-            let mut sender = BinarySender::new(index as u64, stream.try_clone().unwrap(), workers, sender_channels_r, writer_channels_r);
+            let mut sender = BinarySender::new(index as u64, BufWriter::new(stream.try_clone().unwrap()), workers, sender_channels_r, writer_channels_r);
             let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), workers, reader_channels_r);
 
             // start senders and receivers associated with this stream
