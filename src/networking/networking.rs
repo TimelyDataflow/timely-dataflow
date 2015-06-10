@@ -154,11 +154,15 @@ impl<R: Read> BinaryReceiver<R> {
                 }
 
                 // TODO: way inefficient... =/ Fix! :D
-                self.double.clear();
-                self.double.write_all(slice).unwrap();
+                if slice.len() < self.buffer.len() {
+                    self.double.write_all(slice).unwrap();
+                }
             }
 
-            mem::swap(&mut self.buffer, &mut self.double);
+            if self.double.len() > 0 {
+                mem::swap(&mut self.buffer, &mut self.double);
+                self.double.clear();
+            }
         }
     }
 
