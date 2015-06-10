@@ -155,6 +155,7 @@ impl<R: Read> BinaryReceiver<R> {
 
                 // TODO: way inefficient... =/ Fix! :D
                 if slice.len() < self.buffer.len() {
+                    self.double.clear();
                     self.double.write_all(slice).unwrap();
                 }
             }
