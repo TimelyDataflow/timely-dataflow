@@ -99,6 +99,7 @@ pub struct PactObserver<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> {
     pub phantom:    PhantomData<T>,
     shared:         Rc<RefCell<Vec<Vec<D>>>>,
     // threshold:      usize, // TODO : add this in, cloning time, I guess.
+    my_time:        Option<T>,
 }
 
 impl<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T, D, P> {
@@ -108,6 +109,7 @@ impl<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T, D, P> {
             pushable:   pushable,
             phantom:    PhantomData,
             shared:     shared,
+            my_time:    None,
         }
     }
 }
@@ -115,9 +117,15 @@ impl<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T, D, P> {
 impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PactObserver<T,D,P> {
     type Time = T;
     type Data = D;
-    #[inline(always)] fn open(&mut self,_time: &T) { }
+    #[inline(always)] fn open(&mut self, time: &T) { self.my_time = Some(time.clone()); }
     #[inline(always)] fn show(&mut self, data: &D) { self.give(data.clone()); }
-    #[inline(always)] fn give(&mut self, data:  D) { self.data.push(data); }
+    #[inline(always)] fn give(&mut self, data:  D) {
+        self.data.push(data);
+        if self.data.len() > 1024 {
+            let empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
+            self.pushable.push((self.my_time.as_ref().unwrap().clone(), mem::replace(&mut self.data, empty)));
+        }
+    }
     #[inline(always)] fn shut(&mut self, time: &T) {
         if self.data.len() > 0 {
             let empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
