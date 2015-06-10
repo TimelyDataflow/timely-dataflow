@@ -121,15 +121,16 @@ impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PactObse
     #[inline(always)] fn show(&mut self, data: &D) { self.give(data.clone()); }
     #[inline(always)] fn give(&mut self, data:  D) {
         self.data.push(data);
-        if self.data.len() > 1024 {
-            let empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
-            self.pushable.push((self.my_time.as_ref().unwrap().clone(), mem::replace(&mut self.data, empty)));
-        }
+        // TODO : causes correctness issue in notification; likely subtlely wrong... =/
+        // if self.data.len() > 1024 {
+        //     let empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
+        //     self.pushable.push((self.my_time.as_ref().unwrap().clone(), mem::replace(&mut self.data, empty)));
+        // }
     }
     #[inline(always)] fn shut(&mut self, time: &T) {
         if self.data.len() > 0 {
             let empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
-            // if empty.capacity() == 0 { println!("empty buffer!"); }
+            assert!(empty.len() == 0);
             self.pushable.push((time.clone(), mem::replace(&mut self.data, empty)));
         }
     }
