@@ -340,7 +340,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             readers.push(reader_channels_s);    //
             senders.push(sender_channels_s);    //
 
-            let mut sender = BinarySender::new(index as u64, BufWriter::new(stream.try_clone().unwrap()), workers, sender_channels_r, writer_channels_r);
+            let mut sender = BinarySender::new(index as u64, BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()), workers, sender_channels_r, writer_channels_r);
             let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), workers, reader_channels_r);
 
             // start senders and receivers associated with this stream
