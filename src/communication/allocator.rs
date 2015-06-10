@@ -112,7 +112,7 @@ pub struct BinaryCommunicator {
 
     // for loading up state in the networking threads.
     pub writers:    Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>)>>,                     // (index, back-to-worker)
-    pub readers:    Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>, Receiver<Vec<u8>>)>>,  // (index, data-to-worker, back-from-worker)
+    pub readers:    Vec<Sender<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>>,  // (index, data-to-worker, back-from-worker)
     pub senders:    Vec<Sender<(MessageHeader, Vec<u8>)>>                                // for sending bytes!
 }
 
@@ -172,7 +172,7 @@ impl Communicator for BinaryCommunicator {
             let (s,r) = channel();
             pullsends.push(s);
             // println!("init'ing recv channel: ({} {} {})", self.index, self.graph, self.allocated);
-            reader.send(((self.index, self.graph, self.allocated), send.clone(), r)).unwrap();
+            reader.send(((self.index, self.graph, self.allocated), (send.clone(), r))).unwrap();
         }
 
         let pullable = Box::new(BinaryPullable {
