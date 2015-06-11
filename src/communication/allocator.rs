@@ -131,8 +131,6 @@ impl Communicator for BinaryCommunicator {
         let inner_peers = self.inner.peers();
         let (inner_sends, inner_recv) = self.inner.new_channel();
 
-        // println!("inner_peers: {}", inner_peers);
-
         // prep a pushable for each endpoint, multiplied by inner_peers
         for (index, writer) in self.writers.iter().enumerate() {
             for counter in (0..inner_peers) {
@@ -143,10 +141,6 @@ impl Communicator for BinaryCommunicator {
 
                 // we may need to increment target_index by inner_peers;
                 if index as u64 >= self.index / inner_peers { target_index += inner_peers; }
-                // let target_index = if index as u64 >= (self.index * inner_peers) { inner_peers * index as u64 + inner_peers }
-                //                                                             else { inner_peers * index as u64 } + counter;
-
-                // println!("init'ing send channel: ({} {} {}) -> {}", self.index, self.graph, self.allocated, target_index);
                 writer.send(((self.index, self.graph, self.allocated), s)).unwrap();
                 let header = MessageHeader {
                     graph:      self.graph,     // should be
@@ -161,7 +155,6 @@ impl Communicator for BinaryCommunicator {
 
         // splice inner_sends into the vector of pushables
         for (index, writer) in inner_sends.into_iter().enumerate() {
-            // println!("pushing index {} into length {}", ((self.index / inner_peers) * inner_peers) as usize + index, pushers.len());
             pushers.insert(((self.index / inner_peers) * inner_peers) as usize + index, writer);
         }
 
@@ -171,7 +164,6 @@ impl Communicator for BinaryCommunicator {
         for reader in self.readers.iter() {
             let (s,r) = channel();
             pullsends.push(s);
-            // println!("init'ing recv channel: ({} {} {})", self.index, self.graph, self.allocated);
             reader.send(((self.index, self.graph, self.allocated), (send.clone(), r))).unwrap();
         }
 
@@ -243,7 +235,7 @@ impl<T:Columnar+Data> Pullable<T> for BinaryPullable<T> {
         }
         else if let Some(bytes) = self.receiver.try_recv().ok() {
             self.stack.decode(&mut &bytes[..]).unwrap();
-            self.senders[0].send(bytes).unwrap();                   // TODO : Not clear where bytes came from; find out!
+            // self.senders[0].send(bytes).unwrap();                   // TODO : Not clear where bytes came from; find out!
             let data = self.stack.pop();
             data
         }

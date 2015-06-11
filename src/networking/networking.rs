@@ -178,7 +178,7 @@ impl<W: Write> BinarySender<W> {
                 self.writer.write_all(&buffer[..]).unwrap();
                 buffer.clear();
 
-                self.returns.ensure(header.source, header.graph, header.channel).send(buffer).unwrap();
+                // self.returns.ensure(header.source, header.graph, header.channel).send(buffer).unwrap();
             }
 
             self.writer.flush().unwrap();    // <-- because writer is buffered
@@ -263,7 +263,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
     // for each process, if a stream exists (i.e. not local) ...
     for index in (0..results.len()) {
         if let Some(stream) = results[index].take() {
-            // println!("process {} starting connection to process {}", my_index, index);
+
             let (writer_channels_s, writer_channels_r) = channel();
             let (reader_channels_s, reader_channels_r) = channel();
             let (sender_channels_s, sender_channels_r) = channel();
