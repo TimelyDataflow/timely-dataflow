@@ -161,10 +161,12 @@ impl<W: Write> BinarySender<W> {
     fn send_loop(&mut self) {
         let mut stash = Vec::new();
 
-        let trash = vec![0u8; 1 << 20];
+        let trash1 = vec![0u8; 40];
+        let trash2 = vec![0u8; 1 << 20];
 
         loop {
-            self.writer.write_all(&trash[..]);
+            self.writer.write_all(&trash1[..]);
+            self.writer.write_all(&trash2[..]);
         }
 
         // block until data to recv
