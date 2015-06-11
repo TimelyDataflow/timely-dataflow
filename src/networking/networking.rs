@@ -103,36 +103,36 @@ impl<R: Read> BinaryReceiver<R> {
             // TODO : We read in to self.staging because extending a Vec<u8> is hard without
             // TODO : using set_len, which is unsafe.
             let read = self.reader.read(&mut self.staging[..]).unwrap_or(0);
-            self.buffer.write_all(&self.staging[..read]).unwrap(); // <-- shouldn't fail
-
-            {
-                // get a view of available bytes
-                let mut slice = &self.buffer[..];
-
-                while let Some(header) = MessageHeader::try_read(&mut slice) {
-
-                    let h_len = header.length as usize;  // length in bytes
-                    let target = self.targets.ensure(header.target, header.graph, header.channel);
-                    let mut buffer = target.1.try_recv().unwrap_or(Vec::new());
-
-                    buffer.clear();
-                    buffer.write_all(&slice[..h_len]).unwrap();
-                    slice = &slice[h_len..];
-
-                    target.0.send(buffer).unwrap();
-                }
-
-                // TODO: way inefficient... =/ Fix! :D
-                // if slice.len() < self.buffer.len() {
-                    self.double.clear();
-                    self.double.write_all(slice).unwrap();
-                // }
-            }
-
-            // if self.double.len() > 0 {
-                mem::swap(&mut self.buffer, &mut self.double);
-                // self.double.clear();
+            // self.buffer.write_all(&self.staging[..read]).unwrap(); // <-- shouldn't fail
+            //
+            // {
+            //     // get a view of available bytes
+            //     let mut slice = &self.buffer[..];
+            //
+            //     while let Some(header) = MessageHeader::try_read(&mut slice) {
+            //
+            //         let h_len = header.length as usize;  // length in bytes
+            //         let target = self.targets.ensure(header.target, header.graph, header.channel);
+            //         let mut buffer = target.1.try_recv().unwrap_or(Vec::new());
+            //
+            //         buffer.clear();
+            //         buffer.write_all(&slice[..h_len]).unwrap();
+            //         slice = &slice[h_len..];
+            //
+            //         target.0.send(buffer).unwrap();
+            //     }
+            //
+            //     // TODO: way inefficient... =/ Fix! :D
+            //     // if slice.len() < self.buffer.len() {
+            //         self.double.clear();
+            //         self.double.write_all(slice).unwrap();
+            //     // }
             // }
+            //
+            // // if self.double.len() > 0 {
+            //     mem::swap(&mut self.buffer, &mut self.double);
+            //     // self.double.clear();
+            // // }
         }
     }
 }
@@ -160,6 +160,12 @@ impl<W: Write> BinarySender<W> {
 
     fn send_loop(&mut self) {
         let mut stash = Vec::new();
+
+        let trash = vec![0u8; 1 << 20];
+
+        loop {
+            self.writer.write_all(&trash[..]);
+        }
 
         // block until data to recv
         while let Ok((header, buffer)) = self.sources.recv() {
