@@ -45,16 +45,14 @@ impl MessageHeader {
             let target = bytes.read_u64::<LittleEndian>().unwrap();
             let length = bytes.read_u64::<LittleEndian>().unwrap();
 
-            let header = MessageHeader {
-                graph: graph,
-                channel: channel,
-                source: source,
-                target: target,
-                length: length,
-            };
-
-            if bytes.len() >= header.length as usize {
-                Some(header)
+            if bytes.len() >= length as usize {
+                Some(MessageHeader {
+                    graph: graph,
+                    channel: channel,
+                    source: source,
+                    target: target,
+                    length: length,
+                })
             }
             else {
                 // rewind the reader
@@ -102,6 +100,8 @@ impl<R: Read> BinaryReceiver<R> {
             // attempt to read some more bytes into our buffer
             // TODO : We read in to self.staging because extending a Vec<u8> is hard without
             // TODO : using set_len, which is unsafe.
+            // TODO : Could consider optimizing for the self.buffer.len() == 0 case, swapping
+            // TODO : self.staging with self.buffer, rather than using write_all.
             let read = self.reader.read(&mut self.staging[..]).unwrap_or(0);
             self.buffer.write_all(&self.staging[..read]).unwrap(); // <-- shouldn't fail
 
@@ -221,6 +221,7 @@ impl<T:Send> Switchboard<T> {
             self.buffer[x][y][z] = Some(s);
         }
 
+        // we've just ensured that this is not None
         self.buffer[a][b][c].as_mut().unwrap()
     }
 }
@@ -272,7 +273,10 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             readers.push(reader_channels_s);    //
             senders.push(sender_channels_s);    //
 
-            let mut sender = BinarySender::new(index as u64, BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()), sender_channels_r, writer_channels_r);
+            let mut sender = BinarySender::new(index as u64,
+                                               BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()),
+                                               sender_channels_r,
+                                               writer_channels_r);
             let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), reader_channels_r);
 
             // start senders and receivers associated with this stream
