@@ -115,6 +115,8 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
     }
 
     pub fn close(self) { }
+
+    pub fn epoch(&self) -> &T { &self.now_at }
 }
 
 impl<T:Timestamp+Ord, D: Data> Drop for InputHelper<T, D> {
