@@ -6,11 +6,9 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-use columnar::{Columnar, ColumnarStack};
+use serialization::Serializable;
 use communication::{Pushable, Pullable, Data};
 use networking::networking::MessageHeader;
-use std::default::Default;
-
 use drain::DrainExt;
 
 // The Communicator trait presents the interface a worker has to the outside world.
@@ -19,7 +17,7 @@ use drain::DrainExt;
 pub trait Communicator: 'static {
     fn index(&self) -> u64;     // number out of peers
     fn peers(&self) -> u64;     // number of peers
-    fn new_channel<T:Send+Columnar+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
+    fn new_channel<T:Send+Serializable+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
 }
 
 // The simplest communicator remains worker-local and just queues sent messages.
@@ -116,7 +114,7 @@ impl BinaryCommunicator {
 impl Communicator for BinaryCommunicator {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
-    fn new_channel<T:Send+Columnar+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    fn new_channel<T:Send+Serializable+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
         let mut pushers: Vec<Box<Pushable<T>>> = Vec::new(); // built-up vector of Box<Pushable<T>> to return
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
@@ -161,7 +159,6 @@ impl Communicator for BinaryCommunicator {
         let pullable = Box::new(BinaryPullable {
             inner:      inner_recv,
             receiver:   recv,
-            stack:      Default::default(),
         });
 
         self.allocated += 1;
@@ -170,13 +167,13 @@ impl Communicator for BinaryCommunicator {
     }
 }
 
-struct BinaryPushable<T: Columnar> {
+struct BinaryPushable<T: Serializable> {
     header:     MessageHeader,
     sender:     Sender<(MessageHeader, Vec<u8>)>,   // targets for each remote destination
     phantom:    PhantomData<T>,
 }
 
-impl<T: Columnar> BinaryPushable<T> {
+impl<T: Serializable> BinaryPushable<T> {
     pub fn new(header: MessageHeader, sender: Sender<(MessageHeader, Vec<u8>)>) -> BinaryPushable<T> {
         BinaryPushable {
             header:     header,
@@ -186,13 +183,11 @@ impl<T: Columnar> BinaryPushable<T> {
     }
 }
 
-impl<T:Columnar+Data> Pushable<T> for BinaryPushable<T> {
+impl<T:Serializable+Data> Pushable<T> for BinaryPushable<T> {
     #[inline]
     fn push(&mut self, data: T) {
         let mut bytes = Vec::new();
-        let mut stack: <T as Columnar>::Stack = Default::default();
-        stack.push(data);
-        stack.encode(&mut bytes).unwrap();
+        <T as Serializable>::encode(data, &mut bytes);
 
         let mut header = self.header;
         header.length = bytes.len() as u64;
@@ -201,19 +196,17 @@ impl<T:Columnar+Data> Pushable<T> for BinaryPushable<T> {
     }
 }
 
-struct BinaryPullable<T: Columnar> {
+struct BinaryPullable<T: Serializable> {
     inner:      Box<Pullable<T>>,       // inner pullable (e.g. intra-process typed queue)
     receiver:   Receiver<Vec<u8>>,      // source of serialized buffers
-    stack:      <T as Columnar>::Stack,
 }
 
-impl<T:Columnar+Data> Pullable<T> for BinaryPullable<T> {
+impl<T:Serializable+Data> Pullable<T> for BinaryPullable<T> {
     #[inline]
     fn pull(&mut self) -> Option<T> {
         if let Some(data) = self.inner.pull() { Some(data) }
-        else if let Some(bytes) = self.receiver.try_recv().ok() {
-            self.stack.decode(&mut &bytes[..]).unwrap();
-            self.stack.pop()
+        else if let Some(mut bytes) = self.receiver.try_recv().ok() {
+            if let Ok(result) = <T as Serializable>::decode(&mut bytes) { Some (result) } else { None }
         }
         else { None }
     }

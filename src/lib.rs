@@ -78,5 +78,6 @@ pub mod progress;
 pub mod example_shared;
 pub mod example_static;
 pub mod communication;
+pub mod serialization;
 
 pub mod drain;
