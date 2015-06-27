@@ -8,9 +8,9 @@ impl<T: Abomonation+Clone> Serializable for T {
         encode(&slice, bytes);
     }
     fn decode(bytes: &mut [u8]) -> Result<Self, &mut [u8]> {
-        if let Ok(result) = decode::<T>(bytes) {
+        let result = if let Ok(result) = decode::<T>(bytes) {
             Ok(result[0].clone())
-        }
-        else { Err (bytes) }
+        } else { Err(()) };
+        if let Ok(result) = result { Ok(result) } else { Err (bytes) }
     }
 }

@@ -8,7 +8,7 @@ use serialization::Serializable;
 use example_shared::*;
 use example_shared::operators::unary::UnaryNotifyExt;
 
-]use drain::DrainExt;
+use drain::DrainExt;
 
 pub trait QueueExt {
     fn queue(&self) -> Self;

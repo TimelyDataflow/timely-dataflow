@@ -1,5 +1,5 @@
-// pub mod abomonation;
-pub mod columnar;
+pub mod abomonation;
+// pub mod columnar;
 
 pub trait Serializable {
     fn encode(typed: Self, bytes: &mut Vec<u8>);

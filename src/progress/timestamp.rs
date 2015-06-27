@@ -8,11 +8,12 @@ use std::fmt::Error;
 
 use progress::nested::product::Product;
 
+use abomonation::Abomonation;
 use columnar::{Columnar, ColumnarStack};
 use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 
 // TODO : Change Copy requirement to Clone; understand Columnar requirement (for serialization at the moment)
-pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Columnar+Any+Display {
+pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Columnar+Any+Display+Abomonation {
     type Summary : PathSummary<Self> + 'static;   // summarizes cumulative action of Timestamp along a path
 }
 
@@ -36,6 +37,8 @@ impl Debug for RootTimestamp {
         f.write_str(&format!("Root"))
     }
 }
+
+impl Abomonation for RootTimestamp { }
 impl Columnar for RootTimestamp { type Stack = u64; }
 impl ColumnarStack<RootTimestamp> for u64 {
     #[inline(always)] fn push(&mut self, _empty: RootTimestamp) {

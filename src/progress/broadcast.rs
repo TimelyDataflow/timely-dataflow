@@ -1,6 +1,6 @@
 use progress::Timestamp;
 use communication::{Communicator, Pushable, Pullable};
-use columnar::Columnar;
+// use columnar::Columnar;
 
 use drain::DrainExt;
 
@@ -11,7 +11,7 @@ pub struct Progcaster<T:Timestamp> {
     receiver:   Box<Pullable<(ProgressVec<T>, ProgressVec<T>)>>,
 }
 
-impl<T:Timestamp+Send+Columnar> Progcaster<T> {
+impl<T:Timestamp+Send> Progcaster<T> {
     pub fn new<C: Communicator>(communicator: &mut C) -> Progcaster<T> {
         let (senders, receiver) = communicator.new_channel();
         Progcaster { senders: senders, receiver: receiver }

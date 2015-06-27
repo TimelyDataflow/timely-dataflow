@@ -14,7 +14,8 @@ keywords = ["timely", "dataflow"]
 license = "MIT"
 
 [dependencies.abomonation]
-path="../abomonation"
+# path="../abomonation"
+git="https://github.com/frankmcsherry/abomonation"
 
 [dependencies]
 columnar="*"
