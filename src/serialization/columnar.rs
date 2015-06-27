@@ -1,7 +1,7 @@
 use serialization::Serializable;
 use columnar::{Columnar, ColumnarStack};
 
-impl<T: Columnar> Serializable for T {
+impl<T: Abomonation+Columnar> Serializable for T {
     fn encode(typed: Self, bytes: &mut Vec<u8>) {
         let mut stack: <T as Columnar>::Stack = Default::default();
         stack.push(typed);

@@ -1,7 +1,8 @@
 use serialization::Serializable;
 use abomonation::{Abomonation, encode, decode};
+use columnar::{Columnar, ColumnarStack};
 
-impl<T: Abomonation+Clone> Serializable for T {
+impl<T: Abomonation+Columnar+Clone> Serializable for T {
     fn encode(typed: Self, bytes: &mut Vec<u8>) {
         let mut slice = Vec::new();
         slice.push(typed);
