@@ -235,8 +235,6 @@ pub fn initialize_networking_from_file(filename: &str, my_index: u64, workers: u
         addresses.push(try!(line));
     }
 
-    // println!("addresses.len() : {} vs workers : {}", addresses.len(), workers);
-    // assert!(addresses.len() as u64 == workers);
     initialize_networking(addresses, my_index, workers)
 }
 
