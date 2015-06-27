@@ -14,7 +14,7 @@ use std::thread;
 use std::hash::Hash;
 use std::fmt::Debug;
 
-use columnar::Columnar;
+use timely::serialization::Serializable;
 
 use timely::progress::Scope;
 use timely::progress::nested::Summary::Local;
@@ -141,7 +141,7 @@ fn _barrier_multi<C: Communicator+Send>(communicators: Vec<C>) {
 
 fn create_subgraph<G: GraphBuilder, D>(source1: &Stream<G, D>, source2: &Stream<G, D>) ->
                                             (Stream<G, D>, Stream<G, D>)
-where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
+where D: Data+Hash+Eq+Debug+Serializable, G::Timestamp: Hash {
 
     source1.builder().subcomputation::<u64,_,_>(|subgraph| {
         (subgraph.enter(source1).queue().leave(),

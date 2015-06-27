@@ -9,6 +9,7 @@ use communication::Data;
 use communication::{Communicator, Pullable, Pushable, Observer};
 use communication::observer::ExchangeObserver;
 
+// use serialization::Serializable;
 use columnar::Columnar;
 
 // A ParallelizationContract transforms the output of a Communicator, a (Vec<Pushable>, Pullable), to an (Observer, Pullable)

@@ -3,18 +3,18 @@ use std::hash::Hash;
 
 use communication::*;
 use communication::pact::Pipeline;
+use serialization::Serializable;
 
 use example_shared::*;
 use example_shared::operators::unary::UnaryNotifyExt;
 
-use columnar::Columnar;
-use drain::DrainExt;
+]use drain::DrainExt;
 
 pub trait QueueExt {
     fn queue(&self) -> Self;
 }
 
-impl<G: GraphBuilder, D: Data+Columnar> QueueExt for Stream<G, D>
+impl<G: GraphBuilder, D: Data+Serializable> QueueExt for Stream<G, D>
 where G::Timestamp: Hash {
 
     fn queue(&self) -> Stream<G, D> {

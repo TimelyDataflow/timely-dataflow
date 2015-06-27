@@ -9,14 +9,15 @@ use communication::pact::Exchange;
 use example_shared::*;
 use example_shared::operators::unary::UnaryNotifyExt;
 
-use columnar::Columnar;
+use serialization::Serializable;
+// use columnar::Columnar;
 
 pub trait DistinctExtensionTrait {
     fn distinct(&self) -> Self;
     fn distinct_batch(&self) -> Self;
 }
 
-impl<G: GraphBuilder, D: Data+Hash+Eq+Columnar> DistinctExtensionTrait for Stream<G, D>
+impl<G: GraphBuilder, D: Data+Hash+Eq+Serializable> DistinctExtensionTrait for Stream<G, D>
 where G::Timestamp: Hash {
 
     fn distinct(&self) -> Stream<G, D> {

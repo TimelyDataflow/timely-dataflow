@@ -65,8 +65,9 @@
 //! while computation.step() { } // finish off any remaining work
 //! ```
 
-extern crate columnar;
+extern crate abomonation;
 extern crate byteorder;
+extern crate columnar;
 
 pub use communication::ThreadCommunicator;
 pub use example_static::{GraphRoot, GraphBuilder};
