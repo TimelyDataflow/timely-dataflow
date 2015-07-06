@@ -1,4 +1,5 @@
 use serialization::Serializable;
+use abomonation::Abomonation;
 use columnar::{Columnar, ColumnarStack};
 
 impl<T: Abomonation+Columnar> Serializable for T {
