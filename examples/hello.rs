@@ -1,29 +1,39 @@
 extern crate timely;
-use timely::*;
-use timely::example_static::inspect::InspectExt;
+
+use timely::example_shared::*;
+use timely::example_shared::operators::*;
+use timely::communication::allocator::Communicator;
 
 fn main() {
-    // initialize a new computation root
-    let mut computation = GraphRoot::new(ThreadCommunicator);
 
-    let mut input = {
+    // initializes and runs a timely dataflow computation
+    timely::initialize(std::env::args(), |||communicator| {
 
-        // allocate and use a scoped subgraph builder
-        let mut builder = computation.new_subgraph();
-        let (input, stream) = builder.new_input();
-        stream.enable(builder)
-              .inspect(|x| println!("hello {:?}", x));
+        // capture worker index to print
+        let index = communicator.index();
 
-        input
-    };
+        // define a new computation using the communicator
+        let mut computation = GraphRoot::new(communicator);
 
-    for round in 0..10 {
-        input.send_at(round, round..round+1);
-        input.advance_to(round + 1);
-        computation.step();
-    }
+        // create a new input, and inspect its output
+        let mut input = computation.subcomputation(move |builder| {
+            let (input, stream) = builder.new_input();
+            stream.inspect(move |x| println!("{}: hello {:?}", index, x));
 
-    input.close();
+            input
+        });
 
-    while computation.step() { } // finish off any remaining work
+        // introduce data and watch!
+        for round in 0..10 {
+            input.send_at(round, round..round+1);
+            input.advance_to(round + 1);
+            computation.step();
+        }
+
+        // seal the input
+        input.close();
+
+        // finish off any remaining work
+        while computation.step() { }
+    });
 }

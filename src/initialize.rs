@@ -7,7 +7,7 @@ use communication::allocator::GenericCommunicator;
 use networking::{initialize_networking, initialize_networking_from_file};
 
 // initializes a timely dataflow computation with supplied arguments and per-communicator logic
-pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+Sync+'static, G: Fn()->F>(iter: I, func: G) {
+pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+'static, G: Fn()->F>(iter: I, func: G) {
 
     let mut opts = getopts::Options::new();
     opts.optopt("w", "workers", "number of per-process worker threads", "NUM");

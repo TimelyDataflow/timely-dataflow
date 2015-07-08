@@ -70,16 +70,11 @@ extern crate byteorder;
 extern crate columnar;
 extern crate getopts;
 
-pub use communication::ThreadCommunicator;
-pub use example_static::{GraphRoot, GraphBuilder};
-pub use example_static::InputExtensionTrait;
 pub use initialize::initialize;
 
 pub mod networking;
 pub mod progress;
-// pub mod example;
 pub mod example_shared;
-pub mod example_static;
 pub mod communication;
 pub mod serialization;
 
