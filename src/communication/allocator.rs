@@ -20,6 +20,36 @@ pub trait Communicator: 'static {
     fn new_channel<T:Send+Serializable+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>);
 }
 
+pub enum GenericCommunicator {
+    Thread(ThreadCommunicator),
+    Process(ProcessCommunicator),
+    Binary(BinaryCommunicator),
+}
+
+impl Communicator for GenericCommunicator {
+    fn index(&self) -> u64 {
+        match self {
+            &GenericCommunicator::Thread(ref t) => t.index(),
+            &GenericCommunicator::Process(ref p) => p.index(),
+            &GenericCommunicator::Binary(ref b) => b.index(),
+        }
+    }
+    fn peers(&self) -> u64 {
+        match self {
+            &GenericCommunicator::Thread(ref t) => t.peers(),
+            &GenericCommunicator::Process(ref p) => p.peers(),
+            &GenericCommunicator::Binary(ref b) => b.peers(),
+        }
+    }
+    fn new_channel<T:Send+Serializable+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+        match self {
+            &mut GenericCommunicator::Thread(ref mut t) => t.new_channel(),
+            &mut GenericCommunicator::Process(ref mut p) => p.new_channel(),
+            &mut GenericCommunicator::Binary(ref mut b) => b.new_channel(),
+        }
+    }
+}
+
 // The simplest communicator remains worker-local and just queues sent messages.
 pub struct ThreadCommunicator;
 impl Communicator for ThreadCommunicator {
