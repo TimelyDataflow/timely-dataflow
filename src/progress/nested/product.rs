@@ -4,7 +4,7 @@ use std::fmt::{Formatter, Display, Error, Debug};
 use progress::Timestamp;
 use progress::nested::summary::Summary;
 
-use columnar::Columnar;
+// use columnar::Columnar;
 use abomonation::Abomonation;
 
 
@@ -59,10 +59,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner>
     type Summary = Summary<TOuter::Summary, TInner::Summary>;
 }
 
-// columnar implementation because Product<T1, T2> : Copy.
-impl<TOuter: Copy+Columnar, TInner: Copy+Columnar> Columnar for Product<TOuter, TInner> {
-    type Stack = Vec<Product<TOuter, TInner>>;
-}
+// // columnar implementation because Product<T1, T2> : Copy.
+// impl<TOuter: Copy+Columnar, TInner: Copy+Columnar> Columnar for Product<TOuter, TInner> {
+//     type Stack = Vec<Product<TOuter, TInner>>;
+// }
 
 impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
     unsafe fn embalm(&mut self) { self.outer.embalm(); self.inner.embalm(); }

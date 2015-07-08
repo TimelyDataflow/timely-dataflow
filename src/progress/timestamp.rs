@@ -2,18 +2,18 @@ use std::fmt::Debug;
 use std::any::Any;
 use std::default::Default;
 use std::fmt::{Display, Formatter};
-use std::io::{Read, Write};
-use std::io::Result as IoResult;
+// use std::io::{Read, Write};
+// use std::io::Result as IoResult;
 use std::fmt::Error;
 
 use progress::nested::product::Product;
 
 use abomonation::Abomonation;
-use columnar::{Columnar, ColumnarStack};
-use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
+// use columnar::{Columnar, ColumnarStack};
+// use byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 
 // TODO : Change Copy requirement to Clone; understand Columnar requirement (for serialization at the moment)
-pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Columnar+Any+Display+Abomonation {
+pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Any+Display+Abomonation {
     type Summary : PathSummary<Self> + 'static;   // summarizes cumulative action of Timestamp along a path
 }
 
@@ -39,25 +39,26 @@ impl Debug for RootTimestamp {
 }
 
 impl Abomonation for RootTimestamp { }
-impl Columnar for RootTimestamp { type Stack = u64; }
-impl ColumnarStack<RootTimestamp> for u64 {
-    #[inline(always)] fn push(&mut self, _empty: RootTimestamp) {
-        *self += 1;
-    }
-    #[inline(always)] fn pop(&mut self) -> Option<RootTimestamp> {
-        if *self > 0 { *self -= 1; Some(RootTimestamp) }
-        else         { None }
-    }
+// impl Columnar for RootTimestamp { type Stack = u64; }
+// impl ColumnarStack<RootTimestamp> for u64 {
+//     #[inline(always)] fn push(&mut self, _empty: RootTimestamp) {
+//         *self += 1;
+//     }
+//     #[inline(always)] fn pop(&mut self) -> Option<RootTimestamp> {
+//         if *self > 0 { *self -= 1; Some(RootTimestamp) }
+//         else         { None }
+//     }
+//
+//     fn encode<W: Write>(&mut self, writer: &mut W) -> IoResult<()> {
+//         try!(writer.write_u64::<LittleEndian>(*self));
+//         Ok(())
+//     }
+//     fn decode<R: Read>(&mut self, reader: &mut R) -> IoResult<()> {
+//         *self = try!(reader.read_u64::<LittleEndian>());
+//         Ok(())
+//     }
+// }
 
-    fn encode<W: Write>(&mut self, writer: &mut W) -> IoResult<()> {
-        try!(writer.write_u64::<LittleEndian>(*self));
-        Ok(())
-    }
-    fn decode<R: Read>(&mut self, reader: &mut R) -> IoResult<()> {
-        *self = try!(reader.read_u64::<LittleEndian>());
-        Ok(())
-    }
-}
 impl RootTimestamp {
     pub fn new<T: Timestamp>(t: T) -> Product<RootTimestamp, T> {
         Product::new(RootTimestamp, t)

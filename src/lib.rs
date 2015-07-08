@@ -67,7 +67,6 @@
 
 extern crate abomonation;
 extern crate byteorder;
-extern crate columnar;
 extern crate getopts;
 
 pub use initialize::initialize;

@@ -1,5 +1,4 @@
 extern crate timely;
-extern crate columnar;
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -9,8 +8,6 @@ use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
 use timely::example_shared::*;
 use timely::example_shared::operators::*;
-
-use columnar::Columnar;
 
 fn main() {
     timely::initialize(std::env::args(), |||communicator| {
@@ -60,7 +57,7 @@ fn main() {
 }
 
 fn create_subgraph<G: GraphBuilder, D>(builder: &G, source1: &Stream<G, D>, source2: &Stream<G, D>) -> (Stream<G, D>, Stream<G, D>)
-where D: Data+Hash+Eq+Debug+Columnar, G::Timestamp: Hash {
+where D: Data+Hash+Eq+Debug, G::Timestamp: Hash {
     builder.clone().subcomputation::<u64,_,_>(|subgraph| {
         (subgraph.enter(source1).leave(),
          subgraph.enter(source2).leave())
