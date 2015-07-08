@@ -2,7 +2,7 @@ use serialization::Serializable;
 use abomonation::{Abomonation, encode, decode};
 use columnar::Columnar;
 
-impl<T: Abomonation+Columnar+Clone+Eq> Serializable for T {
+impl<T: Abomonation+Columnar+Clone> Serializable for T {
     fn encode(typed: Self, bytes: &mut Vec<u8>) {
         encode(&vec![typed], bytes);
     }
