@@ -206,7 +206,10 @@ impl<T:Serializable+Data> Pullable<T> for BinaryPullable<T> {
     fn pull(&mut self) -> Option<T> {
         if let Some(data) = self.inner.pull() { Some(data) }
         else if let Some(mut bytes) = self.receiver.try_recv().ok() {
-            if let Ok(result) = <T as Serializable>::decode(&mut bytes) { Some (result) } else { None }
+            if let Ok(result) = <T as Serializable>::decode(&mut bytes) {
+                Some (result)
+            }
+            else { None }
         }
         else { None }
     }

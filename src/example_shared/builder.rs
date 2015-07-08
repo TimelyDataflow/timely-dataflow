@@ -88,7 +88,7 @@ impl<C: Communicator> GraphRoot<C> {
 impl<C: Communicator> GraphBuilder for GraphRoot<C> {
     type Timestamp = RootTimestamp;
 
-    fn name(&self) -> String { format!("Root[{}]", self.communicator.borrow().index()) }
+    fn name(&self) -> String { format!("Worker[{}]", self.communicator.borrow().index()) }
     fn add_edge(&self, _source: Source, _target: Target) {
         panic!("GraphRoot::connect(): root doesn't maintain edges; who are you, how did you get here?")
     }
@@ -105,7 +105,7 @@ impl<C: Communicator> GraphBuilder for GraphRoot<C> {
     }
 
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
-        let name = format!("{}::Subgraph[0]", self.name());
+        let name = format!("{}::Subgraph[Root]", self.name());
         Subgraph::new_from(&mut (*self.communicator.borrow_mut()), 0, name)
     }
 }
@@ -146,15 +146,15 @@ impl<G: GraphBuilder, T: Timestamp> GraphBuilder for SubgraphBuilder<G, T> {
 
     fn add_scope<SC: Scope<Self::Timestamp>+'static>(&self, scope: SC) -> u64 {
         let index = self.subgraph.borrow().children.len() as u64;
-        let name = format!("{}", self.name());
-        self.subgraph.borrow_mut().children.push(ScopeWrapper::new(Box::new(scope), index, name));
+        let path = format!("{}", self.subgraph.borrow().path);
+        self.subgraph.borrow_mut().children.push(ScopeWrapper::new(Box::new(scope), index, path));
         index
     }
 
     fn new_subscope<T2: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, T>, T2> {
         let index = self.subgraph.borrow().children() as u64;
-        let name = format!("{}::Subgraph[{}]", self.name(), index);
-        Subgraph::new_from(self, index, name)
+        let path = format!("{}", self.subgraph.borrow().path);
+        Subgraph::new_from(self, index, path)
     }
 }
 

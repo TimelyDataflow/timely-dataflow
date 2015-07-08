@@ -13,24 +13,23 @@ impl<T> Default for CountMap<T> {
 impl<T:Eq+Clone> CountMap<T> {
     #[inline(always)]
     pub fn update(&mut self, key: &T, val: i64) -> i64 {
+        if val != 0 {
         // if self.updates.len() > 100 { println!("perf: self.len() = {}", self.len()); }
-        let mut remove_at = None;
-        let mut found = false;
-        let mut new_val = val;
 
-        for (index, &mut (ref k, ref mut v)) in self.updates.iter_mut().enumerate() {
-            if k.eq(key) {
-                found = true;
-                *v += val;
-                new_val = *v;
-
-                if new_val == 0 { remove_at = Some(index); }
+            if let Some(index) = self.updates.iter().position(|&(ref k, _)| k.eq(key)) {
+                self.updates[index].1 += val;
+                let result = self.updates[index].1;
+                if result == 0 {
+                    self.updates.swap_remove(index);
+                }
+                result
+            }
+            else {
+                self.updates.push((key.clone(), val));
+                val
             }
         }
-
-        if !found && val != 0 { self.updates.push((key.clone(), val)); }
-        if let Some(index) = remove_at { self.updates.swap_remove(index); }
-        return new_val;
+        else { 0 }
     }
 
     pub fn elements<'a>(&'a self) -> &'a Vec<(T, i64)> { &self.updates }
@@ -48,6 +47,11 @@ impl<T:Eq+Clone> CountMap<T> {
     pub fn drain_into(&mut self, other: &mut CountMap<T>) {
         while let Some((ref key, val)) = self.updates.pop() {
             other.update(key, val);
+        }
+    }
+    pub fn extend<I: Iterator<Item=(T, i64)>>(&mut self, iterator: I) {
+        for (key, val) in iterator {
+            self.update(&key, val);
         }
     }
 }

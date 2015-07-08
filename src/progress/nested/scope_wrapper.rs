@@ -9,8 +9,6 @@ use progress::nested::subgraph::Target::{GraphOutput, ScopeInput};
 
 use progress::count_map::CountMap;
 
-use progress::broadcast::ProgressVec;
-
 pub struct ScopeWrapper<T: Timestamp> {
     pub name:                   String,
     pub scope:                  Option<Box<Scope<T>>>,          // the scope itself
@@ -37,7 +35,7 @@ pub struct ScopeWrapper<T: Timestamp> {
 }
 
 impl<T: Timestamp> ScopeWrapper<T> {
-    pub fn new(mut scope: Box<Scope<T>>, index: u64, parent_name: String) -> ScopeWrapper<T> {
+    pub fn new(mut scope: Box<Scope<T>>, index: u64, _path: String) -> ScopeWrapper<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
@@ -48,7 +46,7 @@ impl<T: Timestamp> ScopeWrapper<T> {
         assert!(!summary.iter().any(|x| x.len() as u64 != outputs));
 
         let mut result = ScopeWrapper {
-            name:       format!("{}::{}[{}]", parent_name, scope.name(), index),
+            name:       format!("{}[{}]", scope.name(), index),
             scope:      Some(scope),
             index:      index,
             inputs:     inputs,
@@ -82,7 +80,7 @@ impl<T: Timestamp> ScopeWrapper<T> {
     }
 
 
-    pub fn push_pointstamps(&mut self, external_progress: &Vec<CountMap<T>>) {
+    pub fn push_pointstamps(&mut self, external_progress: &[CountMap<T>]) {
 
         assert!(self.scope.is_some() || external_progress.iter().all(|x| x.len() == 0));
 
@@ -104,9 +102,9 @@ impl<T: Timestamp> ScopeWrapper<T> {
         }
     }
 
-    pub fn pull_pointstamps<A: FnMut(u64, T,i64)->()>(&mut self,
-                                                  pointstamp_messages: &mut ProgressVec<T>,
-                                                  pointstamp_internal: &mut ProgressVec<T>,
+    pub fn pull_pointstamps<A: FnMut(u64,T,i64)->()>(&mut self,
+                                                  pointstamp_messages: &mut CountMap<(u64, u64, T)>,
+                                                  pointstamp_internal: &mut CountMap<(u64, u64, T)>,
                                                   mut output_action:   A) -> bool {
 
         let active = {
@@ -124,7 +122,7 @@ impl<T: Timestamp> ScopeWrapper<T> {
            self.notify && // we don't track guarantees and capabilities for non-notify scopes. bug?
            self.guarantees.iter().all(|guarantee| guarantee.empty()) &&
            self.capabilities.iter().all(|capability| capability.empty()) {
-            //    println!("Shutting down {}", self.name());
+            //    println!("Shutting down {}", self.name);
                self.scope = None;
                self.name = format!("{}(tombstone)", self.name);
            }
@@ -134,21 +132,21 @@ impl<T: Timestamp> ScopeWrapper<T> {
             while let Some((time, delta)) = self.produced_messages[output].pop() {
                 for &target in self.edges[output].iter() {
                     match target {
-                        ScopeInput(tgt, tgt_in)   => { pointstamp_messages.push((tgt, tgt_in, time, delta)); },
+                        ScopeInput(tgt, tgt_in)   => { pointstamp_messages.update(&(tgt, tgt_in, time), delta); },
                         GraphOutput(graph_output) => { output_action(graph_output, time, delta); },
                     }
                 }
             }
 
             while let Some((time, delta)) = self.internal_progress[output as usize].pop() {
-                pointstamp_internal.push((self.index, output as u64, time, delta));
+                pointstamp_internal.update(&(self.index, output as u64, time), delta);
             }
         }
 
         // for each input: consumed messages
         for input in (0..self.inputs as usize) {
             while let Some((time, delta)) = self.consumed_messages[input as usize].pop() {
-                pointstamp_messages.push((self.index, input as u64, time, -delta));
+                pointstamp_messages.update(&(self.index, input as u64, time), -delta);
             }
         }
 

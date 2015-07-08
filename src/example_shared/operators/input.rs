@@ -42,7 +42,6 @@ impl<C: Communicator, T: Timestamp+Ord> InputExtensionTrait<C, T> for SubgraphBu
         };
 
         let copies = self.peers();
-        // println!("peers: {}", self.peers());
 
         let index = self.add_scope(InputScope {
             frontier: helper.frontier.clone(),
@@ -121,7 +120,6 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
 
 impl<T:Timestamp+Ord, D: Data> Drop for InputHelper<T, D> {
     fn drop(&mut self) {
-        // println!("dropping input");
         self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, self.now_at.clone()), -1, &mut (*self.progress.borrow_mut()));
     }
 }

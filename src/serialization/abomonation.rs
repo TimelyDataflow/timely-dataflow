@@ -1,17 +1,13 @@
 use serialization::Serializable;
 use abomonation::{Abomonation, encode, decode};
-use columnar::{Columnar, ColumnarStack};
+use columnar::Columnar;
 
-impl<T: Abomonation+Columnar+Clone> Serializable for T {
+impl<T: Abomonation+Columnar+Clone+Eq> Serializable for T {
     fn encode(typed: Self, bytes: &mut Vec<u8>) {
-        let mut slice = Vec::new();
-        slice.push(typed);
-        encode(&slice, bytes);
+        encode(&vec![typed], bytes);
     }
     fn decode(bytes: &mut [u8]) -> Result<Self, &mut [u8]> {
-        let result = if let Ok(result) = decode::<T>(bytes) {
-            Ok(result[0].clone())
-        } else { Err(()) };
+        let result = if let Ok(result) = decode::<T>(bytes) { Ok(result[0].clone()) } else { Err(()) };
         if let Ok(result) = result { Ok(result) } else { Err (bytes) }
     }
 }

@@ -15,10 +15,9 @@ pub struct PointstampCounter<T:Timestamp> {
 }
 
 impl<T:Timestamp> PointstampCounter<T> {
-    //#[inline(always)]
     pub fn update_target(&mut self, target: Target, time: &T, value: i64) {
         if let ScopeInput(scope, input) = target { self.target_counts[scope as usize][input as usize].update(time, value); }
-        else                                     { println!("lolwut?"); } // no graph outputs as pointstamps
+        else                                     { panic!("graph outputs should not appear as pointstamps"); }
     }
 
     pub fn update_source(&mut self, source: Source, time: &T, value: i64) {

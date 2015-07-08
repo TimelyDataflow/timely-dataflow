@@ -37,8 +37,8 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
 
 #[derive(Default, Debug, Clone)]
 pub struct MutableAntichain<T:Eq> {
-    pub occurrences:    CountMap<T>,    // occurrence count of each time
-    pub precedents:     Vec<(T, i64)>,  // counts number of distinct times in occurences strictly less than element
+    occurrences:    CountMap<T>,    // occurrence count of each time
+    precedents:     Vec<(T, i64)>,  // counts number of distinct times in occurences strictly less than element
     elements:       Vec<T>,         // the set of times with precedent count == 0
 }
 
@@ -73,10 +73,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
 
     #[inline]
     pub fn count(&self, time: &T) -> Option<i64> {
-        for &(ref key, val) in self.occurrences.elements().iter() {
-            if time.eq(key) { return Some(val); }
-        }
-        return None;
+        self.occurrences.elements().iter().filter(|x| time.eq(&x.0)).next().map(|i| i.1)
     }
 
     // TODO : Four different versions of basically the same code. Fix that!
@@ -113,6 +110,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
 
     #[inline]
     pub fn update_and<A: FnMut(&T, i64)->()>(&mut self, elem: &T, delta: i64, mut action: A) -> () {
+
         if delta != 0 {
             // self.test_size(100, "???");
             let new_value = self.occurrences.update(elem, delta);
@@ -168,14 +166,5 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
                 self.precedents.retain(|x| &x.0 != elem);
             }
         }
-
-        // TODO : Not actually an invariant violation if negative counts
-        // TODO : Negative counts are surprising, but not impossible
-        // if self.occurrences.len() > 0 && self.elements.len() == 0 {
-        //     println!("invariant messed?: {:?}", self);
-        // }
-
-        // debug_assert!(self.occurrences.len() == 0 || self.elements.len() > 0);
     }
-
 }

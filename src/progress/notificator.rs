@@ -42,13 +42,6 @@ impl<T: Timestamp> Notificator<T> {
     pub fn notify_at(&mut self, time: &T) {
         self.changes.update(time, 1);
         self.pending.update(time, 1);
-
-        // if !self.frontier.iter().any(|x| x.le(time)) {
-        // TODO : Technically you should be permitted to send and notify at the current notification
-        // TODO : but this would panic because we have already removed it from the frontier.
-        // TODO : A RAII capability for sending/notifying would be good, but the time is almost
-        // TODO : exactly that.
-        // }
     }
 
     pub fn pull_progress(&mut self, internal: &mut CountMap<T>) {
@@ -72,12 +65,6 @@ impl<T: Timestamp> Iterator for Notificator<T> {
             }
         }
 
-        // if self.available.len() == 0 {
-        //     println!("no notifications available:");
-        //     println!("  frontier: {:?}", self.frontier);
-        //     println!("  pending:  {:?}", self.pending);
-        // }
-
         // return an available notification, after cleaning up
         if let Some(time) = self.available.pop_front() {
             if let Some(delta) = self.pending.count(&time) {
@@ -85,7 +72,9 @@ impl<T: Timestamp> Iterator for Notificator<T> {
                 self.pending.update(&time, -delta);
                 Some((time, delta))
             }
-            else { None }
+            else {
+                panic!("failed to find available time in pending");
+            }
         }
         else { None }
     }

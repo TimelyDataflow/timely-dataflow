@@ -50,7 +50,7 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
 // Exchange uses a Box<Pushable> because it cannot know what type of pushable will return from the communicator.
 // The PactObserver will do some buffering for Exchange, cutting down on the virtual calls, but we still
 // would like to get the vectors it sends back, so that they can be re-used if possible.
-impl<T: Timestamp, D: Data+Columnar+Abomonation, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
+impl<T: Timestamp, D: Data+Columnar+Abomonation+Eq, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
     type Observer = ExchangeObserver<PactObserver<T, D, Box<Pushable<(T, Vec<D>)>>>, F>;
     type Pullable = Box<Pullable<(T, Vec<D>)>>;
     fn connect<C: Communicator>(self, communicator: &mut C) -> (Self::Observer, PactPullable<T, D, Self::Pullable>) {
