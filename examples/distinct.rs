@@ -10,7 +10,7 @@ use timely::example_shared::*;
 use timely::example_shared::operators::*;
 
 fn main() {
-    timely::initialize(std::env::args(), |||communicator| {
+    timely::initialize(std::env::args(), |communicator| {
 
         let mut root = GraphRoot::new(communicator);
 

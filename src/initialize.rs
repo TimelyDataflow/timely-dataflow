@@ -1,13 +1,14 @@
 use std::thread;
 
 use getopts;
+use std::sync::Arc;
 
 use communication::{Communicator, ThreadCommunicator, ProcessCommunicator};
 use communication::allocator::GenericCommunicator;
 use networking::{initialize_networking, initialize_networking_from_file};
 
 // initializes a timely dataflow computation with supplied arguments and per-communicator logic
-pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+'static, G: Fn()->F>(iter: I, func: G) {
+pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+Sync+'static>(iter: I, func: F) {
 
     let mut opts = getopts::Options::new();
     opts.optopt("w", "workers", "number of per-process worker threads", "NUM");
@@ -15,7 +16,7 @@ pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+'sta
     opts.optopt("n", "processes", "number of processes", "NUM");
     opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
 
-    if let Ok(matches) = opts.parse(iter.skip(1)) {
+    if let Ok(matches) = opts.parse(iter) {
         let workers: u64 = matches.opt_str("w").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
         let process: u64 = matches.opt_str("p").map(|x| x.parse().unwrap_or(0)).unwrap_or(0);
         let processes: u64 = matches.opt_str("n").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
@@ -36,11 +37,13 @@ pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+'sta
             vec![GenericCommunicator::Thread(ThreadCommunicator)]
         };
 
+        let logic = Arc::new(func);
+
         let mut guards = Vec::new();
         for communicator in communicators.into_iter() {
-            let logic = func();
+            let clone = logic.clone();
             guards.push(thread::Builder::new().name(format!("worker thread {}", communicator.index()))
-                                              .spawn(move || logic(communicator))
+                                              .spawn(move || (*clone)(communicator))
                                               .unwrap());
         }
 

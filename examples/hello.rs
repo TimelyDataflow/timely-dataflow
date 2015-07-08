@@ -7,7 +7,7 @@ use timely::communication::allocator::Communicator;
 fn main() {
 
     // initializes and runs a timely dataflow computation
-    timely::initialize(std::env::args(), |||communicator| {
+    timely::initialize(std::env::args(), |communicator| {
 
         // capture worker index to print
         let index = communicator.index();
