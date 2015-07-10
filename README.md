@@ -102,7 +102,7 @@ There are currently a few options for writing timely dataflow programs. Ideally 
 
 * [**Raw timely dataflow**](https://github.com/frankmcsherry/timely-dataflow/tree/master/src/example_shared/operators): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also including more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
 
-* [**Differential dataflow**](https://github.com/frankmcsherry/differential-dataflow): This is a higher-level language built on timely dataflow, including operators like `group_by`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
+* [**Differential dataflow**](https://github.com/frankmcsherry/differential-dataflow): A higher-level language built on timely dataflow, differential dataflow includes operators like `group_by`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
 
 There are also a few application built on timely dataflow, including [a streaming worst-case optimal join implementation](https://github.com/frankmcsherry/dataflow_join) and a [PageRank](https://github.com/frankmcsherry/pagerank) implementation, both of which should provide helpful examples of writing timely dataflow programs.
 
