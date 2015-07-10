@@ -1,7 +1,112 @@
 # Timely Dataflow #
 
-Timely dataflow is a low-latency cyclic dataflow computational model, introduced by [Naiad](http://research.microsoft.com/Naiad/). It's very neat, and if you are new to all of this I totally recommend the [Naiad paper](http://research.microsoft.com/pubs/201100/naiad_sosp2013.pdf).
+Timely dataflow is a low-latency cyclic dataflow computational model, introduced in the paper [Naiad: a timely datalow system](http://research.microsoft.com/pubs/201100/naiad_sosp2013.pdf).
+This project is an extended and more modular implementation of timely dataflow in Rust.
 
+# An example
+
+To use timely dataflow, add the following to the dependencies section of your project's `Cargo.toml` file:
+
+```
+[dependencies]
+timely="*"
+```
+
+This will bring in the `timely` crate from crates.io, which should allow you to start writing timely dataflow programs like this one (also available in [examples/hello.rs](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/hello.rs)):
+
+```rust
+extern crate timely;
+
+use timely::example_shared::*;
+use timely::example_shared::operators::*;
+
+fn main() {
+
+    // initializes and runs a timely dataflow computation
+    timely::initialize(std::env::args(), |communicator| {
+
+        // define a new computation using the communicator
+        let mut computation = GraphRoot::new(communicator);
+
+        // create a new input, and inspect its output
+        let mut input = computation.subcomputation(move |builder| {
+            let (input, stream) = builder.new_input();
+            stream.inspect(move |x| println!("hello {:?}", x));
+            input
+        });
+
+        // introduce data and watch!
+        for round in 0..10 {
+            input.send_at(round, round..round+1);
+            input.advance_to(round + 1);
+            computation.step();
+        }
+
+        // seal the input
+        input.close();
+
+        // finish off any remaining work
+        while computation.step() { }
+    });
+}
+```
+
+You can run this example from the root directory of the `timely-dataflow` repository by typing
+
+```
+% cargo run --example hello
+Running `target/debug/examples/hello`
+hello 0
+hello 1
+hello 2
+hello 3
+hello 4
+hello 5
+hello 6
+hello 7
+hello 8
+hello 9
+```
+
+# Execution
+
+A program like that written above can be run, and will by default use a single worker thread.
+
+To use multiple threads in a process, use the `-w` or `--workers` options followed by the number of threads you would like to use.
+
+To use multiple processes, you will need to use the `-h` or `--hostfile` option to specify a text file whose lines are `hostname:port` entries corresponding to the locations you plan on spawning the processes. You will need to use the `-n` or `--processes` argument to indicate how many processes you will spawn (a prefix of the host file), and each process must use the `-p` or `--process` argument to indicate their index out of this number.
+
+Said differently, you want a hostfile that looks like so,
+```
+% cat hostfile.txt
+host0:port
+host1:port
+host2:port
+host3:port
+...
+```
+and then to launch the processes like so:
+```
+host0% cargo run -w 2 -h hostfile.txt -n 4 -p 0
+host1% cargo run -w 2 -h hostfile.txt -n 4 -p 1
+host2% cargo run -w 2 -h hostfile.txt -n 4 -p 2
+host3% cargo run -w 2 -h hostfile.txt -n 4 -p 3
+```
+The number of workers should be the same for each process.
+
+# The ecosystem
+
+Timely dataflow is intended to support multiple levels of abstraction, from the lowest level manual dataflow assembly, to higher level "declarative" abstractions.
+
+There are currently a few options for writing timely dataflow programs. Ideally this set will expand with time, as interested people write their own layers (or build on those of others).
+
+* [**Raw timely dataflow**](https://github.com/frankmcsherry/timely-dataflow/tree/master/src/example_shared/operators): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also including more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
+
+* [**Differential dataflow**](https://github.com/frankmcsherry/differential-dataflow): This is a higher-level language built on timely dataflow, including operators like `group_by`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
+
+There are also a few application built on timely dataflow, including [a streaming worst-case optimal join implementation](https://github.com/frankmcsherry/dataflow_join) and a [PageRank](https://github.com/frankmcsherry/pagerank) implementation, both of which should provide helpful examples of writing timely dataflow programs.
+
+<!--
 This project is a flexible implementation of timely dataflow in [Rust](http://www.rust-lang.org). It's main feature is that it takes a new, much more modular approach to coordinating the timely dataflow computation. Naiad threw the entire dataflow graph in a big pile and, with enough restrictions and bits of tape, it all worked.
 
 Our approach here is to organize things a bit more. While a dataflow graph may have operators in it (where computation happens), these operators can be backed by other timely dataflow graphs. There is relatively little information a parent scope needs to have about its children, and by maintaining that abstraction, we make several new things possible:
@@ -140,4 +245,4 @@ fn main() {
 
 Each set of extension functions acts as a new "language" on the `Stream` types, except that they are fully composable, as the functions all render down to timely dataflow logic.
 
-These higher-level languages should compose, being built out of the same parts. Some examples of extensions to *even higher*-level languages are [differential dataflow](https://github.com/frankmcsherry/differential-dataflow) and a project to perform [relational joins in timely dataflow](https://github.com/frankmcsherry/dataflow_join).
+These higher-level languages should compose, being built out of the same parts. Some examples of extensions to *even higher*-level languages are [differential dataflow](https://github.com/frankmcsherry/differential-dataflow) and a project to perform [relational joins in timely dataflow](https://github.com/frankmcsherry/dataflow_join). -->

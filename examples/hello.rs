@@ -2,15 +2,11 @@ extern crate timely;
 
 use timely::example_shared::*;
 use timely::example_shared::operators::*;
-use timely::communication::allocator::Communicator;
 
 fn main() {
 
     // initializes and runs a timely dataflow computation
     timely::initialize(std::env::args(), |communicator| {
-
-        // capture worker index to print
-        let index = communicator.index();
 
         // define a new computation using the communicator
         let mut computation = GraphRoot::new(communicator);
@@ -18,8 +14,7 @@ fn main() {
         // create a new input, and inspect its output
         let mut input = computation.subcomputation(move |builder| {
             let (input, stream) = builder.new_input();
-            stream.inspect(move |x| println!("{}: hello {:?}", index, x));
-
+            stream.inspect(move |x| println!("hello {:?}", x));
             input
         });
 
