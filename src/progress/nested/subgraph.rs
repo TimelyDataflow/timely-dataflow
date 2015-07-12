@@ -112,7 +112,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         // TODO: Explain better.
         self.set_summaries();
 
-        self.push_pointstamps_to_outputs();
+        // self.push_pointstamps_to_outputs();
+        self.push_pointstamps_to_scopes();
 
         self.pointstamp_internal.clear();
 
@@ -263,15 +264,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             active = active || subactive;
         }
 
-        // Step 3: push progress to each graph output; important to do before exchanging poinstamps
-        self.push_pointstamps_to_outputs();
-        for output in (0..self.outputs) {
-            while let Some((time, val)) = self.pointstamps.output_pushed[output as usize].pop() {
-                self.external_capability[output as usize].update_and(&time.outer, val, |t,v| {
-                    internal_progress[output as usize].update(t, v);
-                });
-            }
-        }
+        // if self.pointstamp_messages.len() > 0 || self.pointstamp_internal.len() > 0 {
+        //     println!("{}: messages: {:?}", self.path, self.pointstamp_messages);
+        //     println!("{}: internal: {:?}", self.path, self.pointstamp_internal);
+        // }
+
 
         // Intermission: exchange pointstamp updates, and then move them to the pointstamps structure.
         self.progcaster.send_and_recv(&mut self.pointstamp_messages, &mut self.pointstamp_internal);
@@ -290,7 +287,21 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             }
         }
 
+        // Step 3: push progress to each graph output (important: be very clear about where this happens)
+        // self.push_pointstamps_to_outputs();
         self.push_pointstamps_to_scopes();
+
+        for output in (0..self.outputs) {
+            // let name = self.path.clone();
+            while let Some((time, val)) = self.pointstamps.output_pushed[output as usize].pop() {
+                // println!("{}: output: {}, time: {:?}, update: {}", name, output, time, val);
+                self.external_capability[output as usize].update_and(&time.outer, val, |t,v| {
+                    // println!("{}  done: {}, time: {:?}, update: {}", name, output, t, v);
+                    internal_progress[output as usize].update(t, v);
+                });
+            }
+        }
+
 
         // Step 4: push any progress to each target subgraph ...
         for (index, child) in self.children.iter_mut().enumerate() {
@@ -308,9 +319,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         // // if we want to see why we are active
         // if active { self.print_status(); }
 
-        // println!("returning with internal_progress: {:?}", internal_progress);
-        // println!("               messages_consumed: {:?}", messages_consumed);
-        // println!("               messages_produced: {:?}", messages_produced);
+        // if internal_progress.iter().any(|x| x.len() > 0)
+        // || messages_consumed.iter().any(|x| x.len() > 0)
+        // || messages_produced.iter().any(|x| x.len() > 0) {
+        //     println!("{}: returning with\ninternal_progress: {:?}\nmessages_consumed: {:?}\nmessages_produced: {:?}", self.path, internal_progress, messages_consumed, messages_produced);
+        // }
 
         return active;
     }
@@ -331,6 +344,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                                 self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
                             }
                         }
+                        if let GraphOutput(output) = target {
+                            for summary in antichain.elements.iter() {
+                                self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
+                            }
+                        }
                     }
                 }
             }
@@ -341,6 +359,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                         if let ScopeInput(scope, input) = target {
                             for summary in antichain.elements.iter() {
                                 self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
+                            }
+                        }
+                        if let GraphOutput(output) = target {
+                            for summary in antichain.elements.iter() {
+                                self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
                             }
                         }
                     }
@@ -356,34 +379,39 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                             self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
                         }
                     }
-                }
-            }
-        }
-    }
-
-    // pushes pointstamps to graph outputs; does not clear any of the pre-push counts
-    // TODO : Differentiate connectivity by scope/output to avoid "if let"  in core loop
-    fn push_pointstamps_to_outputs(&mut self) -> () {
-        for &((index, input, ref time), value) in self.pointstamp_messages.elements().iter() {
-            for &(target, ref antichain) in self.target_summaries[index as usize][input as usize].iter() {
-                if let GraphOutput(output) = target {
-                    for summary in antichain.elements.iter() {
-                        self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
-                    }
-                }
-            }
-        }
-
-        for &((index, output, ref time), value) in self.pointstamp_internal.elements().iter() {
-            for &(target, ref antichain) in self.source_summaries[index as usize][output as usize].iter() {
-                if let GraphOutput(output) = target {
-                    for summary in antichain.elements.iter() {
-                        self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
+                    if let GraphOutput(output) = target {
+                        for summary in antichain.elements.iter() {
+                            self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
+                        }
                     }
                 }
             }
         }
     }
+
+    // // pushes pointstamps to graph outputs; does not clear any of the pre-push counts
+    // // TODO : Differentiate connectivity by scope/output to avoid "if let"  in core loop
+    // fn push_pointstamps_to_outputs(&mut self) -> () {
+    //     for &((index, input, ref time), value) in self.pointstamp_messages.elements().iter() {
+    //         for &(target, ref antichain) in self.target_summaries[index as usize][input as usize].iter() {
+    //             if let GraphOutput(output) = target {
+    //                 for summary in antichain.elements.iter() {
+    //                     self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
+    //                 }
+    //             }
+    //         }
+    //     }
+    //
+    //     for &((index, output, ref time), value) in self.pointstamp_internal.elements().iter() {
+    //         for &(target, ref antichain) in self.source_summaries[index as usize][output as usize].iter() {
+    //             if let GraphOutput(output) = target {
+    //                 for summary in antichain.elements.iter() {
+    //                     self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     // Repeatedly takes edges (source, target), finds (target, source') connections,
     // expands based on (source', target') summaries.
