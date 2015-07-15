@@ -13,9 +13,7 @@ repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow"]
 license = "MIT"
 
-[dependencies.abomonation]
-git="https://github.com/frankmcsherry/abomonation"
-
 [dependencies]
+abomonation="*"
 byteorder="*"
 getopts="*"
