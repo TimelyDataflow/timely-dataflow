@@ -1,5 +1,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::mem;
+use std::default::Default;
 
 // TODO : Using an Observer requires a &mut reference, and should have the "No races!" property:
 // TODO : If you hold a &mut ref, no one else can call open/push/shut. Don't let go of that &mut!
@@ -77,8 +79,17 @@ impl<O: ?Sized + Observer> Observer for Box<O> {
 
 // an observer routing between many observers
 pub struct ExchangeObserver<O: Observer, H: Fn(&O::Data) -> u64> {
-    pub observers:  Vec<O>,
-    pub hash_func:  H,
+    observers:  Vec<O>,
+    hash_func:  H,
+}
+
+impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver<O, H> {
+    pub fn new(obs: Vec<O>, key: H) -> ExchangeObserver<O, H> {
+        ExchangeObserver {
+            observers: obs,
+            hash_func: key,
+        }
+    }
 }
 
 impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for ExchangeObserver<O, H> where O::Data : Clone {
@@ -94,4 +105,64 @@ impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for ExchangeObserver<O, H> wh
         self.observers[dst as usize].give(data);
     }
     #[inline(always)] fn shut(&mut self, time: &O::Time) -> () { for observer in self.observers.iter_mut() { observer.shut(time); } }
+}
+
+// an observer routing between 256 observers
+pub struct ExchangeObserver256<O: Observer, H: Fn(&O::Data) -> u64> {
+    observers:  Vec<O>,
+    hash_func:  H,
+    buffer:     Vec<O::Data>,
+    counts:     Vec<u8>,
+}
+
+impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver256<O, H> where O::Data: Clone+Default {
+    pub fn new(obs: Vec<O>, key: H) -> ExchangeObserver256<O, H> {
+        ExchangeObserver256 {
+            observers: obs,
+            hash_func: key,
+            buffer: vec![Default::default(); 256 * 8],  // should use mem::size_of::<O::Data>()
+            counts: vec![0; 256],
+        }
+    }
+}
+impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for ExchangeObserver256<O, H> where O::Data : Clone+Default {
+    type Time = O::Time;
+    type Data = O::Data;
+    #[inline(always)] fn open(&mut self, time: &O::Time) -> () {
+        for observer in self.observers.iter_mut() { observer.open(time); }
+    }
+    #[inline(always)] fn show(&mut self, data: &O::Data) -> () {
+        self.give((*data).clone());
+    }
+    #[inline(always)] fn give(&mut self, data:  O::Data) -> () {
+        self.push_to_buffer(data);
+    }
+    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () {
+        for index in 0..256 {
+            if self.counts[index] > 0 {
+                self.flush_buffer(index);
+            }
+        }
+
+        for observer in self.observers.iter_mut() { observer.shut(time); }
+    }
+}
+
+impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver256<O, H> where O::Data : Clone+Default {
+    fn push_to_buffer(&mut self, data: O::Data) {
+        let byte = (((self.hash_func)(&data)) % 256) as usize;
+        mem::replace(&mut self.buffer[8 * byte + self.counts[byte] as usize], data);
+        self.counts[byte] += 1;
+        if self.counts[byte] == 8 {
+            self.flush_buffer(byte);
+        }
+    }
+    fn flush_buffer(&mut self, buffer_index: usize) {
+        let dest_index = buffer_index % self.observers.len();
+        let dest = &mut self.observers[dest_index];
+        for index in 0..self.counts[buffer_index] as usize {
+            dest.give(mem::replace(&mut self.buffer[8 * buffer_index + index], Default::default()));
+        }
+        self.counts[buffer_index] = 0;
+    }
 }

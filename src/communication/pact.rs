@@ -55,14 +55,8 @@ impl<T: Timestamp, D: Data+Abomonation, F: Fn(&D)->u64+'static> ParallelizationC
     type Pullable = Box<Pullable<(T, Vec<D>)>>;
     fn connect<C: Communicator>(self, communicator: &mut C) -> (Self::Observer, PactPullable<T, D, Self::Pullable>) {
         let (senders, receiver) = communicator.new_channel();
-
         let shared = Rc::new(RefCell::new(Vec::new()));
-
-        let exchange_sender = ExchangeObserver {
-            observers:  senders.into_iter().map(|x| PactObserver::new(x, shared.clone())).collect(),
-            hash_func:  self.hash_func,
-        };
-
+        let exchange_sender = ExchangeObserver::new(senders.into_iter().map(|x| PactObserver::new(x, shared.clone())).collect(), self.hash_func);
         return (exchange_sender, PactPullable::new(receiver, shared));
     }
 }
