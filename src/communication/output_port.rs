@@ -5,14 +5,12 @@ use std::cell::RefCell;
 use progress::Timestamp;
 use communication::{Data, Observer};
 
-use drain::DrainExt;
-
 // half of output_port for observing data
 pub struct OutputPort<T: Timestamp, D: Data> {
     limit:  usize,
     buffer: Vec<D>,
     spare:  Vec<D>,
-    shared: Rc<RefCell<Vec<Box<FlattenerTrait<T, D>>>>>,
+    shared: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
 }
 
 impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
@@ -24,19 +22,14 @@ impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
         for observer in self.shared.borrow_mut().iter_mut() { observer.open(time); }
     }
 
-    #[inline(always)]
-    fn show(&mut self, data: &D) {
-        self.give(data.clone());
-    }
-
-    #[inline(always)] fn give(&mut self, data:  D) {
-        self.buffer.push(data);
-        if self.buffer.len() > self.limit { self.flush_buffer(); }
-    }
-
     #[inline(always)] fn shut(&mut self, time: &T) {
         if self.buffer.len() > 0 { self.flush_buffer(); }
         for observer in self.shared.borrow_mut().iter_mut() { observer.shut(time); }
+    }
+    #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
+        if self.buffer.len() > 0 { self.flush_buffer(); }
+        mem::swap(&mut self.buffer, data);
+        if self.buffer.len() >= self.limit { self.flush_buffer(); }
     }
 }
 
@@ -85,40 +78,16 @@ impl<T: Timestamp, D: Data> Clone for OutputPort<T, D> {
 
 // half of output_port used to add observers
 pub struct Registrar<T, D> {
-    shared: Rc<RefCell<Vec<Box<FlattenerTrait<T, D>>>>>
+    shared: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>
 }
 
 impl<T: Timestamp, D: Data> Registrar<T, D> {
     pub fn add_observer<O: Observer<Time=T, Data=D>+'static>(&self, observer: O) {
-        self.shared.borrow_mut().push(Box::new(Flattener::new(observer)));
+        self.shared.borrow_mut().push(Box::new(observer));
     }
 }
 
 // TODO : Implemented on behalf of example_static::Stream; check if truly needed.
 impl<T: Timestamp, D: Data> Clone for Registrar<T, D> {
     fn clone(&self) -> Registrar<T, D> { Registrar { shared: self.shared.clone() } }
-}
-
-// local type-erased Observer<T, D>
-trait FlattenerTrait<T, D> {
-    fn open(&mut self, time: &T);
-    fn give(&mut self, data: &mut Vec<D>);
-    fn shut(&mut self, time: &T);
-}
-
-// dual to BufferedObserver, flattens out buffers
-struct Flattener<O: Observer> {
-    observer:   O,
-}
-
-impl<O: Observer> Flattener<O> {
-    fn new(observer: O) -> Flattener<O> {
-        Flattener { observer: observer }
-    }
-}
-
-impl<O: Observer> FlattenerTrait<O::Time, O::Data> for Flattener<O> {
-    fn open(&mut self, time: &O::Time) { self.observer.open(time); }
-    fn give(&mut self, data: &mut Vec<O::Data>) { for datum in data.drain_temp() { self.observer.give(datum); }}
-    fn shut(&mut self, time: &O::Time) { self.observer.shut(time); }
 }

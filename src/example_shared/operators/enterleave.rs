@@ -78,9 +78,8 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<
     type Time = TOuter;
     type Data = TData;
     #[inline(always)] fn open(&mut self, time: &TOuter) -> () { self.targets.open(&Product::new(time.clone(), Default::default())); }
-    #[inline(always)] fn show(&mut self, data: &TData) { self.targets.show(data); }
-    #[inline(always)] fn give(&mut self, data:  TData) { self.targets.give(data); }
     #[inline(always)] fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&Product::new(time.clone(), Default::default())); }
+    #[inline(always)] fn give(&mut self, data: &mut Vec<TData>) { self.targets.give(data); }
 }
 
 
@@ -94,7 +93,6 @@ where TOuter: Timestamp, TInner: Timestamp, TData: Data {
     type Time = Product<TOuter, TInner>;
     type Data = TData;
     #[inline(always)] fn open(&mut self, time: &Product<TOuter, TInner>) { self.targets.open(&time.outer); }
-    #[inline(always)] fn show(&mut self, data: &TData) { self.targets.show(data); }
-    #[inline(always)] fn give(&mut self, data:  TData) { self.targets.give(data); }
     #[inline(always)] fn shut(&mut self, time: &Product<TOuter, TInner>) { self.targets.shut(&time.outer); }
+    #[inline(always)] fn give(&mut self, data: &mut Vec<TData>) { self.targets.give(data); }
 }

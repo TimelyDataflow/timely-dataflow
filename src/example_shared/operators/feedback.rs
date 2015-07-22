@@ -60,11 +60,20 @@ impl<T: Timestamp, D: Data> Observer for FeedbackObserver<T, D> {
     type Data = D;
     #[inline(always)] fn open(&mut self, time: &T) {
         self.active = time.le(&self.limit); // don't send if not less than limit
-        if self.active { self.targets.open(&self.summary.results_in(time)); }
+        if self.active {
+            self.targets.open(&self.summary.results_in(time));
+        }
     }
-    #[inline(always)] fn show(&mut self, data: &D) { if self.active { self.targets.show(data); } }
-    #[inline(always)] fn give(&mut self, data:  D) { if self.active { self.targets.give(data); } }
-    #[inline(always)] fn shut(&mut self, time: &T) { if self.active { self.targets.shut(&self.summary.results_in(time)); } }
+    #[inline(always)] fn shut(&mut self, time: &T) {
+        if self.active {
+            self.targets.shut(&self.summary.results_in(time));
+            }
+        }
+    #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
+        if self.active {
+            self.targets.give(data);
+        }
+    }
 }
 
 

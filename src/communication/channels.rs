@@ -22,12 +22,14 @@ impl<O: Observer> Observer for ObserverHelper<O> where O::Time : Timestamp {
     type Time = O::Time;
     type Data = O::Data;
     #[inline(always)] fn open(&mut self, time: &O::Time) { self.observer.open(time); }
-    #[inline(always)] fn show(&mut self, data: &O::Data) { self.count += 1; self.observer.show(data); }
-    #[inline(always)] fn give(&mut self, data:  O::Data) { self.count += 1; self.observer.give(data); }
     #[inline(always)] fn shut(&mut self, time: &O::Time) -> () {
         self.counts.borrow_mut().update(time, self.count);
         self.observer.shut(time);
         self.count = 0;
+    }
+    #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) {
+        self.count += data.len() as i64;
+        self.observer.give(data);
     }
 }
 

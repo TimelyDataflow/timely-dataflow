@@ -98,15 +98,19 @@ pub struct PactObserver<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> {
     pub pushable:   P,
     pub phantom:    PhantomData<T>,
     shared:         Rc<RefCell<Vec<Vec<D>>>>,
+    threshold:      usize,
+    current_time:   Option<T>,
 }
 
 impl<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T, D, P> {
     pub fn new(pushable: P, shared: Rc<RefCell<Vec<Vec<D>>>>) -> PactObserver<T, D, P> {
         PactObserver {
-            data:       Vec::new(),
+            data:       Vec::with_capacity(256),
             pushable:   pushable,
             phantom:    PhantomData,
             shared:     shared,
+            threshold:  256,
+            current_time: None,
         }
     }
 }
@@ -114,18 +118,39 @@ impl<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T, D, P> {
 impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PactObserver<T,D,P> {
     type Time = T;
     type Data = D;
-    #[inline(always)] fn open(&mut self,_time: &T) { }
-    #[inline(always)] fn show(&mut self, data: &D) { self.give(data.clone()); }
-    #[inline(always)] fn give(&mut self, data:  D) { self.data.push(data); }
-    #[inline(always)] fn shut(&mut self, time: &T) {
+    #[inline(always)] fn open(&mut self, time: &T) {
+        assert!(self.current_time.is_none());
+        self.current_time = Some(time.clone());
+    }
+    #[inline(always)] fn shut(&mut self,_time: &T) {
         if self.data.len() > 0 {
-            let empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
-            assert!(empty.len() == 0);
-            self.pushable.push((time.clone(), mem::replace(&mut self.data, empty)));
+            self.flush();
+        }
+        self.current_time = None;
+    }
+    #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
+        if self.data.len() > 0 { self.flush() }
+        mem::swap(&mut self.data, data);
+        if data.len() >= self.threshold {
+            self.flush();
         }
     }
 }
 
+impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T,D,P> {
+    fn flush(&mut self) {
+        if let Some(time) = self.current_time.clone() {
+            let mut empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
+            if empty.capacity() < 256 { empty = Vec::with_capacity(256); }
+            assert!(empty.len() == 0);
+            self.pushable.push((time, mem::replace(&mut self.data, empty)));
+        }
+        else {
+            panic!("PactObserver.flush() with unset current_time");
+        }
+
+    }
+}
 
 // broadcasts to all observers
 // TODO : This needs support from the progress tracking protocol;

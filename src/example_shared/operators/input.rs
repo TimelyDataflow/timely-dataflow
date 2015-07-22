@@ -99,9 +99,9 @@ pub struct InputHelper<T: Timestamp+Ord, D: Data> {
 impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
     pub fn send_at<I: Iterator<Item=D>>(&mut self, time: T, items: I) {
         if time >= self.now_at {
-            self.output.open(&Product::new(RootTimestamp, time));
-            for item in items { self.output.give(item); }
-            self.output.shut(&Product::new(RootTimestamp, time));
+            let new_time = Product::new(RootTimestamp, time);
+            let mut session = self.output.session(&new_time);
+            for item in items { session.give(item); }
         }
     }
 
