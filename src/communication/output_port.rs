@@ -42,8 +42,8 @@ impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
 
 impl<T: Timestamp, D: Data> OutputPort<T, D> {
     pub fn new() -> (OutputPort<T, D>, Registrar<T, D>) {
-        let limit = 16; // TODO : Used to be a parameter, but not clear that the user should
-                        // TODO : need to know the right value here. Think a bit harder...
+        let limit = 256; // TODO : Used to be a parameter, but not clear that the user should
+                         // TODO : need to know the right value here. Think a bit harder...
 
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = OutputPort {
