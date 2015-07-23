@@ -72,7 +72,8 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
         assert!(self.buffer.len() == 0);                // TODO : this is pretty hard core ...
         if let Some((time, mut data)) = self.pullable.pull() {
             if data.len() > 0 {
-                mem::swap(&mut data, &mut self.buffer);
+                mem::swap(&mut data, &mut self.buffer); // install buffer
+                assert!(data.capacity() == 256);
                 self.shared.borrow_mut().push(data);    // TODO : determine sane buffering strategy
                 Some((time, &mut self.buffer))
             } else { None }
@@ -81,7 +82,7 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
     fn new(pullable: P, shared: Rc<RefCell<Vec<Vec<D>>>>) -> PactPullable<T, D, P> {
         PactPullable {
             pullable: pullable,
-            buffer:   Vec::new(),
+            buffer:   Vec::with_capacity(256),
             shared:   shared,
             phantom:  PhantomData,
         }
@@ -107,19 +108,25 @@ impl<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T, D, P> {
 impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PactObserver<T,D,P> {
     type Time = T;
     type Data = D;
-    #[inline(always)] fn open(&mut self, time: &T) {
+    #[inline] fn open(&mut self, time: &T) {
         assert!(self.current_time.is_none());
         self.current_time = Some(time.clone());
     }
-    #[inline(always)] fn shut(&mut self,_time: &T) {
+    #[inline] fn shut(&mut self,_time: &T) {
         assert!(self.current_time.is_some());
         self.current_time = None;
+
+        // we've just been shut; if there are spare shared buffers, we might return some of them
+        if self.shared.borrow().len() > 0 {
+            let len = self.shared.borrow().len();
+            self.shared.borrow_mut().truncate(len / 2);
+        }
     }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
+    #[inline] fn give(&mut self, data: &mut Vec<D>) {
         if let Some(time) = self.current_time.clone() {
-            let mut empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
-            if empty.capacity() != 256 { empty = Vec::with_capacity(256); }
+            let empty = self.shared.borrow_mut().pop().unwrap_or_else(|| Vec::with_capacity(256));
             assert!(empty.len() == 0);
+            assert!(empty.capacity() == 256);
             self.pushable.push((time, mem::replace(data, empty)));
         }
         else {

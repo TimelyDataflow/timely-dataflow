@@ -15,15 +15,15 @@ impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
     type Time = T;
     type Data = D;
 
-    #[inline(always)]
+    #[inline]
     fn open(&mut self, time: &T) {
         for observer in self.shared.borrow_mut().iter_mut() { observer.flat_open(time); }
     }
 
-    #[inline(always)] fn shut(&mut self, time: &T) {
+    #[inline] fn shut(&mut self, time: &T) {
         for observer in self.shared.borrow_mut().iter_mut() { observer.flat_shut(time); }
     }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
+    #[inline] fn give(&mut self, data: &mut Vec<D>) {
         let mut observers = self.shared.borrow_mut();
         for index in (0..observers.len()) {
             if index < observers.len() - 1 {

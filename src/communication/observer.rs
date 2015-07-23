@@ -46,7 +46,7 @@ pub struct ObserverSession<'a, O:Observer+'a> {
 }
 
 impl<'a, O:Observer> Drop for ObserverSession<'a, O> {
-    #[inline(always)] fn drop(&mut self) {
+    #[inline] fn drop(&mut self) {
         if self.buffer.len() > 0 {
             self.observer.give(&mut self.buffer);
         }
@@ -69,18 +69,18 @@ impl<'a, O:Observer> ObserverSession<'a, O> {
 impl<O: Observer> Observer for Rc<RefCell<O>> {
     type Time = O::Time;
     type Data = O::Data;
-    #[inline(always)] fn open(&mut self, time: &O::Time) { self.borrow_mut().open(time); }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) { self.borrow_mut().shut(time); }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) { self.borrow_mut().give(data); }
+    #[inline] fn open(&mut self, time: &O::Time) { self.borrow_mut().open(time); }
+    #[inline] fn shut(&mut self, time: &O::Time) { self.borrow_mut().shut(time); }
+    #[inline] fn give(&mut self, data: &mut Vec<O::Data>) { self.borrow_mut().give(data); }
 }
 
 // blanket implementation for Box'd observers
 impl<O: ?Sized + Observer> Observer for Box<O> {
     type Time = O::Time;
     type Data = O::Data;
-    #[inline(always)] fn open(&mut self, time: &O::Time) { (**self).open(time); }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) { (**self).shut(time); }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) { (**self).give(data); }
+    #[inline] fn open(&mut self, time: &O::Time) { (**self).open(time); }
+    #[inline] fn shut(&mut self, time: &O::Time) { (**self).shut(time); }
+    #[inline] fn give(&mut self, data: &mut Vec<O::Data>) { (**self).give(data); }
 }
 
 // an observer routing between multiple observers
@@ -104,10 +104,10 @@ impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver<O, H> {
 impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for ExchangeObserver<O, H> {
     type Time = O::Time;
     type Data = O::Data;
-    #[inline(always)] fn open(&mut self, time: &O::Time) -> () {
+    #[inline] fn open(&mut self, time: &O::Time) -> () {
         for observer in self.observers.iter_mut() { observer.open(time); }
     }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () {
+    #[inline] fn shut(&mut self, time: &O::Time) -> () {
         for (index, mut buffer) in self.buffers.iter_mut().enumerate() {
             if buffer.len() > 0 {
                 self.observers[index].give(&mut buffer);
@@ -117,7 +117,7 @@ impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for ExchangeObserver<O, H> {
 
         for observer in self.observers.iter_mut() { observer.shut(time); }
     }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) {
+    #[inline] fn give(&mut self, data: &mut Vec<O::Data>) {
         // cheeky optimization for single thread
         if self.observers.len() == 1 {
             self.observers[0].give(data);
