@@ -10,8 +10,10 @@ pub struct OutputPort<T: Timestamp, D: Data> {
     limit:  usize,
     buffer: Vec<D>,
     spare:  Vec<D>,
-    shared: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
+    // shared: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>,
+    shared: Rc<RefCell<Vec<Box<Flattener<T, D>>>>>,
 }
+
 
 impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
     type Time = T;
@@ -19,12 +21,12 @@ impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
 
     #[inline(always)]
     fn open(&mut self, time: &T) {
-        for observer in self.shared.borrow_mut().iter_mut() { observer.open(time); }
+        for observer in self.shared.borrow_mut().iter_mut() { observer.flat_open(time); }
     }
 
     #[inline(always)] fn shut(&mut self, time: &T) {
         if self.buffer.len() > 0 { self.flush_buffer(); }
-        for observer in self.shared.borrow_mut().iter_mut() { observer.shut(time); }
+        for observer in self.shared.borrow_mut().iter_mut() { observer.flat_shut(time); }
     }
     #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
         if self.buffer.len() > 0 { self.flush_buffer(); }
@@ -57,7 +59,7 @@ impl<T: Timestamp, D: Data> OutputPort<T, D> {
             mem::swap(&mut self.buffer, &mut self.spare); // spare valid, buffer empty
             // TODO : was push_all, now extend. currently extend is slow. watch.
             if index < observers.len() - 1 { self.buffer.extend(self.spare.iter().cloned()); }
-            observers[index].give(&mut self.spare);
+            observers[index].flat_give(&mut self.spare);
             self.spare.clear();
         }
         self.buffer.clear(); // in case observers.len() == 0
@@ -78,7 +80,8 @@ impl<T: Timestamp, D: Data> Clone for OutputPort<T, D> {
 
 // half of output_port used to add observers
 pub struct Registrar<T, D> {
-    shared: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>
+    // shared: Rc<RefCell<Vec<Box<Observer<Time=T, Data=D>>>>>
+    shared: Rc<RefCell<Vec<Box<Flattener<T, D>>>>>
 }
 
 impl<T: Timestamp, D: Data> Registrar<T, D> {
@@ -90,4 +93,17 @@ impl<T: Timestamp, D: Data> Registrar<T, D> {
 // TODO : Implemented on behalf of example_static::Stream; check if truly needed.
 impl<T: Timestamp, D: Data> Clone for Registrar<T, D> {
     fn clone(&self) -> Registrar<T, D> { Registrar { shared: self.shared.clone() } }
+}
+
+// observer trait
+pub trait Flattener<T, D> {
+    fn flat_open(&mut self, time: &T);   // new punctuation, essentially ...
+    fn flat_shut(&mut self, time: &T);   // indicates that we are done for now.
+    fn flat_give(&mut self, data: &mut Vec<D>);
+}
+
+impl<O: Observer> Flattener<O::Time, O::Data> for O {
+    fn flat_open(&mut self, time: &O::Time) { self.open(time); }
+    fn flat_shut(&mut self, time: &O::Time) { self.shut(time); }
+    fn flat_give(&mut self, data: &mut Vec<O::Data>) { self.give(data); }
 }
