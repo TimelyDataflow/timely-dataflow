@@ -11,6 +11,7 @@ use progress::nested::product::Product;
 
 use communication::*;
 use communication::channels::ObserverHelper;
+use communication::observer::ObserverSession;
 
 use example_shared::stream::Stream;
 use example_shared::builder::*;
@@ -97,10 +98,13 @@ pub struct InputHelper<T: Timestamp+Ord, D: Data> {
 }
 
 impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
+    pub fn session(&mut self, time: T) -> ObserverSession<ObserverHelper<OutputPort<Product<RootTimestamp, T>, D>>> {
+        self.output.session(&Product::new(RootTimestamp, time))
+    }
+
     pub fn send_at<I: Iterator<Item=D>>(&mut self, time: T, items: I) {
         if time >= self.now_at {
-            let new_time = Product::new(RootTimestamp, time);
-            let mut session = self.output.session(&new_time);
+            let mut session = self.output.session(&Product::new(RootTimestamp, time));
             for item in items { session.give(item); }
         }
     }

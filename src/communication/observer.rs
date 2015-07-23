@@ -17,15 +17,15 @@ pub trait Observer {
 
 // extension trait for creating an RAII observer session from any observer
 pub trait ObserverSessionExt : Observer {
-    fn session<'a>(&'a mut self, time: &'a Self::Time) -> ObserverSession<'a, Self>;
+    fn session<'a>(&'a mut self, time: &Self::Time) -> ObserverSession<'a, Self>;
     fn give_at<I: Iterator<Item=Self::Data>>(&mut self, time: &Self::Time, iter: I);
     fn give_vector_at(&mut self, time: &Self::Time, data: &mut Vec<Self::Data>);
 }
 
-impl<O: Observer> ObserverSessionExt for O {
-    fn session<'a>(&'a mut self, time: &'a O::Time) -> ObserverSession<'a, O> {
+impl<O: Observer> ObserverSessionExt for O where O::Time: Clone {
+    fn session<'a>(&'a mut self, time: &O::Time) -> ObserverSession<'a, O> {
         self.open(time);
-        ObserverSession { buffer: Vec::with_capacity(256), observer: self, time: time }
+        ObserverSession { buffer: Vec::with_capacity(256), observer: self, time: (*time).clone() }
     }
     fn give_at<I: Iterator<Item=O::Data>>(&mut self, time: &O::Time, iter: I) {
         let mut session = self.session(time);
@@ -39,22 +39,22 @@ impl<O: Observer> ObserverSessionExt for O {
 }
 
 // Attempt at RAII for observers. Intended to prevent mis-sequencing of open/push/shut.
-pub struct ObserverSession<'a, O:Observer+'a> where O::Time: 'a {
+pub struct ObserverSession<'a, O:Observer+'a> {
     buffer:     Vec<O::Data>,
     observer:   &'a mut O,
-    time:       &'a O::Time,
+    time:       O::Time,
 }
 
-impl<'a, O:Observer> Drop for ObserverSession<'a, O> where O::Time: 'a {
+impl<'a, O:Observer> Drop for ObserverSession<'a, O> {
     #[inline(always)] fn drop(&mut self) {
         if self.buffer.len() > 0 {
             self.observer.give(&mut self.buffer);
         }
-        self.observer.shut(self.time);
+        self.observer.shut(&self.time);
     }
 }
 
-impl<'a, O:Observer> ObserverSession<'a, O> where O::Time: 'a {
+impl<'a, O:Observer> ObserverSession<'a, O> {
     #[inline(always)] pub fn give(&mut self, data:  O::Data) {
         self.buffer.push(data);
         if self.buffer.len() == self.buffer.capacity() {
