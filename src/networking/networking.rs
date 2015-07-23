@@ -339,7 +339,7 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<O
     let mut results: Vec<_> = (0..(addresses.len() - my_index as usize - 1)).map(|_| None).collect();
     let listener = try!(TcpListener::bind(&addresses[my_index as usize][..]));
 
-    println!("about to wait from {} to {}", my_index + 1, address.len());
+    println!("about to wait from {} to {}", my_index + 1, addresses.len());
     for _ in (my_index as usize + 1 .. addresses.len()) {
         println!("await: waiting {}", my_index);
         let mut stream = try!(listener.accept()).0;
