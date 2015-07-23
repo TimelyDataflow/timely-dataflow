@@ -312,7 +312,6 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<O
     let mut results: Vec<_> = (0..my_index).map(|_| None).collect();
     for index in (0..my_index) {
         let mut connected = false;
-        println!("start: waiting {}", index);
         while !connected {
             match TcpStream::connect(&addresses[index as usize][..]) {
                 Ok(mut stream) => {
@@ -327,10 +326,8 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<O
                 },
             }
         }
-        println!("start: connect {}", index);
     }
 
-    println!("start: returning");
     return Ok(results);
 }
 
@@ -339,15 +336,12 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<O
     let mut results: Vec<_> = (0..(addresses.len() - my_index as usize - 1)).map(|_| None).collect();
     let listener = try!(TcpListener::bind(&addresses[my_index as usize][..]));
 
-    println!("about to wait from {} to {}", my_index + 1, addresses.len());
     for _ in (my_index as usize + 1 .. addresses.len()) {
-        println!("await: waiting {}", my_index);
         let mut stream = try!(listener.accept()).0;
         let identifier = try!(stream.read_u64::<LittleEndian>()) as usize;
         results[identifier - my_index as usize - 1] = Some(stream);
         println!("worker {}:\tconnection from worker {}", my_index, identifier);
     }
 
-    println!("await: returning");
     return Ok(results);
 }

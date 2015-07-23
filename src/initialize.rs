@@ -1,11 +1,11 @@
 use std::thread;
-
+use std::io::BufRead;
 use getopts;
 use std::sync::Arc;
 
 use communication::{Communicator, ThreadCommunicator, ProcessCommunicator};
 use communication::allocator::GenericCommunicator;
-use networking::{initialize_networking, initialize_networking_from_file};
+use networking::initialize_networking;
 
 // initializes a timely dataflow computation with supplied arguments and per-communicator logic
 pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+Sync+'static>(iter: I, func: F) {
@@ -22,13 +22,15 @@ pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+Sync
         let processes: u64 = matches.opt_str("n").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
 
         let communicators = if processes > 1 {
-            if let Some(hosts) = matches.opt_str("h") {
-                initialize_networking_from_file(&hosts, process, workers).ok().expect("error initializing networking").into_iter().map(|x| GenericCommunicator::Binary(x)).collect()
+            let addresses: Vec<_> = if let Some(hosts) = matches.opt_str("h") {
+                let reader = ::std::io::BufReader::new(::std::fs::File::open(hosts).unwrap());
+                reader.lines().take(processes as usize).map(|x| x.unwrap()).collect()
             }
             else {
-                let addresses = (0..processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect();
-                initialize_networking(addresses, process, workers).ok().expect("error initializing networking").into_iter().map(|x| GenericCommunicator::Binary(x)).collect()
-            }
+                (0..processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect()
+            };
+            if addresses.len() != processes as usize { panic!("{} addresses found, for {} processes", addresses.len(), processes); }
+            initialize_networking(addresses, process, workers).ok().expect("error initializing networking").into_iter().map(|x| GenericCommunicator::Binary(x)).collect()
         }
         else if workers > 1 {
             ProcessCommunicator::new_vector(workers).into_iter().map(|x| GenericCommunicator::Process(x)).collect()
