@@ -59,6 +59,7 @@ impl<'a, O:Observer> ObserverSession<'a, O> where O::Time: 'a {
         self.buffer.push(data);
         if self.buffer.len() == self.buffer.capacity() {
             self.observer.give(&mut self.buffer);
+            self.buffer.clear();
         }
     }
 }
@@ -70,7 +71,7 @@ impl<O: Observer> Observer for Rc<RefCell<O>> {
     type Data = O::Data;
     #[inline(always)] fn open(&mut self, time: &O::Time) { self.borrow_mut().open(time); }
     #[inline(always)] fn shut(&mut self, time: &O::Time) { self.borrow_mut().shut(time); }
-    #[inline(always)] fn give(&mut self, data:  &mut Vec<O::Data>) { self.borrow_mut().give(data); }
+    #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) { self.borrow_mut().give(data); }
 }
 
 // blanket implementation for Box'd observers
@@ -82,7 +83,7 @@ impl<O: ?Sized + Observer> Observer for Box<O> {
     #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) { (**self).give(data); }
 }
 
-// an observer routing between 256 observers
+// an observer routing between multiple observers
 // TODO : Software write combining
 pub struct ExchangeObserver<O: Observer, H: Fn(&O::Data) -> u64> {
     observers:  Vec<O>,
@@ -100,87 +101,49 @@ impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver<O, H> {
         }
     }
 }
-impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for ExchangeObserver<O, H> where O::Data : Clone {
+impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for ExchangeObserver<O, H> {
     type Time = O::Time;
     type Data = O::Data;
     #[inline(always)] fn open(&mut self, time: &O::Time) -> () {
         for observer in self.observers.iter_mut() { observer.open(time); }
     }
     #[inline(always)] fn shut(&mut self, time: &O::Time) -> () {
-        for index in 0..self.observers.len() {
-            if self.buffers[index].len() > 0 {
-                self.observers[index].give(&mut self.buffers[index]);
+        for (index, mut buffer) in self.buffers.iter_mut().enumerate() {
+            if buffer.len() > 0 {
+                self.observers[index].give(&mut buffer);
+                buffer.clear();
             }
         }
 
         for observer in self.observers.iter_mut() { observer.shut(time); }
     }
     #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) {
-        for datum in data.drain_temp() {
-            self.push_to_buffer(datum);
+        // cheeky optimization for single thread
+        if self.observers.len() == 1 {
+            self.observers[0].give(data);
         }
-    }
-}
-
-impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver<O, H> {
-    fn push_to_buffer(&mut self, data: O::Data) {
-        let index = (((self.hash_func)(&data)) % self.observers.len() as u64) as usize;
-        self.buffers[index].push(data);
-        if self.buffers[index].len() >= 256 {
-            self.observers[index].give(&mut self.buffers[index]);
-        }
-    }
-}
-
-
-// an observer routing between 256 observers
-// TODO : Software write combining
-pub struct ExchangeObserver256<O: Observer, H: Fn(&O::Data) -> u64> {
-    observers:  Vec<O>,
-    hash_func:  H,
-    buffers:    Vec<Vec<O::Data>>,
-}
-
-impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver256<O, H> {
-    pub fn new(obs: Vec<O>, key: H) -> ExchangeObserver256<O, H> {
-        let mut buffers = vec![]; for _ in 0..256 { buffers.push(Vec::with_capacity(256)); }
-        ExchangeObserver256 {
-            observers: obs,
-            hash_func: key,
-            buffers: buffers,
-        }
-    }
-}
-impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for ExchangeObserver256<O, H> where O::Data : Clone {
-    type Time = O::Time;
-    type Data = O::Data;
-    #[inline(always)] fn open(&mut self, time: &O::Time) -> () {
-        for observer in self.observers.iter_mut() { observer.open(time); }
-    }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () {
-        let observers = self.observers.len();
-        for index in 0..256 {
-            if self.buffers[index].len() > 0 {
-                self.observers[index % observers].give(&mut self.buffers[index]);
+        // if the number of observers is a power of two, use a mask
+        else if (self.observers.len() & (self.observers.len() - 1)) == 0 {
+            let mask = (self.observers.len() - 1) as u64;
+            for datum in data.drain_temp() {
+                let index = (((self.hash_func)(&datum)) & mask) as usize;
+                self.buffers[index].push(datum);
+                if self.buffers[index].len() >= 256 {
+                    self.observers[index].give(&mut self.buffers[index]);
+                    self.buffers[index].clear();
+                }
             }
         }
-
-        for observer in self.observers.iter_mut() { observer.shut(time); }
-    }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) {
-        for datum in data.drain_temp() {
-            self.push_to_buffer(datum);
-        }
-    }
-}
-
-impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver256<O, H> {
-    fn push_to_buffer(&mut self, data: O::Data) {
-        let byte = (((self.hash_func)(&data)) % 256) as usize;
-        self.buffers[byte].push(data);
-        if self.buffers[byte].len() >= 256 {
-            let observers = self.observers.len();
-            self.observers[byte % observers].give(&mut self.buffers[byte]);
+        // as a last resort, use mod (%)
+        else {
+            for datum in data.drain_temp() {
+                let index = (((self.hash_func)(&datum)) % self.observers.len() as u64) as usize;
+                self.buffers[index].push(datum);
+                if self.buffers[index].len() >= 256 {
+                    self.observers[index].give(&mut self.buffers[index]);
+                    self.buffers[index].clear();
+                }
+            }
         }
     }
 }

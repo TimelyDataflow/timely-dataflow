@@ -9,15 +9,10 @@ use communication::Data;
 use communication::{Communicator, Pullable, Pushable, Observer};
 use communication::observer::ExchangeObserver;
 
-// use serialization::Serializable;
-// use columnar::Columnar;
 use abomonation::Abomonation;
 
-// A ParallelizationContract transforms the output of a Communicator, a (Vec<Pushable>, Pullable), to an (Observer, Pullable)
-// TODO : There is an asymmetry with the Observer/Pullable interface at the moment in that the Pullable
-// TODO : yields (and loses) vectors, which need to be continually allocated on the Observer side. It would
-// TODO : be better if there were a way to recycle them, perhaps by having the Pullable only show them,
-// TODO : or be a Pullable<(&T, &mut Vec<D>)>, or Pullable<(T, Iterator<D>)>, or who knows what...
+// A ParallelizationContract transforms the output of a Communicator, a (Vec<Pushable>, Pullable),
+// to an (Observer, Pullable).
 pub trait ParallelizationContract<T: Timestamp, D: Data> {
     type Observer: Observer<Time=T, Data=D>+'static;
     type Pullable: Pullable<(T, Vec<D>)>+'static;
@@ -94,22 +89,16 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
 }
 
 pub struct PactObserver<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> {
-    pub data:       Vec<D>,
     pub pushable:   P,
-    pub phantom:    PhantomData<T>,
     shared:         Rc<RefCell<Vec<Vec<D>>>>,
-    threshold:      usize,
     current_time:   Option<T>,
 }
 
 impl<T:Send, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T, D, P> {
     pub fn new(pushable: P, shared: Rc<RefCell<Vec<Vec<D>>>>) -> PactObserver<T, D, P> {
         PactObserver {
-            data:       Vec::with_capacity(256),
-            pushable:   pushable,
-            phantom:    PhantomData,
-            shared:     shared,
-            threshold:  256,
+            pushable: pushable,
+            shared: shared,
             current_time: None,
         }
     }
@@ -123,32 +112,19 @@ impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PactObse
         self.current_time = Some(time.clone());
     }
     #[inline(always)] fn shut(&mut self,_time: &T) {
-        if self.data.len() > 0 {
-            self.flush();
-        }
+        assert!(self.current_time.is_some());
         self.current_time = None;
     }
     #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
-        if self.data.len() > 0 { self.flush() }
-        mem::swap(&mut self.data, data);
-        if data.len() >= self.threshold {
-            self.flush();
-        }
-    }
-}
-
-impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> PactObserver<T,D,P> {
-    fn flush(&mut self) {
         if let Some(time) = self.current_time.clone() {
             let mut empty = self.shared.borrow_mut().pop().unwrap_or(Vec::new());
-            if empty.capacity() < 256 { empty = Vec::with_capacity(256); }
+            if empty.capacity() != 256 { empty = Vec::with_capacity(256); }
             assert!(empty.len() == 0);
-            self.pushable.push((time, mem::replace(&mut self.data, empty)));
+            self.pushable.push((time, mem::replace(data, empty)));
         }
         else {
-            panic!("PactObserver.flush() with unset current_time");
+            panic!("PactObserver: self.give() with unset self.current_time");
         }
-
     }
 }
 
