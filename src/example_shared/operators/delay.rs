@@ -11,12 +11,13 @@ use drain::DrainExt;
 
 pub trait DelayExt<G: GraphBuilder, D: Data> {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
+    fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
 }
 
 impl<G: GraphBuilder, D: Data> DelayExt<G, D> for Stream<G, D>
 where G::Timestamp: Hash {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
-        let _threshold = 256; // TODO : make more "streaming" by flushing
+
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, format!("Delay"), vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.pull() {
@@ -35,6 +36,37 @@ where G::Timestamp: Hash {
             while let Some((time, _count)) = notificator.next() {
                 if let Some(mut data) = elements.remove(&time) {
                     output.give_at(&time, data.drain_temp());
+                }
+            }
+        })
+    }
+
+    fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
+
+        let mut stash = Vec::new();
+        let mut elements = HashMap::new();
+        self.unary_notify(Pipeline, format!("Delay"), vec![], move |input, output, notificator| {
+            while let Some((time, data)) = input.pull() {
+                let mut new_time = func(&time);
+                if !(new_time >= time) {
+                    new_time = time;
+                }
+
+                let spare = if let Some(vec) = stash.pop() { vec } else { Vec::with_capacity(256) };
+                let data = ::std::mem::replace(data, spare);
+
+                elements.entry(new_time.clone())
+                        .or_insert_with(|| { notificator.notify_at(&new_time); Vec::new() })
+                        .push(data);
+            }
+
+            // for each available notification, send corresponding set
+            while let Some((time, _count)) = notificator.next() {
+                if let Some(mut datas) = elements.remove(&time) {
+                    for mut data in datas.drain_temp() {
+                        output.give_vector_at(&time, &mut data);
+                        stash.push(data);
+                    }
                 }
             }
         })
