@@ -25,7 +25,6 @@ impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
     }
     #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
         let mut observers = self.shared.borrow_mut();
-
         for index in (0..observers.len()) {
             if index < observers.len() - 1 {
                 // TODO : was push_all, but is now extend.
@@ -38,6 +37,7 @@ impl<T: Timestamp, D: Data> Observer for OutputPort<T, D> {
                 observers[index].flat_give(data);
             }
         }
+        data.clear();
     }
 }
 

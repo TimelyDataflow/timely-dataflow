@@ -69,11 +69,11 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
     // for example recycling any remaining elements and
     // pushing the buffer into self.shared.
     pub fn pull(&mut self) -> Option<(T, &mut Vec<D>)> {
+        assert!(self.buffer.len() == 0);                // TODO : this is pretty hard core ...
         if let Some((time, mut data)) = self.pullable.pull() {
             if data.len() > 0 {
                 mem::swap(&mut data, &mut self.buffer);
-                data.clear();                           // TODO : consider recycling data contents
-                // self.shared.borrow_mut().push(data); // TODO : determine sane buffering strategy
+                self.shared.borrow_mut().push(data);    // TODO : determine sane buffering strategy
                 Some((time, &mut self.buffer))
             } else { None }
         } else { None }
