@@ -25,7 +25,7 @@ pub trait ObserverSessionExt : Observer {
 impl<O: Observer> ObserverSessionExt for O where O::Time: Clone {
     fn session<'a>(&'a mut self, time: &O::Time) -> ObserverSession<'a, O> {
         self.open(time);
-        ObserverSession { buffer: Vec::with_capacity(2048), observer: self, time: (*time).clone() }
+        ObserverSession { buffer: Vec::with_capacity(4096), observer: self, time: (*time).clone() }
     }
     fn give_at<I: Iterator<Item=O::Data>>(&mut self, time: &O::Time, iter: I) {
         let mut session = self.session(time);
@@ -93,7 +93,7 @@ pub struct ExchangeObserver<O: Observer, H: Fn(&O::Data) -> u64> {
 
 impl<O: Observer, H: Fn(&O::Data) -> u64> ExchangeObserver<O, H> {
     pub fn new(obs: Vec<O>, key: H) -> ExchangeObserver<O, H> {
-        let mut buffers = vec![]; for _ in 0..obs.len() { buffers.push(Vec::with_capacity(2048)); }
+        let mut buffers = vec![]; for _ in 0..obs.len() { buffers.push(Vec::with_capacity(4096)); }
         ExchangeObserver {
             observers: obs,
             hash_func: key,
