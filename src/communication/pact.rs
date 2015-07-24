@@ -73,7 +73,7 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
         if let Some((time, mut data)) = self.pullable.pull() {
             if data.len() > 0 {
                 mem::swap(&mut data, &mut self.buffer); // install buffer
-                // if data.capacity() == 4096 {
+                // if data.capacity() == 8192 {
                 //     self.shared.borrow_mut().push(data);    // TODO : determine sane buffering strategy
                 // }
                 Some((time, &mut self.buffer))
@@ -83,7 +83,7 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
     fn new(pullable: P, shared: Rc<RefCell<Vec<Vec<D>>>>) -> PactPullable<T, D, P> {
         PactPullable {
             pullable: pullable,
-            buffer:   Vec::with_capacity(4096),
+            buffer:   Vec::with_capacity(8192),
             shared:   shared,
             phantom:  PhantomData,
         }
@@ -125,7 +125,7 @@ impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PactObse
     }
     #[inline] fn give(&mut self, data: &mut Vec<D>) {
         if let Some(time) = self.current_time.clone() {
-            let empty = self.shared.borrow_mut().pop().unwrap_or_else(|| Vec::with_capacity(4096));
+            let empty = self.shared.borrow_mut().pop().unwrap_or_else(|| Vec::with_capacity(8192));
             assert!(empty.len() == 0);
             self.pushable.push((time, mem::replace(data, empty)));
         }
