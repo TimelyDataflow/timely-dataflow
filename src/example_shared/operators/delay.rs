@@ -52,7 +52,7 @@ where G::Timestamp: Hash {
                     new_time = time;
                 }
 
-                let spare = if let Some(vec) = stash.pop() { vec } else { Vec::with_capacity(256) };
+                let spare = if let Some(vec) = stash.pop() { vec } else { Vec::with_capacity(1024) };
                 let data = ::std::mem::replace(data, spare);
 
                 elements.entry(new_time.clone())

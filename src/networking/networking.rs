@@ -85,7 +85,6 @@ struct BinaryReceiver<R: Read> {
 impl<R: Read> BinaryReceiver<R> {
     fn new(reader: R, channels: Receiver<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver<R> {
         BinaryReceiver {
-
             reader:     reader,
             buffer:     Vec::new(),
             double:     Vec::new(),

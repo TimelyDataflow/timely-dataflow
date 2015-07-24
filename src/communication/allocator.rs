@@ -215,9 +215,11 @@ impl<T: Serializable> BinaryPushable<T> {
 
 impl<T:Serializable+Data> Pushable<T> for BinaryPushable<T> {
     #[inline]
-    fn push(&mut self, data: T) {
+    // TODO : data gets dropped here
+    // TODO : bytes gets allocated here
+    fn push(&mut self, mut data: T) {
         let mut bytes = Vec::new();
-        <T as Serializable>::encode(data, &mut bytes);
+        <T as Serializable>::encode(&mut data, &mut bytes);
 
         let mut header = self.header;
         header.length = bytes.len() as u64;
@@ -232,14 +234,13 @@ struct BinaryPullable<T: Serializable> {
 }
 
 impl<T:Serializable+Data> Pullable<T> for BinaryPullable<T> {
+    // TODO : bytes gets dropped here
+    // TODO : data gets cloned here
     #[inline]
     fn pull(&mut self) -> Option<T> {
         if let Some(data) = self.inner.pull() { Some(data) }
         else if let Some(mut bytes) = self.receiver.try_recv().ok() {
-            if let Ok(result) = <T as Serializable>::decode(&mut bytes) {
-                Some (result)
-            }
-            else { None }
+            <T as Serializable>::decode(&mut bytes).map(|data| (*data).clone())
         }
         else { None }
     }
