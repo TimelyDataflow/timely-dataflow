@@ -3,12 +3,11 @@ use std::io::BufRead;
 use getopts;
 use std::sync::Arc;
 
-use communication::{Communicator, ThreadCommunicator, ProcessCommunicator};
-use communication::allocator::GenericCommunicator;
+use communicator::{Communicator, Thread, Process, Generic};
 use networking::initialize_networking;
 
 // initializes a timely dataflow computation with supplied arguments and per-communicator logic
-pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+Sync+'static>(iter: I, func: F) {
+pub fn initialize<I: Iterator<Item=String>, F: Fn(Generic)+Send+Sync+'static>(iter: I, func: F) {
 
     let mut opts = getopts::Options::new();
     opts.optopt("w", "workers", "number of per-process worker threads", "NUM");
@@ -30,13 +29,13 @@ pub fn initialize<I: Iterator<Item=String>, F: Fn(GenericCommunicator)+Send+Sync
                 (0..processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect()
             };
             if addresses.len() != processes as usize { panic!("{} addresses found, for {} processes", addresses.len(), processes); }
-            initialize_networking(addresses, process, workers).ok().expect("error initializing networking").into_iter().map(|x| GenericCommunicator::Binary(x)).collect()
+            initialize_networking(addresses, process, workers).ok().expect("error initializing networking").into_iter().map(|x| Generic::Binary(x)).collect()
         }
         else if workers > 1 {
-            ProcessCommunicator::new_vector(workers).into_iter().map(|x| GenericCommunicator::Process(x)).collect()
+            Process::new_vector(workers).into_iter().map(|x| Generic::Process(x)).collect()
         }
         else {
-            vec![GenericCommunicator::Thread(ThreadCommunicator)]
+            vec![Generic::Thread(Thread)]
         };
 
         let logic = Arc::new(func);

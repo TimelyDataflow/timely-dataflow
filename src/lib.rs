@@ -74,7 +74,8 @@ pub use initialize::initialize;
 pub mod networking;
 pub mod progress;
 pub mod example_shared;
-pub mod communication;
+pub mod communicator;
+pub mod observer;
 pub mod serialization;
 
 pub mod drain;

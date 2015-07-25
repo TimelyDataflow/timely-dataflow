@@ -3,7 +3,7 @@ extern crate timely;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use timely::communication::Data;
+use timely::communicator::Data;
 use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
 use timely::example_shared::*;

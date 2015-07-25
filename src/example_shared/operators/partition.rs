@@ -6,12 +6,14 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communication::*;
-use communication::pact::{Pipeline, PactPullable};
-use communication::channels::ObserverHelper;
+use communicator::Data;
+use communicator::pact::{ParallelizationContract, Pipeline};
+use communicator::Pullable;
+use communicator::pullable::Counter as PullableCounter;
+use observer::{Tee, Extensions};
+use observer::Counter as ObserverCounter;
 
 use example_shared::*;
-use example_shared::operators::unary::PullableHelper;
 
 use drain::DrainExt;
 
@@ -29,7 +31,7 @@ impl<G: GraphBuilder, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> PartitionE
         let mut targets = Vec::new();
         let mut registrars = Vec::new();
         for _ in 0..parts {
-            let (target, registrar) = OutputPort::<G::Timestamp,D2>::new();
+            let (target, registrar) = Tee::<G::Timestamp,D2>::new();
             targets.push(target);
             registrars.push(registrar);
         }
@@ -47,23 +49,23 @@ impl<G: GraphBuilder, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> PartitionE
     }
 }
 
-pub struct PartitionScope<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<(T, Vec<D>)>> {
-    input:   PullableHelper<T, D, P>,
-    outputs: Vec<ObserverHelper<OutputPort<T, D2>>>,
+pub struct PartitionScope<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> {
+    input:   PullableCounter<T, D, P>,
+    outputs: Vec<ObserverCounter<Tee<T, D2>>>,
     func:    F,
 }
 
-impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<(T, Vec<D>)>> PartitionScope<T, D, D2, F, P> {
-    pub fn new(input: PactPullable<T, D, P>, outputs: Vec<OutputPort<T, D2>>, func: F) -> PartitionScope<T, D, D2, F, P> {
+impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> PartitionScope<T, D, D2, F, P> {
+    pub fn new(input: P, outputs: Vec<Tee<T, D2>>, func: F) -> PartitionScope<T, D, D2, F, P> {
         PartitionScope {
-            input:      PullableHelper::new(input),
-            outputs:    outputs.into_iter().map(|x| ObserverHelper::new(x, Rc::new(RefCell::new(CountMap::new())))).collect(),
+            input:      PullableCounter::new(input),
+            outputs:    outputs.into_iter().map(|x| ObserverCounter::new(x, Rc::new(RefCell::new(CountMap::new())))).collect(),
             func:       func,
         }
     }
 }
 
-impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<(T, Vec<D>)>> Scope<T> for PartitionScope<T, D, D2, F, P> {
+impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> Scope<T> for PartitionScope<T, D, D2, F, P> {
     fn name(&self) -> String { format!("Partition") }
     fn inputs(&self) -> u64 { 1 }
     fn outputs(&self) -> u64 { self.outputs.len() as u64 }
@@ -78,7 +80,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<(T, Vec<D>
             // TODO : This results in small sends for many parts, as sessions does the buffering
             let mut sessions: Vec<_> = outputs.map(|x| x.session(&time)).collect();
 
-            for (part, datum) in data.drain_temp().map(&self.func) {
+            for (part, datum) in data.take().drain_temp().map(&self.func) {
                 sessions[part as usize].give(datum);
             }
         }

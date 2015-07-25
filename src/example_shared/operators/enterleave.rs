@@ -9,8 +9,8 @@ use progress::{Timestamp, CountMap};
 use progress::nested::subgraph::Source::{GraphInput, ScopeOutput};
 use progress::nested::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::nested::product::Product;
-use communication::*;
-use communication::channels::ObserverHelper;
+use communicator::{Data, Message};
+use observer::{Counter, Tee, Observer};
 
 use example_shared::*;
 use example_shared::operators::delay::*;
@@ -35,9 +35,9 @@ impl<T: Timestamp, G: GraphBuilder, D: Data>
 EnterSubgraphExt<G, T, D> for SubgraphBuilder<G, T> {
     fn enter(&self, stream: &Stream<G, D>) -> Stream<SubgraphBuilder<G, T>, D> {
 
-        let (targets, registrar) = OutputPort::<Product<G::Timestamp, T>, D>::new();
+        let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
-        let ingress = IngressNub { targets: ObserverHelper::new(targets, produced.clone()) };
+        let ingress = IngressNub { targets: Counter::new(targets, produced.clone()) };
 
         let scope_index = self.subgraph.borrow().index;
         let input_index = self.subgraph.borrow_mut().new_input(produced);
@@ -60,7 +60,7 @@ impl<G: GraphBuilder, D: Data, T: Timestamp> LeaveSubgraphExt<G, D> for Stream<S
         let builder = self.builder();
 
         let output_index = builder.subgraph.borrow_mut().new_output();
-        let (targets, registrar) = OutputPort::<G::Timestamp, D>::new();
+        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         self.connect_to(GraphOutput(output_index), EgressNub { targets: targets, phantom: PhantomData });
         let subgraph_index = builder.subgraph.borrow().index;
         Stream::new(ScopeOutput(subgraph_index, output_index),
@@ -71,7 +71,7 @@ impl<G: GraphBuilder, D: Data, T: Timestamp> LeaveSubgraphExt<G, D> for Stream<S
 
 
 pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
-    targets: ObserverHelper<OutputPort<Product<TOuter, TInner>, TData>>,
+    targets: Counter<Tee<Product<TOuter, TInner>, TData>>,
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<TOuter, TInner, TData> {
@@ -79,12 +79,12 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<
     type Data = TData;
     #[inline(always)] fn open(&mut self, time: &TOuter) -> () { self.targets.open(&Product::new(time.clone(), Default::default())); }
     #[inline(always)] fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&Product::new(time.clone(), Default::default())); }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<TData>) { self.targets.give(data); }
+    #[inline(always)] fn give(&mut self, data: &mut Message<TData>) { self.targets.give(data); }
 }
 
 
 pub struct EgressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
-    targets: OutputPort<TOuter, TData>,
+    targets: Tee<TOuter, TData>,
     phantom: PhantomData<TInner>,
 }
 
@@ -94,5 +94,5 @@ where TOuter: Timestamp, TInner: Timestamp, TData: Data {
     type Data = TData;
     #[inline(always)] fn open(&mut self, time: &Product<TOuter, TInner>) { self.targets.open(&time.outer); }
     #[inline(always)] fn shut(&mut self, time: &Product<TOuter, TInner>) { self.targets.shut(&time.outer); }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<TData>) { self.targets.give(data); }
+    #[inline(always)] fn give(&mut self, data: &mut Message<TData>) { self.targets.give(data); }
 }

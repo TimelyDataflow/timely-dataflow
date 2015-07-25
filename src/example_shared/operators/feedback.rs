@@ -8,27 +8,26 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communication::*;
-use communication::channels::ObserverHelper;
+use communicator::{Data, Message};
+use observer::{Observer, Counter, Tee};
 
 use example_shared::*;
-// use example_shared::operators::unary::UnaryStreamExt;
 
 pub trait FeedbackExt<G: GraphBuilder> {
     fn loop_variable<D:Data>(&self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
-        -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<G, D>);
+        -> (FeedbackHelper<Counter<FeedbackObserver<G::Timestamp, D>>>, Stream<G, D>);
 }
 
 impl<G: GraphBuilder> FeedbackExt<G> for G {
     fn loop_variable<D:Data>(&self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
-        -> (FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>, Stream<G, D>) {
+        -> (FeedbackHelper<Counter<FeedbackObserver<G::Timestamp, D>>>, Stream<G, D>) {
 
-        let (targets, registrar) = OutputPort::<G::Timestamp, D>::new();
+        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
         let consumed: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
 
-        let feedback_output = ObserverHelper::new(targets, produced.clone());
-        let feedback_input =  ObserverHelper::new(FeedbackObserver {
+        let feedback_output = Counter::new(targets, produced.clone());
+        let feedback_input =  Counter::new(FeedbackObserver {
             limit: limit, summary: summary, targets: feedback_output, active: false
         }, consumed.clone());
 
@@ -51,7 +50,7 @@ impl<G: GraphBuilder> FeedbackExt<G> for G {
 pub struct FeedbackObserver<T: Timestamp, D:Data> {
     limit:      T,
     summary:    T::Summary,
-    targets:    ObserverHelper<OutputPort<T, D>>,
+    targets:    Counter<Tee<T, D>>,
     active:     bool,
 }
 
@@ -67,9 +66,9 @@ impl<T: Timestamp, D: Data> Observer for FeedbackObserver<T, D> {
     #[inline(always)] fn shut(&mut self, time: &T) {
         if self.active {
             self.targets.shut(&self.summary.results_in(time));
-            }
         }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<D>) {
+    }
+    #[inline(always)] fn give(&mut self, data: &mut Message<D>) {
         if self.active {
             self.targets.give(data);
         }
@@ -78,11 +77,11 @@ impl<T: Timestamp, D: Data> Observer for FeedbackObserver<T, D> {
 
 
 pub trait FeedbackConnectExt<G: GraphBuilder, D: Data> {
-    fn connect_loop(&self, FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>);
+    fn connect_loop(&self, FeedbackHelper<Counter<FeedbackObserver<G::Timestamp, D>>>);
 }
 
 impl<G: GraphBuilder, D: Data> FeedbackConnectExt<G, D> for Stream<G, D> {
-    fn connect_loop(&self, helper: FeedbackHelper<ObserverHelper<FeedbackObserver<G::Timestamp, D>>>) {
+    fn connect_loop(&self, helper: FeedbackHelper<Counter<FeedbackObserver<G::Timestamp, D>>>) {
         self.connect_to(ScopeInput(helper.index, 0), helper.target);
     }
 

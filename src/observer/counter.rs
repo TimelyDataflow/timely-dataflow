@@ -1,24 +1,18 @@
-use std::fmt::Debug;
-use std::any::Any;
-
-use progress::Timestamp;
-use progress::count_map::CountMap;
-
-use communication::Observer;
-
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub trait Data : Clone+Send+Debug+Any { }
-impl<T: Clone+Send+Debug+Any> Data for T { }
+use progress::CountMap;
+use observer::Observer;
+use communicator::Message;
 
-pub struct ObserverHelper<O: Observer> {
+
+pub struct Counter<O: Observer> {
     observer:   O,
     counts:     Rc<RefCell<CountMap<O::Time>>>,
     count:      i64,
 }
 
-impl<O: Observer> Observer for ObserverHelper<O> where O::Time : Timestamp {
+impl<O: Observer> Observer for Counter<O> where O::Time : Eq+Clone+'static {
     type Time = O::Time;
     type Data = O::Data;
     #[inline(always)] fn open(&mut self, time: &O::Time) { self.observer.open(time); }
@@ -27,15 +21,15 @@ impl<O: Observer> Observer for ObserverHelper<O> where O::Time : Timestamp {
         self.observer.shut(time);
         self.count = 0;
     }
-    #[inline(always)] fn give(&mut self, data: &mut Vec<O::Data>) {
+    #[inline(always)] fn give(&mut self, data: &mut Message<O::Data>) {
         self.count += data.len() as i64;
         self.observer.give(data);
     }
 }
 
-impl<O: Observer> ObserverHelper<O> where O::Time : Eq+Clone+'static {
-    pub fn new(observer: O, counts: Rc<RefCell<CountMap<O::Time>>>) -> ObserverHelper<O> {
-        ObserverHelper {
+impl<O: Observer> Counter<O> where O::Time : Eq+Clone+'static {
+    pub fn new(observer: O, counts: Rc<RefCell<CountMap<O::Time>>>) -> Counter<O> {
+        Counter {
             observer:   observer,
             counts:     counts,
             count:      0,

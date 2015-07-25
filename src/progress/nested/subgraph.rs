@@ -5,7 +5,7 @@ use std::mem;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use communication::Communicator;
+use communicator::Communicator;
 
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, PathSummary, Scope};

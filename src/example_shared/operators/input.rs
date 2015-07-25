@@ -9,9 +9,8 @@ use progress::count_map::CountMap;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
 
-use communication::*;
-use communication::channels::ObserverHelper;
-use communication::observer::ObserverSession;
+use communicator::{Communicator, Data};
+use observer::{Tee, Counter, Session, Extensions};
 
 use example_shared::stream::Stream;
 use example_shared::builder::*;
@@ -31,13 +30,13 @@ pub trait InputExtensionTrait<C: Communicator, T: Timestamp+Ord> {
 impl<C: Communicator, T: Timestamp+Ord> InputExtensionTrait<C, T> for SubgraphBuilder<GraphRoot<C>, T> {
     fn new_input<D:Data>(&self) -> (InputHelper<T, D>, Stream<SubgraphBuilder<GraphRoot<C>, T>, D>) {
 
-        let (output, registrar) = OutputPort::<Product<RootTimestamp, T>, D>::new();
+        let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
         let helper = InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
-            output:   ObserverHelper::new(output, produced.clone()),
+            output:   Counter::new(output, produced.clone()),
             now_at:   Default::default(),
             closed:   false,
         };
@@ -91,14 +90,14 @@ impl<T:Timestamp+Ord> Scope<Product<RootTimestamp, T>> for InputScope<T> {
 pub struct InputHelper<T: Timestamp+Ord, D: Data> {
     frontier:   Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
     progress:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
-    output:     ObserverHelper<OutputPort<Product<RootTimestamp, T>, D>>,
+    output:     Counter<Tee<Product<RootTimestamp, T>, D>>,
 
     now_at:     T,
     closed:     bool,
 }
 
 impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
-    pub fn session(&mut self, time: T) -> ObserverSession<ObserverHelper<OutputPort<Product<RootTimestamp, T>, D>>> {
+    pub fn session(&mut self, time: T) -> Session<Counter<Tee<Product<RootTimestamp, T>, D>>> {
         self.output.session(&Product::new(RootTimestamp, time))
     }
 

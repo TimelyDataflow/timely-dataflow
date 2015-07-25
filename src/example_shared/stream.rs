@@ -2,15 +2,13 @@ use example_shared::builder::GraphBuilder;
 
 use progress::Timestamp;
 use progress::nested::subgraph::{Source, Target};
-
-use communication::Observer;
-use communication::Data;
-use communication::output_port::Registrar;
+use communicator::Data;
+use observer::{Observer, TeeHelper};
 
 #[derive(Clone)]
 pub struct Stream<G: GraphBuilder, D:Data> {
     pub name:   Source,                     // used to name the source in the host graph.
-    ports:      Registrar<G::Timestamp, D>, // used to register interest in the output.
+    ports:      TeeHelper<G::Timestamp, D>, // used to register interest in the output.
     builder:    G,
 }
 
@@ -22,7 +20,7 @@ impl<G: GraphBuilder, D:Data> Stream<G, D> {
         self.ports.add_observer(observer);
     }
 
-    pub fn new(source: Source, output: Registrar<G::Timestamp, D>, builder: G) -> Self {
+    pub fn new(source: Source, output: TeeHelper<G::Timestamp, D>, builder: G) -> Self {
         Stream { name: source, ports: output, builder: builder }
     }
 

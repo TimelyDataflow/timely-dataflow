@@ -1,6 +1,6 @@
 extern crate timely;
 
-use timely::communication::pact::Pipeline;
+use timely::communicator::pact::Pipeline;
 use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
 use timely::example_shared::*;

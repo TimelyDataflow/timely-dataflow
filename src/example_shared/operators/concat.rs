@@ -6,8 +6,8 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communication::*;
-use communication::channels::ObserverHelper;
+use communicator::Data;
+use observer::{Counter, Tee};
 
 use example_shared::*;
 
@@ -19,7 +19,7 @@ pub trait ConcatExt<G: GraphBuilder, D: Data> {
 impl<G: GraphBuilder, D: Data> ConcatExt<G, D> for Stream<G, D> {
     fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
 
-        let (outputs, receiver) = OutputPort::<G::Timestamp, D>::new();
+        let (outputs, receiver) = Tee::<G::Timestamp, D>::new();
         let consumed = vec![Rc::new(RefCell::new(CountMap::new())),
                             Rc::new(RefCell::new(CountMap::new()))];
 
@@ -27,8 +27,8 @@ impl<G: GraphBuilder, D: Data> ConcatExt<G, D> for Stream<G, D> {
 
         let index = builder.add_scope(ConcatScope { consumed: consumed.clone() });
 
-        self.connect_to(ScopeInput(index, 0), ObserverHelper::new(outputs.clone(), consumed[0].clone()));
-        other.connect_to(ScopeInput(index, 1), ObserverHelper::new(outputs, consumed[1].clone()));
+        self.connect_to(ScopeInput(index, 0), Counter::new(outputs.clone(), consumed[0].clone()));
+        other.connect_to(ScopeInput(index, 1), Counter::new(outputs, consumed[1].clone()));
 
         Stream::new(ScopeOutput(index, 0), receiver, builder)
     }
@@ -43,7 +43,7 @@ impl<G: GraphBuilder, D: Data> ConcatVecExt<G, D> for G {
 
         if sources.len() == 0 { panic!("must pass at least one stream to concat"); }
 
-        let (outputs, registrar) = OutputPort::<G::Timestamp, D>::new();
+        let (outputs, registrar) = Tee::<G::Timestamp, D>::new();
         let mut consumed = Vec::new();
         for _ in 0..sources.len() { consumed.push(Rc::new(RefCell::new(CountMap::new()))); }
 
@@ -51,7 +51,7 @@ impl<G: GraphBuilder, D: Data> ConcatVecExt<G, D> for G {
 
         for id in 0..sources.len() {
             sources[id].connect_to(ScopeInput(index, id as u64),
-                                   ObserverHelper::new(outputs.clone(), consumed[id].clone()));
+                                   Counter::new(outputs.clone(), consumed[id].clone()));
         }
 
         Stream::new(ScopeOutput(index, 0), registrar, self.clone())

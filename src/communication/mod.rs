@@ -1,17 +1,16 @@
-pub use communication::channels::Data;
+use std::fmt::Debug;
+use std::any::Any;
+
 pub use communication::allocator::ThreadCommunicator;
 pub use communication::allocator::ProcessCommunicator;
 pub use communication::allocator::BinaryCommunicator;
 pub use communication::pact::ParallelizationContract;
-pub use communication::observer::{Observer, ObserverSessionExt};
 pub use communication::allocator::{Communicator};
 pub use communication::pushpull::{Pushable, Pullable};
 
-pub use communication::output_port::{OutputPort, Registrar};
-
-pub mod channels;
 pub mod allocator;
 pub mod pact;
-pub mod observer;
 pub mod pushpull;
-pub mod output_port;
+
+pub trait Data : Clone+Send+Debug+Any { }
+impl<T: Clone+Send+Debug+Any> Data for T { }

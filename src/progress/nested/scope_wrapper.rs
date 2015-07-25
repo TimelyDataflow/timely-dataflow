@@ -1,6 +1,6 @@
 use std::default::Default;
 
-use communication::Communicator;
+use communicator::Communicator;
 
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, Scope};

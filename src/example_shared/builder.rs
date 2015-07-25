@@ -1,14 +1,15 @@
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::any::Any;
 
+use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Scope, Subgraph};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use progress::nested::scope_wrapper::ScopeWrapper;
-use communication::{Pushable, Pullable, Communicator, Data};
+use communicator::{Communicator, Data};
+use communicator::pullable::Pullable;
+use observer::BoxedObserver;
 use serialization::Serializable;
-use progress::timestamp::RootTimestamp;
 
 // use columnar::Columnar;
 
@@ -113,7 +114,7 @@ impl<C: Communicator> GraphBuilder for GraphRoot<C> {
 impl<C: Communicator> Communicator for GraphRoot<C> {
     fn index(&self) -> u64 { self.communicator.borrow().index() }
     fn peers(&self) -> u64 { self.communicator.borrow().peers() }
-    fn new_channel<T:Send+Serializable+Any+Data>(&mut self) -> (Vec<Box<Pushable<T>>>, Box<Pullable<T>>) {
+    fn new_channel<T:Data+Serializable, D:Data+Serializable>(&mut self) -> (Vec<BoxedObserver<T, D>>, Box<Pullable<T, D>>) {
         self.communicator.borrow_mut().new_channel()
     }
 }
@@ -161,7 +162,7 @@ impl<G: GraphBuilder, T: Timestamp> GraphBuilder for SubgraphBuilder<G, T> {
 impl<G: GraphBuilder, T: Timestamp> Communicator for SubgraphBuilder<G, T> {
     fn index(&self) -> u64 { self.parent.index() }
     fn peers(&self) -> u64 { self.parent.peers() }
-    fn new_channel<D:Send+Serializable+Any+Data>(&mut self) -> (Vec<Box<Pushable<D>>>, Box<Pullable<D>>) {
+    fn new_channel<T2:Data+Serializable, D:Data+Serializable>(&mut self) -> (Vec<BoxedObserver<T2, D>>, Box<Pullable<T2, D>>) {
         self.parent.new_channel()
     }
 }

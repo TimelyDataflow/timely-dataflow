@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use communication::*;
-use communication::pact::Pipeline;
+use communicator::Data;
+use communicator::pact::Pipeline;
 use serialization::Serializable;
+use observer::Extensions;
 
 use example_shared::*;
 use example_shared::operators::unary::UnaryNotifyExt;
@@ -21,10 +22,9 @@ where G::Timestamp: Hash {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, format!("Queue"), vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.pull() {
-                let set = elements.entry(time).or_insert(Vec::new());
-                for datum in data.drain_temp() { set.push(datum); }
-
-                notificator.notify_at(&time);
+                notificator.notify_at(time);
+                let set = elements.entry((*time).clone()).or_insert(Vec::new());
+                for datum in data.take().drain_temp() { set.push(datum); }
             }
 
             while let Some((time, _count)) = notificator.next() {

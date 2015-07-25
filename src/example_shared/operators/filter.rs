@@ -1,5 +1,6 @@
-use communication::*;
-use communication::pact::Pipeline;
+use communicator::Data;
+use communicator::pact::Pipeline;
+use observer::Extensions;
 
 use example_shared::*;
 use example_shared::operators::unary::UnaryStreamExt;
@@ -12,9 +13,9 @@ impl<G: GraphBuilder, D: Data> FilterExt<D> for Stream<G, D> {
     fn filter<L: Fn(&D)->bool+'static>(&self, logic: L) -> Stream<G, D> {
         self.unary_stream(Pipeline, format!("Filter"), move |input, output| {
             while let Some((time, data)) = input.pull() {
-                data.retain(|x| logic(x));
-                if data.len() > 0 {
-                    output.give_vector_at(&time, data);
+                data.take().retain(|x| logic(x));
+                if data.look().len() > 0 {
+                    output.give_message_at(time, data);
                 }
             }
         })

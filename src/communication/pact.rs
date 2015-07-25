@@ -6,8 +6,9 @@ use std::collections::VecDeque;
 
 use progress::Timestamp;
 use communication::Data;
-use communication::{Communicator, Pullable, Pushable, Observer};
-use communication::observer::ExchangeObserver;
+use communication::{Communicator, Pullable, Pushable};
+use observer::Observer;
+use observer::exchange::Exchange as ExchangeObserver;
 
 use abomonation::Abomonation;
 
@@ -22,8 +23,8 @@ pub trait ParallelizationContract<T: Timestamp, D: Data> {
 // direct connection
 pub struct Pipeline;
 impl<T: Timestamp, D: Data> ParallelizationContract<T, D> for Pipeline {
-    type Observer = PactObserver<T, D, Rc<RefCell<VecDeque<(T, Vec<D>)>>>>;
-    type Pullable = Rc<RefCell<VecDeque<(T, Vec<D>)>>>;
+    type Observer = communicator::thread::Observer<T, D>;
+    type Pullable = communicator::thread::Pullable<T, D>;
     fn connect<C: Communicator>(self,_communicator: &mut C) -> (Self::Observer, PactPullable<T, D, Self::Pullable>) {
         let shared1 = Rc::new(RefCell::new(VecDeque::new()));
         let shared2 = Rc::new(RefCell::new(Vec::new()));
@@ -73,7 +74,7 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
         if let Some((time, mut data)) = self.pullable.pull() {
             if data.len() > 0 {
                 mem::swap(&mut data, &mut self.buffer); // install buffer
-                if data.capacity() == 8192 {
+                if data.capacity() == 4096 {
                     self.shared.borrow_mut().push(data);    // TODO : determine sane buffering strategy
                 }
                 Some((time, &mut self.buffer))
@@ -83,7 +84,7 @@ impl<T:Send, D: Send+Clone, P: Pullable<(T, Vec<D>)>> PactPullable<T, D, P> {
     fn new(pullable: P, shared: Rc<RefCell<Vec<Vec<D>>>>) -> PactPullable<T, D, P> {
         PactPullable {
             pullable: pullable,
-            buffer:   Vec::with_capacity(8192),
+            buffer:   Vec::with_capacity(4096),
             shared:   shared,
             phantom:  PhantomData,
         }
@@ -125,7 +126,7 @@ impl<T:Send+Clone, D:Send+Clone, P: Pushable<(T, Vec<D>)>> Observer for PactObse
     }
     #[inline] fn give(&mut self, data: &mut Vec<D>) {
         if let Some(time) = self.current_time.clone() {
-            let empty = self.shared.borrow_mut().pop().unwrap_or_else(|| Vec::with_capacity(8192));
+            let empty = self.shared.borrow_mut().pop().unwrap_or_else(|| Vec::with_capacity(4096));
             assert!(empty.len() == 0);
             self.pushable.push((time, mem::replace(data, empty)));
         }

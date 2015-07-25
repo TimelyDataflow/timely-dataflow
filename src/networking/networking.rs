@@ -4,7 +4,6 @@ use std::thread::sleep_ms;
 use std::io::{Read, Write, Result, BufRead, BufReader, BufWriter};
 use std::fs::File;
 
-
 use std::net::{TcpListener, TcpStream};
 use std::mem::size_of;
 
@@ -16,7 +15,7 @@ use std::mem;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use communication::{Pushable, BinaryCommunicator, ProcessCommunicator};
+use communicator::{Binary, Process};
 use drain::DrainExt;
 
 // TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.
@@ -225,7 +224,7 @@ impl<T:Send> Switchboard<T> {
     }
 }
 
-pub fn initialize_networking_from_file(filename: &str, my_index: u64, workers: u64) -> Result<Vec<BinaryCommunicator>> {
+pub fn initialize_networking_from_file(filename: &str, my_index: u64, workers: u64) -> Result<Vec<Binary>> {
 
     let reader = BufReader::new(try!(File::open(filename)));
     let mut addresses = Vec::new();
@@ -237,7 +236,7 @@ pub fn initialize_networking_from_file(filename: &str, my_index: u64, workers: u
     initialize_networking(addresses, my_index, workers)
 }
 
-pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> Result<Vec<BinaryCommunicator>> {
+pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> Result<Vec<Binary>> {
 
     let processes = addresses.len() as u64;
     let hosts1 = Arc::new(addresses);
@@ -287,11 +286,11 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
         }
     }
 
-    let proc_comms = ProcessCommunicator::new_vector(workers);
+    let proc_comms = Process::new_vector(workers);
 
     let mut results = Vec::new();
     for (index, proc_comm) in proc_comms.into_iter().enumerate() {
-        results.push(BinaryCommunicator {
+        results.push(Binary {
             inner:          proc_comm,
             index:          my_index * workers + index as u64,
             peers:          workers * processes,
