@@ -2,9 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::CountMap;
-use observer::Observer;
-use communicator::Message;
-
+use communication::{Message, Observer};
 
 pub struct Counter<O: Observer> {
     observer:   O,

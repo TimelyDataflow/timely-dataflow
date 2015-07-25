@@ -1,5 +1,4 @@
-use observer::Observer;
-use communicator::Message;
+use communication::{Message, Observer};
 
 // Attempt at RAII for observers. Intended to prevent mis-sequencing of open/push/shut.
 pub struct Session<'a, O:Observer+'a> {

@@ -1,10 +1,10 @@
-use communicator::Data;
-use communicator::pact::Pipeline;
+use communication::Data;
+use communication::pact::Pipeline;
 
 use example_shared::*;
 use example_shared::operators::unary::UnaryStreamExt;
 
-use observer::Extensions;
+use communication::observer::Extensions;
 
 pub trait InspectExt<D: Data> {
     fn inspect<F: FnMut(&D)+'static>(&self, func: F) -> Self;

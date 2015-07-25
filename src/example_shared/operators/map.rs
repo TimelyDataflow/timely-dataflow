@@ -1,6 +1,6 @@
-use communicator::Data;
-use communicator::pact::Pipeline;
-use observer::Extensions;
+use communication::Data;
+use communication::pact::Pipeline;
+use communication::observer::Extensions;
 
 use example_shared::*;
 use example_shared::operators::unary::UnaryStreamExt;

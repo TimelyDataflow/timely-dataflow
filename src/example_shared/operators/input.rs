@@ -9,8 +9,8 @@ use progress::count_map::CountMap;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
 
-use communicator::{Communicator, Data};
-use observer::{Tee, Counter, Session, Extensions};
+use communication::{Communicator, Data};
+use communication::observer::{Tee, Counter, Session, Extensions};
 
 use example_shared::stream::Stream;
 use example_shared::builder::*;

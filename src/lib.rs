@@ -69,14 +69,13 @@ extern crate abomonation;
 extern crate byteorder;
 extern crate getopts;
 
-pub use initialize::initialize;
+pub use execute::execute;
 
 pub mod networking;
 pub mod progress;
 pub mod example_shared;
-pub mod communicator;
-pub mod observer;
+pub mod communication;
 pub mod serialization;
 
 pub mod drain;
-pub mod initialize;
+pub mod execute;

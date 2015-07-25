@@ -8,11 +8,11 @@ use progress::nested::subgraph::Target::ScopeInput;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
-use observer::Tee;
-use observer::Counter as ObserverCounter;
-use communicator::pact::ParallelizationContract;
-use communicator::pullable::Counter as PullableCounter;
-use communicator::{Data, Pullable};
+use communication::observer::Tee;
+use communication::observer::Counter as ObserverCounter;
+use communication::pact::ParallelizationContract;
+use communication::pullable::Counter as PullableCounter;
+use communication::{Data, Pullable};
 
 use example_shared::*;
 

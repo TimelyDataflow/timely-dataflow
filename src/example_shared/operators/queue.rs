@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use communicator::Data;
-use communicator::pact::Pipeline;
+use communication::Data;
+use communication::pact::Pipeline;
 use serialization::Serializable;
-use observer::Extensions;
+use communication::observer::Extensions;
 
 use example_shared::*;
 use example_shared::operators::unary::UnaryNotifyExt;

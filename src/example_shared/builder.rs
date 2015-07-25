@@ -6,9 +6,8 @@ use progress::{Timestamp, Scope, Subgraph};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use progress::nested::scope_wrapper::ScopeWrapper;
-use communicator::{Communicator, Data};
-use communicator::pullable::Pullable;
-use observer::BoxedObserver;
+use communication::{Communicator, Data, Pullable};
+use communication::observer::BoxedObserver;
 use serialization::Serializable;
 
 // use columnar::Columnar;

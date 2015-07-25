@@ -1,5 +1,3 @@
-// use std::old_io::{TcpListener, TcpStream};
-// use std::old_io::{Acceptor, Listener, IoResult, MemReader};
 use std::thread::sleep_ms;
 use std::io::{Read, Write, Result, BufRead, BufReader, BufWriter};
 use std::fs::File;
@@ -15,7 +13,7 @@ use std::mem;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use communicator::{Binary, Process};
+use communication::communicator::{Binary, Process};
 use drain::DrainExt;
 
 // TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.

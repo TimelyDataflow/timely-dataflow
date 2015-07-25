@@ -3,11 +3,11 @@ use std::io::BufRead;
 use getopts;
 use std::sync::Arc;
 
-use communicator::{Communicator, Thread, Process, Generic};
+use communication::communicator::{Communicator, Thread, Process, Generic};
 use networking::initialize_networking;
 
 // initializes a timely dataflow computation with supplied arguments and per-communicator logic
-pub fn initialize<I: Iterator<Item=String>, F: Fn(Generic)+Send+Sync+'static>(iter: I, func: F) {
+pub fn execute<I: Iterator<Item=String>, F: Fn(Generic)+Send+Sync+'static>(iter: I, func: F) {
 
     let mut opts = getopts::Options::new();
     opts.optopt("w", "workers", "number of per-process worker threads", "NUM");

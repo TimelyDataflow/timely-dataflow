@@ -2,8 +2,8 @@ use example_shared::builder::GraphBuilder;
 
 use progress::Timestamp;
 use progress::nested::subgraph::{Source, Target};
-use communicator::Data;
-use observer::{Observer, TeeHelper};
+use communication::Data;
+use communication::observer::{Observer, TeeHelper};
 
 #[derive(Clone)]
 pub struct Stream<G: GraphBuilder, D:Data> {

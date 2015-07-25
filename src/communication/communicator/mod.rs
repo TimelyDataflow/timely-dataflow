@@ -1,25 +1,16 @@
-pub use communicator::thread::Thread;
-pub use communicator::process::Process;
-pub use communicator::binary::Binary;
-pub use communicator::generic::Generic;
-pub use communicator::pullable::Pullable;
-pub use communicator::pullable::Message;
+pub use self::thread::Thread;
+pub use self::process::Process;
+pub use self::binary::Binary;
+pub use self::generic::Generic;
 
-use std::any::Any;
-use std::fmt::Debug;
-
-use observer::BoxedObserver;
+use communication::{Data, Pullable};
+use communication::observer::BoxedObserver;
 use serialization::Serializable;
 
 pub mod thread;
 pub mod process;
 pub mod binary;
 pub mod generic;
-pub mod pact;
-pub mod pullable;
-
-pub trait Data : Clone+Send+Debug+Any+Serializable { }
-impl<T: Clone+Send+Debug+Any+Serializable> Data for T { }
 
 // The Communicator trait presents the interface a worker has to the outside world.
 // The worker can see its index, the total number of peers, and acquire channels to and from the other workers.

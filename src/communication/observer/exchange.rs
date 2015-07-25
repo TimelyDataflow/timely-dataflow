@@ -1,8 +1,6 @@
-use observer::Observer;
-use communicator::Message;
-use drain::DrainExt;
-// use std::default::Default;
+use communication::{Message, Observer};
 use serialization::Serializable;
+use drain::DrainExt;
 
 // an observer routing between multiple observers
 // TODO : Software write combining

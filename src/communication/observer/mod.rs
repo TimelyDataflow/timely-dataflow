@@ -1,17 +1,17 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-pub use observer::tee::{Tee, TeeHelper};
-pub use observer::session::Session;
-pub use observer::exchange::Exchange;
-pub use observer::counter::Counter;
+pub use self::tee::{Tee, TeeHelper};
+pub use self::session::Session;
+pub use self::exchange::Exchange;
+pub use self::counter::Counter;
 
 pub mod tee;
 pub mod session;
 pub mod exchange;
 pub mod counter;
 
-use communicator::Message;
+use communication::Message;
 
 // TODO : Using an Observer requires a &mut reference, and should have the "No races!" property:
 // TODO : If you hold a &mut ref, no one else can call open/push/shut. Don't let go of that &mut!

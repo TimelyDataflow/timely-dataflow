@@ -6,12 +6,11 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communicator::Data;
-use communicator::pact::{ParallelizationContract, Pipeline};
-use communicator::Pullable;
-use communicator::pullable::Counter as PullableCounter;
-use observer::{Tee, Extensions};
-use observer::Counter as ObserverCounter;
+use communication::{Data, Pullable};
+use communication::pact::{ParallelizationContract, Pipeline};
+use communication::pullable::Counter as PullableCounter;
+use communication::observer::{Tee, Extensions};
+use communication::observer::Counter as ObserverCounter;
 
 use example_shared::*;
 

@@ -2,11 +2,10 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use std::marker::PhantomData;
 
 use serialization::Serializable;
-use communicator::pullable::Pullable;
 use networking::networking::MessageHeader;
 
-use communicator::{Communicator, Process, Data};
-use communicator::pullable::Message;
+use communication::communicator::Process;
+use communication::{Communicator, Data, Message, Pullable};
 
 // A communicator intended for binary channels (networking, pipes, shared memory)
 pub struct Binary {
@@ -30,8 +29,8 @@ impl Binary {
 impl Communicator for Binary {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
-    fn new_channel<T:Data+Serializable, D: Data+Serializable>(&mut self) -> (Vec<::observer::BoxedObserver<T, D>>, Box<Pullable<T, D>>) {
-        let mut pushers: Vec<::observer::BoxedObserver<T, D>> = Vec::new(); // built-up vector of BoxedObserver<T, D> to return
+    fn new_channel<T:Data+Serializable, D: Data+Serializable>(&mut self) -> (Vec<::communication::observer::BoxedObserver<T, D>>, Box<Pullable<T, D>>) {
+        let mut pushers: Vec<::communication::observer::BoxedObserver<T, D>> = Vec::new(); // built-up vector of BoxedObserver<T, D> to return
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
         let inner_peers = self.inner.peers();
@@ -54,7 +53,7 @@ impl Communicator for Binary {
                     target:     target_index,   //
                     length:     0,
                 };
-                pushers.push(::observer::BoxedObserver::new(Observer::new(header, self.senders[index].clone())));
+                pushers.push(::communication::observer::BoxedObserver::new(Observer::new(header, self.senders[index].clone())));
             }
         }
 
@@ -102,7 +101,7 @@ impl<T, D> Observer<T, D> {
     }
 }
 
-impl<T:Data+Serializable, D:Data+Serializable> ::observer::Observer for Observer<T, D> {
+impl<T:Data+Serializable, D:Data+Serializable> ::communication::observer::Observer for Observer<T, D> {
     type Time = T;
     type Data = D;
 

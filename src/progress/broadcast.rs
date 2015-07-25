@@ -1,8 +1,7 @@
 use progress::Timestamp;
 use progress::count_map::CountMap;
-use communicator::{Communicator, Message};
-use observer::{Observer, BoxedObserver};
-use communicator::pullable::Pullable;
+use communication::{Communicator, Message, Pullable, Observer};
+use communication::observer::BoxedObserver;
 
 pub type ProgressVec<T> = Vec<((u64, u64, T), i64)>;  // (child_scope, [in/out]port, timestamp, delta)
 

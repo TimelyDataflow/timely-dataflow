@@ -3,8 +3,8 @@ use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use drain::DrainExt;
 
-use communicator::{Communicator, Thread, Data};
-use communicator::pullable::Message;
+use communication::{Communicator, Data, Message};
+use communication::communicator::Thread;
 
 // A specific Communicator for inter-thread intra-process communication
 pub struct Process {
@@ -32,7 +32,7 @@ impl Process {
 impl Communicator for Process {
     fn index(&self) -> u64 { self.index }
     fn peers(&self) -> u64 { self.peers }
-    fn new_channel<T: Data, D: Data>(&mut self) -> (Vec<::observer::BoxedObserver<T, D>>, Box<::communicator::Pullable<T, D>>) {
+    fn new_channel<T: Data, D: Data>(&mut self) -> (Vec<::communication::observer::BoxedObserver<T, D>>, Box<::communication::Pullable<T, D>>) {
         let mut channels = self.channels.lock().ok().expect("mutex error?");
         if self.allocated == channels.len() as u64 {  // we need a new channel ...
             let mut senders = Vec::new();
@@ -56,8 +56,8 @@ impl Communicator for Process {
                 self.allocated += 1;
                 let (mut send, recv) = vector[self.index as usize].take().unwrap();
                 let mut temp = Vec::new();
-                for s in send.drain_temp() { temp.push(::observer::BoxedObserver::new(Observer::new(s))); }
-                return (temp, Box::new(Pullable::new(recv)) as Box<::communicator::Pullable<T, D>>)
+                for s in send.drain_temp() { temp.push(::communication::observer::BoxedObserver::new(Observer::new(s))); }
+                return (temp, Box::new(Pullable::new(recv)) as Box<::communication::Pullable<T, D>>)
             }
             _ => { panic!("unable to cast channel correctly"); }
         }
@@ -80,7 +80,7 @@ impl<T: Data, D: Data> Observer<T, D> {
     }
 }
 
-impl<T: Data, D: Data> ::observer::Observer for Observer<T, D> {
+impl<T: Data, D: Data> ::communication::observer::Observer for Observer<T, D> {
     type Time = T;
     type Data = D;
     #[inline] fn open(&mut self, time: &Self::Time) {
@@ -113,7 +113,7 @@ impl<T: Data, D: Data> Pullable<T, D> {
     }
 }
 
-impl<T: Data, D: Data> ::communicator::pullable::Pullable<T, D> for Pullable<T, D> {
+impl<T: Data, D: Data> ::communication::pullable::Pullable<T, D> for Pullable<T, D> {
     #[inline]
     fn pull(&mut self) -> Option<(&T, &mut Message<D>)> {
         let next = self.source.try_recv().ok();

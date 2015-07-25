@@ -6,8 +6,8 @@ use progress::nested::Source::ScopeOutput;
 use progress::nested::Target::ScopeInput;
 use progress::count_map::CountMap;
 
-use communicator::Data;
-use observer::{Counter, Tee};
+use communication::Data;
+use communication::observer::{Counter, Tee};
 
 use example_shared::*;
 

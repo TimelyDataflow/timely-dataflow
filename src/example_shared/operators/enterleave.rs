@@ -9,8 +9,8 @@ use progress::{Timestamp, CountMap};
 use progress::nested::subgraph::Source::{GraphInput, ScopeOutput};
 use progress::nested::subgraph::Target::{GraphOutput, ScopeInput};
 use progress::nested::product::Product;
-use communicator::{Data, Message};
-use observer::{Counter, Tee, Observer};
+use communication::{Data, Message, Observer};
+use communication::observer::{Counter, Tee};
 
 use example_shared::*;
 use example_shared::operators::delay::*;

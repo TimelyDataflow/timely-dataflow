@@ -3,14 +3,13 @@ use std::collections::hash_state::DefaultState;
 use std::hash::{hash, Hash, SipHasher};
 use std::default::Default;
 
-use communication::*;
+use communication::Data;
 use communication::pact::Exchange;
 
 use example_shared::*;
 use example_shared::operators::unary::UnaryNotifyExt;
 
 use serialization::Serializable;
-// use columnar::Columnar;
 
 pub trait DistinctExtensionTrait {
     fn distinct(&self) -> Self;

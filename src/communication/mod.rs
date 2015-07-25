@@ -1,16 +1,18 @@
-use std::fmt::Debug;
+pub use self::communicator::Communicator;
+pub use self::observer::Observer;
+pub use self::pullable::Pullable;
+pub use self::message::Message;
+
 use std::any::Any;
+use std::fmt::Debug;
 
-pub use communication::allocator::ThreadCommunicator;
-pub use communication::allocator::ProcessCommunicator;
-pub use communication::allocator::BinaryCommunicator;
-pub use communication::pact::ParallelizationContract;
-pub use communication::allocator::{Communicator};
-pub use communication::pushpull::{Pushable, Pullable};
+use serialization::Serializable;
 
-pub mod allocator;
+pub mod communicator;
+pub mod observer;
+pub mod pullable;
+pub mod message;
 pub mod pact;
-pub mod pushpull;
 
-pub trait Data : Clone+Send+Debug+Any { }
-impl<T: Clone+Send+Debug+Any> Data for T { }
+pub trait Data : Clone+Send+Debug+Any+Serializable { }
+impl<T: Clone+Send+Debug+Any+Serializable> Data for T { }

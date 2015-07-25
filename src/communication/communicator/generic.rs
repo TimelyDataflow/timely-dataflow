@@ -1,6 +1,6 @@
-use communicator::{Communicator, Thread, Process, Binary, Data};
-use communicator::pullable::Pullable;
-use observer::BoxedObserver;
+use communication::communicator::{Thread, Process, Binary};
+use communication::{Pullable, Communicator, Data};
+use communication::observer::BoxedObserver;
 use serialization::Serializable;
 
 pub enum Generic {

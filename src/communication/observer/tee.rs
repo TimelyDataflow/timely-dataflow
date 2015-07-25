@@ -1,8 +1,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use observer::{Observer, ObserverBoxable};
-use communicator::Message;
+use communication::observer::ObserverBoxable;
+use communication::{Message, Observer};
 use serialization::Serializable;
 
 // half of output_port for observing data

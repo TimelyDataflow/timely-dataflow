@@ -5,17 +5,15 @@ use std::default::Default;
 use progress::nested::subgraph::Source::ScopeOutput;
 use progress::nested::subgraph::Target::ScopeInput;
 
-use communicator::Data;
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Scope, Antichain};
 
-use observer::Counter as ObserverCounter;
-use observer::tee::Tee;
-
-use communicator::pullable::Pullable;
-use communicator::pullable::Counter as PullableCounter;
-use communicator::pact::ParallelizationContract;
+use communication::{Data, Pullable};
+use communication::observer::Counter as ObserverCounter;
+use communication::observer::tee::Tee;
+use communication::pullable::Counter as PullableCounter;
+use communication::pact::ParallelizationContract;
 
 use example_shared::*;
 

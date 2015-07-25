@@ -2,18 +2,17 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use communicator::{Communicator, Data};
-use communicator::pullable::Message;
+use communication::{Communicator, Data, Message};
 
 // The simplest communicator remains worker-local and just queues sent messages.
 pub struct Thread;
 impl Communicator for Thread {
     fn index(&self) -> u64 { 0 }
     fn peers(&self) -> u64 { 1 }
-    fn new_channel<T: Clone+'static, D: 'static>(&mut self) -> (Vec<::observer::BoxedObserver<T, D>>, Box<::communicator::Pullable<T, D>>) {
+    fn new_channel<T: Clone+'static, D: 'static>(&mut self) -> (Vec<::communication::observer::BoxedObserver<T, D>>, Box<::communication::Pullable<T, D>>) {
         let shared = Rc::new(RefCell::new(VecDeque::<(T, Message<D>)>::new()));
-        (vec![::observer::BoxedObserver::new(Observer::new(shared.clone()))],
-         Box::new(Pullable::new(shared.clone())) as Box<::communicator::Pullable<T, D>>)
+        (vec![::communication::observer::BoxedObserver::new(Observer::new(shared.clone()))],
+         Box::new(Pullable::new(shared.clone())) as Box<::communication::Pullable<T, D>>)
     }
 }
 
@@ -31,7 +30,7 @@ impl<T, D> Observer<T, D> {
     }
 }
 
-impl<T: Clone, D> ::observer::Observer for Observer<T, D> {
+impl<T: Clone, D> ::communication::observer::Observer for Observer<T, D> {
     type Time = T;
     type Data = D;
     #[inline] fn open(&mut self, time: &Self::Time) { assert!(self.time.is_none()); self.time = Some(time.clone()); }
@@ -56,7 +55,7 @@ impl<T, D> Pullable<T, D> {
     }
 }
 
-impl<T, D> ::communicator::pullable::Pullable<T, D> for Pullable<T, D> {
+impl<T, D> ::communication::pullable::Pullable<T, D> for Pullable<T, D> {
     #[inline]
     fn pull(&mut self) -> Option<(&T, &mut Message<D>)> {
         let next = self.source.borrow_mut().pop_front();
