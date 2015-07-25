@@ -1,4 +1,4 @@
-use example_shared::builder::GraphBuilder;
+use construction::builder::GraphBuilder;
 
 use progress::Timestamp;
 use progress::nested::subgraph::{Source, Target};

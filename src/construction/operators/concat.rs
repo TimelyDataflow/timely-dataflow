@@ -9,7 +9,7 @@ use progress::count_map::CountMap;
 use communication::Data;
 use communication::observer::{Counter, Tee};
 
-use example_shared::*;
+use construction::{Stream, GraphBuilder};
 
 
 pub trait ConcatExt<G: GraphBuilder, D: Data> {

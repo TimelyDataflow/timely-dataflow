@@ -11,7 +11,7 @@ use progress::count_map::CountMap;
 use communication::{Data, Message, Observer};
 use communication::observer::{Counter, Tee};
 
-use example_shared::*;
+use construction::{Stream, GraphBuilder};
 
 pub trait FeedbackExt<G: GraphBuilder> {
     fn loop_variable<D:Data>(&self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)

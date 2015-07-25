@@ -14,7 +14,7 @@ use communication::pact::ParallelizationContract;
 use communication::pullable::Counter as PullableCounter;
 use communication::{Data, Pullable};
 
-use example_shared::*;
+use construction::{Stream, GraphBuilder};
 
 use drain::DrainExt;
 

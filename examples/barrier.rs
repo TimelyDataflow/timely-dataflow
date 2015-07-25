@@ -1,14 +1,15 @@
 extern crate timely;
 
-use timely::communicator::pact::Pipeline;
+use timely::communication::pact::Pipeline;
 use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
-use timely::example_shared::*;
-use timely::example_shared::operators::*;
+
+use timely::construction::*;
+use timely::construction::operators::*;
 
 fn main() {
 
-    timely::initialize(std::env::args(), |communicator| {
+    timely::execute(std::env::args(), |communicator| {
 
         let mut root = GraphRoot::new(communicator);
 

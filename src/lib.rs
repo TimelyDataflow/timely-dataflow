@@ -73,7 +73,7 @@ pub use execute::execute;
 
 pub mod networking;
 pub mod progress;
-pub mod example_shared;
+pub mod construction;
 pub mod communication;
 pub mod serialization;
 

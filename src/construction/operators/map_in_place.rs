@@ -2,8 +2,8 @@ use communication::Data;
 use communication::pact::Pipeline;
 use communication::observer::Extensions;
 
-use example_shared::*;
-use example_shared::operators::unary::UnaryStreamExt;
+use construction::{Stream, GraphBuilder};
+use construction::operators::unary::UnaryStreamExt;
 
 pub trait MapInPlaceExt<G: GraphBuilder, D: Data> {
     fn map_in_place<L: Fn(&mut D)+'static>(&self, logic: L) -> Stream<G, D>;

@@ -12,8 +12,9 @@ use progress::nested::product::Product;
 use communication::{Data, Message, Observer};
 use communication::observer::{Counter, Tee};
 
-use example_shared::*;
-use example_shared::operators::delay::*;
+use construction::{Stream, GraphBuilder};
+use construction::builder::SubgraphBuilder;
+use construction::operators::delay::*;
 
 pub trait EnterSubgraphExt<G: GraphBuilder, T: Timestamp, D: Data> {
     fn enter(&self, &Stream<G, D>) -> Stream<SubgraphBuilder<G, T>, D>;

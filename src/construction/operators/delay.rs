@@ -5,8 +5,8 @@ use communication::{Data, Pullable, Message};
 use communication::pact::Pipeline;
 use communication::observer::Extensions;
 
-use example_shared::*;
-use example_shared::operators::unary::UnaryNotifyExt;
+use construction::{Stream, GraphBuilder};
+use construction::operators::unary::UnaryNotifyExt;
 
 use drain::DrainExt;
 

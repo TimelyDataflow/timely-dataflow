@@ -12,8 +12,8 @@ use progress::nested::product::Product;
 use communication::{Communicator, Data};
 use communication::observer::{Tee, Counter, Session, Extensions};
 
-use example_shared::stream::Stream;
-use example_shared::builder::*;
+use construction::stream::Stream;
+use construction::builder::*;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.

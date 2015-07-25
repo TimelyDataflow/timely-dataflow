@@ -12,7 +12,7 @@ use communication::pullable::Counter as PullableCounter;
 use communication::observer::{Tee, Extensions};
 use communication::observer::Counter as ObserverCounter;
 
-use example_shared::*;
+use construction::{Stream, GraphBuilder};
 
 use drain::DrainExt;
 

@@ -2,8 +2,8 @@ use communication::Data;
 use communication::pact::Pipeline;
 use communication::observer::Extensions;
 
-use example_shared::*;
-use example_shared::operators::unary::UnaryStreamExt;
+use construction::{Stream, GraphBuilder};
+use construction::operators::unary::UnaryStreamExt;
 
 use drain::DrainExt;
 

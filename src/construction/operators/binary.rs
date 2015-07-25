@@ -15,7 +15,7 @@ use communication::observer::tee::Tee;
 use communication::pullable::Counter as PullableCounter;
 use communication::pact::ParallelizationContract;
 
-use example_shared::*;
+use construction::{Stream, GraphBuilder};
 
 use drain::DrainExt;
 

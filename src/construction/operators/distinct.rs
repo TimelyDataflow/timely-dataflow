@@ -6,8 +6,8 @@ use std::default::Default;
 use communication::Data;
 use communication::pact::Exchange;
 
-use example_shared::*;
-use example_shared::operators::unary::UnaryNotifyExt;
+use construction::{Stream, GraphBuilder};
+use construction::operators::unary::UnaryNotifyExt;
 
 use serialization::Serializable;
 

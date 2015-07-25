@@ -1,12 +1,12 @@
 extern crate timely;
 
-use timely::example_shared::*;
-use timely::example_shared::operators::*;
+use timely::construction::*;
+use timely::construction::operators::*;
 
 fn main() {
 
     // initializes and runs a timely dataflow computation
-    timely::initialize(std::env::args(), |communicator| {
+    timely::execute(std::env::args(), |communicator| {
 
         // define a new computation using the communicator
         let mut computation = GraphRoot::new(communicator);
@@ -30,6 +30,6 @@ fn main() {
 
         // finish off any remaining work
         while computation.step() { }
-        
+
     });
 }
