@@ -17,19 +17,16 @@ This will bring in the `timely` crate from crates.io, which should allow you to 
 ```rust
 extern crate timely;
 
-use timely::example_shared::*;
-use timely::example_shared::operators::*;
+use timely::construction::*;
+use timely::construction::operators::*;
 
 fn main() {
 
     // initializes and runs a timely dataflow computation
-    timely::initialize(std::env::args(), |communicator| {
-
-        // define a new computation using the communicator
-        let mut computation = GraphRoot::new(communicator);
+    timely::execute(std::env::args(), |root| {
 
         // create a new input, and inspect its output
-        let mut input = computation.subcomputation(move |builder| {
+        let mut input = root.subcomputation(move |builder| {
             let (input, stream) = builder.new_input();
             stream.inspect(move |x| println!("hello {:?}", x));
             input
@@ -39,15 +36,15 @@ fn main() {
         for round in 0..10 {
             input.send_at(round, round..round+1);
             input.advance_to(round + 1);
-            computation.step();
+            root.step();
         }
 
         // seal the input
         input.close();
 
         // finish off any remaining work
-        while computation.step() { }
-        
+        while root.step() { }
+
     });
 }
 ```
