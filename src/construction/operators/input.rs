@@ -9,8 +9,8 @@ use progress::count_map::CountMap;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
 
-use communication::{Communicator, Data};
-use communication::observer::{Tee, Counter, Session, Extensions};
+use communication::{Communicator, Data, Message, Observer};
+use communication::observer::{Tee, Counter};
 
 use construction::stream::Stream;
 use construction::builder::*;
@@ -33,13 +33,14 @@ impl<C: Communicator, T: Timestamp+Ord> InputExtensionTrait<C, T> for SubgraphBu
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
 
-        let helper = InputHelper {
-            frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
-            progress: Rc::new(RefCell::new(CountMap::new())),
-            output:   Counter::new(output, produced.clone()),
-            now_at:   Default::default(),
-            closed:   false,
-        };
+        let helper = InputHelper::new(Counter::new(output, produced.clone()));
+        // {
+        //     frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
+        //     progress: Rc::new(RefCell::new(CountMap::new())),
+        //     output:   Counter::new(output, produced.clone()),
+        //     now_at:   Default::default(),
+        //     closed:   false,
+        // };
 
         let copies = self.peers();
 
@@ -88,31 +89,53 @@ impl<T:Timestamp+Ord> Scope<Product<RootTimestamp, T>> for InputScope<T> {
 }
 
 pub struct InputHelper<T: Timestamp+Ord, D: Data> {
-    frontier:   Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
-    progress:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
-    output:     Counter<Tee<Product<RootTimestamp, T>, D>>,
-
-    now_at:     T,
-    closed:     bool,
+    frontier: Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
+    progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
+    observer: Counter<Tee<Product<RootTimestamp, T>, D>>,
+    buffer: Vec<D>,
+    now_at: T,
 }
 
 impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
-    pub fn session(&mut self, time: T) -> Session<Counter<Tee<Product<RootTimestamp, T>, D>>> {
-        self.output.session(&Product::new(RootTimestamp, time))
+    fn new(mut observer: Counter<Tee<Product<RootTimestamp, T>, D>>) -> InputHelper<T, D> {
+        observer.open(&Default::default());
+        InputHelper {
+            frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
+            progress: Rc::new(RefCell::new(CountMap::new())),
+            observer: observer,
+            buffer: Vec::with_capacity(4096),
+            now_at: Default::default(),
+        }
     }
 
-    pub fn send_at<I: Iterator<Item=D>>(&mut self, time: T, items: I) {
-        if time >= self.now_at {
-            let mut session = self.output.session(&Product::new(RootTimestamp, time));
-            for item in items { session.give(item); }
+    fn flush(&mut self) {
+        let mut message = Message::from_typed(&mut self.buffer);
+        self.observer.give(&mut message);
+        self.buffer = message.into_typed(4096);
+        self.buffer.clear();
+    }
+
+    #[inline(always)] pub fn give(&mut self, data: D) {
+        self.buffer.push(data);
+        if self.buffer.len() == self.buffer.capacity() {
+            self.flush();
         }
     }
 
     pub fn advance_to(&mut self, next: T) {
         if next > self.now_at {
+            if self.buffer.len() > 0 {
+                self.flush();
+            }
+            self.observer.shut(&Product::new(RootTimestamp, self.now_at.clone()));
+
             self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, self.now_at.clone()), -1, &mut (*self.progress.borrow_mut()));
             self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, next.clone()),  1, &mut (*self.progress.borrow_mut()));
             self.now_at = next;
+            self.observer.open(&Product::new(RootTimestamp, self.now_at.clone()));
+        }
+        else {
+            println!("attempted to advance to {:?}, but input already at {:?}", next, self.now_at);
         }
     }
 
@@ -123,6 +146,10 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
 
 impl<T:Timestamp+Ord, D: Data> Drop for InputHelper<T, D> {
     fn drop(&mut self) {
+        if self.buffer.len() > 0 {
+            self.flush();
+        }
+        self.observer.shut(&Product::new(RootTimestamp, self.now_at.clone()));
         self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, self.now_at.clone()), -1, &mut (*self.progress.borrow_mut()));
     }
 }

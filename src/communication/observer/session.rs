@@ -35,15 +35,4 @@ impl<'a, O:Observer> Session<'a, O> where O::Time: Clone {
             self.buffer = message.into_typed(4096);
         }
     }
-    pub fn new_time(&mut self, time: &O::Time) {
-        if self.buffer.len() > 0 {
-            let mut message = Message::from_typed(&mut self.buffer);
-            self.observer.give(&mut message);
-            self.buffer = message.into_typed(4096);
-            self.buffer.clear();
-        }
-        self.observer.shut(&self.time);
-        self.time = (*time).clone();
-        self.observer.open(&self.time);
-    }
 }

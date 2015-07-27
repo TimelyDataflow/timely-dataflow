@@ -39,8 +39,8 @@ fn main() {
         root.step();
 
         // move some data into the dataflow graph.
-        input1.send_at(0, 0..10);
-        input2.send_at(0, 1..11);
+        input1.give(0);
+        input2.give(1);
 
         // see what everyone thinks about that ...
         root.step();
