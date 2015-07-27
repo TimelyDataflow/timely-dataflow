@@ -62,6 +62,15 @@ impl<'a, O:Observer> ObserverSession<'a, O> {
             self.buffer.clear();
         }
     }
+    pub fn new_time(&mut self, time: O::Time) {
+        if self.buffer.len() > 0 {
+            self.observer.give(&mut self.buffer);
+            self.buffer.clear();
+        }
+        self.observer.shut(&self.time);
+        self.time = time;
+        self.observer.open(&self.time);
+    }
 }
 
 
