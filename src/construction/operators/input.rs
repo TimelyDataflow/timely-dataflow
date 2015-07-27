@@ -98,7 +98,6 @@ pub struct InputHelper<T: Timestamp+Ord, D: Data> {
 
 impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
     fn new(mut observer: Counter<Tee<Product<RootTimestamp, T>, D>>) -> InputHelper<T, D> {
-        observer.open(&Default::default());
         InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
@@ -113,6 +112,10 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
         self.observer.give(&mut message);
         self.buffer = message.into_typed(4096);
         self.buffer.clear();
+    }
+
+    #[inline] pub fn open(&mut self) {
+        self.observer.open(&Default::default());
     }
 
     #[inline(always)] pub fn give(&mut self, data: D) {
