@@ -1,3 +1,9 @@
+//! Core type for communicated a collection of `D: Data` records.
+//!
+//! `Message<D>` is meant to be treated as a `Vec<D>`, with the caveat that it may wrap either
+//! typed `Vec<D>` data or binary `Vec<u8>` data that have not yet been deserialized. The type
+//! implements `Deref` and `DerefMut` with `Target = Vec<D>`, whose implementations accommodate
+//! the possibly serialized representation.
 use serialization::Serializable;
 use std::ops::{Deref, DerefMut};
 
@@ -6,15 +12,22 @@ pub struct Message<D> {
 }
 
 impl<D> Message<D> {
+    /// Constructs a `Message` from typed data, replacing its argument with `Vec::new()`.
     pub fn from_typed(typed: &mut Vec<D>) -> Message<D> {
         Message { contents: Contents::Typed(::std::mem::replace(typed, Vec::new())) }
     }
+    /// The length of the underlying vector.
+    ///
+    /// The length is tracked without needing to deserialize the data, so that this method can be
+    /// called even for `D` that do not implement `Serializable`.
     pub fn len(&self) -> usize {
         match self.contents {
             Contents::Bytes(_, _, length) => length,
             Contents::Typed(ref data) => data.len(),
         }
     }
+    /// Returns the typed vector, cleared, or allocates a new vector of supplied capacity if the
+    /// `Message` is backed by binary data.
     pub fn into_typed(self, capacity: usize) -> Vec<D> {
         match self.contents {
             Contents::Bytes(_,_,_) => Vec::with_capacity(capacity),
@@ -22,7 +35,12 @@ impl<D> Message<D> {
         }
     }
 }
+
 impl<D: Serializable> Message<D> {
+    /// Constructs a `Message` from binary data, starting at `offset` in `bytes`.
+    ///
+    /// This method calls `decode` on the binary data, ensuring that pointers are properly
+    /// adjusted, and that future calls to `verify` should succeed.
     pub fn from_bytes(mut bytes: Vec<u8>, offset: usize) -> Message<D> {
         let length = <Vec<D> as Serializable>::decode(&mut bytes[offset..]).unwrap().0.len();
         Message { contents: Contents::Bytes(bytes, offset, length) }

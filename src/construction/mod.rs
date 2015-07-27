@@ -1,4 +1,4 @@
-//! A collection of tools for constructing timely dataflow graphs.
+//! Tools for constructing timely dataflow graphs.
 
 pub use self::stream::Stream;
 pub use self::builder::{GraphBuilder, GraphRoot};
