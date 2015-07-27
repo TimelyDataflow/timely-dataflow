@@ -7,6 +7,6 @@ impl<T: Abomonation+Clone> Serializable for T {
         encode(typed, bytes);
     }
     fn decode(bytes: &mut [u8]) -> Option<&Self> {
-        decode::<T>(bytes).ok().map(|x| x.0)
+        decode::<T>(bytes).map(|x| x.0)
     }
 }

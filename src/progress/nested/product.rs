@@ -67,9 +67,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner>
 impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
     unsafe fn embalm(&mut self) { self.outer.embalm(); self.inner.embalm(); }
     unsafe fn entomb(&self, bytes: &mut Vec<u8>) { self.outer.entomb(bytes); self.inner.entomb(bytes); }
-    unsafe fn exhume<'a,'b>(&'a mut self, mut bytes: &'b mut [u8]) -> Result<&'b mut [u8], &'b mut [u8]> {
-        let tmp = bytes; bytes = try!(self.outer.exhume(tmp));
-        let tmp = bytes; bytes = try!(self.inner.exhume(tmp));
-        Ok(bytes)
+    unsafe fn exhume<'a,'b>(&'a mut self, mut bytes: &'b mut [u8]) -> Option<&'b mut [u8]> {
+        let tmp = bytes; bytes = if let Some(bytes) = self.outer.exhume(tmp) { bytes } else { return None };
+        let tmp = bytes; bytes = if let Some(bytes) = self.inner.exhume(tmp) { bytes } else { return None };
+        Some(bytes)
+    }
+    fn verify<'a,'b>(&'a self, mut bytes: &'b [u8]) -> Option<&'b [u8]> {
+        let tmp = bytes; bytes = if let Some(bytes) = self.outer.verify(tmp) { bytes } else { return None };
+        let tmp = bytes; bytes = if let Some(bytes) = self.inner.verify(tmp) { bytes } else { return None };
+        Some(bytes)
     }
 }
