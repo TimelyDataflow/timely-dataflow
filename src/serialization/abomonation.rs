@@ -1,6 +1,5 @@
 use serialization::Serializable;
 use abomonation::{Abomonation, encode, decode, verify};
-// use columnar::Columnar;
 
 impl<T: Abomonation> Serializable for T {
     fn encode(typed: &Self, bytes: &mut Vec<u8>) {
