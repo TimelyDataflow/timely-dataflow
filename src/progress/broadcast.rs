@@ -24,7 +24,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
             if messages.len() > 0 || internal.len() > 0 {
                 for sender in self.senders.iter_mut() {
                     sender.open(&Default::default());
-                    sender.give(&mut Message::Typed(vec![(messages.elements().clone(), internal.elements().clone())]));
+                    sender.give(&mut Message::from_typed(&mut vec![(messages.elements().clone(), internal.elements().clone())]));
                     sender.shut(&Default::default());
                 }
 
@@ -33,7 +33,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
             }
 
             while let Some((_, data)) = self.receiver.pull() {
-                let &(ref recv_messages, ref recv_internal) = &data.look()[0];
+                let (ref recv_messages, ref recv_internal) = data[0];
                 for &(ref update, delta) in recv_messages {
                     messages.update(update, delta);
                 }

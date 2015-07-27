@@ -133,6 +133,62 @@ impl<R: Read> BinaryReceiver<R> {
     }
 }
 
+// structure in charge of receiving data from a Reader, for example the network
+struct BinaryReceiver2<R: Read> {
+    reader:     R,          // the generic reader
+    buffer:     Vec<u8>,    // current working buffer
+    length:     usize,
+    targets:    Switchboard<(Sender<Vec<u8>>, Receiver<Vec<u8>>)>,
+}
+
+impl<R: Read> BinaryReceiver2<R> {
+    fn new(reader: R, channels: Receiver<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver2<R> {
+        BinaryReceiver2 {
+            reader:     reader,
+            buffer:     vec![0u8; 1 << 20],
+            length:     0,
+            targets:    Switchboard::new(channels),
+        }
+    }
+
+    fn recv_loop(&mut self) {
+        loop {
+
+            // if we've mostly filled our buffer and still can't read a whole message from it,
+            // we'll need more space / to read more at once. let's double the buffer!
+            if self.length >= self.buffer.len() / 2 {
+                self.buffer.extend(::std::iter::repeat(0u8).take(self.length));
+            }
+
+            // attempt to read some more bytes into our buffer
+            let read = self.reader.read(&mut self.buffer[self.length..]).unwrap_or(0);
+            self.length += read;
+
+            let remaining = {
+                let mut slice = &self.buffer[..self.length];
+                while let Some(header) = MessageHeader::try_read(&mut slice) {
+                    let h_len = header.length as usize;  // length in bytes
+                    let target = &mut self.targets.ensure(header.target, header.graph, header.channel).0;
+                    target.send(slice[..h_len].to_vec()).unwrap();
+                    slice = &slice[h_len..];
+                }
+
+                slice.len()
+            };
+
+            // we consumed bytes, must shift to beginning.
+            // this should optimize to copy_overlapping;
+            // would just do that if it weren't unsafe =/
+            if remaining < self.length {
+                for index in 0..remaining {
+                    self.buffer[index] = self.buffer[index + self.length - remaining];
+                }
+                self.length = remaining;
+            }
+        }
+    }
+}
+
 // structure in charge of sending data to a Writer, for example the network
 struct BinarySender<W: Write> {
     id:         u64,    // destination process

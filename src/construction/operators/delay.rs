@@ -1,5 +1,6 @@
 use std::hash::Hash;
 use std::collections::HashMap;
+use std::ops::DerefMut;
 
 use communication::{Data, Pullable, Message};
 use communication::pact::Pipeline;
@@ -19,13 +20,10 @@ impl<G: GraphBuilder, D: Data> DelayExt<G, D> for Stream<G, D>
 where G::Timestamp: Hash {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
         let mut elements = HashMap::new();
-        self.unary_notify(Pipeline, format!("Delay"), vec![], move |input, output, notificator| {
+        self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.pull() {
-                for datum in data.take().drain_temp() {
+                for datum in data.drain_temp() {
                     let new_time = func(&datum, time);
-                    if !(&new_time >= time) {
-                        println!("error; new_time : {} >!= {} : time", new_time, time);
-                    }
                     assert!(&new_time >= time);
                     elements.entry(new_time.clone())
                             .or_insert_with(|| { notificator.notify_at(&new_time); Vec::new() })
@@ -44,12 +42,12 @@ where G::Timestamp: Hash {
     fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
         let mut stash = Vec::new();
         let mut elements = HashMap::new();
-        self.unary_notify(Pipeline, format!("Delay"), vec![], move |input, output, notificator| {
+        self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.pull() {
                 let new_time = func(time);
                 assert!(&new_time >= time);
                 let spare = stash.pop().unwrap_or_else(|| Vec::with_capacity(4096));
-                let data = ::std::mem::replace(data.take(), spare);
+                let data = ::std::mem::replace(data.deref_mut(), spare);
 
                 elements.entry(new_time.clone())
                         .or_insert_with(|| { notificator.notify_at(&new_time); Vec::new() })
@@ -59,12 +57,11 @@ where G::Timestamp: Hash {
             // for each available notification, send corresponding set
             while let Some((time, _count)) = notificator.next() {
                 if let Some(mut datas) = elements.remove(&time) {
-                    for data in datas.drain_temp() {
-                        let mut message = Message::Typed(data);
+                    for mut data in datas.drain_temp() {
+                        let mut message = Message::from_typed(&mut data);
                         output.give_message_at(&time, &mut message);
-                        if let Message::Typed(data) = message {
-                            stash.push(data);
-                        }
+                        let buffer = message.into_typed(0);
+                        if buffer.capacity() == 4096 { stash.push(buffer); }
                     }
                 }
             }

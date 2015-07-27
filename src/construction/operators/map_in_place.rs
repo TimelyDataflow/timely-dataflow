@@ -11,9 +11,9 @@ pub trait MapInPlaceExt<G: GraphBuilder, D: Data> {
 
 impl<G: GraphBuilder, D: Data> MapInPlaceExt<G, D> for Stream<G, D> {
     fn map_in_place<L: Fn(&mut D)+'static>(&self, logic: L) -> Stream<G, D> {
-        self.unary_stream(Pipeline, format!("MapInPlace"), move |input, output| {
+        self.unary_stream(Pipeline, "MapInPlace", move |input, output| {
             while let Some((time, data)) = input.pull() {
-                for datum in data.take().iter_mut() { logic(datum); }
+                for datum in data.iter_mut() { logic(datum); }
                 output.give_message_at(time, data);
             }
         })

@@ -1,5 +1,6 @@
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::marker::PhantomData;
+use std::ops::Deref;
 
 use serialization::Serializable;
 use networking::networking::MessageHeader;
@@ -115,7 +116,7 @@ impl<T:Data+Serializable, D:Data+Serializable> ::communication::observer::Observ
     }
     #[inline] fn give(&mut self, data: &mut Message<Self::Data>) {
         assert!(self.time.is_some());
-        if let Some(mut time) = self.time.clone() {
+        if let Some(time) = self.time.clone() {
             // TODO : anything better to do here than allocate (bytes)?
             // TODO : perhaps team up with the Pushable to recycle (bytes) ...
 
@@ -129,8 +130,9 @@ impl<T:Data+Serializable, D:Data+Serializable> ::communication::observer::Observ
             // via an exchange channel? Seems uncommon.
 
             let mut bytes = Vec::new();
-            <T as Serializable>::encode(&mut time, &mut bytes);
-            <Vec<D> as Serializable>::encode(data.look(), &mut bytes);
+            Serializable::encode(&time, &mut bytes);
+            let vec: &Vec<D> = data.deref();
+            Serializable::encode(vec, &mut bytes);
             // data.clear();   // <--- ??????? improve!!!
 
             let mut header = self.header;
@@ -161,24 +163,18 @@ impl<T:Data+Serializable, D: Data+Serializable> Pullable<T, D> for BinaryPullabl
     fn pull(&mut self) -> Option<(&T, &mut Message<D>)> {
         if let Some(pair) = self.inner.pull() { Some(pair) }
         else {
-            let next = self.receiver.try_recv().ok().map(|mut bytes| {
+            // TODO : Do something better than drop self.current
+            self.current = self.receiver.try_recv().ok().map(|mut bytes| {
                 let x_len = bytes.len();
-                let (time, off, len) = {
+                let (time, offset) = {
                     let (t,r) = <T as Serializable>::decode(&mut bytes).unwrap();
                     let o = x_len - r.len();
-                    let l = <Vec<D> as Serializable>::decode(r).unwrap().0.len();
-                    ((*t).clone(), o, l)
+                    ((*t).clone(), o)
                 };
 
-                (time, Message::Bytes(bytes, off, len))
+                (time, Message::from_bytes(bytes, offset))
             });
-            let prev = ::std::mem::replace(&mut self.current, next);
-            match prev {
-                // TODO : Do something better than drop
-                Some((_time, Message::Bytes(_bytes, _, _))) => { },
-                Some((_time, Message::Typed(_typed))) => { },
-                None => { },
-            };
+
             if let Some((_, ref mut message)) = self.current {
                 // TODO : old code; can't recall why this would happen.
                 // TODO : probably shouldn't, but I recall a progress

@@ -10,61 +10,71 @@ use communication::{Communicator, Data, Pullable};
 use communication::observer::BoxedObserver;
 use serialization::Serializable;
 
-// use columnar::Columnar;
-
-/// GraphBuilder provides the fundamental operations required for connecting operators in a timely
-/// dataflow graph.
-
-/// Importantly, this is a *shared* object, almost certainly backed by a Rc<RefCell<>> wrapper.
-/// Each method is designed so that it does not hold the RefCell's borrow, meaning you shouldn't be
-/// able to shoot yourself in the foot. Each method takes a shared borrow, and can be thought of as
-/// first calling .clone() and then calling the method.
-
+/// The fundamental operations required to add and connect operators in a timely dataflow graph.
+///
+/// Importantly, this is often a *shared* object, backed by a `Rc<RefCell<>>` wrapper. Each method
+/// takes a shared reference, but can be thought of as first calling .clone() and then calling the
+/// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
 pub trait GraphBuilder : Communicator+Clone {
     type Timestamp : Timestamp;
 
+    /// A useful name describing the builder's scope.
     fn name(&self) -> String;
 
+    /// Connects a source of data with a target of the data. This should only link the two for
+    /// the purposes of tracking progress, rather than effect any data movement itself.
     fn add_edge(&self, source: Source, target: Target);
 
+    /// Adds a child `Scope` to the builder's scope.
     fn add_scope<SC: Scope<Self::Timestamp>+'static>(&self, scope: SC) -> u64;  // returns name
 
+    /// Creates a new `Subgraph` with timestamp `T`. Used by `subcomputation`, but unlikely to be
+    /// commonly useful to end users.
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T>;
 
-    // TODO : Learn about the scoped() pattern that prevents the subgraph builder from escaping
-    fn subcomputation<T: Timestamp, R, F:FnOnce(&SubgraphBuilder<Self, T>)->R>(&mut self, func: F) -> R {
+    /// Creates a `Subgraph` from a closure acting on a `SubgraphBuilder`, and returning
+    /// whatever the closure returns.
+    ///
+    /// Commonly used to create new timely dataflow subgraphs, either creating new input streams
+    /// and the input handle, or ingressing data streams and returning the egresses stream.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::construction::*;
+    /// use timely::construction::operators::*;
+    ///
+    /// timely::execute(std::env::args(), |root| {
+    ///     // must specify types as nothing else drives inference.
+    ///     let input = root.subcomputation::<u64,_,_>(|subgraph| {
+    ///         let (input, stream) = subgraph.new_input::<String>();
+    ///         let output = subgraph.subcomputation::<u32,_,_>(|subgraph2| {
+    ///             subgraph2.enter(&stream).leave()
+    ///         });
+    ///         input
+    ///     });
+    /// });
+    /// ```
+    fn subcomputation<T: Timestamp, R, F:FnOnce(&mut SubgraphBuilder<Self, T>)->R>(&mut self, func: F) -> R {
         let subscope = Rc::new(RefCell::new(self.new_subscope()));
-        let builder = SubgraphBuilder {
+        let mut builder = SubgraphBuilder {
             subgraph: subscope,
             parent: self.clone(),
         };
 
-        let result = func(&builder);
-
+        let result = func(&mut builder);
         self.add_scope(builder.subgraph);
-
         result
-        //
-        //
-        // if let Ok(subgraph) = try_unwrap(builder.subgraph) {
-        //     self.add_scope(subgraph.into_inner());
-        //     result
-        // }
-        // else {
-        //     panic!("subcomputation failed to get unique handle to subgraph builder");
-        // }
     }
 }
 
-// impl<G: GraphBuilder> GraphBuilder for Rc<RefCell<G>> {
-//     type Timestamp = G::Timestamp;
-//
-//     fn name(&self) -> String { self.borrow().name() }
-//     fn add_edge(&self, source: Source, target: Target) { self.borrow().add_edge(source, target) }
-//     fn add_scope<SC: Scope<Self::Timestamp>+'static>(&self, scope: SC) { self.borrow().add_scope() }
-//     fn new_subscope<T: Timestamp>(&self) -> Subgraph<Self::Timestamp, T> { self.borrow().new_subscope() }
-// }
-
+/// A `GraphRoot` is the entry point to a timely dataflow computation. It wraps a `Communicator`,
+/// and has a slot for one child `Scope`. The primary intended use of `GraphRoot` is through its
+/// implementation of the `GraphBuilder` trait.
+///
+/// # Panics
+/// Calling `subcomputation` more than once will result in a `panic!`.
+///
+/// Calling `step` without having called `subcomputation` will result in a `panic!`.
 pub struct GraphRoot<C: Communicator> {
     communicator:   Rc<RefCell<C>>,
     graph:          Rc<RefCell<Option<Box<Scope<RootTimestamp>>>>>,
@@ -122,19 +132,12 @@ impl<C: Communicator> Clone for GraphRoot<C> {
     fn clone(&self) -> Self { GraphRoot { communicator: self.communicator.clone(), graph: self.graph.clone() }}
 }
 
-
+/// A `SubgraphBuilder` wraps a `Subgraph` and a parent `G: GraphBuilder`. It manages the addition
+/// of `Scope`s to a subgraph, and the connection of edges between them.
 pub struct SubgraphBuilder<G: GraphBuilder, T: Timestamp> {
     pub subgraph: Rc<RefCell<Subgraph<G::Timestamp, T>>>,
     pub parent:   G,
 }
-
-// impl<G: GraphBuilder, T: Timestamp> Drop for SubgraphBuilder<G, T> {
-//     fn drop(&mut self) {
-//         // TODO : This is a pretty silly way to grab the subgraph. perhaps something more tasteful?
-//         let subgraph = mem::replace(&mut self.subgraph, Subgraph::new_from(&mut ThreadCommunicator, 0, format!("Empty")));
-//         self.parent.add_scope(subgraph);
-//     }
-// }
 
 impl<G: GraphBuilder, T: Timestamp> GraphBuilder for SubgraphBuilder<G, T> {
     type Timestamp = Product<G::Timestamp, T>;

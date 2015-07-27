@@ -20,10 +20,9 @@ impl<O: Observer, H: Fn(&O::Data) -> u64> Exchange<O, H> {
         }
     }
     fn flush(&mut self, index: usize) {
-        let mut message = Message::Typed(::std::mem::replace(&mut self.buffers[index], Vec::new()));
+        let mut message = Message::from_typed(&mut self.buffers[index]);
         self.observers[index].give(&mut message);
-        self.buffers[index] = if let Message::Typed(mut data) = message { data.clear(); data }
-                              else { Vec::with_capacity(4096) };
+        self.buffers[index] = message.into_typed(4096);
     }
 }
 impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for Exchange<O, H> where O::Data: Clone+Serializable {
@@ -49,7 +48,7 @@ impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for Exchange<O, H> where O::D
         // if the number of observers is a power of two, use a mask
         else if (self.observers.len() & (self.observers.len() - 1)) == 0 {
             let mask = (self.observers.len() - 1) as u64;
-            for datum in data.take().drain_temp() {
+            for datum in data.drain_temp() {
                 let index = (((self.hash_func)(&datum)) & mask) as usize;
                 self.buffers[index].push(datum);
                 if self.buffers[index].len() == self.buffers[index].capacity() {
@@ -59,7 +58,7 @@ impl<O: Observer, H: Fn(&O::Data) -> u64> Observer for Exchange<O, H> where O::D
         }
         // as a last resort, use mod (%)
         else {
-            for datum in data.take().drain_temp() {
+            for datum in data.drain_temp() {
                 let index = (((self.hash_func)(&datum)) % self.observers.len() as u64) as usize;
                 self.buffers[index].push(datum);
                 if self.buffers[index].len() == self.buffers[index].capacity() {

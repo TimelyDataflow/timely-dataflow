@@ -6,10 +6,7 @@ use timely::construction::operators::*;
 fn main() {
 
     // initializes and runs a timely dataflow computation
-    timely::execute(std::env::args(), |communicator| {
-
-        // define a new computation using the communicator
-        let mut computation = GraphRoot::new(communicator);
+    timely::execute(std::env::args(), |computation| {
 
         // create a new input, and inspect its output
         let mut input = computation.subcomputation(move |builder| {

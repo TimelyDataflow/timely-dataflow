@@ -96,7 +96,8 @@ impl<T: Data, D: Data> ::communication::observer::Observer for Observer<T, D> {
         if let Some(time) = self.time.clone() {
             // TODO : anything better to do here than allocate (data)?
             // TODO : perhaps team up with the Pushable to recycle (data) ...
-            self.dest.send((time, ::std::mem::replace(data, Message::Typed(Vec::with_capacity(4096))))).unwrap();
+            // TODO : why allocating here? some assumption back upstream that memory are retained .. ?
+            self.dest.send((time, ::std::mem::replace(data, Message::from_typed(&mut Vec::with_capacity(4096))))).unwrap();
         }
     }
 }
@@ -116,14 +117,10 @@ impl<T: Data, D: Data> Pullable<T, D> {
 impl<T: Data, D: Data> ::communication::pullable::Pullable<T, D> for Pullable<T, D> {
     #[inline]
     fn pull(&mut self) -> Option<(&T, &mut Message<D>)> {
-        let next = self.source.try_recv().ok();
-        let prev = ::std::mem::replace(&mut self.current, next);
-        match prev {
-            // TODO : here is where we would recycle data
-            Some((_time, Message::Bytes(_bytes, _, _))) => { },
-            Some((_time, Message::Typed(_typed))) => { },
-            None => { },
-        }
+        
+        // TODO : here is where we would recycle data
+        self.current = self.source.try_recv().ok();
+
         if let Some((_, ref mut data)) = self.current {
             // TODO : old code; can't recall why this would happen.
             // TODO : probably shouldn't, but I recall a progress

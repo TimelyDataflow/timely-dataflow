@@ -24,7 +24,7 @@ pub trait UnaryNotifyExt<G: GraphBuilder, D1: Data> {
                      &mut ObserverCounter<Tee<G::Timestamp, D2>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            (&self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>;
+            (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>;
 }
 
 impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for Stream<G, D1> {
@@ -33,13 +33,13 @@ impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for Stream<G, D1> {
                      &mut ObserverCounter<Tee<G::Timestamp, D2>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-             (&self, pact: P, name: String, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2> {
+             (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2> {
 
         let mut builder = self.builder();   // clones the builder
 
         let (sender, receiver) = pact.connect(&mut builder);
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets, name, logic, Some((init, builder.peers())));
+        let scope = UnaryScope::new(receiver, targets, name.to_owned(), logic, Some((init, builder.peers())));
         let index = builder.add_scope(scope);
 
         self.connect_to(ScopeInput(index, 0), sender);
@@ -54,7 +54,7 @@ pub trait UnaryStreamExt<G: GraphBuilder, D1: Data> {
              L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
                       &mut ObserverCounter<Tee<G::Timestamp, D2>>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-            (&self, pact: P, name: String, logic: L) -> Stream<G, D2>;
+            (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>;
 }
 
 impl<G: GraphBuilder, D1: Data> UnaryStreamExt<G, D1> for Stream<G, D1> {
@@ -62,13 +62,13 @@ impl<G: GraphBuilder, D1: Data> UnaryStreamExt<G, D1> for Stream<G, D1> {
              L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
                       &mut ObserverCounter<Tee<G::Timestamp, D2>>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
-             (&self, pact: P, name: String, mut logic: L) -> Stream<G, D2> {
+             (&self, pact: P, name: &str, mut logic: L) -> Stream<G, D2> {
 
         let mut builder = self.builder();
 
         let (sender, receiver) = pact.connect(&mut builder);
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets, name, move |i,o,_| logic(i,o), None);
+        let scope = UnaryScope::new(receiver, targets, name.to_owned(), move |i,o,_| logic(i,o), None);
         let index = builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender);
 

@@ -29,11 +29,11 @@ impl<T, D: Clone+Serializable> Observer for Tee<T, D> {
             if index < observers.len() - 1 {
                 // TODO : was push_all, but is now extend.
                 // TODO : currently extend is slow. watch.
-                self.buffer.extend(data.look().iter().cloned());
-                let mut message = Message::Typed(::std::mem::replace(&mut self.buffer, Vec::new()));
+                self.buffer.extend(data.iter().cloned());
+                let mut message = Message::from_typed(&mut self.buffer);
                 observers[index].give_box(&mut message);
-                self.buffer = if let Message::Typed(mut buffer) = message { buffer.clear(); buffer }
-                              else { Vec::with_capacity(4096) };
+
+                self.buffer = message.into_typed(4096);
             }
             else {
                 observers[index].give_box(data);

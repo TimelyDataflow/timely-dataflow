@@ -79,7 +79,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> Sco
             // TODO : This results in small sends for many parts, as sessions does the buffering
             let mut sessions: Vec<_> = outputs.map(|x| x.session(&time)).collect();
 
-            for (part, datum) in data.take().drain_temp().map(&self.func) {
+            for (part, datum) in data.drain_temp().map(&self.func) {
                 sessions[part as usize].give(datum);
             }
         }

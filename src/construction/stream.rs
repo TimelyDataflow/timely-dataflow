@@ -5,11 +5,14 @@ use progress::nested::subgraph::{Source, Target};
 use communication::Data;
 use communication::observer::{Observer, TeeHelper};
 
+/// Abstraction of a stream of `D: Data` records timestamped with `G::Timestamp`.
+///
+/// Internally `Stream` tracks any observer `Observer` 
 #[derive(Clone)]
 pub struct Stream<G: GraphBuilder, D:Data> {
-    pub name:   Source,                     // used to name the source in the host graph.
-    ports:      TeeHelper<G::Timestamp, D>, // used to register interest in the output.
-    builder:    G,
+    name: Source,                       // used to name the source in the host graph.
+    ports: TeeHelper<G::Timestamp, D>,  // used to register interest in the output.
+    builder: G,                         // access to a communicator to allocate edges.
 }
 
 impl<G: GraphBuilder, D:Data> Stream<G, D> {

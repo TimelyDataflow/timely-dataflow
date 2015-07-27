@@ -20,11 +20,11 @@ where G::Timestamp: Hash {
 
     fn queue(&self) -> Stream<G, D> {
         let mut elements = HashMap::new();
-        self.unary_notify(Pipeline, format!("Queue"), vec![], move |input, output, notificator| {
+        self.unary_notify(Pipeline, "Queue", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.pull() {
                 notificator.notify_at(time);
                 let set = elements.entry((*time).clone()).or_insert(Vec::new());
-                for datum in data.take().drain_temp() { set.push(datum); }
+                for datum in data.drain_temp() { set.push(datum); }
             }
 
             while let Some((time, _count)) = notificator.next() {

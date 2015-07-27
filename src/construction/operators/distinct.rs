@@ -22,7 +22,7 @@ where G::Timestamp: Hash {
     fn distinct(&self) -> Stream<G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         let exch = Exchange::new(|x| hash::<_,SipHasher>(&x));
-        self.unary_notify(exch, format!("Distinct"), vec![], move |input, output, notificator| {
+        self.unary_notify(exch, "Distinct", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.pull() {
                 let set = elements.entry(time).or_insert(Default::default());
                 let mut session = output.session(&time);
@@ -44,7 +44,7 @@ where G::Timestamp: Hash {
     fn distinct_batch(&self) -> Stream<G, D> {
         let mut elements: HashMap<_, HashSet<_, DefaultState<SipHasher>>> = HashMap::new();
         let exch = Exchange::new(|x| hash::<_,SipHasher>(&x));
-        self.unary_notify(exch, format!("DistinctBlock"), vec![], move |input, output, notificator| {
+        self.unary_notify(exch, "DistinctBlock", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.pull() {
                 let set = elements.entry(time).or_insert(Default::default());
                 for datum in data.drain(..) { set.insert(datum); }

@@ -27,7 +27,7 @@ pub trait BinaryStreamExt<G: GraphBuilder, D1: Data> {
                        &mut ObserverCounter<Tee<G::Timestamp, D3>>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
-            (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: String, logic: L) -> Stream<G, D3>;
+            (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, logic: L) -> Stream<G, D3>;
 }
 
 impl<G: GraphBuilder, D1: Data> BinaryStreamExt<G, D1> for Stream<G, D1> {
@@ -39,14 +39,14 @@ impl<G: GraphBuilder, D1: Data> BinaryStreamExt<G, D1> for Stream<G, D1> {
                       &mut ObserverCounter<Tee<G::Timestamp, D3>>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: String, mut logic: L) -> Stream<G, D3> {
+             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, mut logic: L) -> Stream<G, D3> {
 
         let mut builder = self.builder();
 
         let (sender1, receiver1) = pact1.connect(&mut builder);
         let (sender2, receiver2) = pact2.connect(&mut builder);;
         let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
-        let scope = BinaryScope::new(receiver1, receiver2, targets, name, None, move |i1, i2, o, _| logic(i1, i2, o));
+        let scope = BinaryScope::new(receiver1, receiver2, targets, name.to_owned(), None, move |i1, i2, o, _| logic(i1, i2, o));
         let index = builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender1);
         other.connect_to(ScopeInput(index, 1), sender2);
@@ -66,7 +66,7 @@ pub trait BinaryNotifyExt<G: GraphBuilder, D1: Data> {
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
-            (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: String, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3>;
+            (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3>;
 }
 
 impl<G: GraphBuilder, D1: Data> BinaryNotifyExt<G, D1> for Stream<G, D1> {
@@ -79,14 +79,14 @@ impl<G: GraphBuilder, D1: Data> BinaryNotifyExt<G, D1> for Stream<G, D1> {
                       &mut Notificator<G::Timestamp>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: String, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3> {
+             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3> {
 
         let mut builder = self.builder();
 
         let (sender1, receiver1) = pact1.connect(&mut builder);
         let (sender2, receiver2) = pact2.connect(&mut builder);;
         let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
-        let scope = BinaryScope::new(receiver1, receiver2, targets, name, Some((notify, builder.peers())), logic);
+        let scope = BinaryScope::new(receiver1, receiver2, targets, name.to_owned(), Some((notify, builder.peers())), logic);
         let index = builder.add_scope(scope);
         self.connect_to(ScopeInput(index, 0), sender1);
         other.connect_to(ScopeInput(index, 1), sender2);

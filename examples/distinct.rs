@@ -11,9 +11,7 @@ use timely::construction::*;
 use timely::construction::operators::*;
 
 fn main() {
-    timely::execute(std::env::args(), |communicator| {
-
-        let mut root = GraphRoot::new(communicator);
+    timely::execute(std::env::args(), |root| {
 
         let (mut input1, mut input2) = root.subcomputation(|graph| {
 
