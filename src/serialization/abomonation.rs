@@ -1,5 +1,5 @@
 use serialization::Serializable;
-use abomonation::{Abomonation, encode, decode, decode_unchecked};
+use abomonation::{Abomonation, encode, decode, verify};
 // use columnar::Columnar;
 
 impl<T: Abomonation> Serializable for T {
@@ -7,12 +7,9 @@ impl<T: Abomonation> Serializable for T {
         encode(typed, bytes);
     }
     fn decode(bytes: &mut [u8]) -> Option<(&Self, &mut [u8])> {
-        match decode::<T>(bytes) {
-            Ok(pair) => Some(pair),
-            Err(hrm) => { panic!("found this: {}", hrm.len()); }
-        }
+        decode::<T>(bytes)
     }
-    unsafe fn assume(bytes: &[u8]) -> &Self {
-        decode_unchecked(bytes)
+    fn verify(bytes: &[u8]) -> Option<(&Self, &[u8])> {
+        verify::<T>(bytes)
     }
 }

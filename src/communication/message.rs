@@ -33,10 +33,10 @@ impl<D: Serializable> Deref for Message<D> {
     type Target = Vec<D>;
     fn deref(&self) -> &Vec<D> {
         match self.contents {
-            // NOTE : unsafe, but validated in Contents::Byte constructor.
+            // NOTE : decoded in Contents::Byte constructor. verification should pass.
             // NOTE : privacy of Contents should mean cannot construct w/o validation.
             Contents::Bytes(ref bytes, offset, _length) => {
-                unsafe { <Vec<D> as Serializable>::assume(&bytes[offset..]) }
+                <Vec<D> as Serializable>::verify(&bytes[offset..]).unwrap().0
             },
             Contents::Typed(ref data) => data,
         }
