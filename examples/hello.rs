@@ -11,7 +11,7 @@ fn main() {
         // create a new input, and inspect its output
         let mut input = computation.subcomputation(move |builder| {
             let (input, stream) = builder.new_input();
-            stream.inspect(move |x| println!("hello {:?}", x));
+            stream.inspect(|x| println!("hello: {:?}", x));
             input
         });
 

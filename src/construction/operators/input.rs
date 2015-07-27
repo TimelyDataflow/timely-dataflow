@@ -88,37 +88,67 @@ impl<T:Timestamp+Ord> Scope<Product<RootTimestamp, T>> for InputScope<T> {
     fn notify_me(&self) -> bool { false }
 }
 
+
+/// Manages the movement of data into the dataflow from the outside world.
 pub struct InputHelper<T: Timestamp+Ord, D: Data> {
     frontier: Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
     progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
     observer: Counter<Tee<Product<RootTimestamp, T>, D>>,
     buffer: Vec<D>,
-    now_at: T,
+    now_at: Option<Product<RootTimestamp, T>>,
 }
 
+// an input helper's state is either uninitialized, with now_at == None, or at some specific time.
+// if now_at == None it has a hold on Default::default(), else it has a hold on the specific time.
+// if now_at == None the observer has not been opened, else it is open with the specific time.
+
+
 impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
-    fn new(mut observer: Counter<Tee<Product<RootTimestamp, T>, D>>) -> InputHelper<T, D> {
+    fn new(observer: Counter<Tee<Product<RootTimestamp, T>, D>>) -> InputHelper<T, D> {
         InputHelper {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
             observer: observer,
             buffer: Vec::with_capacity(4096),
-            now_at: Default::default(),
+            now_at: None,
         }
     }
 
+    // flushes any data we are sitting on. may need to initialize self.now_at if no one has yet.
     fn flush(&mut self) {
+        // if we haven't yet we should initialize now_at, to Default::default() because
+        // we haven't been told anything better.
+        if self.now_at.is_none() {
+            self.now_at = Some(Default::default());
+            self.observer.open(&Default::default());
+            // we skip the frontier update because we would be adding and subtracting from the same
+            // time: Default::default().
+        }
+
         let mut message = Message::from_typed(&mut self.buffer);
         self.observer.give(&mut message);
         self.buffer = message.into_typed(4096);
         self.buffer.clear();
     }
 
-    #[inline] pub fn open(&mut self) {
-        self.observer.open(&Default::default());
+    // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
+    fn close_epoch(&mut self) {
+        // if we are sitting on any data, clear it out.
+        if self.buffer.len() > 0 { self.flush(); }
+
+        // shut things down if needed; release hold.
+        if let Some(old_time) = self.now_at {
+            self.observer.shut(&old_time);
+            self.frontier.borrow_mut().update_weight(&old_time, -1, &mut (*self.progress.borrow_mut()));
+        }
+        else {
+            let old_time = Default::default();
+            self.frontier.borrow_mut().update_weight(&old_time, -1, &mut (*self.progress.borrow_mut()));
+        }
     }
 
-    #[inline(always)] pub fn give(&mut self, data: D) {
+    #[inline(always)]
+    pub fn give(&mut self, data: D) {
         self.buffer.push(data);
         if self.buffer.len() == self.buffer.capacity() {
             self.flush();
@@ -126,33 +156,32 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
     }
 
     pub fn advance_to(&mut self, next: T) {
-        if next > self.now_at {
-            if self.buffer.len() > 0 {
-                self.flush();
-            }
-            self.observer.shut(&Product::new(RootTimestamp, self.now_at.clone()));
+        // attempting to reverse time's arrow is not supported.
+        if let Some(time) = self.now_at { assert!(next >= time.inner); }
 
-            self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, self.now_at.clone()), -1, &mut (*self.progress.borrow_mut()));
-            self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, next.clone()),  1, &mut (*self.progress.borrow_mut()));
-            self.now_at = next;
-            self.observer.open(&Product::new(RootTimestamp, self.now_at.clone()));
-        }
-        else {
-            println!("attempted to advance to {:?}, but input already at {:?}", next, self.now_at);
-        }
+        self.close_epoch();
+
+        // open up new epoch
+        let new_time = Product::new(RootTimestamp, next);
+        self.now_at = Some(new_time);
+        self.observer.open(&new_time);
+        self.frontier.borrow_mut().update_weight(&new_time,  1, &mut (*self.progress.borrow_mut()));
     }
 
     pub fn close(self) { }
 
-    pub fn epoch(&self) -> &T { &self.now_at }
+    pub fn epoch(&mut self) -> &T {
+        if self.now_at.is_none() {
+            self.now_at = Some(Default::default());
+            self.observer.open(&Default::default());
+        }
+
+        &self.now_at.as_ref().unwrap().inner
+    }
 }
 
 impl<T:Timestamp+Ord, D: Data> Drop for InputHelper<T, D> {
     fn drop(&mut self) {
-        if self.buffer.len() > 0 {
-            self.flush();
-        }
-        self.observer.shut(&Product::new(RootTimestamp, self.now_at.clone()));
-        self.frontier.borrow_mut().update_weight(&Product::new(RootTimestamp, self.now_at.clone()), -1, &mut (*self.progress.borrow_mut()));
+        self.close_epoch();
     }
 }
