@@ -35,6 +35,8 @@ impl<O: Observer> Counter<O> where O::Time : Eq+Clone+'static {
     }
 
     #[inline(always)] pub fn pull_progress(&mut self, updates: &mut CountMap<O::Time>) {
-        while let Some((ref time, delta)) = self.counts.borrow_mut().pop() { updates.update(time, delta); }
+        while let Some((ref time, delta)) = self.counts.borrow_mut().pop() {
+            updates.update(time, delta);
+        }
     }
 }

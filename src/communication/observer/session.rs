@@ -1,7 +1,6 @@
 use communication::{Message, Observer};
 
-// RAII for Observer sessions. Intended to prevent mis-sequencing of open/give/shut.
-//
+/// RAII for Observer sessions. Intended to prevent mis-sequencing of open/give/shut.
 pub struct Session<'a, O:Observer+'a> {
     time: O::Time,
     buffer: Vec<O::Data>,
