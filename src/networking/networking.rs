@@ -70,80 +70,80 @@ impl MessageHeader {
     }
 }
 
+// // structure in charge of receiving data from a Reader, for example the network
+// struct BinaryReceiver<R: Read> {
+//     reader:     R,          // the generic reader
+//     buffer:     Vec<u8>,    // current working buffer
+//     double:     Vec<u8>,    // second working buffer
+//     staging:    Vec<u8>,    // 1 << 20 of buffer to read into
+//     targets:    Switchboard<(Sender<Vec<u8>>, Receiver<Vec<u8>>)>,
+// }
+// 
+// impl<R: Read> BinaryReceiver<R> {
+//     fn new(reader: R, channels: Receiver<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver<R> {
+//         BinaryReceiver {
+//             reader:     reader,
+//             buffer:     Vec::new(),
+//             double:     Vec::new(),
+//             staging:    vec![0u8; 1 << 20],
+//             targets:    Switchboard::new(channels),
+//         }
+//     }
+//
+//     fn recv_loop(&mut self) {
+//         loop {
+//
+//             // attempt to read some more bytes into our buffer
+//             // TODO : We read in to self.staging because extending a Vec<u8> is hard without
+//             // TODO : using set_len, which is unsafe.
+//             // TODO : Could consider optimizing for the self.buffer.len() == 0 case, swapping
+//             // TODO : self.staging with self.buffer, rather than using write_all.
+//             let read = self.reader.read(&mut self.staging[..]).unwrap_or(0);
+//             self.buffer.write_all(&self.staging[..read]).unwrap(); // <-- shouldn't fail
+//
+//             {
+//                 // get a view of available bytes
+//                 let mut slice = &self.buffer[..];
+//
+//                 while let Some(header) = MessageHeader::try_read(&mut slice) {
+//
+//                     let h_len = header.length as usize;  // length in bytes
+//                     let target = self.targets.ensure(header.target, header.graph, header.channel);
+//                     let mut buffer = target.1.try_recv().unwrap_or(Vec::new());
+//
+//                     buffer.clear();
+//                     buffer.write_all(&slice[..h_len]).unwrap();
+//                     slice = &slice[h_len..];
+//
+//                     target.0.send(buffer).unwrap();
+//                 }
+//
+//                 // TODO: way inefficient... =/ Fix! :D
+//                 // if slice.len() < self.buffer.len() {
+//                     self.double.clear();
+//                     self.double.write_all(slice).unwrap();
+//                 // }
+//             }
+//
+//             // if self.double.len() > 0 {
+//                 mem::swap(&mut self.buffer, &mut self.double);
+//                 // self.double.clear();
+//             // }
+//         }
+//     }
+// }
+
 // structure in charge of receiving data from a Reader, for example the network
 struct BinaryReceiver<R: Read> {
-    reader:     R,          // the generic reader
-    buffer:     Vec<u8>,    // current working buffer
-    double:     Vec<u8>,    // second working buffer
-    staging:    Vec<u8>,    // 1 << 20 of buffer to read into
-    targets:    Switchboard<(Sender<Vec<u8>>, Receiver<Vec<u8>>)>,
-}
-
-impl<R: Read> BinaryReceiver<R> {
-    fn new(reader: R, channels: Receiver<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver<R> {
-        BinaryReceiver {
-            reader:     reader,
-            buffer:     Vec::new(),
-            double:     Vec::new(),
-            staging:    vec![0u8; 1 << 20],
-            targets:    Switchboard::new(channels),
-        }
-    }
-
-    fn recv_loop(&mut self) {
-        loop {
-
-            // attempt to read some more bytes into our buffer
-            // TODO : We read in to self.staging because extending a Vec<u8> is hard without
-            // TODO : using set_len, which is unsafe.
-            // TODO : Could consider optimizing for the self.buffer.len() == 0 case, swapping
-            // TODO : self.staging with self.buffer, rather than using write_all.
-            let read = self.reader.read(&mut self.staging[..]).unwrap_or(0);
-            self.buffer.write_all(&self.staging[..read]).unwrap(); // <-- shouldn't fail
-
-            {
-                // get a view of available bytes
-                let mut slice = &self.buffer[..];
-
-                while let Some(header) = MessageHeader::try_read(&mut slice) {
-
-                    let h_len = header.length as usize;  // length in bytes
-                    let target = self.targets.ensure(header.target, header.graph, header.channel);
-                    let mut buffer = target.1.try_recv().unwrap_or(Vec::new());
-
-                    buffer.clear();
-                    buffer.write_all(&slice[..h_len]).unwrap();
-                    slice = &slice[h_len..];
-
-                    target.0.send(buffer).unwrap();
-                }
-
-                // TODO: way inefficient... =/ Fix! :D
-                // if slice.len() < self.buffer.len() {
-                    self.double.clear();
-                    self.double.write_all(slice).unwrap();
-                // }
-            }
-
-            // if self.double.len() > 0 {
-                mem::swap(&mut self.buffer, &mut self.double);
-                // self.double.clear();
-            // }
-        }
-    }
-}
-
-// structure in charge of receiving data from a Reader, for example the network
-struct BinaryReceiver2<R: Read> {
     reader:     R,          // the generic reader
     buffer:     Vec<u8>,    // current working buffer
     length:     usize,
     targets:    Switchboard<(Sender<Vec<u8>>, Receiver<Vec<u8>>)>,
 }
 
-impl<R: Read> BinaryReceiver2<R> {
-    fn new(reader: R, channels: Receiver<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver2<R> {
-        BinaryReceiver2 {
+impl<R: Read> BinaryReceiver<R> {
+    fn new(reader: R, channels: Receiver<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver<R> {
+        BinaryReceiver {
             reader:     reader,
             buffer:     vec![0u8; 1 << 20],
             length:     0,
