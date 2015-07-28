@@ -1,15 +1,11 @@
-use std::thread::sleep_ms;
 use std::io::{Read, Write, Result, BufRead, BufReader, BufWriter};
 use std::fs::File;
-
 use std::net::{TcpListener, TcpStream};
 use std::mem::size_of;
-
-use std::sync::mpsc::{Sender, Receiver, channel};
-
-use std::thread;
 use std::sync::Arc;
-use std::mem;
+use std::sync::mpsc::{Sender, Receiver, channel};
+use std::thread;
+use std::thread::sleep_ms;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
@@ -78,7 +74,7 @@ impl MessageHeader {
 //     staging:    Vec<u8>,    // 1 << 20 of buffer to read into
 //     targets:    Switchboard<(Sender<Vec<u8>>, Receiver<Vec<u8>>)>,
 // }
-// 
+//
 // impl<R: Read> BinaryReceiver<R> {
 //     fn new(reader: R, channels: Receiver<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver<R> {
 //         BinaryReceiver {
