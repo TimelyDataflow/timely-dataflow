@@ -175,7 +175,7 @@ impl<T:Data+Serializable, D: Data+Serializable> Pullable<T, D> for BinaryPullabl
                 (time, Message::from_bytes(bytes, offset))
             });
 
-            if let Some((_, ref mut message)) = self.current {
+            if let Some((_, ref message)) = self.current {
                 // TODO : old code; can't recall why this would happen.
                 // TODO : probably shouldn't, but I recall a progress
                 // TODO : tracking issue if it ever did. check it out!

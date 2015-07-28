@@ -9,7 +9,9 @@ pub struct Thread;
 impl Communicator for Thread {
     fn index(&self) -> u64 { 0 }
     fn peers(&self) -> u64 { 1 }
-    fn new_channel<T: Clone+'static, D: 'static>(&mut self) -> (Vec<::communication::observer::BoxedObserver<T, D>>, Box<::communication::Pullable<T, D>>) {
+    fn new_channel<T: Clone+'static, D: 'static>(&mut self) ->
+            (Vec<::communication::observer::BoxedObserver<T, D>>,
+             Box<::communication::Pullable<T, D>>) {
         let shared = Rc::new(RefCell::new(VecDeque::<(T, Message<D>)>::new()));
         (vec![::communication::observer::BoxedObserver::new(Observer::new(shared.clone()))],
          Box::new(Pullable::new(shared.clone())) as Box<::communication::Pullable<T, D>>)
@@ -63,12 +65,12 @@ impl<T, D> ::communication::pullable::Pullable<T, D> for Pullable<T, D> {
         // TODO : here is where we would recycle data
         self.current = self.source.borrow_mut().pop_front();
 
-        if let Some(ref mut _message) = self.current {
+        if let Some((_, ref message)) = self.current {
             // TODO : old code; can't recall why this would happen.
             // TODO : probably shouldn't, but I recall a progress
             // TODO : tracking issue if it ever did. check it out!
             // TODO : many operators will call notify_at if they get any messages, is why!
-            // assert!(message.look().len() > 0);
+            assert!(message.len() > 0);
         }
         self.current.as_mut().map(|&mut (ref time, ref mut data)| (time, data))
     }

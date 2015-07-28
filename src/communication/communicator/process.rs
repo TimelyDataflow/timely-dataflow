@@ -117,11 +117,11 @@ impl<T: Data, D: Data> Pullable<T, D> {
 impl<T: Data, D: Data> ::communication::pullable::Pullable<T, D> for Pullable<T, D> {
     #[inline]
     fn pull(&mut self) -> Option<(&T, &mut Message<D>)> {
-        
+
         // TODO : here is where we would recycle data
         self.current = self.source.try_recv().ok();
 
-        if let Some((_, ref mut data)) = self.current {
+        if let Some((_, ref data)) = self.current {
             // TODO : old code; can't recall why this would happen.
             // TODO : probably shouldn't, but I recall a progress
             // TODO : tracking issue if it ever did. check it out!
