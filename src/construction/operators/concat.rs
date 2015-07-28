@@ -1,13 +1,5 @@
-use std::rc::Rc;
-use std::cell::RefCell;
-
-use progress::{Timestamp, Scope};
-use progress::nested::Source::ScopeOutput;
-use progress::nested::Target::ScopeInput;
-use progress::count_map::CountMap;
-
 use communication::Data;
-use communication::observer::{Counter, Tee, Extensions};
+use communication::observer::Extensions;
 use communication::pact::Pipeline;
 
 use construction::{Stream, GraphBuilder};
