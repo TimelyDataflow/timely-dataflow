@@ -32,16 +32,7 @@ impl<C: Communicator, T: Timestamp+Ord> InputExtensionTrait<C, T> for SubgraphBu
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
-
         let helper = InputHelper::new(Counter::new(output, produced.clone()));
-        // {
-        //     frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
-        //     progress: Rc::new(RefCell::new(CountMap::new())),
-        //     output:   Counter::new(output, produced.clone()),
-        //     now_at:   Default::default(),
-        //     closed:   false,
-        // };
-
         let copies = self.peers();
 
         let index = self.add_scope(InputScope {
