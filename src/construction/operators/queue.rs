@@ -3,9 +3,6 @@ use std::hash::Hash;
 
 use communication::Data;
 use communication::pact::Pipeline;
-use serialization::Serializable;
-use communication::observer::Extensions;
-
 use construction::{Stream, GraphBuilder};
 use construction::operators::unary::UnaryNotifyExt;
 
@@ -15,7 +12,7 @@ pub trait QueueExt {
     fn queue(&self) -> Self;
 }
 
-impl<G: GraphBuilder, D: Data+Serializable> QueueExt for Stream<G, D>
+impl<G: GraphBuilder, D: Data> QueueExt for Stream<G, D>
 where G::Timestamp: Hash {
 
     fn queue(&self) -> Stream<G, D> {
@@ -29,7 +26,7 @@ where G::Timestamp: Hash {
 
             while let Some((time, _count)) = notificator.next() {
                 if let Some(mut data) = elements.remove(&time) {
-                    output.give_at(&time, data.drain_temp());
+                    output.session(&time).give_iterator(data.drain_temp());
                 }
             }
         })

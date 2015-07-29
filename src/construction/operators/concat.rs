@@ -1,7 +1,5 @@
 use communication::Data;
-use communication::observer::Extensions;
 use communication::pact::Pipeline;
-
 use construction::{Stream, GraphBuilder};
 use construction::operators::binary::BinaryStreamExt;
 
@@ -19,10 +17,10 @@ impl<G: GraphBuilder, D: Data> ConcatExt<G, D> for Stream<G, D> {
     fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
         self.binary_stream(other, Pipeline, Pipeline, "concat", |input1, input2, output| {
             while let Some((time, data)) = input1.pull() {
-                output.give_message_at(time, data);
+                output.session(time).give_message(data);
             }
             while let Some((time, data)) = input2.pull() {
-                output.give_message_at(time, data);
+                output.session(time).give_message(data);
             }
         })
     }

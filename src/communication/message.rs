@@ -11,12 +11,31 @@ pub struct Message<D> {
     contents: Contents<D>,
 }
 
+enum Contents<D> {
+    Bytes(Vec<u8>, usize, usize),  // bytes[offset..] decodes to length elements
+    Typed(Vec<D>),
+}
+
+/// ALLOC : This Drop implementation gets *very* angry if we drop allocated data.
+/// ALLOC : It probably shouldn't be used in practice, but should help track down who is being
+/// ALLOC : bad about respecting allocated memory.
+// impl<D> Drop for Message<D> {
+//     match self.contents {
+//         Contents::Bytes(bytes, _, _) => { assert!(bytes.capacity() == 0); }
+//         Contents::Typed(typed) => { assert!(typed.capacity() == 0); }
+//     }
+// }
+
 impl<D> Message<D> {
+    /// Default number of elements in a typed allocated message. This could vary as a function of
+    /// `std::mem::size_of::<D>()`, so is left as a method rather than a constant.
+    pub fn default_length() -> usize { 4096 }
+
     /// Constructs a `Message` from typed data, replacing its argument with `Vec::new()`.
     pub fn from_typed(typed: &mut Vec<D>) -> Message<D> {
         Message { contents: Contents::Typed(::std::mem::replace(typed, Vec::new())) }
     }
-    /// The length of the underlying vector.
+    /// The length of the underlying typed vector.
     ///
     /// The length is tracked without needing to deserialize the data, so that this method can be
     /// called even for `D` that do not implement `Serializable`.
@@ -26,14 +45,22 @@ impl<D> Message<D> {
             Contents::Typed(ref data) => data.len(),
         }
     }
-    /// Returns the typed vector, cleared, or allocates a new vector of supplied capacity if the
-    /// `Message` is backed by binary data.
-    pub fn into_typed(self, capacity: usize) -> Vec<D> {
+    /// Returns the typed vector, cleared, or a Vec::new() if the data are binary (and drops them
+    /// on the floor, I guess! Ouch.
+    /// ALLOC : dropping of binary data. likely called only by persons who pushed typed data on,
+    /// ALLOC : so perhaps not all that common. Could put a panic! here just for fun! :D
+    pub fn into_typed(self) -> Vec<D> {
         match self.contents {
-            Contents::Bytes(_,_,_) => Vec::with_capacity(capacity),
+            Contents::Bytes(_,_,_) => Vec::new(),
             Contents::Typed(mut data) => { data.clear(); data },
         }
     }
+
+    // pub fn test_capacity(&self) {
+    //     if let Contents::Typed(ref data) = self.contents {
+    //         assert!(data.capacity() == 0 || data.capacity() == Message::<D>::default_length());
+    //     }
+    // }
 }
 
 impl<D: Serializable> Message<D> {
@@ -61,10 +88,18 @@ impl<D: Serializable> Deref for Message<D> {
     }
 }
 
+// TODO : Rather than .clone() the decoded data, we should try and re-rig serialization so that the
+// TODO : underlying byte array can just be handed to Vec::from_raw_parts, cloning any owned data.
+// TODO : I think we would need to make sure that the byte array had the right alignment, so that
+// TODO : when the Vec is eventually dropped we don't de-allocate the wrong number of bytes.
+// TODO : This require mucking with the Abomonation code, as it doesn't currently let you step in
+// TODO : and skip copying the 24 byte Vec struct first. We'd also have to bake in the typed length
+// TODO : somewhere outside of this serialized hunk of data.
 impl<D: Clone+Serializable> DerefMut for Message<D> {
     fn deref_mut(&mut self) -> &mut Vec<D> {
         let value = if let Contents::Bytes(ref mut bytes, offset, _length) = self.contents {
             let (data, _) = <Vec<D> as Serializable>::decode(&mut bytes[offset..]).unwrap();
+            // ALLOC : clone() will allocate a Vec<D> and maybe more.
             Some(Contents::Typed((*data).clone()))
         }
         else { None };
@@ -79,45 +114,3 @@ impl<D: Clone+Serializable> DerefMut for Message<D> {
         else { unreachable!() }
     }
 }
-
-enum Contents<D> {
-    Bytes(Vec<u8>, usize, usize),  // bytes[offset..] decodes to length elements
-    Typed(Vec<D>),
-}
-
-// impl<D> Message<D> {
-//     pub fn len(&self) -> usize {
-//         match *self {
-//             Message::Bytes(_, _, length) => length,
-//             Message::Typed(ref data) => data.len(),
-//         }
-//     }
-// }
-// impl<D: Serializable> Message<D> {
-//     pub fn look(&mut self) -> &Vec<D> {
-//         match *self {
-//             Message::Bytes(ref mut bytes, offset, _length) => {
-//                 <Vec<D> as Serializable>::decode(&mut bytes[offset..]).unwrap().0
-//             },
-//             Message::Typed(ref data) => data,
-//         }
-//     }
-// }
-// impl<D: Clone+Serializable> Message<D> {
-//     pub fn take(&mut self) -> &mut Vec<D> {
-//         let value = if let Message::Bytes(ref mut bytes, offset, _length) = *self {
-//             let (data, _) = <Vec<D> as Serializable>::decode(&mut bytes[offset..]).unwrap();
-//             Some(Message::Typed((*data).clone()))
-//         }
-//         else { None };
-//
-//         if let Some(message) = value {
-//             *self = message;
-//         }
-//
-//         if let Message::Typed(ref mut data) = *self {
-//             data
-//         }
-//         else { panic!{} }
-//     }
-// }

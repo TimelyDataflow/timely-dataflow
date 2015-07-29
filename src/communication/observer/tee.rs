@@ -32,14 +32,16 @@ impl<T, D: Clone+Serializable> Observer for Tee<T, D> {
                 self.buffer.extend(data.iter().cloned());
                 let mut message = Message::from_typed(&mut self.buffer);
                 observers[index].give_box(&mut message);
-
-                self.buffer = message.into_typed(4096);
+                self.buffer = message.into_typed();
+                if self.buffer.capacity() != Message::<D>::default_length() {
+                    assert!(self.buffer.capacity() == 0);
+                    self.buffer = Vec::with_capacity(Message::<D>::default_length());
+                }
             }
             else {
                 observers[index].give_box(data);
             }
         }
-        // data.clear();
     }
 }
 
@@ -47,7 +49,7 @@ impl<T, D> Tee<T, D> {
     pub fn new() -> (Tee<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = Tee {
-            buffer: Vec::new(),
+            buffer: Vec::with_capacity(Message::<D>::default_length()),
             shared: shared.clone(),
         };
 

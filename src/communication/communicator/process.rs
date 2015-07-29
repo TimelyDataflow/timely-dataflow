@@ -93,11 +93,12 @@ impl<T: Data, D: Data> ::communication::observer::Observer for Observer<T, D> {
     }
     #[inline] fn give(&mut self, data: &mut Message<Self::Data>) {
         assert!(self.time.is_some());
-        if let Some(time) = self.time.clone() {
-            // TODO : anything better to do here than allocate (data)?
-            // TODO : perhaps team up with the Pushable to recycle (data) ...
-            // TODO : why allocating here? some assumption back upstream that memory are retained .. ?
-            self.dest.send((time, ::std::mem::replace(data, Message::from_typed(&mut Vec::with_capacity(4096))))).unwrap();
+        if data.len() > 0 {
+            if let Some(time) = self.time.clone() {
+                // ALLOC : We replace with empty typed data. Not clear why typed is better than binary,
+                // ALLOC : but lots of folks wouldn't expect bytes, and anyone should tolerate typed.
+                self.dest.send((time, ::std::mem::replace(data, Message::from_typed(&mut Vec::new())))).unwrap();
+            }
         }
     }
 }
@@ -122,10 +123,6 @@ impl<T: Data, D: Data> ::communication::pullable::Pullable<T, D> for Pullable<T,
         self.current = self.source.try_recv().ok();
 
         if let Some((_, ref data)) = self.current {
-            // TODO : old code; can't recall why this would happen.
-            // TODO : probably shouldn't, but I recall a progress
-            // TODO : tracking issue if it ever did. check it out!
-            // TODO : many operators will call notify_at if they get any messages, is why!
             assert!(data.len() > 0);
         }
         self.current.as_mut().map(|&mut (ref time, ref mut data)| (time, data))

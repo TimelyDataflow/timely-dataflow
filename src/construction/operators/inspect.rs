@@ -1,10 +1,7 @@
 use communication::Data;
 use communication::pact::Pipeline;
-
 use construction::{Stream, GraphBuilder};
 use construction::operators::unary::UnaryStreamExt;
-
-use communication::observer::Extensions;
 
 pub trait InspectExt<D: Data> {
     fn inspect<F: FnMut(&D)+'static>(&self, func: F) -> Self;
@@ -16,7 +13,7 @@ impl<G: GraphBuilder, D: Data> InspectExt<D> for Stream<G, D> {
         self.unary_stream(Pipeline, "Inspect", move |input, output| {
             while let Some((time, data)) = input.pull() {
                 for datum in data.iter() { func(datum); }
-                output.give_message_at(time, data);
+                output.session(time).give_message(data);
             }
         })
     }
@@ -33,7 +30,7 @@ impl<G: GraphBuilder, D: Data> InspectBatchExt<G, D> for Stream<G, D> {
         self.unary_stream(Pipeline, "Inspect", move |input, output| {
             while let Some((time, data)) = input.pull() {
                 func(&time, &data[..]);
-                output.give_message_at(time, data);
+                output.session(time).give_message(data);
             }
         })
     }

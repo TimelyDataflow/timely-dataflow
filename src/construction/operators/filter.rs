@@ -1,7 +1,5 @@
 use communication::Data;
 use communication::pact::Pipeline;
-use communication::observer::Extensions;
-
 use construction::{Stream, GraphBuilder};
 use construction::operators::unary::UnaryStreamExt;
 
@@ -15,7 +13,7 @@ impl<G: GraphBuilder, D: Data> FilterExt<D> for Stream<G, D> {
             while let Some((time, data)) = input.pull() {
                 data.retain(|x| logic(x));
                 if data.len() > 0 {
-                    output.give_message_at(time, data);
+                    output.session(time).give_message(data);
                 }
             }
         })

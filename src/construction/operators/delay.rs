@@ -4,8 +4,6 @@ use std::ops::DerefMut;
 
 use communication::{Data, Pullable, Message};
 use communication::pact::Pipeline;
-use communication::observer::Extensions;
-
 use construction::{Stream, GraphBuilder};
 use construction::operators::unary::UnaryNotifyExt;
 
@@ -33,7 +31,7 @@ where G::Timestamp: Hash {
             // for each available notification, send corresponding set
             while let Some((time, _count)) = notificator.next() {
                 if let Some(mut data) = elements.remove(&time) {
-                    output.give_at(&time, data.drain_temp());
+                    output.session(&time).give_iterator(data.drain_temp());
                 }
             }
         })
@@ -46,7 +44,7 @@ where G::Timestamp: Hash {
             while let Some((time, data)) = input.pull() {
                 let new_time = func(time);
                 assert!(&new_time >= time);
-                let spare = stash.pop().unwrap_or_else(|| Vec::with_capacity(4096));
+                let spare = stash.pop().unwrap_or_else(|| Vec::new());
                 let data = ::std::mem::replace(data.deref_mut(), spare);
 
                 elements.entry(new_time.clone())
@@ -59,9 +57,9 @@ where G::Timestamp: Hash {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain_temp() {
                         let mut message = Message::from_typed(&mut data);
-                        output.give_message_at(&time, &mut message);
-                        let buffer = message.into_typed(0);
-                        if buffer.capacity() == 4096 { stash.push(buffer); }
+                        output.session(&time).give_message(&mut message);
+                        let buffer = message.into_typed();
+                        if buffer.capacity() == Message::<D>::default_length() { stash.push(buffer); }
                     }
                 }
             }

@@ -8,9 +8,10 @@ use progress::count_map::CountMap;
 
 use communication::{Data, Pullable};
 use communication::pact::{ParallelizationContract, Pipeline};
-use communication::pullable::Counter as PullableCounter;
-use communication::observer::{Tee, Extensions};
+use communication::observer::Tee;
 use communication::observer::Counter as ObserverCounter;
+use communication::observer::buffer::Buffer as ObserverBuffer;
+use communication::pullable::Counter as PullableCounter;
 
 use construction::{Stream, GraphBuilder};
 
@@ -50,7 +51,7 @@ impl<G: GraphBuilder, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> PartitionE
 
 pub struct PartitionScope<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> {
     input:   PullableCounter<T, D, P>,
-    outputs: Vec<ObserverCounter<Tee<T, D2>>>,
+    outputs: Vec<ObserverBuffer<ObserverCounter<Tee<T, D2>>>>,
     func:    F,
 }
 
@@ -58,7 +59,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> Par
     pub fn new(input: P, outputs: Vec<Tee<T, D2>>, func: F) -> PartitionScope<T, D, D2, F, P> {
         PartitionScope {
             input:      PullableCounter::new(input),
-            outputs:    outputs.into_iter().map(|x| ObserverCounter::new(x, Rc::new(RefCell::new(CountMap::new())))).collect(),
+            outputs:    outputs.into_iter().map(|x| ObserverBuffer::new(ObserverCounter::new(x, Rc::new(RefCell::new(CountMap::new()))))).collect(),
             func:       func,
         }
     }
@@ -86,7 +87,8 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> Sco
 
         self.input.pull_progress(&mut consumed[0]);
         for (index, output) in self.outputs.iter_mut().enumerate() {
-            output.pull_progress(&mut produced[index]);
+            output.flush_and_shut();
+            output.inner().pull_progress(&mut produced[index]);
         }
 
         return false;   // no reason to keep running on Partition's account

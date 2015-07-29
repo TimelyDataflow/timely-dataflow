@@ -116,29 +116,25 @@ impl<T:Data+Serializable, D:Data+Serializable> ::communication::observer::Observ
     }
     #[inline] fn give(&mut self, data: &mut Message<Self::Data>) {
         assert!(self.time.is_some());
-        if let Some(time) = self.time.clone() {
-            // TODO : anything better to do here than allocate (bytes)?
-            // TODO : perhaps team up with the Pushable to recycle (bytes) ...
+        if data.len() > 0 {
+            if let Some(time) = self.time.clone() {
+                // TODO : anything better to do here than allocate (bytes)?
+                // TODO : perhaps team up with the Pushable to recycle (bytes) ...
+                // ALLOC : We create some new byte buffers here, because we have to.
+                // ALLOC : We would love to borrow these from somewhere nearby, if possible.
+                let mut bytes = Vec::new();
+                Serializable::encode(&time, &mut bytes);
+                let vec: &Vec<D> = data.deref();
+                Serializable::encode(vec, &mut bytes);
 
-            // VERY IMPORTANT : We don't know much about data. If it is binary, we believe that
-            // it is valid, but we don't know that the encoded timestamp is self.time, for example.
-            // We could try and tweak the layout (putting time last, for example) to allow a faster
-            // serialization process, but it is something to be done carefully.
+                // NOTE : We do not .clear() data, because that could forcibly allocate.
+                // NOTE : Instead, upstream folks are expected to clear allocations before re-using.
 
-            // For now, just serialize the whole thing and think about optimizations later on.
-            // Also, who serialized data and now wants to re-serialize it without breaking it up
-            // via an exchange channel? Seems uncommon.
+                let mut header = self.header;
+                header.length = bytes.len() as u64;
 
-            let mut bytes = Vec::new();
-            Serializable::encode(&time, &mut bytes);
-            let vec: &Vec<D> = data.deref();
-            Serializable::encode(vec, &mut bytes);
-            // data.clear();   // <--- ??????? improve!!!
-
-            let mut header = self.header;
-            header.length = bytes.len() as u64;
-
-            self.sender.send((header, bytes)).ok();
+                self.sender.send((header, bytes)).ok();
+            }
         }
     }
 }
@@ -176,10 +172,6 @@ impl<T:Data+Serializable, D: Data+Serializable> Pullable<T, D> for BinaryPullabl
             });
 
             if let Some((_, ref message)) = self.current {
-                // TODO : old code; can't recall why this would happen.
-                // TODO : probably shouldn't, but I recall a progress
-                // TODO : tracking issue if it ever did. check it out!
-                // TODO : many operators will call notify_at if they get any messages, is why!
                 assert!(message.len() > 0);
             }
             self.current.as_mut().map(|&mut (ref time, ref mut data)| (time, data))

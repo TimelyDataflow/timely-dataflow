@@ -14,6 +14,7 @@ use communication::observer::Counter as ObserverCounter;
 use communication::observer::tee::Tee;
 use communication::pullable::Counter as PullableCounter;
 use communication::pact::ParallelizationContract;
+use communication::observer::buffer::Buffer as ObserverBuffer;
 
 use construction::{Stream, GraphBuilder};
 
@@ -24,7 +25,7 @@ pub trait BinaryStreamExt<G: GraphBuilder, D1: Data> {
               D3: Data,
               L: FnMut(&mut PullableCounter<G::Timestamp, D1, P1::Pullable>,
                        &mut PullableCounter<G::Timestamp, D2, P2::Pullable>,
-                       &mut ObserverCounter<Tee<G::Timestamp, D3>>)+'static,
+                       &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D3>>>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
             (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, logic: L) -> Stream<G, D3>;
@@ -36,7 +37,7 @@ impl<G: GraphBuilder, D1: Data> BinaryStreamExt<G, D1> for Stream<G, D1> {
              D3: Data,
              L: FnMut(&mut PullableCounter<G::Timestamp, D1, P1::Pullable>,
                       &mut PullableCounter<G::Timestamp, D2, P2::Pullable>,
-                      &mut ObserverCounter<Tee<G::Timestamp, D3>>)+'static,
+                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D3>>>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
              (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, mut logic: L) -> Stream<G, D3> {
@@ -62,7 +63,7 @@ pub trait BinaryNotifyExt<G: GraphBuilder, D1: Data> {
               D3: Data,
               L: FnMut(&mut PullableCounter<G::Timestamp, D1, P1::Pullable>,
                        &mut PullableCounter<G::Timestamp, D2, P2::Pullable>,
-                       &mut ObserverCounter<Tee<G::Timestamp, D3>>,
+                       &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D3>>>,
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
@@ -75,7 +76,7 @@ impl<G: GraphBuilder, D1: Data> BinaryNotifyExt<G, D1> for Stream<G, D1> {
              D3: Data,
              L: FnMut(&mut PullableCounter<G::Timestamp, D1, P1::Pullable>,
                       &mut PullableCounter<G::Timestamp, D2, P2::Pullable>,
-                      &mut ObserverCounter<Tee<G::Timestamp, D3>>,
+                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D3>>>,
                       &mut Notificator<G::Timestamp>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
@@ -100,7 +101,7 @@ impl<G: GraphBuilder, D1: Data> BinaryNotifyExt<G, D1> for Stream<G, D1> {
 pub struct BinaryScopeHandle<T: Timestamp, D1: Data, D2: Data, D3: Data, P1: Pullable<T, D1>, P2: Pullable<T, D2>> {
     pub input1:         PullableCounter<T, D1, P1>,
     pub input2:         PullableCounter<T, D2, P2>,
-    pub output:         ObserverCounter<Tee<T, D3>>,
+    pub output:         ObserverBuffer<ObserverCounter<Tee<T, D3>>>,
     pub notificator:    Notificator<T>,
 }
 
@@ -110,7 +111,7 @@ pub struct BinaryScope<T: Timestamp,
                        P2: Pullable<T, D2>,
                        L: FnMut(&mut PullableCounter<T, D1, P1>,
                                 &mut PullableCounter<T, D2, P2>,
-                                &mut ObserverCounter<Tee<T, D3>>,
+                                &mut ObserverBuffer<ObserverCounter<Tee<T, D3>>>,
                                 &mut Notificator<T>)> {
     name:           String,
     handle:         BinaryScopeHandle<T, D1, D2, D3, P1, P2>,
@@ -124,7 +125,7 @@ impl<T: Timestamp,
      P2: Pullable<T, D2>,
      L: FnMut(&mut PullableCounter<T, D1, P1>,
               &mut PullableCounter<T, D2, P2>,
-              &mut ObserverCounter<Tee<T, D3>>,
+              &mut ObserverBuffer<ObserverCounter<Tee<T, D3>>>,
               &mut Notificator<T>)+'static>
 BinaryScope<T, D1, D2, D3, P1, P2, L> {
     pub fn new(receiver1: P1,
@@ -139,7 +140,7 @@ BinaryScope<T, D1, D2, D3, P1, P2, L> {
             handle: BinaryScopeHandle {
                 input1:      PullableCounter::new(receiver1),
                 input2:      PullableCounter::new(receiver2),
-                output:      ObserverCounter::new(targets, Rc::new(RefCell::new(CountMap::new()))),
+                output:      ObserverBuffer::new(ObserverCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
                 notificator: Default::default(),
             },
             logic: logic,
@@ -155,7 +156,7 @@ where T: Timestamp,
       P2: Pullable<T, D2>,
       L: FnMut(&mut PullableCounter<T, D1, P1>,
                &mut PullableCounter<T, D2, P2>,
-               &mut ObserverCounter<Tee<T, D3>>,
+               &mut ObserverBuffer<ObserverCounter<Tee<T, D3>>>,
                &mut Notificator<T>)+'static {
     fn inputs(&self) -> u64 { 2 }
     fn outputs(&self) -> u64 { 1 }
@@ -189,10 +190,12 @@ where T: Timestamp,
     {
         (self.logic)(&mut self.handle.input1, &mut self.handle.input2, &mut self.handle.output, &mut self.handle.notificator);
 
+        self.handle.output.flush_and_shut();
+
         // extract what we know about progress from the input and output adapters.
         self.handle.input1.pull_progress(&mut consumed[0]);
         self.handle.input2.pull_progress(&mut consumed[1]);
-        self.handle.output.pull_progress(&mut produced[0]);
+        self.handle.output.inner().pull_progress(&mut produced[0]);
         self.handle.notificator.pull_progress(&mut internal[0]);
 
         return false;   // no unannounced internal work

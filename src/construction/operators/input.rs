@@ -100,7 +100,7 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
             observer: observer,
-            buffer: Vec::with_capacity(4096),
+            buffer: Vec::with_capacity(Message::<D>::default_length()),
             now_at: None,
         }
     }
@@ -118,8 +118,11 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
 
         let mut message = Message::from_typed(&mut self.buffer);
         self.observer.give(&mut message);
-        self.buffer = message.into_typed(4096);
-        self.buffer.clear();
+        self.buffer = message.into_typed();
+        if self.buffer.capacity() != Message::<D>::default_length() {
+            assert!(self.buffer.capacity() == 0);
+            self.buffer = Vec::with_capacity(Message::<D>::default_length());
+        }
     }
 
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
@@ -140,6 +143,7 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
 
     #[inline(always)]
     pub fn give(&mut self, data: D) {
+        assert!(self.buffer.capacity() == Message::<D>::default_length());
         self.buffer.push(data);
         if self.buffer.len() == self.buffer.capacity() {
             self.flush();

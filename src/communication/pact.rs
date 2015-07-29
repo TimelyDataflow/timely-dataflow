@@ -27,7 +27,9 @@ impl<T: Timestamp, D: Data> ParallelizationContract<T, D> for Pipeline {
     type Pullable = ThreadPullable<T, D>;
     fn connect<C: Communicator>(self,_communicator: &mut C) -> (Self::Observer, Self::Pullable) {
         let shared = Rc::new(RefCell::new(VecDeque::new()));
-        (ThreadObserver::new(shared.clone()), ThreadPullable::new(shared.clone()))
+        let reverse = Rc::new(RefCell::new(Vec::new()));
+
+        (ThreadObserver::new(shared.clone(), reverse.clone()), ThreadPullable::new(shared.clone(), reverse.clone()))
     }
 }
 
