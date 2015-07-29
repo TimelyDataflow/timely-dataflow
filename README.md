@@ -28,13 +28,13 @@ fn main() {
         // create a new input, and inspect its output
         let mut input = root.subcomputation(move |builder| {
             let (input, stream) = builder.new_input();
-            stream.inspect(move |x| println!("hello {:?}", x));
+            stream.inspect(|x| println!("hello {:?}", x));
             input
         });
 
         // introduce data and watch!
         for round in 0..10 {
-            input.send_at(round, round..round+1);
+            input.give(round);
             input.advance_to(round + 1);
             root.step();
         }
@@ -98,7 +98,7 @@ Timely dataflow is intended to support multiple levels of abstraction, from the 
 
 There are currently a few options for writing timely dataflow programs. Ideally this set will expand with time, as interested people write their own layers (or build on those of others).
 
-* [**Raw timely dataflow**](https://github.com/frankmcsherry/timely-dataflow/tree/master/src/example_shared/operators): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also including more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
+* [**Timely dataflow**](https://github.com/frankmcsherry/timely-dataflow/tree/master/src/example_shared/operators): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also including more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
 
 * [**Differential dataflow**](https://github.com/frankmcsherry/differential-dataflow): A higher-level language built on timely dataflow, differential dataflow includes operators like `group_by`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
 
