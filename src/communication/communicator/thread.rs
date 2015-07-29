@@ -73,7 +73,7 @@ impl<T, D> ::communication::pullable::Pullable<T, D> for Pullable<T, D> {
             let mut vector = data.into_typed();
             if vector.capacity() == Message::<D>::default_length() {
                 vector.clear();
-                self.reverse.borrow_mut().push(vector);
+                // self.reverse.borrow_mut().push(vector);
             }
         }
 
