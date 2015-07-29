@@ -98,7 +98,7 @@ impl<D: Serializable> Deref for Message<D> {
 impl<D: Clone+Serializable> DerefMut for Message<D> {
     fn deref_mut(&mut self) -> &mut Vec<D> {
         let value = if let Contents::Bytes(ref mut bytes, offset, _length) = self.contents {
-            let (data, _) = <Vec<D> as Serializable>::decode(&mut bytes[offset..]).unwrap();
+            let (data, _) = <Vec<D> as Serializable>::verify(&bytes[offset..]).unwrap();
             // ALLOC : clone() will allocate a Vec<D> and maybe more.
             Some(Contents::Typed((*data).clone()))
         }
