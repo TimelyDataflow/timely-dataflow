@@ -32,18 +32,19 @@ pub trait Unary<G: GraphBuilder, D1: Data> {
     /// write to the output stream.
     ///
     /// #Examples
-    /// ```
+    /// ```ignore
     /// use communication::pact::Pipeline;
     /// source.unary_stream(Pipeline, "example", |input, output| {
-    ///     while let Some((time, data)) = input.pul() {
+    ///     while let Some((time, data)) = input.pull() {
     ///         output.session(time).give_message(data);
     ///     }
     /// });
     /// ```
-    fn unary_stream<D2: Data,
-             L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
-                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>)+'static,
-             P: ParallelizationContract<G::Timestamp, D1>>
+    fn unary_stream<
+        D2: Data,
+        L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
+                 &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>)+'static,
+        P: ParallelizationContract<G::Timestamp, D1>>
             (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>;
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream,
@@ -51,10 +52,10 @@ pub trait Unary<G: GraphBuilder, D1: Data> {
     /// a vector of initial notifications the operator requires (commonly none).
     ///
     /// #Examples
-    /// ```
+    /// ```ignore
     /// use communication::pact::Pipeline;
     /// source.unary_notify(Pipeline, "example", vec![], |input, output, notificator| {
-    ///     while let Some((time, data)) = input.pul() {
+    ///     while let Some((time, data)) = input.pull() {
     ///         output.session(time).give_message(data);
     ///     }
     /// }
