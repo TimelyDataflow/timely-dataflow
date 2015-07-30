@@ -1,3 +1,6 @@
+//! A trait for serializable data types. Currently a proxy for `Abomonation`.
+
+
 pub mod abomonation;
 
 use abomonation::Abomonation;

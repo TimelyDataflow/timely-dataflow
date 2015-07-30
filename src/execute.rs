@@ -1,3 +1,5 @@
+//! Tools to start a timely dataflow execution from command line arguments and per-worker logic.
+
 use std::thread;
 use std::io::BufRead;
 use getopts;
@@ -22,7 +24,8 @@ use networking::initialize_networking;
 /// `-p, --process`: identity of this process; from 0 to n-1.
 ///
 /// `-h, --hostfile`: a text file whose lines are "hostname:port" in order of process identity.
-/// If not specified, `localhost` will be used, with port numbers increasing from 2101 (arbitrary).
+/// If not specified, `localhost` will be used, with port numbers increasing from 2101 (chosen
+/// arbitrarily).
 ///
 /// #Examples
 /// ```ignore

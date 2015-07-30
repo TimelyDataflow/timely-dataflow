@@ -1,3 +1,5 @@
+//! Placeholder `Drain` implementation for `Vec<T>` until it lands in stable Rust.
+
 use std::slice;
 use std::ptr;
 

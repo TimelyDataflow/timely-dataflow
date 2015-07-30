@@ -4,17 +4,16 @@ use std::hash::Hash;
 use communication::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
-use construction::operators::unary::UnaryNotifyExt;
+use construction::operators::unary::Unary;
 
 use drain::DrainExt;
 
-pub trait QueueExt {
+pub trait Queue {
     fn queue(&self) -> Self;
 }
 
-impl<G: GraphBuilder, D: Data> QueueExt for Stream<G, D>
+impl<G: GraphBuilder, D: Data> Queue for Stream<G, D>
 where G::Timestamp: Hash {
-
     fn queue(&self) -> Stream<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Queue", vec![], move |input, output, notificator| {

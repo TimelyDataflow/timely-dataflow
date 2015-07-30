@@ -5,16 +5,16 @@ use std::ops::DerefMut;
 use communication::{Data, Pullable, Message};
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
-use construction::operators::unary::UnaryNotifyExt;
+use construction::operators::unary::Unary;
 
 use drain::DrainExt;
 
-pub trait DelayExt<G: GraphBuilder, D: Data> {
+pub trait Delay<G: GraphBuilder, D: Data> {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
     fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
 }
 
-impl<G: GraphBuilder, D: Data> DelayExt<G, D> for Stream<G, D>
+impl<G: GraphBuilder, D: Data> Delay<G, D> for Stream<G, D>
 where G::Timestamp: Hash {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
         let mut elements = HashMap::new();

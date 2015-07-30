@@ -3,6 +3,8 @@
 Timely dataflow is a low-latency cyclic dataflow computational model, introduced in the paper [Naiad: a timely datalow system](http://research.microsoft.com/pubs/201100/naiad_sosp2013.pdf).
 This project is an extended and more modular implementation of timely dataflow in Rust.
 
+Be sure to read the [documentation for timely dataflow](hthp://frankmcsherry.github.io/timely-dataflow).
+
 # An example
 
 To use timely dataflow, add the following to the dependencies section of your project's `Cargo.toml` file:

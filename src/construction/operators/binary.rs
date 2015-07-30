@@ -20,7 +20,7 @@ use construction::{Stream, GraphBuilder};
 
 use drain::DrainExt;
 
-pub trait BinaryStreamExt<G: GraphBuilder, D1: Data> {
+pub trait Binary<G: GraphBuilder, D1: Data> {
     fn binary_stream<D2: Data,
               D3: Data,
               L: FnMut(&mut PullableCounter<G::Timestamp, D1, P1::Pullable>,
@@ -29,9 +29,18 @@ pub trait BinaryStreamExt<G: GraphBuilder, D1: Data> {
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
             (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, logic: L) -> Stream<G, D3>;
+    fn binary_notify<D2: Data,
+              D3: Data,
+              L: FnMut(&mut PullableCounter<G::Timestamp, D1, P1::Pullable>,
+                       &mut PullableCounter<G::Timestamp, D2, P2::Pullable>,
+                       &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D3>>>,
+                       &mut Notificator<G::Timestamp>)+'static,
+              P1: ParallelizationContract<G::Timestamp, D1>,
+              P2: ParallelizationContract<G::Timestamp, D2>>
+            (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3>;
 }
 
-impl<G: GraphBuilder, D1: Data> BinaryStreamExt<G, D1> for Stream<G, D1> {
+impl<G: GraphBuilder, D1: Data> Binary<G, D1> for Stream<G, D1> {
     fn binary_stream<
              D2: Data,
              D3: Data,
@@ -56,21 +65,7 @@ impl<G: GraphBuilder, D1: Data> BinaryStreamExt<G, D1> for Stream<G, D1> {
 
         Stream::new(ScopeOutput(index, 0), registrar, builder)
     }
-}
 
-pub trait BinaryNotifyExt<G: GraphBuilder, D1: Data> {
-    fn binary_notify<D2: Data,
-              D3: Data,
-              L: FnMut(&mut PullableCounter<G::Timestamp, D1, P1::Pullable>,
-                       &mut PullableCounter<G::Timestamp, D2, P2::Pullable>,
-                       &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D3>>>,
-                       &mut Notificator<G::Timestamp>)+'static,
-              P1: ParallelizationContract<G::Timestamp, D1>,
-              P2: ParallelizationContract<G::Timestamp, D2>>
-            (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3>;
-}
-
-impl<G: GraphBuilder, D1: Data> BinaryNotifyExt<G, D1> for Stream<G, D1> {
     fn binary_notify<
              D2: Data,
              D3: Data,

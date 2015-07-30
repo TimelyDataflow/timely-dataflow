@@ -72,12 +72,8 @@ impl Communicator for Binary {
             reader.send(((self.index, self.graph, self.allocated), (send.clone(), r))).unwrap();
         }
 
-        let pullable = Box::new(BinaryPullable {
-            inner: inner_recv,
-            current: None,
-            receiver: recv,
-        });
-
+        let pullable = Box::new(BinaryPullable::new(inner_recv, recv));
+        
         self.allocated += 1;
 
         return (pushers, pullable);

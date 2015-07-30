@@ -1,13 +1,13 @@
 [package]
 
 name = "timely"
-version = "0.0.7"
+version = "0.0.8"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 description = "A low-latency data-parallel dataflow system in Rust"
 
 # These URLs point to more information about the repository
-documentation = "https://github.com/frankmcsherry/timely-dataflow"
+documentation = "https://frankmcsherry.github.com/timely-dataflow"
 homepage = "https://github.com/frankmcsherry/timely-dataflow"
 repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow"]

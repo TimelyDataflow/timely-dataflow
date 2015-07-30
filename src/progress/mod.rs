@@ -1,3 +1,5 @@
+//! Progress tracking mechanisms to support notification in timely dataflow
+
 pub use self::scope::Scope;
 pub use self::nested::{Subgraph, Source, Target};
 pub use self::timestamp::{Timestamp, PathSummary};

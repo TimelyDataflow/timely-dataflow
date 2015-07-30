@@ -1,3 +1,5 @@
+//! Methods to construct generic streaming and blocking unary operators.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
@@ -19,16 +21,54 @@ use construction::{Stream, GraphBuilder};
 
 use drain::DrainExt;
 
-pub trait UnaryNotifyExt<G: GraphBuilder, D1: Data> {
+type Input<T, D, P> = PullableCounter<T, D, P>;
+type Output<T, D> = ObserverBuffer<ObserverCounter<Tee<T, D>>>;
+
+/// Methods to construct generic streaming and blocking unary operators.
+
+pub trait Unary<G: GraphBuilder, D1: Data> {
+    /// Creates a new dataflow operator that partitions its input stream by a parallelization
+    /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream and
+    /// write to the output stream.
+    ///
+    /// #Examples
+    /// ```
+    /// use communication::pact::Pipeline;
+    /// source.unary_stream(Pipeline, "example", |input, output| {
+    ///     while let Some((time, data)) = input.pul() {
+    ///         output.session(time).give_message(data);
+    ///     }
+    /// });
+    /// ```
+    fn unary_stream<D2: Data,
+             L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
+                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>)+'static,
+             P: ParallelizationContract<G::Timestamp, D1>>
+            (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>;
+    /// Creates a new dataflow operator that partitions its input stream by a parallelization
+    /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream,
+    /// write to the output stream, and request and receive notifications. The method also requires
+    /// a vector of initial notifications the operator requires (commonly none).
+    ///
+    /// #Examples
+    /// ```
+    /// use communication::pact::Pipeline;
+    /// source.unary_notify(Pipeline, "example", vec![], |input, output, notificator| {
+    ///     while let Some((time, data)) = input.pul() {
+    ///         output.session(time).give_message(data);
+    ///     }
+    /// }
+    /// ```
     fn unary_notify<D2: Data,
             L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
             (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>;
+
 }
 
-impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for Stream<G, D1> {
+impl<G: GraphBuilder, D1: Data> Unary<G, D1> for Stream<G, D1> {
     fn unary_notify<D2: Data,
             L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>,
@@ -47,18 +87,7 @@ impl<G: GraphBuilder, D1: Data> UnaryNotifyExt<G, D1> for Stream<G, D1> {
 
         Stream::new(ScopeOutput(index, 0), registrar, builder)
     }
-}
 
-
-pub trait UnaryStreamExt<G: GraphBuilder, D1: Data> {
-    fn unary_stream<D2: Data,
-             L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
-                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>)+'static,
-             P: ParallelizationContract<G::Timestamp, D1>>
-            (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>;
-}
-
-impl<G: GraphBuilder, D1: Data> UnaryStreamExt<G, D1> for Stream<G, D1> {
     fn unary_stream<D2: Data,
              L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
                       &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>)+'static,
@@ -77,13 +106,13 @@ impl<G: GraphBuilder, D1: Data> UnaryStreamExt<G, D1> for Stream<G, D1> {
     }
 }
 
-pub struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data, P: Pullable<T, D1>> {
+struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data, P: Pullable<T, D1>> {
     pub input:          PullableCounter<T, D1, P>,
     pub output:         ObserverBuffer<ObserverCounter<Tee<T, D2>>>,
     pub notificator:    Notificator<T>,
 }
 
-pub struct UnaryScope
+struct UnaryScope
     <
     T: Timestamp,
     D1: Data,
