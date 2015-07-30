@@ -13,6 +13,7 @@ pub use self::flat_map::*;
 pub use self::filter::*;
 pub use self::binary::*;
 pub use self::delay::*;
+pub use self::exchange::*;
 
 pub mod enterleave;
 pub mod unary;
@@ -29,3 +30,4 @@ pub mod flat_map;
 pub mod filter;
 pub mod binary;
 pub mod delay;
+pub mod exchange;
