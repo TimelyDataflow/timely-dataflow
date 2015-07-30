@@ -40,12 +40,12 @@ pub trait Unary<G: GraphBuilder, D1: Data> {
     ///     }
     /// });
     /// ```
-    fn unary_stream<
+    fn unary_stream<D2, L, P> (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>
+    where
         D2: Data,
         L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
                  &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>)+'static,
-        P: ParallelizationContract<G::Timestamp, D1>>
-            (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>;
+        P: ParallelizationContract<G::Timestamp, D1>;
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream,
     /// write to the output stream, and request and receive notifications. The method also requires
@@ -60,13 +60,13 @@ pub trait Unary<G: GraphBuilder, D1: Data> {
     ///     }
     /// }
     /// ```
-    fn unary_notify<D2: Data,
-            L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
-                     &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>,
-                     &mut Notificator<G::Timestamp>)+'static,
-             P: ParallelizationContract<G::Timestamp, D1>>
-            (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>;
-
+    fn unary_notify<D2, L, P> (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>
+    where
+        D2: Data,
+        L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
+                 &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>,
+                 &mut Notificator<G::Timestamp>)+'static,
+         P: ParallelizationContract<G::Timestamp, D1>;
 }
 
 impl<G: GraphBuilder, D1: Data> Unary<G, D1> for Stream<G, D1> {
