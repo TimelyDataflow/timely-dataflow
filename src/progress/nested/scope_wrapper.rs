@@ -3,20 +3,20 @@ use std::default::Default;
 use communication::Communicator;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Timestamp, Scope};
+use progress::{Timestamp, Operate};
 use progress::nested::Target;
-use progress::nested::subgraph::Target::{GraphOutput, ScopeInput};
+use progress::nested::subgraph::Target::{GraphOutput, ChildInput};
 
 use progress::count_map::CountMap;
 
 pub struct ScopeWrapper<T: Timestamp> {
     pub name:                   String,
-    pub scope:                  Option<Box<Scope<T>>>,          // the scope itself
+    pub scope:                  Option<Box<Operate<T>>>,          // the scope itself
 
-    index:                      u64,
+    index:                      usize,
 
-    pub inputs:                 u64,                       // cached information about inputs
-    pub outputs:                u64,                       // cached information about outputs
+    pub inputs:                 usize,                       // cached information about inputs
+    pub outputs:                usize,                       // cached information about outputs
 
     pub edges:                  Vec<Vec<Target>>,
 
@@ -35,15 +35,15 @@ pub struct ScopeWrapper<T: Timestamp> {
 }
 
 impl<T: Timestamp> ScopeWrapper<T> {
-    pub fn new(mut scope: Box<Scope<T>>, index: u64, _path: String) -> ScopeWrapper<T> {
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, _path: String) -> ScopeWrapper<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
 
         let (summary, work) = scope.get_internal_summary();
 
-        assert!(summary.len() as u64 == inputs);
-        assert!(!summary.iter().any(|x| x.len() as u64 != outputs));
+        assert!(summary.len() == inputs);
+        assert!(!summary.iter().any(|x| x.len() != outputs));
 
         let mut result = ScopeWrapper {
             name:       format!("{}[{}]", scope.name(), index),
@@ -51,20 +51,20 @@ impl<T: Timestamp> ScopeWrapper<T> {
             index:      index,
             inputs:     inputs,
             outputs:    outputs,
-            edges:      vec![Default::default(); outputs as usize],
+            edges:      vec![Default::default(); outputs],
 
             notify:     notify,
             summary:    summary,
 
-            guarantees:             vec![Default::default(); inputs as usize],
-            capabilities:           vec![Default::default(); outputs as usize],
-            outstanding_messages:   vec![Default::default(); inputs as usize],
+            guarantees:             vec![Default::default(); inputs],
+            capabilities:           vec![Default::default(); outputs],
+            outstanding_messages:   vec![Default::default(); inputs],
 
-            internal_progress: vec![CountMap::new(); outputs as usize],
-            consumed_messages: vec![CountMap::new(); inputs as usize],
-            produced_messages: vec![CountMap::new(); outputs as usize],
+            internal_progress: vec![CountMap::new(); outputs],
+            consumed_messages: vec![CountMap::new(); inputs],
+            produced_messages: vec![CountMap::new(); outputs],
 
-            guarantee_changes: vec![CountMap::new(); inputs as usize],
+            guarantee_changes: vec![CountMap::new(); inputs],
         };
 
         // TODO : Gross. Fix.
@@ -85,7 +85,7 @@ impl<T: Timestamp> ScopeWrapper<T> {
         assert!(self.scope.is_some() || external_progress.iter().all(|x| x.len() == 0));
 
         if self.notify && external_progress.iter().any(|x| x.len() > 0) {
-            for input_port in (0..self.inputs as usize) {
+            for input_port in (0..self.inputs) {
                 self.guarantees[input_port]
                     .update_into_cm(&external_progress[input_port], &mut self.guarantee_changes[input_port]);
             }
@@ -102,9 +102,9 @@ impl<T: Timestamp> ScopeWrapper<T> {
         }
     }
 
-    pub fn pull_pointstamps<A: FnMut(u64,T,i64)->()>(&mut self,
-                                                  pointstamp_messages: &mut CountMap<(u64, u64, T)>,
-                                                  pointstamp_internal: &mut CountMap<(u64, u64, T)>,
+    pub fn pull_pointstamps<A: FnMut(usize,T,i64)->()>(&mut self,
+                                                  pointstamp_messages: &mut CountMap<(usize, usize, T)>,
+                                                  pointstamp_internal: &mut CountMap<(usize, usize, T)>,
                                                   mut output_action:   A) -> bool {
 
         let active = {
@@ -128,32 +128,32 @@ impl<T: Timestamp> ScopeWrapper<T> {
            }
 
         // for each output: produced messages and internal progress
-        for output in (0..self.outputs as usize) {
+        for output in (0..self.outputs) {
             while let Some((time, delta)) = self.produced_messages[output].pop() {
                 for &target in self.edges[output].iter() {
                     match target {
-                        ScopeInput(tgt, tgt_in)   => { pointstamp_messages.update(&(tgt, tgt_in, time), delta); },
+                        ChildInput(tgt, tgt_in)   => { pointstamp_messages.update(&(tgt, tgt_in, time), delta); },
                         GraphOutput(graph_output) => { output_action(graph_output, time, delta); },
                     }
                 }
             }
 
-            while let Some((time, delta)) = self.internal_progress[output as usize].pop() {
-                pointstamp_internal.update(&(self.index, output as u64, time), delta);
+            while let Some((time, delta)) = self.internal_progress[output].pop() {
+                pointstamp_internal.update(&(self.index, output, time), delta);
             }
         }
 
         // for each input: consumed messages
-        for input in (0..self.inputs as usize) {
-            while let Some((time, delta)) = self.consumed_messages[input as usize].pop() {
-                pointstamp_messages.update(&(self.index, input as u64, time), -delta);
+        for input in (0..self.inputs) {
+            while let Some((time, delta)) = self.consumed_messages[input].pop() {
+                pointstamp_messages.update(&(self.index, input, time), -delta);
             }
         }
 
         return active;
     }
 
-    pub fn add_edge(&mut self, output: u64, target: Target) { self.edges[output as usize].push(target); }
+    pub fn add_edge(&mut self, output: usize, target: Target) { self.edges[output].push(target); }
 
     pub fn name(&self) -> String { self.name.clone() }
 }

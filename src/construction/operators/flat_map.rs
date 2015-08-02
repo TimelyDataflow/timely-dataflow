@@ -1,7 +1,7 @@
 use communication::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
-use construction::operators::unary::Unary;
+use construction::operators::unary::Extension;
 
 use drain::DrainExt;
 

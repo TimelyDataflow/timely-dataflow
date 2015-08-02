@@ -3,7 +3,7 @@
 use communication::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
-use construction::operators::unary::Unary;
+use construction::operators::unary::Extension;
 
 /// Methods to inspect records and batches of records on a stream.
 pub trait Inspect<G: GraphBuilder, D: Data> {

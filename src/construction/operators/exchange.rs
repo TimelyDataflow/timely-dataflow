@@ -1,7 +1,7 @@
 use communication::Data;
 use communication::pact::Exchange as ExchangePact;
 use construction::{Stream, GraphBuilder};
-use construction::operators::unary::Unary;
+use construction::operators::unary::Extension;
 
 pub trait Exchange<D: Data> {
     fn exchange<F: Fn(&D)->u64+'static>(&self, func: F) -> Self;

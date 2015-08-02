@@ -9,22 +9,23 @@
 //! Most of the operators in this module are defined using these two general operators.
 
 pub use self::enterleave::*;
-pub use self::unary::Unary;
+pub use self::unary::Extension as UnaryExtension;
 // pub use self::distinct::*;
 pub use self::queue::*;
 pub use self::input::*;
-pub use self::feedback::*;
+pub use self::feedback::Extension as FeedbackExtension;
+pub use self::feedback::ConnectExtension as FeedbackConnectExtension;
 pub use self::concat::*;
-pub use self::partition::*;
+pub use self::partition::Extension as PartitionExtension;
 pub use self::map::*;
 pub use self::map_in_place::*;
 pub use self::inspect::Inspect;
 pub use self::flat_map::*;
 pub use self::filter::*;
-pub use self::binary::Binary;
+pub use self::binary::Extension as BinaryExtension;
 pub use self::delay::Delay;
 pub use self::exchange::Exchange;
-pub use self::probe::Probe;
+pub use self::probe::Extension as ProbeExtension;
 
 pub mod enterleave;
 pub mod unary;

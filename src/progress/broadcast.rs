@@ -3,7 +3,7 @@ use progress::count_map::CountMap;
 use communication::{Communicator, Message, Pullable, Observer};
 use communication::observer::BoxedObserver;
 
-pub type ProgressVec<T> = Vec<((u64, u64, T), i64)>;  // (child_scope, [in/out]port, timestamp, delta)
+pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;  // (child_scope, [in/out]port, timestamp, delta)
 
 pub struct Progcaster<T:Timestamp> {
     senders:    Vec<BoxedObserver<T, (ProgressVec<T>, ProgressVec<T>)>>,
@@ -16,7 +16,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
         Progcaster { senders: senders, receiver: receiver }
     }
     // TODO : This is all a horrible hack to deal with the way channels currently look (with a time)
-    pub fn send_and_recv(&mut self, messages: &mut CountMap<(u64, u64, T)>, internal: &mut CountMap<(u64, u64, T)>) -> () {
+    pub fn send_and_recv(&mut self, messages: &mut CountMap<(usize, usize, T)>, internal: &mut CountMap<(usize, usize, T)>) -> () {
 
         // assert!(messages.elements().iter().all(|x| x.1 != 0));
         // assert!(internal.elements().iter().all(|x| x.1 != 0));

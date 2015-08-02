@@ -3,8 +3,8 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Scope, Timestamp};
-use progress::nested::subgraph::Source::{ScopeOutput};
+use progress::{Operate, Timestamp};
+use progress::nested::subgraph::Source::ChildOutput;
 use progress::count_map::CountMap;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
@@ -23,11 +23,11 @@ use construction::builder::*;
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 // returns both an input scope and a stream representing its output.
-pub trait InputExtensionTrait<C: Communicator, T: Timestamp+Ord> {
+pub trait Extension<C: Communicator, T: Timestamp+Ord> {
     fn new_input<D:Data>(&self) -> (InputHelper<T, D>, Stream<SubgraphBuilder<GraphRoot<C>, T>, D>);
 }
 
-impl<C: Communicator, T: Timestamp+Ord> InputExtensionTrait<C, T> for SubgraphBuilder<GraphRoot<C>, T> {
+impl<C: Communicator, T: Timestamp+Ord> Extension<C, T> for SubgraphBuilder<GraphRoot<C>, T> {
     fn new_input<D:Data>(&self) -> (InputHelper<T, D>, Stream<SubgraphBuilder<GraphRoot<C>, T>, D>) {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
@@ -35,28 +35,28 @@ impl<C: Communicator, T: Timestamp+Ord> InputExtensionTrait<C, T> for SubgraphBu
         let helper = InputHelper::new(Counter::new(output, produced.clone()));
         let copies = self.peers();
 
-        let index = self.add_scope(InputScope {
+        let index = self.add_operator(Operator {
             frontier: helper.frontier.clone(),
             progress: helper.progress.clone(),
             messages: produced.clone(),
             copies:   copies,
         });
 
-        return (helper, Stream::new(ScopeOutput(index, 0), registrar, self.clone()));
+        return (helper, Stream::new(ChildOutput(index, 0), registrar, self.clone()));
     }
 }
 
-pub struct InputScope<T:Timestamp+Ord> {
+pub struct Operator<T:Timestamp+Ord> {
     frontier:   Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
     progress:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
     messages:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // messages sent since last asked
-    copies:     u64,
+    copies:     usize,
 }
 
-impl<T:Timestamp+Ord> Scope<Product<RootTimestamp, T>> for InputScope<T> {
-    fn name(&self) -> String { format!("Input") }
-    fn inputs(&self) -> u64 { 0 }
-    fn outputs(&self) -> u64 { 1 }
+impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
+    fn name(&self) -> &str { "Input" }
+    fn inputs(&self) -> usize { 0 }
+    fn outputs(&self) -> usize { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<Product<RootTimestamp, T> as Timestamp>::Summary>>>,
                                            Vec<CountMap<Product<RootTimestamp, T>>>) {

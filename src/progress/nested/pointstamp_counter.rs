@@ -1,6 +1,6 @@
 use progress::Timestamp;
-use progress::nested::subgraph::Source::{GraphInput, ScopeOutput};
-use progress::nested::subgraph::Target::ScopeInput;
+use progress::nested::subgraph::Source::{GraphInput, ChildOutput};
+use progress::nested::subgraph::Target::ChildInput;
 use progress::nested::{Source, Target};
 
 use progress::count_map::CountMap;
@@ -16,13 +16,13 @@ pub struct PointstampCounter<T:Timestamp> {
 
 impl<T:Timestamp> PointstampCounter<T> {
     pub fn update_target(&mut self, target: Target, time: &T, value: i64) {
-        if let ScopeInput(scope, input) = target { self.target_counts[scope as usize][input as usize].update(time, value); }
+        if let ChildInput(scope, input) = target { self.target_counts[scope as usize][input as usize].update(time, value); }
         else                                     { panic!("graph outputs should not appear as pointstamps"); }
     }
 
     pub fn update_source(&mut self, source: Source, time: &T, value: i64) {
         match source {
-            ScopeOutput(scope, output) => { self.source_counts[scope as usize][output as usize].update(time, value); },
+            ChildOutput(scope, output) => { self.source_counts[scope as usize][output as usize].update(time, value); },
             GraphInput(input)          => { self.input_counts[input as usize].update(time, value); },
         }
     }

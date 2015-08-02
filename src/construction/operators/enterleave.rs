@@ -6,8 +6,8 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 
 use progress::{Timestamp, CountMap};
-use progress::nested::subgraph::Source::{GraphInput, ScopeOutput};
-use progress::nested::subgraph::Target::{GraphOutput, ScopeInput};
+use progress::nested::subgraph::Source::{GraphInput, ChildOutput};
+use progress::nested::subgraph::Target::{GraphOutput, ChildInput};
 use progress::nested::product::Product;
 use communication::{Data, Message, Observer};
 use communication::observer::{Counter, Tee};
@@ -43,9 +43,7 @@ EnterSubgraphExt<G, T, D> for SubgraphBuilder<G, T> {
         let scope_index = self.subgraph.borrow().index;
         let input_index = self.subgraph.borrow_mut().new_input(produced);
 
-        stream.connect_to(ScopeInput(scope_index, input_index), ingress);
-        // self.parent.add_edge(stream.name, ScopeInput(scope_index, input_index));
-        // stream.ports.add_observer(ingress);
+        stream.connect_to(ChildInput(scope_index, input_index), ingress);
 
         Stream::new(GraphInput(input_index), registrar, self.clone())
     }
@@ -64,7 +62,7 @@ impl<G: GraphBuilder, D: Data, T: Timestamp> LeaveSubgraphExt<G, D> for Stream<S
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         self.connect_to(GraphOutput(output_index), EgressNub { targets: targets, phantom: PhantomData });
         let subgraph_index = builder.subgraph.borrow().index;
-        Stream::new(ScopeOutput(subgraph_index, output_index),
+        Stream::new(ChildOutput(subgraph_index, output_index),
                     registrar,
                     builder.parent.clone())
     }

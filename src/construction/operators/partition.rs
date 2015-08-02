@@ -1,9 +1,9 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::{Timestamp, Scope};
-use progress::nested::Source::ScopeOutput;
-use progress::nested::Target::ScopeInput;
+use progress::{Timestamp, Operate};
+use progress::nested::Source::ChildOutput;
+use progress::nested::Target::ChildInput;
 use progress::count_map::CountMap;
 
 use communication::{Data, Pullable};
@@ -17,11 +17,11 @@ use construction::{Stream, GraphBuilder};
 
 use drain::DrainExt;
 
-pub trait PartitionExt<G: GraphBuilder, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
+pub trait Extension<G: GraphBuilder, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
     fn partition(&self, parts: u64, func: F) -> Vec<Stream<G, D2>>;
 }
 
-impl<G: GraphBuilder, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> PartitionExt<G, D, D2, F> for Stream<G, D> {
+impl<G: GraphBuilder, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Extension<G, D, D2, F> for Stream<G, D> {
     fn partition(&self, parts: u64, func: F) -> Vec<Stream<G, D2>> {
 
         let mut builder = self.builder();
@@ -36,28 +36,28 @@ impl<G: GraphBuilder, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> PartitionE
             registrars.push(registrar);
         }
 
-        let scope = PartitionScope::new(receiver, targets, func);
-        let index = builder.add_scope(scope);
-        self.connect_to(ScopeInput(index, 0), sender);
+        let operator = Operator::new(receiver, targets, func);
+        let index = builder.add_operator(operator);
+        self.connect_to(ChildInput(index, 0), sender);
 
         let mut results = Vec::new();
         for (output, registrar) in registrars.into_iter().enumerate() {
-            results.push(Stream::new(ScopeOutput(index, output as u64), registrar, builder.clone()));
+            results.push(Stream::new(ChildOutput(index, output), registrar, builder.clone()));
         }
 
         results
     }
 }
 
-pub struct PartitionScope<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> {
+pub struct Operator<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> {
     input:   PullableCounter<T, D, P>,
     outputs: Vec<ObserverBuffer<ObserverCounter<Tee<T, D2>>>>,
     func:    F,
 }
 
-impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> PartitionScope<T, D, D2, F, P> {
-    pub fn new(input: P, outputs: Vec<Tee<T, D2>>, func: F) -> PartitionScope<T, D, D2, F, P> {
-        PartitionScope {
+impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> Operator<T, D, D2, F, P> {
+    pub fn new(input: P, outputs: Vec<Tee<T, D2>>, func: F) -> Operator<T, D, D2, F, P> {
+        Operator {
             input:      PullableCounter::new(input),
             outputs:    outputs.into_iter().map(|x| ObserverBuffer::new(ObserverCounter::new(x, Rc::new(RefCell::new(CountMap::new()))))).collect(),
             func:       func,
@@ -65,10 +65,10 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> Par
     }
 }
 
-impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> Scope<T> for PartitionScope<T, D, D2, F, P> {
-    fn name(&self) -> String { format!("Partition") }
-    fn inputs(&self) -> u64 { 1 }
-    fn outputs(&self) -> u64 { self.outputs.len() as u64 }
+impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2), P: Pullable<T, D>> Operate<T> for Operator<T, D, D2, F, P> {
+    fn name(&self) -> &str { "Partition" }
+    fn inputs(&self) -> usize { 1 }
+    fn outputs(&self) -> usize { self.outputs.len() }
 
     fn pull_internal_progress(&mut self,_internal: &mut [CountMap<T>],
                                          consumed: &mut [CountMap<T>],

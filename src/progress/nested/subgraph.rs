@@ -8,9 +8,9 @@ use std::cell::RefCell;
 use communication::Communicator;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Timestamp, PathSummary, Scope};
-use progress::nested::Source::{GraphInput, ScopeOutput};
-use progress::nested::Target::{GraphOutput, ScopeInput};
+use progress::{Timestamp, PathSummary, Operate};
+use progress::nested::Source::{GraphInput, ChildOutput};
+use progress::nested::Target::{GraphOutput, ChildInput};
 
 use progress::nested::summary::Summary::{Local, Outer};
 use progress::count_map::CountMap;
@@ -23,25 +23,25 @@ use progress::nested::product::Product;
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Source {
-    GraphInput(u64),        // from outer scope
-    ScopeOutput(u64, u64),  // (scope, port) may have interesting connectivity
+    GraphInput(usize),          // from outer scope
+    ChildOutput(usize, usize),  // (scope, port) may have interesting connectivity
 }
 
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Target {
-    GraphOutput(u64),       // to outer scope
-    ScopeInput(u64, u64),   // (scope, port) may have interesting connectivity
+    GraphOutput(usize),       // to outer scope
+    ChildInput(usize, usize),   // (scope, port) may have interesting connectivity
 }
 
 pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     pub name:               String,                     // a helpful name
     pub path:               String,
-    pub index:              u64,                        // a useful integer
+    pub index:              usize,                        // a useful integer
 
     default_summary:        Summary<TOuter::Summary, TInner::Summary>,    // default summary to use for something TODO: figure out what.
 
-    pub inputs:                 u64,                        // number inputs into the scope
-    pub outputs:                u64,                        // number outputs from the scope
+    inputs:                 usize,                        // number inputs into the scope
+    outputs:                usize,                        // number outputs from the scope
 
     input_edges:            Vec<Vec<Target>>,           // edges as list of Targets for each input_port.
 
@@ -64,17 +64,17 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
 
     pointstamps:            PointstampCounter<Product<TOuter, TInner>>,
 
-    pointstamp_messages:    CountMap<(u64, u64, Product<TOuter, TInner>)>,
-    pointstamp_internal:    CountMap<(u64, u64, Product<TOuter, TInner>)>,
+    pointstamp_messages:    CountMap<(usize, usize, Product<TOuter, TInner>)>,
+    pointstamp_internal:    CountMap<(usize, usize, Product<TOuter, TInner>)>,
 
     progcaster:             Progcaster<Product<TOuter, TInner>>,
 }
 
 
-impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TInner> {
-    fn name(&self) -> String { self.name.clone() }
-    fn inputs(&self)  -> u64 { self.inputs }
-    fn outputs(&self) -> u64 { self.outputs }
+impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, TInner> {
+    fn name(&self) -> &str { &self.name }
+    fn inputs(&self)  -> usize { self.inputs }
+    fn outputs(&self) -> usize { self.outputs }
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
@@ -82,8 +82,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
         // seal subscopes; prepare per-scope state/buffers
         for index in (0..self.children.len()) {
-            let inputs  = self.children[index].inputs as usize;
-            let outputs = self.children[index].outputs as usize;
+            let inputs  = self.children[index].inputs;
+            let outputs = self.children[index].outputs;
 
             // initialize storage for vector-based source and target path summaries.
             self.source_summaries.push(vec![Vec::new(); outputs]);
@@ -96,18 +96,18 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             // introduce capabilities as pre-pushed pointstamps; will push to outputs.
             for output in (0..outputs) {
                 for time in self.children[index].capabilities[output].elements().iter(){
-                    self.pointstamp_internal.update(&(index as u64, output as u64, time.clone()), 1);
+                    self.pointstamp_internal.update(&(index, output, time.clone()), 1);
                 }
             }
         }
 
         // initialize space for input -> Vec<(Target, Antichain) mapping.
-        self.input_summaries = vec![Vec::new(); self.inputs() as usize];
+        self.input_summaries = vec![Vec::new(); self.inputs()];
 
-        self.pointstamps.input_counts = vec![Default::default(); self.inputs() as usize];
-        self.pointstamps.output_pushed = vec![Default::default(); self.outputs() as usize];
+        self.pointstamps.input_counts = vec![Default::default(); self.inputs()];
+        self.pointstamps.output_pushed = vec![Default::default(); self.outputs()];
 
-        self.external_summaries = vec![vec![Default::default(); self.inputs() as usize]; self.outputs() as usize];
+        self.external_summaries = vec![vec![Default::default(); self.inputs()]; self.outputs()];
 
         // TODO: Explain better.
         self.set_summaries();
@@ -118,7 +118,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         self.pointstamp_internal.clear();
 
         // TODO: WTF is this all about? Who wrote this? Me...
-        let mut work = vec![CountMap::new(); self.outputs() as usize];
+        let mut work = vec![CountMap::new(); self.outputs()];
         for (output, map) in work.iter_mut().enumerate() {
             for &(ref key, val) in self.pointstamps.output_pushed[output].elements().iter() {
                 map.update(&key.outer, val);
@@ -126,13 +126,13 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
             }
         }
 
-        let mut summaries = vec![vec![Antichain::new(); self.outputs() as usize]; self.inputs() as usize];
+        let mut summaries = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
 
         for input in (0..self.inputs()) {
-            for &(target, ref antichain) in self.input_summaries[input as usize].iter() {
+            for &(target, ref antichain) in self.input_summaries[input].iter() {
                 if let GraphOutput(output) = target {
                     for &summary in antichain.elements.iter() {
-                        summaries[input as usize][output as usize].insert(match summary {
+                        summaries[input][output].insert(match summary {
                             Local(_)    => Default::default(),
                             Outer(y, _) => y,
                         });
@@ -155,7 +155,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
 
         // change frontier to local times; introduce as pointstamps
         for graph_input in (0..self.inputs) {
-            while let Some((time, val)) = frontier[graph_input as usize].pop() {
+            while let Some((time, val)) = frontier[graph_input].pop() {
                 self.pointstamps.update_source(GraphInput(graph_input), &Product::new(time, Default::default()), val);
             }
         }
@@ -163,8 +163,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         // identify all capabilities expressed locally
         for scope in (0..self.children.len()) {
             for output in (0..self.children[scope].outputs) {
-                for time in self.children[scope].capabilities[output as usize].elements().iter() {
-                    self.pointstamps.update_source(ScopeOutput(scope as u64, output), time, 1);
+                for time in self.children[scope].capabilities[output].elements().iter() {
+                    self.pointstamps.update_source(ChildOutput(scope, output), time, 1);
                 }
             }
         }
@@ -183,15 +183,15 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
                 }
             }
 
-            let inputs = self.children[subscope].inputs as usize;
-            let outputs = self.children[subscope].outputs as usize;
+            let inputs = self.children[subscope].inputs;
+            let outputs = self.children[subscope].outputs;
 
             let mut summaries = vec![vec![Antichain::new(); inputs]; outputs];
 
             for output in (0..summaries.len()) {
                 for &(target, ref antichain) in self.source_summaries[subscope][output].iter() {
-                    if let ScopeInput(target_scope, target_input) = target {
-                        if target_scope == subscope as u64 { summaries[output][target_input as usize] = antichain.clone() }
+                    if let ChildInput(target_scope, target_input) = target {
+                        if target_scope == subscope { summaries[output][target_input] = antichain.clone() }
                     }
                 }
             }
@@ -216,7 +216,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         // transform into pointstamps to use push_progress_to_target().
         for (input, progress) in external_progress.iter_mut().enumerate() {
             while let Some((time, val)) = progress.pop() {
-                self.pointstamps.update_source(GraphInput(input as u64), &Product::new(time, Default::default()), val);
+                self.pointstamps.update_source(GraphInput(input), &Product::new(time, Default::default()), val);
             }
         }
 
@@ -242,14 +242,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         let mut active = false;
 
         // Step 1: handle messages introduced through each graph input
-        for input in (0..self.inputs as usize) {
+        for input in (0..self.inputs) {
             let mut borrowed = self.input_messages[input].borrow_mut();
             while let Some((time, delta)) = borrowed.pop() {
                 messages_consumed[input].update(&time.outer, delta);
                 for &target in self.input_edges[input].iter() {
                     match target {
-                        ScopeInput(tgt, tgt_in)   => { self.pointstamp_messages.update(&(tgt, tgt_in, time), delta); },
-                        GraphOutput(graph_output) => { messages_produced[graph_output as usize].update(&time.outer, delta); },
+                        ChildInput(tgt, tgt_in)   => { self.pointstamp_messages.update(&(tgt, tgt_in, time), delta); },
+                        GraphOutput(graph_output) => { messages_produced[graph_output].update(&time.outer, delta); },
                     }
                 }
             }
@@ -259,7 +259,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         for child in self.children.iter_mut() {
             let subactive = child.pull_pointstamps(&mut self.pointstamp_messages,
                                                    &mut self.pointstamp_internal,
-                                                   |out, time, delta| { messages_produced[out as usize].update(&time.outer, delta); });
+                                                   |out, time, delta| { messages_produced[out].update(&time.outer, delta); });
 
             active = active || subactive;
         }
@@ -276,13 +276,13 @@ impl<TOuter: Timestamp, TInner: Timestamp> Scope<TOuter> for Subgraph<TOuter, TI
         {
             let pointstamps = &mut self.pointstamps;
             while let Some(((scope, input, time), delta)) = self.pointstamp_messages.pop() {
-                self.children[scope as usize].outstanding_messages[input as usize].update_and(&time, delta, |time, delta| {
-                    pointstamps.update_target(ScopeInput(scope, input), time, delta);
+                self.children[scope].outstanding_messages[input].update_and(&time, delta, |time, delta| {
+                    pointstamps.update_target(ChildInput(scope, input), time, delta);
                 });
             }
             while let Some(((scope, output, time), delta)) = self.pointstamp_internal.pop() {
-                self.children[scope as usize].capabilities[output as usize].update_and(&time, delta, |time, delta| {
-                    pointstamps.update_source(ScopeOutput(scope, output), time, delta);
+                self.children[scope].capabilities[output].update_and(&time, delta, |time, delta| {
+                    pointstamps.update_source(ChildOutput(scope, output), time, delta);
                 });
             }
         }
@@ -339,7 +339,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             for input in (0..self.pointstamps.target_counts[index].len()) {
                 while let Some((time, value)) = self.pointstamps.target_counts[index][input].pop() {
                     for &(target, ref antichain) in self.target_summaries[index][input].iter() {
-                        if let ScopeInput(scope, input) = target {
+                        if let ChildInput(scope, input) = target {
                             for summary in antichain.elements.iter() {
                                 self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
                             }
@@ -356,7 +356,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             for output in (0..self.pointstamps.source_counts[index].len()) {
                 while let Some((time, value)) = self.pointstamps.source_counts[index][output].pop() {
                     for &(target, ref antichain) in self.source_summaries[index][output].iter() {
-                        if let ScopeInput(scope, input) = target {
+                        if let ChildInput(scope, input) = target {
                             for summary in antichain.elements.iter() {
                                 self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
                             }
@@ -374,7 +374,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for input in (0..self.inputs as usize) {
             while let Some((time, value)) = self.pointstamps.input_counts[input].pop() {
                 for &(target, ref antichain) in self.input_summaries[input].iter() {
-                    if let ScopeInput(scope, input) = target {
+                    if let ChildInput(scope, input) = target {
                         for summary in antichain.elements.iter() {
                             self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
                         }
@@ -419,10 +419,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     fn set_summaries(&mut self) -> () {
 
         for scope in (0..self.children.len()) {
-            for output in (0..self.children[scope].outputs as usize) {
+            for output in (0..self.children[scope].outputs) {
                 self.source_summaries[scope][output].clear();
                 for &target in self.children[scope].edges[output].iter() {
-                    if match target { ScopeInput(t, _) => self.children[t as usize].notify, _ => true } {
+                    if match target { ChildInput(t, _) => self.children[t].notify, _ => true } {
                         self.source_summaries[scope][output].push((target, Antichain::from_elem(self.default_summary)));
                     }
                 }
@@ -431,12 +431,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
         // load up edges from graph inputs
         for input in (0..self.inputs) {
-            if input as usize >= self.input_edges.len() { println!("oops 1"); }
-            if input as usize >= self.input_summaries.len() { println!("oops 2"); }
-            self.input_summaries[input as usize].clear();
-            for &target in self.input_edges[input as usize].iter() {
-                if match target { ScopeInput(t, _) => self.children[t as usize].notify, _ => true } {
-                    self.input_summaries[input as usize].push((target, Antichain::from_elem(self.default_summary)));
+            // if input >= self.input_edges.len() { println!("oops 1"); }
+            // if input >= self.input_summaries.len() { println!("oops 2"); }
+            self.input_summaries[input].clear();
+            for &target in self.input_edges[input].iter() {
+                if match target { ChildInput(t, _) => self.children[t].notify, _ => true } {
+                    self.input_summaries[input].push((target, Antichain::from_elem(self.default_summary)));
                 }
             }
         }
@@ -448,16 +448,16 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             // process edges from scope outputs ...
             for scope in (0..self.children.len()) {                                         // for each scope
                 for output in (0..self.children[scope].outputs) {                           // for each output
-                    for target in self.children[scope].edges[output as usize].iter() {      // for each edge target
+                    for target in self.children[scope].edges[output].iter() {      // for each edge target
                         let next_sources = self.target_to_sources(target);
                         for &(next_source, next_summary) in next_sources.iter() {           // for each source it reaches
-                            if let ScopeOutput(next_scope, next_output) = next_source {
+                            if let ChildOutput(next_scope, next_output) = next_source {
                                 // clone this so that we aren't holding a read ref to self.source_summaries.
-                                let reachable = self.source_summaries[next_scope as usize][next_output as usize].clone();
+                                let reachable = self.source_summaries[next_scope][next_output].clone();
                                 for &(next_target, ref antichain) in reachable.iter() {
                                     for summary in antichain.elements.iter() {
                                         let cand_summary = next_summary.followed_by(summary);
-                                        if try_to_add_summary(&mut self.source_summaries[scope][output as usize],next_target,cand_summary) {
+                                        if try_to_add_summary(&mut self.source_summaries[scope][output],next_target,cand_summary) {
                                             done = false;
                                         }
                                     }
@@ -470,15 +470,15 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
             // process edges from graph inputs ...
             for input in (0..self.inputs) {
-                for target in self.input_edges[input as usize].iter() {
+                for target in self.input_edges[input].iter() {
                     let next_sources = self.target_to_sources(target);
                     for &(next_source, next_summary) in next_sources.iter() {
-                        if let ScopeOutput(next_scope, next_output) = next_source {
-                            let reachable = self.source_summaries[next_scope as usize][next_output as usize].clone();
+                        if let ChildOutput(next_scope, next_output) = next_source {
+                            let reachable = self.source_summaries[next_scope][next_output].clone();
                             for &(next_target, ref antichain) in reachable.iter() {
                                 for summary in antichain.elements.iter() {
                                     let candidate_summary = next_summary.followed_by(summary);
-                                    if try_to_add_summary(&mut self.input_summaries[input as usize], next_target, candidate_summary) {
+                                    if try_to_add_summary(&mut self.input_summaries[input], next_target, candidate_summary) {
                                         done = false;
                                     }
                                 }
@@ -492,16 +492,16 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         // now that we are done, populate self.target_summaries
         for scope in (0..self.children.len()) {
             for input in (0..self.children[scope].inputs) {
-                self.target_summaries[scope][input as usize].clear();
+                self.target_summaries[scope][input].clear();
                 // first: add a link directly to the associate scope input
-                try_to_add_summary(&mut self.target_summaries[scope][input as usize], ScopeInput(scope as u64, input), Default::default());
-                let next_sources = self.target_to_sources(&ScopeInput(scope as u64, input));
+                try_to_add_summary(&mut self.target_summaries[scope][input], ChildInput(scope, input), Default::default());
+                let next_sources = self.target_to_sources(&ChildInput(scope, input));
                 for &(next_source, next_summary) in next_sources.iter() {
-                    if let ScopeOutput(next_scope, next_output) = next_source {
-                        for &(next_target, ref antichain) in self.source_summaries[next_scope as usize][next_output as usize].iter() {
+                    if let ChildOutput(next_scope, next_output) = next_source {
+                        for &(next_target, ref antichain) in self.source_summaries[next_scope][next_output].iter() {
                             for summary in antichain.elements.iter() {
                                 let candidate_summary = next_summary.followed_by(summary);
-                                try_to_add_summary(&mut self.target_summaries[scope][input as usize], next_target, candidate_summary);
+                                try_to_add_summary(&mut self.target_summaries[scope][input], next_target, candidate_summary);
                             }
                         }
                     }
@@ -521,10 +521,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                     }
                 }
             },
-            ScopeInput(graph, port) => {
+            ChildInput(graph, port) => {
                 for i in (0..self.children[graph as usize].outputs) {
                     for &summary in self.children[graph as usize].summary[port as usize][i as usize].elements.iter() {
-                        result.push((ScopeOutput(graph, i), summary));
+                        result.push((ChildOutput(graph, i), summary));
                     }
                 }
             }
@@ -533,7 +533,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         result
     }
 
-    pub fn new_input(&mut self, shared_counts: Rc<RefCell<CountMap<Product<TOuter, TInner>>>>) -> u64 {
+    pub fn new_input(&mut self, shared_counts: Rc<RefCell<CountMap<Product<TOuter, TInner>>>>) -> usize {
         self.inputs += 1;
         self.external_guarantee.push(MutableAntichain::new());
         self.input_messages.push(shared_counts);
@@ -541,7 +541,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         return self.inputs - 1;
     }
 
-    pub fn new_output(&mut self) -> u64 {
+    pub fn new_output(&mut self) -> usize {
         self.outputs += 1;
         self.external_capability.push(MutableAntichain::new());
         return self.outputs - 1;
@@ -549,15 +549,15 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
     pub fn connect(&mut self, source: Source, target: Target) {
         match source {
-            ScopeOutput(scope, index) => { self.children[scope as usize].add_edge(index, target); },
+            ChildOutput(scope, index) => { self.children[scope].add_edge(index, target); },
             GraphInput(input) => {
-                while (self.input_edges.len() as u64) < (input + 1) { self.input_edges.push(Vec::new()); }
-                self.input_edges[input as usize].push(target);
+                while (self.input_edges.len()) < (input + 1) { self.input_edges.push(Vec::new()); }
+                self.input_edges[input].push(target);
             },
         }
     }
 
-    pub fn new_from<C: Communicator>(communicator: &mut C, index: u64, path: String) -> Subgraph<TOuter, TInner> {
+    pub fn new_from<C: Communicator>(communicator: &mut C, index: usize, path: String) -> Subgraph<TOuter, TInner> {
         let progcaster = Progcaster::new(communicator);
         Subgraph {
             name:                   format!("Subgraph"),
@@ -584,27 +584,27 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
     fn print_reachability_summaries(&self) {
         println!("Reachability summary for subscope {}", self.name());
-        println!("Scope outputs -> targets:");
+        println!("Operate outputs -> targets:");
 
         for i in 0..self.source_summaries.len() {
             for j in 0..self.source_summaries[i].len() {
                 println!("\t{}.{} {}(output[{}]) ->", i, j, self.children[i].name(), j);
                 for &(ref target, ref chain) in self.source_summaries[i][j].iter() {
                     println!("\t\t{}:\t{:?}", match target {
-                        &ScopeInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].name(), scope, input),
+                        &ChildInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].name(), scope, input),
                         x => format!("{:?} ", x),
                     }, chain.elements);
                 }
             }
         }
 
-        println!("Scope inputs -> targets:");
+        println!("Operate inputs -> targets:");
         for i in 0..self.target_summaries.len() {
             for j in 0..self.target_summaries[i].len() {
                 println!("\t{}.{} {}(input[{}]) ->", i, j, self.children[i].name(), j);
                 for &(ref target, ref chain) in self.target_summaries[i][j].iter() {
                     println!("\t\t{}:\t{:?}", match target {
-                        &ScopeInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].name(), scope, input),
+                        &ChildInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].name(), scope, input),
                         x => format!("{:?} ", x),
                         }, chain.elements);
                 }

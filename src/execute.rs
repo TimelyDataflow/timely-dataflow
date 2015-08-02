@@ -77,9 +77,9 @@ pub fn execute<I: Iterator<Item=String>, F: Fn(&mut GraphRoot<Generic>)+Send+Syn
     opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
 
     if let Ok(matches) = opts.parse(iter) {
-        let workers: u64 = matches.opt_str("w").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
-        let process: u64 = matches.opt_str("p").map(|x| x.parse().unwrap_or(0)).unwrap_or(0);
-        let processes: u64 = matches.opt_str("n").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
+        let workers: usize = matches.opt_str("w").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
+        let process: usize = matches.opt_str("p").map(|x| x.parse().unwrap_or(0)).unwrap_or(0);
+        let processes: usize = matches.opt_str("n").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
 
         let communicators = if processes > 1 {
             let addresses: Vec<_> = if let Some(hosts) = matches.opt_str("h") {

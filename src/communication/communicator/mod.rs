@@ -16,8 +16,8 @@ pub mod generic;
 // The worker can see its index, the total number of peers, and acquire channels to and from the other workers.
 // There is an assumption that each worker performs the same channel allocation logic; things go wrong otherwise.
 pub trait Communicator: 'static {
-    fn index(&self) -> u64;     // number out of peers
-    fn peers(&self) -> u64;     // number of peers
+    fn index(&self) -> usize;     // number out of peers
+    fn peers(&self) -> usize;     // number of peers
     fn new_channel<T, D>(&mut self) -> (Vec<BoxedObserver<T, D>>, Box<Pullable<T, D>>)
         where T: Data+Serializable, D: Data+Serializable;
 }

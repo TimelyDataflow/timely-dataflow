@@ -2,12 +2,12 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::nested::subgraph::Source::ScopeOutput;
-use progress::nested::subgraph::Target::ScopeInput;
+use progress::nested::subgraph::Source::ChildOutput;
+use progress::nested::subgraph::Target::ChildInput;
 
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
-use progress::{Timestamp, Scope, Antichain};
+use progress::{Timestamp, Antichain, Operate};
 
 use communication::{Data, Pullable};
 use communication::observer::Counter as ObserverCounter;
@@ -20,7 +20,7 @@ use construction::{Stream, GraphBuilder};
 
 use drain::DrainExt;
 
-pub trait Binary<G: GraphBuilder, D1: Data> {
+pub trait Extension<G: GraphBuilder, D1: Data> {
     fn binary_stream<D2: Data,
               D3: Data,
               L: FnMut(&mut PullableCounter<G::Timestamp, D1, P1::Pullable>,
@@ -40,7 +40,7 @@ pub trait Binary<G: GraphBuilder, D1: Data> {
             (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3>;
 }
 
-impl<G: GraphBuilder, D1: Data> Binary<G, D1> for Stream<G, D1> {
+impl<G: GraphBuilder, D1: Data> Extension<G, D1> for Stream<G, D1> {
     fn binary_stream<
              D2: Data,
              D3: Data,
@@ -56,14 +56,14 @@ impl<G: GraphBuilder, D1: Data> Binary<G, D1> for Stream<G, D1> {
         let (sender1, receiver1) = pact1.connect(&mut builder);
         let (sender2, receiver2) = pact2.connect(&mut builder);;
         let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
-        let scope = BinaryScope::new(receiver1, receiver2, targets, name.to_owned(), None, move |i1, i2, o, _| logic(i1, i2, o));
-        let index = builder.add_scope(scope);
-        self.connect_to(ScopeInput(index, 0), sender1);
-        other.connect_to(ScopeInput(index, 1), sender2);
-        // self.builder.connect(other.name, ScopeInput(index, 1));
+        let operator = Operator::new(receiver1, receiver2, targets, name.to_owned(), None, move |i1, i2, o, _| logic(i1, i2, o));
+        let index = builder.add_operator(operator);
+        self.connect_to(ChildInput(index, 0), sender1);
+        other.connect_to(ChildInput(index, 1), sender2);
+        // self.builder.connect(other.name, ChildInput(index, 1));
         // other.ports.add_observer(sender2);
 
-        Stream::new(ScopeOutput(index, 0), registrar, builder)
+        Stream::new(ChildOutput(index, 0), registrar, builder)
     }
 
     fn binary_notify<
@@ -82,25 +82,25 @@ impl<G: GraphBuilder, D1: Data> Binary<G, D1> for Stream<G, D1> {
         let (sender1, receiver1) = pact1.connect(&mut builder);
         let (sender2, receiver2) = pact2.connect(&mut builder);;
         let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
-        let scope = BinaryScope::new(receiver1, receiver2, targets, name.to_owned(), Some((notify, builder.peers())), logic);
-        let index = builder.add_scope(scope);
-        self.connect_to(ScopeInput(index, 0), sender1);
-        other.connect_to(ScopeInput(index, 1), sender2);
-        // self.builder.connect(other.name, ScopeInput(index, 1));
+        let operator = Operator::new(receiver1, receiver2, targets, name.to_owned(), Some((notify, builder.peers())), logic);
+        let index = builder.add_operator(operator);
+        self.connect_to(ChildInput(index, 0), sender1);
+        other.connect_to(ChildInput(index, 1), sender2);
+        // self.builder.connect(other.name, ChildInput(index, 1));
         // other.ports.add_observer(sender2);
 
-        Stream::new(ScopeOutput(index, 0), registrar, builder)
+        Stream::new(ChildOutput(index, 0), registrar, builder)
     }
 }
 
-pub struct BinaryScopeHandle<T: Timestamp, D1: Data, D2: Data, D3: Data, P1: Pullable<T, D1>, P2: Pullable<T, D2>> {
+struct Handle<T: Timestamp, D1: Data, D2: Data, D3: Data, P1: Pullable<T, D1>, P2: Pullable<T, D2>> {
     pub input1:         PullableCounter<T, D1, P1>,
     pub input2:         PullableCounter<T, D2, P2>,
     pub output:         ObserverBuffer<ObserverCounter<Tee<T, D3>>>,
     pub notificator:    Notificator<T>,
 }
 
-pub struct BinaryScope<T: Timestamp,
+struct Operator<T: Timestamp,
                        D1: Data, D2: Data, D3: Data,
                        P1: Pullable<T, D1>,
                        P2: Pullable<T, D2>,
@@ -109,9 +109,9 @@ pub struct BinaryScope<T: Timestamp,
                                 &mut ObserverBuffer<ObserverCounter<Tee<T, D3>>>,
                                 &mut Notificator<T>)> {
     name:           String,
-    handle:         BinaryScopeHandle<T, D1, D2, D3, P1, P2>,
+    handle:         Handle<T, D1, D2, D3, P1, P2>,
     logic:          L,
-    notify:         Option<(Vec<T>, u64)>,  // initial notifications and peers
+    notify:         Option<(Vec<T>, usize)>,  // initial notifications and peers
 }
 
 impl<T: Timestamp,
@@ -122,17 +122,17 @@ impl<T: Timestamp,
               &mut PullableCounter<T, D2, P2>,
               &mut ObserverBuffer<ObserverCounter<Tee<T, D3>>>,
               &mut Notificator<T>)+'static>
-BinaryScope<T, D1, D2, D3, P1, P2, L> {
+Operator<T, D1, D2, D3, P1, P2, L> {
     pub fn new(receiver1: P1,
                receiver2: P2,
                targets: Tee<T, D3>,
                name: String,
-               notify: Option<(Vec<T>, u64)>,
+               notify: Option<(Vec<T>, usize)>,
                logic: L)
-        -> BinaryScope<T, D1, D2, D3, P1, P2, L> {
-        BinaryScope {
+        -> Operator<T, D1, D2, D3, P1, P2, L> {
+        Operator {
             name: name,
-            handle: BinaryScopeHandle {
+            handle: Handle {
                 input1:      PullableCounter::new(receiver1),
                 input2:      PullableCounter::new(receiver2),
                 output:      ObserverBuffer::new(ObserverCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
@@ -144,7 +144,7 @@ BinaryScope<T, D1, D2, D3, P1, P2, L> {
     }
 }
 
-impl<T, D1, D2, D3, P1, P2, L> Scope<T> for BinaryScope<T, D1, D2, D3, P1, P2, L>
+impl<T, D1, D2, D3, P1, P2, L> Operate<T> for Operator<T, D1, D2, D3, P1, P2, L>
 where T: Timestamp,
       D1: Data, D2: Data, D3: Data,
       P1: Pullable<T, D1>,
@@ -153,8 +153,8 @@ where T: Timestamp,
                &mut PullableCounter<T, D2, P2>,
                &mut ObserverBuffer<ObserverCounter<Tee<T, D3>>>,
                &mut Notificator<T>)+'static {
-    fn inputs(&self) -> u64 { 2 }
-    fn outputs(&self) -> u64 { 1 }
+    fn inputs(&self) -> usize { 2 }
+    fn outputs(&self) -> usize { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut internal = vec![CountMap::new()];
@@ -196,6 +196,6 @@ where T: Timestamp,
         return false;   // no unannounced internal work
     }
 
-    fn name(&self) -> String { format!("{}", self.name) }
+    fn name(&self) -> &str { &self.name }
     fn notify_me(&self) -> bool { self.notify.is_some() }
 }

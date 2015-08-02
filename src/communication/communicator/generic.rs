@@ -10,14 +10,14 @@ pub enum Generic {
 }
 
 impl Communicator for Generic {
-    fn index(&self) -> u64 {
+    fn index(&self) -> usize {
         match self {
             &Generic::Thread(ref t) => t.index(),
             &Generic::Process(ref p) => p.index(),
             &Generic::Binary(ref b) => b.index(),
         }
     }
-    fn peers(&self) -> u64 {
+    fn peers(&self) -> usize {
         match self {
             &Generic::Thread(ref t) => t.peers(),
             &Generic::Process(ref p) => p.peers(),

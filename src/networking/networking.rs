@@ -17,11 +17,11 @@ use drain::DrainExt;
 
 #[derive(Copy, Clone)]
 pub struct MessageHeader {
-    pub graph:      u64,   // graph identifier
-    pub channel:    u64,   // index of channel
-    pub source:     u64,   // index of worker sending message
-    pub target:     u64,   // index of worker receiving message
-    pub length:     u64,   // number of bytes in message
+    pub graph:      usize,   // graph identifier
+    pub channel:    usize,   // index of channel
+    pub source:     usize,   // index of worker sending message
+    pub target:     usize,   // index of worker receiving message
+    pub length:     usize,   // number of bytes in message
 }
 
 impl MessageHeader {
@@ -32,13 +32,13 @@ impl MessageHeader {
             let original = *bytes;
 
             // unclear what order struct initializers run in, so ...
-            let graph = bytes.read_u64::<LittleEndian>().unwrap();
-            let channel = bytes.read_u64::<LittleEndian>().unwrap();
-            let source = bytes.read_u64::<LittleEndian>().unwrap();
-            let target = bytes.read_u64::<LittleEndian>().unwrap();
-            let length = bytes.read_u64::<LittleEndian>().unwrap();
+            let graph = bytes.read_u64::<LittleEndian>().unwrap() as usize;
+            let channel = bytes.read_u64::<LittleEndian>().unwrap() as usize;
+            let source = bytes.read_u64::<LittleEndian>().unwrap() as usize;
+            let target = bytes.read_u64::<LittleEndian>().unwrap() as usize;
+            let length = bytes.read_u64::<LittleEndian>().unwrap() as usize;
 
-            if bytes.len() >= length as usize {
+            if bytes.len() >= length {
                 Some(MessageHeader {
                     graph: graph,
                     channel: channel,
@@ -57,11 +57,11 @@ impl MessageHeader {
     }
 
     fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
-        try!(writer.write_u64::<LittleEndian>(self.graph));
-        try!(writer.write_u64::<LittleEndian>(self.channel));
-        try!(writer.write_u64::<LittleEndian>(self.source));
-        try!(writer.write_u64::<LittleEndian>(self.target));
-        try!(writer.write_u64::<LittleEndian>(self.length));
+        try!(writer.write_u64::<LittleEndian>(self.graph as u64));
+        try!(writer.write_u64::<LittleEndian>(self.channel as u64));
+        try!(writer.write_u64::<LittleEndian>(self.source as u64));
+        try!(writer.write_u64::<LittleEndian>(self.target as u64));
+        try!(writer.write_u64::<LittleEndian>(self.length as u64));
         Ok(())
     }
 }
@@ -138,7 +138,7 @@ struct BinaryReceiver<R: Read> {
 }
 
 impl<R: Read> BinaryReceiver<R> {
-    fn new(reader: R, channels: Receiver<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver<R> {
+    fn new(reader: R, channels: Receiver<((usize, usize, usize), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>) -> BinaryReceiver<R> {
         BinaryReceiver {
             reader:     reader,
             buffer:     vec![0u8; 1 << 20],
@@ -187,17 +187,17 @@ impl<R: Read> BinaryReceiver<R> {
 
 // structure in charge of sending data to a Writer, for example the network
 struct BinarySender<W: Write> {
-    id:         u64,    // destination process
+    id:         usize,    // destination process
     writer:     W,
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
     returns:    Switchboard<Sender<Vec<u8>>>,
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(id: u64,
+    fn new(id: usize,
            writer: W,
            sources: Receiver<(MessageHeader, Vec<u8>)>,
-           channels: Receiver<((u64, u64, u64), Sender<Vec<u8>>)>) -> BinarySender<W> {
+           channels: Receiver<((usize, usize, usize), Sender<Vec<u8>>)>) -> BinarySender<W> {
         BinarySender {
             id:         id,
             writer:     writer,
@@ -220,8 +220,8 @@ impl<W: Write> BinarySender<W> {
             }
 
             // println!("send loop to process {}:\tstarting", self.id);
-            for (mut header, mut buffer) in stash.drain_temp() {
-                header.length = buffer.len() as u64;    // <-- is this really our job? O.o
+            for (header, mut buffer) in stash.drain_temp() {
+                assert!(header.length == buffer.len());
                 header.write_to(&mut self.writer).unwrap();
                 self.writer.write_all(&buffer[..]).unwrap();
                 buffer.clear();
@@ -235,22 +235,19 @@ impl<W: Write> BinarySender<W> {
 }
 
 struct Switchboard<T:Send> {
-    source: Receiver<((u64, u64, u64), T)>,
+    source: Receiver<((usize, usize, usize), T)>,
     buffer: Vec<Vec<Vec<Option<T>>>>,
 }
 
 impl<T:Send> Switchboard<T> {
-    pub fn new(source: Receiver<((u64, u64, u64), T)>) -> Switchboard<T> {
+    pub fn new(source: Receiver<((usize, usize, usize), T)>) -> Switchboard<T> {
         Switchboard {
             source: source,
             buffer: Vec::new(),
         }
     }
 
-    pub fn ensure(&mut self, a: u64, b: u64, c: u64) -> &mut T {
-        let a = a as usize;
-        let b = b as usize;
-        let c = c as usize;
+    pub fn ensure(&mut self, a: usize, b: usize, c: usize) -> &mut T {
 
         while self.buffer.len() <= a { self.buffer.push(Vec::new()); }
         while self.buffer[a].len() <= b { self.buffer[a].push(Vec::new()); }
@@ -258,10 +255,6 @@ impl<T:Send> Switchboard<T> {
 
         while let None = self.buffer[a][b][c] {
             let ((x, y, z), s) = self.source.recv().unwrap();
-
-            let x = x as usize;
-            let y = y as usize;
-            let z = z as usize;
 
             while self.buffer.len() <= x { self.buffer.push(Vec::new()); }
             while self.buffer[x].len() <= y { self.buffer[x].push(Vec::new()); }
@@ -274,7 +267,7 @@ impl<T:Send> Switchboard<T> {
     }
 }
 
-pub fn initialize_networking_from_file(filename: &str, my_index: u64, workers: u64) -> Result<Vec<Binary>> {
+pub fn initialize_networking_from_file(filename: &str, my_index: usize, workers: usize) -> Result<Vec<Binary>> {
 
     let reader = BufReader::new(try!(File::open(filename)));
     let mut addresses = Vec::new();
@@ -286,9 +279,9 @@ pub fn initialize_networking_from_file(filename: &str, my_index: u64, workers: u
     initialize_networking(addresses, my_index, workers)
 }
 
-pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64) -> Result<Vec<Binary>> {
+pub fn initialize_networking(addresses: Vec<String>, my_index: usize, workers: usize) -> Result<Vec<Binary>> {
 
-    let processes = addresses.len() as u64;
+    let processes = addresses.len();
     let hosts1 = Arc::new(addresses);
     let hosts2 = hosts1.clone();
 
@@ -319,7 +312,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
             readers.push(reader_channels_s);    //
             senders.push(sender_channels_s);    //
 
-            let mut sender = BinarySender::new(index as u64,
+            let mut sender = BinarySender::new(index,
                                                BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()),
                                                sender_channels_r,
                                                writer_channels_r);
@@ -342,7 +335,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
     for (index, proc_comm) in proc_comms.into_iter().enumerate() {
         results.push(Binary {
             inner:          proc_comm,
-            index:          my_index * workers + index as u64,
+            index:          my_index * workers + index,
             peers:          workers * processes,
             graph:          0,          // TODO : Fix this
             allocated:      0,
@@ -356,14 +349,14 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: u64, workers: u64
 }
 
 // result contains connections [0, my_index - 1].
-fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<Option<TcpStream>>> {
+fn start_connections(addresses: Arc<Vec<String>>, my_index: usize) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..my_index).map(|_| None).collect();
     for index in (0..my_index) {
         let mut connected = false;
         while !connected {
-            match TcpStream::connect(&addresses[index as usize][..]) {
+            match TcpStream::connect(&addresses[index][..]) {
                 Ok(mut stream) => {
-                    try!(stream.write_u64::<LittleEndian>(my_index));
+                    try!(stream.write_u64::<LittleEndian>(my_index as u64));
                     results[index as usize] = Some(stream);
                     println!("worker {}:\tconnection to worker {}", my_index, index);
                     connected = true;
@@ -380,14 +373,14 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<O
 }
 
 // result contains connections [my_index + 1, addresses.len() - 1].
-fn await_connections(addresses: Arc<Vec<String>>, my_index: u64) -> Result<Vec<Option<TcpStream>>> {
-    let mut results: Vec<_> = (0..(addresses.len() - my_index as usize - 1)).map(|_| None).collect();
-    let listener = try!(TcpListener::bind(&addresses[my_index as usize][..]));
+fn await_connections(addresses: Arc<Vec<String>>, my_index: usize) -> Result<Vec<Option<TcpStream>>> {
+    let mut results: Vec<_> = (0..(addresses.len() - my_index - 1)).map(|_| None).collect();
+    let listener = try!(TcpListener::bind(&addresses[my_index][..]));
 
-    for _ in (my_index as usize + 1 .. addresses.len()) {
+    for _ in (my_index + 1 .. addresses.len()) {
         let mut stream = try!(listener.accept()).0;
         let identifier = try!(stream.read_u64::<LittleEndian>()) as usize;
-        results[identifier - my_index as usize - 1] = Some(stream);
+        results[identifier - my_index - 1] = Some(stream);
         println!("worker {}:\tconnection from worker {}", my_index, identifier);
     }
 

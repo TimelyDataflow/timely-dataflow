@@ -9,15 +9,15 @@ use communication::communicator::Thread;
 // A specific Communicator for inter-thread intra-process communication
 pub struct Process {
     inner:      Thread,             // inner Thread
-    index:      u64,                            // number out of peers
-    peers:      u64,                            // number of peer allocators (for typed channel allocation).
-    allocated:  u64,                            // indicates how many have been allocated (locally).
+    index:      usize,                            // number out of peers
+    peers:      usize,                            // number of peer allocators (for typed channel allocation).
+    allocated:  usize,                            // indicates how many have been allocated (locally).
     channels:   Arc<Mutex<Vec<Box<Any+Send>>>>, // Box<Any+Send> -> Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>
 }
 
 impl Process {
     pub fn inner<'a>(&'a mut self) -> &'a mut Thread { &mut self.inner }
-    pub fn new_vector(count: u64) -> Vec<Process> {
+    pub fn new_vector(count: usize) -> Vec<Process> {
         let channels = Arc::new(Mutex::new(Vec::new()));
         return (0 .. count).map(|index| Process {
             inner:      Thread,
@@ -30,11 +30,11 @@ impl Process {
 }
 
 impl Communicator for Process {
-    fn index(&self) -> u64 { self.index }
-    fn peers(&self) -> u64 { self.peers }
+    fn index(&self) -> usize { self.index }
+    fn peers(&self) -> usize { self.peers }
     fn new_channel<T: Data, D: Data>(&mut self) -> (Vec<::communication::observer::BoxedObserver<T, D>>, Box<::communication::Pullable<T, D>>) {
         let mut channels = self.channels.lock().ok().expect("mutex error?");
-        if self.allocated == channels.len() as u64 {  // we need a new channel ...
+        if self.allocated == channels.len() {  // we need a new channel ...
             let mut senders = Vec::new();
             let mut receivers = Vec::new();
             for _ in (0..self.peers) {

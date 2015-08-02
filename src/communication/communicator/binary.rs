@@ -8,17 +8,19 @@ use networking::networking::MessageHeader;
 use communication::communicator::Process;
 use communication::{Communicator, Data, Message, Pullable};
 
+// TODO : wrap (usize, usize, usize) as a type?
+
 // A communicator intended for binary channels (networking, pipes, shared memory)
 pub struct Binary {
     pub inner:      Process,    // inner Process (use for process-local channels)
-    pub index:      u64,                    // index of this worker
-    pub peers:      u64,                    // number of peer workers
-    pub graph:      u64,                    // identifier for the current graph
-    pub allocated:  u64,                    // indicates how many channels have been allocated (locally).
+    pub index:      usize,                    // index of this worker
+    pub peers:      usize,                    // number of peer workers
+    pub graph:      usize,                    // identifier for the current graph
+    pub allocated:  usize,                    // indicates how many channels have been allocated (locally).
 
     // for loading up state in the networking threads.
-    pub writers:    Vec<Sender<((u64, u64, u64), Sender<Vec<u8>>)>>,
-    pub readers:    Vec<Sender<((u64, u64, u64), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>>,
+    pub writers:    Vec<Sender<((usize, usize, usize), Sender<Vec<u8>>)>>,
+    pub readers:    Vec<Sender<((usize, usize, usize), (Sender<Vec<u8>>, Receiver<Vec<u8>>))>>,
     pub senders:    Vec<Sender<(MessageHeader, Vec<u8>)>>
 }
 
@@ -28,8 +30,8 @@ impl Binary {
 
 // A Communicator backed by Sender<Vec<u8>>/Receiver<Vec<u8>> pairs (e.g. networking, shared memory, files, pipes)
 impl Communicator for Binary {
-    fn index(&self) -> u64 { self.index }
-    fn peers(&self) -> u64 { self.peers }
+    fn index(&self) -> usize { self.index }
+    fn peers(&self) -> usize { self.peers }
     fn new_channel<T:Data+Serializable, D: Data+Serializable>(&mut self) -> (Vec<::communication::observer::BoxedObserver<T, D>>, Box<Pullable<T, D>>) {
         let mut pushers: Vec<::communication::observer::BoxedObserver<T, D>> = Vec::new(); // built-up vector of BoxedObserver<T, D> to return
 
@@ -41,10 +43,10 @@ impl Communicator for Binary {
         for (index, writer) in self.writers.iter().enumerate() {
             for counter in (0..inner_peers) {
                 let (s,_r) = channel();  // TODO : Obviously this should be deleted...
-                let mut target_index = index as u64 * inner_peers + counter as u64;
+                let mut target_index = index * inner_peers + counter;
 
                 // we may need to increment target_index by inner_peers;
-                if index as u64 >= self.index / inner_peers { target_index += inner_peers; }
+                if index >= self.index / inner_peers { target_index += inner_peers; }
 
                 writer.send(((self.index, self.graph, self.allocated), s)).unwrap();
                 let header = MessageHeader {
@@ -60,7 +62,7 @@ impl Communicator for Binary {
 
         // splice inner_sends into the vector of pushables
         for (index, writer) in inner_sends.into_iter().enumerate() {
-            pushers.insert(((self.index / inner_peers) * inner_peers) as usize + index, writer);
+            pushers.insert(((self.index / inner_peers) * inner_peers) + index, writer);
         }
 
         // prep a Box<Pullable<T>> using inner_recv and fresh registered pullables
@@ -73,7 +75,7 @@ impl Communicator for Binary {
         }
 
         let pullable = Box::new(BinaryPullable::new(inner_recv, recv));
-        
+
         self.allocated += 1;
 
         return (pushers, pullable);
@@ -127,7 +129,7 @@ impl<T:Data+Serializable, D:Data+Serializable> ::communication::observer::Observ
                 // NOTE : Instead, upstream folks are expected to clear allocations before re-using.
 
                 let mut header = self.header;
-                header.length = bytes.len() as u64;
+                header.length = bytes.len();
 
                 self.sender.send((header, bytes)).ok();
             }

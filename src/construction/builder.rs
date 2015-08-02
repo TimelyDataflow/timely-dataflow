@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::timestamp::RootTimestamp;
-use progress::{Timestamp, Scope, Subgraph};
+use progress::{Timestamp, Operate, Subgraph};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use progress::nested::scope_wrapper::ScopeWrapper;
@@ -25,8 +25,8 @@ pub trait GraphBuilder : Communicator+Clone {
     /// the purposes of tracking progress, rather than effect any data movement itself.
     fn add_edge(&self, source: Source, target: Target);
 
-    /// Adds a child `Scope` to the builder's scope.
-    fn add_scope<SC: Scope<Self::Timestamp>+'static>(&self, scope: SC) -> u64;  // returns name
+    /// Adds a child `Operate` to the builder's scope.
+    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize;  // returns name
 
     /// Creates a new `Subgraph` with timestamp `T`. Used by `subcomputation`, but unlikely to be
     /// commonly useful to end users.
@@ -62,13 +62,13 @@ pub trait GraphBuilder : Communicator+Clone {
         };
 
         let result = func(&mut builder);
-        self.add_scope(builder.subgraph);
+        self.add_operator(builder.subgraph);
         result
     }
 }
 
 /// A `GraphRoot` is the entry point to a timely dataflow computation. It wraps a `Communicator`,
-/// and has a slot for one child `Scope`. The primary intended use of `GraphRoot` is through its
+/// and has a slot for one child `Operate`. The primary intended use of `GraphRoot` is through its
 /// implementation of the `GraphBuilder` trait.
 ///
 /// # Panics
@@ -77,7 +77,7 @@ pub trait GraphBuilder : Communicator+Clone {
 /// Calling `step` without having called `subcomputation` will result in a `panic!`.
 pub struct GraphRoot<C: Communicator> {
     communicator:   Rc<RefCell<C>>,
-    graph:          Rc<RefCell<Option<Box<Scope<RootTimestamp>>>>>,
+    graph:          Rc<RefCell<Option<Box<Operate<RootTimestamp>>>>>,
 }
 
 impl<C: Communicator> GraphRoot<C> {
@@ -103,7 +103,7 @@ impl<C: Communicator> GraphBuilder for GraphRoot<C> {
         panic!("GraphRoot::connect(): root doesn't maintain edges; who are you, how did you get here?")
     }
 
-    fn add_scope<SC: Scope<RootTimestamp>+'static>(&self, mut scope: SC) -> u64  {
+    fn add_operator<SC: Operate<RootTimestamp>+'static>(&self, mut scope: SC) -> usize  {
         let mut borrow = self.graph.borrow_mut();
         if borrow.is_none() {
             scope.get_internal_summary();
@@ -111,7 +111,7 @@ impl<C: Communicator> GraphBuilder for GraphRoot<C> {
             *borrow = Some(Box::new(scope));
             0
         }
-        else { panic!("GraphRoot::add_scope(): added second scope to root") }
+        else { panic!("GraphRoot::add_operator(): added second scope to root") }
     }
 
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
@@ -121,8 +121,8 @@ impl<C: Communicator> GraphBuilder for GraphRoot<C> {
 }
 
 impl<C: Communicator> Communicator for GraphRoot<C> {
-    fn index(&self) -> u64 { self.communicator.borrow().index() }
-    fn peers(&self) -> u64 { self.communicator.borrow().peers() }
+    fn index(&self) -> usize { self.communicator.borrow().index() }
+    fn peers(&self) -> usize { self.communicator.borrow().peers() }
     fn new_channel<T:Data+Serializable, D:Data+Serializable>(&mut self) -> (Vec<BoxedObserver<T, D>>, Box<Pullable<T, D>>) {
         self.communicator.borrow_mut().new_channel()
     }
@@ -133,7 +133,7 @@ impl<C: Communicator> Clone for GraphRoot<C> {
 }
 
 /// A `SubgraphBuilder` wraps a `Subgraph` and a parent `G: GraphBuilder`. It manages the addition
-/// of `Scope`s to a subgraph, and the connection of edges between them.
+/// of `Operate`s to a subgraph, and the connection of edges between them.
 pub struct SubgraphBuilder<G: GraphBuilder, T: Timestamp> {
     pub subgraph: Rc<RefCell<Subgraph<G::Timestamp, T>>>,
     pub parent:   G,
@@ -142,28 +142,28 @@ pub struct SubgraphBuilder<G: GraphBuilder, T: Timestamp> {
 impl<G: GraphBuilder, T: Timestamp> GraphBuilder for SubgraphBuilder<G, T> {
     type Timestamp = Product<G::Timestamp, T>;
 
-    fn name(&self) -> String { self.subgraph.borrow().name() }
+    fn name(&self) -> String { self.subgraph.borrow().name().to_owned() }
     fn add_edge(&self, source: Source, target: Target) {
         self.subgraph.borrow_mut().connect(source, target);
     }
 
-    fn add_scope<SC: Scope<Self::Timestamp>+'static>(&self, scope: SC) -> u64 {
-        let index = self.subgraph.borrow().children.len() as u64;
+    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize {
+        let index = self.subgraph.borrow().children.len();
         let path = format!("{}", self.subgraph.borrow().path);
         self.subgraph.borrow_mut().children.push(ScopeWrapper::new(Box::new(scope), index, path));
         index
     }
 
     fn new_subscope<T2: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, T>, T2> {
-        let index = self.subgraph.borrow().children() as u64;
+        let index = self.subgraph.borrow().children();
         let path = format!("{}", self.subgraph.borrow().path);
         Subgraph::new_from(self, index, path)
     }
 }
 
 impl<G: GraphBuilder, T: Timestamp> Communicator for SubgraphBuilder<G, T> {
-    fn index(&self) -> u64 { self.parent.index() }
-    fn peers(&self) -> u64 { self.parent.peers() }
+    fn index(&self) -> usize { self.parent.index() }
+    fn peers(&self) -> usize { self.parent.peers() }
     fn new_channel<T2:Data+Serializable, D:Data+Serializable>(&mut self) -> (Vec<BoxedObserver<T2, D>>, Box<Pullable<T2, D>>) {
         self.parent.new_channel()
     }

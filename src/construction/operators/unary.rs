@@ -4,12 +4,12 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::nested::subgraph::Source::ScopeOutput;
-use progress::nested::subgraph::Target::ScopeInput;
+use progress::nested::subgraph::Source::ChildOutput;
+use progress::nested::subgraph::Target::ChildInput;
 
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
-use progress::{Timestamp, Scope, Antichain};
+use progress::{Timestamp, Operate, Antichain};
 use communication::observer::Tee;
 use communication::observer::Counter as ObserverCounter;
 use communication::observer::buffer::Buffer as ObserverBuffer;
@@ -26,7 +26,7 @@ type Output<T, D> = ObserverBuffer<ObserverCounter<Tee<T, D>>>;
 
 /// Methods to construct generic streaming and blocking unary operators.
 
-pub trait Unary<G: GraphBuilder, D1: Data> {
+pub trait Extension<G: GraphBuilder, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream and
     /// write to the output stream.
@@ -69,7 +69,7 @@ pub trait Unary<G: GraphBuilder, D1: Data> {
          P: ParallelizationContract<G::Timestamp, D1>;
 }
 
-impl<G: GraphBuilder, D1: Data> Unary<G, D1> for Stream<G, D1> {
+impl<G: GraphBuilder, D1: Data> Extension<G, D1> for Stream<G, D1> {
     fn unary_notify<D2: Data,
             L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>,
@@ -81,12 +81,12 @@ impl<G: GraphBuilder, D1: Data> Unary<G, D1> for Stream<G, D1> {
 
         let (sender, receiver) = pact.connect(&mut builder);
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets, name.to_owned(), logic, Some((init, builder.peers())));
-        let index = builder.add_scope(scope);
+        let operator = Operator::new(receiver, targets, name.to_owned(), logic, Some((init, builder.peers())));
+        let index = builder.add_operator(operator);
 
-        self.connect_to(ScopeInput(index, 0), sender);
+        self.connect_to(ChildInput(index, 0), sender);
 
-        Stream::new(ScopeOutput(index, 0), registrar, builder)
+        Stream::new(ChildOutput(index, 0), registrar, builder)
     }
 
     fn unary_stream<D2: Data,
@@ -99,21 +99,22 @@ impl<G: GraphBuilder, D1: Data> Unary<G, D1> for Stream<G, D1> {
 
         let (sender, receiver) = pact.connect(&mut builder);
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
-        let scope = UnaryScope::new(receiver, targets, name.to_owned(), move |i,o,_| logic(i,o), None);
-        let index = builder.add_scope(scope);
-        self.connect_to(ScopeInput(index, 0), sender);
+        let operator = Operator::new(receiver, targets, name.to_owned(), move |i,o,_| logic(i,o), None);
+        let index = builder.add_operator(operator);
+        self.connect_to(ChildInput(index, 0), sender);
 
-        Stream::new(ScopeOutput(index, 0), registrar, builder)
+        Stream::new(ChildOutput(index, 0), registrar, builder)
     }
 }
 
+// TODO : Is this necessary, or useful? (perhaps!)
 struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data, P: Pullable<T, D1>> {
     pub input:          PullableCounter<T, D1, P>,
     pub output:         ObserverBuffer<ObserverCounter<Tee<T, D2>>>,
     pub notificator:    Notificator<T>,
 }
 
-struct UnaryScope
+struct Operator
     <
     T: Timestamp,
     D1: Data,
@@ -125,7 +126,7 @@ struct UnaryScope
     name:           String,
     handle:         UnaryScopeHandle<T, D1, D2, P>,
     logic:          L,
-    notify:         Option<(Vec<T>, u64)>,    // initial notifications and peers
+    notify:         Option<(Vec<T>, usize)>,    // initial notifications and peers
 }
 
 impl<T:  Timestamp,
@@ -135,14 +136,14 @@ impl<T:  Timestamp,
      L:  FnMut(&mut PullableCounter<T, D1, P>,
                &mut ObserverBuffer<ObserverCounter<Tee<T, D2>>>,
                &mut Notificator<T>)>
-UnaryScope<T, D1, D2, P, L> {
+Operator<T, D1, D2, P, L> {
     pub fn new(receiver: P,
                targets:  Tee<T, D2>,
                name:     String,
                logic:    L,
-               notify:   Option<(Vec<T>, u64)>)
-           -> UnaryScope<T, D1, D2, P, L> {
-        UnaryScope {
+               notify:   Option<(Vec<T>, usize)>)
+           -> Operator<T, D1, D2, P, L> {
+        Operator {
             name:    name,
             handle:  UnaryScopeHandle {
                 input:       PullableCounter::new(receiver),
@@ -155,15 +156,15 @@ UnaryScope<T, D1, D2, P, L> {
     }
 }
 
-impl<T, D1, D2, P, L> Scope<T> for UnaryScope<T, D1, D2, P, L>
+impl<T, D1, D2, P, L> Operate<T> for Operator<T, D1, D2, P, L>
 where T: Timestamp,
       D1: Data, D2: Data,
       P: Pullable<T, D1>,
       L: FnMut(&mut PullableCounter<T, D1, P>,
                &mut ObserverBuffer<ObserverCounter<Tee<T, D2>>>,
                &mut Notificator<T>) {
-    fn inputs(&self) -> u64 { 1 }
-    fn outputs(&self) -> u64 { 1 }
+    fn inputs(&self) -> usize { 1 }
+    fn outputs(&self) -> usize { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut internal = vec![CountMap::new()];
@@ -204,6 +205,6 @@ where T: Timestamp,
         return false;   // no unannounced internal work
     }
 
-    fn name(&self) -> String { format!("{}", self.name) }
+    fn name(&self) -> &str { &self.name }
     fn notify_me(&self) -> bool { self.notify.is_some() }
 }

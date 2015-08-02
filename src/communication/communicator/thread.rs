@@ -7,8 +7,8 @@ use communication::{Communicator, Data, Message};
 // The simplest communicator remains worker-local and just queues sent messages.
 pub struct Thread;
 impl Communicator for Thread {
-    fn index(&self) -> u64 { 0 }
-    fn peers(&self) -> u64 { 1 }
+    fn index(&self) -> usize { 0 }
+    fn peers(&self) -> usize { 1 }
     fn new_channel<T: Clone+'static, D: 'static>(&mut self) ->
             (Vec<::communication::observer::BoxedObserver<T, D>>,
              Box<::communication::Pullable<T, D>>) {

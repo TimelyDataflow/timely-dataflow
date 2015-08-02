@@ -1,7 +1,7 @@
 use communication::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
-use construction::operators::unary::Unary;
+use construction::operators::unary::Extension;
 
 pub trait MapInPlaceExt<G: GraphBuilder, D: Data> {
     fn map_in_place<L: Fn(&mut D)+'static>(&self, logic: L) -> Stream<G, D>;

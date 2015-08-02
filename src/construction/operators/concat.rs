@@ -1,7 +1,7 @@
 use communication::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
-use construction::operators::binary::Binary;
+use construction::operators::binary::Extension;
 
 // NOTE : These used to have more exotic implementations that connected observers in a tangle.
 // NOTE : It was defective when used with the Observer protocol, because it just forwarded open and
