@@ -24,6 +24,7 @@ pub use self::filter::*;
 pub use self::binary::Binary;
 pub use self::delay::Delay;
 pub use self::exchange::Exchange;
+pub use self::probe::Probe;
 
 pub mod enterleave;
 pub mod unary;
@@ -41,3 +42,4 @@ pub mod filter;
 pub mod binary;
 pub mod delay;
 pub mod exchange;
+pub mod probe;

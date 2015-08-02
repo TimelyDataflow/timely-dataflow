@@ -7,7 +7,7 @@ use communication::observer::{Observer, TeeHelper};
 
 /// Abstraction of a stream of `D: Data` records timestamped with `G::Timestamp`.
 ///
-/// Internally `Stream` tracks any observer `Observer` 
+/// Internally `Stream` tracks any observer `Observer`
 #[derive(Clone)]
 pub struct Stream<G: GraphBuilder, D:Data> {
     name: Source,                       // used to name the source in the host graph.
@@ -26,6 +26,7 @@ impl<G: GraphBuilder, D:Data> Stream<G, D> {
     pub fn new(source: Source, output: TeeHelper<G::Timestamp, D>, builder: G) -> Self {
         Stream { name: source, ports: output, builder: builder }
     }
+    pub fn name(&self) -> &Source { &self.name }
 
     pub fn builder(&self) -> G { self.builder.clone() }
 }
