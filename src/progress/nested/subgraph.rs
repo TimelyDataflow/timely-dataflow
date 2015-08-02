@@ -322,7 +322,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // if internal_progress.iter().any(|x| x.len() > 0)
         // || messages_consumed.iter().any(|x| x.len() > 0)
         // || messages_produced.iter().any(|x| x.len() > 0) {
-        //     println!("{}: returning with\ninternal_progress: {:?}\nmessages_consumed: {:?}\nmessages_produced: {:?}", self.path, internal_progress, messages_consumed, messages_produced);
+        //     println!("{}: returning with\ninternal_progress: {:?}\nmessages_consumed: {:?}\nmessages_produced: {:?}",
+        //          self.path, internal_progress, messages_consumed, messages_produced);
         // }
 
         return active;

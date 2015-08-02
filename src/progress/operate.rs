@@ -1,3 +1,5 @@
+//! The `Operate` trait contains methods for describing an operators topology, and the progress it makes.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -5,30 +7,35 @@ use std::default::Default;
 
 use progress::{Timestamp, CountMap, Antichain};
 
-pub trait Operate<T: Timestamp> {
-    fn inputs(&self) -> usize;               // number of inputs to the vertex.
-    fn outputs(&self) -> usize;              // number of outputs from the vertex.
 
-    // Returns (in -> out) summaries using only edges internal to the vertex, and initial capabilities.
-    // by default, full connectivity from all inputs to all outputs, and no capabilities reserved.
+/// Methods for describing an operators topology, and the progress it makes.
+pub trait Operate<T: Timestamp> {
+
+    /// The number of inputs.
+    fn inputs(&self) -> usize;
+    /// The number of outputs.
+    fn outputs(&self) -> usize;
+
+    /// Returns (in -> out) summaries using only edges internal to the vertex, and initial capabilities.
+    /// by default, full connectivity from all inputs to all outputs, and no capabilities reserved.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         (vec![vec![Antichain::from_elem(Default::default()); self.outputs()]; self.inputs()],
          vec![CountMap::new(); self.outputs()])
     }
 
-    // Reports (out -> in) summaries for the vertex, and initial frontier information.
+    /// Reports (out -> in) summaries for the vertex, and initial frontier information.
     // TODO: Update this to be summaries along paths external to the vertex, as this is strictly more informative.
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, _frontier: &mut [CountMap<T>]) { }
 
-    // Reports changes to the projection of external work onto each of the scope's inputs.
+    /// Reports changes to the projection of external work onto each of the scope's inputs.
+    /// Callee is expected to consume the contents of _external to indicate acknowledgement.
     // TODO: Update this to be strictly external work, i.e. not work from this vertex.
-    // Note: callee is expected to consume the contents of _external to indicate acknowledgement.
     fn push_external_progress(&mut self, _external: &mut [CountMap<T>]) { }
 
-    // Requests changes to the projection of internal work onto each of the scope's outputs, and
-    //          changes to the number of messages consumed by each of the scope's inputs, and
-    //          changes to the number of messages producen on each of the scope's outputs.
-    // Returns a bool indicating if there is any un-reported work remaining (e.g. work that doesn't project on an output).
+    /// Requests changes to the projection of internal work onto each of the scope's outputs, and
+    ///          changes to the number of messages consumed by each of the scope's inputs, and
+    ///          changes to the number of messages producen on each of the scope's outputs.
+    /// Returns a bool indicating if there is any un-reported work remaining (e.g. work that doesn't project on an output).
     fn pull_internal_progress(&mut self,  internal: &mut [CountMap<T>],           // to populate
                                           consumed: &mut [CountMap<T>],           // to populate
                                           produced: &mut [CountMap<T>]) -> bool;  // to populate

@@ -24,7 +24,7 @@ pub use self::flat_map::*;
 pub use self::filter::*;
 pub use self::binary::Extension as BinaryExtension;
 pub use self::delay::Delay;
-pub use self::exchange::Exchange;
+pub use self::exchange::Exchange as ExchangeExtension;
 pub use self::probe::Extension as ProbeExtension;
 
 pub mod enterleave;

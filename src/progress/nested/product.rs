@@ -1,13 +1,13 @@
 use std::cmp::Ordering;
-use std::fmt::{Formatter, Display, Error, Debug};
+use std::fmt::{Formatter, Error, Debug};
 
 use progress::Timestamp;
 use progress::nested::summary::Summary;
 
-// use columnar::Columnar;
 use abomonation::Abomonation;
 
-
+/// We use `Product` rather than `(TOuter, TInner)`` so that we can derive our own `PartialOrd`,
+/// because Rust just uses the lexicographic total order.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Default)]
 pub struct Product<TOuter, TInner> {
     pub outer: TOuter,
@@ -23,12 +23,7 @@ impl<TOuter, TInner> Product<TOuter, TInner> {
     }
 }
 
-impl<TOuter: Display, TInner: Display> Display for Product<TOuter, TInner> {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        f.write_str(&format!("({}, {})", self.outer, self.inner))
-    }
-}
-
+/// Debug implementation to avoid seeing fully qualified path names.
 impl<TOuter: Debug, TInner: Debug> Debug for Product<TOuter, TInner> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.write_str(&format!("({:?}, {:?})", self.outer, self.inner))
@@ -38,7 +33,7 @@ impl<TOuter: Debug, TInner: Debug> Debug for Product<TOuter, TInner> {
 impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInner> {
     #[inline(always)]
     fn partial_cmp(&self, other: &Product<TOuter, TInner>) -> Option<Ordering> {
-        match (self <= other, self >= other) {
+        match (self <= other, other <= self) {
             (true, true)   => Some(Ordering::Equal),
             (true, false)  => Some(Ordering::Less),
             (false, true)  => Some(Ordering::Greater),
@@ -58,11 +53,6 @@ impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInn
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner> {
     type Summary = Summary<TOuter::Summary, TInner::Summary>;
 }
-
-// // columnar implementation because Product<T1, T2> : Copy.
-// impl<TOuter: Copy+Columnar, TInner: Copy+Columnar> Columnar for Product<TOuter, TInner> {
-//     type Stack = Vec<Product<TOuter, TInner>>;
-// }
 
 impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
     unsafe fn embalm(&mut self) { self.outer.embalm(); self.inner.embalm(); }
