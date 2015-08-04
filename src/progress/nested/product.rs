@@ -1,3 +1,5 @@
+//! A pair timestamp suitable for use with the product partial order.
+
 use std::cmp::Ordering;
 use std::fmt::{Formatter, Error, Debug};
 

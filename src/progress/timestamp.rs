@@ -1,3 +1,5 @@
+//! A partially ordered measure of progress at each timely dataflow location.
+
 use std::fmt::Debug;
 use std::any::Any;
 use std::default::Default;
@@ -8,18 +10,25 @@ use progress::nested::product::Product;
 
 use abomonation::Abomonation;
 
-// TODO : Change Copy requirement to Clone; understand Columnar requirement (for serialization at the moment)
+// TODO : Change Copy requirement to Clone;
+/// A composite trait for types that serve as timestamps in timely dataflow.
 pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Any+Abomonation {
     type Summary : PathSummary<Self> + 'static;   // summarizes cumulative action of Timestamp along a path
 }
 
-// summarized reachability from one location to another.
 // TODO : Change Copy requirement to Clone
+// TODO : Change `results_in` and perhaps `followed_by` to return an `Option`, indicating no path.
+// TODO : This can be important when a summary would "overflow", as we want neither to overflow,
+// TODO : nor wrap around, nor saturate. 
+/// A summary of how a timestamp advances along a timely dataflow path.
 pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrd+Debug+Default {
-    fn results_in(&self, src: &T) -> T;             // advances a timestamp
-    fn followed_by(&self, other: &Self) -> Self;    // composes two summaries
+    /// Advances a timestamp according to the timestamp actions on the path.
+    fn results_in(&self, src: &T) -> T;
+    /// Composes this path summary with another path summary.
+    fn followed_by(&self, other: &Self) -> Self;
 }
 
+/// An empty timestamp used by the root scope.
 #[derive(Copy, Clone, Hash, Eq, PartialOrd, PartialEq, Default)]
 pub struct RootTimestamp;
 impl Timestamp for RootTimestamp { type Summary = RootSummary; }
@@ -31,12 +40,13 @@ impl Debug for RootTimestamp {
 
 impl Abomonation for RootTimestamp { }
 impl RootTimestamp {
+    /// Constructs a new `Product<RootTimestamp,T>`.
     pub fn new<T: Timestamp>(t: T) -> Product<RootTimestamp, T> {
         Product::new(RootTimestamp, t)
     }
 }
 
-
+/// An empty path summary for root timestamps.
 #[derive(Copy, Clone, Eq, PartialOrd, PartialEq, Debug, Default)]
 pub struct RootSummary;
 impl PathSummary<RootTimestamp> for RootSummary {
@@ -44,6 +54,12 @@ impl PathSummary<RootTimestamp> for RootSummary {
     fn followed_by(&self, _: &RootSummary) -> RootSummary { RootSummary }
 }
 
+
+impl Timestamp for usize { type Summary = usize; }
+impl PathSummary<usize> for usize {
+    fn results_in(&self, src: &usize) -> usize { *self + *src }
+    fn followed_by(&self, other: &usize) -> usize { *self + *other }
+}
 
 impl Timestamp for u64 { type Summary = u64; }
 impl PathSummary<u64> for u64 {

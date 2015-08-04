@@ -1,4 +1,4 @@
-//! Operators for `Stream` manipulation.
+//! Extension traits for `Stream` implementing various operators.
 //!
 //! A collection of functions taking typed `Stream` objects as input and producing new `Stream`
 //! objects as output. Many of the operators provide simple, composable functionality. Some of the

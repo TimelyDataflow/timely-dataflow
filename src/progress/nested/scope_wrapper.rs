@@ -1,3 +1,5 @@
+//! Wraps a child operator, and mediates the communication of progress information.
+
 use std::default::Default;
 
 // use fabric::Allocate;

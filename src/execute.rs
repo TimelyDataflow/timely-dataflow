@@ -1,9 +1,51 @@
-//! Starts a timely dataflow execution from command line arguments and per-worker logic.
+//! Starts a timely dataflow execution from configuration information and per-worker logic.
 
 use timely_communication::{initialize, Configuration, Allocator};
 use dataflow::scopes::Root;
 
-/// Executes a timely dataflow computation with supplied arguments and per-communicator logic.
+
+/// Executes a timely dataflow from a configuration and per-communicator logic.
+///
+/// The `execute` method takes a `Configuration` and spins up some number of
+/// workers threads, each of which execute the supplied closure to construct and run a timely
+/// dataflow computation.
+///
+/// #Examples
+/// ```ignore
+/// extern crate timely;
+///
+/// use timely::*;
+/// use timely::dataflow::inspect::{Input, Inspect};
+///
+/// // execute a timely dataflow using three worker threads.
+/// timely::execute(Configuration::Process(3), |root| {
+///
+///     // add an input and base computation off of it
+///     let mut input = root.scoped(|scope| {
+///         let (input, stream) = scope.new_input();
+///         stream.inspect(|x| println!("hello {:?}", x));
+///         input
+///     });
+///
+///     // introduce input, advance computation
+///     for round in 0..10 {
+///         input.send(round);
+///         input.advance_to(round + 1);
+///         root.step();
+///     }
+///
+///     input.close();          // close the input
+///     while root.step() { }   // finish off the computation
+/// });
+/// ```
+pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configuration, func: F) {
+    initialize(config, move |allocator| {
+        func(&mut Root::new(allocator));
+    })
+}
+
+
+/// Executes a timely dataflow from supplied arguments and per-communicator logic.
 ///
 /// The `execute` method takes arguments (typically `std::env::args()`) and spins up some number of
 /// workers threads, each of which execute the supplied closure to construct and run a timely
@@ -26,21 +68,21 @@ use dataflow::scopes::Root;
 /// extern crate timely;
 ///
 /// use timely::*;
-/// use timely::construction::inspect::InspectExt;
+/// use timely::dataflow::inspect::{Input, Inspect};
 ///
-/// // construct and execute a timely dataflow
+/// // execute a timely dataflow using command line parameters
 /// timely::execute_from_args(std::env::args(), |root| {
 ///
 ///     // add an input and base computation off of it
-///     let mut input = root.subcomputation(|subgraph| {
-///         let (input, stream) = subgraph.new_input();
+///     let mut input = root.scoped(|scope| {
+///         let (input, stream) = scope.new_input();
 ///         stream.inspect(|x| println!("hello {:?}", x));
 ///         input
 ///     });
 ///
 ///     // introduce input, advance computation
 ///     for round in 0..10 {
-///         input.send_at(round, round..round+1);
+///         input.send(round);
 ///         input.advance_to(round + 1);
 ///         root.step();
 ///     }
@@ -62,14 +104,6 @@ use dataflow::scopes::Root;
 /// host2:port
 /// host3:port
 /// ```
-
-pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configuration, func: F) {
-    initialize(config, move |allocator| {
-        func(&mut Root::new(allocator));
-    })
-}
-
-
 pub fn execute_from_args<I: Iterator<Item=String>, F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(iter: I, func: F) {
     if let Some(config) = Configuration::from_args(iter) {
         initialize(config, move |allocator| {

@@ -1,3 +1,5 @@
+//! Path summaries that are either child local, or leave the scope and re-enter from the parent. 
+
 use std::cmp::Ordering;
 use std::default::Default;
 use std::fmt::{Display, Formatter};

@@ -49,7 +49,7 @@
 //! });
 //! ```
 //!
-//! The program uses `timely::execute` to spin up a computation based on command line arguments
+//! The program uses `timely::execute_from_args` to spin up a computation based on command line arguments
 //! and a closure specifying what each worker should do, in terms of a handle to a timely dataflow
 //! `Scope` (in this case, `root`). A `Scope` allows you to define inputs, feedback
 //! cycles, and dataflow subgraphs, as part of building the dataflow graph of your dreams.
@@ -58,7 +58,7 @@
 //! input using `new_input`, and add a dataflow `inspect` operator to print each observed record.
 //! We then introduce input at increasing rounds, indicate the advance to the system (promising
 //! that we will introduce no more input at prior rounds), and step the computation. Finally, we
-//! close the input (promisng that we will introduce no more input ever) and step the computation
+//! close the input (promising that we will introduce no more input ever) and step the computation
 //! until there is no more work to do.
 
 extern crate abomonation;

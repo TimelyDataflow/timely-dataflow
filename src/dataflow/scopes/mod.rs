@@ -1,4 +1,4 @@
-//! Scopes describe the hierarchical structure of timely dataflow graphs.
+//! Hierarchical organization of timely dataflow graphs.
 //!
 
 use std::rc::Rc;

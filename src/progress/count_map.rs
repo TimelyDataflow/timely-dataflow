@@ -1,3 +1,5 @@
+//! A mapping from general types `T` to `i64`, with zero values absent.
+
 use std::default::Default;
 
 // could be updated to be an Enum { Vec<(T, i64)>, HashMap<T, i64> } in the fullness of time

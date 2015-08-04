@@ -1,16 +1,21 @@
+//! Tracks minimal sets of mutually incomparable elements of a partial order.
+
 use std::fmt::Debug;
 use std::default::Default;
 use std::cmp::Ordering;
 
 use progress::CountMap;
 
+/// A set of mutually incomparable elements.
 #[derive(Default, Clone, Debug)]
 pub struct Antichain<T> {
-    pub elements: Vec<T>
+    elements: Vec<T>
 }
 
 impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
-    // returns true if element is added to the set
+    /// Updates the `Antichain` if the element is not greater than or equal to some present element.
+    ///
+    /// Returns true if element is added to the set
     pub fn insert(&mut self, element: T) -> bool {
         // bail if any element exceeds the candidate
         if !self.elements.iter().any(|x| element.ge(x)) {
@@ -31,10 +36,22 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
         }
     }
 
+    /// Creates a new empty `Antichain`.
     pub fn new() -> Antichain<T> { Antichain { elements: Vec::new() } }
+
+    /// Creates a new singleton `Antichain`.
     pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
+
+    /// Reveals the elements in the `Antichain`.
+    pub fn elements(&self) -> &[T] { &self.elements[..] }
 }
 
+/// An antichain based on a multiset whose elements frequencies can be updated.
+///
+/// In particular, unlike `Antichain`, element frequencies can be decremented, removing elements in
+/// the antichain and revealing other elements that were previously obscured.
+/// As part of this, the `MutableAntichain` must maintain the frequences for all elements, not just
+/// those in the antichain at the moment.
 #[derive(Default, Debug, Clone)]
 pub struct MutableAntichain<T:Eq> {
     occurrences:    CountMap<T>,    // occurrence count of each time
@@ -43,6 +60,7 @@ pub struct MutableAntichain<T:Eq> {
 }
 
 impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
+    /// Creates a new empty `MutableAntichain`.
     pub fn new() -> MutableAntichain<T> {
         MutableAntichain {
             occurrences:    Default::default(),
@@ -51,26 +69,32 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
         }
     }
 
+    /// Reveals the element in the `MutableAntichain`.
     pub fn elements(&self) -> &[T] { &self.elements }
 
+    /// Creates a new singleton `MutableAntichain`.
     pub fn new_bottom(bottom: T) -> MutableAntichain<T> {
         let mut result = MutableAntichain::new();
         result.update_weight(&bottom, 1, &mut Default::default());
         return result;
     }
 
+    /// Returns true if there are no elements in the `MutableAntichain`.
     pub fn empty(&self) -> bool { self.elements.len() == 0 }
 
+    /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
     #[inline]
     pub fn lt(&self, time: &T) -> bool {
         self.elements.iter().any(|x| x.lt(time))
     }
 
+    /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
     #[inline]
     pub fn le(&self, time: &T) -> bool {
         self.elements.iter().any(|x| x.le(time))
     }
 
+    /// Returns the number of times an element exists in the set.
     #[inline]
     pub fn count(&self, time: &T) -> Option<i64> {
         self.occurrences.elements().iter().filter(|x| time.eq(&x.0)).next().map(|i| i.1)

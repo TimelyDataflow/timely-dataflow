@@ -1,4 +1,4 @@
-//! Methods and structures for communication between timely dataflow components.
+//! Structured communication between timely dataflow operators.
 
 pub use self::message::Message;
 pub use self::message::Content;

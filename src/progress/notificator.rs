@@ -1,11 +1,13 @@
+//! A Notificator manages outstanding capabilities on several inputs as well as notification
+//! requests that may be blocked by them.
+
 use std::collections::VecDeque;
 
 use progress::Timestamp;
 use progress::frontier::MutableAntichain;
 use progress::count_map::CountMap;
 
-/// A Notificator manages outstanding capabilities on several inputs as well as notification
-/// requests that may be blocked by them.
+/// Tracks requests for notification and delivers available notifications.
 ///
 /// Notificator is meant to manage the delivery of requested notifications in the presence of
 /// inputs that may have outstanding messages to deliver. The notificator tracks the frontiers,
@@ -13,7 +15,6 @@ use progress::count_map::CountMap;
 /// once there are no frontier elements less-or-equal to them, and there are no other pending
 /// notification requests less than them. Each with be less-or-equal to itself, so we want to
 /// dodge that corner case.
-
 #[derive(Default)]
 pub struct Notificator<T: Timestamp> {
     pending:        MutableAntichain<T>,        // notification requests not yet been delivered
@@ -23,6 +24,7 @@ pub struct Notificator<T: Timestamp> {
 }
 
 impl<T: Timestamp> Notificator<T> {
+    /// Updates the `Notificator`'s frontiers from a `CountMap` per input.
     pub fn update_frontier_from_cm(&mut self, count_map: &mut [CountMap<T>]) {
         while self.frontier.len() < count_map.len() {
             self.frontier.push(MutableAntichain::new());
@@ -35,15 +37,21 @@ impl<T: Timestamp> Notificator<T> {
         }
     }
 
+    /// Reveals the elements in the frontier of the indicated input.
     pub fn frontier(&self, input: usize) -> &[T] {
         self.frontier[input].elements()
     }
 
+    /// Requests a notification at `time`.
     pub fn notify_at(&mut self, time: &T) {
         self.changes.update(time, 1);
         self.pending.update(time, 1);
     }
 
+    /// Retrieves progress updates from the `Notificator`.
+    ///
+    /// This is intended to be called by the progress tracking machinery, rather than the casual
+    /// operator programmer.
     pub fn pull_progress(&mut self, internal: &mut CountMap<T>) {
         while let Some((time, delta)) = self.changes.pop() {
             internal.update(&time, delta);

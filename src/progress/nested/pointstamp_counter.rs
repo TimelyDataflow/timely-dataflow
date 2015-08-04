@@ -1,3 +1,5 @@
+//! Manages pointstamp counts (timestamp, location) within a sub operator.
+
 use progress::Timestamp;
 use progress::nested::subgraph::Source::{GraphInput, ChildOutput};
 use progress::nested::subgraph::Target::ChildInput;

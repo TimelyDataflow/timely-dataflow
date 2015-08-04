@@ -1,4 +1,4 @@
-//! The `Operate` trait contains methods for describing an operators topology, and the progress it makes.
+//! Methods which describe an operators topology, and the progress it makes.
 
 use std::rc::Rc;
 use std::cell::RefCell;

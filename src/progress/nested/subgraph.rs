@@ -1,3 +1,5 @@
+//! Implements `Operate` for a scoped collection of child operators.
+
 use std::default::Default;
 use std::fmt::Debug;
 
@@ -131,7 +133,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for input in (0..self.inputs()) {
             for &(target, ref antichain) in self.input_summaries[input].iter() {
                 if let GraphOutput(output) = target {
-                    for &summary in antichain.elements.iter() {
+                    for &summary in antichain.elements().iter() {
                         summaries[input][output].insert(match summary {
                             Local(_)    => Default::default(),
                             Outer(y, _) => y,
@@ -341,12 +343,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                 while let Some((time, value)) = self.pointstamps.target_counts[index][input].pop() {
                     for &(target, ref antichain) in self.target_summaries[index][input].iter() {
                         if let ChildInput(scope, input) = target {
-                            for summary in antichain.elements.iter() {
+                            for summary in antichain.elements().iter() {
                                 self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
                             }
                         }
                         if let GraphOutput(output) = target {
-                            for summary in antichain.elements.iter() {
+                            for summary in antichain.elements().iter() {
                                 self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
                             }
                         }
@@ -358,12 +360,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                 while let Some((time, value)) = self.pointstamps.source_counts[index][output].pop() {
                     for &(target, ref antichain) in self.source_summaries[index][output].iter() {
                         if let ChildInput(scope, input) = target {
-                            for summary in antichain.elements.iter() {
+                            for summary in antichain.elements().iter() {
                                 self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
                             }
                         }
                         if let GraphOutput(output) = target {
-                            for summary in antichain.elements.iter() {
+                            for summary in antichain.elements().iter() {
                                 self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
                             }
                         }
@@ -376,12 +378,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             while let Some((time, value)) = self.pointstamps.input_counts[input].pop() {
                 for &(target, ref antichain) in self.input_summaries[input].iter() {
                     if let ChildInput(scope, input) = target {
-                        for summary in antichain.elements.iter() {
+                        for summary in antichain.elements().iter() {
                             self.pointstamps.target_pushed[scope as usize][input as usize].update(&summary.results_in(&time), value);
                         }
                     }
                     if let GraphOutput(output) = target {
-                        for summary in antichain.elements.iter() {
+                        for summary in antichain.elements().iter() {
                             self.pointstamps.output_pushed[output as usize].update(&summary.results_in(&time), value);
                         }
                     }
@@ -456,7 +458,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                                 // clone this so that we aren't holding a read ref to self.source_summaries.
                                 let reachable = self.source_summaries[next_scope][next_output].clone();
                                 for &(next_target, ref antichain) in reachable.iter() {
-                                    for summary in antichain.elements.iter() {
+                                    for summary in antichain.elements().iter() {
                                         let cand_summary = next_summary.followed_by(summary);
                                         if try_to_add_summary(&mut self.source_summaries[scope][output],next_target,cand_summary) {
                                             done = false;
@@ -477,7 +479,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                         if let ChildOutput(next_scope, next_output) = next_source {
                             let reachable = self.source_summaries[next_scope][next_output].clone();
                             for &(next_target, ref antichain) in reachable.iter() {
-                                for summary in antichain.elements.iter() {
+                                for summary in antichain.elements().iter() {
                                     let candidate_summary = next_summary.followed_by(summary);
                                     if try_to_add_summary(&mut self.input_summaries[input], next_target, candidate_summary) {
                                         done = false;
@@ -500,7 +502,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                 for &(next_source, next_summary) in next_sources.iter() {
                     if let ChildOutput(next_scope, next_output) = next_source {
                         for &(next_target, ref antichain) in self.source_summaries[next_scope][next_output].iter() {
-                            for summary in antichain.elements.iter() {
+                            for summary in antichain.elements().iter() {
                                 let candidate_summary = next_summary.followed_by(summary);
                                 try_to_add_summary(&mut self.target_summaries[scope][input], next_target, candidate_summary);
                             }
@@ -517,14 +519,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         match *target {
             GraphOutput(port) => {
                 for input in (0..self.inputs()) {
-                    for &summary in self.external_summaries[port as usize][input as usize].elements.iter() {
+                    for &summary in self.external_summaries[port as usize][input as usize].elements().iter() {
                         result.push((GraphInput(input), Outer(summary, Default::default())));
                     }
                 }
             },
             ChildInput(graph, port) => {
                 for i in (0..self.children[graph as usize].outputs) {
-                    for &summary in self.children[graph as usize].summary[port as usize][i as usize].elements.iter() {
+                    for &summary in self.children[graph as usize].summary[port as usize][i as usize].elements().iter() {
                         result.push((ChildOutput(graph, i), summary));
                     }
                 }
@@ -594,7 +596,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                     println!("\t\t{}:\t{:?}", match target {
                         &ChildInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].name(), scope, input),
                         x => format!("{:?} ", x),
-                    }, chain.elements);
+                    }, chain.elements());
                 }
             }
         }
@@ -607,7 +609,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                     println!("\t\t{}:\t{:?}", match target {
                         &ChildInput(scope, input) => format!("{}[{}](input[{}])", self.children[scope as usize].name(), scope, input),
                         x => format!("{:?} ", x),
-                        }, chain.elements);
+                        }, chain.elements());
                 }
             }
         }
