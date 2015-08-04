@@ -3,17 +3,17 @@ extern crate timely;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use timely::communication::Data;
+use timely::Data;
 use timely::progress::timestamp::RootTimestamp;
 use timely::progress::nested::Summary::Local;
 
-use timely::construction::*;
-use timely::construction::operators::*;
+use timely::dataflow::*;
+use timely::dataflow::operators::*;
 
 fn main() {
-    timely::execute(std::env::args(), |root| {
+    timely::execute_from_args(std::env::args(), |root| {
 
-        let (mut input1, mut input2) = root.subcomputation(|graph| {
+        let (mut input1, mut input2) = root.scoped(|graph| {
 
             // try building some input scopes
             let (input1, stream1) = graph.new_input::<u64>();
@@ -39,8 +39,8 @@ fn main() {
         root.step();
 
         // move some data into the dataflow graph.
-        input1.give(0);
-        input2.give(1);
+        input1.send(0);
+        input2.send(1);
 
         // see what everyone thinks about that ...
         root.step();
@@ -55,9 +55,9 @@ fn main() {
     });
 }
 
-fn create_subgraph<G: GraphBuilder, D>(builder: &G, source1: &Stream<G, D>, source2: &Stream<G, D>) -> (Stream<G, D>, Stream<G, D>)
+fn create_subgraph<G: Scope, D>(builder: &G, source1: &Stream<G, D>, source2: &Stream<G, D>) -> (Stream<G, D>, Stream<G, D>)
 where D: Data+Hash+Eq+Debug, G::Timestamp: Hash {
-    builder.clone().subcomputation::<u64,_,_>(|subgraph| {
+    builder.clone().scoped::<u64,_,_>(|subgraph| {
         (subgraph.enter(source1).leave(),
          subgraph.enter(source2).leave())
     })

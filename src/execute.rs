@@ -1,15 +1,7 @@
-//! Tools to start a timely dataflow execution from command line arguments and per-worker logic.
+//! Starts a timely dataflow execution from command line arguments and per-worker logic.
 
-// use std::thread;
-// use std::io::BufRead;
-// use getopts;
-// use std::sync::Arc;
-
-// use communication::communicator::{Communicator, Thread, Process, Generic};
-use fabric::allocator::Generic;
-use fabric::{initialize, Configuration};
-use construction::GraphRoot;
-// use networking::initialize_networking;
+use timely_communication::{initialize, Configuration, Allocator};
+use dataflow::scopes::Root;
 
 /// Executes a timely dataflow computation with supplied arguments and per-communicator logic.
 ///
@@ -37,7 +29,7 @@ use construction::GraphRoot;
 /// use timely::construction::inspect::InspectExt;
 ///
 /// // construct and execute a timely dataflow
-/// timely::execute(std::env::args(), |root| {
+/// timely::execute_from_args(std::env::args(), |root| {
 ///
 ///     // add an input and base computation off of it
 ///     let mut input = root.subcomputation(|subgraph| {
@@ -71,10 +63,17 @@ use construction::GraphRoot;
 /// host3:port
 /// ```
 
-pub fn execute<I: Iterator<Item=String>, F: Fn(&mut GraphRoot<Generic>)+Send+Sync+'static>(iter: I, func: F) {
+pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configuration, func: F) {
+    initialize(config, move |allocator| {
+        func(&mut Root::new(allocator));
+    })
+}
+
+
+pub fn execute_from_args<I: Iterator<Item=String>, F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(iter: I, func: F) {
     if let Some(config) = Configuration::from_args(iter) {
         initialize(config, move |allocator| {
-            func(&mut GraphRoot::new(allocator));
+            func(&mut Root::new(allocator));
         })
     }
     else {

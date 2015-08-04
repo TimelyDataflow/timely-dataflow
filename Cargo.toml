@@ -13,8 +13,8 @@ repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow"]
 license = "MIT"
 
-[dependencies.fabric]
-path="fabric"
+[dependencies.timely_communication]
+path="./communication"
 
 [dependencies]
 abomonation="*"

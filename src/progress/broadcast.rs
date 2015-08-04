@@ -1,6 +1,7 @@
 use progress::Timestamp;
 use progress::count_map::CountMap;
-use fabric::{Allocate, Push, Pull};
+use timely_communication::Allocate;
+use {Push, Pull};
 
 // ((child_scope, [in/out]_port, timestamp), delta)
 pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;

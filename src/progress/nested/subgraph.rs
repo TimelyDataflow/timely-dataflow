@@ -5,7 +5,7 @@ use std::mem;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use fabric::Allocate;
+use timely_communication::Allocate;
 
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, PathSummary, Operate};
@@ -317,7 +317,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         }
 
         // // if we want to see why we are active
-        // if active { self.print_status(); }
+        // if active { self._print_status(); }
 
         // if internal_progress.iter().any(|x| x.len() > 0)
         // || messages_consumed.iter().any(|x| x.len() > 0)
@@ -583,7 +583,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 
-    fn print_reachability_summaries(&self) {
+    fn _print_reachability_summaries(&self) {
         println!("Reachability summary for subscope {}", self.name());
         println!("Operate outputs -> targets:");
 
@@ -613,7 +613,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 
-    fn print_status(&self) {
+    fn _print_status(&self) {
         println!("printing status for {}", self.path);
         for child in self.children.iter() {
             for (index, messages) in child.outstanding_messages.iter().enumerate() {

@@ -1,0 +1,91 @@
+// use communication::{Message, Observer};
+// use serialization::Serializable;
+use drain::DrainExt;
+
+use {Push, Data};
+use dataflow::channels::Content;
+use abomonation::Abomonation;
+
+// an observer routing between multiple pushers
+// TODO : Software write combining
+pub struct Exchange<T, D, P: Push<(T, Content<D>)>, H: Fn(&D) -> u64> {
+    pushers: Vec<P>,
+    buffers: Vec<Vec<D>>,
+    current: Option<T>,
+    hash_func: H,
+}
+
+impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&D)->u64>  Exchange<T, D, P, H> {
+    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
+        let mut buffers = vec![];
+        for _ in 0..pushers.len() {
+            buffers.push(Vec::with_capacity(Content::<D>::default_length()));
+        }
+        Exchange {
+            pushers: pushers,
+            hash_func: key,
+            buffers: buffers,
+            current: None,
+        }
+    }
+    fn flush(&mut self, index: usize) {
+        if self.buffers[index].len() > 0 {
+            if let Some(ref time) = self.current {
+                Content::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
+            }
+        }
+    }
+}
+
+impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&D)->u64> Push<(T, Content<D>)> for Exchange<T, D, P, H> {
+    fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
+        // if only one pusher, no exchange
+        if self.pushers.len() == 1 {
+            self.pushers[0].push(message);
+        }
+        else {
+            if let Some((ref time, ref mut data)) = *message {
+
+                // if the time isn't right, flush everything.
+                if self.current.as_ref().map(|x| x != time).unwrap_or(false) {
+                    for index in 0..self.pushers.len() {
+                        self.flush(index);
+                    }
+                }
+                self.current = Some(time.clone());
+
+                // if the number of pushers is a power of two, use a mask
+                if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
+                    let mask = (self.pushers.len() - 1) as u64;
+                    for datum in data.drain_temp() {
+                        let index = (((self.hash_func)(&datum)) & mask) as usize;
+                        // assert!(self.buffers[index].capacity() == Message::<O::Data>::default_length());
+                        self.buffers[index].push(datum);
+                        if self.buffers[index].len() == self.buffers[index].capacity() {
+                            self.flush(index);
+                        }
+                    }
+                }
+                // as a last resort, use mod (%)
+                else {
+                    for datum in data.drain_temp() {
+                        let index = (((self.hash_func)(&datum)) % self.pushers.len() as u64) as usize;
+                        // assert!(self.buffers[index].capacity() == Message::<O::Data>::default_length());
+                        self.buffers[index].push(datum);
+                        if self.buffers[index].len() == self.buffers[index].capacity() {
+                            self.flush(index);
+                        }
+                    }
+                }
+
+            }
+            else {
+                // flush
+                for index in 0..self.pushers.len() {
+                    self.flush(index);
+                    self.pushers[index].push(&mut None);
+                }
+            }
+        }
+    }
+}
