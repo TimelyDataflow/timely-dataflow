@@ -3,7 +3,7 @@
 Timely dataflow is a low-latency cyclic dataflow computational model, introduced in the paper [Naiad: a timely datalow system](http://research.microsoft.com/pubs/201100/naiad_sosp2013.pdf).
 This project is an extended and more modular implementation of timely dataflow in Rust.
 
-Be sure to read the [documentation for timely dataflow](http://frankmcsherry.github.io/timely-dataflow).
+Be sure to read the [documentation for timely dataflow](http://frankmcsherry.github.io/timely-dataflow). It is a work in progress, but mostly improving.
 
 # An example
 
@@ -19,24 +19,24 @@ This will bring in the `timely` crate from crates.io, which should allow you to 
 ```rust
 extern crate timely;
 
-use timely::construction::*;
-use timely::construction::operators::*;
+use timely::dataflow::*;
+use timely::dataflow::operators::{Input, Inspect};
 
 fn main() {
 
     // initializes and runs a timely dataflow computation
-    timely::execute(std::env::args(), |root| {
+    timely::execute_from_args(std::env::args(), |root| {
 
         // create a new input, and inspect its output
-        let mut input = root.subcomputation(move |builder| {
-            let (input, stream) = builder.new_input();
+        let mut input = root.scoped(move |scope| {
+            let (input, stream) = scope.new_input();
             stream.inspect(|x| println!("hello {:?}", x));
             input
         });
 
         // introduce data and watch!
         for round in 0..10 {
-            input.give(round);
+            input.push(round);
             input.advance_to(round + 1);
             root.step();
         }
@@ -219,10 +219,10 @@ fn main() {
 
     let mut input = {
 
-        // allocate and use a scoped subgraph builder
-        let mut builder = computation.new_subgraph();
-        let (input, stream) = builder.new_input();
-        stream.enable(builder)
+        // allocate and use a scoped subgraph scope
+        let mut scope = computation.new_subgraph();
+        let (input, stream) = scope.new_input();
+        stream.enable(scope)
               .inspect(|x| println!("hello {:?}", x));
 
         input
