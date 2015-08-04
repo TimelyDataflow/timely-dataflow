@@ -15,14 +15,17 @@ use communication::observer::Counter as ObserverCounter;
 use communication::observer::buffer::Buffer as ObserverBuffer;
 use communication::pact::ParallelizationContract;
 use communication::pullable::Counter as PullableCounter;
-use communication::{Data, Pullable};
+// use communication::message::Content;
+// use communication::{Data, Pullable};
+// use fabric::{Pull};
+use ::Data;
 
 use construction::{Stream, GraphBuilder};
 
 use drain::DrainExt;
 
-type Input<T, D, P> = PullableCounter<T, D, P>;
-type Output<T, D> = ObserverBuffer<ObserverCounter<Tee<T, D>>>;
+type Input<T, D> = PullableCounter<T, D>;
+type Output<T, D> = ObserverBuffer<T, D, ObserverCounter<T, D, Tee<T, D>>>;
 
 /// Methods to construct generic streaming and blocking unary operators.
 
@@ -43,8 +46,8 @@ pub trait Extension<G: GraphBuilder, D1: Data> {
     fn unary_stream<D2, L, P> (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>
     where
         D2: Data,
-        L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
-                 &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>)+'static,
+        L: FnMut(&mut PullableCounter<G::Timestamp, D1>,
+                 &mut ObserverBuffer<G::Timestamp, D2,ObserverCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream,
@@ -63,16 +66,16 @@ pub trait Extension<G: GraphBuilder, D1: Data> {
     fn unary_notify<D2, L, P> (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>
     where
         D2: Data,
-        L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
-                 &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>,
+        L: FnMut(&mut PullableCounter<G::Timestamp, D1>,
+                 &mut ObserverBuffer<G::Timestamp, D2, ObserverCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>,
                  &mut Notificator<G::Timestamp>)+'static,
          P: ParallelizationContract<G::Timestamp, D1>;
 }
 
 impl<G: GraphBuilder, D1: Data> Extension<G, D1> for Stream<G, D1> {
     fn unary_notify<D2: Data,
-            L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
-                     &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>,
+            L: FnMut(&mut PullableCounter<G::Timestamp, D1>,
+                     &mut ObserverBuffer<G::Timestamp, D2, ObserverCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2> {
@@ -81,7 +84,7 @@ impl<G: GraphBuilder, D1: Data> Extension<G, D1> for Stream<G, D1> {
 
         let (sender, receiver) = pact.connect(&mut builder);
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
-        let operator = Operator::new(receiver, targets, name.to_owned(), logic, Some((init, builder.peers())));
+        let operator = Operator::new(PullableCounter::new(receiver), targets, name.to_owned(), logic, Some((init, builder.peers())));
         let index = builder.add_operator(operator);
 
         self.connect_to(ChildInput(index, 0), sender);
@@ -90,8 +93,8 @@ impl<G: GraphBuilder, D1: Data> Extension<G, D1> for Stream<G, D1> {
     }
 
     fn unary_stream<D2: Data,
-             L: FnMut(&mut PullableCounter<G::Timestamp, D1, P::Pullable>,
-                      &mut ObserverBuffer<ObserverCounter<Tee<G::Timestamp, D2>>>)+'static,
+             L: FnMut(&mut PullableCounter<G::Timestamp, D1>,
+                      &mut ObserverBuffer<G::Timestamp, D2, ObserverCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&self, pact: P, name: &str, mut logic: L) -> Stream<G, D2> {
 
@@ -99,7 +102,7 @@ impl<G: GraphBuilder, D1: Data> Extension<G, D1> for Stream<G, D1> {
 
         let (sender, receiver) = pact.connect(&mut builder);
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
-        let operator = Operator::new(receiver, targets, name.to_owned(), move |i,o,_| logic(i,o), None);
+        let operator = Operator::new(PullableCounter::new(receiver), targets, name.to_owned(), move |i,o,_| logic(i,o), None);
         let index = builder.add_operator(operator);
         self.connect_to(ChildInput(index, 0), sender);
 
@@ -108,9 +111,9 @@ impl<G: GraphBuilder, D1: Data> Extension<G, D1> for Stream<G, D1> {
 }
 
 // TODO : Is this necessary, or useful? (perhaps!)
-struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data, P: Pullable<T, D1>> {
-    pub input:          PullableCounter<T, D1, P>,
-    pub output:         ObserverBuffer<ObserverCounter<Tee<T, D2>>>,
+struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data> {
+    pub input:          PullableCounter<T, D1>,
+    pub output:         ObserverBuffer<T, D2, ObserverCounter<T, D2, Tee<T, D2>>>,
     pub notificator:    Notificator<T>,
 }
 
@@ -119,12 +122,11 @@ struct Operator
     T: Timestamp,
     D1: Data,
     D2: Data,
-    P: Pullable<T, D1>,
-    L: FnMut(&mut PullableCounter<T, D1, P>,
-             &mut ObserverBuffer<ObserverCounter<Tee<T, D2>>>,
+    L: FnMut(&mut PullableCounter<T, D1>,
+             &mut ObserverBuffer<T, D2, ObserverCounter<T, D2, Tee<T, D2>>>,
              &mut Notificator<T>)> {
     name:           String,
-    handle:         UnaryScopeHandle<T, D1, D2, P>,
+    handle:         UnaryScopeHandle<T, D1, D2>,
     logic:          L,
     notify:         Option<(Vec<T>, usize)>,    // initial notifications and peers
 }
@@ -132,21 +134,20 @@ struct Operator
 impl<T:  Timestamp,
      D1: Data,
      D2: Data,
-     P:  Pullable<T, D1>,
-     L:  FnMut(&mut PullableCounter<T, D1, P>,
-               &mut ObserverBuffer<ObserverCounter<Tee<T, D2>>>,
+     L:  FnMut(&mut PullableCounter<T, D1>,
+               &mut ObserverBuffer<T, D2, ObserverCounter<T, D2, Tee<T, D2>>>,
                &mut Notificator<T>)>
-Operator<T, D1, D2, P, L> {
-    pub fn new(receiver: P,
+Operator<T, D1, D2, L> {
+    pub fn new(receiver: PullableCounter<T, D1>,
                targets:  Tee<T, D2>,
                name:     String,
                logic:    L,
                notify:   Option<(Vec<T>, usize)>)
-           -> Operator<T, D1, D2, P, L> {
+           -> Operator<T, D1, D2, L> {
         Operator {
             name:    name,
             handle:  UnaryScopeHandle {
-                input:       PullableCounter::new(receiver),
+                input:       receiver,
                 output:      ObserverBuffer::new(ObserverCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
                 notificator: Default::default(),
             },
@@ -156,12 +157,11 @@ Operator<T, D1, D2, P, L> {
     }
 }
 
-impl<T, D1, D2, P, L> Operate<T> for Operator<T, D1, D2, P, L>
+impl<T, D1, D2, L> Operate<T> for Operator<T, D1, D2, L>
 where T: Timestamp,
       D1: Data, D2: Data,
-      P: Pullable<T, D1>,
-      L: FnMut(&mut PullableCounter<T, D1, P>,
-               &mut ObserverBuffer<ObserverCounter<Tee<T, D2>>>,
+      L: FnMut(&mut PullableCounter<T, D1>,
+               &mut ObserverBuffer<T, D2, ObserverCounter<T, D2, Tee<T, D2>>>,
                &mut Notificator<T>) {
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { 1 }
@@ -195,7 +195,7 @@ where T: Timestamp,
     {
         (self.logic)(&mut self.handle.input, &mut self.handle.output, &mut self.handle.notificator);
 
-        self.handle.output.flush_and_shut();
+        self.handle.output.cease();
 
         // extract what we know about progress from the input and output adapters.
         self.handle.input.pull_progress(&mut consumed[0]);

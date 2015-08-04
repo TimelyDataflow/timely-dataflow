@@ -2,8 +2,11 @@ use std::hash::Hash;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 
-use communication::{Data, Pullable, Message};
+// use communication::{Data, Pullable, Message};
+// use fabric::{Pull};
+use ::Data;
 use communication::pact::Pipeline;
+use communication::message::Content;
 use construction::{Stream, GraphBuilder};
 use construction::operators::unary::Extension;
 
@@ -19,7 +22,7 @@ where G::Timestamp: Hash {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
-            while let Some((time, data)) = input.pull() {
+            while let Some((time, data)) = input.next() {
                 for datum in data.drain_temp() {
                     let new_time = func(&datum, time);
                     assert!(&new_time >= time);
@@ -41,7 +44,7 @@ where G::Timestamp: Hash {
         let mut stash = Vec::new();
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
-            while let Some((time, data)) = input.pull() {
+            while let Some((time, data)) = input.next() {
                 let new_time = func(time);
                 assert!(&new_time >= time);
                 let spare = stash.pop().unwrap_or_else(|| Vec::new());
@@ -56,10 +59,10 @@ where G::Timestamp: Hash {
             while let Some((time, _count)) = notificator.next() {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain_temp() {
-                        let mut message = Message::from_typed(&mut data);
-                        output.session(&time).give_message(&mut message);
+                        let mut message = Content::from_typed(&mut data);
+                        output.session(&time).give_content(&mut message);
                         let buffer = message.into_typed();
-                        if buffer.capacity() == Message::<D>::default_length() { stash.push(buffer); }
+                        if buffer.capacity() == Content::<D>::default_length() { stash.push(buffer); }
                     }
                 }
             }

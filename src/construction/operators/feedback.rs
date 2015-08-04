@@ -8,20 +8,23 @@ use progress::nested::Source::ChildOutput;
 use progress::nested::Target::ChildInput;
 use progress::count_map::CountMap;
 
-use communication::Observer as Observe;
-use communication::{Data, Message};
+// use communication::Observer as Observe;
+// use communication::{Data, Message};
+use communication::message::Content;
+use fabric::{Push};
+use ::Data;
 use communication::observer::{Counter, Tee};
 
 use construction::{Stream, GraphBuilder};
 
 pub trait Extension<G: GraphBuilder> {
     fn loop_variable<D:Data>(&self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
-        -> (Helper<Counter<Observer<G::Timestamp, D>>>, Stream<G, D>);
+        -> (Helper<G::Timestamp, D, Counter<G::Timestamp, D, Observer<G::Timestamp, D>>>, Stream<G, D>);
 }
 
 impl<G: GraphBuilder> Extension<G> for G {
     fn loop_variable<D:Data>(&self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
-        -> (Helper<Counter<Observer<G::Timestamp, D>>>, Stream<G, D>) {
+        -> (Helper<G::Timestamp, D, Counter<G::Timestamp, D, Observer<G::Timestamp, D>>>, Stream<G, D>) {
 
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
@@ -41,6 +44,7 @@ impl<G: GraphBuilder> Extension<G> for G {
         let helper = Helper {
             index:  index,
             target: feedback_input,
+            phant: ::std::marker::PhantomData,
         };
 
         (helper, Stream::new(ChildOutput(index, 0), registrar, self.clone()))
@@ -51,47 +55,40 @@ impl<G: GraphBuilder> Extension<G> for G {
 pub struct Observer<T: Timestamp, D:Data> {
     limit:      T,
     summary:    T::Summary,
-    targets:    Counter<Tee<T, D>>,
+    targets:    Counter<T, D, Tee<T, D>>,
     active:     bool,
 }
 
-impl<T: Timestamp, D: Data> Observe for Observer<T, D> {
-    type Time = T;
-    type Data = D;
-    #[inline(always)] fn open(&mut self, time: &T) {
-        self.active = time.le(&self.limit); // don't send if not less than limit
-        if self.active {
-            self.targets.open(&self.summary.results_in(time));
+impl<T: Timestamp, D: Data> Push<(T, Content<D>)> for Observer<T, D> {
+    #[inline]
+    fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
+        let active = if let Some((ref mut time, _)) = *message {
+            *time = self.summary.results_in(time);
+            self.limit.ge(time)
         }
-    }
-    #[inline(always)] fn shut(&mut self, time: &T) {
-        if self.active {
-            self.targets.shut(&self.summary.results_in(time));
-        }
-    }
-    #[inline(always)] fn give(&mut self, data: &mut Message<D>) {
-        if self.active {
-            self.targets.give(data);
-        }
+        else { true };
+
+        if active { self.targets.push(message); }
     }
 }
 
 
 pub trait ConnectExtension<G: GraphBuilder, D: Data> {
-    fn connect_loop(&self, Helper<Counter<Observer<G::Timestamp, D>>>);
+    fn connect_loop(&self, Helper<G::Timestamp, D, Counter<G::Timestamp, D, Observer<G::Timestamp, D>>>);
 }
 
 impl<G: GraphBuilder, D: Data> ConnectExtension<G, D> for Stream<G, D> {
-    fn connect_loop(&self, helper: Helper<Counter<Observer<G::Timestamp, D>>>) {
+    fn connect_loop(&self, helper: Helper<G::Timestamp, D, Counter<G::Timestamp, D, Observer<G::Timestamp, D>>>) {
         self.connect_to(ChildInput(helper.index, 0), helper.target);
     }
 
 }
 
 // a handy widget for connecting feedback edges
-pub struct Helper<O: Observe> {
+pub struct Helper<T, D, P: Push<(T, Content<D>)>> {
     index:  usize,
-    target: O,
+    target: P,
+    phant: ::std::marker::PhantomData<(T, D)>,
 }
 
 // impl<O: Observer+'static> Helper<O>

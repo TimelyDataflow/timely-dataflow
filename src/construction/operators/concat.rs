@@ -1,4 +1,4 @@
-use communication::Data;
+use ::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
 use construction::operators::binary::Extension;
@@ -9,6 +9,8 @@ use construction::operators::binary::Extension;
 // NOTE : from each of its inputs. This implementation does more staging of data, but should be
 // NOTE : less wrong.
 
+// NOTE : Observers don't exist any more, so maybe it could become a horrible tangle again! :D
+
 pub trait ConcatExt<G: GraphBuilder, D: Data> {
     fn concat(&self, &Stream<G, D>) -> Stream<G, D>;
 }
@@ -16,11 +18,11 @@ pub trait ConcatExt<G: GraphBuilder, D: Data> {
 impl<G: GraphBuilder, D: Data> ConcatExt<G, D> for Stream<G, D> {
     fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
         self.binary_stream(other, Pipeline, Pipeline, "concat", |input1, input2, output| {
-            while let Some((time, data)) = input1.pull() {
-                output.session(time).give_message(data);
+            while let Some((time, data)) = input1.next() {
+                output.session(time).give_content(data);
             }
-            while let Some((time, data)) = input2.pull() {
-                output.session(time).give_message(data);
+            while let Some((time, data)) = input2.next() {
+                output.session(time).give_content(data);
             }
         })
     }

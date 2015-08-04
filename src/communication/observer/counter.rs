@@ -2,39 +2,34 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::CountMap;
-use communication::{Message, Observer};
+use communication::message::Content;
+use fabric::Push;
 
-pub struct Counter<O: Observer> {
-    observer:   O,
-    counts:     Rc<RefCell<CountMap<O::Time>>>,
-    count:      i64,
+pub struct Counter<T, D, P: Push<(T, Content<D>)>> {
+    pushee: P,
+    counts: Rc<RefCell<CountMap<T>>>,
+    phantom: ::std::marker::PhantomData<D>,
 }
 
-impl<O: Observer> Observer for Counter<O> where O::Time : Eq+Clone+'static {
-    type Time = O::Time;
-    type Data = O::Data;
-    #[inline(always)] fn open(&mut self, time: &O::Time) { self.observer.open(time); }
-    #[inline(always)] fn shut(&mut self, time: &O::Time) -> () {
-        self.counts.borrow_mut().update(time, self.count);
-        self.observer.shut(time);
-        self.count = 0;
-    }
-    #[inline(always)] fn give(&mut self, data: &mut Message<O::Data>) {
-        self.count += data.len() as i64;
-        self.observer.give(data);
+impl<T, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D, P> where T : Eq+Clone+'static {
+    #[inline] fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
+        if let Some((ref time, ref data)) = *message {
+            self.counts.borrow_mut().update(time, data.len() as i64);
+        }
+        self.pushee.push(message);
     }
 }
 
-impl<O: Observer> Counter<O> where O::Time : Eq+Clone+'static {
-    pub fn new(observer: O, counts: Rc<RefCell<CountMap<O::Time>>>) -> Counter<O> {
+impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Eq+Clone+'static {
+    pub fn new(pushee: P, counts: Rc<RefCell<CountMap<T>>>) -> Counter<T, D, P> {
         Counter {
-            observer:   observer,
-            counts:     counts,
-            count:      0,
+            pushee: pushee,
+            counts: counts,
+            phantom: ::std::marker::PhantomData,
         }
     }
 
-    #[inline(always)] pub fn pull_progress(&mut self, updates: &mut CountMap<O::Time>) {
+    #[inline] pub fn pull_progress(&mut self, updates: &mut CountMap<T>) {
         while let Some((ref time, delta)) = self.counts.borrow_mut().pop() {
             updates.update(time, delta);
         }

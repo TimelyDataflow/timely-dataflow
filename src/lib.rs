@@ -63,14 +63,14 @@
 extern crate abomonation;
 extern crate byteorder;
 extern crate getopts;
+extern crate fabric;
 
 pub use execute::execute;
-
-pub mod networking;
 pub mod progress;
 pub mod construction;
 pub mod communication;
-pub mod serialization;
-
 pub mod drain;
 pub mod execute;
+
+pub trait Data: fabric::Data + abomonation::Abomonation { }
+impl<T: fabric::Data+abomonation::Abomonation> Data for T { }

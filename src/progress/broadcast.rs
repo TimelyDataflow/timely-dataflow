@@ -1,39 +1,41 @@
 use progress::Timestamp;
 use progress::count_map::CountMap;
-use communication::{Communicator, Message, Pullable, Observer};
-use communication::observer::BoxedObserver;
+use fabric::{Allocate, Push, Pull};
 
-pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;  // (child_scope, [in/out]port, timestamp, delta)
+// ((child_scope, [in/out]_port, timestamp), delta)
+pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;
 
 pub struct Progcaster<T:Timestamp> {
-    senders:    Vec<BoxedObserver<T, (ProgressVec<T>, ProgressVec<T>)>>,
-    receiver:   Box<Pullable<T, (ProgressVec<T>, ProgressVec<T>)>>,
+    pushers: Vec<Box<Push<(ProgressVec<T>, ProgressVec<T>)>>>,
+    puller: Box<Pull<(ProgressVec<T>, ProgressVec<T>)>>,
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
-    pub fn new<C: Communicator>(communicator: &mut C) -> Progcaster<T> {
-        let (senders, receiver) = communicator.new_channel();
-        Progcaster { senders: senders, receiver: receiver }
+    pub fn new<A: Allocate>(allocator: &mut A) -> Progcaster<T> {
+        let (pushers, puller) = allocator.allocate();
+        Progcaster { pushers: pushers, puller: puller }
     }
-    // TODO : This is all a horrible hack to deal with the way channels currently look (with a time)
+
+    // TODO : puller.pull() forcibly decodes, whereas we would be just as happy to read data from
+    // TODO : binary. Investigate fabric::Wrapper for this purpose.
     pub fn send_and_recv(&mut self, messages: &mut CountMap<(usize, usize, T)>, internal: &mut CountMap<(usize, usize, T)>) -> () {
 
         // assert!(messages.elements().iter().all(|x| x.1 != 0));
         // assert!(internal.elements().iter().all(|x| x.1 != 0));
-        if self.senders.len() > 1 {  // if the length is one, just return the updates...
+        if self.pushers.len() > 1 {  // if the length is one, just return the updates...
             if messages.len() > 0 || internal.len() > 0 {
-                for sender in self.senders.iter_mut() {
-                    sender.open(&Default::default());
-                    sender.give(&mut Message::from_typed(&mut vec![(messages.elements().clone(), internal.elements().clone())]));
-                    sender.shut(&Default::default());
+                for pusher in self.pushers.iter_mut() {
+                    // TODO : Feels like an Arc might be not horrible here... less allocation,
+                    // TODO : at least, but more "contention" in the deallocation.
+                    pusher.push(&mut Some((messages.elements().clone(), internal.elements().clone())));
                 }
 
                 messages.clear();
                 internal.clear();
             }
 
-            while let Some((_, data)) = self.receiver.pull() {
-                let (ref recv_messages, ref recv_internal) = data[0];
+            // TODO : Could take ownership, and recycle / reuse for next broadcast ...
+            while let Some((ref recv_messages, ref recv_internal)) = *self.puller.pull() {
                 for &(ref update, delta) in recv_messages {
                     messages.update(update, delta);
                 }

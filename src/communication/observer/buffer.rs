@@ -1,103 +1,89 @@
-use communication::{Message, Observer};
+use communication::message::Content;
+use fabric::Push;
 
-pub struct Buffer<O: Observer> {
-    time: Option<O::Time>,  // the currently open time, if it is open
-    buffer: Vec<O::Data>,   // a buffer for records, to send at self.time
-    observer: O,
+pub struct Buffer<T, D, P: Push<(T, Content<D>)>> {
+    time: Option<T>,  // the currently open time, if it is open
+    buffer: Vec<D>,   // a buffer for records, to send at self.time
+    pusher: P,
 }
 
-impl<O: Observer> Buffer<O> where O::Time: Eq+Clone {
+impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
 
-    /// Constructs a new Buffer to wrap a supplied Observer
-    pub fn new(obs: O) -> Buffer<O> {
+    pub fn new(pusher: P) -> Buffer<T, D, P> {
         Buffer {
             time: None,
-            buffer: Vec::with_capacity(Message::<O::Data>::default_length()),
-            observer: obs,
+            buffer: Vec::with_capacity(Content::<D>::default_length()),
+            pusher: pusher,
         }
     }
-    /// Flushes any buffered data, calls observer.shut if it was open, and sets self.time = None.
-    /// Important to call this to ensure progress; ideally do it for the user, rather than expect
-    /// that they will do it.
-    pub fn flush_and_shut(&mut self) {
-        if self.buffer.len() > 0 {
-            assert!(self.time.is_some());
-            self.flush();
-        }
-        if let Some(time) = self.time.take() {
-            self.observer.shut(&time);
-        }
-    }
+
     /// Returns a Session, which accepts data to send at the associated time
-    pub fn session(&mut self, time: &O::Time) -> Session<O> {
-        self.set_time(time.clone());
+    pub fn session(&mut self, time: &T) -> Session<T, D, P> {
+        if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
+        self.time = Some(time.clone());
         Session { buffer: self }
     }
 
-    pub fn inner(&mut self) -> &mut O {
-        &mut self.observer
+    pub fn inner(&mut self) -> &mut P { &mut self.pusher }
+
+    pub fn cease(&mut self) {
+        self.flush();
+        self.pusher.push(&mut None);
     }
 
-    // puts the buffer in a state where self.time == Some(time) and observer.open(&time) called
-    // may flush data, call observer.shut, etc., as appropriate.
-    fn set_time(&mut self, time: O::Time) {
-        // if we have an open time that is different, flush and shut it
-        if self.time.as_ref().map(|x| x != &time).unwrap_or(false)  {
-            self.flush_and_shut();
-        }
-        // if time is currently un-set, open it up
-        if self.time.is_none() {
-            self.observer.open(&time);
-            self.time = Some(time);
-        }
-    }
     /// moves the contents of
     fn flush(&mut self) {
-        let mut message = Message::from_typed(&mut self.buffer);
-        self.observer.give(&mut message);
-        self.buffer = message.into_typed();
-        if self.buffer.capacity() != Message::<O::Data>::default_length() {
-            // ALLOC : We sent along typed data, so would expect a Vec::new()
-            assert!(self.buffer.capacity() == 0);
-            self.buffer = Vec::with_capacity(Message::<O::Data>::default_length());
+        if self.buffer.len() > 0 {
+            let time = self.time.as_ref().unwrap().clone();
+            Content::push_at(&mut self.buffer, time, &mut self.pusher);
         }
-        self.buffer.clear();
     }
-    fn give(&mut self, data: O::Data) {
+
+    fn give(&mut self, data: D) {
         self.buffer.push(data);
-        assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
+        // assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
         if self.buffer.len() == self.buffer.capacity() {
             self.flush();
         }
     }
+
     /// Gives an entire message at a specific time.
-    fn give_message(&mut self, message: &mut Message<O::Data>) {
+    fn give_content(&mut self, content: &mut Content<D>) {
         // flush to ensure fifo-ness
         if self.buffer.len() > 0 {
             self.flush();
         }
-        self.observer.give(message);
+
+        let time = self.time.as_ref().unwrap().clone();
+        let data = ::std::mem::replace(content, Content::Typed(Vec::new()));
+        let mut message = Some((time, data));
+
+        self.pusher.push(&mut message);
+        if let Some((_, data)) = message {
+            *content = data;
+        }
     }
-
 }
 
-pub struct Session<'a, O: Observer+'a> where O::Time: Eq+Clone+'a, O::Data: 'a {
-    buffer: &'a mut Buffer<O>,
+
+
+pub struct Session<'a, T, D, P: Push<(T, Content<D>)>+'a> where T: Eq+Clone+'a, D: 'a {
+    buffer: &'a mut Buffer<T, D, P>,
 }
 
-impl<'a, O: Observer+'a> Session<'a, O>  where O::Time: Eq+Clone+'a, O::Data: 'a {
+impl<'a, T, D, P: Push<(T, Content<D>)>+'a> Session<'a, T, D, P>  where T: Eq+Clone+'a, D: 'a {
     #[inline(always)]
-    pub fn give(&mut self, data: O::Data) {
+    pub fn give(&mut self, data: D) {
         self.buffer.give(data);
     }
-    pub fn give_iterator<I: Iterator<Item=O::Data>>(&mut self, iter: I) {
+    pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
         for item in iter {
             self.give(item);
         }
     }
-    pub fn give_message(&mut self, message: &mut Message<O::Data>) {
+    pub fn give_content(&mut self, message: &mut Content<D>) {
         if message.len() > 0 {
-            self.buffer.give_message(message);
+            self.buffer.give_content(message);
         }
     }
 }

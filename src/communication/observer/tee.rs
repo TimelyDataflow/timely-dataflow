@@ -1,45 +1,40 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use communication::observer::ObserverBoxable;
-use communication::{Message, Observer};
-use serialization::Serializable;
+// use communication::observer::ObserverBoxable;
+// use communication::{Message, Observer};
+// use serialization::Serializable;
+use communication::message::Content;
+use abomonation::Abomonation;
+
+use fabric::Push;
 
 // half of output_port for observing data
 pub struct Tee<T, D> {
     buffer: Vec<D>,
-    shared: Rc<RefCell<Vec<Box<ObserverBoxable<T, D>>>>>,
+    shared: Rc<RefCell<Vec<Box<Push<(T, Content<D>)>>>>>,
 }
 
-impl<T, D: Clone+Serializable> Observer for Tee<T, D> {
-    type Time = T;
-    type Data = D;
-
+impl<T: Clone, D: Abomonation+Clone> Push<(T, Content<D>)> for Tee<T, D> {
     #[inline]
-    fn open(&mut self, time: &T) {
-        for observer in self.shared.borrow_mut().iter_mut() { observer.open_box(time); }
-    }
-
-    #[inline] fn shut(&mut self, time: &T) {
-        for observer in self.shared.borrow_mut().iter_mut() { observer.shut_box(time); }
-    }
-    #[inline] fn give(&mut self, data: &mut Message<D>) {
-        let mut observers = self.shared.borrow_mut();
-        for index in (0..observers.len()) {
-            if index < observers.len() - 1 {
-                // TODO : was push_all, but is now extend.
-                // TODO : currently extend is slow. watch.
-                self.buffer.extend(data.iter().cloned());
-                let mut message = Message::from_typed(&mut self.buffer);
-                observers[index].give_box(&mut message);
-                self.buffer = message.into_typed();
-                if self.buffer.capacity() != Message::<D>::default_length() {
-                    assert!(self.buffer.capacity() == 0);
-                    self.buffer = Vec::with_capacity(Message::<D>::default_length());
+    fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
+        if let Some((ref time, ref mut data)) = *message {
+            let mut pushers = self.shared.borrow_mut();
+            for index in (0..pushers.len()) {
+                if index < pushers.len() - 1 {
+                    // TODO : was `push_all`, but is now `extend`, slow.
+                    self.buffer.extend(data.iter().cloned());
+                    Content::push_at(&mut self.buffer, (*time).clone(), &mut pushers[index]);
+                }
+                else {
+                    Content::push_at(data, (*time).clone(), &mut pushers[index]);
+                    // pushers[index].push(data);
                 }
             }
-            else {
-                observers[index].give_box(data);
+        }
+        else {
+            for pusher in self.shared.borrow_mut().iter_mut() {
+                pusher.push(&mut None);
             }
         }
     }
@@ -49,7 +44,7 @@ impl<T, D> Tee<T, D> {
     pub fn new() -> (Tee<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = Tee {
-            buffer: Vec::with_capacity(Message::<D>::default_length()),
+            buffer: Vec::with_capacity(Content::<D>::default_length()),
             shared: shared.clone(),
         };
 
@@ -67,14 +62,14 @@ impl<T, D> Clone for Tee<T, D> {
 }
 
 
-// half of output_port used to add observers
+// half of output_port used to add pushers
 pub struct TeeHelper<T, D> {
-    shared: Rc<RefCell<Vec<Box<ObserverBoxable<T, D>>>>>
+    shared: Rc<RefCell<Vec<Box<Push<(T, Content<D>)>>>>>
 }
 
 impl<T, D> TeeHelper<T, D> {
-    pub fn add_observer<O: Observer<Time=T, Data=D>+'static>(&self, observer: O) {
-        self.shared.borrow_mut().push(Box::new(observer));
+    pub fn add_pusher<P: Push<(T, Content<D>)>+'static>(&self, pusher: P) {
+        self.shared.borrow_mut().push(Box::new(pusher));
     }
 }
 

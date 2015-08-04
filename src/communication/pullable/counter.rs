@@ -1,22 +1,22 @@
-use communication::{Message, Pullable};
+// use communication::{Message, Pullable};
+use communication::message::Content;
 use progress::count_map::CountMap;
+use fabric::Pull;
 
 
-pub struct Counter<T: Eq+Clone+'static, D, P: Pullable<T, D>> {
-    pullable:   P,
-    consumed:   CountMap<T>,
+pub struct Counter<T: Eq+Clone+'static, D> {
+    pullable: Box<Pull<(T, Content<D>)>>,
+    consumed: CountMap<T>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
-// NOTE : not implementing pullable, as never composed and users don't
-// NOTE : want to have to `use communicator::Pullable;` to use this.
-impl<T:Eq+Clone+'static, D, P: Pullable<T, D>> Counter<T, D, P> {
+impl<T:Eq+Clone+'static, D> Counter<T, D> {
     #[inline]
-    pub fn pull(&mut self) -> Option<(&T, &mut Message<D>)> {
-        if let Some(pair) = self.pullable.pull() {
-            if pair.1.len() > 0 {
-                self.consumed.update(&pair.0, pair.1.len() as i64);
-                Some(pair)
+    pub fn next(&mut self) -> Option<(&T, &mut Content<D>)> {
+        if let Some((ref time, ref mut data)) = *self.pullable.pull() {
+            if data.len() > 0 {
+                self.consumed.update(time, data.len() as i64);
+                Some((time, data))
             }
             else { None }
         }
@@ -24,8 +24,8 @@ impl<T:Eq+Clone+'static, D, P: Pullable<T, D>> Counter<T, D, P> {
     }
 }
 
-impl<T:Eq+Clone+'static, D, P: Pullable<T, D>> Counter<T, D, P> {
-    pub fn new(pullable: P) -> Counter<T, D, P> {
+impl<T:Eq+Clone+'static, D> Counter<T, D> {
+    pub fn new(pullable: Box<Pull<(T, Content<D>)>>) -> Counter<T, D> {
         Counter {
             phantom: ::std::marker::PhantomData,
             pullable: pullable,

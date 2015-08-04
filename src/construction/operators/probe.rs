@@ -6,7 +6,7 @@ use progress::frontier::MutableAntichain;
 use progress::nested::Target::ChildInput;
 use progress::count_map::CountMap;
 
-use communication::Data;
+use fabric::Data;
 use construction::{Stream, GraphBuilder};
 
 pub trait Extension<T: Timestamp> {

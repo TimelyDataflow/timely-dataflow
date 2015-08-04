@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use communication::Data;
+use ::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
 use construction::operators::unary::Extension;
@@ -17,7 +17,7 @@ where G::Timestamp: Hash {
     fn queue(&self) -> Stream<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Queue", vec![], move |input, output, notificator| {
-            while let Some((time, data)) = input.pull() {
+            while let Some((time, data)) = input.next() {
                 notificator.notify_at(time);
                 let set = elements.entry((*time).clone()).or_insert(Vec::new());
                 for datum in data.drain_temp() { set.push(datum); }

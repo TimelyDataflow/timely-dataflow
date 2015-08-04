@@ -1,13 +1,15 @@
 //! Tools to start a timely dataflow execution from command line arguments and per-worker logic.
 
-use std::thread;
-use std::io::BufRead;
-use getopts;
-use std::sync::Arc;
+// use std::thread;
+// use std::io::BufRead;
+// use getopts;
+// use std::sync::Arc;
 
-use communication::communicator::{Communicator, Thread, Process, Generic};
+// use communication::communicator::{Communicator, Thread, Process, Generic};
+use fabric::allocator::Generic;
+use fabric::{initialize, Configuration};
 use construction::GraphRoot;
-use networking::initialize_networking;
+// use networking::initialize_networking;
 
 /// Executes a timely dataflow computation with supplied arguments and per-communicator logic.
 ///
@@ -68,48 +70,14 @@ use networking::initialize_networking;
 /// host2:port
 /// host3:port
 /// ```
+
 pub fn execute<I: Iterator<Item=String>, F: Fn(&mut GraphRoot<Generic>)+Send+Sync+'static>(iter: I, func: F) {
-
-    let mut opts = getopts::Options::new();
-    opts.optopt("w", "workers", "number of per-process worker threads", "NUM");
-    opts.optopt("p", "process", "identity of this process", "IDX");
-    opts.optopt("n", "processes", "number of processes", "NUM");
-    opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
-
-    if let Ok(matches) = opts.parse(iter) {
-        let workers: usize = matches.opt_str("w").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
-        let process: usize = matches.opt_str("p").map(|x| x.parse().unwrap_or(0)).unwrap_or(0);
-        let processes: usize = matches.opt_str("n").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
-
-        let communicators = if processes > 1 {
-            let addresses: Vec<_> = if let Some(hosts) = matches.opt_str("h") {
-                let reader = ::std::io::BufReader::new(::std::fs::File::open(hosts).unwrap());
-                reader.lines().take(processes as usize).map(|x| x.unwrap()).collect()
-            }
-            else {
-                (0..processes).map(|index| format!("localhost:{}", 2101 + index).to_string()).collect()
-            };
-            if addresses.len() != processes as usize { panic!("{} addresses found, for {} processes", addresses.len(), processes); }
-            initialize_networking(addresses, process, workers).ok().expect("error initializing networking").into_iter().map(|x| Generic::Binary(x)).collect()
-        }
-        else if workers > 1 {
-            Process::new_vector(workers).into_iter().map(|x| Generic::Process(x)).collect()
-        }
-        else {
-            vec![Generic::Thread(Thread)]
-        };
-
-        let logic = Arc::new(func);
-
-        let mut guards = Vec::new();
-        for graph_root in communicators.into_iter() {
-            let clone = logic.clone();
-            guards.push(thread::Builder::new().name(format!("worker thread {}", graph_root.index()))
-                                              .spawn(move || (*clone)(&mut GraphRoot::new(graph_root)))
-                                              .unwrap());
-        }
-
-        for guard in guards { guard.join().unwrap(); }
+    if let Some(config) = Configuration::from_args(iter) {
+        initialize(config, move |allocator| {
+            func(&mut GraphRoot::new(allocator));
+        })
     }
-    else { println!("{}", opts.usage("test")); }
+    else {
+        println!("failed to initialize communication fabric");
+    }
 }

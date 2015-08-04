@@ -5,7 +5,7 @@ use std::mem;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use communication::Communicator;
+use fabric::Allocate;
 
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, PathSummary, Operate};
@@ -558,8 +558,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 
-    pub fn new_from<C: Communicator>(communicator: &mut C, index: usize, path: String) -> Subgraph<TOuter, TInner> {
-        let progcaster = Progcaster::new(communicator);
+    pub fn new_from<A: Allocate>(allocator: &mut A, index: usize, path: String) -> Subgraph<TOuter, TInner> {
+        let progcaster = Progcaster::new(allocator);
         Subgraph {
             name:                   format!("Subgraph"),
             path:                   format!("{}::Subgraph[{}]", path, index),

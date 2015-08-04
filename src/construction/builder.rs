@@ -6,27 +6,27 @@ use progress::{Timestamp, Operate, Subgraph};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use progress::nested::scope_wrapper::ScopeWrapper;
-use communication::{Communicator, Data, Pullable};
-use communication::observer::BoxedObserver;
-use serialization::Serializable;
+use fabric::{Allocate, Data, Push, Pull};
+// use communication::Data;
+// use serialization::Serializable;
 
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
 ///
 /// Importantly, this is often a *shared* object, backed by a `Rc<RefCell<>>` wrapper. Each method
 /// takes a shared reference, but can be thought of as first calling .clone() and then calling the
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
-pub trait GraphBuilder : Communicator+Clone {
+pub trait GraphBuilder : Allocate+Clone {
     type Timestamp : Timestamp;
 
     /// A useful name describing the builder's scope.
     fn name(&self) -> String;
 
-    /// Connects a source of data with a target of the data. This should only link the two for
+    /// Connects a source of data with a target of the data. This only links the two for
     /// the purposes of tracking progress, rather than effect any data movement itself.
     fn add_edge(&self, source: Source, target: Target);
 
-    /// Adds a child `Operate` to the builder's scope.
-    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize;  // returns name
+    /// Adds a child `Operate` to the builder's scope. Returns the new child's index.
+    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize;
 
     /// Creates a new `Subgraph` with timestamp `T`. Used by `subcomputation`, but unlikely to be
     /// commonly useful to end users.
@@ -67,7 +67,7 @@ pub trait GraphBuilder : Communicator+Clone {
     }
 }
 
-/// A `GraphRoot` is the entry point to a timely dataflow computation. It wraps a `Communicator`,
+/// A `GraphRoot` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a slot for one child `Operate`. The primary intended use of `GraphRoot` is through its
 /// implementation of the `GraphBuilder` trait.
 ///
@@ -75,16 +75,16 @@ pub trait GraphBuilder : Communicator+Clone {
 /// Calling `subcomputation` more than once will result in a `panic!`.
 ///
 /// Calling `step` without having called `subcomputation` will result in a `panic!`.
-pub struct GraphRoot<C: Communicator> {
-    communicator:   Rc<RefCell<C>>,
-    graph:          Rc<RefCell<Option<Box<Operate<RootTimestamp>>>>>,
+pub struct GraphRoot<A: Allocate> {
+    allocator: Rc<RefCell<A>>,
+    graph: Rc<RefCell<Option<Box<Operate<RootTimestamp>>>>>,
 }
 
-impl<C: Communicator> GraphRoot<C> {
-    pub fn new(c: C) -> GraphRoot<C> {
+impl<A: Allocate> GraphRoot<A> {
+    pub fn new(c: A) -> GraphRoot<A> {
         GraphRoot {
-            communicator: Rc::new(RefCell::new(c)),
-            graph:        Rc::new(RefCell::new(None)),
+            allocator: Rc::new(RefCell::new(c)),
+            graph: Rc::new(RefCell::new(None)),
         }
     }
     pub fn step(&mut self) -> bool {
@@ -93,12 +93,14 @@ impl<C: Communicator> GraphRoot<C> {
         }
         else { panic!("GraphRoot::step(): empty; make sure to add a subgraph!") }
     }
+    pub fn index(&self) -> usize { self.allocator.borrow().index() }
+    pub fn peers(&self) -> usize { self.allocator.borrow().peers() }
 }
 
-impl<C: Communicator> GraphBuilder for GraphRoot<C> {
+impl<A: Allocate> GraphBuilder for GraphRoot<A> {
     type Timestamp = RootTimestamp;
 
-    fn name(&self) -> String { format!("Worker[{}]", self.communicator.borrow().index()) }
+    fn name(&self) -> String { format!("Worker[{}]", self.allocator.borrow().index()) }
     fn add_edge(&self, _source: Source, _target: Target) {
         panic!("GraphRoot::connect(): root doesn't maintain edges; who are you, how did you get here?")
     }
@@ -116,20 +118,20 @@ impl<C: Communicator> GraphBuilder for GraphRoot<C> {
 
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
         let name = format!("{}::Subgraph[Root]", self.name());
-        Subgraph::new_from(&mut (*self.communicator.borrow_mut()), 0, name)
+        Subgraph::new_from(&mut (*self.allocator.borrow_mut()), 0, name)
     }
 }
 
-impl<C: Communicator> Communicator for GraphRoot<C> {
-    fn index(&self) -> usize { self.communicator.borrow().index() }
-    fn peers(&self) -> usize { self.communicator.borrow().peers() }
-    fn new_channel<T:Data+Serializable, D:Data+Serializable>(&mut self) -> (Vec<BoxedObserver<T, D>>, Box<Pullable<T, D>>) {
-        self.communicator.borrow_mut().new_channel()
+impl<A: Allocate> Allocate for GraphRoot<A> {
+    fn index(&self) -> usize { self.allocator.borrow().index() }
+    fn peers(&self) -> usize { self.allocator.borrow().peers() }
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>) {
+        self.allocator.borrow_mut().allocate()
     }
 }
 
-impl<C: Communicator> Clone for GraphRoot<C> {
-    fn clone(&self) -> Self { GraphRoot { communicator: self.communicator.clone(), graph: self.graph.clone() }}
+impl<A: Allocate> Clone for GraphRoot<A> {
+    fn clone(&self) -> Self { GraphRoot { allocator: self.allocator.clone(), graph: self.graph.clone() }}
 }
 
 /// A `SubgraphBuilder` wraps a `Subgraph` and a parent `G: GraphBuilder`. It manages the addition
@@ -161,11 +163,11 @@ impl<G: GraphBuilder, T: Timestamp> GraphBuilder for SubgraphBuilder<G, T> {
     }
 }
 
-impl<G: GraphBuilder, T: Timestamp> Communicator for SubgraphBuilder<G, T> {
+impl<G: GraphBuilder, T: Timestamp> Allocate for SubgraphBuilder<G, T> {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn new_channel<T2:Data+Serializable, D:Data+Serializable>(&mut self) -> (Vec<BoxedObserver<T2, D>>, Box<Pullable<T2, D>>) {
-        self.parent.new_channel()
+    fn allocate<D:Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>) {
+        self.parent.allocate()
     }
 }
 

@@ -9,8 +9,11 @@ use progress::{Timestamp, CountMap};
 use progress::nested::subgraph::Source::{GraphInput, ChildOutput};
 use progress::nested::subgraph::Target::{GraphOutput, ChildInput};
 use progress::nested::product::Product;
-use communication::{Data, Message, Observer};
+// use communication::{Data, Message, Observer};
+use fabric::{Push};
+use ::Data;
 use communication::observer::{Counter, Tee};
+use communication::message::Content;
 
 use construction::{Stream, GraphBuilder};
 use construction::builder::SubgraphBuilder;
@@ -70,15 +73,21 @@ impl<G: GraphBuilder, D: Data, T: Timestamp> LeaveSubgraphExt<G, D> for Stream<S
 
 
 pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
-    targets: Counter<Tee<Product<TOuter, TInner>, TData>>,
+    targets: Counter<Product<TOuter, TInner>, TData, Tee<Product<TOuter, TInner>, TData>>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Observer for IngressNub<TOuter, TInner, TData> {
-    type Time = TOuter;
-    type Data = TData;
-    #[inline(always)] fn open(&mut self, time: &TOuter) -> () { self.targets.open(&Product::new(time.clone(), Default::default())); }
-    #[inline(always)] fn shut(&mut self, time: &TOuter) -> () { self.targets.shut(&Product::new(time.clone(), Default::default())); }
-    #[inline(always)] fn give(&mut self, data: &mut Message<TData>) { self.targets.give(data); }
+impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Push<(TOuter, Content<TData>)> for IngressNub<TOuter, TInner, TData> {
+    fn push(&mut self, message: &mut Option<(TOuter, Content<TData>)>) {
+        if let Some((ref time, ref mut data)) = *message {
+            let content = ::std::mem::replace(data, Content::Typed(Vec::new()));
+            let mut message = Some((Product::new(time.clone(), Default::default()), content));
+            self.targets.push(&mut message);
+            if let Some((_, content)) = message {
+                *data = content;
+            }
+        }
+        else { self.targets.done(); }
+    }
 }
 
 
@@ -87,11 +96,17 @@ pub struct EgressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData> Observer for EgressNub<TOuter, TInner, TData>
+impl<TOuter, TInner, TData> Push<(Product<TOuter, TInner>, Content<TData>)> for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp, TData: Data {
-    type Time = Product<TOuter, TInner>;
-    type Data = TData;
-    #[inline(always)] fn open(&mut self, time: &Product<TOuter, TInner>) { self.targets.open(&time.outer); }
-    #[inline(always)] fn shut(&mut self, time: &Product<TOuter, TInner>) { self.targets.shut(&time.outer); }
-    #[inline(always)] fn give(&mut self, data: &mut Message<TData>) { self.targets.give(data); }
+    fn push(&mut self, message: &mut Option<(Product<TOuter, TInner>, Content<TData>)>) {
+        if let Some((ref time, ref mut data)) = *message {
+            let content = ::std::mem::replace(data, Content::Typed(Vec::new()));
+            let mut message = Some((time.outer.clone(), content));
+            self.targets.push(&mut message);
+            if let Some((_, content)) = message {
+                *data = content;
+            }
+        }
+        else { self.targets.done(); }
+    }
 }

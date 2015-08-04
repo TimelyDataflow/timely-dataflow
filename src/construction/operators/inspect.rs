@@ -1,6 +1,6 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
-use communication::Data;
+use ::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
 use construction::operators::unary::Extension;
@@ -16,18 +16,18 @@ pub trait Inspect<G: GraphBuilder, D: Data> {
 impl<G: GraphBuilder, D: Data> Inspect<G, D> for Stream<G, D> {
     fn inspect<F: FnMut(&D)+'static>(&self, mut func: F) -> Stream<G, D> {
         self.unary_stream(Pipeline, "Inspect", move |input, output| {
-            while let Some((time, data)) = input.pull() {
+            while let Some((time, data)) = input.next() {
                 for datum in data.iter() { func(datum); }
-                output.session(time).give_message(data);
+                output.session(time).give_content(data);
             }
         })
     }
 
     fn inspect_batch<F: FnMut(&G::Timestamp, &[D])+'static>(&self, mut func: F) -> Stream<G, D> {
         self.unary_stream(Pipeline, "InspectBatch", move |input, output| {
-            while let Some((time, data)) = input.pull() {
+            while let Some((time, data)) = input.next() {
                 func(&time, &data[..]);
-                output.session(time).give_message(data);
+                output.session(time).give_content(data);
             }
         })
     }

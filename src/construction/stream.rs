@@ -2,8 +2,9 @@ use construction::builder::GraphBuilder;
 
 use progress::Timestamp;
 use progress::nested::subgraph::{Source, Target};
-use communication::Data;
-use communication::observer::{Observer, TeeHelper};
+use fabric::{Data, Push};
+use communication::observer::TeeHelper;
+use communication::message::Content;
 
 /// Abstraction of a stream of `D: Data` records timestamped with `G::Timestamp`.
 ///
@@ -17,10 +18,9 @@ pub struct Stream<G: GraphBuilder, D:Data> {
 
 impl<G: GraphBuilder, D:Data> Stream<G, D> {
 
-    pub fn connect_to<O>(&self, target: Target, observer: O)
-    where O: Observer<Time=G::Timestamp, Data=D>+'static {
+    pub fn connect_to<P: Push<(G::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P) {
         self.builder.add_edge(self.name, target);
-        self.ports.add_observer(observer);
+        self.ports.add_pusher(pusher);
     }
 
     pub fn new(source: Source, output: TeeHelper<G::Timestamp, D>, builder: G) -> Self {

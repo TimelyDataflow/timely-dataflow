@@ -1,4 +1,4 @@
-use communication::Data;
+use ::Data;
 use communication::pact::Pipeline;
 use construction::{Stream, GraphBuilder};
 use construction::operators::unary::Extension;
@@ -12,7 +12,7 @@ pub trait MapExt<G: GraphBuilder, D1: Data> {
 impl<G: GraphBuilder, D1: Data> MapExt<G, D1> for Stream<G, D1> {
     fn map<D2: Data, L: Fn(D1)->D2+'static>(&self, logic: L) -> Stream<G, D2> {
         self.unary_stream(Pipeline, "Map", move |input, output| {
-            while let Some((time, data)) = input.pull() {
+            while let Some((time, data)) = input.next() {
                 output.session(time).give_iterator(data.drain_temp().map(|x| logic(x)));
             }
         })
