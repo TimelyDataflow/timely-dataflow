@@ -5,6 +5,8 @@ This project is an extended and more modular implementation of timely dataflow i
 
 Be sure to read the [documentation for timely dataflow](http://frankmcsherry.github.io/timely-dataflow). It is a work in progress, but mostly improving.
 
+The [timely dataflow wiki](https://github.com/frankmcsherry/timely-dataflow/wiki) has more long-form text, introducing programming and explaining concepts in more detail.
+
 # An example
 
 To use timely dataflow, add the following to the dependencies section of your project's `Cargo.toml` file:
