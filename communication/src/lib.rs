@@ -78,13 +78,12 @@ impl<T: Clone+Send+Any+Serialize+'static> Data for T { }
 ///
 /// A type must implement this trait to move along the channels produced by an `A: Allocate`.
 ///
-/// A default implementation is provided for any `T: Abomonation`,
-/// but types may specify their own conversion as well.
+/// A default implementation is provided for any `T: Abomonation+Clone`.
 pub trait Serialize {
     /// Append the binary representation of `self` to a vector of bytes. The `&mut self` argument
     /// may be mutated, but the second argument should only be appended to.
     fn into_bytes(&mut self, &mut Vec<u8>);
-    /// Recover an instance of Self from its binary representation. The `&mut Vec<u8> argument may
+    /// Recover an instance of Self from its binary representation. The `&mut Vec<u8>` argument may
     /// be taken with `mem::replace` if it is needed.
     fn from_bytes(&mut Vec<u8>) -> Self;
 }
@@ -100,9 +99,9 @@ impl<T: Abomonation+Clone> Serialize for T {
 
 /// Pushing elements of type `T`.
 pub trait Push<T> {
-    /// Pushes `element` with the opportunity to take ownership.
+    /// Pushes `element` and provides the opportunity to take ownership.
     ///
-    /// The value of `element` after the call may be changed, and does not signal anything other
+    /// The value of `element` after the call may be changed. A change does not imply anything other
     /// than that the implementor took resources associated with `element` and is returning other
     /// resources.
     fn push(&mut self, element: &mut Option<T>);
@@ -118,7 +117,7 @@ impl<T, P: ?Sized + Push<T>> Push<T> for Box<P> {
 
 /// Pulling elements of type `T`.
 pub trait Pull<T> {
-    /// Pulls an element with the opportunity to take ownership.
+    /// Pulls an element and provides the opportunity to take ownership.
     ///
     /// The receiver may mutate the result, in particular take ownership of the data by replacing
     /// it with other data or even `None`.
