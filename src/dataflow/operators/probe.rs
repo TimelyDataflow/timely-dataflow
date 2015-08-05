@@ -3,32 +3,57 @@ use std::cell::RefCell;
 
 use progress::{Timestamp, Operate, Antichain};
 use progress::frontier::MutableAntichain;
-use progress::nested::Target::ChildInput;
+use progress::nested::subgraph::Source::ChildOutput;
+use progress::nested::subgraph::Target::ChildInput;
 use progress::count_map::CountMap;
+
+use dataflow::channels::pushers::Tee;
+use dataflow::channels::pushers::Counter as PushCounter;
+use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
+use dataflow::channels::pact::{ParallelizationContract, Pipeline};
+use dataflow::channels::pullers::Counter as PullCounter;
+
 
 use Data;
 use dataflow::{Stream, Scope};
 
-pub trait Probe<T: Timestamp> {
+pub trait Probe<G: Scope, D: Data> {
     /// Constructs a progress probe which can indicates which timestamps have elapsed at the operator.
-    fn probe(&self) -> Handle<T>;
+    fn probe(&self) -> (Handle<G::Timestamp>, Stream<G, D>);
 }
 
-impl<G: Scope, D: Data> Probe<G::Timestamp> for Stream<G, D> {
-    fn probe(&self) -> Handle<G::Timestamp> {
+impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
+    fn probe(&self) -> (Handle<G::Timestamp>, Stream<G, D>) {
 
         // the frontier is shared state; scope updates, handle reads.
         let frontier = Rc::new(RefCell::new(MutableAntichain::new()));
-
-        // we add the scope, acquiring the name of the probe, then add an edge.
-        let index = self.scope().add_operator(Operator { frontier: frontier.clone() });
-        self.scope().add_edge(*self.name(), ChildInput(index, 0));
+        //
+        // // we add the scope, acquiring the name of the probe, then add an edge.
+        // let index = self.scope().add_operator(Operator { frontier: frontier.clone() });
+        // self.scope().add_edge(*self.name(), ChildInput(index, 0));
 
         // the handle is the only result
-        Handle { frontier: frontier }
+        let handle = Handle { frontier: frontier.clone() };
+
+
+
+        let mut scope = self.scope();   // clones the scope
+
+        let (sender, receiver) = Pipeline.connect(&mut scope);
+        let (targets, registrar) = Tee::<G::Timestamp,D>::new();
+        let operator = Operator {
+            input: PullCounter::new(receiver),
+            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            frontier: frontier,
+        };
+
+        let index = scope.add_operator(operator);
+        self.connect_to(ChildInput(index, 0), sender);
+        (handle, Stream::new(ChildOutput(index, 0), registrar, scope))
     }
 }
 
+#[derive(Default)]
 pub struct Handle<T:Timestamp> {
     frontier: Rc<RefCell<MutableAntichain<T>>>
 }
@@ -36,16 +61,19 @@ pub struct Handle<T:Timestamp> {
 impl<T: Timestamp> Handle<T> {
     #[inline] pub fn lt(&self, time: &T) -> bool { self.frontier.borrow().lt(time) }
     #[inline] pub fn le(&self, time: &T) -> bool { self.frontier.borrow().le(time) }
+    #[inline] pub fn done(&self) -> bool { self.frontier.borrow().elements().len() == 0 }
 }
 
-struct Operator<T:Timestamp> {
+struct Operator<T:Timestamp, D: Data> {
+    input: PullCounter<T, D>,
+    output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
     frontier: Rc<RefCell<MutableAntichain<T>>>
 }
 
-impl<T:Timestamp> Operate<T> for Operator<T> {
+impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
     fn name(&self) -> &str { "Probe" }
     fn inputs(&self) -> usize { 1 }
-    fn outputs(&self) -> usize { 0 }
+    fn outputs(&self) -> usize { 1 }
 
     // we need to set the initial value of the frontier
     fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [CountMap<T>]) {
@@ -64,9 +92,61 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     }
 
     // the scope does nothing. this is actually a problem, because "reachability" assumes all messages on each edge.
-    fn pull_internal_progress(&mut self,_: &mut [CountMap<T>], _: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self,_: &mut [CountMap<T>], consumed: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
+
+        while let Some((time, data)) = self.input.next() {
+            self.output.session(time).give_content(data);
+        }
+
+        self.output.cease();
+
+        // extract what we know about progress from the input and output adapters.
+        self.input.pull_progress(&mut consumed[0]);
+        self.output.inner().pull_progress(&mut produced[0]);
+
         false
     }
 
     fn notify_me(&self) -> bool { true }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use ::Configuration;
+    use ::progress::timestamp::RootTimestamp;
+    use dataflow::*;
+    use dataflow::operators::{Input, Probe};
+
+    #[test]
+    fn probe() {
+
+        // initializes and runs a timely dataflow computation
+        ::execute(Configuration::Thread, |computation| {
+
+            // create a new input, and inspect its output
+            let (mut input, probe) = computation.scoped(move |builder| {
+                let (input, stream) = builder.new_input::<String>();
+                (input, stream.probe().0)
+            });
+
+            // introduce data and watch!
+            for round in 0..10 {
+                assert!(!probe.done());
+                assert!(probe.le(&RootTimestamp::new(round)));
+                assert!(!probe.lt(&RootTimestamp::new(round)));
+                assert!(probe.lt(&RootTimestamp::new(round + 1)));
+                input.advance_to(round + 1);
+                computation.step();
+            }
+
+            // seal the input
+            input.close();
+
+            // finish off any remaining work
+            computation.step();
+            assert!(probe.done());
+        });
+    }
+
 }
