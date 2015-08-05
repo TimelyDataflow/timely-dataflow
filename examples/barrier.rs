@@ -9,18 +9,22 @@ use timely::dataflow::operators::*;
 
 fn main() {
 
-    timely::execute_from_args(std::env::args(), |root| {
+    let iterations = std::env::args().nth(1).unwrap().parse::<usize>().unwrap_or(1_000_000);
 
-        root.scoped(|graph| {
-            let (handle, stream) = graph.loop_variable::<u64>(RootTimestamp::new(1_000_000), Local(1));
+    timely::execute_from_args(std::env::args().skip(2), move |root| {
+
+        root.scoped(move |graph| {
+            let (handle, stream) = graph.loop_variable::<u64>(RootTimestamp::new(iterations), Local(1));
             stream.unary_notify(Pipeline,
                                 "Barrier",
-                                vec![RootTimestamp::new(0u64)],
-                                |_, _, notificator| {
+                                vec![RootTimestamp::new(0)],
+                                move |_, _, notificator| {
                       while let Some((mut time, _count)) = notificator.next() {
-                          println!("iterating");
+                        //   println!("iterating");
                           time.inner += 1;
-                          notificator.notify_at(&time);
+                          if time.inner < iterations {
+                              notificator.notify_at(&time);
+                          }
                       }
                   })
                   .connect_loop(handle);
