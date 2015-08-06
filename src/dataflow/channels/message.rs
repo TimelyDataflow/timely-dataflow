@@ -55,7 +55,7 @@ pub enum Content<D> {
 impl<D> Content<D> {
     /// Default number of elements in a typed allocated message. This could vary as a function of
     /// `std::mem::size_of::<D>()`, so is left as a method rather than a constant.
-    pub fn default_length() -> usize { 256 }
+    pub fn default_length() -> usize { 4096 }
 
     /// The length of the underlying typed vector.
     ///
