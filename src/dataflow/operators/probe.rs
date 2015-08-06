@@ -1,3 +1,5 @@
+//! An extension method to monitor progress at a `Stream`.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -17,8 +19,9 @@ use dataflow::channels::pullers::Counter as PullCounter;
 use Data;
 use dataflow::{Stream, Scope};
 
+/// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, D: Data> {
-    /// Constructs a progress probe which can indicates which timestamps have elapsed at the operator.
+    /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
     fn probe(&self) -> (Handle<G::Timestamp>, Stream<G, D>);
 }
 
@@ -27,15 +30,7 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
 
         // the frontier is shared state; scope updates, handle reads.
         let frontier = Rc::new(RefCell::new(MutableAntichain::new()));
-        //
-        // // we add the scope, acquiring the name of the probe, then add an edge.
-        // let index = self.scope().add_operator(Operator { frontier: frontier.clone() });
-        // self.scope().add_edge(*self.name(), ChildInput(index, 0));
-
-        // the handle is the only result
         let handle = Handle { frontier: frontier.clone() };
-
-
 
         let mut scope = self.scope();   // clones the scope
 
@@ -53,14 +48,17 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
     }
 }
 
-#[derive(Default)]
+/// Reports information about progress at the probe.
 pub struct Handle<T:Timestamp> {
     frontier: Rc<RefCell<MutableAntichain<T>>>
 }
 
 impl<T: Timestamp> Handle<T> {
+    /// returns true iff the frontier is strictly less than `time`.
     #[inline] pub fn lt(&self, time: &T) -> bool { self.frontier.borrow().lt(time) }
+    /// returns true iff the frontier is less than or equal to `time`.
     #[inline] pub fn le(&self, time: &T) -> bool { self.frontier.borrow().le(time) }
+    /// returns true iff the frontier is empty.
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().elements().len() == 0 }
 }
 
