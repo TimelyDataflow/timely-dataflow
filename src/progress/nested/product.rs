@@ -64,9 +64,4 @@ impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, T
         let tmp = bytes; bytes = if let Some(bytes) = self.inner.exhume(tmp) { bytes } else { return None };
         Some(bytes)
     }
-    fn verify<'a,'b>(&'a self, mut bytes: &'b [u8]) -> Option<&'b [u8]> {
-        let tmp = bytes; bytes = if let Some(bytes) = self.outer.verify(tmp) { bytes } else { return None };
-        let tmp = bytes; bytes = if let Some(bytes) = self.inner.verify(tmp) { bytes } else { return None };
-        Some(bytes)
-    }
 }

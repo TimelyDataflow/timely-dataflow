@@ -6,7 +6,7 @@
 //! the possibly serialized representation.
 use timely_communication::{Serialize, Push};
 use std::ops::{Deref, DerefMut};
-use abomonation::{Abomonation, encode, decode, verify};
+use abomonation::{Abomonation, encode, decode};
 
 #[derive(Clone)]
 pub struct Message<T, D> {
@@ -17,20 +17,20 @@ pub struct Message<T, D> {
 // Implementation required to get different behavior out of communication fabric.
 impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
     fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
-        encode(&self.time, bytes);
+        unsafe { encode(&self.time, bytes); }
         let vec: &Vec<D> = self.data.deref();
-        encode(vec, bytes);
+        unsafe { encode(vec, bytes); }
     }
     fn from_bytes(bytes: &mut Vec<u8>) -> Self {
         let mut bytes = ::std::mem::replace(bytes, Vec::new());
         let x_len = bytes.len();
         let (time, offset) = {
-            let (t,r) = decode::<T>(&mut bytes).unwrap();
+            let (t,r) = unsafe { decode::<T>(&mut bytes) }.unwrap();
             let o = x_len - r.len();
             ((*t).clone(), o)
         };
 
-        let length = decode::<Vec<D>>(&mut bytes[offset..]).unwrap().0.len();
+        let length = unsafe { decode::<Vec<D>>(&mut bytes[offset..]) }.unwrap().0.len();
         Message { time: time, data: Content::Bytes(bytes, offset, length) }
     }
 }
@@ -111,7 +111,8 @@ impl<D: Abomonation> Deref for Content<D> {
     fn deref(&self) -> &Vec<D> {
         match *self {
             Content::Bytes(ref bytes, offset, _length) => {
-                verify::<Vec<D>>(&bytes[offset..]).unwrap().0
+                // verify wasn't actually safe, it turns out...
+                unsafe { ::std::mem::transmute(bytes.get_unchecked(offset)) }
             },
             Content::Typed(ref data) => data,
         }
@@ -128,7 +129,8 @@ impl<D: Abomonation> Deref for Content<D> {
 impl<D: Clone+Abomonation> DerefMut for Content<D> {
     fn deref_mut(&mut self) -> &mut Vec<D> {
         let value = if let Content::Bytes(ref mut bytes, offset, _length) = *self {
-            let (data, _) = verify::<Vec<D>>(&bytes[offset..]).unwrap();
+            let data: &Vec<D> = unsafe { ::std::mem::transmute(bytes.get_unchecked(offset)) };
+            // let (data, _) = verify::<Vec<D>>(&bytes[offset..]).unwrap();
             // ALLOC : clone() will allocate a Vec<D> and maybe more.
             Some(Content::Typed((*data).clone()))
         }
