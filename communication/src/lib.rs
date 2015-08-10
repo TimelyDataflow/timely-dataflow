@@ -88,12 +88,14 @@ pub trait Serialize {
     fn from_bytes(&mut Vec<u8>) -> Self;
 }
 
+// NOTE : this should be unsafe, because these methods are.
+// NOTE : figure this out later. don't use for serious things.
 impl<T: Abomonation+Clone> Serialize for T {
     fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
-        encode(self, bytes);
+        unsafe { encode(self, bytes); }
     }
     fn from_bytes(bytes: &mut Vec<u8>) -> Self {
-        (*decode::<T>(bytes).unwrap().0).clone()
+        (* unsafe { decode::<T>(bytes) }.unwrap().0).clone()
     }
 }
 
