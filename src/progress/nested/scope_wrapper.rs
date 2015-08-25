@@ -11,7 +11,7 @@ use progress::nested::subgraph::Target::{GraphOutput, ChildInput};
 
 use progress::count_map::CountMap;
 
-pub struct ScopeWrapper<T: Timestamp> {
+pub struct ChildWrapper<T: Timestamp> {
     pub name:                   String,
     pub scope:                  Option<Box<Operate<T>>>,          // the scope itself
 
@@ -36,8 +36,8 @@ pub struct ScopeWrapper<T: Timestamp> {
     pub guarantee_changes:      Vec<CountMap<T>>,         // per-input:   temp storage for changes in some guarantee...
 }
 
-impl<T: Timestamp> ScopeWrapper<T> {
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, _path: String) -> ScopeWrapper<T> {
+impl<T: Timestamp> ChildWrapper<T> {
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, _path: String) -> ChildWrapper<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
@@ -47,7 +47,7 @@ impl<T: Timestamp> ScopeWrapper<T> {
         assert!(summary.len() == inputs);
         assert!(!summary.iter().any(|x| x.len() != outputs));
 
-        let mut result = ScopeWrapper {
+        let mut result = ChildWrapper {
             name:       format!("{}[{}]", scope.name(), index),
             scope:      Some(scope),
             index:      index,

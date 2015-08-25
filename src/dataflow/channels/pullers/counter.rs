@@ -35,4 +35,9 @@ impl<T:Eq+Clone+'static, D> Counter<T, D> {
             consumed.update(time, value);
         }
     }
+    pub fn for_each<F: FnMut(&T, &mut Content<D>)>(&mut self, mut logic: F) {
+        while let Some((time, data)) = self.next() {
+            logic(time, data);
+        }
+    }
 }

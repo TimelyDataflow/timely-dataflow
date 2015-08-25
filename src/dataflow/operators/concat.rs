@@ -17,7 +17,7 @@ pub trait Concat<G: Scope, D: Data> {
 
 impl<G: Scope, D: Data> Concat<G, D> for Stream<G, D> {
     fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
-        self.binary_stream(other, Pipeline, Pipeline, "concat", |input1, input2, output| {
+        self.binary_stream(other, Pipeline, Pipeline, "Concat", |input1, input2, output| {
             while let Some((time, data)) = input1.next() {
                 output.session(time).give_content(data);
             }

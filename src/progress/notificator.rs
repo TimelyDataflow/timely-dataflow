@@ -57,6 +57,11 @@ impl<T: Timestamp> Notificator<T> {
             internal.update(&time, delta);
         }
     }
+    pub fn for_each<F: FnMut(T, i64)>(&mut self, mut logic: F) {
+        while let Some((time, count)) = self.next() {
+            logic(time, count);
+        }
+    }
 }
 
 impl<T: Timestamp> Iterator for Notificator<T> {

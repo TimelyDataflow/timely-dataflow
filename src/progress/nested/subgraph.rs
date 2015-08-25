@@ -19,7 +19,7 @@ use progress::count_map::CountMap;
 
 use progress::broadcast::Progcaster;
 use progress::nested::summary::Summary;
-use progress::nested::scope_wrapper::ScopeWrapper;
+use progress::nested::scope_wrapper::ChildWrapper;
 use progress::nested::pointstamp_counter::PointstampCounter;
 use progress::nested::product::Product;
 
@@ -49,7 +49,7 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
 
     external_summaries:     Vec<Vec<Antichain<TOuter::Summary>>>,// path summaries from output -> input (TODO: Check) using any edges
 
-    // maps from (scope, output), (scope, input) and (input) to respective Vec<(target, antichain)> lists
+    // maps from (operator, output), (operator, input) and (input) to respective Vec<(target, antichain)> lists
     // TODO: sparsify complete_summaries to contain only paths which avoid their target scopes.
     // TODO: differentiate summaries by type of destination, to remove match from inner-most loop (of push_poinstamps).
     source_summaries:       Vec<Vec<Vec<(Target, Antichain<Summary<TOuter::Summary, TInner::Summary>>)>>>,
@@ -60,7 +60,7 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     pub external_capability:    Vec<MutableAntichain<TOuter>>,
     pub external_guarantee:     Vec<MutableAntichain<TOuter>>,
 
-    pub children:               Vec<ScopeWrapper<Product<TOuter, TInner>>>,
+    pub children:               Vec<ChildWrapper<Product<TOuter, TInner>>>,
 
     pub input_messages:         Vec<Rc<RefCell<CountMap<Product<TOuter, TInner>>>>>,
 
@@ -154,6 +154,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [CountMap<TOuter>]) -> () {
         self.external_summaries = summaries;
         self.set_summaries();
+
+        // self._print_topology();
+        // self._print_reachability_summaries();
 
         // change frontier to local times; introduce as pointstamps
         for graph_input in (0..self.inputs) {
@@ -585,8 +588,33 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 
+    fn _print_topology(&self) {
+        println!("Topology for {}", self.path);
+
+        for child in self.children.iter() {
+            for (output, list) in child.edges.iter().enumerate() {
+                for target in list {
+                    match *target {
+                        ChildInput(index, port) => {
+                            println!("  {}({}) -> {}({})", child.name(), output, self.children[index].name(), port);
+                        },
+                        GraphOutput(port) => {
+                            println!("  {}({}) -> SELF({})", child.name(), output, port);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (input, list) in self.input_edges.iter().enumerate() {
+            for target in list {
+                println!("  SELF({}) -> {:?}", input, target);
+            }
+        }
+    }
+
     fn _print_reachability_summaries(&self) {
-        println!("Reachability summary for subscope {}", self.name());
+        println!("Reachability summary for subscope {}", self.path);
         println!("Operate outputs -> targets:");
 
         for i in 0..self.source_summaries.len() {

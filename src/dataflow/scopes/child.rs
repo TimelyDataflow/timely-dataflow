@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use progress::{Timestamp, Operate, Subgraph};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
-use progress::nested::scope_wrapper::ScopeWrapper;
+use progress::nested::scope_wrapper::ChildWrapper;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
@@ -28,7 +28,7 @@ impl<G: Scope, T: Timestamp> Scope for Child<G, T> {
     fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize {
         let index = self.subgraph.borrow().children.len();
         let path = format!("{}", self.subgraph.borrow().path);
-        self.subgraph.borrow_mut().children.push(ScopeWrapper::new(Box::new(scope), index, path));
+        self.subgraph.borrow_mut().children.push(ChildWrapper::new(Box::new(scope), index, path));
         index
     }
 
