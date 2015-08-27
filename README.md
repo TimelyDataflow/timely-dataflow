@@ -38,7 +38,7 @@ fn main() {
 
         // introduce data and watch!
         for round in 0..10 {
-            input.push(round);
+            input.send(round);
             input.advance_to(round + 1);
             root.step();
         }
