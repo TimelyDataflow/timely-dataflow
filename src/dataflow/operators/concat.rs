@@ -10,6 +10,7 @@ use dataflow::operators::binary::Binary;
 // NOTE : less wrong.
 
 // NOTE : Observers don't exist any more, so maybe it could become a horrible tangle again! :D
+// NOTE : Not clear that the tangle buys much, as buffers are simply passed along without copying.
 
 pub trait Concat<G: Scope, D: Data> {
     fn concat(&self, &Stream<G, D>) -> Stream<G, D>;

@@ -15,7 +15,7 @@ pub trait Map<S: Scope, D: Data> {
     /// Consumes each element of the stream and yields some number of new elements.
     fn flat_map<I: Iterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data;
     ///
-    fn filter_map2<D2: Data, L: Fn(D)->Option<D2>+'static>(&self, logic: L) -> Stream<S, D2>;
+    fn filter_map<D2: Data, L: Fn(D)->Option<D2>+'static>(&self, logic: L) -> Stream<S, D2>;
 }
 
 impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
@@ -41,8 +41,8 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
             }
         })
     }
-    fn filter_map2<D2: Data, L: Fn(D)->Option<D2>+'static>(&self, logic: L) -> Stream<S, D2> {
-        self.unary_stream(Pipeline, "FlatMap", move |input, output| {
+    fn filter_map<D2: Data, L: Fn(D)->Option<D2>+'static>(&self, logic: L) -> Stream<S, D2> {
+        self.unary_stream(Pipeline, "FilterMap", move |input, output| {
             while let Some((time, data)) = input.next() {
                 output.session(time).give_iterator(data.drain_temp().filter_map(|x| logic(x)));
             }

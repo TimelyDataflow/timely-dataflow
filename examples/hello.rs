@@ -17,7 +17,7 @@ fn main() {
 
         // introduce data and watch!
         for round in 0..10 {
-            input.send(round);
+            input.send("bacon");
             input.advance_to(round + 1);
             computation.step();
         }

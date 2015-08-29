@@ -29,7 +29,7 @@ fn main() {
     // initializes and runs a timely dataflow computation
     timely::execute_from_args(std::env::args(), |root| {
 
-        // create a new input, and inspect its output
+        // create a new input and inspect its output
         let mut input = root.scoped(move |scope| {
             let (input, stream) = scope.new_input();
             stream.inspect(|x| println!("hello {:?}", x));

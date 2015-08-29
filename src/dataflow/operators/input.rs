@@ -9,7 +9,6 @@ use progress::count_map::CountMap;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
 
-// use communication::{Allocate, Data, Message, Observer};
 use timely_communication::Allocate;
 use {Data, Push};
 use dataflow::channels::Content;
@@ -49,7 +48,7 @@ impl<A: Allocate, T: Timestamp+Ord> Input<A, T> for Child<Root<A>, T> {
     }
 }
 
-pub struct Operator<T:Timestamp+Ord> {
+struct Operator<T:Timestamp+Ord> {
     frontier:   Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
     progress:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
     messages:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // messages sent since last asked
