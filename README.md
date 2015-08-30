@@ -25,30 +25,21 @@ use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Inspect};
 
 fn main() {
-
     // initializes and runs a timely dataflow computation
     timely::execute_from_args(std::env::args(), |root| {
-
         // create a new input and inspect its output
         let mut input = root.scoped(move |scope| {
             let (input, stream) = scope.new_input();
-            stream.inspect(|x| println!("hello {:?}", x));
+            stream.inspect(|x| println!("hello {}", x));
             input
         });
 
         // introduce data and watch!
         for round in 0..10 {
-            input.send(round);
+            input.send(format!("world: {}", round));
             input.advance_to(round + 1);
             root.step();
         }
-
-        // seal the input
-        input.close();
-
-        // finish off any remaining work
-        while root.step() { }
-
     });
 }
 ```

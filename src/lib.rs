@@ -43,9 +43,6 @@
 //!         input.advance_to(round + 1);
 //!         root.step();
 //!     }
-//!
-//!     input.close();          // close the input
-//!     while root.step() { }   // finish off the computation
 //! });
 //! ```
 //!
@@ -57,9 +54,7 @@
 //! In this example, we define a new scope of root using `scoped`, add an exogenous
 //! input using `new_input`, and add a dataflow `inspect` operator to print each observed record.
 //! We then introduce input at increasing rounds, indicate the advance to the system (promising
-//! that we will introduce no more input at prior rounds), and step the computation. Finally, we
-//! close the input (promising that we will introduce no more input ever) and step the computation
-//! until there is no more work to do.
+//! that we will introduce no more input at prior rounds), and step the computation.
 
 extern crate abomonation;
 extern crate byteorder;

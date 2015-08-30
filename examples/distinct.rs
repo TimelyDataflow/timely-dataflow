@@ -41,17 +41,6 @@ fn main() {
         // move some data into the dataflow graph.
         input1.send(0);
         input2.send(1);
-
-        // see what everyone thinks about that ...
-        root.step();
-
-        input1.advance_to(1000000);
-        input2.advance_to(1000000);
-        input1.close();
-        input2.close();
-
-        // spin
-        while root.step() { }
     });
 }
 
