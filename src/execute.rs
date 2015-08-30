@@ -12,10 +12,8 @@ use dataflow::scopes::Root;
 ///
 /// #Examples
 /// ```ignore
-/// extern crate timely;
-///
-/// use timely::*;
-/// use timely::dataflow::inspect::{Input, Inspect};
+/// use timely::dataflow::*;
+/// use timely::dataflow::operators::{Input, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
 /// timely::execute(Configuration::Process(3), |root| {
@@ -33,14 +31,13 @@ use dataflow::scopes::Root;
 ///         input.advance_to(round + 1);
 ///         root.step();
 ///     }
-///
-///     input.close();          // close the input
-///     while root.step() { }   // finish off the computation
 /// });
 /// ```
 pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configuration, func: F) {
     initialize(config, move |allocator| {
-        func(&mut Root::new(allocator));
+        let mut root = Root::new(allocator);
+        func(&mut root);
+        while root.step() { }
     })
 }
 
@@ -64,11 +61,9 @@ pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configurat
 /// arbitrarily).
 ///
 /// #Examples
-/// ```ignore
-/// extern crate timely;
-///
-/// use timely::*;
-/// use timely::dataflow::inspect::{Input, Inspect};
+/// ```
+/// use timely::dataflow::*;
+/// use timely::dataflow::operators::{Input, Inspect};
 ///
 /// // execute a timely dataflow using command line parameters
 /// timely::execute_from_args(std::env::args(), |root| {
@@ -86,9 +81,6 @@ pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configurat
 ///         input.advance_to(round + 1);
 ///         root.step();
 ///     }
-///
-///     input.close();          // close the input
-///     while root.step() { }   // finish off the computation
 /// });
 /// ```
 /// ```ignore
@@ -106,9 +98,10 @@ pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configurat
 /// ```
 pub fn execute_from_args<I: Iterator<Item=String>, F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(iter: I, func: F) {
     if let Some(config) = Configuration::from_args(iter) {
-        initialize(config, move |allocator| {
-            func(&mut Root::new(allocator));
-        })
+        execute(config, func);
+        // initialize(config, move |allocator| {
+        //     func(&mut Root::new(allocator));
+        // })
     }
     else {
         println!("failed to initialize communication fabric");
