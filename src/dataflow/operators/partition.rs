@@ -26,8 +26,9 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
     fn partition(&self, parts: u64, func: F) -> Vec<Stream<G, D2>> {
 
         let mut scope = self.scope();
+        let channel_id = scope.new_identifier();
 
-        let (sender, receiver) = Pipeline.connect(&mut scope);
+        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id);
 
         let mut targets = Vec::new();
         let mut registrars = Vec::new();
@@ -39,7 +40,7 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
 
         let operator = Operator::new(PullCounter::new(receiver), targets, func);
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender);
+        self.connect_to(ChildInput(index, 0), sender, channel_id);
 
         let mut results = Vec::new();
         for (output, registrar) in registrars.into_iter().enumerate() {

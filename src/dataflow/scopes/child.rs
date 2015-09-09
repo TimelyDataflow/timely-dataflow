@@ -32,6 +32,11 @@ impl<G: Scope, T: Timestamp> Scope for Child<G, T> {
         index
     }
 
+    fn new_identifier(&mut self) -> usize {
+        self.parent.new_identifier()
+    }
+
+
     fn new_subscope<T2: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, T>, T2> {
         let index = self.subgraph.borrow().children();
         let path = format!("{}", self.subgraph.borrow().path);

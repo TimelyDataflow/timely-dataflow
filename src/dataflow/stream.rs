@@ -28,7 +28,9 @@ pub struct Stream<S: Scope, D:Data> {
 
 impl<S: Scope, D:Data> Stream<S, D> {
 
-    pub fn connect_to<P: Push<(S::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P) {
+    pub fn connect_to<P: Push<(S::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P, _identifier: usize) {
+        // LOGGING
+        // println!("edge {}:\t{:?} -> {:?}", _identifier, self.name, target);
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);
     }

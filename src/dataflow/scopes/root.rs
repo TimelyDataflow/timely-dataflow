@@ -15,6 +15,7 @@ use super::Scope;
 pub struct Root<A: Allocate> {
     allocator: Rc<RefCell<A>>,
     graph: Rc<RefCell<Vec<Box<Operate<RootTimestamp>>>>>,
+    identifiers: Rc<RefCell<usize>>,
 }
 
 impl<A: Allocate> Root<A> {
@@ -22,6 +23,7 @@ impl<A: Allocate> Root<A> {
         Root {
             allocator: Rc::new(RefCell::new(c)),
             graph: Rc::new(RefCell::new(Vec::new())),
+            identifiers: Rc::new(RefCell::new(0)),
         }
     }
     pub fn step(&mut self) -> bool {
@@ -51,6 +53,11 @@ impl<A: Allocate> Scope for Root<A> {
         self.graph.borrow_mut().push(Box::new(scope));
         self.graph.borrow().len() - 1
     }
+    fn new_identifier(&mut self) -> usize {
+        *self.identifiers.borrow_mut() += 1;
+        *self.identifiers.borrow() - 1
+    }
+
 
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
         let name = format!("{}::Subgraph[Root]", self.name());
@@ -67,5 +74,11 @@ impl<A: Allocate> Allocate for Root<A> {
 }
 
 impl<A: Allocate> Clone for Root<A> {
-    fn clone(&self) -> Self { Root { allocator: self.allocator.clone(), graph: self.graph.clone() }}
+    fn clone(&self) -> Self {
+        Root {
+            allocator: self.allocator.clone(),
+            graph: self.graph.clone(),
+            identifiers: self.identifiers.clone(),
+        }
+    }
 }

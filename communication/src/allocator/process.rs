@@ -69,7 +69,6 @@ impl Allocate for Process {
         else {
             panic!("failed to correctly cast channel");
         }
-
     }
 }
 

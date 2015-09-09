@@ -80,12 +80,14 @@ impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
 
         let mut scope = self.scope();   // clones the scope
 
-        let (sender, receiver) = pact.connect(&mut scope);
+        let channel_id = scope.new_identifier();
+
+        let (sender, receiver) = pact.connect(&mut scope, channel_id);
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
         let operator = Operator::new(PullCounter::new(receiver), targets, name.to_owned(), logic, Some((init, scope.peers())));
         let index = scope.add_operator(operator);
 
-        self.connect_to(ChildInput(index, 0), sender);
+        self.connect_to(ChildInput(index, 0), sender, channel_id);
 
         Stream::new(ChildOutput(index, 0), registrar, scope)
     }
@@ -98,11 +100,13 @@ impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
 
         let mut scope = self.scope();
 
-        let (sender, receiver) = pact.connect(&mut scope);
+        let channel_id = scope.new_identifier();
+
+        let (sender, receiver) = pact.connect(&mut scope, channel_id);
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
         let operator = Operator::new(PullCounter::new(receiver), targets, name.to_owned(), move |i,o,_| logic(i,o), None);
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender);
+        self.connect_to(ChildInput(index, 0), sender, channel_id);
 
         Stream::new(ChildOutput(index, 0), registrar, scope)
     }

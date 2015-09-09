@@ -33,8 +33,9 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         let handle = Handle { frontier: frontier.clone() };
 
         let mut scope = self.scope();   // clones the scope
+        let channel_id = scope.new_identifier();
 
-        let (sender, receiver) = Pipeline.connect(&mut scope);
+        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id);
         let (targets, registrar) = Tee::<G::Timestamp,D>::new();
         let operator = Operator {
             input: PullCounter::new(receiver),
@@ -43,7 +44,7 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         };
 
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender);
+        self.connect_to(ChildInput(index, 0), sender, channel_id);
         (handle, Stream::new(ChildOutput(index, 0), registrar, scope))
     }
 }

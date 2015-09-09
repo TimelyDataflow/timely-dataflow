@@ -12,26 +12,43 @@ use abomonation::{Abomonation, encode, decode};
 pub struct Message<T, D> {
     pub time: T,
     pub data: Content<D>,
+    pub from: usize,
+    pub seq: usize,
+}
+
+impl<T, D> Message<T, D> {
+    pub fn new(time: T, data: Content<D>, from: usize, seq: usize) -> Message<T, D> {
+        Message {
+            time: time,
+            data: data,
+            from: from,
+            seq: seq,
+        }
+    }
 }
 
 // Implementation required to get different behavior out of communication fabric.
 impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
     fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
         unsafe { encode(&self.time, bytes); }
+        unsafe { encode(&self.from, bytes); }
+        unsafe { encode(&self.seq, bytes); }
         let vec: &Vec<D> = self.data.deref();
         unsafe { encode(vec, bytes); }
     }
     fn from_bytes(bytes: &mut Vec<u8>) -> Self {
         let mut bytes = ::std::mem::replace(bytes, Vec::new());
         let x_len = bytes.len();
-        let (time, offset) = {
+        let (time, from, seq, offset) = {
             let (t,r) = unsafe { decode::<T>(&mut bytes) }.unwrap();
+            let (&f,r) = unsafe { decode::<usize>(r) }.unwrap();
+            let (&s,r) = unsafe { decode::<usize>(r) }.unwrap();
             let o = x_len - r.len();
-            ((*t).clone(), o)
+            ((*t).clone(), f, s, o)
         };
 
         let length = unsafe { decode::<Vec<D>>(&mut bytes[offset..]) }.unwrap().0.len();
-        Message { time: time, data: Content::Bytes(bytes, offset, length) }
+        Message::new(time, Content::Bytes(bytes, offset, length), from, seq)
     }
 }
 

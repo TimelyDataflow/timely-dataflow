@@ -55,14 +55,16 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
              (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, mut logic: L) -> Stream<G, D3> {
 
         let mut scope = self.scope();
+        let channel_id1 = scope.new_identifier();
+        let channel_id2 = scope.new_identifier();
 
-        let (sender1, receiver1) = pact1.connect(&mut scope);
-        let (sender2, receiver2) = pact2.connect(&mut scope);;
+        let (sender1, receiver1) = pact1.connect(&mut scope, channel_id1);
+        let (sender2, receiver2) = pact2.connect(&mut scope, channel_id2);;
         let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
         let operator = Operator::new(PullCounter::new(receiver1), PullCounter::new(receiver2), targets, name.to_owned(), None, move |i1, i2, o, _| logic(i1, i2, o));
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender1);
-        other.connect_to(ChildInput(index, 1), sender2);
+        self.connect_to(ChildInput(index, 0), sender1, channel_id1);
+        other.connect_to(ChildInput(index, 1), sender2, channel_id2);
         // self.scope.connect(other.name, ChildInput(index, 1));
         // other.ports.add_observer(sender2);
 
@@ -81,14 +83,16 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
              (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3> {
 
         let mut scope = self.scope();
+        let channel_id1 = scope.new_identifier();
+        let channel_id2 = scope.new_identifier();
 
-        let (sender1, receiver1) = pact1.connect(&mut scope);
-        let (sender2, receiver2) = pact2.connect(&mut scope);;
+        let (sender1, receiver1) = pact1.connect(&mut scope, channel_id1);
+        let (sender2, receiver2) = pact2.connect(&mut scope, channel_id2);;
         let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
         let operator = Operator::new(PullCounter::new(receiver1), PullCounter::new(receiver2), targets, name.to_owned(), Some((notify, scope.peers())), logic);
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender1);
-        other.connect_to(ChildInput(index, 1), sender2);
+        self.connect_to(ChildInput(index, 0), sender1, channel_id1);
+        other.connect_to(ChildInput(index, 1), sender2, channel_id2);
         // self.scope.connect(other.name, ChildInput(index, 1));
         // other.ports.add_observer(sender2);
 

@@ -38,6 +38,8 @@ pub trait Scope : Allocate+Clone {
     /// commonly useful to end users.
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T>;
 
+    fn new_identifier(&mut self) -> usize;
+
     /// Creates a `Subgraph` from a closure acting on a `Child` scope, and returning
     /// whatever the closure returns.
     ///

@@ -77,7 +77,7 @@ pub trait ConnectLoop<G: Scope, D: Data> {
 
 impl<G: Scope, D: Data> ConnectLoop<G, D> for Stream<G, D> {
     fn connect_loop(&self, helper: Helper<G::Timestamp, D, Counter<G::Timestamp, D, Observer<G::Timestamp, D>>>) {
-        self.connect_to(ChildInput(helper.index, 0), helper.target);
+        self.connect_to(ChildInput(helper.index, 0), helper.target, usize::max_value());
     }
 
 }
