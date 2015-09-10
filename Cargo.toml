@@ -16,6 +16,11 @@ license = "MIT"
 # [dependencies.timely_communication]
 # path="./communication"
 
+[features]
+
+default=[]
+logging=[]
+
 [dependencies]
 abomonation="*"
 timely_communication="*"

@@ -37,7 +37,8 @@ pub enum Target {
 
 pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     pub name:               String,                     // a helpful name
-    pub path:               String,
+    // pub path:               String,
+    pub path:               Vec<usize>,
     pub index:              usize,                        // a useful integer
 
     default_summary:        Summary<TOuter::Summary, TInner::Summary>,    // default summary to use for something TODO: figure out what.
@@ -276,7 +277,20 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
 
         // Intermission: exchange pointstamp updates, and then move them to the pointstamps structure.
+        // LOGGING
+        if cfg!(feature = "logging") {
+            if self.pointstamp_messages.len() > 0 || self.pointstamp_internal.len() > 0 {
+                println!("PROGRESS_SEND: {:?}: messages: {:?}, internal: {:?}", self.path, self.pointstamp_messages, self.pointstamp_internal);
+            }
+        }
         self.progcaster.send_and_recv(&mut self.pointstamp_messages, &mut self.pointstamp_internal);
+
+        // LOGGING
+        if cfg!(feature = "logging") {
+            if self.pointstamp_messages.len() > 0 || self.pointstamp_internal.len() > 0 {
+                println!("PROGRESS_RECV: {:?}: messages: {:?}, internal: {:?}", self.path, self.pointstamp_messages, self.pointstamp_internal);
+            }
+        }
 
         {
             let pointstamps = &mut self.pointstamps;
@@ -563,11 +577,13 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 
-    pub fn new_from<A: Allocate>(allocator: &mut A, index: usize, path: String) -> Subgraph<TOuter, TInner> {
+    pub fn new_from<A: Allocate>(allocator: &mut A, index: usize, path: Vec<usize>) -> Subgraph<TOuter, TInner> {
         let progcaster = Progcaster::new(allocator);
+        let mut path = path;
+        path.push(index);
         Subgraph {
             name:                   format!("Subgraph"),
-            path:                   format!("{}::Subgraph[{}]", path, index),
+            path:                   path,
             index:                  index,
             default_summary:        Default::default(),
             inputs:                 Default::default(),
@@ -589,7 +605,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 
     fn _print_topology(&self) {
-        println!("Topology for {}", self.path);
+        println!("Topology for {:?}", self.path);
 
         for child in self.children.iter() {
             for (output, list) in child.edges.iter().enumerate() {
@@ -614,7 +630,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 
     fn _print_reachability_summaries(&self) {
-        println!("Reachability summary for subscope {}", self.path);
+        println!("Reachability summary for subscope {:?}", self.path);
         println!("Operate outputs -> targets:");
 
         for i in 0..self.source_summaries.len() {
@@ -644,17 +660,17 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 
     fn _print_status(&self) {
-        println!("printing status for {}", self.path);
+        println!("printing status for {:?}", self.path);
         for child in self.children.iter() {
             for (index, messages) in child.outstanding_messages.iter().enumerate() {
                 if messages.elements().len() > 0 {
-                    println!("  ({})::{}.messages[{}]: {:?}", self.path, child.name(), index, messages.elements());
+                    println!("  ({:?})::{}.messages[{}]: {:?}", self.path, child.name(), index, messages.elements());
                 }
             }
 
             for (index, internal) in child.capabilities.iter().enumerate() {
                 if internal.elements().len() > 0 {
-                    println!("  ({})::{}.internal[{}]: {:?}", self.path, child.name(), index, internal.elements());
+                    println!("  ({:?})::{}.internal[{}]: {:?}", self.path, child.name(), index, internal.elements());
                 }
             }
         }

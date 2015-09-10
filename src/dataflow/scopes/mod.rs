@@ -26,6 +26,7 @@ pub trait Scope : Allocate+Clone {
 
     /// A useful name describing the scope.
     fn name(&self) -> String;
+    fn addr(&self) -> Vec<usize>;
 
     /// Connects a source of data with a target of the data. This only links the two for
     /// the purposes of tracking progress, rather than effect any data movement itself.
@@ -68,7 +69,7 @@ pub trait Scope : Allocate+Clone {
             subgraph: subscope,
             parent: self.clone(),
         };
-
+        
         let result = func(&mut builder);
         self.add_operator(builder.subgraph);
         result

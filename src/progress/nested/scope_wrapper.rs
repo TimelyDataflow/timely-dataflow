@@ -37,7 +37,14 @@ pub struct ChildWrapper<T: Timestamp> {
 }
 
 impl<T: Timestamp> ChildWrapper<T> {
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, _path: String) -> ChildWrapper<T> {
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut _path: Vec<usize>) -> ChildWrapper<T> {
+
+        // LOGGING
+        _path.push(index);
+        if cfg!(feature = "logging") {
+            println!("CREATION_NODE {:?}: {}", _path, scope.name());
+        }
+        
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();

@@ -21,13 +21,14 @@ impl<G: Scope, T: Timestamp> Scope for Child<G, T> {
     type Timestamp = Product<G::Timestamp, T>;
 
     fn name(&self) -> String { self.subgraph.borrow().name().to_owned() }
+    fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
     fn add_edge(&self, source: Source, target: Target) {
         self.subgraph.borrow_mut().connect(source, target);
     }
 
     fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize {
         let index = self.subgraph.borrow().children.len();
-        let path = format!("{}", self.subgraph.borrow().path);
+        let path = self.subgraph.borrow().path.clone();
         self.subgraph.borrow_mut().children.push(ChildWrapper::new(Box::new(scope), index, path));
         index
     }
@@ -39,7 +40,8 @@ impl<G: Scope, T: Timestamp> Scope for Child<G, T> {
 
     fn new_subscope<T2: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, T>, T2> {
         let index = self.subgraph.borrow().children();
-        let path = format!("{}", self.subgraph.borrow().path);
+        // let path = format!("{}", self.subgraph.borrow().path);
+        let path = self.subgraph.borrow().path.clone();
         Subgraph::new_from(self, index, path)
     }
 }

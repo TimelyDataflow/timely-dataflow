@@ -42,6 +42,7 @@ impl<A: Allocate> Scope for Root<A> {
     type Timestamp = RootTimestamp;
 
     fn name(&self) -> String { format!("Worker[{}]", self.allocator.borrow().index()) }
+    fn addr(&self) -> Vec<usize> { vec![self.allocator.borrow().index() ] }
     fn add_edge(&self, _source: Source, _target: Target) {
         panic!("Root::connect(): root doesn't maintain edges; who are you, how did you get here?")
     }
@@ -60,8 +61,8 @@ impl<A: Allocate> Scope for Root<A> {
 
 
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
-        let name = format!("{}::Subgraph[Root]", self.name());
-        Subgraph::new_from(&mut (*self.allocator.borrow_mut()), 0, name)
+        let addr = vec![self.allocator.borrow().index()];
+        Subgraph::new_from(&mut (*self.allocator.borrow_mut()), self.graph.borrow().len(), addr)
     }
 }
 

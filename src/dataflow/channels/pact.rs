@@ -71,7 +71,9 @@ impl<T, D> Push<(T, Content<D>)> for Pusher<T, D> {
     fn push(&mut self, pair: &mut Option<(T, Content<D>)>) {
         if let Some((time, data)) = pair.take() {
             // LOGGING
-            // println!("send {}:\t(from: {}, to: {}, seq: {}, len: {})", self.channel, self.source, self.target, self.counter, data.len());
+            if cfg!(feature = "logging") {
+                println!("MESSAGE_SEND {}:\t(from: {}, to: {}, seq: {}, len: {})", self.channel, self.source, self.target, self.counter, data.len());
+            }
             let mut message = Some(Message::new(time, data, self.source, self.counter));
             self.counter += 1;
             self.pusher.push(&mut message);
@@ -112,7 +114,9 @@ impl<T, D> Pull<(T, Content<D>)> for Puller<T, D> {
         // Log something about previous.{index, counter, time, length}?
         if let Some(ref message) = previous.as_ref() {
             // LOGGING
-            // println!("recv {}:\t(from: {}, to: {}, seq: {}, len: {})", self.channel, message.from, self.index, message.seq, message.data.len());
+            if cfg!(feature = "logging") {
+                println!("MESSAGE_RECV {}:\t(from: {}, to: {}, seq: {}, len: {})", self.channel, message.from, self.index, message.seq, message.data.len());
+            }
         }
 
         self.current = previous.map(|message| (message.time, message.data));
