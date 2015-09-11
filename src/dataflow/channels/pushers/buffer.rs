@@ -76,11 +76,13 @@ impl<'a, T, D, P: Push<(T, Content<D>)>+'a> Session<'a, T, D, P>  where T: Eq+Cl
     pub fn give(&mut self, data: D) {
         self.buffer.give(data);
     }
+    #[inline(always)]
     pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
         for item in iter {
             self.give(item);
         }
     }
+    #[inline(always)]
     pub fn give_content(&mut self, message: &mut Content<D>) {
         if message.len() > 0 {
             self.buffer.give_content(message);

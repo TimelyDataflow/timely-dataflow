@@ -23,6 +23,8 @@ use progress::nested::scope_wrapper::ChildWrapper;
 use progress::nested::pointstamp_counter::PointstampCounter;
 use progress::nested::product::Product;
 
+// use dataflow::scopes::root::loggers::*;
+
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum Source {
     GraphInput(usize),          // from outer scope
@@ -280,7 +282,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // LOGGING
         if cfg!(feature = "logging") {
             if self.pointstamp_messages.len() > 0 || self.pointstamp_internal.len() > 0 {
-                println!("PROGRESS_SEND: {:?}: messages: {:?}, internal: {:?}", self.path, self.pointstamp_messages, self.pointstamp_internal);
+                // PROGRESS_Q.with(|cell| cell.borrow_mut().push((true, self.channel, message.from, self.index, message.seq, message.data.len())));
+                // println!("PROGRESS_SEND: {:?}: messages: {:?}, internal: {:?}", self.path, self.pointstamp_messages, self.pointstamp_internal);
             }
         }
         self.progcaster.send_and_recv(&mut self.pointstamp_messages, &mut self.pointstamp_internal);
@@ -288,7 +291,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // LOGGING
         if cfg!(feature = "logging") {
             if self.pointstamp_messages.len() > 0 || self.pointstamp_internal.len() > 0 {
-                println!("PROGRESS_RECV: {:?}: messages: {:?}, internal: {:?}", self.path, self.pointstamp_messages, self.pointstamp_internal);
+                // PROGRESS_Q.with(|cell| cell.borrow_mut().push((false, self.channel, message.from, self.index, message.seq, message.data.len())));
+                // println!("PROGRESS_RECV: {:?}: messages: {:?}, internal: {:?}", self.path, self.pointstamp_messages, self.pointstamp_internal);
             }
         }
 

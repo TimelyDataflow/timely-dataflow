@@ -8,11 +8,14 @@ use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, Operate};
 use progress::nested::Target;
 use progress::nested::subgraph::Target::{GraphOutput, ChildInput};
-
 use progress::count_map::CountMap;
+use logging::Logger;
+
+// use dataflow::scopes::root::loggers::OPERATORS_Q;
 
 pub struct ChildWrapper<T: Timestamp> {
     pub name:                   String,
+    pub addr:                   Vec<usize>,
     pub scope:                  Option<Box<Operate<T>>>,          // the scope itself
 
     index:                      usize,
@@ -37,14 +40,17 @@ pub struct ChildWrapper<T: Timestamp> {
 }
 
 impl<T: Timestamp> ChildWrapper<T> {
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut _path: Vec<usize>) -> ChildWrapper<T> {
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>) -> ChildWrapper<T> {
 
         // LOGGING
-        _path.push(index);
+        path.push(index);
         if cfg!(feature = "logging") {
-            println!("CREATION_NODE {:?}: {}", _path, scope.name());
+            ::logging::OPERATES.with(|x| x.log(::logging::OperatesEvent {
+                addr: path.clone(),
+                name: scope.name().to_owned()
+            }));
         }
-        
+
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
@@ -56,6 +62,7 @@ impl<T: Timestamp> ChildWrapper<T> {
 
         let mut result = ChildWrapper {
             name:       format!("{}[{}]", scope.name(), index),
+            addr:       path,
             scope:      Some(scope),
             index:      index,
             inputs:     inputs,
@@ -117,12 +124,31 @@ impl<T: Timestamp> ChildWrapper<T> {
                                                   mut output_action:   A) -> bool {
 
         let active = {
-            if let &mut Some(ref mut scope) = &mut self.scope {
+
+            if cfg!(feature = "logging") {
+                use ::logging::Logger;
+                ::logging::SCHEDULE.with(|x| x.log(::logging::ScheduleEvent {
+                    addr: self.addr.clone(),
+                    is_start: true,
+                }));
+            }
+
+            let result = if let &mut Some(ref mut scope) = &mut self.scope {
                 scope.pull_internal_progress(&mut self.internal_progress,
                                              &mut self.consumed_messages,
                                              &mut self.produced_messages)
             }
-            else { false }
+            else { false };
+
+            if cfg!(feature = "logging") {
+                use ::logging::Logger;
+                ::logging::SCHEDULE.with(|x| x.log(::logging::ScheduleEvent {
+                    addr: self.addr.clone(),
+                    is_start: false,
+                }));
+            }
+
+            result
         };
 
         // shutting down if nothing left to do

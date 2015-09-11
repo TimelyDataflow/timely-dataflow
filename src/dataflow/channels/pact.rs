@@ -6,6 +6,8 @@ use timely_communication::allocator::Thread;
 use dataflow::channels::pushers::Exchange as ExchangeObserver;
 use dataflow::channels::{Message, Content};
 
+// use dataflow::scopes::root::loggers::MESSAGES_Q;
+
 use abomonation::Abomonation;
 
 // A ParallelizationContract transforms the output of a Allocate to an (Observer, Pullable).
@@ -72,7 +74,15 @@ impl<T, D> Push<(T, Content<D>)> for Pusher<T, D> {
         if let Some((time, data)) = pair.take() {
             // LOGGING
             if cfg!(feature = "logging") {
-                println!("MESSAGE_SEND {}:\t(from: {}, to: {}, seq: {}, len: {})", self.channel, self.source, self.target, self.counter, data.len());
+                use ::logging::Logger;
+                ::logging::MESSAGES.with(|x| x.log(::logging::MessagesEvent {
+                    is_send: true,
+                    channel: self.channel,
+                    source: self.source,
+                    target: self.target,
+                    seq_no: self.counter,
+                    length: data.len(),
+                }));
             }
             let mut message = Some(Message::new(time, data, self.source, self.counter));
             self.counter += 1;
@@ -115,7 +125,17 @@ impl<T, D> Pull<(T, Content<D>)> for Puller<T, D> {
         if let Some(ref message) = previous.as_ref() {
             // LOGGING
             if cfg!(feature = "logging") {
-                println!("MESSAGE_RECV {}:\t(from: {}, to: {}, seq: {}, len: {})", self.channel, message.from, self.index, message.seq, message.data.len());
+                use ::logging::Logger;
+                ::logging::MESSAGES.with(|x| x.log(::logging::MessagesEvent {
+                    is_send: false,
+                    channel: self.channel,
+                    source: message.from,
+                    target: self.index,
+                    seq_no: message.seq,
+                    length: message.data.len(),
+                }));
+                // ::logging::MESSAGES.with(|x| x.log((false, self.channel, message.from, self.index, message.seq, message.data.len())));
+                // println!("MESSAGE_RECV {}:\t(from: {}, to: {}, seq: {}, len: {})", self.channel, message.from, self.index, message.seq, message.data.len());
             }
         }
 

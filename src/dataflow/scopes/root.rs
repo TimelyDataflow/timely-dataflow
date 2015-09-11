@@ -7,6 +7,8 @@ use progress::nested::{Source, Target};
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
+// use ::logging::initialize;
+
 use super::Scope;
 
 /// A `Root` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
@@ -20,13 +22,25 @@ pub struct Root<A: Allocate> {
 
 impl<A: Allocate> Root<A> {
     pub fn new(c: A) -> Root<A> {
-        Root {
+        let mut result = Root {
             allocator: Rc::new(RefCell::new(c)),
             graph: Rc::new(RefCell::new(Vec::new())),
             identifiers: Rc::new(RefCell::new(0)),
+        };
+
+        // LOGGING
+        if cfg!(feature = "logging") {
+            ::logging::initialize(&mut result);
         }
+
+        result
     }
     pub fn step(&mut self) -> bool {
+
+        if cfg!(feature = "logging") {
+            ::logging::flush_logs();
+        }
+
         let mut active = false;
         for scope in self.graph.borrow_mut().iter_mut() {
             let sub_active = scope.pull_internal_progress(&mut [], &mut [], &mut []);

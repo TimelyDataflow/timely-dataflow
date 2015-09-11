@@ -56,10 +56,12 @@
 //! We then introduce input at increasing rounds, indicate the advance to the system (promising
 //! that we will introduce no more input at prior rounds), and step the computation.
 
+#[macro_use]
 extern crate abomonation;
 extern crate byteorder;
 extern crate getopts;
 extern crate timely_communication;
+extern crate time;
 
 pub use execute::{execute, execute_from_args};
 pub use timely_communication::{Push, Pull, Configuration};
@@ -68,6 +70,9 @@ pub mod progress;
 pub mod dataflow;
 pub mod drain;
 pub mod execute;
+
+// #[cfg(feature = "logging")]
+pub mod logging;
 
 /// A composite trait for types usable in timely dataflow.
 pub trait Data: timely_communication::Data + abomonation::Abomonation { }
