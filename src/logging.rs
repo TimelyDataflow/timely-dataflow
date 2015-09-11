@@ -16,6 +16,12 @@ use abomonation::Abomonation;
 
 use drain::DrainExt;
 
+pub fn log<T: Logger>(logger: &'static ::std::thread::LocalKey<T>, record: T::Record) {
+    if cfg!(feature = "logging") {
+        logger.with(|x| x.log(record));
+    }
+}
+
 pub trait Logger {
     type Record;
     fn log(&self, record: Self::Record);

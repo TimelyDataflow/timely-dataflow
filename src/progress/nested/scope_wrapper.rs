@@ -2,16 +2,11 @@
 
 use std::default::Default;
 
-// use fabric::Allocate;
-
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, Operate};
 use progress::nested::Target;
 use progress::nested::subgraph::Target::{GraphOutput, ChildInput};
 use progress::count_map::CountMap;
-use logging::Logger;
-
-// use dataflow::scopes::root::loggers::OPERATORS_Q;
 
 pub struct ChildWrapper<T: Timestamp> {
     pub name:                   String,
@@ -44,12 +39,8 @@ impl<T: Timestamp> ChildWrapper<T> {
 
         // LOGGING
         path.push(index);
-        if cfg!(feature = "logging") {
-            ::logging::OPERATES.with(|x| x.log(::logging::OperatesEvent {
-                addr: path.clone(),
-                name: scope.name().to_owned()
-            }));
-        }
+
+        ::logging::log(&::logging::OPERATES, ::logging::OperatesEvent { addr: path.clone(), name: scope.name().to_owned() });
 
         let inputs = scope.inputs();
         let outputs = scope.outputs();
@@ -125,13 +116,7 @@ impl<T: Timestamp> ChildWrapper<T> {
 
         let active = {
 
-            if cfg!(feature = "logging") {
-                use ::logging::Logger;
-                ::logging::SCHEDULE.with(|x| x.log(::logging::ScheduleEvent {
-                    addr: self.addr.clone(),
-                    is_start: true,
-                }));
-            }
+            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: true });
 
             let result = if let &mut Some(ref mut scope) = &mut self.scope {
                 scope.pull_internal_progress(&mut self.internal_progress,
@@ -140,13 +125,7 @@ impl<T: Timestamp> ChildWrapper<T> {
             }
             else { false };
 
-            if cfg!(feature = "logging") {
-                use ::logging::Logger;
-                ::logging::SCHEDULE.with(|x| x.log(::logging::ScheduleEvent {
-                    addr: self.addr.clone(),
-                    is_start: false,
-                }));
-            }
+            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: false });
 
             result
         };

@@ -31,20 +31,14 @@ pub struct Stream<S: Scope, D:Data> {
 impl<S: Scope, D:Data> Stream<S, D> {
 
     pub fn connect_to<P: Push<(S::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P, _identifier: usize) {
-        // LOGGING
-        if cfg!(feature = "logging") {
-            use ::logging::Logger;
 
-            let source = match self.name { Source::ChildOutput(i,j) => (i,j), Source::GraphInput(i) => (usize::max_value(), i) };
-            let target = match target    { Target::ChildInput(i,j) => (i,j), Target::GraphOutput(i) => (usize::max_value(), i) };
+        ::logging::log(&::logging::CHANNELS, ::logging::ChannelsEvent {
+            id: _identifier,
+            scope_addr: self.scope.addr(),
+            source: match self.name { Source::ChildOutput(i,j) => (i,j), Source::GraphInput(i) => (usize::max_value(), i) },
+            target: match target    { Target::ChildInput(i,j) => (i,j), Target::GraphOutput(i) => (usize::max_value(), i) },
+        });
 
-            ::logging::CHANNELS.with(|x| x.log(::logging::ChannelsEvent {
-                id: _identifier,
-                scope_addr: self.scope.addr(),
-                source: source,
-                target: target,
-            }));
-        }
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);
     }
