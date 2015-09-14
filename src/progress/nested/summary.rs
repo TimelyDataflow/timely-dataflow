@@ -1,4 +1,4 @@
-//! Path summaries that are either child local, or leave the scope and re-enter from the parent. 
+//! Path summaries that are either child local, or leave the scope and re-enter from the parent.
 
 use std::cmp::Ordering;
 use std::default::Default;
@@ -21,6 +21,7 @@ impl<S, T: Default> Default for Summary<S, T> {
 }
 
 impl<S:PartialOrd+Copy, T:PartialOrd+Copy> PartialOrd for Summary<S, T> {
+    #[inline]
     fn partial_cmp(&self, other: &Summary<S, T>) -> Option<Ordering> {
         match (*self, *other) {
             (Local(t1),    Local(t2))    => t1.partial_cmp(&t2),
@@ -48,12 +49,14 @@ where TOuter: Timestamp,
       SInner: PathSummary<TInner>,
 {
     // this makes sense for a total order, but less clear for a partial order.
+    #[inline]
     fn results_in(&self, product: &Product<TOuter, TInner>) -> Product<TOuter, TInner> {
         match *self {
             Local(ref iters)              => Product::new(product.outer.clone(), iters.results_in(&product.inner)),
             Outer(ref summary, ref iters) => Product::new(summary.results_in(&product.outer), iters.results_in(&Default::default())),
         }
     }
+    #[inline]
     fn followed_by(&self, other: &Summary<SOuter, SInner>) -> Summary<SOuter, SInner> {
         match (*self, *other) {
             (Local(inner1), Local(inner2))             => Local(inner1.followed_by(&inner2)),
@@ -65,6 +68,7 @@ where TOuter: Timestamp,
 }
 
 impl<SOuter: Display, SInner: Display> Display for Summary<SOuter, SInner> {
+    #[inline]
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self {
             &Local(ref s) => f.write_str(&format!("Local({})", s)),

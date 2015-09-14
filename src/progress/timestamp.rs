@@ -19,7 +19,7 @@ pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Any+Abomonation {
 // TODO : Change Copy requirement to Clone
 // TODO : Change `results_in` and perhaps `followed_by` to return an `Option`, indicating no path.
 // TODO : This can be important when a summary would "overflow", as we want neither to overflow,
-// TODO : nor wrap around, nor saturate. 
+// TODO : nor wrap around, nor saturate.
 /// A summary of how a timestamp advances along a timely dataflow path.
 pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrd+Debug+Default {
     /// Advances a timestamp according to the timestamp actions on the path.
@@ -33,6 +33,7 @@ pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrd+Debug+Default {
 pub struct RootTimestamp;
 impl Timestamp for RootTimestamp { type Summary = RootSummary; }
 impl Debug for RootTimestamp {
+    #[inline]
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         f.write_str(&format!("Root"))
     }
@@ -41,6 +42,7 @@ impl Debug for RootTimestamp {
 impl Abomonation for RootTimestamp { }
 impl RootTimestamp {
     /// Constructs a new `Product<RootTimestamp,T>`.
+    #[inline]
     pub fn new<T: Timestamp>(t: T) -> Product<RootTimestamp, T> {
         Product::new(RootTimestamp, t)
     }
@@ -50,31 +52,41 @@ impl RootTimestamp {
 #[derive(Copy, Clone, Eq, PartialOrd, PartialEq, Debug, Default)]
 pub struct RootSummary;
 impl PathSummary<RootTimestamp> for RootSummary {
+    #[inline]
     fn results_in(&self, _: &RootTimestamp) -> RootTimestamp { RootTimestamp }
+    #[inline]
     fn followed_by(&self, _: &RootSummary) -> RootSummary { RootSummary }
 }
 
 
 impl Timestamp for usize { type Summary = usize; }
 impl PathSummary<usize> for usize {
+    #[inline]
     fn results_in(&self, src: &usize) -> usize { *self + *src }
+    #[inline]
     fn followed_by(&self, other: &usize) -> usize { *self + *other }
 }
 
 impl Timestamp for u64 { type Summary = u64; }
 impl PathSummary<u64> for u64 {
+    #[inline]
     fn results_in(&self, src: &u64) -> u64 { *self + *src }
+    #[inline]
     fn followed_by(&self, other: &u64) -> u64 { *self + *other }
 }
 
 impl Timestamp for u32 { type Summary = u32; }
 impl PathSummary<u32> for u32 {
+    #[inline]
     fn results_in(&self, src: &u32) -> u32 { *self + *src }
+    #[inline]
     fn followed_by(&self, other: &u32) -> u32 { *self + *other }
 }
 
 impl Timestamp for i32 { type Summary = i32; }
 impl PathSummary<i32> for i32 {
+    #[inline]
     fn results_in(&self, src: &i32) -> i32 { *self + *src }
+    #[inline]
     fn followed_by(&self, other: &i32) -> i32 { *self + *other }
 }

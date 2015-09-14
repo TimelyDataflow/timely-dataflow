@@ -4,9 +4,6 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use timely::Data;
-use timely::progress::timestamp::RootTimestamp;
-use timely::progress::nested::Summary::Local;
-
 use timely::dataflow::*;
 use timely::dataflow::operators::*;
 
@@ -20,8 +17,8 @@ fn main() {
             let (input2, stream2) = graph.new_input::<u64>();
 
             // prepare some feedback edges
-            let (loop1_source, loop1) = graph.loop_variable(RootTimestamp::new(100), Local(1));
-            let (loop2_source, loop2) = graph.loop_variable(RootTimestamp::new(100), Local(1));
+            let (loop1_source, loop1) = graph.loop_variable(100, 1);
+            let (loop2_source, loop2) = graph.loop_variable(100, 1);
 
             let concat1 = stream1.concat(&loop1);//graph.concatenate(vec![stream1, loop1]);
             let concat2 = stream2.concat(&loop2);//(&mut graph.concatenate(vec![stream2, loop2]);

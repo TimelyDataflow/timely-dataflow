@@ -2,7 +2,6 @@ extern crate timely;
 
 use timely::dataflow::channels::pact::Pipeline;
 use timely::progress::timestamp::RootTimestamp;
-use timely::progress::nested::Summary::Local;
 
 use timely::dataflow::*;
 use timely::dataflow::operators::*;
@@ -14,7 +13,7 @@ fn main() {
     timely::execute_from_args(std::env::args().skip(2), move |root| {
 
         root.scoped(move |graph| {
-            let (handle, stream) = graph.loop_variable::<u64>(RootTimestamp::new(iterations), Local(1));
+            let (handle, stream) = graph.loop_variable::<u64>(iterations, 1);
             stream.unary_notify(
                 Pipeline,
                 "Barrier",

@@ -17,6 +17,7 @@ pub struct Message<T, D> {
 }
 
 impl<T, D> Message<T, D> {
+    #[inline]
     pub fn new(time: T, data: Content<D>, from: usize, seq: usize) -> Message<T, D> {
         Message {
             time: time,
@@ -29,6 +30,7 @@ impl<T, D> Message<T, D> {
 
 // Implementation required to get different behavior out of communication fabric.
 impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
+    #[inline]
     fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
         unsafe { encode(&self.time, bytes); }
         unsafe { encode(&self.from, bytes); }
@@ -36,6 +38,7 @@ impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
         let vec: &Vec<D> = self.data.deref();
         unsafe { encode(vec, bytes); }
     }
+    #[inline]
     fn from_bytes(bytes: &mut Vec<u8>) -> Self {
         let mut bytes = ::std::mem::replace(bytes, Vec::new());
         let x_len = bytes.len();
@@ -72,12 +75,14 @@ pub enum Content<D> {
 impl<D> Content<D> {
     /// Default number of elements in a typed allocated message. This could vary as a function of
     /// `std::mem::size_of::<D>()`, so is left as a method rather than a constant.
+    #[inline]
     pub fn default_length() -> usize { 4096 }
 
     /// The length of the underlying typed vector.
     ///
     /// The length is tracked without needing to deserialize the data, so that this method can be
     /// called even for `D` that do not implement `Serializable`.
+    #[inline]
     pub fn len(&self) -> usize {
         match *self {
             Content::Bytes(_, _, length) => length,
@@ -87,6 +92,7 @@ impl<D> Content<D> {
 
 
     /// Constructs a `Message` from typed data, replacing its argument with `Vec::new()`.
+    #[inline]
     pub fn from_typed(typed: &mut Vec<D>) -> Content<D> {
         Content::Typed(::std::mem::replace(typed, Vec::new()))
     }
@@ -96,6 +102,7 @@ impl<D> Content<D> {
     /// ALLOC : dropping of binary data. likely called only by persons who pushed typed data on,
     /// ALLOC : so perhaps not all that common. Could put a panic! here just for fun! :D
     /// ALLOC : casual dropping of contents of `data`, which might have allocated memory.
+    #[inline]
     pub fn into_typed(self) -> Vec<D> {
         match self {
             Content::Bytes(_,_,_) => Vec::new(),
@@ -103,6 +110,7 @@ impl<D> Content<D> {
         }
     }
 
+    #[inline]
     pub fn push_at<T, P: Push<(T, Content<D>)>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
 
         let data = Content::from_typed(buffer);
@@ -130,6 +138,7 @@ impl<D> Content<D> {
 
 impl<D: Abomonation> Deref for Content<D> {
     type Target = Vec<D>;
+    #[inline]
     fn deref(&self) -> &Vec<D> {
         match *self {
             Content::Bytes(ref bytes, offset, _length) => {
@@ -149,6 +158,7 @@ impl<D: Abomonation> Deref for Content<D> {
 // TODO : and skip copying the 24 byte Vec struct first. We'd also have to bake in the typed length
 // TODO : somewhere outside of this serialized hunk of data.
 impl<D: Clone+Abomonation> DerefMut for Content<D> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Vec<D> {
         let value = if let Content::Bytes(ref mut bytes, offset, _length) = *self {
             let data: &Vec<D> = unsafe { ::std::mem::transmute(bytes.get_unchecked(offset)) };
