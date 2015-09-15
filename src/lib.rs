@@ -63,7 +63,7 @@ extern crate getopts;
 extern crate timely_communication;
 extern crate time;
 
-pub use execute::{execute, execute_from_args};
+pub use execute::{execute, execute_from_args, example};
 pub use timely_communication::{Push, Pull, Configuration};
 
 pub mod progress;

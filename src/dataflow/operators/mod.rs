@@ -22,6 +22,7 @@ pub use self::binary::Binary;
 pub use self::delay::Delay;
 pub use self::exchange::Exchange as ExchangeExtension;
 pub use self::probe::Probe;
+pub use self::to_stream::ToStream;
 
 pub mod enterleave;
 pub mod unary;
@@ -37,3 +38,4 @@ pub mod binary;
 pub mod delay;
 pub mod exchange;
 pub mod probe;
+pub mod to_stream;

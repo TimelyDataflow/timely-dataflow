@@ -1,3 +1,24 @@
+//! Extension traits to move a `Stream` between an outer `Scope` and inner `Scope`.
+//!
+//! Each `Stream` indicates its containing `Scope` as part of its type signature. To create a new
+//! stream with the same contents in another scope, one must explicit use the methods `enter` and
+//! `leave`, to clearly indicate the transition to the timely dataflow progress tracking logic.
+//!
+//! # Examples
+//! ```
+//! use timely::dataflow::scopes::Scope;
+//! use timely::dataflow::operators::{Enter, Leave, ToStream, Inspect};
+//!
+//! timely::example(|outer| {
+//!     let stream = (0..9).to_stream(outer);
+//!     let output = outer.scoped::<u32,_,_>(|inner| {
+//!         inner.enter(&stream)
+//!              .inspect(|x| println!("in nested scope: {:?}", x))
+//!              .leave()
+//!     });
+//! });
+//! ```
+
 use std::hash::Hash;
 use std::default::Default;
 
@@ -17,11 +38,41 @@ use dataflow::{Stream, Scope};
 use dataflow::scopes::Child;
 use dataflow::operators::delay::*;
 
+/// Extension trait to move a `Stream` into a child of its current `Scope`.
 pub trait Enter<G: Scope, T: Timestamp, D: Data> {
+    /// Moves the `Stream` argument into a child of its current `Scope`.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::scopes::Scope;
+    /// use timely::dataflow::operators::{Enter, Leave, ToStream};
+    ///
+    /// timely::example(|outer| {
+    ///     let stream = (0..9).to_stream(outer);
+    ///     let output = outer.scoped::<u32,_,_>(|inner| {
+    ///         inner.enter(&stream).leave()
+    ///     });
+    /// });
+    /// ```
     fn enter(&self, &Stream<G, D>) -> Stream<Child<G, T>, D>;
 }
 
+/// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
 pub trait EnterAt<G: Scope, T: Timestamp, D: Data>  where  G::Timestamp: Hash, T: Hash {
+    /// Moves the `Stream` argument into a child of its current `Scope` setting the timestamp for each element by `initial`.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::scopes::Scope;
+    /// use timely::dataflow::operators::{EnterAt, Leave, ToStream};
+    ///
+    /// timely::example(|outer| {
+    ///     let stream = (0..9).to_stream(outer);
+    ///     let output = outer.scoped::<u32,_,_>(|inner| {
+    ///         inner.enter_at(&stream, |x| *x).leave()
+    ///     });
+    /// });
+    /// ```
     fn enter_at<F:Fn(&D)->T+'static>(&self, stream: &Stream<G, D>, initial: F) -> Stream<Child<G, T>, D> ;
 }
 
@@ -50,7 +101,22 @@ Enter<G, T, D> for Child<G, T> {
     }
 }
 
+/// Extension trait to move a `Stream` to the parent of its current `Scope`.
 pub trait Leave<G: Scope, D: Data> {
+    /// Moves a `Stream` to the parent of its current `Scope`.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::scopes::Scope;
+    /// use timely::dataflow::operators::{Enter, Leave, ToStream};
+    ///
+    /// timely::example(|outer| {
+    ///     let stream = (0..9).to_stream(outer);
+    ///     let output = outer.scoped::<u32,_,_>(|inner| {
+    ///         inner.enter(&stream).leave()
+    ///     });
+    /// });
+    /// ```
     fn leave(&self) -> Stream<G, D>;
 }
 
@@ -70,7 +136,7 @@ impl<G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<G, T>, D> {
 }
 
 
-pub struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
     targets: Counter<Product<TOuter, TInner>, TData, Tee<Product<TOuter, TInner>, TData>>,
 }
 
@@ -89,7 +155,7 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Push<(TOuter, Content<TD
 }
 
 
-pub struct EgressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
+struct EgressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
     targets: Tee<TOuter, TData>,
     phantom: PhantomData<TInner>,
 }

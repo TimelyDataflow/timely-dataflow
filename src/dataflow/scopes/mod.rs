@@ -69,7 +69,7 @@ pub trait Scope : Allocate+Clone {
             subgraph: subscope,
             parent: self.clone(),
         };
-        
+
         let result = func(&mut builder);
         self.add_operator(builder.subgraph);
         result

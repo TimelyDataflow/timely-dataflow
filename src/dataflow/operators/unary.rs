@@ -26,7 +26,6 @@ use drain::DrainExt;
 // type Output<T, D> = PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>;
 
 /// Methods to construct generic streaming and blocking unary operators.
-
 pub trait Unary<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream and
@@ -36,8 +35,8 @@ pub trait Unary<G: Scope, D1: Data> {
     /// ```ignore
     /// use communication::pact::Pipeline;
     /// source.unary_stream(Pipeline, "example", |input, output| {
-    ///     while let Some((time, data)) = input.pull() {
-    ///         output.session(time).give_message(data);
+    ///     while let Some((time, data)) = input.next() {
+    ///         output.session(time).give_content(data);
     ///     }
     /// });
     /// ```
@@ -56,8 +55,11 @@ pub trait Unary<G: Scope, D1: Data> {
     /// ```ignore
     /// use communication::pact::Pipeline;
     /// source.unary_notify(Pipeline, "example", vec![], |input, output, notificator| {
-    ///     while let Some((time, data)) = input.pull() {
-    ///         output.session(time).give_message(data);
+    ///     while let Some((time, data)) = input.next() {
+    ///         output.session(time).give_content(data);
+    ///     }
+    ///     while let Some((time, count)) = notificator.next() {
+    ///         println!("done with time: {:?}", time);
     ///     }
     /// }
     /// ```

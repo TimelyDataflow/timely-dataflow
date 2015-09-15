@@ -1,8 +1,30 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
 use timely_communication::{initialize, Configuration, Allocator};
-use dataflow::scopes::Root;
+use dataflow::scopes::{Root, Child, Scope};
 
+/// Executes a single-threaded timely dataflow computation.
+///
+/// The `example` method takes a closure on a `Scope` which it executes to initialize and run a
+/// timely dataflow computation on a single thread. This method is intended for use in examples,
+/// rather than programs that may need to run across multiple workers.
+///
+/// #Examples
+/// ```
+/// use timely::dataflow::operators::{ToStream, Inspect};
+///
+/// timely::example(|scope| {
+///     (0..10).to_stream(scope)
+///            .inspect(|x| println!("seen: {:?}", x));
+/// });
+/// ```
+pub fn example<F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static>(func: F) {
+    initialize(Configuration::Thread, move |allocator| {
+        let mut root = Root::new(allocator);
+        root.scoped::<u64,_,_>(|x| func(x));
+        while root.step() { }
+    })
+}
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
 ///
@@ -13,24 +35,14 @@ use dataflow::scopes::Root;
 /// #Examples
 /// ```ignore
 /// use timely::dataflow::*;
-/// use timely::dataflow::operators::{Input, Inspect};
+/// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
 /// timely::execute(Configuration::Process(3), |root| {
-///
-///     // add an input and base computation off of it
-///     let mut input = root.scoped(|scope| {
-///         let (input, stream) = scope.new_input();
-///         stream.inspect(|x| println!("hello {:?}", x));
-///         input
-///     });
-///
-///     // introduce input, advance computation
-///     for round in 0..10 {
-///         input.send(round);
-///         input.advance_to(round + 1);
-///         root.step();
-///     }
+///     root.scoped::<u64,_,_>(|scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x));
+///     })
 /// });
 /// ```
 pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configuration, func: F) {
@@ -63,24 +75,14 @@ pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configurat
 /// #Examples
 /// ```
 /// use timely::dataflow::*;
-/// use timely::dataflow::operators::{Input, Inspect};
+/// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using command line parameters
 /// timely::execute_from_args(std::env::args(), |root| {
-///
-///     // add an input and base computation off of it
-///     let mut input = root.scoped(|scope| {
-///         let (input, stream) = scope.new_input();
-///         stream.inspect(|x| println!("hello {:?}", x));
-///         input
-///     });
-///
-///     // introduce input, advance computation
-///     for round in 0..10 {
-///         input.send(round);
-///         input.advance_to(round + 1);
-///         root.step();
-///     }
+///     root.scoped::<u64,_,_>(|scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x));
+///     })
 /// });
 /// ```
 /// ```ignore
@@ -99,9 +101,6 @@ pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configurat
 pub fn execute_from_args<I: Iterator<Item=String>, F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(iter: I, func: F) {
     if let Some(config) = Configuration::from_args(iter) {
         execute(config, func);
-        // initialize(config, move |allocator| {
-        //     func(&mut Root::new(allocator));
-        // })
     }
     else {
         println!("failed to initialize communication fabric");
