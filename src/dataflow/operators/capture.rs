@@ -26,7 +26,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// ```
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-
+    ///
     /// timely::execute(timely::Configuration::Thread, |computation| {
     ///     let handle = computation.scoped::<u64,_,_>(|builder|
     ///         (0..10).to_stream(builder)
@@ -83,7 +83,7 @@ pub struct EventLink<T, D> {
 
 /// A handle to the captured data, shared with the capture operator itself.
 pub struct Handle<T: Timestamp, D: Data> {
-    events: Rc<RefCell<EventLink<T, D>>>,
+    pub events: Rc<RefCell<EventLink<T, D>>>,
 }
 
 impl<T: Timestamp, D: Data> Handle<T, D> {
