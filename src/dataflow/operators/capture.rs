@@ -20,6 +20,25 @@ use progress::nested::subgraph::Target::ChildInput;
 use progress::{Timestamp, Operate, Antichain};
 
 pub trait Capture<T: Timestamp, D: Data> {
+    ///
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
+
+    /// timely::execute(timely::Configuration::Thread, |computation| {
+    ///     let handle = computation.scoped::<u64,_,_>(|builder|
+    ///         (0..10).to_stream(builder)
+    ///                .capture()
+    ///     );
+    ///
+    ///     computation.scoped(|builder| {
+    ///         handle.replay(builder)
+    ///               .inspect(|x| println!("replayed: {:?}", x));
+    ///     })
+    /// });
+    /// ```
     fn capture(&self) -> Handle<T, D>;
 }
 
@@ -192,9 +211,9 @@ mod tests {
                        .capture()
             );
 
-            computation.step();
-            computation.step();
-            computation.step();
+            // computation.step();
+            // computation.step();
+            // computation.step();
 
             computation.scoped(|builder| {
                 handle.replay(builder)
