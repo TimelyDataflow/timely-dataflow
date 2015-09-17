@@ -80,10 +80,10 @@ host3:port
 ```
 and then to launch the processes like so:
 ```
-host0% cargo run -w 2 -h hostfile.txt -n 4 -p 0
-host1% cargo run -w 2 -h hostfile.txt -n 4 -p 1
-host2% cargo run -w 2 -h hostfile.txt -n 4 -p 2
-host3% cargo run -w 2 -h hostfile.txt -n 4 -p 3
+host0% cargo run -- -w 2 -h hostfile.txt -n 4 -p 0
+host1% cargo run -- -w 2 -h hostfile.txt -n 4 -p 1
+host2% cargo run -- -w 2 -h hostfile.txt -n 4 -p 2
+host3% cargo run -- -w 2 -h hostfile.txt -n 4 -p 3
 ```
 The number of workers should be the same for each process.
 
