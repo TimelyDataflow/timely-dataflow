@@ -81,18 +81,24 @@ pub fn initialize<A: Allocate>(root: &mut Root<A>) {
         let (input_p, stream_p) = scope.new_input();
         let (input_m, stream_m) = scope.new_input();
         let (input_s, stream_s) = scope.new_input();
+        let (input_gm, stream_gm) = scope.new_input();
+        let (input_gp, stream_gp) = scope.new_input();
 
         stream_o.inspect_batch(|t, x| { println!("OPERATES at {:?}:", t); for elem in x { println!("  {:?}", elem) } });
         stream_c.inspect_batch(|t, x| { println!("CHANNELS at {:?}:", t); for elem in x { println!("  {:?}", elem) } });
         stream_m.inspect_batch(|t, x| { println!("MESSAGES at {:?}:", t); for elem in x { println!("  {:?}", elem) } });
         stream_p.inspect_batch(|t, x| { println!("PROGRESS at {:?}:", t); for elem in x { println!("  {:?}", elem) } });
         stream_s.inspect_batch(|t, x| { println!("SCHEDULE at {:?}:", t); for elem in x { println!("  {:?}", elem) } });
+        stream_gm.inspect_batch(|t, x| { println!("GUARDED_MESSAGE at {:?}:", t); for elem in x { println!("  {:?}", elem) } });
+        stream_gp.inspect_batch(|t, x| { println!("GUARDED_PROGRESS at {:?}:", t); for elem in x { println!("  {:?}", elem) } });
 
         OPERATES.with(|x| x.set(input_o));
         CHANNELS.with(|x| x.set(input_c));
         MESSAGES.with(|x| x.set(input_m));
         PROGRESS.with(|x| x.set(input_p));
         SCHEDULE.with(|x| x.set(input_s));
+        GUARDED_MESSAGE.with(|x| x.set(input_gm));
+        GUARDED_PROGRESS.with(|x| x.set(input_gp));
     });
 }
 
@@ -103,6 +109,8 @@ pub fn flush_logs() {
     PROGRESS.with(|x| x.flush());
     MESSAGES.with(|x| x.flush());
     SCHEDULE.with(|x| x.flush());
+    GUARDED_MESSAGE.with(|x| x.flush());
+    GUARDED_PROGRESS.with(|x| x.flush());
 }
 
 thread_local!(pub static OPERATES: TimelyLogger<OperatesEvent> = TimelyLogger::new());
@@ -110,6 +118,8 @@ thread_local!(pub static CHANNELS: TimelyLogger<ChannelsEvent> = TimelyLogger::n
 thread_local!(pub static PROGRESS: TimelyLogger<ProgressEvent> = TimelyLogger::new());
 thread_local!(pub static MESSAGES: TimelyLogger<MessagesEvent> = TimelyLogger::new());
 thread_local!(pub static SCHEDULE: TimelyLogger<ScheduleEvent> = TimelyLogger::new());
+thread_local!(pub static GUARDED_MESSAGE: TimelyLogger<bool> = TimelyLogger::new());
+thread_local!(pub static GUARDED_PROGRESS: TimelyLogger<bool> = TimelyLogger::new());
 
 #[derive(Debug, Clone)]
 /// The creation of an `Operate` implementor.

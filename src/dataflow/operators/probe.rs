@@ -1,4 +1,4 @@
-//! An extension method to monitor progress at a `Stream`.
+//! Monitor progress at a `Stream`.
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -22,6 +22,35 @@ use dataflow::{Stream, Scope};
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, D: Data> {
     /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::*;
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Probe, Inspect};
+    /// use timely::progress::timestamp::RootTimestamp;
+    ///
+    /// // construct and execute a timely dataflow
+    /// timely::execute(Configuration::Thread, |root| {
+    ///
+    ///     // add an input and base computation off of it
+    ///     let (mut input, probe) = root.scoped(|scope| {
+    ///         let (input, stream) = scope.new_input();
+    ///         let (probe, stream) = stream.inspect(|x| println!("hello {:?}", x))
+    ///                                     .probe();
+    ///         (input, probe)
+    ///     });
+    ///
+    ///     // introduce input, advance computation
+    ///     for round in 0..10 {
+    ///         input.send(round);
+    ///         input.advance_to(round + 1);
+    ///         while probe.le(&RootTimestamp::new(round)) {
+    ///             root.step();
+    ///         }
+    ///     }
+    /// });
+    /// ```
     fn probe(&self) -> (Handle<G::Timestamp>, Stream<G, D>);
 }
 

@@ -16,10 +16,14 @@ pub trait Inspect<G: Scope, D: Data> {
 impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
     fn inspect<F: FnMut(&D)+'static>(&self, mut func: F) -> Stream<G, D> {
         self.unary_stream(Pipeline, "Inspect", move |input, output| {
-            while let Some((time, data)) = input.next() {
+            input.for_each(|time, data| {
                 for datum in data.iter() { func(datum); }
                 output.session(time).give_content(data);
-            }
+            });
+            // while let Some((time, data)) = input.next() {
+            //     for datum in data.iter() { func(datum); }
+            //     output.session(time).give_content(data);
+            // }
         })
     }
 

@@ -5,6 +5,8 @@ use progress::count_map::CountMap;
 use timely_communication::Allocate;
 use {Push, Pull};
 
+// TODO : Extend ProgressVec<T> to contain a source worker id and a sequence number.
+
 
 /// A list of progress updates corresponding to ((child_scope, [in/out]_port, timestamp), delta)
 pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;

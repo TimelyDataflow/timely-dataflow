@@ -59,7 +59,9 @@ impl<T: Timestamp> Notificator<T> {
     }
     pub fn for_each<F: FnMut(T, i64)>(&mut self, mut logic: F) {
         while let Some((time, count)) = self.next() {
+            ::logging::log(&::logging::GUARDED_PROGRESS, true);
             logic(time, count);
+            ::logging::log(&::logging::GUARDED_PROGRESS, false);
         }
     }
 }
