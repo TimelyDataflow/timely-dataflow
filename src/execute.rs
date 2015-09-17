@@ -33,12 +33,12 @@ pub fn example<F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static>(func: 
 /// dataflow computation.
 ///
 /// #Examples
-/// ```ignore
-/// use timely::dataflow::*;
+/// ```
+/// use timely::dataflow::Scope;
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
-/// timely::execute(Configuration::Process(3), |root| {
+/// timely::execute(timely::Configuration::Process(3), |root| {
 ///     root.scoped::<u64,_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));

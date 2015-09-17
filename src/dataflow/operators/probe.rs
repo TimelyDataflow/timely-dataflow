@@ -134,8 +134,6 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
 
         false
     }
-
-    fn notify_me(&self) -> bool { true }
 }
 
 #[cfg(test)]

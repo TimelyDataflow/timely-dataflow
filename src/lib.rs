@@ -28,7 +28,7 @@
 //! use timely::dataflow::operators::{Input, Inspect};
 //!
 //! // construct and execute a timely dataflow
-//! timely::execute(Configuration::Thread, |root| {
+//! timely::execute_from_args(std::env::args(), |root| {
 //!
 //!     // add an input and base computation off of it
 //!     let mut input = root.scoped(|scope| {
