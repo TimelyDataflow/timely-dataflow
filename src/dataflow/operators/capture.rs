@@ -19,8 +19,9 @@ use progress::nested::subgraph::Source::ChildOutput;
 use progress::nested::subgraph::Target::ChildInput;
 use progress::{Timestamp, Operate, Antichain};
 
+/// Capture a stream of timestamped data for later replay.
 pub trait Capture<T: Timestamp, D: Data> {
-    ///
+    /// Captures a stream of timestamped data for later replay.
     ///
     /// #Examples
     /// ```
@@ -72,9 +73,12 @@ pub enum Event<T, D> {
     Messages(T, Content<D>),
 }
 
+/// Linked list of events.
 pub struct EventLink<T, D> {
-    event: Event<T, D>,
-    next: Option<Rc<RefCell<EventLink<T, D>>>>,
+    /// An event.
+    pub event: Event<T, D>,
+    /// The next event, if it exists.
+    pub next: Option<Rc<RefCell<EventLink<T, D>>>>,
 }
 
 // TODO : No notion of streaming garbage collection, which is probably a bug.
@@ -83,6 +87,7 @@ pub struct EventLink<T, D> {
 
 /// A handle to the captured data, shared with the capture operator itself.
 pub struct Handle<T: Timestamp, D: Data> {
+    /// A linked list of events.
     pub events: Rc<RefCell<EventLink<T, D>>>,
 }
 
@@ -210,11 +215,7 @@ mod tests {
                 (0..10).to_stream(builder)
                        .capture()
             );
-
-            // computation.step();
-            // computation.step();
-            // computation.step();
-
+            
             computation.scoped(|builder| {
                 handle.replay(builder)
                       .inspect(|x| println!("replayed: {:?}", x));
