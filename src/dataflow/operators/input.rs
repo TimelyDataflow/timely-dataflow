@@ -1,3 +1,5 @@
+//! Create new `Streams` connected to external inputs.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
@@ -24,17 +26,51 @@ use dataflow::scopes::{Child, Root};
 // NOTE : Experiments with &mut indicate that the borrow of 'a lives for too long.
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
-// returns both an input scope and a stream representing its output.
+/// Create a new `Stream` and `Handle` through which to supply input.
 pub trait Input<A: Allocate, T: Timestamp+Ord> {
-    fn new_input<D:Data>(&self) -> (InputHelper<T, D>, Stream<Child<Root<A>, T>, D>);
+    /// Create a new `Stream` and `Handle` through which to supply input.
+    ///
+    /// The `new_input` method returns a pair `(Handle, Stream)` where the `Stream` can be used
+    /// immediately for timely dataflow construction, and the `Handle` is later used to introduce
+    /// data into the timely dataflow computation.
+    ///
+    /// The `Handle` also provides a means to indicate
+    /// to timely dataflow that the input has advanced beyond certain timestamps, allowing timely
+    /// to issue progress notifications.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::*;
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Inspect};
+    ///
+    /// // construct and execute a timely dataflow
+    /// timely::execute(Configuration::Thread, |root| {
+    ///
+    ///     // add an input and base computation off of it
+    ///     let mut input = root.scoped(|scope| {
+    ///         let (input, stream) = scope.new_input();
+    ///         stream.inspect(|x| println!("hello {:?}", x));
+    ///         input
+    ///     });
+    ///
+    ///     // introduce input, advance computation
+    ///     for round in 0..10 {
+    ///         input.send(round);
+    ///         input.advance_to(round + 1);
+    ///         root.step();
+    ///     }
+    /// });
+    /// ```
+    fn new_input<D:Data>(&self) -> (Handle<T, D>, Stream<Child<Root<A>, T>, D>);
 }
 
 impl<A: Allocate, T: Timestamp+Ord> Input<A, T> for Child<Root<A>, T> {
-    fn new_input<D:Data>(&self) -> (InputHelper<T, D>, Stream<Child<Root<A>, T>, D>) {
+    fn new_input<D:Data>(&self) -> (Handle<T, D>, Stream<Child<Root<A>, T>, D>) {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
-        let helper = InputHelper::new(Counter::new(output, produced.clone()));
+        let helper = Handle::new(Counter::new(output, produced.clone()));
         let copies = self.peers();
 
         let index = self.add_operator(Operator {
@@ -82,8 +118,8 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
 }
 
 
-/// Manages the movement of data into the dataflow from the outside world.
-pub struct InputHelper<T: Timestamp+Ord, D: Data> {
+/// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
+pub struct Handle<T: Timestamp+Ord, D: Data> {
     frontier: Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
     progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
     pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>,
@@ -96,9 +132,9 @@ pub struct InputHelper<T: Timestamp+Ord, D: Data> {
 // if now_at == None the pusher has not been opened, else it is open with the specific time.
 
 
-impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
-    fn new(pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>) -> InputHelper<T, D> {
-        InputHelper {
+impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
+    fn new(pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>) -> Handle<T, D> {
+        Handle {
             frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
             pusher: pusher,
@@ -120,6 +156,7 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
     }
 
     #[inline(always)]
+    /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     pub fn send(&mut self, data: D) {
         // assert!(self.buffer.capacity() == Content::<D>::default_length());
         self.buffer.push(data);
@@ -128,6 +165,10 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
         }
     }
 
+    /// Advances the current epoch to `next`.
+    ///
+    /// This method allows timely dataflow to issue progress notifications as it can now determine
+    /// that this input can no longer produce data at earlier timestamps.
     pub fn advance_to(&mut self, next: T) {
         assert!(next > self.now_at.inner);
         self.close_epoch();
@@ -135,14 +176,19 @@ impl<T:Timestamp+Ord, D: Data> InputHelper<T, D> {
         self.frontier.borrow_mut().update_weight(&self.now_at,  1, &mut (*self.progress.borrow_mut()));
     }
 
+    /// Closes the input.
+    ///
+    /// This method allows timely dataflow to issue all progress notifications blocked by this input
+    /// and to begin to shut down operators, as this input can no longer produce data.
     pub fn close(self) { }
 
+    /// Reports the current epoch.
     pub fn epoch(&mut self) -> &T {
         &self.now_at.inner
     }
 }
 
-impl<T:Timestamp+Ord, D: Data> Drop for InputHelper<T, D> {
+impl<T:Timestamp+Ord, D: Data> Drop for Handle<T, D> {
     fn drop(&mut self) {
         self.close_epoch();
     }

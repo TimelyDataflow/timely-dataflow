@@ -17,7 +17,7 @@ pub use self::concat::{Concat, Concatenate};
 pub use self::partition::Partition;
 pub use self::map::Map;
 pub use self::inspect::Inspect;
-pub use self::filter::*;
+pub use self::filter::Filter;
 pub use self::binary::Binary;
 pub use self::delay::Delay;
 pub use self::exchange::Exchange as ExchangeExtension;

@@ -26,6 +26,8 @@ pub trait Scope : Allocate+Clone {
 
     /// A useful name describing the scope.
     fn name(&self) -> String;
+
+    /// A sequence of scope identifiers describing the path from the `Root` to this scope.
     fn addr(&self) -> Vec<usize>;
 
     /// Connects a source of data with a target of the data. This only links the two for
@@ -39,6 +41,7 @@ pub trait Scope : Allocate+Clone {
     /// commonly useful to end users.
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T>;
 
+    /// Allocates a new locally unique identifier.
     fn new_identifier(&mut self) -> usize;
 
     /// Creates a `Subgraph` from a closure acting on a `Child` scope, and returning
@@ -48,11 +51,11 @@ pub trait Scope : Allocate+Clone {
     /// and the input handle, or ingressing data streams and returning the egresses stream.
     ///
     /// # Examples
-    /// ```ignore
-    /// use timely::dataflow::*;
-    /// use timely::dataflow::operators::*;
+    /// ```
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Enter, Leave};
     ///
-    /// timely::execute(std::env::args(), |root| {
+    /// timely::execute_from_args(std::env::args(), |root| {
     ///     // must specify types as nothing else drives inference.
     ///     let input = root.scoped::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<String>();

@@ -32,12 +32,17 @@ pub trait Unary<G: Scope, D1: Data> {
     /// write to the output stream.
     ///
     /// #Examples
-    /// ```ignore
-    /// use communication::pact::Pipeline;
-    /// source.unary_stream(Pipeline, "example", |input, output| {
-    ///     while let Some((time, data)) = input.next() {
-    ///         output.session(time).give_content(data);
-    ///     }
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///                while let Some((time, data)) = input.next() {
+    ///                    output.session(time).give_content(data);
+    ///                }
+    ///            });
     /// });
     /// ```
     fn unary_stream<D2, L, P> (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>
@@ -49,19 +54,25 @@ pub trait Unary<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream,
     /// write to the output stream, and request and receive notifications. The method also requires
-    /// a vector of initial notifications the operator requires (commonly none).
+    /// a vector of the initial notifications the operator requires (commonly none).
     ///
     /// #Examples
-    /// ```ignore
-    /// use communication::pact::Pipeline;
-    /// source.unary_notify(Pipeline, "example", vec![], |input, output, notificator| {
-    ///     while let Some((time, data)) = input.next() {
-    ///         output.session(time).give_content(data);
-    ///     }
-    ///     while let Some((time, count)) = notificator.next() {
-    ///         println!("done with time: {:?}", time);
-    ///     }
-    /// }
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
+    ///                while let Some((time, data)) = input.next() {
+    ///                    notificator.notify_at(&time);
+    ///                    output.session(time).give_content(data);
+    ///                }
+    ///                while let Some((time, count)) = notificator.next() {
+    ///                    println!("done with time: {:?}", time);
+    ///                }
+    ///            });
+    /// });
     /// ```
     fn unary_notify<D2, L, P> (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>
     where

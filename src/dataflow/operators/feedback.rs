@@ -1,3 +1,5 @@
+//! Create cycles in a timely dataflow graph.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
@@ -19,13 +21,32 @@ use dataflow::channels::pushers::{Counter, Tee};
 use dataflow::{Stream, Scope};
 use dataflow::scopes::Child;
 
+/// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait LoopVariable<G: Scope, T: Timestamp> {
-    fn loop_variable<D: Data>(&self, limit: T, summary: T::Summary) -> (Helper<G::Timestamp, T, D>, Stream<Child<G, T>, D>);
+    /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
+    ///
+    /// The resulting `Stream` will have its data defined by a future call to `collect_loop` with
+    /// its `Handle` passed as an argument. Data will be passed through the stream will have their
+    /// timestampsas advanced by `summary`, and will be dropped if the result exceeds `limit`.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     // circulate 0..10 for 100 iterations.
+    ///     let (handle, cycle) = scope.loop_variable(100, 1);
+    ///     (0..10).to_stream(scope)
+    ///            .concat(&cycle)
+    ///            .inspect(|x| println!("seen: {:?}", x))
+    ///            .connect_loop(handle);
+    /// });
+    /// ```
+    fn loop_variable<D: Data>(&self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<G, T>, D>);
 }
 
 impl<G: Scope, T: Timestamp> LoopVariable<G, T> for Child<G, T> {
-    fn loop_variable<D: Data>(&self, limit: T, summary: T::Summary) -> (Helper<G::Timestamp, T, D>, Stream<Child<G, T>, D>) {
-
+    fn loop_variable<D: Data>(&self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
         let produced: Rc<RefCell<CountMap<Product<G::Timestamp, T>>>> = Default::default();
@@ -42,51 +63,14 @@ impl<G: Scope, T: Timestamp> LoopVariable<G, T> for Child<G, T> {
             summary:            Local(summary),
         });
 
-        let helper = Helper {
+        let helper = Handle {
             index:  index,
             target: feedback_input,
-            // phant: ::std::marker::PhantomData,
         };
 
         (helper, Stream::new(ChildOutput(index, 0), registrar, self.clone()))
-
-
     }
 }
-
-// pub trait LoopVariable<G: Scope> {
-//     fn loop_variable<D:Data>(&self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
-//         -> (Helper<G::Timestamp, D, Counter<G::Timestamp, D, Observer<G::Timestamp, D>>>, Stream<G, D>);
-// }
-//
-// impl<G: Scope> LoopVariable<G> for G {
-//     fn loop_variable<D:Data>(&self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary)
-//         -> (Helper<G::Timestamp, D, Counter<G::Timestamp, D, Observer<G::Timestamp, D>>>, Stream<G, D>) {
-//
-//         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
-//         let produced: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
-//         let consumed: Rc<RefCell<CountMap<G::Timestamp>>> = Default::default();
-//
-//         let feedback_output = Counter::new(targets, produced.clone());
-//         let feedback_input =  Counter::new(Observer {
-//             limit: limit, summary: summary, targets: feedback_output
-//         }, consumed.clone());
-//
-//         let index = self.add_operator(Operator {
-//             consumed_messages:  consumed.clone(),
-//             produced_messages:  produced.clone(),
-//             summary:            summary,
-//         });
-//
-//         let helper = Helper {
-//             index:  index,
-//             target: feedback_input,
-//             phant: ::std::marker::PhantomData,
-//         };
-//
-//         (helper, Stream::new(ChildOutput(index, 0), registrar, self.clone()))
-//     }
-// }
 
 // implementation of the feedback vertex, essentially, as an observer
 pub struct Observer<TOuter: Timestamp, TInner: Timestamp, D:Data> {
@@ -108,28 +92,40 @@ impl<TOuter: Timestamp, TInner: Timestamp, D: Data> Push<(Product<TOuter, TInner
     }
 }
 
-
+/// Connect a `Stream` to the input of a loop variable.
 pub trait ConnectLoop<G: Scope, T: Timestamp, D: Data> {
-    fn connect_loop(&self, Helper<G::Timestamp, T, D>);
+    /// Connect a `Stream` to be the input of a loop variable.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     // circulate 0..10 for 100 iterations.
+    ///     let (handle, cycle) = scope.loop_variable(100, 1);
+    ///     (0..10).to_stream(scope)
+    ///            .concat(&cycle)
+    ///            .inspect(|x| println!("seen: {:?}", x))
+    ///            .connect_loop(handle);
+    /// });
+    /// ```
+    fn connect_loop(&self, Handle<G::Timestamp, T, D>);
 }
 
 impl<G: Scope, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<G, T>, D> {
-    fn connect_loop(&self, helper: Helper<G::Timestamp, T, D>) {
+    fn connect_loop(&self, helper: Handle<G::Timestamp, T, D>) {
         self.connect_to(ChildInput(helper.index, 0), helper.target, usize::max_value());
     }
 }
 
-// , Counter<G::Timestamp, D, Observer<G::Timestamp, D>>
-
-// a handy widget for connecting feedback edges
-pub struct Helper<TOuter: Timestamp, TInner: Timestamp, D: Data> {
+/// A handle used to bind the source of a loop variable.
+pub struct Handle<TOuter: Timestamp, TInner: Timestamp, D: Data> {
     index:  usize,
     target: Counter<Product<TOuter, TInner>, D, Observer<TOuter, TInner, D>>
-    // phant: ::std::marker::PhantomData<(T, D)>,
 }
 
 // the scope that the progress tracker interacts with
-pub struct Operator<T:Timestamp> {
+struct Operator<T:Timestamp> {
     consumed_messages:  Rc<RefCell<CountMap<T>>>,
     produced_messages:  Rc<RefCell<CountMap<T>>>,
     summary:            T::Summary,

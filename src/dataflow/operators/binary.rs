@@ -1,3 +1,5 @@
+//! Methods to construct generic streaming and blocking binary operators.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
@@ -9,10 +11,7 @@ use progress::count_map::CountMap;
 use progress::notificator::Notificator;
 use progress::{Timestamp, Antichain, Operate};
 
-// use communication::{Data, Pullable};
-// use fabric::{Pull, Push};
 use ::Data;
-// use communication::message::Message;
 use dataflow::channels::pushers::counter::Counter as PushCounter;
 use dataflow::channels::pushers::tee::Tee;
 use dataflow::channels::pullers::counter::Counter as PullCounter;
@@ -23,7 +22,31 @@ use dataflow::{Stream, Scope};
 
 use drain::DrainExt;
 
+/// Methods to construct generic streaming and blocking binary operators.
 pub trait Binary<G: Scope, D1: Data> {
+    /// Creates a new dataflow operator that partitions each of its input stream by a parallelization
+    /// strategy `pact`, and repeatedly invokes `logic` which can read from the input streams and
+    /// write to the output stream.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Binary};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     let stream1 = (0..10).to_stream(scope);
+    ///     let stream2 = (0..10).to_stream(scope);
+    ///
+    ///     stream1.binary_stream(&stream2, Pipeline, Pipeline, "example", |input1, input2, output| {
+    ///         while let Some((time, data)) = input1.next() {
+    ///             output.session(time).give_content(data);
+    ///         }
+    ///         while let Some((time, data)) = input2.next() {
+    ///             output.session(time).give_content(data);
+    ///         }
+    ///     });
+    /// });
+    /// ```
     fn binary_stream<D2: Data,
               D3: Data,
               L: FnMut(&mut PullCounter<G::Timestamp, D1>,
@@ -32,6 +55,36 @@ pub trait Binary<G: Scope, D1: Data> {
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
             (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, logic: L) -> Stream<G, D3>;
+
+    /// Creates a new dataflow operator that partitions its input stream by a parallelization
+    /// strategy `pact`, and repeatedly invokes `logic` which can read from the input streams,
+    /// write to the output stream, and request and receive notifications. The method also requires
+    /// a vector of the initial notifications the operator requires (commonly none).
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Binary};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     let stream1 = (0..10).to_stream(scope);
+    ///     let stream2 = (0..10).to_stream(scope);
+    ///
+    ///     stream1.binary_notify(&stream2, Pipeline, Pipeline, "example", Vec::new(), |input1, input2, output, notificator| {
+    ///         while let Some((time, data)) = input1.next() {
+    ///             notificator.notify_at(&time);
+    ///             output.session(time).give_content(data);
+    ///         }
+    ///         while let Some((time, data)) = input2.next() {
+    ///             notificator.notify_at(&time);
+    ///             output.session(time).give_content(data);
+    ///         }
+    ///         while let Some((time, count)) = notificator.next() {
+    ///             println!("done with time: {:?}", time);
+    ///         }
+    ///     });
+    /// });
+    /// ```
     fn binary_notify<D2: Data,
               D3: Data,
               L: FnMut(&mut PullCounter<G::Timestamp, D1>,

@@ -1,3 +1,5 @@
+//! Conversion to the `Stream` type from iterators.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
@@ -17,6 +19,17 @@ use dataflow::channels::pushers::buffer::Buffer;
 use dataflow::{Stream, Scope};
 
 pub trait ToStream<D: Data> {
+    /// Converts an iterator to a timely `Stream`, with records at the default time.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .inspect(|x| println!("seen: {:?}", x));
+    /// });
+    /// ```
     fn to_stream<S: Scope>(self, scope: &S) -> Stream<S, D>;
 }
 
