@@ -1,3 +1,6 @@
+//! Merges the contents of multiple streams.
+
+
 use Data;
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
@@ -12,24 +15,51 @@ use dataflow::operators::binary::Binary;
 // NOTE : Observers don't exist any more, so maybe it could become a horrible tangle again! :D
 // NOTE : Not clear that the tangle buys much, as buffers are simply passed along without copying.
 
+/// Merge the contents of two streams.
 pub trait Concat<G: Scope, D: Data> {
+    /// Merge the contents of two streams.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Concat, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///
+    ///     let stream = (0..10).to_stream(scope);
+    ///     stream.concat(&stream)
+    ///           .inspect(|x| println!("seen: {:?}", x));
+    /// });
+    /// ```
     fn concat(&self, &Stream<G, D>) -> Stream<G, D>;
 }
 
 impl<G: Scope, D: Data> Concat<G, D> for Stream<G, D> {
     fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
         self.binary_stream(other, Pipeline, Pipeline, "Concat", |input1, input2, output| {
-            while let Some((time, data)) = input1.next() {
-                output.session(time).give_content(data);
-            }
-            while let Some((time, data)) = input2.next() {
-                output.session(time).give_content(data);
-            }
+            input1.for_each(|time, data| { output.session(time).give_content(data); });
+            input2.for_each(|time, data| { output.session(time).give_content(data); });
         })
     }
 }
 
+/// Merge the contents of multiple streams.
 pub trait Concatenate<G: Scope, D: Data> {
+    /// Merge the contents of multiple streams.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Concatenate, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///
+    ///     let streams = vec![(0..10).to_stream(scope),
+    ///                        (0..10).to_stream(scope),
+    ///                        (0..10).to_stream(scope)];
+    ///
+    ///     scope.concatenate(streams)
+    ///          .inspect(|x| println!("seen: {:?}", x));
+    /// });
+    /// ```
     fn concatenate(&self, Vec<Stream<G, D>>) -> Stream<G, D>;
 }
 
