@@ -85,7 +85,7 @@ pub struct EventLink<T, D> {
 // TODO : The whole list will be collected when everyone is done, but perhaps a linked list would
 // TODO : be better / have better properties?
 
-/// A handle to the captured data, shared with the capture operator itself.
+/// A handle to the captured data, shared with and populated by the capture operator.
 pub struct Handle<T: Timestamp, D: Data> {
     /// A linked list of events.
     pub events: Rc<RefCell<EventLink<T, D>>>,
@@ -215,7 +215,7 @@ mod tests {
                 (0..10).to_stream(builder)
                        .capture()
             );
-            
+
             computation.scoped(|builder| {
                 handle.replay(builder)
                       .inspect(|x| println!("replayed: {:?}", x));

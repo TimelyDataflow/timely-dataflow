@@ -20,10 +20,6 @@ impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
                 for datum in data.iter() { func(datum); }
                 output.session(time).give_content(data);
             });
-            // while let Some((time, data)) = input.next() {
-            //     for datum in data.iter() { func(datum); }
-            //     output.session(time).give_content(data);
-            // }
         })
     }
 
