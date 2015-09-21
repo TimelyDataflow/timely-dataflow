@@ -78,13 +78,14 @@ fn main() {
                             if index == 0 {
                                 println!("{}:\tstarting sort", time::precise_time_s() - start);
                             }
-                            
+
                             // construct the graph
                             offsets.push(0);
                             let mut prev_node = 0;
                             let sorted = sorter.finish(&|x| x.0);
                             for buffer in &sorted {
                                 for &(node, edge) in buffer {
+                                    let node = node / peers as u32;
                                     while prev_node < node {
                                         prev_node += 1;
                                         offsets.push(targets.len())
