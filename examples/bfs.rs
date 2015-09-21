@@ -75,8 +75,10 @@ fn main() {
                         // maybe process the graph
                         if time.inner == 0 {
 
-                            println!("{}:\tstarting sort", time::precise_time_s() - start);
-
+                            if index == 0 {
+                                println!("{}:\tstarting sort", time::precise_time_s() - start);
+                            }
+                            
                             // construct the graph
                             offsets.push(0);
                             let mut prev_node = 0;
@@ -94,8 +96,9 @@ fn main() {
 
                         }
 
-                        println!("{}:\tworker: {}, todo.len(): {}", time::precise_time_s() - start, index, recents.len());
-
+                        if index == 0 {
+                            println!("{}:\tworker: {}, todo.len(): {}", time::precise_time_s() - start, index, recents.len());
+                        }
                         let mut session = output.session(&time);
                         while let Some(next) = recents.pop() {
                             let lower = offsets[(next as usize) / peers];
