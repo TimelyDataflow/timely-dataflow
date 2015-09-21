@@ -17,7 +17,6 @@ license = "MIT"
 # path="./communication"
 
 [features]
-
 default=[]
 logging=[]
 
@@ -31,5 +30,5 @@ time="*"
 getopts="*"
 rand="*"
 
-[dependencies.radix_sort]
-path="../radix-sort"
+[dev-dependencies.radix_sort]
+git="https://github.com/frankmcsherry/radix-sort"

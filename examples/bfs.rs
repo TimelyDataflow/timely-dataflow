@@ -42,6 +42,7 @@ fn main() {
             // define a loop variable, for the (node, root) pairs.
             let (handle, stream) = scope.loop_variable(usize::max_value(), 1);
 
+            // use the stream of edges
             graph.binary_notify(
                 &stream,
                 Exchange::new(|x: &(u32, u32)| x.0 as u64),
