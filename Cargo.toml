@@ -25,5 +25,11 @@ logging=[]
 abomonation="*"
 timely_communication="*"
 byteorder="*"
-getopts="*"
 time="*"
+
+[dev-dependencies]
+getopts="*"
+rand="*"
+
+[dependencies.radix_sort]
+path="../radix-sort"

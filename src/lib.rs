@@ -59,7 +59,6 @@
 #[macro_use]
 extern crate abomonation;
 extern crate byteorder;
-extern crate getopts;
 extern crate timely_communication;
 extern crate time;
 
