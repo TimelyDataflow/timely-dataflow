@@ -90,7 +90,6 @@ impl<D> Content<D> {
         }
     }
 
-
     /// Constructs a `Message` from typed data, replacing its argument with `Vec::new()`.
     #[inline]
     pub fn from_typed(typed: &mut Vec<D>) -> Content<D> {
@@ -132,6 +131,13 @@ impl<D> Content<D> {
         if buffer.capacity() != Content::<D>::default_length() {
             *buffer = Vec::with_capacity(Content::<D>::default_length());
         }
+    }
+}
+
+impl<D: Clone+Abomonation> Content<D> {
+    #[inline]
+    pub fn replace_with(&mut self, other: Vec<D>) -> Vec<D> {
+        ::std::mem::replace(self.deref_mut(), other)
     }
 }
 
