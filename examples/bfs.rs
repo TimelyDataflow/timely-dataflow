@@ -3,12 +3,16 @@ extern crate rand;
 extern crate timely;
 extern crate radix_sort;
 
+use std::collections::HashMap;
+
 use rand::{Rng, SeedableRng, StdRng};
 use radix_sort::RadixSorter;
 
 use timely::dataflow::*;
 use timely::dataflow::operators::*;
 use timely::dataflow::channels::pact::Exchange;
+
+use timely::drain::DrainExt;
 
 fn main() {
 
@@ -25,10 +29,16 @@ fn main() {
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         let mut sorter = RadixSorter::new();
 
+        // pending edges and node updates.
+        let mut edge_list = Vec::new();
+        let mut node_lists = HashMap::new();
+
+        // graph data; offsets into targets.
         let mut offsets = Vec::new();
         let mut targets = Vec::new();
-        let mut recents = Vec::new();
-        let mut parents = vec![u32::max_value(); nodes / peers];
+
+        // holds the bfs parent of each node, or u32::max_value() if unset.
+        let mut done = vec![u32::max_value(); 1 + (nodes / peers)];
 
         let start = time::precise_time_s();
 
@@ -54,70 +64,81 @@ fn main() {
                     // receive edges, start to sort them
                     input1.for_each(|time, data| {
                         notify.notify_at(time);
-                        for &edge in data.iter() { sorter.push(edge, &|x| x.0); }
+                        edge_list.push(data.replace_with(Vec::new()));
                     });
 
                     // receive (node, root) pairs, note any new ones.
-                    input2.for_each(|time, data| {
-                        notify.notify_at(time);
-                        for &(node, root) in data.iter() {
-                            // println!("received: {:?}, parents[{}] = {}", (node, root), node, parents[node as usize]);
-                            if parents[(node as usize) / peers] == u32::max_value() {
-                                // println!("keeping: {:?}", node);
-                                parents[(node as usize) / peers] = root;
-                                recents.push(node);
-                            }
-                        }
+                    input2.for_each(|&time, data| {
+                        node_lists.entry(time)
+                                  .or_insert_with(|| {
+                                      notify.notify_at(&time);
+                                      Vec::new()
+                                  })
+                                  .push(data.replace_with(Vec::new()));
                     });
 
-                    notify.for_each(|time, _count| {
+                    notify.for_each(|time, _num| {
 
                         // maybe process the graph
                         if time.inner == 0 {
 
-                            if index == 0 {
-                                println!("{}:\tstarting sort", time::precise_time_s() - start);
-                            }
+                            // print some diagnostic timing information
+                            if index == 0 { println!("{}:\tsorting", time::precise_time_s() - start); }
+
+                            // sort the edges
+                            sorter.sort(&mut edge_list, &|x| x.0);
+
+                            let mut count = 0;
+                            for buffer in &edge_list { count += buffer.len(); }
+
+                            // allocate sufficient memory, to avoid resizing.
+                            offsets = Vec::with_capacity(1 + (nodes / peers));
+                            targets = Vec::with_capacity(count);
 
                             // construct the graph
                             offsets.push(0);
                             let mut prev_node = 0;
-                            let sorted = sorter.finish(&|x| x.0);
-                            for buffer in &sorted {
-                                for &(node, edge) in buffer {
-                                    let node = node / peers as u32;
-                                    while prev_node < node {
+                            for buffer in edge_list.drain_temp() {
+                                for (node, edge) in buffer {
+                                    let temp = node / peers as u32;
+                                    while prev_node < temp {
                                         prev_node += 1;
-                                        offsets.push(targets.len())
+                                        offsets.push(targets.len() as u32)
                                     }
                                     targets.push(edge);
                                 }
                             }
-                            offsets.push(targets.len())
-
+                            offsets.push(targets.len() as u32);
                         }
 
-                        if index == 0 {
-                            println!("{}:\tworker: {}, todo.len(): {}", time::precise_time_s() - start, index, recents.len());
-                        }
-                        let mut session = output.session(&time);
-                        while let Some(next) = recents.pop() {
-                            let lower = offsets[(next as usize) / peers];
-                            let upper = offsets[((next as usize) / peers) + 1];
-                            // println!("degree[{}]: {}", next, upper-lower);
-                            for &target in &targets[lower..upper] {
-                                session.give((target, next));
+                        // print some diagnostic timing information
+                        if index == 0 { println!("{}:\ttime: {:?}", time::precise_time_s() - start, time); }
+
+                        if let Some(mut todo) = node_lists.remove(&time) {
+                            let mut session = output.session(&time);
+
+                            // we could sort these, or not. try it out!
+                            // sorter.sort(&mut todo, &|x| x.0);
+
+                            for buffer in todo.drain_temp() {
+                                for (node, prev) in buffer {
+                                    let temp = (node as usize) / peers;
+                                    if done[temp] == u32::max_value() {
+                                        done[temp] = prev;
+                                        let lower = offsets[temp] as usize;
+                                        let upper = offsets[temp + 1] as usize;
+                                        for &target in &targets[lower..upper] {
+                                            session.give((target, node));
+                                        }
+                                    }
+                                }
                             }
                         }
-
                     });
                 }
             )
             .concat(&(0..1).map(|x| (x,x)).to_stream(scope))
             .connect_loop(handle);
-
         });
-
     });
-
 }
