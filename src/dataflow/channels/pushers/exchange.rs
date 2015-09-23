@@ -28,6 +28,7 @@ impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&D)->u64>  Exchange<T, D, P, H
             current: None,
         }
     }
+    #[inline]
     fn flush(&mut self, index: usize) {
         if self.buffers[index].len() > 0 {
             if let Some(ref time) = self.current {
@@ -38,6 +39,7 @@ impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&D)->u64>  Exchange<T, D, P, H
 }
 
 impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&D)->u64> Push<(T, Content<D>)> for Exchange<T, D, P, H> {
+    #[inline]
     fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
