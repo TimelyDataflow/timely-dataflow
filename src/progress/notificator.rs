@@ -43,6 +43,7 @@ impl<T: Timestamp> Notificator<T> {
     }
 
     /// Requests a notification at `time`.
+    #[inline]
     pub fn notify_at(&mut self, time: &T) {
         self.changes.update(time, 1);
         self.pending.update(time, 1);
@@ -57,6 +58,7 @@ impl<T: Timestamp> Notificator<T> {
             internal.update(&time, delta);
         }
     }
+    #[inline]
     pub fn for_each<F: FnMut(T, i64)>(&mut self, mut logic: F) {
         while let Some((time, count)) = self.next() {
             ::logging::log(&::logging::GUARDED_PROGRESS, true);

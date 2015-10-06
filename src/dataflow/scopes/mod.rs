@@ -66,6 +66,7 @@ pub trait Scope : Allocate+Clone {
     ///     });
     /// });
     /// ```
+    #[inline]
     fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
         let subscope = Rc::new(RefCell::new(self.new_subscope()));
         let mut builder = Child {

@@ -97,6 +97,7 @@ pub trait Binary<G: Scope, D1: Data> {
 }
 
 impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
+    #[inline]
     fn binary_stream<
              D2: Data,
              D3: Data,
@@ -124,6 +125,7 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
         Stream::new(ChildOutput(index, 0), registrar, scope)
     }
 
+    #[inline]
     fn binary_notify<
              D2: Data,
              D3: Data,
@@ -179,6 +181,7 @@ impl<T: Timestamp,
               &mut ObserverBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
               &mut Notificator<T>)+'static>
 Operator<T, D1, D2, D3, L> {
+    #[inline(always)]
     pub fn new(receiver1: PullCounter<T, D1>,
                receiver2: PullCounter<T, D2>,
                targets: Tee<T, D3>,

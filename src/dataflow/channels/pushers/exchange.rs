@@ -61,7 +61,6 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                     let mask = (self.pushers.len() - 1) as u64;
                     for datum in data.drain_temp() {
                         let index = (((self.hash_func)(&datum)) & mask) as usize;
-                        // assert!(self.buffers[index].capacity() == Message::<O::Data>::default_length());
                         self.buffers[index].push(datum);
                         if self.buffers[index].len() == self.buffers[index].capacity() {
                             self.flush(index);
@@ -72,7 +71,6 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                 else {
                     for datum in data.drain_temp() {
                         let index = (((self.hash_func)(&datum)) % self.pushers.len() as u64) as usize;
-                        // assert!(self.buffers[index].capacity() == Message::<O::Data>::default_length());
                         self.buffers[index].push(datum);
                         if self.buffers[index].len() == self.buffers[index].capacity() {
                             self.flush(index);
