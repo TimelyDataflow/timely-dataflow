@@ -11,9 +11,7 @@ use progress::count_map::CountMap;
 pub struct PointstampCounter<T:Timestamp> {
     pub source_counts:  Vec<Vec<CountMap<T>>>,    // timestamp updates indexed by (scope, output)
     pub target_counts:  Vec<Vec<CountMap<T>>>,    // timestamp updates indexed by (scope, input)
-    pub input_counts:   Vec<CountMap<T>>,         // timestamp updates indexed by input_port
     pub target_pushed:  Vec<Vec<CountMap<T>>>,    // pushed updates indexed by (scope, input)
-    pub output_pushed:  Vec<CountMap<T>>,         // pushed updates indexed by output_port
 }
 
 impl<T:Timestamp> PointstampCounter<T> {

@@ -28,8 +28,13 @@ impl<T:Timestamp+Send> Progcaster<T> {
     // TODO : binary. Investigate fabric::Wrapper for this purpose.
     /// Sends and receives progress updates, broadcasting the contents of `messages` and `internal`,
     /// and updating each with updates from other workers.
-    pub fn send_and_recv(&mut self, messages: &mut CountMap<(usize, usize, T)>, internal: &mut CountMap<(usize, usize, T)>) -> () {
+    pub fn send_and_recv(
+        &mut self,
+        messages: &mut CountMap<(usize, usize, T)>,
+        internal: &mut CountMap<(usize, usize, T)>)
+    {
 
+        // // we should not be sending zero deltas.
         // assert!(messages.elements().iter().all(|x| x.1 != 0));
         // assert!(internal.elements().iter().all(|x| x.1 != 0));
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...

@@ -20,6 +20,7 @@ pub struct ChildWrapper<T: Timestamp> {
 
     pub edges:                  Vec<Vec<Target>>,
 
+    pub local:                  bool,                       // cached information about whether the operator is local
     pub notify:                 bool,
     pub summary:                Vec<Vec<Antichain<T::Summary>>>,     // internal path summaries (input x output)
 
@@ -42,6 +43,7 @@ impl<T: Timestamp> ChildWrapper<T> {
 
         ::logging::log(&::logging::OPERATES, ::logging::OperatesEvent { addr: path.clone(), name: scope.name().to_owned() });
 
+        let local = scope.local();
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
@@ -56,6 +58,7 @@ impl<T: Timestamp> ChildWrapper<T> {
             addr:       path,
             scope:      Some(scope),
             index:      index,
+            local:      local,
             inputs:     inputs,
             outputs:    outputs,
             edges:      vec![Default::default(); outputs],
@@ -109,10 +112,8 @@ impl<T: Timestamp> ChildWrapper<T> {
         }
     }
 
-    pub fn pull_pointstamps<A: FnMut(usize,T,i64)->()>(&mut self,
-                                                  pointstamp_messages: &mut CountMap<(usize, usize, T)>,
-                                                  pointstamp_internal: &mut CountMap<(usize, usize, T)>,
-                                                  mut output_action:   A) -> bool {
+    pub fn pull_pointstamps(&mut self, pointstamp_messages: &mut CountMap<(usize, usize, T)>,
+                                       pointstamp_internal: &mut CountMap<(usize, usize, T)>) -> bool {
 
         let active = {
 
@@ -144,11 +145,8 @@ impl<T: Timestamp> ChildWrapper<T> {
         // for each output: produced messages and internal progress
         for output in (0..self.outputs) {
             while let Some((time, delta)) = self.produced_messages[output].pop() {
-                for &target in self.edges[output].iter() {
-                    match target {
-                        ChildInput(tgt, tgt_in)   => { pointstamp_messages.update(&(tgt, tgt_in, time), delta); },
-                        GraphOutput(graph_output) => { output_action(graph_output, time, delta); },
-                    }
+                for &(target, t_port) in self.edges[output].iter() {
+                    pointstamp_messages.update((target, t_port, time), delta);
                 }
             }
 
