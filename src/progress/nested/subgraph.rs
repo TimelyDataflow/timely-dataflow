@@ -159,15 +159,23 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // now re-compute all summaries with `self.children[0].target_source_summaries` set.
         self.compute_summaries();
 
+        // filter out the external -> external links, as we only want to summarize contained scopes
+        for summaries in &mut self.children[0].target_target_summaries {
+            summaries.retain(|&(t, _)| t.index > 0);
+        }
+        for summaries in &mut self.children[0].source_target_summaries {
+            summaries.retain(|&(t, _)| t.index > 0);
+        }
+
         // initialize pointstamps for capabilities, from `frontier` and from child capabitilies.
         // change frontier to local times; introduce as pointstamps
         for input in 0..self.inputs {
             while let Some((time, val)) = frontier[input].pop() {
-                self.pointstamps.update_source(
-                    Source { index: 0, port: input },
-                    &Product::new(time, Default::default()),
-                    val
-                );
+                // let pointstamps = &mut self.pointstamps;
+                self.children[0].internal[input].update_and(&Product::new(time, Default::default()), val, |_t, _v| {
+                    // // going to be taken care of in the next block down
+                    // pointstamps.update_source(Source { index: 0, port: input }, t, v)
+                });
             }
         }
 
@@ -222,6 +230,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
     // changes in the message possibilities for each of the subgraph's inputs.
     fn push_external_progress(&mut self, external: &mut [CountMap<TOuter>]) {
+
+        // println!("pep: {:?}", external);
+
         // I believe we can simply move these into our pointstamp staging area.
         // Nothing will happen until we call `step`, but that is to be expected.
         for (port, changes) in external.iter_mut().enumerate() {
@@ -270,7 +281,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for input in (0..self.inputs) {
             let mut borrowed = self.input_messages[input].borrow_mut();
             while let Some((time, delta)) = borrowed.pop() {
-                self.local_pointstamp_internal.update(&(0, input, time), -delta);
+                self.local_pointstamp_internal.update(&(0, input, time), delta);
                 for target in self.children[0].edges[input].iter() {
                     self.local_pointstamp_messages.update(&(target.index, target.port, time), delta);
                 }
@@ -298,6 +309,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
                     &mut self.final_pointstamp_internal,
                 )
             };
+
+            // if subactive { println!("child {} demands activity!", child.name); }
 
             active = active || subactive;
         }
@@ -331,7 +344,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // fold exchanged messages into the view of global progress.
         self.local_pointstamp_messages.drain_into(&mut self.final_pointstamp_messages);
         while let Some(((index, port, timestamp), delta)) = self.local_pointstamp_internal.pop() {
-            if index == 0 { consumed[port].update(&timestamp.outer, delta); }
+            if index == 0 {
+                // println!("consumed: {} records", delta);
+                consumed[port].update(&timestamp.outer, delta);
+            }
             else { self.final_pointstamp_internal.update(&(index, port, timestamp), delta); }
         }
 
@@ -360,6 +376,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // update input capabilities for actual children.
         for child in self.children.iter_mut().skip(1) {
             let index = child.index;
+            // println!("pushing pointstamps for child: {}", child.name);
             child.push_pointstamps(&self.pointstamps.pushed[index][..]);
         }
 
@@ -376,7 +393,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // if there are outstanding messages or capabilities, we must insist on continuing to run
         for child in self.children.iter() {
+            // if child.messages.iter().any(|x| x.elements().len() > 0) { println!("child {} has outstanding messages", child.name); }
             active = active || child.messages.iter().any(|x| x.elements().len() > 0);
+            // if child.internal.iter().any(|x| x.elements().len() > 0) { println!("child {} has outstanding capabilities", child.name); }
             active = active || child.internal.iter().any(|x| x.elements().len() > 0);
         }
 
@@ -389,14 +408,17 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     // pushes pointstamps to scopes using self.*_summaries; clears pre-push counts.
     fn push_pointstamps(&mut self) {
 
+        // println!("");
         // push pointstamps from targets to targets.
         for index in 0..self.pointstamps.target.len() {
             for input in (0..self.pointstamps.target[index].len()) {
                 while let Some((time, value)) = self.pointstamps.target[index][input].pop() {
-                    println!("pushing pointstamp (target): ({}, {}): ({:?}, {})", index, input, time, value);
+                    // println!("pushing pointstamp (target): ({}, {}): ({:?}, {})  {}", index, input, time, value, self.children[index].name);
                     for &(target, ref antichain) in self.children[index].target_target_summaries[input].iter() {
                         for summary in antichain.elements().iter() {
-                            println!("  reached (target): ({}, {}): ({:?}, {})", target.index, target.port, summary.results_in(&time), value);
+                            // println!("  reached (target): ({}, {}): ({:?}, {})  {}",
+                            //     target.index, target.port, summary.results_in(&time), value, self.children[target.index].name
+                            // );
                             self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
                         }
                     }
@@ -408,16 +430,20 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for index in 0..self.pointstamps.source.len() {
             for output in (0..self.pointstamps.source[index].len()) {
                 while let Some((time, value)) = self.pointstamps.source[index][output].pop() {
-                    println!("pushing pointstamp (source): ({}, {}): ({:?}, {})", index, output, time, value);
+                    // println!("pushing pointstamp (source): ({}, {}): ({:?}, {})  {}", index, output, time, value, self.children[index].name);
                     for &(target, ref antichain) in self.children[index].source_target_summaries[output].iter() {
                         for summary in antichain.elements().iter() {
-                            println!("  reached (target): ({}, {}): ({:?}, {})", target.index, target.port, summary.results_in(&time), value);
+                            // println!("  reached (target): ({}, {}): ({:?}, {})  {}",
+                            //     target.index, target.port, summary.results_in(&time), value, self.children[target.index].name
+                            // );
                             self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
                         }
                     }
                 }
             }
         }
+
+        // println!("");
     }
 
     // sets source_target_summaries and target_target_summaries based on the transitive closure of
@@ -739,7 +765,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     pub fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<T::Summary>>>) {
         let frontier = &mut self.external_buffer;
-        if self.notify && frontier.len() > 0 && !frontier.iter().any(|x| x.len() > 0) {
+        if self.index > 0 && self.notify && frontier.len() > 0 && !frontier.iter().any(|x| x.len() > 0) {
             println!("initializing notifiable operator {} with inputs but no external capabilities", self.name);
         }
         self.operator.as_mut().map(|scope| scope.set_external_summary(summaries, frontier));
@@ -747,6 +773,25 @@ impl<T: Timestamp> PerOperatorState<T> {
 
 
     pub fn push_pointstamps(&mut self, external_progress: &[CountMap<T>]) {
+
+        // if external_progress.iter().any(|x| x.len() > 0) {
+        //     println!("operator pep: {}", self.name);
+        //     println!("  updates: {:?}", external_progress);
+        //     println!("  current: {:?}", self.external);
+        // }
+
+        // assert the "uprighted-ness" property for updates to each input
+        // doesn't need to be true here; only after titration through self.external
+        for (index, updates) in external_progress.iter().enumerate() {
+            for &(time, val) in updates.elements() {
+                if val > 0 {
+                    if !self.external[index].elements().iter().any(|&t2| t2.le(&time)) {
+                        println!("in operator: {:?}", self.name);
+                        panic!("non-upright update: {:?}", updates);
+                    }
+                }
+            }
+        }
 
         // we shouldn't be pushing progress updates at finished operators. would be a bug!
         if !(self.operator.is_some() || external_progress.iter().all(|x| x.len() == 0)) {
@@ -761,11 +806,12 @@ impl<T: Timestamp> PerOperatorState<T> {
             self.external[input].update_into_cm(updates, &mut self.external_buffer[input]);
         }
 
-        if self.external_buffer.iter().any(|x| x.len() > 0) {
-            println!("changes in external capabilities for {}", self.name);
-            for blah in &self.external_buffer {
-                println!("  {:?}", blah);
-            }
+        // if self.external_buffer.iter().any(|x| x.len() > 0)
+        {
+            // println!("changes in external capabilities for {}", self.name);
+            // for blah in &self.external_buffer {
+            //     println!("  {:?}", blah);
+            // }
 
             let changes = &mut self.external_buffer;
             self.operator.as_mut().map(|x| x.push_external_progress(changes));
@@ -808,7 +854,7 @@ impl<T: Timestamp> PerOperatorState<T> {
            self.notify && // we don't track guarantees and capabilities for non-notify scopes. bug?
            self.external.iter().all(|x| x.empty()) &&
            self.internal.iter().all(|x| x.empty()) {
-            //    println!("Shutting down {}", self.name);
+               println!("Shutting down {}", self.name);
                self.operator = None;
                self.name = format!("{}(tombstone)", self.name);
            }
