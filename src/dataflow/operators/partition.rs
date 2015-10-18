@@ -4,8 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::{Timestamp, Operate};
-use progress::nested::Source::ChildOutput;
-use progress::nested::Target::ChildInput;
+use progress::nested::{Source, Target};
 use progress::count_map::CountMap;
 
 use Data;
@@ -58,11 +57,11 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
 
         let operator = Operator::new(PullCounter::new(receiver), targets, route);
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender, channel_id);
+        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
 
         let mut results = Vec::new();
         for (output, registrar) in registrars.into_iter().enumerate() {
-            results.push(Stream::new(ChildOutput(index, output), registrar, scope.clone()));
+            results.push(Stream::new(Source { index: index, port: output }, registrar, scope.clone()));
         }
 
         results
@@ -86,12 +85,12 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operator<T, D, D2, F> 
 }
 
 impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operator<T, D, D2, F> {
-    fn name(&self) -> &str { "Partition" }
+    fn name(&self) -> String { "Partition".to_owned() }
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { self.outputs.len() }
 
-    fn pull_internal_progress(&mut self,_internal: &mut [CountMap<T>],
-                                         consumed: &mut [CountMap<T>],
+    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
+                                        _internal: &mut [CountMap<T>],
                                          produced: &mut [CountMap<T>]) -> bool {
 
         while let Some((time, data)) = self.input.next() {

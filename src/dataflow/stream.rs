@@ -35,8 +35,8 @@ impl<S: Scope, D:Data> Stream<S, D> {
         ::logging::log(&::logging::CHANNELS, ::logging::ChannelsEvent {
             id: _identifier,
             scope_addr: self.scope.addr(),
-            source: match self.name { Source::ChildOutput(i,j) => (i,j), Source::GraphInput(i) => (usize::max_value(), i) },
-            target: match target    { Target::ChildInput(i,j) => (i,j), Target::GraphOutput(i) => (usize::max_value(), i) },
+            source: (self.name.index, self.name.port),
+            target: (target.index, target.port),
         });
 
         self.scope.add_edge(self.name, target);

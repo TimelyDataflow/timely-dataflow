@@ -28,7 +28,7 @@ pub trait Operate<T: Timestamp> {
     /// how many groups. This becomes complicated, as a full all-to-all exchange would result in
     /// multiple copies of the same progress messages (but aggregated variously) arriving at
     /// arbitrary times.
-    fn local(&self) -> bool { true };
+    fn local(&self) -> bool { true }
 
     /// The number of inputs.
     fn inputs(&self) -> usize;
@@ -75,7 +75,12 @@ pub trait Operate<T: Timestamp> {
     /// noting the consequences of those actions, will be in a bit of a pickle.
     ///
     /// Note: Callee is expected to consume the contents of _external to indicate acknowledgement.
-    fn push_external_progress(&mut self, external: &mut [CountMap<T>]);
+    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) {
+        // default implementation just drains the external updates
+        for updates in external.iter_mut() {
+            updates.clear();
+        }
+    }
 
     /// Retrieves a summary of progress statements internal to the operator.
     ///
@@ -103,7 +108,7 @@ impl<T: Timestamp, S: Operate<T>> Operate<T> for Rc<RefCell<S>> {
 
     // proxy methods through the Rc<RefCell<_>>.
     fn name(&self) -> String { self.borrow().name() }
-    fn local(&self) -> bool { self.borrow().group() }
+    fn local(&self) -> bool { self.borrow().local() }
     fn inputs(&self) -> usize { self.borrow().inputs() }
     fn outputs(&self) -> usize { self.borrow().outputs() }
     fn notify_me(&self) -> bool { self.borrow().notify_me() }
@@ -114,14 +119,12 @@ impl<T: Timestamp, S: Operate<T>> Operate<T> for Rc<RefCell<S>> {
     fn set_external_summary(&mut self, x: Vec<Vec<Antichain<T::Summary>>>, y: &mut [CountMap<T>]) {
         self.borrow_mut().set_external_summary(x, y);
     }
-    fn push_external_progress(&mut self, consumed: &mut [CountMap<T>],
-                                         external: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) {
-        self.borrow_mut().push_external_progress(consumed, external, produced)
+    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) {
+        self.borrow_mut().push_external_progress(external)
     }
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
                                          internal: &mut [CountMap<T>],
                                          produced: &mut [CountMap<T>]) -> bool {
-        self.borrow_mut().pull_internal_progress(internal, consumed, produced)
+        self.borrow_mut().pull_internal_progress(consumed, internal, produced)
     }
 }

@@ -4,8 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::nested::subgraph::Source::ChildOutput;
-use progress::nested::subgraph::Target::ChildInput;
+use progress::nested::subgraph::{Source, Target};
 
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
@@ -100,9 +99,9 @@ impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
         let operator = Operator::new(PullCounter::new(receiver), targets, name.to_owned(), logic, Some((init, scope.peers())));
         let index = scope.add_operator(operator);
 
-        self.connect_to(ChildInput(index, 0), sender, channel_id);
+        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
 
-        Stream::new(ChildOutput(index, 0), registrar, scope)
+        Stream::new(Source {index: index, port: 0 }, registrar, scope)
     }
 
     fn unary_stream<D2: Data,
@@ -119,9 +118,9 @@ impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
         let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
         let operator = Operator::new(PullCounter::new(receiver), targets, name.to_owned(), move |i,o,_| logic(i,o), None);
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender, channel_id);
+        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
 
-        Stream::new(ChildOutput(index, 0), registrar, scope)
+        Stream::new(Source { index: index, port: 0 }, registrar, scope)
     }
 }
 
@@ -196,16 +195,16 @@ where T: Timestamp,
     }
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>,
-                                       frontier: &mut [CountMap<T>]) -> () {
+                                       frontier: &mut [CountMap<T>]) {
         self.handle.notificator.update_frontier_from_cm(frontier);
     }
 
-    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) -> () {
+    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) {
         self.handle.notificator.update_frontier_from_cm(external);
     }
 
-    fn pull_internal_progress(&mut self, internal: &mut [CountMap<T>],
-                                         consumed: &mut [CountMap<T>],
+    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
+                                         internal: &mut [CountMap<T>],
                                          produced: &mut [CountMap<T>]) -> bool
     {
         (self.logic)(&mut self.handle.input, &mut self.handle.output, &mut self.handle.notificator);
@@ -220,6 +219,6 @@ where T: Timestamp,
         return false;   // no unannounced internal work
     }
 
-    fn name(&self) -> &str { &self.name }
+    fn name(&self) -> String { self.name.clone() }
     fn notify_me(&self) -> bool { self.notify.is_some() }
 }

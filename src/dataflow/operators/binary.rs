@@ -4,8 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::nested::subgraph::Source::ChildOutput;
-use progress::nested::subgraph::Target::ChildInput;
+use progress::nested::subgraph::{Source, Target};
 
 use progress::count_map::CountMap;
 use progress::notificator::Notificator;
@@ -117,12 +116,12 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
         let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
         let operator = Operator::new(PullCounter::new(receiver1), PullCounter::new(receiver2), targets, name.to_owned(), None, move |i1, i2, o, _| logic(i1, i2, o));
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender1, channel_id1);
-        other.connect_to(ChildInput(index, 1), sender2, channel_id2);
+        self.connect_to(Target { index: index, port: 0 }, sender1, channel_id1);
+        other.connect_to(Target { index: index, port: 1 }, sender2, channel_id2);
         // self.scope.connect(other.name, ChildInput(index, 1));
         // other.ports.add_observer(sender2);
 
-        Stream::new(ChildOutput(index, 0), registrar, scope)
+        Stream::new(Source { index: index, port: 0 }, registrar, scope)
     }
 
     #[inline]
@@ -146,12 +145,12 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
         let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
         let operator = Operator::new(PullCounter::new(receiver1), PullCounter::new(receiver2), targets, name.to_owned(), Some((notify, scope.peers())), logic);
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender1, channel_id1);
-        other.connect_to(ChildInput(index, 1), sender2, channel_id2);
+        self.connect_to(Target { index: index, port: 0 }, sender1, channel_id1);
+        other.connect_to(Target { index: index, port: 1 }, sender2, channel_id2);
         // self.scope.connect(other.name, ChildInput(index, 1));
         // other.ports.add_observer(sender2);
 
-        Stream::new(ChildOutput(index, 0), registrar, scope)
+        Stream::new(Source { index: index, port: 0 }, registrar, scope)
     }
 }
 
@@ -236,8 +235,8 @@ where T: Timestamp,
         self.handle.notificator.update_frontier_from_cm(external);
     }
 
-    fn pull_internal_progress(&mut self, internal: &mut [CountMap<T>],
-                                         consumed: &mut [CountMap<T>],
+    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
+                                         internal: &mut [CountMap<T>],
                                          produced: &mut [CountMap<T>]) -> bool
     {
         (self.logic)(&mut self.handle.input1, &mut self.handle.input2, &mut self.handle.output, &mut self.handle.notificator);
@@ -253,6 +252,6 @@ where T: Timestamp,
         return false;   // no unannounced internal work
     }
 
-    fn name(&self) -> &str { &self.name }
+    fn name(&self) -> String { self.name.clone() }
     fn notify_me(&self) -> bool { self.notify.is_some() }
 }

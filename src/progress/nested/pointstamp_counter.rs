@@ -1,33 +1,33 @@
 //! Manages pointstamp counts (timestamp, location) within a sub operator.
 
 use progress::Timestamp;
-use progress::nested::subgraph::Source::{GraphInput, ChildOutput};
-use progress::nested::subgraph::Target::ChildInput;
 use progress::nested::{Source, Target};
 
 use progress::count_map::CountMap;
 
 #[derive(Default)]
 pub struct PointstampCounter<T:Timestamp> {
-    pub source_counts:  Vec<Vec<CountMap<T>>>,    // timestamp updates indexed by (scope, output)
-    pub target_counts:  Vec<Vec<CountMap<T>>>,    // timestamp updates indexed by (scope, input)
-    pub target_pushed:  Vec<Vec<CountMap<T>>>,    // pushed updates indexed by (scope, input)
+    pub source:  Vec<Vec<CountMap<T>>>,    // timestamp updates indexed by (scope, output)
+    pub target:  Vec<Vec<CountMap<T>>>,    // timestamp updates indexed by (scope, input)
+    pub pushed:  Vec<Vec<CountMap<T>>>,    // pushed updates indexed by (scope, input)
 }
 
 impl<T:Timestamp> PointstampCounter<T> {
     pub fn update_target(&mut self, target: Target, time: &T, value: i64) {
-        if let ChildInput(scope, input) = target { self.target_counts[scope as usize][input as usize].update(time, value); }
-        else                                     { panic!("graph outputs should not appear as pointstamps"); }
+        self.target[target.index][target.port].update(time, value);
+    }
+    pub fn update_source(&mut self, source: Source, time: &T, value: i64) {
+        self.source[source.index][source.port].update(time, value);
+    }
+    pub fn clear(&mut self) {
+        for vec in self.source.iter_mut() { for map in vec.iter_mut() { map.clear(); } }
+        for vec in self.target.iter_mut() { for map in vec.iter_mut() { map.clear(); } }
+        for vec in self.pushed.iter_mut() { for map in vec.iter_mut() { map.clear(); } }
     }
 
-    pub fn update_source(&mut self, source: Source, time: &T, value: i64) {
-        match source {
-            ChildOutput(scope, output) => { self.source_counts[scope as usize][output as usize].update(time, value); },
-            GraphInput(input)          => { self.input_counts[input as usize].update(time, value); },
-        }
-    }
-    pub fn clear_pushed(&mut self) {
-        for vec in self.target_pushed.iter_mut() { for map in vec.iter_mut() { map.clear(); } }
-        for map in self.output_pushed.iter_mut() { map.clear(); }
+    pub fn allocate_for_operator(&mut self, inputs: usize, outputs: usize) {
+        self.pushed.push(vec![Default::default(); inputs]);
+        self.target.push(vec![Default::default(); inputs]);
+        self.source.push(vec![Default::default(); outputs]);
     }
 }

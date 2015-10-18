@@ -6,7 +6,7 @@ use std::default::Default;
 
 use progress::frontier::Antichain;
 use progress::{Operate, Timestamp};
-use progress::nested::subgraph::Source::ChildOutput;
+use progress::nested::subgraph::Source;
 use progress::count_map::CountMap;
 
 use timely_communication::Allocate;
@@ -45,7 +45,7 @@ impl<D: Data, I: Iterator<Item=D>+'static> ToStream<D> for I {
             output: Buffer::new(Counter::new(output, Rc::new(RefCell::new(CountMap::new())))),
         });
 
-        return Stream::new(ChildOutput(index, 0), registrar, scope.clone());
+        return Stream::new(Source { index: index, port: 0 }, registrar, scope.clone());
     }
 }
 
@@ -56,7 +56,7 @@ struct Operator<T:Timestamp, D: Data, I: Iterator<Item=D>> {
 }
 
 impl<T:Timestamp, D: Data, I: Iterator<Item=D>> Operate<T> for Operator<T, D, I> {
-    fn name(&self) -> &str { "ToStream" }
+    fn name(&self) -> String { "ToStream".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
@@ -66,8 +66,8 @@ impl<T:Timestamp, D: Data, I: Iterator<Item=D>> Operate<T> for Operator<T, D, I>
         (Vec::new(), vec![map])
     }
 
-    fn pull_internal_progress(&mut self, frontier_progress: &mut [CountMap<T>],
-                                        _messages_consumed: &mut [CountMap<T>],
+    fn pull_internal_progress(&mut self,_messages_consumed: &mut [CountMap<T>],
+                                         frontier_progress: &mut [CountMap<T>],
                                          messages_produced: &mut [CountMap<T>]) -> bool
     {
         if self.iterator.is_some() {

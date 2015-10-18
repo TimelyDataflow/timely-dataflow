@@ -69,6 +69,12 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.occurrences.clear();
+        self.precedents.clear();
+        self.elements.clear();
+    }
+
     /// Reveals the element in the `MutableAntichain`.
     pub fn elements(&self) -> &[T] { &self.elements }
 

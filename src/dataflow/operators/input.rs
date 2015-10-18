@@ -6,7 +6,7 @@ use std::default::Default;
 
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Operate, Timestamp};
-use progress::nested::subgraph::Source::ChildOutput;
+use progress::nested::subgraph::Source;
 use progress::count_map::CountMap;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
@@ -80,7 +80,7 @@ impl<A: Allocate, T: Timestamp+Ord> Input<A, T> for Child<Root<A>, T> {
             copies:   copies,
         });
 
-        return (helper, Stream::new(ChildOutput(index, 0), registrar, self.clone()));
+        return (helper, Stream::new(Source { index: index, port: 0 }, registrar, self.clone()));
     }
 }
 
@@ -92,7 +92,7 @@ struct Operator<T:Timestamp+Ord> {
 }
 
 impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
-    fn name(&self) -> &str { "Input" }
+    fn name(&self) -> String { "Input".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
@@ -105,8 +105,8 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
         (Vec::new(), vec![map])
     }
 
-    fn pull_internal_progress(&mut self, frontier_progress: &mut [CountMap<Product<RootTimestamp, T>>],
-                                        _messages_consumed: &mut [CountMap<Product<RootTimestamp, T>>],
+    fn pull_internal_progress(&mut self,_messages_consumed: &mut [CountMap<Product<RootTimestamp, T>>],
+                                         frontier_progress: &mut [CountMap<Product<RootTimestamp, T>>],
                                          messages_produced: &mut [CountMap<Product<RootTimestamp, T>>]) -> bool
     {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);

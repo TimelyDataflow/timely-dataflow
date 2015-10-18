@@ -5,8 +5,7 @@ use std::cell::RefCell;
 
 use progress::{Timestamp, Operate, Antichain};
 use progress::frontier::MutableAntichain;
-use progress::nested::subgraph::Source::ChildOutput;
-use progress::nested::subgraph::Target::ChildInput;
+use progress::nested::subgraph::{Source, Target};
 use progress::count_map::CountMap;
 
 use dataflow::channels::pushers::Tee;
@@ -73,8 +72,8 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         };
 
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender, channel_id);
-        (handle, Stream::new(ChildOutput(index, 0), registrar, scope))
+        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
+        (handle, Stream::new(Source { index: index, port: 0 }, registrar, scope))
     }
 }
 
@@ -99,7 +98,7 @@ struct Operator<T:Timestamp, D: Data> {
 }
 
 impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
-    fn name(&self) -> &str { "Probe" }
+    fn name(&self) -> String { "Probe".to_owned() }
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { 1 }
 
@@ -120,7 +119,7 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
     }
 
     // the scope does nothing. this is actually a problem, because "reachability" assumes all messages on each edge.
-    fn pull_internal_progress(&mut self,_: &mut [CountMap<T>], consumed: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>], _: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
 
         while let Some((time, data)) = self.input.next() {
             self.output.session(time).give_content(data);

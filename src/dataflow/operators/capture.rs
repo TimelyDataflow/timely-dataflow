@@ -15,8 +15,7 @@ use dataflow::channels::pushers::Tee;
 use dataflow::channels::message::Content;
 
 use progress::count_map::CountMap;
-use progress::nested::subgraph::Source::ChildOutput;
-use progress::nested::subgraph::Target::ChildInput;
+use progress::nested::subgraph::{Source, Target};
 use progress::{Timestamp, Operate, Antichain};
 
 /// Capture a stream of timestamped data for later replay.
@@ -59,7 +58,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
         };
 
         let index = scope.add_operator(operator);
-        self.connect_to(ChildInput(index, 0), sender, channel_id);
+        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
         handle
     }
 }
@@ -101,7 +100,7 @@ impl<T: Timestamp, D: Data> Handle<T, D> {
         };
 
         let index = scope.add_operator(operator);
-        Stream::new(ChildOutput(index, 0), registrar, scope.clone())
+        Stream::new(Source { index: index, port: 0 }, registrar, scope.clone())
     }
 }
 
@@ -111,7 +110,7 @@ struct CaptureOperator<T: Timestamp, D: Data> {
 }
 
 impl<T:Timestamp, D: Data> Operate<T> for CaptureOperator<T, D> {
-    fn name(&self) -> &str { "Capture" }
+    fn name(&self) -> String { "Capture".to_owned() }
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { 0 }
 
@@ -131,7 +130,7 @@ impl<T:Timestamp, D: Data> Operate<T> for CaptureOperator<T, D> {
         counts[0].updates.clear();
     }
 
-    fn pull_internal_progress(&mut self, _: &mut [CountMap<T>], consumed: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],  _: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> bool {
         let events = &mut self.events;
         self.input.for_each(|&time, data| {
             events.borrow_mut().next = Some(Rc::new(RefCell::new(EventLink { event: Event::Messages(time, data.clone()), next: None })));
@@ -149,7 +148,7 @@ struct ReplayOperator<T:Timestamp, D: Data> {
 }
 
 impl<T:Timestamp, D: Data> Operate<T> for ReplayOperator<T, D> {
-    fn name(&self) -> &str { "Replay" }
+    fn name(&self) -> String { "Replay".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
@@ -172,7 +171,7 @@ impl<T:Timestamp, D: Data> Operate<T> for ReplayOperator<T, D> {
         (vec![], vec![result])
     }
 
-    fn pull_internal_progress(&mut self, internal: &mut [CountMap<T>], _: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, _: &mut [CountMap<T>], internal: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
 
         while self.events.borrow().next.is_some() {
             let next = self.events.borrow().next.as_ref().unwrap().clone();

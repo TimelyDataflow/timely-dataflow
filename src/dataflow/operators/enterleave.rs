@@ -27,8 +27,7 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 
 use progress::{Timestamp, CountMap};
-use progress::nested::subgraph::Source::{GraphInput, ChildOutput};
-use progress::nested::subgraph::Target::{GraphOutput, ChildInput};
+use progress::nested::subgraph::{Source, Target};
 use progress::nested::product::Product;
 use {Data, Push};
 use dataflow::channels::pushers::{Counter, Tee};
@@ -95,9 +94,8 @@ Enter<G, T, D> for Child<G, T> {
         let scope_index = self.subgraph.borrow().index;
         let input_index = self.subgraph.borrow_mut().new_input(produced);
 
-        stream.connect_to(ChildInput(scope_index, input_index), ingress, usize::max_value());
-
-        Stream::new(GraphInput(input_index), registrar, self.clone())
+        stream.connect_to(Target { index: scope_index, port: input_index }, ingress, usize::max_value());
+        Stream::new(Source { index: 0, port: input_index }, registrar, self.clone())
     }
 }
 
@@ -127,11 +125,14 @@ impl<G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<G, T>, D> {
 
         let output_index = scope.subgraph.borrow_mut().new_output();
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
-        self.connect_to(GraphOutput(output_index), EgressNub { targets: targets, phantom: PhantomData }, usize::max_value());
+        self.connect_to(Target { index: 0, port: output_index }, EgressNub { targets: targets, phantom: PhantomData }, usize::max_value());
         let subgraph_index = scope.subgraph.borrow().index;
-        Stream::new(ChildOutput(subgraph_index, output_index),
-                    registrar,
-                    scope.parent.clone())
+        
+        Stream::new(
+            Source { index: subgraph_index, port: output_index },
+            registrar,
+            scope.parent.clone()
+        )
     }
 }
 

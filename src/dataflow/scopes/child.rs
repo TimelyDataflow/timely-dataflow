@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use progress::{Timestamp, Operate, Subgraph};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
-use progress::nested::scope_wrapper::ChildWrapper;
+// use progress::nested::scope_wrapper::ChildWrapper;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
@@ -26,21 +26,22 @@ impl<G: Scope, T: Timestamp> Scope for Child<G, T> {
         self.subgraph.borrow_mut().connect(source, target);
     }
 
-    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize {
-        let index = self.subgraph.borrow().children.len();
-        let path = self.subgraph.borrow().path.clone();
-        self.subgraph.borrow_mut().children.push(ChildWrapper::new(Box::new(scope), index, path));
-        index
+    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC, index: usize) {
+        self.subgraph.borrow_mut().add_child(Box::new(scope), index);
     }
 
+    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize {
+        let index = self.subgraph.borrow_mut().allocate_child_id();
+        self.add_operator_with_index(scope, index);
+        index
+    }
+    
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
     }
 
-
     fn new_subscope<T2: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, T>, T2> {
-        let index = self.subgraph.borrow().children();
-        // let path = format!("{}", self.subgraph.borrow().path);
+        let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
         Subgraph::new_from(self, index, path)
     }

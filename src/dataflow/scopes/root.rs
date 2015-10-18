@@ -61,12 +61,19 @@ impl<A: Allocate> Scope for Root<A> {
         panic!("Root::connect(): root doesn't maintain edges; who are you, how did you get here?")
     }
 
-    fn add_operator<SC: Operate<RootTimestamp>+'static>(&self, mut scope: SC) -> usize  {
+    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize {
+        let index = self.graph.borrow().len();
+        self.add_operator_with_index(scope, index);
+        index
+    }
+
+    fn add_operator_with_index<SC: Operate<RootTimestamp>+'static>(&self, mut scope: SC, index: usize) {
+        assert_eq!(index, self.graph.borrow().len());
 
         scope.get_internal_summary();
         scope.set_external_summary(Vec::new(), &mut []);
         self.graph.borrow_mut().push(Box::new(scope));
-        self.graph.borrow().len() - 1
+        // self.graph.borrow().len() - 1
     }
     fn new_identifier(&mut self) -> usize {
         *self.identifiers.borrow_mut() += 1;

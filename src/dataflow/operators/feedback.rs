@@ -8,8 +8,7 @@ use {Data, Push};
 
 use progress::{Timestamp, Operate, PathSummary};
 use progress::frontier::Antichain;
-use progress::nested::Source::ChildOutput;
-use progress::nested::Target::ChildInput;
+use progress::nested::{Source, Target};
 use progress::count_map::CountMap;
 
 use progress::nested::product::Product;
@@ -68,7 +67,7 @@ impl<G: Scope, T: Timestamp> LoopVariable<G, T> for Child<G, T> {
             target: feedback_input,
         };
 
-        (helper, Stream::new(ChildOutput(index, 0), registrar, self.clone()))
+        (helper, Stream::new(Source { index: index, port: 0 }, registrar, self.clone()))
     }
 }
 
@@ -114,7 +113,7 @@ pub trait ConnectLoop<G: Scope, T: Timestamp, D: Data> {
 
 impl<G: Scope, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<G, T>, D> {
     fn connect_loop(&self, helper: Handle<G::Timestamp, T, D>) {
-        self.connect_to(ChildInput(helper.index, 0), helper.target, usize::max_value());
+        self.connect_to(Target { index: helper.index, port: 0 }, helper.target, usize::max_value());
     }
 }
 
@@ -133,7 +132,7 @@ struct Operator<T:Timestamp> {
 
 
 impl<T:Timestamp> Operate<T> for Operator<T> {
-    fn name(&self) -> &str { "Feedback" }
+    fn name(&self) -> String { "Feedback".to_owned() }
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { 1 }
 
@@ -141,9 +140,9 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
         (vec![vec![Antichain::from_elem(self.summary)]], vec![CountMap::new()])
     }
 
-    fn pull_internal_progress(&mut self, _frontier_progress: &mut [CountMap<T>],
-                                          messages_consumed: &mut [CountMap<T>],
-                                          messages_produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, messages_consumed: &mut [CountMap<T>],
+                                        _frontier_progress: &mut [CountMap<T>],
+                                         messages_produced: &mut [CountMap<T>]) -> bool {
 
         self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
         self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);

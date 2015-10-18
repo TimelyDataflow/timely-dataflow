@@ -37,6 +37,8 @@ pub trait Scope : Allocate+Clone {
     /// Adds a child `Operate` to the builder's scope. Returns the new child's index.
     fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize;
 
+    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC, index: usize);
+
     /// Creates a new `Subgraph` with timestamp `T`. Used by `scoped`, but unlikely to be
     /// commonly useful to end users.
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T>;
@@ -75,7 +77,9 @@ pub trait Scope : Allocate+Clone {
         };
 
         let result = func(&mut builder);
-        self.add_operator(builder.subgraph);
+        let index = builder.subgraph.borrow().index;
+        // println!("adding subgraph with index: {}", index);
+        self.add_operator_with_index(builder.subgraph, index);
         result
     }
 }
