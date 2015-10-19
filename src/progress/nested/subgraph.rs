@@ -829,7 +829,7 @@ impl<T: Timestamp> PerOperatorState<T> {
            self.notify && // we don't track guarantees and capabilities for non-notify scopes. bug?
            self.external.iter().all(|x| x.empty()) &&
            self.internal.iter().all(|x| x.empty()) {
-               println!("Shutting down {}", self.name);
+            //    println!("Shutting down {}", self.name);
                self.operator = None;
                self.name = format!("{}(tombstone)", self.name);
            }
