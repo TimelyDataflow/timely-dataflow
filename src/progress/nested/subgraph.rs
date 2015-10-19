@@ -266,9 +266,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
                                          internal: &mut [CountMap<TOuter>],
                                          produced: &mut [CountMap<TOuter>]) -> bool
     {
-        assert_eq!(self.inputs, consumed.len());
-        assert_eq!(self.outputs, internal.len());
-        assert_eq!(self.outputs, produced.len());
+        // assert_eq!(self.inputs, consumed.len());
+        // assert_eq!(self.outputs, internal.len());
+        // assert_eq!(self.outputs, produced.len());
 
         // should be false when there is nothing left to do
         let mut active = false;
@@ -344,10 +344,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // fold exchanged messages into the view of global progress.
         self.local_pointstamp_messages.drain_into(&mut self.final_pointstamp_messages);
         while let Some(((index, port, timestamp), delta)) = self.local_pointstamp_internal.pop() {
-            if index == 0 {
-                // println!("consumed: {} records", delta);
-                consumed[port].update(&timestamp.outer, delta);
-            }
+            if index == 0 { consumed[port].update(&timestamp.outer, delta); }
             else { self.final_pointstamp_internal.update(&(index, port, timestamp), delta); }
         }
 
@@ -360,7 +357,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             self.children[index].messages[input].update_and(&time, delta, |time, delta|
                 pointstamps.update_target(Target { index: index, port: input }, time, delta)
             );
-            // if the message went to the output, well, tell someone I guess.
+            // if the message went to the output, tell someone I guess.
             if index == 0 { produced[input].update(&time.outer, delta); }
         }
         while let Some(((index, output, time), delta)) = self.final_pointstamp_internal.pop() {
@@ -375,9 +372,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // update input capabilities for actual children.
         for child in self.children.iter_mut().skip(1) {
-            let index = child.index;
-            // println!("pushing pointstamps for child: {}", child.name);
-            child.push_pointstamps(&self.pointstamps.pushed[index][..]);
+            let pointstamps = &self.pointstamps.pushed[child.index][..];
+            child.push_pointstamps(&pointstamps);
         }
 
         // produce output data for `internal`. `consumed` and `produced` have already been filled.
@@ -408,17 +404,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     // pushes pointstamps to scopes using self.*_summaries; clears pre-push counts.
     fn push_pointstamps(&mut self) {
 
-        // println!("");
-        // push pointstamps from targets to targets.
         for index in 0..self.pointstamps.target.len() {
             for input in (0..self.pointstamps.target[index].len()) {
                 while let Some((time, value)) = self.pointstamps.target[index][input].pop() {
-                    // println!("pushing pointstamp (target): ({}, {}): ({:?}, {})  {}", index, input, time, value, self.children[index].name);
                     for &(target, ref antichain) in self.children[index].target_target_summaries[input].iter() {
                         for summary in antichain.elements().iter() {
-                            // println!("  reached (target): ({}, {}): ({:?}, {})  {}",
-                            //     target.index, target.port, summary.results_in(&time), value, self.children[target.index].name
-                            // );
                             self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
                         }
                     }
@@ -430,20 +420,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for index in 0..self.pointstamps.source.len() {
             for output in (0..self.pointstamps.source[index].len()) {
                 while let Some((time, value)) = self.pointstamps.source[index][output].pop() {
-                    // println!("pushing pointstamp (source): ({}, {}): ({:?}, {})  {}", index, output, time, value, self.children[index].name);
                     for &(target, ref antichain) in self.children[index].source_target_summaries[output].iter() {
                         for summary in antichain.elements().iter() {
-                            // println!("  reached (target): ({}, {}): ({:?}, {})  {}",
-                            //     target.index, target.port, summary.results_in(&time), value, self.children[target.index].name
-                            // );
                             self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
                         }
                     }
                 }
             }
         }
-
-        // println!("");
     }
 
     // sets source_target_summaries and target_target_summaries based on the transitive closure of
@@ -537,7 +521,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 
     pub fn new_input(&mut self, shared_counts: Rc<RefCell<CountMap<Product<TOuter, TInner>>>>) -> usize {
-        // println!("adding input");
         self.inputs += 1;
         self.input_messages.push(shared_counts);
         self.children[0].add_output();
@@ -545,7 +528,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 
     pub fn new_output(&mut self) -> usize {
-        // println!("adding output");
         self.outputs += 1;
         self.output_capabilities.push(MutableAntichain::new());
         self.children[0].add_input();
@@ -555,16 +537,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     pub fn connect(&mut self, source: Source, target: Target) {
         for child in &mut self.children {
             if child.index == source.index {
-                // if source.port >= child.edges.len() {
-                //     println!("attempting to add edge {:?} but outputs: {}", source, child.edges.len());
-                // }
                 child.edges[source.port].push(target);
                 return;
             }
-        }
-        println!("source: {:?}, target: {:?}, children: {:?}", source, target, self.children.len());
-        for index in 0..self.children.len() {
-            println!("self.children[{}].index = {}", index, self.children[index].index);
         }
 
         panic!("Subgraph::connect: could not find source");
@@ -827,13 +802,13 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: true });
+            // ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: true });
 
             let result = if let &mut Some(ref mut operator) = &mut self.operator {
 
-                assert_eq!(operator.inputs(), self.consumed_buffer.len());
-                assert_eq!(operator.outputs(), self.internal_buffer.len());
-                assert_eq!(operator.outputs(), self.produced_buffer.len());
+                // assert_eq!(operator.inputs(), self.consumed_buffer.len());
+                // assert_eq!(operator.outputs(), self.internal_buffer.len());
+                // assert_eq!(operator.outputs(), self.produced_buffer.len());
 
                 operator.pull_internal_progress(
                     &mut self.consumed_buffer[..],
@@ -843,7 +818,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
             else { false };
 
-            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: false });
+            // ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: false });
 
             result
         };
