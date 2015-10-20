@@ -76,7 +76,7 @@ impl<D> Content<D> {
     /// Default number of elements in a typed allocated message. This could vary as a function of
     /// `std::mem::size_of::<D>()`, so is left as a method rather than a constant.
     #[inline]
-    pub fn default_length() -> usize { 4096 }
+    pub fn default_length() -> usize { 1024 }
 
     /// The length of the underlying typed vector.
     ///
