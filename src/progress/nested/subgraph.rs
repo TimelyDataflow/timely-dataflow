@@ -802,7 +802,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            // ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: true });
+            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: true });
 
             let result = if let &mut Some(ref mut operator) = &mut self.operator {
 
@@ -818,7 +818,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
             else { false };
 
-            // ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: false });
+            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: false });
 
             result
         };
