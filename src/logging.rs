@@ -192,6 +192,8 @@ thread_local!(pub static GUARDED_PROGRESS: FileLogger<bool> = FileLogger::new())
 #[derive(Debug, Clone)]
 /// The creation of an `Operate` implementor.
 pub struct OperatesEvent {
+    /// Worker-unique identifier for the operator.
+    pub id: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
     pub addr: Vec<usize>,
     /// A helpful name.
@@ -253,10 +255,10 @@ unsafe_abomonate!(MessagesEvent);
 #[derive(Debug, Clone)]
 /// Operator start or stop.
 pub struct ScheduleEvent {
-    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
-    pub addr: Vec<usize>,
+    /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
+    pub id: usize,
     /// `true` if the operator is starting, `false` if it is stopping.
     pub is_start: bool,
 }
 
-unsafe_abomonate!(ScheduleEvent : addr, is_start);
+unsafe_abomonate!(ScheduleEvent : id, is_start);

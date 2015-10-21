@@ -35,9 +35,9 @@ pub trait Scope : Allocate+Clone {
     fn add_edge(&self, source: Source, target: Target);
 
     /// Adds a child `Operate` to the builder's scope. Returns the new child's index.
-    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize;
+    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC) -> usize;
 
-    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC, index: usize);
+    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC, index: usize);
 
     /// Creates a new `Subgraph` with timestamp `T`. Used by `scoped`, but unlikely to be
     /// commonly useful to end users.

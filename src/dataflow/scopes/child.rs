@@ -26,16 +26,17 @@ impl<G: Scope, T: Timestamp> Scope for Child<G, T> {
         self.subgraph.borrow_mut().connect(source, target);
     }
 
-    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC, index: usize) {
-        self.subgraph.borrow_mut().add_child(Box::new(scope), index);
+    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC, index: usize) {
+        let identifier = self.new_identifier();
+        self.subgraph.borrow_mut().add_child(Box::new(scope), index, identifier);
     }
 
-    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&self, scope: SC) -> usize {
+    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC) -> usize {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         self.add_operator_with_index(scope, index);
         index
     }
-    
+
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
     }

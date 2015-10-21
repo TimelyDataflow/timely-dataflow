@@ -30,11 +30,11 @@ pub trait ToStream<D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn to_stream<S: Scope>(self, scope: &S) -> Stream<S, D>;
+    fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, D>;
 }
 
 impl<D: Data, I: Iterator<Item=D>+'static> ToStream<D> for I {
-    fn to_stream<S: Scope>(self, scope: &S) -> Stream<S, D> {
+    fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, D> {
 
         let (output, registrar) = Tee::<S::Timestamp, D>::new();
         let copies = scope.peers();

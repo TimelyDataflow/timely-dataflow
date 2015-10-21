@@ -582,8 +582,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         return self.child_count - 1;
     }
 
-    pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize) {
-        self.children.push(PerOperatorState::new(child, index, self.path.clone()))
+    pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize, identifier: usize) {
+        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier))
     }
 }
 
@@ -600,8 +600,10 @@ fn try_to_add_summary<T: Eq, S: PartialOrd+Eq+Copy+Debug>(vector: &mut Vec<(T, A
 struct PerOperatorState<T: Timestamp> {
 
     name: String,       // name of the operator
-    addr: Vec<usize>,   // address of the operator
+    // addr: Vec<usize>,   // address of the operator
     index: usize,       // index of the operator within its parent scope
+    id: usize,          // worker-unique identifier
+
     local: bool,        // indicates whether the operator will exchange data or not
     notify: bool,
 
@@ -652,9 +654,10 @@ impl<T: Timestamp> PerOperatorState<T> {
         path.push(0);
         PerOperatorState {
             name:       "External".to_owned(),
-            addr:       path,
+            // addr:       path,
             operator:      None,
             index:      0,
+            id:         usize::max_value(),
             local:      false,
             inputs:     0,
             outputs:    0,
@@ -675,12 +678,12 @@ impl<T: Timestamp> PerOperatorState<T> {
         }
     }
 
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>) -> PerOperatorState<T> {
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>, identifier: usize) -> PerOperatorState<T> {
 
         // LOGGING
         path.push(index);
 
-        ::logging::log(&::logging::OPERATES, ::logging::OperatesEvent { addr: path.clone(), name: scope.name().to_owned() });
+        ::logging::log(&::logging::OPERATES, ::logging::OperatesEvent { id: identifier, addr: path.clone(), name: scope.name().to_owned() });
 
         let local = scope.local();
         let inputs = scope.inputs();
@@ -703,9 +706,10 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let mut result = PerOperatorState {
             name:       scope.name(),
-            addr:       path,
+            // addr:       path,
             operator:      Some(scope),
             index:      index,
+            id:         identifier,
             local:      local,
             inputs:     inputs,
             outputs:    outputs,
@@ -802,7 +806,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: true });
+            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { id: self.id, is_start: true });
 
             let result = if let &mut Some(ref mut operator) = &mut self.operator {
 
@@ -818,7 +822,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
             else { false };
 
-            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { addr: self.addr.clone(), is_start: false });
+            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { id: self.id, is_start: false });
 
             result
         };

@@ -41,11 +41,11 @@ pub trait LoopVariable<G: Scope, T: Timestamp> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn loop_variable<D: Data>(&self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<G, T>, D>);
+    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<G, T>, D>);
 }
 
 impl<G: Scope, T: Timestamp> LoopVariable<G, T> for Child<G, T> {
-    fn loop_variable<D: Data>(&self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<G, T>, D>) {
+    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
         let produced: Rc<RefCell<CountMap<Product<G::Timestamp, T>>>> = Default::default();
