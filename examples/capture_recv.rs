@@ -1,10 +1,9 @@
 extern crate timely;
 
-use std::rc::Rc;
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 use timely::dataflow::Scope;
-use timely::dataflow::operators::{Capture, ToStream, Inspect};
-use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay};
+use timely::dataflow::operators::Inspect;
+use timely::dataflow::operators::capture::{EventReader, Replay};
 
 fn main() {
     timely::execute(timely::Configuration::Thread, |computation| {
