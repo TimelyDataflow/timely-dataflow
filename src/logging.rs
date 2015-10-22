@@ -72,7 +72,9 @@ impl<T: Data, S: Write> EventStreamLogger<T, S> {
         }
     }
     fn set(&self, stream: S) {
-        *self.stream.borrow_mut() = Some(EventWriter::new(stream));
+        let mut stream = EventWriter::new(stream);
+        stream.push(Event::Progress(vec![(RootTimestamp::new(0), 1)]));
+        *self.stream.borrow_mut() = Some(stream);
     }
 }
 
