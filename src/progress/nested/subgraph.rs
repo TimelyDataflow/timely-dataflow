@@ -41,6 +41,8 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     children: Vec<PerOperatorState<Product<TOuter, TInner>>>,
     child_count: usize,
 
+    edge_stash: Vec<(Source, Target)>,
+
     // shared state written to by the datapath, counting records entering this subgraph instance.
     input_messages: Vec<Rc<RefCell<CountMap<Product<TOuter, TInner>>>>>,
 
@@ -81,6 +83,20 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // perhaps first check that the children are saney identified
         self.children.sort_by(|x,y| x.index.cmp(&y.index));
         assert!(self.children.iter().enumerate().all(|(i,x)| i == x.index));
+
+        while let Some((source, target)) = self.edge_stash.pop() {
+            let mut found = false;
+            for child in &mut self.children {
+                if child.index == source.index {
+                    child.edges[source.port].push(target);
+                    found = true;
+                }
+            }
+            if !found {
+                // println!("missing source?: ({}, {})", source, target);
+                panic!("Subgraph::connect: could not find source");
+            }
+        }
 
         // set up a bit of information about the "0th" child, reflecting the subgraph's external
         // connections
@@ -535,14 +551,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 
     pub fn connect(&mut self, source: Source, target: Target) {
-        for child in &mut self.children {
-            if child.index == source.index {
-                child.edges[source.port].push(target);
-                return;
-            }
-        }
-
-        panic!("Subgraph::connect: could not find source");
+        self.edge_stash.push((source, target));
     }
 
 
@@ -563,6 +572,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
             children:               children,
             child_count:            1,
+            edge_stash: vec![],
 
             input_messages:         Default::default(),
             output_capabilities:    Default::default(),
