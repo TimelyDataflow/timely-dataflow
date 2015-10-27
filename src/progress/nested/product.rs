@@ -10,7 +10,7 @@ use abomonation::Abomonation;
 
 /// We use `Product` rather than `(TOuter, TInner)`` so that we can derive our own `PartialOrd`,
 /// because Rust just uses the lexicographic total order.
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Default)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord)]
 pub struct Product<TOuter, TInner> {
     pub outer: TOuter,
     pub inner: TInner,
