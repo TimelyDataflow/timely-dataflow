@@ -29,7 +29,7 @@ pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrd+Debug+Default {
 }
 
 /// An empty timestamp used by the root scope.
-#[derive(Copy, Clone, Hash, Eq, PartialOrd, PartialEq, Default)]
+#[derive(Copy, Clone, Hash, Eq, Ord, PartialOrd, PartialEq, Default)]
 pub struct RootTimestamp;
 impl Timestamp for RootTimestamp { type Summary = RootSummary; }
 impl Debug for RootTimestamp {
@@ -49,7 +49,7 @@ impl RootTimestamp {
 }
 
 /// An empty path summary for root timestamps.
-#[derive(Copy, Clone, Eq, PartialOrd, PartialEq, Debug, Default)]
+#[derive(Copy, Clone, Eq, Ord, PartialOrd, PartialEq, Debug, Default)]
 pub struct RootSummary;
 impl PathSummary<RootTimestamp> for RootSummary {
     #[inline]
