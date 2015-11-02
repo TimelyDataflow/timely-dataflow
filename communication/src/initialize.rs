@@ -95,7 +95,7 @@ impl Configuration {
                     }
                 }
                 else {
-                    for index in (0..processes) {
+                    for index in 0..processes {
                         addresses.push(format!("localhost:{}", 2101 + index));
                     }
                 }

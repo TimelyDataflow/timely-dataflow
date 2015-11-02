@@ -33,7 +33,7 @@ impl Allocate for Binary {
 
         // prep a pushable for each endpoint, multiplied by inner_peers
         for index in 0..self.readers.len() {
-            for counter in (0..inner_peers) {
+            for counter in 0..inner_peers {
                 let mut target_index = index * inner_peers + counter;
 
                 // we may need to increment target_index by inner_peers;

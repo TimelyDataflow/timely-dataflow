@@ -12,10 +12,16 @@ impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
     fn allocate<T: 'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
+        Thread::new()
+    }
+}
+
+impl Thread {
+  pub fn new<T: 'static>() -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
         let shared = Rc::new(RefCell::new(VecDeque::<T>::new()));
         (vec![Box::new(Pusher { target: shared.clone() }) as Box<Push<T>>],
          Box::new(Puller { source: shared, current: None }) as Box<Pull<T>>)
-    }
+    }  
 }
 
 

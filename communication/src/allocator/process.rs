@@ -40,7 +40,7 @@ impl Allocate for Process {
         if self.allocated == channels.len() {
             let mut pushers = Vec::new();
             let mut pullers = Vec::new();
-            for _ in (0..self.peers) {
+            for _ in 0..self.peers {
                 let (s, r): (Sender<T>, Receiver<T>) = channel();
                 pushers.push(Pusher { target: s });
                 pullers.push(Puller { source: r, current: None });

@@ -216,7 +216,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: u
     let mut senders = Vec::new();   // destinations for serialized data (to send serialized data)
 
     // for each process, if a stream exists (i.e. not local) ...
-    for index in (0..results.len()) {
+    for index in 0..results.len() {
         if let Some(stream) = results[index].take() {
 
             let (reader_channels_s, reader_channels_r) = channel();
@@ -260,7 +260,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: u
 // result contains connections [0, my_index - 1].
 fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..my_index).map(|_| None).collect();
-    for index in (0..my_index) {
+    for index in 0..my_index {
         let mut connected = false;
         while !connected {
             match TcpStream::connect(&addresses[index][..]) {
@@ -286,7 +286,7 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
     let mut results: Vec<_> = (0..(addresses.len() - my_index - 1)).map(|_| None).collect();
     let listener = try!(TcpListener::bind(&addresses[my_index][..]));
 
-    for _ in (my_index + 1 .. addresses.len()) {
+    for _ in (my_index + 1) .. addresses.len() {
         let mut stream = try!(listener.accept()).0;
         let identifier = try!(stream.read_u64::<LittleEndian>()) as usize;
         results[identifier - my_index - 1] = Some(stream);
