@@ -78,7 +78,7 @@ impl<T:Timestamp, D: Data, I: Iterator<Item=D>> Operate<T> for Operator<T, D, I>
                 // send 4096 messages, or whatever the buffer size is.
                 let mut session = self.output.session(&Default::default());
                 session.give(element);
-                for element in self.iterator.as_mut().unwrap().take((16 * Content::<D>::default_length()) - 1) {
+                for element in self.iterator.as_mut().unwrap().take((256 * Content::<D>::default_length()) - 1) {
                     session.give(element);
                 }
             }
