@@ -216,7 +216,7 @@ where T: Timestamp,
         let mut internal = vec![CountMap::new()];
         if let Some((ref mut initial, peers)) = self.notify {
             for time in initial.drain_temp() {
-                for _ in (0..peers) {
+                for _ in 0..peers {
                     self.handle.notificator.notify_at(&time);
                 }
             }

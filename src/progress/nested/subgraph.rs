@@ -128,7 +128,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // summarize the scope internals by looking for source_target_summaries from id 0 to id 0.
         let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
-        for input in (0..self.inputs()) {
+        for input in 0..self.inputs() {
             for &(target, ref antichain) in self.children[0].source_target_summaries[input].iter() {
                 if target.index == 0 {
                     for &summary in antichain.elements().iter() {
@@ -284,7 +284,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // This information should be exchanged with peers, probably as subtractions to the output
         // "capabilities" of the input ports. This is a bit non-standard, but ... it makes sense.
         // The "resulting" increments to message counts should also be exchanged at the same time.
-        for input in (0..self.inputs) {
+        for input in 0..self.inputs {
             let mut borrowed = self.input_messages[input].borrow_mut();
             while let Some((time, delta)) = borrowed.pop() {
                 self.local_pointstamp_internal.update(&(0, input, time), delta);
@@ -412,9 +412,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // if there are outstanding messages or capabilities, we must insist on continuing to run
         for child in self.children.iter() {
-            // if child.messages.iter().any(|x| x.elements().len() > 0) { println!("{:?}: child {}[{}] has outstanding messages", self.path, child.name, child.index); }
+            // if child.messages.iter().any(|x| x.elements().len() > 0) 
+            // { println!("{:?}: child {}[{}] has outstanding messages", self.path, child.name, child.index); }
             active = active || child.messages.iter().any(|x| x.elements().len() > 0);
-            // if child.internal.iter().any(|x| x.elements().len() > 0) { println!("{:?} child {}[{}] has outstanding capabilities", self.path, child.name, child.index); }
+            // if child.internal.iter().any(|x| x.elements().len() > 0) 
+            // { println!("{:?} child {}[{}] has outstanding capabilities", self.path, child.name, child.index); }
             active = active || child.internal.iter().any(|x| x.elements().len() > 0);
         }
 
@@ -428,7 +430,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     fn push_pointstamps(&mut self) {
 
         for index in 0..self.pointstamps.target.len() {
-            for input in (0..self.pointstamps.target[index].len()) {
+            for input in 0..self.pointstamps.target[index].len() {
                 while let Some((time, value)) = self.pointstamps.target[index][input].pop() {
                     for &(target, ref antichain) in self.children[index].target_target_summaries[input].iter() {
                         for summary in antichain.elements().iter() {
@@ -441,7 +443,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
         // push pointstamps from sources to targets.
         for index in 0..self.pointstamps.source.len() {
-            for output in (0..self.pointstamps.source[index].len()) {
+            for output in 0..self.pointstamps.source[index].len() {
                 while let Some((time, value)) = self.pointstamps.source[index][output].pop() {
                     for &(target, ref antichain) in self.children[index].source_target_summaries[output].iter() {
                         for summary in antichain.elements().iter() {
@@ -867,7 +869,7 @@ impl<T: Timestamp> PerOperatorState<T> {
            }
 
         // for each output: produced messages and internal progress
-        for output in (0..self.outputs) {
+        for output in 0..self.outputs {
             while let Some((time, delta)) = self.produced_buffer[output].pop() {
                 for target in self.edges[output].iter() {
                     pointstamp_messages.update(&(target.index, target.port, time), delta);
@@ -883,7 +885,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         }
 
         // for each input: consumed messages
-        for input in (0..self.inputs) {
+        for input in 0..self.inputs {
             while let Some((time, delta)) = self.consumed_buffer[input].pop() {
                 pointstamp_messages.update(&(self.index, input, time), -delta);
             }

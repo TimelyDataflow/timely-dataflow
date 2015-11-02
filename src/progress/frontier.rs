@@ -20,7 +20,7 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
         // bail if any element exceeds the candidate
         if !self.elements.iter().any(|x| element.ge(x)) {
             let mut removed = 0;
-            for index in (0..self.elements.len()) {
+            for index in 0..self.elements.len() {
                 let new_index = index - removed;
                 if element.lt(&self.elements[new_index]) {
                     self.elements.swap_remove(new_index);

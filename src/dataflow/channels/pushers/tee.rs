@@ -9,17 +9,17 @@ use abomonation::Abomonation;
 use timely_communication::Push;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
-pub struct Tee<T, D> {
+pub struct Tee<T: 'static, D: 'static> {
     buffer: Vec<D>,
     shared: Rc<RefCell<Vec<Box<Push<(T, Content<D>)>>>>>,
 }
 
-impl<T: Clone, D: Abomonation+Clone> Push<(T, Content<D>)> for Tee<T, D> {
+impl<T: Clone+'static, D: Abomonation+Clone+'static> Push<(T, Content<D>)> for Tee<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
         if let Some((ref time, ref mut data)) = *message {
             let mut pushers = self.shared.borrow_mut();
-            for index in (0..pushers.len()) {
+            for index in 0..pushers.len() {
                 if index < pushers.len() - 1 {
                     // TODO : was `push_all`, but is now `extend`, slow.
                     self.buffer.extend(data.iter().cloned());

@@ -9,17 +9,16 @@ use dataflow::channels::{Message, Content};
 use abomonation::Abomonation;
 
 // A ParallelizationContract transforms the output of a Allocate to an (Observer, Pullable).
-pub trait ParallelizationContract<T: Data, D: Data> {
+pub trait ParallelizationContract<T: 'static, D: 'static> {
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>);
 }
 
 // direct connection
 pub struct Pipeline;
-// TODO : +Abomonation probably not needed?
-impl<T: Data+Abomonation, D: Data+Abomonation> ParallelizationContract<T, D> for Pipeline {
+impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>) {
         // ignore &mut A and use thread allocator
-        let (mut pushers, puller) = Thread.allocate::<Message<T, D>>();
+        let (mut pushers, puller) = Thread::new::<Message<T, D>>();
 
         (Box::new(Pusher::new(pushers.pop().unwrap(), allocator.index(), allocator.index(), identifier)),
          Box::new(Puller::new(puller, allocator.index(), identifier)))

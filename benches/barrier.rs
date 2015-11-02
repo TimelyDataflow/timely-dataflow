@@ -17,7 +17,6 @@ use timely::dataflow::operators::*;
 fn barrier_x100_000(bencher: &mut Bencher) {
 
     bencher.iter(|| {
-
         timely::execute(Configuration::Thread, |root| {
 
             root.scoped(|graph| {
