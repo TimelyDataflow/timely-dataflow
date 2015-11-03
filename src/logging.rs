@@ -48,17 +48,21 @@ impl<T: Data, S: Write> Logger for EventStreamLogger<T, S> {
         self.buffer.borrow_mut().push((record, time::precise_time_ns()));
     }
     fn flush(&self) {
-        if self.buffer.borrow().len() > 0 {
-            if let Some(ref mut writer) = *self.stream.borrow_mut() {
-                let time = time::precise_time_ns();
+        // TODO : sends progress update even if nothing happened.
+        // TODO : consider a minimum interval from prior update to
+        // TODO : cut down on the amount on logging, at the expense 
+        // TODO : of freshness on the side of the reader.
+        if let Some(ref mut writer) = *self.stream.borrow_mut() {
+            let time = time::precise_time_ns();
+            if self.buffer.borrow().len() > 0 {
                 writer.push(Event::Messages(RootTimestamp::new(time), self.buffer.borrow().clone()));
-                writer.push(Event::Progress(vec![(RootTimestamp::new(*self.last_time.borrow()),-1), (RootTimestamp::new(time), 1)]));
-                *self.last_time.borrow_mut() = time;
-                self.buffer.borrow_mut().clear();
             }
-            else {
-                panic!("logging file not initialized!!!!");
-            }
+            writer.push(Event::Progress(vec![(RootTimestamp::new(*self.last_time.borrow()),-1), (RootTimestamp::new(time), 1)]));
+            *self.last_time.borrow_mut() = time;
+            self.buffer.borrow_mut().clear();
+        }
+        else {
+            panic!("logging file not initialized!!!!");
         }
     }
 }
@@ -80,15 +84,15 @@ impl<T: Data, S: Write> EventStreamLogger<T, S> {
 
 impl<T: Data, S: Write> Drop for EventStreamLogger<T, S> {
     fn drop(&mut self) {
-        if self.buffer.borrow().len() > 0 {
-            if let Some(ref mut writer) = *self.stream.borrow_mut() {
+        if let Some(ref mut writer) = *self.stream.borrow_mut() {
+            if self.buffer.borrow().len() > 0 {
                 let time = time::precise_time_ns();
                 writer.push(Event::Messages(RootTimestamp::new(time), self.buffer.borrow().clone()));
-                writer.push(Event::Progress(vec![(RootTimestamp::new(*self.last_time.borrow()),-1)]));
             }
-            else {
-                panic!("logging file not initialized!!!!");
-            }
+            writer.push(Event::Progress(vec![(RootTimestamp::new(*self.last_time.borrow()),-1)]));
+        }
+        else {
+            panic!("logging file not initialized!!!!");
         }
     }
 }
