@@ -116,3 +116,11 @@ The timely communication layer currently discards most buffers it moves through 
 The communication layer is based on a type `Content<T>` which can be backed by typed or binary data. Consequently, it requires that the type it supports be serializable, because it needs to have logic for the case that the data is binary, even if this case is not used. It seems like the `Stream` type should be extendable to be parametric in the type of storage used for the data, so that we can express the fact that some types are not serializable and that this is ok. 
 
 This would allow us to safely pass Rc<T> types around, as long as we use the `Pipeline` parallelization contract.
+
+## Coarse- vs fine-grained timestamps
+
+The progress tracking machinery involves some non-trivial overhead per timestamp. This means that using very fine-grained timestamps, for example the nanosecond at which a record is processed, swamps the progress tracking logic. By contrast, the logging infrastructure demotes nanoseconds to data, part of the logged payload, and approximates batches of events with the largest (should probably be the smallest) timestamp in the batch. This is less accurate from a progress tracking point of view, but more performant. It may be possible to generalize this so that users can write programs without thinking about granularity of timestamp, and the system automatically coarsens when possible (essentially boxcar-ing times).
+
+## Capability-based operators
+
+At the moment there are somewhat delicate contracts with how operators should work: they should not hold on to timestamps not consumed in their inputs, and they should not produce messages for timestamps they have not held on to. This could be enforced by having the system hand out timestamps as capabilities, and attempting to make them unforgeable (in safe code, at least) to prevent accidental anti-patterns where timestamps just get stashed as keys it a `HashMap` and then used when the map is drained. As long as a timestamp is unaccounted for, literally there is an instance of it the systems hasn't had returned to it, the time is still considered open.
