@@ -55,7 +55,7 @@ impl<T: Data, S: Write> Logger for EventStreamLogger<T, S> {
         if let Some(ref mut writer) = *self.stream.borrow_mut() {
             let time = time::precise_time_ns();
             if self.buffer.borrow().len() > 0 {
-                writer.push(Event::Messages(RootTimestamp::new(time), self.buffer.borrow().clone()));
+                writer.push(Event::Messages(RootTimestamp::new(*self.last_time.borrow()), self.buffer.borrow().clone()));
             }
             writer.push(Event::Progress(vec![(RootTimestamp::new(*self.last_time.borrow()),-1), (RootTimestamp::new(time), 1)]));
             *self.last_time.borrow_mut() = time;
@@ -86,8 +86,7 @@ impl<T: Data, S: Write> Drop for EventStreamLogger<T, S> {
     fn drop(&mut self) {
         if let Some(ref mut writer) = *self.stream.borrow_mut() {
             if self.buffer.borrow().len() > 0 {
-                let time = time::precise_time_ns();
-                writer.push(Event::Messages(RootTimestamp::new(time), self.buffer.borrow().clone()));
+                writer.push(Event::Messages(RootTimestamp::new(*self.last_time.borrow()), self.buffer.borrow().clone()));
             }
             writer.push(Event::Progress(vec![(RootTimestamp::new(*self.last_time.borrow()),-1)]));
         }
