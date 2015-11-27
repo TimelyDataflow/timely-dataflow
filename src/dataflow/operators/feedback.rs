@@ -113,7 +113,8 @@ pub trait ConnectLoop<G: Scope, T: Timestamp, D: Data> {
 
 impl<G: Scope, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<G, T>, D> {
     fn connect_loop(&self, helper: Handle<G::Timestamp, T, D>) {
-        self.connect_to(Target { index: helper.index, port: 0 }, helper.target, usize::max_value());
+        let channel_id = self.scope().new_identifier();
+        self.connect_to(Target { index: helper.index, port: 0 }, helper.target, channel_id);
     }
 }
 

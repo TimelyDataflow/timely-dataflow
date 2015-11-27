@@ -94,7 +94,8 @@ Enter<G, T, D> for Child<G, T> {
         let scope_index = self.subgraph.borrow().index;
         let input_index = self.subgraph.borrow_mut().new_input(produced);
 
-        stream.connect_to(Target { index: scope_index, port: input_index }, ingress, usize::max_value());
+        let channel_id = self.clone().new_identifier();
+        stream.connect_to(Target { index: scope_index, port: input_index }, ingress, channel_id);
         Stream::new(Source { index: 0, port: input_index }, registrar, self.clone())
     }
 }
@@ -125,7 +126,8 @@ impl<G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<G, T>, D> {
 
         let output_index = scope.subgraph.borrow_mut().new_output();
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
-        self.connect_to(Target { index: 0, port: output_index }, EgressNub { targets: targets, phantom: PhantomData }, usize::max_value());
+        let channel_id = scope.clone().new_identifier();
+        self.connect_to(Target { index: 0, port: output_index }, EgressNub { targets: targets, phantom: PhantomData }, channel_id);
         let subgraph_index = scope.subgraph.borrow().index;
         
         Stream::new(
