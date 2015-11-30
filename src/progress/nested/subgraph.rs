@@ -801,16 +801,16 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         // assert the "uprighted-ness" property for updates to each input
         // doesn't need to be true here; only after titration through self.external
-        for (index, updates) in external_progress.iter().enumerate() {
-            for &(time, val) in updates.elements() {
-                if val > 0 {
-                    if !self.external[index].elements().iter().any(|&t2| t2.le(&time)) {
-                        println!("in operator: {:?}", self.name);
-                        panic!("non-upright update: {:?}", updates);
-                    }
-                }
-            }
-        }
+        // for (index, updates) in external_progress.iter().enumerate() {
+        //     for &(time, val) in updates.elements() {
+        //         if val > 0 {
+        //             if !self.external[index].elements().iter().any(|&t2| t2.le(&time)) {
+        //                 println!("in operator: {:?}", self.name);
+        //                 panic!("non-upright update: {:?}", updates);
+        //             }
+        //         }
+        //     }
+        // }
 
         // we shouldn't be pushing progress updates at finished operators. would be a bug!
         if !(self.operator.is_some() || external_progress.iter().all(|x| x.len() == 0)) {
