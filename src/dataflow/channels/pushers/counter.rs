@@ -12,11 +12,16 @@ pub struct Counter<T, D, P: Push<(T, Content<D>)>> {
 }
 
 impl<T, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D, P> where T : Eq+Clone+'static {
-    #[inline] fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
+    #[inline] 
+    fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
         if let Some((ref time, ref data)) = *message {
             self.counts.borrow_mut().update(time, data.len() as i64);
         }
-        self.pushee.push(message);
+
+        // only propagate `None` if dirty (indicates flush)
+        if message.is_some() || self.counts.borrow().len() > 0 {
+            self.pushee.push(message);            
+        }
     }
 }
 
