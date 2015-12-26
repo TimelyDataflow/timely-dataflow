@@ -62,7 +62,7 @@ pub trait Scope : Allocate+Clone {
     ///     let input = root.scoped::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<String>();
     ///         let output = child1.scoped::<u32,_,_>(|child2| {
-    ///             child2.enter(&stream).leave()
+    ///             stream.enter(child2).leave()
     ///         });
     ///         input
     ///     });
