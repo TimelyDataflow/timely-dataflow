@@ -12,9 +12,9 @@
 //! timely::example(|outer| {
 //!     let stream = (0..9).to_stream(outer);
 //!     let output = outer.scoped::<u32,_,_>(|inner| {
-//!         inner.enter(&stream)
-//!              .inspect(|x| println!("in nested scope: {:?}", x))
-//!              .leave()
+//!         stream.enter(inner)
+//!               .inspect(|x| println!("in nested scope: {:?}", x))
+//!               .leave()
 //!     });
 //! });
 //! ```
@@ -49,11 +49,11 @@ pub trait Enter<G: Scope, T: Timestamp, D: Data> {
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer);
     ///     let output = outer.scoped::<u32,_,_>(|inner| {
-    ///         inner.enter(&stream).leave()
+    ///         stream.enter(inner).leave()
     ///     });
     /// });
     /// ```
-    fn enter(&self, &Stream<G, D>) -> Stream<Child<G, T>, D>;
+    fn enter(&self, &Child<G, T>) -> Stream<Child<G, T>, D>;
 }
 
 /// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
@@ -68,35 +68,34 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data>  where  G::Timestamp: Hash, T
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer);
     ///     let output = outer.scoped::<u32,_,_>(|inner| {
-    ///         inner.enter_at(&stream, |x| *x).leave()
+    ///         stream.enter_at(inner, |x| *x).leave()
     ///     });
     /// });
     /// ```
-    fn enter_at<F:Fn(&D)->T+'static>(&self, stream: &Stream<G, D>, initial: F) -> Stream<Child<G, T>, D> ;
+    fn enter_at<F:Fn(&D)->T+'static>(&self, scope: &Child<G, T>, initial: F) -> Stream<Child<G, T>, D> ;
 }
 
 impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, T, D>> EnterAt<G, T, D> for E
 where G::Timestamp: Hash, T: Hash {
-    fn enter_at<F:Fn(&D)->T+'static>(&self, stream: &Stream<G, D>, initial: F) ->
+    fn enter_at<F:Fn(&D)->T+'static>(&self, scope: &Child<G, T>, initial: F) ->
         Stream<Child<G, T>, D> {
-            self.enter(stream).delay(move |datum, time| Product::new(time.outer, initial(datum)))
+            self.enter(scope).delay(move |datum, time| Product::new(time.outer, initial(datum)))
     }
 }
 
-impl<T: Timestamp, G: Scope, D: Data>
-Enter<G, T, D> for Child<G, T> {
-    fn enter(&self, stream: &Stream<G, D>) -> Stream<Child<G, T>, D> {
+impl<T: Timestamp, G: Scope, D: Data> Enter<G, T, D> for Stream<G, D> {
+    fn enter(&self, scope: &Child<G, T>) -> Stream<Child<G, T>, D> {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
         let ingress = IngressNub { targets: Counter::new(targets, produced.clone()) };
 
-        let scope_index = self.subgraph.borrow().index;
-        let input_index = self.subgraph.borrow_mut().new_input(produced);
+        let scope_index = scope.subgraph.borrow().index;
+        let input_index = scope.subgraph.borrow_mut().new_input(produced);
 
-        let channel_id = self.clone().new_identifier();
-        stream.connect_to(Target { index: scope_index, port: input_index }, ingress, channel_id);
-        Stream::new(Source { index: 0, port: input_index }, registrar, self.clone())
+        let channel_id = scope.clone().new_identifier();
+        self.connect_to(Target { index: scope_index, port: input_index }, ingress, channel_id);
+        Stream::new(Source { index: 0, port: input_index }, registrar, scope.clone())
     }
 }
 
@@ -112,7 +111,7 @@ pub trait Leave<G: Scope, D: Data> {
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer);
     ///     let output = outer.scoped::<u32,_,_>(|inner| {
-    ///         inner.enter(&stream).leave()
+    ///         stream.enter(inner).leave()
     ///     });
     /// });
     /// ```
