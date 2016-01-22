@@ -68,7 +68,6 @@ pub use timely_communication::{Push, Pull, Configuration};
 
 pub mod progress;
 pub mod dataflow;
-pub mod drain;
 pub mod execute;
 
 // #[cfg(feature = "logging")]

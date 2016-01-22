@@ -11,9 +11,6 @@ use radix_sort::RadixSorter;
 use timely::dataflow::*;
 use timely::dataflow::operators::*;
 use timely::dataflow::channels::pact::Exchange;
-
-use timely::drain::DrainExt;
-
 fn main() {
 
     // command-line args: numbers of nodes and edges in the random graph.
@@ -98,7 +95,7 @@ fn main() {
                             // construct the graph
                             offsets.push(0);
                             let mut prev_node = 0;
-                            for buffer in edge_list.drain_temp() {
+                            for buffer in edge_list.drain(..) {
                                 for (node, edge) in buffer {
                                     let temp = node / peers as u32;
                                     while prev_node < temp {
@@ -120,7 +117,7 @@ fn main() {
                             // we could sort these, or not. try it out!
                             // sorter.sort(&mut todo, &|x| x.0);
 
-                            for buffer in todo.drain_temp() {
+                            for buffer in todo.drain(..) {
                                 for (node, prev) in buffer {
                                     let temp = (node as usize) / peers;
                                     if done[temp] == u32::max_value() {

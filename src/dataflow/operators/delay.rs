@@ -8,8 +8,6 @@ use dataflow::channels::Content;
 use dataflow::{Stream, Scope};
 use dataflow::operators::unary::Unary;
 
-use drain::DrainExt;
-
 pub trait Delay<G: Scope, D: Data> {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
     fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
@@ -21,7 +19,7 @@ where G::Timestamp: Hash {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.next() {
-                for datum in data.drain_temp() {
+                for datum in data.drain(..) {
                     let new_time = func(&datum, time);
                     assert!(&new_time >= time);
                     elements.entry(new_time.clone())
@@ -32,7 +30,7 @@ where G::Timestamp: Hash {
             // for each available notification, send corresponding set
             while let Some((time, _count)) = notificator.next() {
                 if let Some(mut data) = elements.remove(&time) {
-                    output.session(&time).give_iterator(data.drain_temp());
+                    output.session(&time).give_iterator(data.drain(..));
                 }
             }
         })
@@ -56,7 +54,7 @@ where G::Timestamp: Hash {
             // for each available notification, send corresponding set
             while let Some((time, _count)) = notificator.next() {
                 if let Some(mut datas) = elements.remove(&time) {
-                    for mut data in datas.drain_temp() {
+                    for mut data in datas.drain(..) {
                         let mut message = Content::from_typed(&mut data);
                         output.session(&time).give_content(&mut message);
                         let buffer = message.into_typed();

@@ -1,7 +1,3 @@
-// use communication::{Message, Observer};
-// use serialization::Serializable;
-use drain::DrainExt;
-
 use {Push, Data};
 use dataflow::channels::Content;
 use abomonation::Abomonation;
@@ -59,7 +55,7 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                 // if the number of pushers is a power of two, use a mask
                 if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
                     let mask = (self.pushers.len() - 1) as u64;
-                    for datum in data.drain_temp() {
+                    for datum in data.drain(..) {
                         let index = (((self.hash_func)(&datum)) & mask) as usize;
 
                         self.buffers[index].push(datum);
@@ -78,7 +74,7 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                 }
                 // as a last resort, use mod (%)
                 else {
-                    for datum in data.drain_temp() {
+                    for datum in data.drain(..) {
                         let index = (((self.hash_func)(&datum)) % self.pushers.len() as u64) as usize;
                         self.buffers[index].push(datum);
                         if self.buffers[index].len() == self.buffers[index].capacity() {

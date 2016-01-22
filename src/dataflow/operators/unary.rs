@@ -19,8 +19,6 @@ use ::Data;
 
 use dataflow::{Stream, Scope};
 
-use drain::DrainExt;
-
 // type Input<T, D> = PullCounter<T, D>;
 // type Output<T, D> = PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>;
 
@@ -183,7 +181,7 @@ where T: Timestamp,
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut internal = vec![CountMap::new()];
         if let Some((ref mut initial, peers)) = self.notify {
-            for time in initial.drain_temp() {
+            for time in initial.drain(..) {
                 for _ in 0..peers {
                     self.handle.notificator.notify_at(&time);
                 }

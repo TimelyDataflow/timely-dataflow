@@ -4,7 +4,6 @@
 //! operator output. Extension methods on the `Stream` type provide the appearance of higher-level
 //! declarative progamming, while constructing a dataflow graph underneath.
 
-use progress::Timestamp;
 use progress::nested::subgraph::{Source, Target};
 
 use {Data, Push};

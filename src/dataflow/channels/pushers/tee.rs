@@ -22,7 +22,7 @@ impl<T: Clone+'static, D: Abomonation+Clone+'static> Push<(T, Content<D>)> for T
             for index in 0..pushers.len() {
                 if index < pushers.len() - 1 {
                     // TODO : was `push_all`, but is now `extend`, slow.
-                    self.buffer.extend(data.iter().cloned());
+                    self.buffer.extend_from_slice(data);
                     Content::push_at(&mut self.buffer, (*time).clone(), &mut pushers[index]);
                 }
                 else {

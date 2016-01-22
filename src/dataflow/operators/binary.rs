@@ -19,8 +19,6 @@ use dataflow::channels::pushers::buffer::Buffer as ObserverBuffer;
 
 use dataflow::{Stream, Scope};
 
-use drain::DrainExt;
-
 /// Methods to construct generic streaming and blocking binary operators.
 pub trait Binary<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions each of its input stream by a parallelization
@@ -215,7 +213,7 @@ where T: Timestamp,
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
         let mut internal = vec![CountMap::new()];
         if let Some((ref mut initial, peers)) = self.notify {
-            for time in initial.drain_temp() {
+            for time in initial.drain(..) {
                 for _ in 0..peers {
                     self.handle.notificator.notify_at(&time);
                 }

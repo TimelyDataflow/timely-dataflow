@@ -17,8 +17,6 @@ use dataflow::channels::pullers::Counter as PullCounter;
 
 use dataflow::{Stream, Scope};
 
-use drain::DrainExt;
-
 /// Partition a stream of records into multiple streams.
 pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
     /// Produces `parts` output streams, containing records produced and assigned by `route`.
@@ -99,7 +97,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
             // TODO : This results in small sends for many parts, as sessions does the buffering
             let mut sessions: Vec<_> = outputs.map(|x| x.session(&time)).collect();
 
-            for (part, datum) in data.drain_temp().map(&self.route) {
+            for (part, datum) in data.drain(..).map(&self.route) {
                 sessions[part as usize].give(datum);
             }
         }

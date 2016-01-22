@@ -4,7 +4,6 @@ use Data;
 use dataflow::{Stream, Scope};
 use dataflow::channels::pact::Pipeline;
 use dataflow::operators::unary::Unary;
-use drain::DrainExt;
 
 /// Extension trait for `Stream`.
 pub trait Map<S: Scope, D: Data> {
@@ -53,7 +52,7 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn map<D2: Data, L: Fn(D)->D2+'static>(&self, logic: L) -> Stream<S, D2> {
         self.unary_stream(Pipeline, "Map", move |input, output| {
             while let Some((time, data)) = input.next() {
-                output.session(time).give_iterator(data.drain_temp().map(|x| logic(x)));
+                output.session(time).give_iterator(data.drain(..).map(|x| logic(x)));
             }
         })
     }
@@ -71,14 +70,14 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn flat_map<I: Iterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data {
         self.unary_stream(Pipeline, "FlatMap", move |input, output| {
             while let Some((time, data)) = input.next() {
-                output.session(time).give_iterator(data.drain_temp().flat_map(|x| logic(x)));
+                output.session(time).give_iterator(data.drain(..).flat_map(|x| logic(x)));
             }
         })
     }
     // fn filter_map<D2: Data, L: Fn(D)->Option<D2>+'static>(&self, logic: L) -> Stream<S, D2> {
     //     self.unary_stream(Pipeline, "FilterMap", move |input, output| {
     //         while let Some((time, data)) = input.next() {
-    //             output.session(time).give_iterator(data.drain_temp().filter_map(|x| logic(x)));
+    //             output.session(time).give_iterator(data.drain(..).filter_map(|x| logic(x)));
     //         }
     //     })
     // }
