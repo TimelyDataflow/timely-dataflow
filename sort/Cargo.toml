@@ -1,0 +1,13 @@
+[package]
+name = "timely_sort"
+version = "0.1.1"
+authors = ["Frank McSherry <fmcsherry@me.com>"]
+
+description = "Sorting infrastructure for timely dataflow"
+
+# These URLs point to more information about the repository
+documentation = "https://frankmcsherry.github.com/timely-dataflow"
+homepage = "https://github.com/frankmcsherry/timely-dataflow"
+repository = "https://github.com/frankmcsherry/timely-dataflow.git"
+keywords = ["timely", "dataflow", "radix", "sort"]
+license = "MIT"
