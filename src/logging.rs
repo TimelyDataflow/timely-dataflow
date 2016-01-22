@@ -190,14 +190,45 @@ pub struct MessagesEvent {
 
 unsafe_abomonate!(MessagesEvent);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartStop {
+    Start,
+    Stop { activity: bool },
+}
+
+impl Abomonation for StartStop { }
+
+#[test]
+fn start_stop_abomonation_roundtrip() {
+    use abomonation::{encode, decode};
+    fn check(data: StartStop) -> () {
+        let mut bytes = Vec::new();
+        unsafe {
+            encode(&data, &mut bytes);
+        }
+        if let Some((result, remaining)) = unsafe { decode::<StartStop>(&mut bytes) } {
+            assert!(result == &data);
+            assert!(remaining.len() == 0);
+        }
+    }
+    for data in vec![
+        StartStop::Stop { activity: true },
+        StartStop::Stop { activity: false },
+        StartStop::Start,
+    ] {
+        check(data);
+    }
+}
 
 #[derive(Debug, Clone)]
 /// Operator start or stop.
 pub struct ScheduleEvent {
     /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
     pub id: usize,
-    /// `true` if the operator is starting, `false` if it is stopping.
-    pub is_start: bool,
+    /// `Start` if the operator is starting, `Stop` if it is stopping.
+    /// activiy is true if it looks like some useful work was performed during this call (data was
+    /// read or written, notifications were requested / delivered)
+    pub start_stop: StartStop,
 }
 
-unsafe_abomonate!(ScheduleEvent : id, is_start);
+unsafe_abomonate!(ScheduleEvent : id, start_stop);
