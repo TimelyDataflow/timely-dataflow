@@ -1,7 +1,7 @@
 [package]
 
 name = "timely"
-version = "0.0.11"
+version = "0.0.12"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 description = "A low-latency data-parallel dataflow system in Rust"
@@ -21,14 +21,12 @@ default=[]
 logging=[]
 
 [dependencies]
-abomonation="*"
-timely_communication="*"
-byteorder="*"
-time="*"
+abomonation="0.4.*"
+timely_communication="0.1.*"
+byteorder="0.4.2"
+time="0.1.34"
 
 [dev-dependencies]
-getopts="*"
-rand="*"
-
-[dev-dependencies.radix_sort]
-git="https://github.com/frankmcsherry/radix-sort"
+getopts="0.2.14"
+rand="0.3.13"
+timely_sort="0.1.1"

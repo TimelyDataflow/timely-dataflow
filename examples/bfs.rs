@@ -1,12 +1,12 @@
 extern crate time;
 extern crate rand;
 extern crate timely;
-extern crate radix_sort;
+extern crate timely_sort;
 
 use std::collections::HashMap;
 
 use rand::{Rng, SeedableRng, StdRng};
-use radix_sort::RadixSorter;
+use timely_sort::LSBRadixSorter as RadixSorter;
 
 use timely::dataflow::*;
 use timely::dataflow::operators::*;

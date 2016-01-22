@@ -1,6 +1,6 @@
 [package]
 name = "timely_communication"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 description = "Communication layer for timely dataflow"
@@ -13,6 +13,6 @@ keywords = ["timely", "dataflow"]
 license = "MIT"
 
 [dependencies]
-abomonation="*"
-byteorder="*"
-getopts="*"
+abomonation="0.4.*"
+byteorder="0.4.2"
+getopts="0.2.14"
