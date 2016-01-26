@@ -26,7 +26,7 @@ impl<S:PartialOrd+Copy, T:PartialOrd+Copy> PartialOrd for Summary<S, T> {
         match (*self, *other) {
             (Local(t1),    Local(t2))    => t1.partial_cmp(&t2),
             (Local(t1),    Outer(_,t2))  => match t1.partial_cmp(&t2) {
-                Some(Ordering::Less)    => Some(Ordering::Less),
+                Some(Ordering::Less)    => Some(Ordering::Less), // TODO : Is this correct? 
                 Some(Ordering::Equal)   => Some(Ordering::Less), // might not be strict if s2~=0, but lets break ties
                 Some(Ordering::Greater) => None,                 // if s2 = 0 we could be leaving something else out
                 None                    => None,

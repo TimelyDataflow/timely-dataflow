@@ -103,9 +103,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             // introduce capabilities as pre-pushed pointstamps; will push to outputs.
             for (output, capability) in child.internal.iter().enumerate() {
                 for time in capability.elements() {
-                    // println!("  child {} output {} has capability: {:?}", child.index, output, time);
                     self.pointstamps.source[child.index][output].update(time, 1);
-                    // self.final_pointstamp_internal.update(&(child.index, output, time.clone()), 1);
                 }
             }
         }
@@ -356,6 +354,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // fold exchanged messages into the view of global progress.
         self.local_pointstamp_messages.drain_into(&mut self.final_pointstamp_messages);
+
         while let Some(((index, port, timestamp), delta)) = self.local_pointstamp_internal.pop() {
             if index == 0 { consumed[port].update(&timestamp.outer, delta); }
             else { self.final_pointstamp_internal.update(&(index, port, timestamp), delta); }
@@ -382,10 +381,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         }
         while let Some(((index, output, time), delta)) = self.final_pointstamp_internal.pop() {
             let pointstamps = &mut self.pointstamps;
-            // println!("attempting internal update for {}[{}][{}]: {:?} by {}", self.children[index].name, index, output, time, delta);
-            // println!("  current state: {:?}", self.children[index].internal[output]);
             self.children[index].internal[output].update_and(&time, delta, |time, delta| {
-                // println!("  difference made! {:?} {}", time, delta);
                 pointstamps.update_source(Source { index: index, port: output }, time, delta);
             });
         }
@@ -799,6 +795,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     pub fn push_pointstamps(&mut self, external_progress: &[CountMap<T>]) {
 
+        // TODO : Introduce correct assertion
         // assert the "uprighted-ness" property for updates to each input
         // doesn't need to be true here; only after titration through self.external
         // for (index, updates) in external_progress.iter().enumerate() {
@@ -878,9 +875,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             while let Some((time, delta)) = self.internal_buffer[output].pop() {
                 let index = self.index;
-                // self.internal[output].update_and(&time, delta, |&t,d| {
-                    pointstamp_internal.update(&(index, output, time), delta);
-                // });
+                pointstamp_internal.update(&(index, output, time), delta);
             }
         }
 
