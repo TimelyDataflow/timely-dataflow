@@ -20,10 +20,10 @@ where G::Timestamp: Hash {
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.next() {
                 for datum in data.drain(..) {
-                    let new_time = func(&datum, time);
-                    assert!(&new_time >= time);
+                    let new_time = func(&datum, &time);
+                    assert!(new_time >= time.time());
                     elements.entry(new_time.clone())
-                            .or_insert_with(|| { notificator.notify_at(&new_time); Vec::new() })
+                            .or_insert_with(|| { notificator.notify_at(time.clone().into_delayed(&new_time)); Vec::new() })
                             .push(datum);
                 }
             }
@@ -41,13 +41,13 @@ where G::Timestamp: Hash {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.next() {
-                let new_time = func(time);
-                assert!(&new_time >= time);
+                let new_time = func(&time);
+                assert!(new_time >= time.time());
                 let spare = stash.pop().unwrap_or_else(|| Vec::new());
                 let data = ::std::mem::replace(data.deref_mut(), spare);
 
                 elements.entry(new_time.clone())
-                        .or_insert_with(|| { notificator.notify_at(&new_time); Vec::new() })
+                        .or_insert_with(|| { notificator.notify_at(time.clone().into_delayed(&new_time)); Vec::new() })
                         .push(data);
             }
 

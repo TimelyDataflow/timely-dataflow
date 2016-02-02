@@ -7,7 +7,7 @@ use std::default::Default;
 use progress::nested::subgraph::{Source, Target};
 
 use progress::count_map::CountMap;
-use progress::notificator::Notificator;
+use dataflow::operators::capabilities::CapabilityNotificator as Notificator;
 use progress::{Timestamp, Operate, Antichain};
 use dataflow::channels::pushers::Tee;
 use dataflow::channels::pushers::Counter as PushCounter;
@@ -15,12 +15,14 @@ use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pullers::Counter as PullCounter;
 
+use dataflow::operators::capabilities::{CapabilityPull, CapabilityPush, unsafe_mint_capability};
+
 use ::Data;
 
 use dataflow::{Stream, Scope};
 
-// type Input<T, D> = PullCounter<T, D>;
-// type Output<T, D> = PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>;
+pub type Input<'a, T, D> = CapabilityPull<'a, T, D>;
+pub type Output<'a, T, D, P> = CapabilityPush<'a, T, D, P>;
 
 /// Methods to construct generic streaming and blocking unary operators.
 pub trait Unary<G: Scope, D1: Data> {
@@ -45,8 +47,8 @@ pub trait Unary<G: Scope, D1: Data> {
     fn unary_stream<D2, L, P> (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>
     where
         D2: Data,
-        L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                 &mut PushBuffer<G::Timestamp, D2,PushCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>)+'static,
+        L: FnMut(&mut Input<G::Timestamp, D1>,
+                 &mut Output<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream,
@@ -74,16 +76,16 @@ pub trait Unary<G: Scope, D1: Data> {
     fn unary_notify<D2, L, P> (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>
     where
         D2: Data,
-        L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                 &mut PushBuffer<G::Timestamp, D2, PushCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>,
+        L: FnMut(&mut Input<G::Timestamp, D1>,
+                 &mut Output<G::Timestamp, D2, Tee<G::Timestamp, D2>>,
                  &mut Notificator<G::Timestamp>)+'static,
          P: ParallelizationContract<G::Timestamp, D1>;
 }
 
 impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
     fn unary_notify<D2: Data,
-            L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                     &mut PushBuffer<G::Timestamp, D2, PushCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>,
+            L: FnMut(&mut Input<G::Timestamp, D1>,
+                     &mut Output<G::Timestamp, D2, Tee<G::Timestamp, D2>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2> {
@@ -103,8 +105,8 @@ impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
     }
 
     fn unary_stream<D2: Data,
-             L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                      &mut PushBuffer<G::Timestamp, D2, PushCounter<G::Timestamp, D2, Tee<G::Timestamp, D2>>>)+'static,
+             L: FnMut(&mut Input<G::Timestamp, D1>,
+                      &mut Output<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&self, pact: P, name: &str, mut logic: L) -> Stream<G, D2> {
 
@@ -134,20 +136,21 @@ struct Operator
     T: Timestamp,
     D1: Data,
     D2: Data,
-    L: FnMut(&mut PullCounter<T, D1>,
-             &mut PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>,
+    L: FnMut(&mut Input<T, D1>,
+             &mut Output<T, D2, Tee<T, D2>>,
              &mut Notificator<T>)> {
-    name:           String,
-    handle:         UnaryScopeHandle<T, D1, D2>,
-    logic:          L,
-    notify:         Option<(Vec<T>, usize)>,    // initial notifications and peers
+    name:             String,
+    handle:           UnaryScopeHandle<T, D1, D2>,
+    logic:            L,
+    notify:           Option<(Vec<T>, usize)>,    // initial notifications and peers
+    internal_changes: Rc<RefCell<CountMap<T>>>,
 }
 
 impl<T:  Timestamp,
      D1: Data,
      D2: Data,
-     L:  FnMut(&mut PullCounter<T, D1>,
-               &mut PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>,
+     L:  FnMut(&mut Input<T, D1>,
+               &mut Output<T, D2, Tee<T, D2>>,
                &mut Notificator<T>)>
 Operator<T, D1, D2, L> {
     pub fn new(receiver: PullCounter<T, D1>,
@@ -156,15 +159,19 @@ Operator<T, D1, D2, L> {
                logic:    L,
                notify:   Option<(Vec<T>, usize)>)
            -> Operator<T, D1, D2, L> {
+
+        let internal = Rc::new(RefCell::new(CountMap::new()));
+
         Operator {
             name:    name,
             handle:  UnaryScopeHandle {
                 input:       receiver,
                 output:      PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
-                notificator: Default::default(),
+                notificator: Notificator::new(internal.clone()),
             },
             logic:   logic,
             notify:  notify,
+            internal_changes: internal.clone(),
         }
     }
 }
@@ -172,8 +179,8 @@ Operator<T, D1, D2, L> {
 impl<T, D1, D2, L> Operate<T> for Operator<T, D1, D2, L>
 where T: Timestamp,
       D1: Data, D2: Data,
-      L: FnMut(&mut PullCounter<T, D1>,
-               &mut PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>,
+      L: FnMut(&mut Input<T, D1>,
+               &mut Output<T, D2, Tee<T, D2>>,
                &mut Notificator<T>) {
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { 1 }
@@ -183,11 +190,11 @@ where T: Timestamp,
         if let Some((ref mut initial, peers)) = self.notify {
             for time in initial.drain(..) {
                 for _ in 0..peers {
-                    self.handle.notificator.notify_at(&time);
+                    self.handle.notificator.notify_at(unsafe_mint_capability(time, self.internal_changes.clone()));
                 }
             }
 
-            self.handle.notificator.pull_progress(&mut internal[0]);
+            self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
         }
         (vec![vec![Antichain::from_elem(Default::default())]], internal)
     }
@@ -205,14 +212,18 @@ where T: Timestamp,
                                          internal: &mut [CountMap<T>],
                                          produced: &mut [CountMap<T>]) -> bool
     {
-        (self.logic)(&mut self.handle.input, &mut self.handle.output, &mut self.handle.notificator);
+        {
+            let mut capability_pull = CapabilityPull::new(&mut self.handle.input, self.internal_changes.clone());
+            let mut capability_push = CapabilityPush::new(&mut self.handle.output);
+            (self.logic)(&mut capability_pull, &mut capability_push, &mut self.handle.notificator);
+        }
 
         self.handle.output.cease();
 
         // extract what we know about progress from the input and output adapters.
         self.handle.input.pull_progress(&mut consumed[0]);
         self.handle.output.inner().pull_progress(&mut produced[0]);
-        self.handle.notificator.pull_progress(&mut internal[0]);
+        self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 
         return false;   // no unannounced internal work
     }

@@ -6,7 +6,8 @@ use std::ops::Deref;
 use progress::Timestamp;
 use progress::count_map::CountMap;
 use progress::frontier::MutableAntichain;
-use dataflow::channels::pullers::Counter;
+use dataflow::channels::pullers::Counter as PullCounter;
+use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::{Buffer, Session};
 use dataflow::channels::Content;
 use timely_communication::Push;
@@ -58,12 +59,12 @@ impl<T: Timestamp> Deref for Capability<T> {
 }
 
 pub struct CapabilityPull<'a, T: Timestamp, D: 'a> {
-    pull_counter: &'a mut Counter<T, D>,
+    pull_counter: &'a mut PullCounter<T, D>,
     internal: Rc<RefCell<CountMap<T>>>,
 }
 
 impl<'a, 'b, T: Timestamp, D> CapabilityPull<'a, T, D> {
-    pub fn new(pull_counter: &'a mut Counter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> CapabilityPull<'a, T, D> {
+    pub fn new(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> CapabilityPull<'a, T, D> {
         CapabilityPull {
             pull_counter: pull_counter,
             internal: internal,
@@ -89,17 +90,17 @@ impl<'a, 'b, T: Timestamp, D> CapabilityPull<'a, T, D> {
 }
 
 pub struct CapabilityPush<'a, T: Timestamp, D: 'a, P: Push<(T, Content<D>)>+'a> {
-    pub push_buffer: &'a mut Buffer<T, D, P>,
+    pub push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>,
 }
 
 impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> CapabilityPush<'a, T, D, P> {
-    pub fn new(push_buffer: &'a mut Buffer<T, D, P>) -> CapabilityPush<'a, T, D, P> {
+    pub fn new(push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>) -> CapabilityPush<'a, T, D, P> {
         CapabilityPush {
             push_buffer: push_buffer,
         }
     }
 
-    pub fn session<'b>(&'b mut self, cap: &Capability<T>) -> Session<'b, T, D, P> where 'a: 'b {
+    pub fn session<'b>(&'b mut self, cap: &Capability<T>) -> Session<'b, T, D, PushCounter<T, D, P>> where 'a: 'b {
         self.push_buffer.session(cap)
     }
 }
@@ -185,3 +186,11 @@ impl<T: Timestamp> Iterator for CapabilityNotificator<T> {
         else { None }
     }
 }
+
+pub fn unsafe_mint_capability<T: Timestamp>(time: T, internal: Rc<RefCell<CountMap<T>>>) -> Capability<T> {
+    Capability {
+        time: time,
+        internal: internal,
+    }
+}
+
