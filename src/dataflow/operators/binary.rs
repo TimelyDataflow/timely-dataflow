@@ -152,13 +152,6 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
     }
 }
 
-struct Handle<T: Timestamp, D1: Data, D2: Data, D3: Data> {
-    pub input1:         PullCounter<T, D1>,
-    pub input2:         PullCounter<T, D2>,
-    pub output:         ObserverBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
-    pub notificator:    Notificator<T>,
-}
-
 struct Operator<T: Timestamp,
                        D1: Data, D2: Data, D3: Data,
                        L: FnMut(&mut PullCounter<T, D1>,
@@ -166,7 +159,10 @@ struct Operator<T: Timestamp,
                                 &mut ObserverBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
                                 &mut Notificator<T>)> {
     name:           String,
-    handle:         Handle<T, D1, D2, D3>,
+    input1:         PullCounter<T, D1>,
+    input2:         PullCounter<T, D2>,
+    output:         ObserverBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
+    notificator:    Notificator<T>,
     logic:          L,
     notify:         Option<(Vec<T>, usize)>,  // initial notifications and peers
 }
@@ -188,12 +184,10 @@ Operator<T, D1, D2, D3, L> {
         -> Operator<T, D1, D2, D3, L> {
         Operator {
             name: name,
-            handle: Handle {
-                input1:      receiver1,
-                input2:      receiver2,
-                output:      ObserverBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
-                notificator: Default::default(),
-            },
+            input1:      receiver1,
+            input2:      receiver2,
+            output:      ObserverBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            notificator: Default::default(),
             logic: logic,
             notify: notify,
         }
@@ -215,37 +209,37 @@ where T: Timestamp,
         if let Some((ref mut initial, peers)) = self.notify {
             for time in initial.drain(..) {
                 for _ in 0..peers {
-                    self.handle.notificator.notify_at(&time);
+                    self.notificator.notify_at(&time);
                 }
             }
 
-            self.handle.notificator.pull_progress(&mut internal[0]);
+            self.notificator.pull_progress(&mut internal[0]);
         }
         (vec![vec![Antichain::from_elem(Default::default())],
               vec![Antichain::from_elem(Default::default())]], internal)
     }
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [CountMap<T>]) -> () {
-        self.handle.notificator.update_frontier_from_cm(frontier);
+        self.notificator.update_frontier_from_cm(frontier);
     }
 
     fn push_external_progress(&mut self, external: &mut [CountMap<T>]) -> () {
-        self.handle.notificator.update_frontier_from_cm(external);
+        self.notificator.update_frontier_from_cm(external);
     }
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
                                          internal: &mut [CountMap<T>],
                                          produced: &mut [CountMap<T>]) -> bool
     {
-        (self.logic)(&mut self.handle.input1, &mut self.handle.input2, &mut self.handle.output, &mut self.handle.notificator);
+        (self.logic)(&mut self.input1, &mut self.input2, &mut self.output, &mut self.notificator);
 
-        self.handle.output.cease();
+        self.output.cease();
 
         // extract what we know about progress from the input and output adapters.
-        self.handle.input1.pull_progress(&mut consumed[0]);
-        self.handle.input2.pull_progress(&mut consumed[1]);
-        self.handle.output.inner().pull_progress(&mut produced[0]);
-        self.handle.notificator.pull_progress(&mut internal[0]);
+        self.input1.pull_progress(&mut consumed[0]);
+        self.input2.pull_progress(&mut consumed[1]);
+        self.output.inner().pull_progress(&mut produced[0]);
+        self.notificator.pull_progress(&mut internal[0]);
 
         return false;   // no unannounced internal work
     }

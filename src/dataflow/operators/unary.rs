@@ -122,13 +122,6 @@ impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
     }
 }
 
-// TODO : Is this necessary, or useful? (perhaps!)
-struct UnaryScopeHandle<T: Timestamp, D1: Data, D2: Data> {
-    pub input:          PullCounter<T, D1>,
-    pub output:         PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>,
-    pub notificator:    Notificator<T>,
-}
-
 struct Operator
     <
     T: Timestamp,
@@ -138,7 +131,9 @@ struct Operator
              &mut OutputHandle<T, D2, Tee<T, D2>>,
              &mut Notificator<T>)> {
     name:             String,
-    handle:           UnaryScopeHandle<T, D1, D2>,
+    input:            PullCounter<T, D1>,
+    output:           PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>,
+    notificator:      Notificator<T>,
     logic:            L,
     notify:           Option<(Vec<T>, usize)>,    // initial notifications and peers
     internal_changes: Rc<RefCell<CountMap<T>>>,
@@ -162,11 +157,9 @@ Operator<T, D1, D2, L> {
 
         Operator {
             name:    name,
-            handle:  UnaryScopeHandle {
-                input:       receiver,
-                output:      PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
-                notificator: Notificator::new(internal.clone()),
-            },
+            input:       receiver,
+            output:      PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            notificator: Notificator::new(internal.clone()),
             logic:   logic,
             notify:  notify,
             internal_changes: internal.clone(),
@@ -188,7 +181,7 @@ where T: Timestamp,
         if let Some((ref mut initial, peers)) = self.notify {
             for time in initial.drain(..) {
                 for _ in 0..peers {
-                    self.handle.notificator.notify_at(mint_capability(time, self.internal_changes.clone()));
+                    self.notificator.notify_at(mint_capability(time, self.internal_changes.clone()));
                 }
             }
 
@@ -199,11 +192,11 @@ where T: Timestamp,
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>,
                                        frontier: &mut [CountMap<T>]) {
-        self.handle.notificator.update_frontier_from_cm(frontier);
+        self.notificator.update_frontier_from_cm(frontier);
     }
 
     fn push_external_progress(&mut self, external: &mut [CountMap<T>]) {
-        self.handle.notificator.update_frontier_from_cm(external);
+        self.notificator.update_frontier_from_cm(external);
     }
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
@@ -211,16 +204,16 @@ where T: Timestamp,
                                          produced: &mut [CountMap<T>]) -> bool
     {
         {
-            let mut input_handle = InputHandle::new(&mut self.handle.input, self.internal_changes.clone());
-            let mut output_handle = OutputHandle::new(&mut self.handle.output);
-            (self.logic)(&mut input_handle, &mut output_handle, &mut self.handle.notificator);
+            let mut input_handle = InputHandle::new(&mut self.input, self.internal_changes.clone());
+            let mut output_handle = OutputHandle::new(&mut self.output);
+            (self.logic)(&mut input_handle, &mut output_handle, &mut self.notificator);
         }
 
-        self.handle.output.cease();
+        self.output.cease();
 
         // extract what we know about progress from the input and output adapters.
-        self.handle.input.pull_progress(&mut consumed[0]);
-        self.handle.output.inner().pull_progress(&mut produced[0]);
+        self.input.pull_progress(&mut consumed[0]);
+        self.output.inner().pull_progress(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 
         return false;   // no unannounced internal work
