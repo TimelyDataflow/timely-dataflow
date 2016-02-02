@@ -7,7 +7,7 @@ use std::default::Default;
 use progress::nested::subgraph::{Source, Target};
 
 use progress::count_map::CountMap;
-use dataflow::operators::CapabilityNotificator as Notificator;
+use dataflow::operators::Notificator;
 use progress::{Timestamp, Antichain, Operate};
 
 use ::Data;
@@ -187,17 +187,15 @@ Operator<T, D1, D2, D3, L> {
                logic: L)
         -> Operator<T, D1, D2, D3, L> {
 
-        let internal = Rc::new(RefCell::new(CountMap::new()));
-
         Operator {
             name: name,
             input1:      receiver1,
             input2:      receiver2,
             output:      PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
-            notificator: Notificator::new(internal.clone()),
+            notificator: Notificator::new(),
             logic: logic,
             notify: notify,
-            internal_changes: internal,
+            internal_changes: Rc::new(RefCell::new(CountMap::new())),
         }
     }
 }

@@ -12,4 +12,3 @@ pub mod nested;
 pub mod timestamp;
 pub mod operate;
 pub mod broadcast;
-pub mod notificator;

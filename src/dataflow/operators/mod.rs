@@ -42,8 +42,11 @@ pub mod probe;
 pub mod to_stream;
 pub mod capture;
 
-mod inputoutput;
-pub use self::inputoutput::{InputHandle, OutputHandle, CapabilityNotificator};
+mod handles;
+pub use self::handles::{InputHandle, OutputHandle};
+
+mod notificator;
+pub use self::notificator::Notificator;
 
 // keep "mint" module-private
 mod capability;
