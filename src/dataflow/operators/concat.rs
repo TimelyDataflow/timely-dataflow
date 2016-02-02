@@ -36,8 +36,8 @@ pub trait Concat<G: Scope, D: Data> {
 impl<G: Scope, D: Data> Concat<G, D> for Stream<G, D> {
     fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
         self.binary_stream(other, Pipeline, Pipeline, "Concat", |input1, input2, output| {
-            input1.for_each(|time, data| { output.session(time).give_content(data); });
-            input2.for_each(|time, data| { output.session(time).give_content(data); });
+            input1.for_each(|time, data| { output.session(&time).give_content(data); });
+            input2.for_each(|time, data| { output.session(&time).give_content(data); });
         })
     }
 }
