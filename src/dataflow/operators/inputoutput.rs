@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
-use std::ops::Deref;
 use progress::Timestamp;
 use progress::count_map::CountMap;
 use progress::frontier::MutableAntichain;
@@ -12,60 +11,17 @@ use dataflow::channels::pushers::buffer::{Buffer, Session};
 use dataflow::channels::Content;
 use timely_communication::Push;
 
-pub struct Capability<T: Timestamp> {
-    time: T,
-    internal: Rc<RefCell<CountMap<T>>>,
-}
+use dataflow::operators::Capability;
+use dataflow::operators::capability::mint as mint_capability;
 
-impl<T: Timestamp> Capability<T> {
-    fn new(time: T, internal: Rc<RefCell<CountMap<T>>>) -> Capability<T> {
-        internal.borrow_mut().update(&time, 1);
-        Capability {
-            time: time,
-            internal: internal
-        }
-    }
-
-    #[inline]
-    pub fn time(&self) -> T {
-        self.time
-    }
-
-    #[inline]
-    pub fn into_delayed(self, new_time: &T) -> Capability<T> {
-        assert!(new_time >= &self.time);
-        Capability::<T>::new(new_time, self.internal.clone())
-    }
-}
-
-impl<T: Timestamp> Drop for Capability<T> {
-    fn drop(&mut self) {
-        self.internal.borrow_mut().update(&self.time, -1);
-    }
-}
-
-impl<T: Timestamp> Clone for Capability<T> {
-    fn clone(&self) -> Capability<T> {
-        Capability::<T>::new(self.time, self.internal.clone())
-    }
-}
-
-impl<T: Timestamp> Deref for Capability<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        &self.time
-    }
-}
-
-pub struct CapabilityPull<'a, T: Timestamp, D: 'a> {
+pub struct InputHandle<'a, T: Timestamp, D: 'a> {
     pull_counter: &'a mut PullCounter<T, D>,
     internal: Rc<RefCell<CountMap<T>>>,
 }
 
-impl<'a, 'b, T: Timestamp, D> CapabilityPull<'a, T, D> {
-    pub fn new(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> CapabilityPull<'a, T, D> {
-        CapabilityPull {
+impl<'a, 'b, T: Timestamp, D> InputHandle<'a, T, D> {
+    pub fn new(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> InputHandle<'a, T, D> {
+        InputHandle {
             pull_counter: pull_counter,
             internal: internal,
         }
@@ -75,7 +31,7 @@ impl<'a, 'b, T: Timestamp, D> CapabilityPull<'a, T, D> {
     pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
         let internal = &mut self.internal;
         self.pull_counter.next().map(|(&time, content)| {
-            (Capability::<T>::new(time, internal.clone()), content)
+            (mint_capability(time, internal.clone()), content)
         })
     }
 
@@ -89,13 +45,13 @@ impl<'a, 'b, T: Timestamp, D> CapabilityPull<'a, T, D> {
     }
 }
 
-pub struct CapabilityPush<'a, T: Timestamp, D: 'a, P: Push<(T, Content<D>)>+'a> {
+pub struct OutputHandle<'a, T: Timestamp, D: 'a, P: Push<(T, Content<D>)>+'a> {
     pub push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>,
 }
 
-impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> CapabilityPush<'a, T, D, P> {
-    pub fn new(push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>) -> CapabilityPush<'a, T, D, P> {
-        CapabilityPush {
+impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
+    pub fn new(push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>) -> OutputHandle<'a, T, D, P> {
+        OutputHandle {
             push_buffer: push_buffer,
         }
     }
@@ -177,20 +133,13 @@ impl<T: Timestamp> Iterator for CapabilityNotificator<T> {
             if let Some(delta) = self.pending.count(&time) {
                 self.internal_changes.borrow_mut().update(&time, -delta);
                 self.pending.update(&time, -delta);
-                Some((Capability::new(time, self.internal_changes.clone()), delta))
+                Some((mint_capability(time, self.internal_changes.clone()), delta))
             }
             else {
                 panic!("failed to find available time in pending");
             }
         }
         else { None }
-    }
-}
-
-pub fn unsafe_mint_capability<T: Timestamp>(time: T, internal: Rc<RefCell<CountMap<T>>>) -> Capability<T> {
-    Capability {
-        time: time,
-        internal: internal,
     }
 }
 

@@ -41,4 +41,10 @@ pub mod exchange;
 pub mod probe;
 pub mod to_stream;
 pub mod capture;
-pub mod capabilities;
+
+mod inputoutput;
+pub use self::inputoutput::{InputHandle, OutputHandle, CapabilityNotificator};
+
+// keep "mint" module-private
+mod capability;
+pub use self::capability::Capability;
