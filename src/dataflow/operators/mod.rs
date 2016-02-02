@@ -41,3 +41,4 @@ pub mod exchange;
 pub mod probe;
 pub mod to_stream;
 pub mod capture;
+pub mod capabilities;
