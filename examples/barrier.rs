@@ -19,10 +19,11 @@ fn main() {
                 "Barrier",
                 vec![RootTimestamp::new(0)],
                 move |_, _, notificator| {
-                    while let Some((mut time, _count)) = notificator.next() {
+                    while let Some((cap, _count)) = notificator.next() {
+                        let mut time = cap.time();
                         time.inner += 1;
                         if time.inner < iterations {
-                            notificator.notify_at(&time);
+                            notificator.notify_at(cap.into_delayed(&time));
                         }
                     }
                 }

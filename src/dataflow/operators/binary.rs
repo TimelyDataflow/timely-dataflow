@@ -39,10 +39,10 @@ pub trait Binary<G: Scope, D1: Data> {
     ///
     ///     stream1.binary_stream(&stream2, Pipeline, Pipeline, "example", |input1, input2, output| {
     ///         while let Some((time, data)) = input1.next() {
-    ///             output.session(time).give_content(data);
+    ///             output.session(&time).give_content(data);
     ///         }
     ///         while let Some((time, data)) = input2.next() {
-    ///             output.session(time).give_content(data);
+    ///             output.session(&time).give_content(data);
     ///         }
     ///     });
     /// });
@@ -72,15 +72,15 @@ pub trait Binary<G: Scope, D1: Data> {
     ///
     ///     stream1.binary_notify(&stream2, Pipeline, Pipeline, "example", Vec::new(), |input1, input2, output, notificator| {
     ///         while let Some((time, data)) = input1.next() {
-    ///             notificator.notify_at(&time);
-    ///             output.session(time).give_content(data);
+    ///             output.session(&time).give_content(data);
+    ///             notificator.notify_at(time);
     ///         }
     ///         while let Some((time, data)) = input2.next() {
-    ///             notificator.notify_at(&time);
-    ///             output.session(time).give_content(data);
+    ///             output.session(&time).give_content(data);
+    ///             notificator.notify_at(time);
     ///         }
     ///         while let Some((time, count)) = notificator.next() {
-    ///             println!("done with time: {:?}", time);
+    ///             println!("done with time: {:?}", time.time());
     ///         }
     ///     });
     /// });
