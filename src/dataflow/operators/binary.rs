@@ -18,6 +18,7 @@ use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 
 use dataflow::operators::{InputHandle, OutputHandle};
+use dataflow::operators::handles::{new_input_handle, new_output_handle};
 use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::{Stream, Scope};
@@ -238,9 +239,9 @@ where T: Timestamp,
                                          produced: &mut [CountMap<T>]) -> bool
     {
         {
-            let mut input1_handle = InputHandle::new(&mut self.input1, self.internal_changes.clone());
-            let mut input2_handle = InputHandle::new(&mut self.input2, self.internal_changes.clone());
-            let mut output_handle = OutputHandle::new(&mut self.output);
+            let mut input1_handle = new_input_handle(&mut self.input1, self.internal_changes.clone());
+            let mut input2_handle = new_input_handle(&mut self.input2, self.internal_changes.clone());
+            let mut output_handle = new_output_handle(&mut self.output);
             (self.logic)(&mut input1_handle, &mut input2_handle, &mut output_handle, &mut self.notificator);
         }
 

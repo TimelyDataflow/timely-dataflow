@@ -16,14 +16,7 @@ pub struct InputHandle<'a, T: Timestamp, D: 'a> {
     internal: Rc<RefCell<CountMap<T>>>,
 }
 
-impl<'a, 'b, T: Timestamp, D> InputHandle<'a, T, D> {
-    pub fn new(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> InputHandle<'a, T, D> {
-        InputHandle {
-            pull_counter: pull_counter,
-            internal: internal,
-        }
-    }
-
+impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
     #[inline]
     pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
         let internal = &mut self.internal;
@@ -42,19 +35,28 @@ impl<'a, 'b, T: Timestamp, D> InputHandle<'a, T, D> {
     }
 }
 
+pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> InputHandle<'a, T, D> {
+    InputHandle {
+        pull_counter: pull_counter,
+        internal: internal,
+    }
+}
+
+
 pub struct OutputHandle<'a, T: Timestamp, D: 'a, P: Push<(T, Content<D>)>+'a> {
-    pub push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>,
+    push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>,
 }
 
 impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
-    pub fn new(push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>) -> OutputHandle<'a, T, D, P> {
-        OutputHandle {
-            push_buffer: push_buffer,
-        }
-    }
-
     pub fn session<'b>(&'b mut self, cap: &Capability<T>) -> Session<'b, T, D, PushCounter<T, D, P>> where 'a: 'b {
         self.push_buffer.session(cap)
     }
 }
+
+pub fn new_output_handle<'a, T: Timestamp, D, P: Push<(T, Content<D>)>>(push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>) -> OutputHandle<'a, T, D, P> {
+    OutputHandle {
+        push_buffer: push_buffer,
+    }
+}
+
 

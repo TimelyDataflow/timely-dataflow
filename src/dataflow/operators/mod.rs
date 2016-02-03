@@ -42,6 +42,7 @@ pub mod probe;
 pub mod to_stream;
 pub mod capture;
 
+// keep the handle constructors private
 mod handles;
 pub use self::handles::{InputHandle, OutputHandle};
 
