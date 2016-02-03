@@ -23,7 +23,7 @@ where G::Timestamp: Hash {
                     let new_time = func(&datum, &time);
                     assert!(new_time >= time.time());
                     elements.entry(new_time.clone())
-                            .or_insert_with(|| { notificator.notify_at(time.clone().into_delayed(&new_time)); Vec::new() })
+                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                             .push(datum);
                 }
             }
@@ -47,7 +47,7 @@ where G::Timestamp: Hash {
                 let data = ::std::mem::replace(data.deref_mut(), spare);
 
                 elements.entry(new_time.clone())
-                        .or_insert_with(|| { notificator.notify_at(time.clone().into_delayed(&new_time)); Vec::new() })
+                        .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                         .push(data);
             }
 

@@ -16,7 +16,7 @@ impl<T: Timestamp> Capability<T> {
     }
 
     #[inline]
-    pub fn into_delayed(self, new_time: &T) -> Capability<T> {
+    pub fn delayed(&self, new_time: &T) -> Capability<T> {
         assert!(new_time >= &self.time);
         mint(*new_time, self.internal.clone())
     }

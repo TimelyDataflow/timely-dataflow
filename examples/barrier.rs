@@ -23,7 +23,7 @@ fn main() {
                         let mut time = cap.time();
                         time.inner += 1;
                         if time.inner < iterations {
-                            notificator.notify_at(cap.into_delayed(&time));
+                            notificator.notify_at(cap.delayed(&time));
                         }
                     }
                 }
