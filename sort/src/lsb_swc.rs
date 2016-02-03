@@ -157,3 +157,37 @@ impl<T> RShuffle<T> {
         result
     }
 }
+
+mod test {
+
+    #[test]
+    fn test1() {
+
+        let size = 1_000_000;
+
+        let mut vector = Vec::<usize>::with_capacity(size);
+        for index in 0..size {
+            vector.push(index);
+        }
+        for index in 0..size {
+            vector.push(size - index);
+        }
+
+        let mut sorter = super::RadixSorter::new();
+
+        for &element in &vector {
+            sorter.push(element, &|&x| x);
+        }
+
+        vector.sort();
+
+        let mut result = Vec::new();
+        for element in sorter.finish(&|&x| x).into_iter().flat_map(|x| x.into_iter()) {
+            result.push(element);
+        }
+
+        assert_eq!(result, vector);
+
+    }
+
+}

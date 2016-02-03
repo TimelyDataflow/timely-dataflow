@@ -11,3 +11,6 @@ homepage = "https://github.com/frankmcsherry/timely-dataflow"
 repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow", "radix", "sort"]
 license = "MIT"
+
+[dev-dependencies]
+rand="0.3.13"
