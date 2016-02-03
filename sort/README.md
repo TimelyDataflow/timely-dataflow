@@ -5,7 +5,7 @@ Timely sort is a least-significant bit radix sort written in Rust. It is designe
 
 There are currently two flavors of radix sorter: A vanilla `LSBRadixSorter` and a version which performs software write-combining, `LSBSWCRadixSorter`. Each maintain internal buffers of the elements `push`ed so far, initially partitioned by the least significant byte, and finish the sorting when you call `finish`. For examples, check out `benches/benches.rs`. At the moment, the documentation is not stellar.
 
-For performance, consider sorting increasing numbers of random `u32` data. Here we go from `2 << 20` to `2 << 25` elements, using Rust's default `sort()`:
+For performance, consider sorting increasing numbers of random `u32` data. Here we go from `2 << 20` to `2 << 25` elements, using Rust's default `sort()`. You should see numbers like these when you run `cargo bench`:
 
 	test msort_u32_20    ... bench:  19,182,135 ns/iter (+/- 1,022,566) = 218 MB/s
 	test msort_u32_21    ... bench:  38,633,682 ns/iter (+/- 1,299,863) = 217 MB/s
