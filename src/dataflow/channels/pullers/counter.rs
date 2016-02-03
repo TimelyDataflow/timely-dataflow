@@ -35,12 +35,4 @@ impl<T:Eq+Clone+'static, D> Counter<T, D> {
             consumed.update(time, value);
         }
     }
-    #[inline]
-    pub fn for_each<F: FnMut(&T, &mut Content<D>)>(&mut self, mut logic: F) {
-        while let Some((time, data)) = self.next() {
-            ::logging::log(&::logging::GUARDED_MESSAGE, true);
-            logic(time, data);
-            ::logging::log(&::logging::GUARDED_MESSAGE, false);
-        }
-    }
 }
