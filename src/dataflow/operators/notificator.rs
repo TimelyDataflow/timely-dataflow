@@ -4,6 +4,14 @@ use progress::Timestamp;
 use progress::count_map::CountMap;
 use dataflow::operators::Capability;
 
+/// Tracks requests for notification and delivers available notifications.
+///
+/// Notificator is meant to manage the delivery of requested notifications in the presence of
+/// inputs that may have outstanding messages to deliver. The notificator tracks the frontiers,
+/// as presented from the outside, for each input. Requested notifications can be served only
+/// once there are no frontier elements less-or-equal to them, and there are no other pending
+/// notification requests less than them. Each with be less-or-equal to itself, so we want to
+/// dodge that corner case.
 pub struct Notificator<T: Timestamp> {
     pending: Vec<Capability<T>>,
     frontier: Vec<MutableAntichain<T>>,
@@ -37,12 +45,41 @@ impl<T: Timestamp> Notificator<T> {
         self.frontier[input].elements()
     }
 
-    /// Requests a notification at `time`.
+    /// Requests a notification at the time associated with capability `cap`. Takes ownership of
+    /// the capability.
+    ///
+    /// In order to request a notification at future timestamp, obtain a capability for the new
+    /// timestamp first, as show in the example.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
+    ///                while let Some((cap, data)) = input.next() {
+    ///                    output.session(&cap).give_content(data);
+    ///                    let mut time = cap.time();
+    ///                    time.inner += 1;
+    ///                    notificator.notify_at(cap.delayed(&time));
+    ///                }
+    ///                while let Some((cap, count)) = notificator.next() {
+    ///                    println!("done with time: {:?}", cap.time());
+    ///                }
+    ///            });
+    /// });
+    /// ```
     #[inline]
-    pub fn notify_at(&mut self, time: Capability<T>) {
-        self.pending.push(time);
+    pub fn notify_at(&mut self, cap: Capability<T>) {
+        self.pending.push(cap);
     }
 
+    /// Repeatedly calls `logic` till exhaustion of the available notifications.
+    ///
+    /// `logic` receives a capability for `t`, the timestamp being notified and a `count`
+    /// representing how many capabilities were requested for that specific timestamp.
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, i64)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
@@ -78,12 +115,16 @@ impl<T: Timestamp> Notificator<T> {
             last = position;
         }
     }
-
 }
 
 impl<T: Timestamp> Iterator for Notificator<T> {
     type Item = (Capability<T>, i64);
 
+    /// Retrieve the next available notification.
+    ///
+    /// Returns `None` if no notification is available. Returns `Some(cap, count)` otherwise:
+    /// `cap` is a a capability for `t`, the timestamp being notified and, `count` represents
+    /// how many capabilities were requested for that specific timestamp.
     fn next(&mut self) -> Option<(Capability<T>, i64)> {
         if self.available.len() == 0 {
             self.scan_for_available_notifications();
