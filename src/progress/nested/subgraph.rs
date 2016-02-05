@@ -115,7 +115,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // that they are `Product<TOuter, TInner>`, and we just want `TOuter`.
         let mut initial_capabilities = vec![CountMap::new(); self.outputs()];
         for (o_port, capabilities) in self.pointstamps.pushed[0].iter().enumerate() {
-            for &(time, val) in capabilities.elements() {
+            for &(time, val) in capabilities.iter() {
                 // make a note to self and inform scope of our capability.
                 self.output_capabilities[o_port].update(&time.outer, val);
                 initial_capabilities[o_port].update(&time.outer, val);
@@ -778,7 +778,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         // TODO : Gross. Fix.
         for (index, capability) in result.internal.iter_mut().enumerate() {
-            capability.update_iter_and(work[index].elements().iter().map(|x|x.clone()), |_, _| {});
+            capability.update_iter_and(work[index].iter().cloned(), |_, _| {});
         }
 
         return result;
