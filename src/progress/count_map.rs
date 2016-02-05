@@ -5,7 +5,7 @@ use std::default::Default;
 // could be updated to be an Enum { Vec<(T, i64)>, HashMap<T, i64> } in the fullness of time
 #[derive(Clone, Debug)]
 pub struct CountMap<T> {
-    pub updates: Vec<(T, i64)>
+    updates: Vec<(T, i64)>
 }
 
 impl<T> Default for CountMap<T> {
@@ -34,6 +34,7 @@ impl<T:Eq+Clone> CountMap<T> {
         else { 0 }
     }
 
+    pub fn into_inner(self) -> Vec<(T, i64)> { self.updates }
     pub fn elements<'a>(&'a self) -> &'a Vec<(T, i64)> { &self.updates }
     pub fn clear(&mut self) { self.updates.clear(); }
     pub fn len(&self) -> usize { self.updates.len() }
