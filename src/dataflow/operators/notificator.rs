@@ -174,3 +174,75 @@ fn drain_into_if_behaves_correctly() {
     assert!(v == vec![1, 2, 3, 4]);
     assert!(v1 == vec![5, 7, 10, 13]);
 }
+
+#[test]
+fn notificator_delivers_notifications_in_topo_order() {
+    use std::rc::Rc;
+    use std::cell::RefCell;
+    use progress::nested::product::Product;
+    use progress::timestamp::RootTimestamp;
+    use dataflow::operators::capability::mint as mint_capability;
+    fn ts_from_tuple(t: (u64, u64)) -> Product<Product<RootTimestamp, u64>, u64> {
+        let (a, b) = t;
+        Product::new(RootTimestamp::new(a), b)
+    }
+    let mut notificator = Notificator::<Product<Product<RootTimestamp, u64>, u64>>::new();
+    notificator.update_frontier_from_cm(&mut vec![CountMap::new_from(&ts_from_tuple((0, 0)), 1)]);
+    let internal_changes = Rc::new(RefCell::new(CountMap::new()));
+    let times = vec![
+        (3, 5),
+        (5, 4),
+        (1, 2),
+        (1, 1),
+        (1, 1),
+        (5, 4),
+        (6, 0),
+        (5, 8),
+    ].into_iter().map(ts_from_tuple).map(|ts| mint_capability(ts, internal_changes.clone()));
+    for t in times {
+        notificator.notify_at(t);
+    }
+    notificator.update_frontier_from_cm(&mut {
+        let mut cm = CountMap::new();
+        cm.update(&ts_from_tuple((0, 0)), -1);
+        cm.update(&ts_from_tuple((5, 7)), 1);
+        cm.update(&ts_from_tuple((6, 0)), 1);
+        vec![cm]
+    });
+    // Drains all the available notifications and checks they're being delivered in some
+    // topological ordering. Also checks that the counts returned by .next() match the expected
+    // counts.
+    fn check_notifications(
+        notificator: &mut Notificator<Product<Product<RootTimestamp, u64>, u64>>,
+        expected_counts: Vec<((u64, u64), u64)>) {
+
+        let notified = notificator.by_ref().collect::<Vec<_>>();
+        for (i, &(ref cap, _)) in notified.iter().enumerate() {
+            assert!(notified.iter().skip(i + 1).all(|&(ref c, _)| !c.time().lt(&cap.time())));
+        }
+        let mut counts = notified.iter().map(|&(ref cap, count)| {
+            let ts = cap.time();
+            ((ts.outer.inner, ts.inner), count)
+        }).collect::<Vec<_>>();
+        counts.sort_by(|&(ts1, _), &(ts2, _)| ts1.cmp(&ts2));
+        assert!(counts == expected_counts);
+    }
+    check_notifications(&mut notificator, vec![
+        ((1, 1), 2),
+        ((1, 2), 1),
+        ((3, 5), 1),
+        ((5, 4), 2),
+    ]);
+    notificator.update_frontier_from_cm(&mut {
+        let mut cm = CountMap::new();
+        cm.update(&ts_from_tuple((5, 7)), -1);
+        cm.update(&ts_from_tuple((6, 0)), -1);
+        cm.update(&ts_from_tuple((6, 10)), 1);
+        vec![cm]
+    });
+    check_notifications(&mut notificator, vec![
+        ((5, 8), 1),
+        ((6, 0), 1),
+    ]);
+
+}
