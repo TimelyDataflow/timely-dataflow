@@ -1,11 +1,12 @@
 //! A mapping from general types `T` to `i64`, with zero values absent.
 
 use std::default::Default;
+use std::slice::Iter;
 
 // could be updated to be an Enum { Vec<(T, i64)>, HashMap<T, i64> } in the fullness of time
 #[derive(Clone, Debug)]
 pub struct CountMap<T> {
-    pub updates: Vec<(T, i64)>
+    updates: Vec<(T, i64)>
 }
 
 impl<T> Default for CountMap<T> {
@@ -34,7 +35,8 @@ impl<T:Eq+Clone> CountMap<T> {
         else { 0 }
     }
 
-    pub fn elements<'a>(&'a self) -> &'a Vec<(T, i64)> { &self.updates }
+    pub fn into_inner(self) -> Vec<(T, i64)> { self.updates }
+    pub fn iter<'a>(&'a self) -> Iter<'a, (T, i64)> { self.updates.iter() }
     pub fn clear(&mut self) { self.updates.clear(); }
     pub fn len(&self) -> usize { self.updates.len() }
     pub fn pop(&mut self) -> Option<(T, i64)> { self.updates.pop() }

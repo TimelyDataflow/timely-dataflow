@@ -35,14 +35,14 @@ impl<T:Timestamp+Send> Progcaster<T> {
     {
 
         // // we should not be sending zero deltas.
-        // assert!(messages.elements().iter().all(|x| x.1 != 0));
-        // assert!(internal.elements().iter().all(|x| x.1 != 0));
+        // assert!(messages.iter().all(|x| x.1 != 0));
+        // assert!(internal.iter().all(|x| x.1 != 0));
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
             if messages.len() > 0 || internal.len() > 0 {
                 for pusher in self.pushers.iter_mut() {
                     // TODO : Feels like an Arc might be not horrible here... less allocation,
                     // TODO : at least, but more "contention" in the deallocation.
-                    pusher.push(&mut Some((messages.elements().clone(), internal.elements().clone())));
+                    pusher.push(&mut Some((messages.clone().into_inner(), internal.clone().into_inner())));
                 }
 
                 messages.clear();

@@ -287,14 +287,14 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
 
     // we need to set the initial value of the frontier
     fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [CountMap<T>]) {
-        self.events.push(Event::Progress(counts[0].updates.clone()));
-        counts[0].updates.clear();
+        self.events.push(Event::Progress(counts[0].clone().into_inner()));
+        counts[0].clear();
     }
 
     // each change to the frontier should be shared
     fn push_external_progress(&mut self, counts: &mut [CountMap<T>]) {
-        self.events.push(Event::Progress(counts[0].updates.clone()));
-        counts[0].updates.clear();
+        self.events.push(Event::Progress(counts[0].clone().into_inner()));
+        counts[0].clear();
     }
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],  _: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> bool {

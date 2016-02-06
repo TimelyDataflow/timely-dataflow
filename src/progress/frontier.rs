@@ -103,13 +103,13 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
     /// Returns the number of times an element exists in the set.
     #[inline]
     pub fn count(&self, time: &T) -> Option<i64> {
-        self.occurrences.elements().iter().filter(|x| time.eq(&x.0)).next().map(|i| i.1)
+        self.occurrences.iter().filter(|x| time.eq(&x.0)).next().map(|i| i.1)
     }
 
     // TODO : Four different versions of basically the same code. Fix that!
     // TODO : Should this drain updates through to the CM? Check out uses!
     pub fn update_into_cm(&mut self, updates: &CountMap<T>, results: &mut CountMap<T>) -> () {
-        self.update_iter_and(updates.elements().iter().map(|x| x.clone()), |time, val| { results.update(time, val); });
+        self.update_iter_and(updates.iter().cloned(), |time, val| { results.update(time, val); });
     }
 
     pub fn update_weight(&mut self, elem: &T, delta: i64, results: &mut CountMap<T>) -> () {
