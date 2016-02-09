@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use progress::Timestamp;
 use progress::count_map::CountMap;
+use std::fmt::{self, Debug};
 
 /// A capability for timestamp `t` represents a permit for an operator that holds the capability
 /// to send data and request notifications at timestamp `t`.
@@ -58,5 +59,11 @@ impl<T: Timestamp> Deref for Capability<T> {
 
     fn deref(&self) -> &T {
         &self.time
+    }
+}
+
+impl<T: Timestamp> Debug for Capability<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Capability {{ time: {:?}, internal: ... }}", self.time)
     }
 }
