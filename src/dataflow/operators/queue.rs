@@ -16,9 +16,9 @@ where G::Timestamp: Hash {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Queue", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.next() {
-                notificator.notify_at(time);
                 let set = elements.entry((*time).clone()).or_insert(Vec::new());
                 for datum in data.drain(..) { set.push(datum); }
+                notificator.notify_at(time);
             }
 
             while let Some((time, _count)) = notificator.next() {

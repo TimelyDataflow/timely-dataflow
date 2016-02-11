@@ -65,10 +65,10 @@ fn main() {
                     });
 
                     // receive (node, root) pairs, note any new ones.
-                    input2.for_each(|&time, data| {
-                        node_lists.entry(time)
+                    input2.for_each(|time, data| {
+                        node_lists.entry(time.time())
                                   .or_insert_with(|| {
-                                      notify.notify_at(&time);
+                                      notify.notify_at(time.clone());
                                       Vec::new()
                                   })
                                   .push(data.replace_with(Vec::new()));
@@ -109,7 +109,7 @@ fn main() {
                         }
 
                         // print some diagnostic timing information
-                        if index == 0 { println!("{}:\ttime: {:?}", time::precise_time_s() - start, time); }
+                        if index == 0 { println!("{}:\ttime: {:?}", time::precise_time_s() - start, time.time()); }
 
                         if let Some(mut todo) = node_lists.remove(&time) {
                             let mut session = output.session(&time);

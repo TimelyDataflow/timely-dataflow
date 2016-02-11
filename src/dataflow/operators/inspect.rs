@@ -18,7 +18,7 @@ impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
         self.unary_stream(Pipeline, "Inspect", move |input, output| {
             input.for_each(|time, data| {
                 for datum in data.iter() { func(datum); }
-                output.session(time).give_content(data);
+                output.session(&time).give_content(data);
             });
         })
     }
@@ -27,7 +27,7 @@ impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
         self.unary_stream(Pipeline, "InspectBatch", move |input, output| {
             while let Some((time, data)) = input.next() {
                 func(&time, &data[..]);
-                output.session(time).give_content(data);
+                output.session(&time).give_content(data);
             }
         })
     }

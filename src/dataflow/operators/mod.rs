@@ -41,3 +41,14 @@ pub mod exchange;
 pub mod probe;
 pub mod to_stream;
 pub mod capture;
+
+// keep the handle constructors private
+mod handles;
+pub use self::handles::{InputHandle, OutputHandle};
+
+mod notificator;
+pub use self::notificator::Notificator;
+
+// keep "mint" module-private
+mod capability;
+pub use self::capability::Capability;

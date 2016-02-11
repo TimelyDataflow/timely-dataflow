@@ -7,7 +7,7 @@ use std::default::Default;
 use progress::nested::subgraph::{Source, Target};
 
 use progress::count_map::CountMap;
-use progress::notificator::Notificator;
+use dataflow::operators::Notificator;
 use progress::{Timestamp, Antichain, Operate};
 
 use ::Data;
@@ -15,7 +15,11 @@ use dataflow::channels::pushers::counter::Counter as PushCounter;
 use dataflow::channels::pushers::tee::Tee;
 use dataflow::channels::pullers::counter::Counter as PullCounter;
 use dataflow::channels::pact::ParallelizationContract;
-use dataflow::channels::pushers::buffer::Buffer as ObserverBuffer;
+use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
+
+use dataflow::operators::{InputHandle, OutputHandle};
+use dataflow::operators::handles::{new_input_handle, new_output_handle};
+use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::{Stream, Scope};
 
@@ -36,19 +40,19 @@ pub trait Binary<G: Scope, D1: Data> {
     ///
     ///     stream1.binary_stream(&stream2, Pipeline, Pipeline, "example", |input1, input2, output| {
     ///         while let Some((time, data)) = input1.next() {
-    ///             output.session(time).give_content(data);
+    ///             output.session(&time).give_content(data);
     ///         }
     ///         while let Some((time, data)) = input2.next() {
-    ///             output.session(time).give_content(data);
+    ///             output.session(&time).give_content(data);
     ///         }
     ///     });
     /// });
     /// ```
     fn binary_stream<D2: Data,
               D3: Data,
-              L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                       &mut PullCounter<G::Timestamp, D2>,
-                       &mut ObserverBuffer<G::Timestamp, D3, PushCounter<G::Timestamp, D3, Tee<G::Timestamp, D3>>>)+'static,
+              L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+                       &mut InputHandle<G::Timestamp, D2>,
+                       &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
             (&self, &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, logic: L) -> Stream<G, D3>;
@@ -69,24 +73,24 @@ pub trait Binary<G: Scope, D1: Data> {
     ///
     ///     stream1.binary_notify(&stream2, Pipeline, Pipeline, "example", Vec::new(), |input1, input2, output, notificator| {
     ///         while let Some((time, data)) = input1.next() {
-    ///             notificator.notify_at(&time);
-    ///             output.session(time).give_content(data);
+    ///             output.session(&time).give_content(data);
+    ///             notificator.notify_at(time);
     ///         }
     ///         while let Some((time, data)) = input2.next() {
-    ///             notificator.notify_at(&time);
-    ///             output.session(time).give_content(data);
+    ///             output.session(&time).give_content(data);
+    ///             notificator.notify_at(time);
     ///         }
     ///         while let Some((time, count)) = notificator.next() {
-    ///             println!("done with time: {:?}", time);
+    ///             println!("done with time: {:?}", time.time());
     ///         }
     ///     });
     /// });
     /// ```
     fn binary_notify<D2: Data,
               D3: Data,
-              L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                       &mut PullCounter<G::Timestamp, D2>,
-                       &mut ObserverBuffer<G::Timestamp, D3, PushCounter<G::Timestamp, D3, Tee<G::Timestamp, D3>>>,
+              L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+                       &mut InputHandle<G::Timestamp, D2>,
+                       &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>,
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
@@ -98,9 +102,9 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
     fn binary_stream<
              D2: Data,
              D3: Data,
-             L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                      &mut PullCounter<G::Timestamp, D2>,
-                      &mut ObserverBuffer<G::Timestamp, D3, PushCounter<G::Timestamp, D3, Tee<G::Timestamp, D3>>>)+'static,
+             L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+                      &mut InputHandle<G::Timestamp, D2>,
+                      &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
              (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, mut logic: L) -> Stream<G, D3> {
@@ -126,9 +130,9 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
     fn binary_notify<
              D2: Data,
              D3: Data,
-             L: FnMut(&mut PullCounter<G::Timestamp, D1>,
-                      &mut PullCounter<G::Timestamp, D2>,
-                      &mut ObserverBuffer<G::Timestamp, D3, PushCounter<G::Timestamp, D3, Tee<G::Timestamp, D3>>>,
+             L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+                      &mut InputHandle<G::Timestamp, D2>,
+                      &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>,
                       &mut Notificator<G::Timestamp>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
@@ -152,30 +156,27 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
     }
 }
 
-struct Handle<T: Timestamp, D1: Data, D2: Data, D3: Data> {
-    pub input1:         PullCounter<T, D1>,
-    pub input2:         PullCounter<T, D2>,
-    pub output:         ObserverBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
-    pub notificator:    Notificator<T>,
-}
-
 struct Operator<T: Timestamp,
                        D1: Data, D2: Data, D3: Data,
-                       L: FnMut(&mut PullCounter<T, D1>,
-                                &mut PullCounter<T, D2>,
-                                &mut ObserverBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
+                       L: FnMut(&mut InputHandle<T, D1>,
+                                &mut InputHandle<T, D2>,
+                                &mut OutputHandle<T, D3, Tee<T, D3>>,
                                 &mut Notificator<T>)> {
-    name:           String,
-    handle:         Handle<T, D1, D2, D3>,
-    logic:          L,
-    notify:         Option<(Vec<T>, usize)>,  // initial notifications and peers
+    name:             String,
+    input1:           PullCounter<T, D1>,
+    input2:           PullCounter<T, D2>,
+    output:           PushBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
+    notificator:      Notificator<T>,
+    logic:            L,
+    notify:           Option<(Vec<T>, usize)>,  // initial notifications and peers
+    internal_changes: Rc<RefCell<CountMap<T>>>,
 }
 
 impl<T: Timestamp,
      D1: Data, D2: Data, D3: Data,
-     L: FnMut(&mut PullCounter<T, D1>,
-              &mut PullCounter<T, D2>,
-              &mut ObserverBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
+     L: FnMut(&mut InputHandle<T, D1>,
+              &mut InputHandle<T, D2>,
+              &mut OutputHandle<T, D3, Tee<T, D3>>,
               &mut Notificator<T>)+'static>
 Operator<T, D1, D2, D3, L> {
     #[inline(always)]
@@ -186,16 +187,16 @@ Operator<T, D1, D2, D3, L> {
                notify: Option<(Vec<T>, usize)>,
                logic: L)
         -> Operator<T, D1, D2, D3, L> {
+
         Operator {
             name: name,
-            handle: Handle {
-                input1:      receiver1,
-                input2:      receiver2,
-                output:      ObserverBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
-                notificator: Default::default(),
-            },
+            input1:      receiver1,
+            input2:      receiver2,
+            output:      PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            notificator: Notificator::new(),
             logic: logic,
             notify: notify,
+            internal_changes: Rc::new(RefCell::new(CountMap::new())),
         }
     }
 }
@@ -203,9 +204,9 @@ Operator<T, D1, D2, D3, L> {
 impl<T, D1, D2, D3, L> Operate<T> for Operator<T, D1, D2, D3, L>
 where T: Timestamp,
       D1: Data, D2: Data, D3: Data,
-      L: FnMut(&mut PullCounter<T, D1>,
-               &mut PullCounter<T, D2>,
-               &mut ObserverBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
+      L: FnMut(&mut InputHandle<T, D1>,
+               &mut InputHandle<T, D2>,
+               &mut OutputHandle<T, D3, Tee<T, D3>>,
                &mut Notificator<T>)+'static {
     fn inputs(&self) -> usize { 2 }
     fn outputs(&self) -> usize { 1 }
@@ -215,37 +216,42 @@ where T: Timestamp,
         if let Some((ref mut initial, peers)) = self.notify {
             for time in initial.drain(..) {
                 for _ in 0..peers {
-                    self.handle.notificator.notify_at(&time);
+                    self.notificator.notify_at(mint_capability(time, self.internal_changes.clone()));
                 }
             }
 
-            self.handle.notificator.pull_progress(&mut internal[0]);
+            self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
         }
         (vec![vec![Antichain::from_elem(Default::default())],
               vec![Antichain::from_elem(Default::default())]], internal)
     }
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [CountMap<T>]) -> () {
-        self.handle.notificator.update_frontier_from_cm(frontier);
+        self.notificator.update_frontier_from_cm(frontier);
     }
 
     fn push_external_progress(&mut self, external: &mut [CountMap<T>]) -> () {
-        self.handle.notificator.update_frontier_from_cm(external);
+        self.notificator.update_frontier_from_cm(external);
     }
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
                                          internal: &mut [CountMap<T>],
                                          produced: &mut [CountMap<T>]) -> bool
     {
-        (self.logic)(&mut self.handle.input1, &mut self.handle.input2, &mut self.handle.output, &mut self.handle.notificator);
+        {
+            let mut input1_handle = new_input_handle(&mut self.input1, self.internal_changes.clone());
+            let mut input2_handle = new_input_handle(&mut self.input2, self.internal_changes.clone());
+            let mut output_handle = new_output_handle(&mut self.output);
+            (self.logic)(&mut input1_handle, &mut input2_handle, &mut output_handle, &mut self.notificator);
+        }
 
-        self.handle.output.cease();
+        self.output.cease();
 
         // extract what we know about progress from the input and output adapters.
-        self.handle.input1.pull_progress(&mut consumed[0]);
-        self.handle.input2.pull_progress(&mut consumed[1]);
-        self.handle.output.inner().pull_progress(&mut produced[0]);
-        self.handle.notificator.pull_progress(&mut internal[0]);
+        self.input1.pull_progress(&mut consumed[0]);
+        self.input2.pull_progress(&mut consumed[1]);
+        self.output.inner().pull_progress(&mut produced[0]);
+        self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 
         return false;   // no unannounced internal work
     }

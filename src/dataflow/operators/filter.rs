@@ -28,7 +28,7 @@ impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
             while let Some((time, data)) = input.next() {
                 data.retain(|x| predicate(x));
                 if data.len() > 0 {
-                    output.session(time).give_content(data);
+                    output.session(&time).give_content(data);
                 }
             }
         })

@@ -52,7 +52,7 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn map<D2: Data, L: Fn(D)->D2+'static>(&self, logic: L) -> Stream<S, D2> {
         self.unary_stream(Pipeline, "Map", move |input, output| {
             while let Some((time, data)) = input.next() {
-                output.session(time).give_iterator(data.drain(..).map(|x| logic(x)));
+                output.session(&time).give_iterator(data.drain(..).map(|x| logic(x)));
             }
         })
     }
@@ -60,7 +60,7 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
         self.unary_stream(Pipeline, "MapInPlace", move |input, output| {
             while let Some((time, data)) = input.next() {
                 for datum in data.iter_mut() { logic(datum); }
-                output.session(time).give_content(data);
+                output.session(&time).give_content(data);
             }
         })
     }
@@ -70,7 +70,7 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn flat_map<I: Iterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data {
         self.unary_stream(Pipeline, "FlatMap", move |input, output| {
             while let Some((time, data)) = input.next() {
-                output.session(time).give_iterator(data.drain(..).flat_map(|x| logic(x)));
+                output.session(&time).give_iterator(data.drain(..).flat_map(|x| logic(x)));
             }
         })
     }
