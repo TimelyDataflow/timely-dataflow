@@ -49,16 +49,16 @@ You can run this example from the root directory of the `timely-dataflow` reposi
 ```
 % cargo run --example hello
 Running `target/debug/examples/hello`
-hello 0
-hello 1
-hello 2
-hello 3
-hello 4
-hello 5
-hello 6
-hello 7
-hello 8
-hello 9
+hello world: 0
+hello world: 1
+hello world: 2
+hello world: 3
+hello world: 4
+hello world: 5
+hello world: 6
+hello world: 7
+hello world: 8
+hello world: 9
 ```
 
 # Execution
