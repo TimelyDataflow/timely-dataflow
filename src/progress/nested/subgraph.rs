@@ -837,10 +837,21 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { id: self.id, is_start: true });
+            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent {
+                id: self.id, start_stop: ::logging::StartStop::Start
+            });
+
+            if cfg!(feature = "logging") {
+                for buffer in vec![
+                    &self.consumed_buffer,
+                    &self.internal_buffer,
+                    &self.produced_buffer] {
+
+                    assert!(buffer.iter().all(|cm| cm.len() == 0));
+                }
+            }
 
             let result = if let &mut Some(ref mut operator) = &mut self.operator {
-
                 operator.pull_internal_progress(
                     &mut self.consumed_buffer[..],
                     &mut self.internal_buffer[..],
@@ -849,7 +860,17 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
             else { false };
 
-            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent { id: self.id, is_start: false });
+            if cfg!(feature = "logging") {
+                let did_work = vec![
+                    &self.consumed_buffer,
+                    &self.internal_buffer,
+                    &self.produced_buffer].iter().any(|buffer|
+                        buffer.iter().any(|cm| cm.len() > 0));
+                ::logging::log(&::logging::SCHEDULE,
+                               ::logging::ScheduleEvent {
+                                   id: self.id, start_stop: ::logging::StartStop::Stop { activity: did_work }
+                               });
+            }
 
             result
         };
