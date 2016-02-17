@@ -18,6 +18,17 @@ use dataflow::operators::capture::{EventWriter, Event, EventPusher};
 
 use abomonation::Abomonation;
 
+static mut precise_time_ns_delta: Option<i64> = None;
+
+/// Returns the value of an high resolution performance counter, in nanoseconds, rebased to be
+/// roughly comparable to an unix timestamp.
+/// Useful for comparing and merging logs from different machines (precision is limited by the
+/// precision of the wall clock base; clock skew effects should be taken into consideration).
+#[inline(always)]
+fn get_precise_time_ns() -> u64 {
+    (time::precise_time_ns() as i64 - unsafe { precise_time_ns_delta.unwrap() }) as u64
+}
+
 /// Logs `record` in `logger` if logging is enabled.
 pub fn log<T: Logger>(logger: &'static ::std::thread::LocalKey<T>, record: T::Record) {
     if cfg!(feature = "logging") {
@@ -45,7 +56,7 @@ impl<T: Data, S: Write> Logger for EventStreamLogger<T, S> {
     type Record = T;
     #[inline]
     fn log(&self, record: T) {
-        self.buffer.borrow_mut().push((record, time::precise_time_ns()));
+        self.buffer.borrow_mut().push((record, get_precise_time_ns()));
     }
     fn flush(&self) {
         // TODO : sends progress update even if nothing happened.
@@ -53,7 +64,7 @@ impl<T: Data, S: Write> Logger for EventStreamLogger<T, S> {
         // TODO : cut down on the amount on logging, at the expense 
         // TODO : of freshness on the side of the reader.
         if let Some(ref mut writer) = *self.stream.borrow_mut() {
-            let time = time::precise_time_ns();
+            let time = get_precise_time_ns();
             if self.buffer.borrow().len() > 0 {
                 writer.push(Event::Messages(RootTimestamp::new(*self.last_time.borrow()), self.buffer.borrow().clone()));
             }
@@ -96,7 +107,6 @@ impl<T: Data, S: Write> Drop for EventStreamLogger<T, S> {
     }
 }
 
-
 /// Initializes logging; called as part of `Root` initialization.
 pub fn initialize<A: Allocate>(root: &mut Root<A>) {
 
@@ -107,6 +117,15 @@ pub fn initialize<A: Allocate>(root: &mut Root<A>) {
     SCHEDULE.with(|x| x.set(File::create(format!("logs/schedule-{}.abom", root.index())).unwrap()));
     GUARDED_MESSAGE.with(|x| x.set(File::create(format!("logs/guarded_message-{}.abom", root.index())).unwrap()));
     GUARDED_PROGRESS.with(|x| x.set(File::create(format!("logs/guarded_progress-{}.abom", root.index())).unwrap()));
+
+    unsafe {
+        precise_time_ns_delta = Some({
+            let wall_time = time::get_time();
+            let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
+            time::precise_time_ns() as i64 - wall_time_ns
+        });
+    }
+
 }
 
 /// Flushes logs; called by `Root::step`.
