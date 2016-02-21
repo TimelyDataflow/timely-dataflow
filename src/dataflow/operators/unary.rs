@@ -176,14 +176,22 @@ where T: Timestamp,
     fn outputs(&self) -> usize { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
+        // by the end of the method, we want the return Vec<CountMap<T>> to contain each reserved capability, 
+        // *multiplied by the number of peers*. This is so that each worker knows to wait for each other worker
+        // instance. Importantly, we do not want to multiply the number of capabilities by the number of peers.
+
         let mut internal = vec![CountMap::new()];
         if let Some((ref mut initial, peers)) = self.notify {
             for time in initial.drain(..) {
-                for _ in 0..peers {
-                    self.notificator.notify_at(mint_capability(time, self.internal_changes.clone()));
-                }
+                self.notificator.notify_at(mint_capability(time, self.internal_changes.clone()));
             }
 
+            // augment the counts for each reserved capability.
+            for &(ref time, count) in self.internal_changes.borrow().iter() {
+                internal[0].update(time, count * (peers as i64 - 1));
+            }
+
+            // drain the changes to empty out, and complete the counts for internal.
             self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
         }
         (vec![vec![Antichain::from_elem(Default::default())]], internal)
