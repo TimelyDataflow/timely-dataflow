@@ -23,21 +23,14 @@ impl<S, T: Default> Default for Summary<S, T> {
 impl<S:PartialOrd+Copy, T:PartialOrd+Copy> PartialOrd for Summary<S, T> {
     #[inline]
     fn partial_cmp(&self, other: &Summary<S, T>) -> Option<Ordering> {
+        // Two summaries are comparable if they are of the same type (Local, Outer).
+        // Otherwise, as Local *updates* and Outer *sets* the inner coordinate, we 
+        // cannot be sure that either strictly improves on the other.
         match (*self, *other) {
             (Local(t1),    Local(t2))    => t1.partial_cmp(&t2),
-            (Local(t1),    Outer(_,t2))  => match t1.partial_cmp(&t2) {
-                Some(Ordering::Less)    => Some(Ordering::Less), // TODO : Is this correct? 
-                Some(Ordering::Equal)   => Some(Ordering::Less), // might not be strict if s2~=0, but lets break ties
-                Some(Ordering::Greater) => None,                 // if s2 = 0 we could be leaving something else out
-                None                    => None,
-            },
+            (Local(_),     Outer(_,_))   => None,
             (Outer(s1,t1), Outer(s2,t2)) => (s1,t1).partial_cmp(&(s2,t2)),
-            (Outer(_,t1),   Local(t2))   => match t1.partial_cmp(&t2) {
-                Some(Ordering::Less)    => None,
-                Some(Ordering::Equal)   => Some(Ordering::Greater), // might not be strict if s2~=0, but lets break ties
-                Some(Ordering::Greater) => Some(Ordering::Greater), // if s2 = 0 we could be leaving something else out
-                None                    => None,
-            },
+            (Outer(_,_),   Local(_))     => None,
         }
     }
 }
