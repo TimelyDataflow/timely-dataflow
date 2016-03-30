@@ -10,7 +10,7 @@ use dataflow::channels::pact::Exchange;
 /// 
 /// Extension method supporting aggregation of keyed data within timestamp. 
 /// For inter-timestamp aggregation, consider `StateMachine`.
-trait Aggregate<S: Scope, K: Data+Hash, V: Data> {
+pub trait Aggregate<S: Scope, K: Data+Hash, V: Data> {
 	/// Aggregates data of the form `(key, val)`, using user-supplied logic.
 	///
 	/// The `aggregate` method is implemented for streams of `(K, V)` data, 
