@@ -23,6 +23,28 @@ pub trait StateMachine<S: Scope, K: Data+Hash+Eq, V: Data> {
 	/// The transition logic `fold` may mutate the state, and produce both output records and 
 	/// a `bool` indicating that it is appropriate to deregister the state, cleaning up once
 	/// the state is no longer helpful.
+	///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::aggregation::StateMachine;
+    ///
+    ///	timely::example(|scope| {
+	///
+	///     // these results happen to be right, but aren't guaranteed.
+	///     // the system is at liberty to re-order within a timestamp.
+    ///     let result = vec![(0,0), (0,2), (0,6), (0,12), (0,20), 
+    ///                       (1,1), (1,4), (1,9), (1,16), (1,25)];
+    ///
+    ///		(0..10).to_stream(scope)
+    ///			   .map(|x| (x % 2, x))
+    ///			   .state_machine(
+    ///                |_key, val, agg| { *agg += val; (false, Some((*_key, *agg))) }, 
+    ///                |key| *key as u64
+    ///            )
+    ///            .inspect(move |x| assert!(result.contains(x)));
+    /// });
+    /// ```
 	fn state_machine<
 		R: Data, 									// output type
 		D: Default+'static, 						// per-key state (data)
@@ -85,28 +107,3 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K,
 		})
 	}
 }
-
-
-#[cfg(test)]
-mod test {
-
-	use dataflow::operators::{ToStream, Inspect, Map};
-	use super::StateMachine;
-
-    #[test]
-    fn it_works() {
-
-    	::example(|scope| {
-
-    		let result = vec![(0,0), (0,2), (0,6), (0,12), (0,20), (1,1), (1,4), (1,9), (1,16), (1,25)];
-
-    		(0..10).to_stream(scope)
-    			   .map(|x| (x % 2, x))
-    			   .state_machine(|_key, val, agg| { *agg += val; (false, Some((*_key, *agg))) }, |key| *key as u64)
-    			   .inspect(move |x| assert!(result.contains(x)));
-
-    	})
-
-    }
-}
-
