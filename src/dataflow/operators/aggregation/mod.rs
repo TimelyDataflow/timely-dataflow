@@ -11,5 +11,8 @@
 //! The two methods are often combined, using first `Aggregate` to reduce the volume of information, and then
 //! `StateMachine` to track an accumulation across timestamps. 
 
+pub use self::aggregate::Aggregate;
+pub use self::state_machine::StateMachine;
+
 pub mod state_machine;
 pub mod aggregate;

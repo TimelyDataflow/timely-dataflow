@@ -21,7 +21,46 @@ pub trait Aggregate<S: Scope, K: Data+Hash, V: Data> {
 	///
 	/// Aggregation happens within each time, and results are produced once the 
 	/// time is complete.
-	fn aggregate<
+	///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::aggregation::Aggregate;
+    ///
+    ///	timely::example(|scope| {
+	///
+    ///		(0..10).to_stream(scope)
+    ///			   .map(|x| (x % 2, x))
+    ///			   .aggregate(
+    ///			   	   |_key, val, agg| { *agg += val; }, 
+    ///                |key, agg: i32| (key, agg), 
+    ///                |key| *key as u64
+    ///            )
+    ///			   .inspect(|x| assert!(*x == (0, 20) || *x == (1, 25)));
+    /// });
+    /// ```
+    ///
+    /// By changing the type of the aggregate value, one can accumulate into different types.
+    /// Here we accumulate the data into a `Vec<i32>` and report its length (which we could 
+    /// obviously do more efficiently; imagine we were doing a hash instead).
+    /// 	
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::aggregation::Aggregate;
+    ///
+    ///	timely::example(|scope| {
+	///
+    ///		(0..10).to_stream(scope)
+    ///			   .map(|x| (x % 2, x))
+    ///            .aggregate::<_,Vec<i32>,_,_,_>(
+    ///                |_key, val, agg| { agg.push(val); }, 
+    ///                |key, agg| (key, agg.len()), 
+    ///                |key| *key as u64
+    ///            )
+    ///            .inspect(|x| assert!(*x == (0, 5) || *x == (1, 5)));
+    /// });
+    /// ```	
+    fn aggregate<
 		R: Data, 
 		D: Default+'static, 
 		F: Fn(&K, V, &mut D)+'static, 
@@ -66,30 +105,4 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> Aggregate<S, K, V> for Stream<S, (K, V)
 		})
 
 	}
-}
-
-#[cfg(test)]
-mod test {
-
-	use dataflow::operators::{ToStream, Inspect, Map};
-	use super::Aggregate;
-
-    #[test]
-    fn it_works() {
-
-    	::example(|scope| {
-
-    		(0..10).to_stream(scope)
-    			   .map(|x| (x % 2, x))
-    			   .aggregate(|_key, val, agg| { *agg += val; }, |key, agg: i32| (key, agg), |key| *key as u64)
-    			   .inspect(|x| assert!(*x == (0, 20) || *x == (1, 25)));
-
-       		(0..10).to_stream(scope)
-    			   .map(|x| (x % 2, x))
-    			   .aggregate::<_,Vec<i32>,_,_,_>(|_key, val, agg| { agg.push(val); }, |key, agg| (key, agg.len()), |key| *key as u64)
-    			   .inspect(|x| assert!(*x == (0, 5) || *x == (1, 5)));
-
-    	})
-
-    }
 }
