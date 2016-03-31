@@ -17,7 +17,7 @@ use dataflow::channels::pact::Exchange;
 /// is some total order on times respecting the total order (updates may be interleaved).
 
 /// Provides the `state_machine` method.
-trait StateMachine<S: Scope, K: Data+Hash+Eq, V: Data> {
+pub trait StateMachine<S: Scope, K: Data+Hash+Eq, V: Data> {
 	/// Tracks a state for each presented key, using user-supplied state transition logic.
 	///
 	/// The transition logic `fold` may mutate the state, and produce both output records and 
