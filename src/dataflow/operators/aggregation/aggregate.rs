@@ -1,3 +1,4 @@
+/// General purpose intra-timestamp aggregation
 use std::hash::Hash;
 use std::collections::HashMap;
 

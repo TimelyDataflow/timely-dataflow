@@ -1,3 +1,4 @@
+//! General purpose state transition operator. 
 use std::hash::Hash;
 use std::collections::HashMap;
 
@@ -15,12 +16,17 @@ use dataflow::channels::pact::Exchange;
 /// ordered times, the only guarantee is that updates are not applied out of order, not that there
 /// is some total order on times respecting the total order (updates may be interleaved).
 
-
+/// Provides the `state_machine` method.
 trait StateMachine<S: Scope, K: Data+Hash+Eq, V: Data> {
+	/// Tracks a state for each presented key, using user-supplied state transition logic.
+	///
+	/// The transition logic `fold` may mutate the state, and produce both output records and 
+	/// a `bool` indicating that it is appropriate to deregister the state, cleaning up once
+	/// the state is no longer helpful.
 	fn state_machine<
-		R: Data, 							// output type
+		R: Data, 									// output type
 		D: Default+'static, 						// per-key state (data)
-		I: Iterator<Item=R>,				// type of output iterator
+		I: IntoIterator<Item=R>,					// type of output iterator
 		F: Fn(&K, V, &mut D)->(bool, I)+'static, 	// state update logic
 		H: Fn(&K)->u64+'static,						// "hash" function for keys
 	>(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq ;
@@ -28,9 +34,9 @@ trait StateMachine<S: Scope, K: Data+Hash+Eq, V: Data> {
 
 impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K, V)> {
 	fn state_machine<
-			R: Data, 							// output type
+			R: Data, 									// output type
 			D: Default+'static, 						// per-key state (data)
-			I: Iterator<Item=R>,				// type of output iterator
+			I: IntoIterator<Item=R>,					// type of output iterator
 			F: Fn(&K, V, &mut D)->(bool, I)+'static, 	// state update logic
 			H: Fn(&K)->u64+'static,						// "hash" function for keys
 		>(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq {
@@ -56,7 +62,7 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K,
 							fold(&key, val, state)
 						};
 						if remove { states.remove(&key); }
-						session.give_iterator(output);
+						session.give_iterator(output.into_iter());
 					}
 				}
 			}
@@ -71,7 +77,7 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K,
 							fold(&key, val, state)
 						};
 						if remove { states.remove(&key); }
-						session.give_iterator(output);
+						session.give_iterator(output.into_iter());
 					}
 				}
 			}
@@ -79,3 +85,28 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K,
 		})
 	}
 }
+
+
+#[cfg(test)]
+mod test {
+
+	use dataflow::operators::{ToStream, Inspect, Map};
+	use super::StateMachine;
+
+    #[test]
+    fn it_works() {
+
+    	::example(|scope| {
+
+    		let result = vec![(0,0), (0,2), (0,6), (0,12), (0,20), (1,1), (1,4), (1,9), (1,16), (1,25)];
+
+    		(0..10).to_stream(scope)
+    			   .map(|x| (x % 2, x))
+    			   .state_machine(|_key, val, agg| { *agg += val; (false, Some((*_key, *agg))) }, |key| *key as u64)
+    			   .inspect(move |x| assert!(result.contains(x)));
+
+    	})
+
+    }
+}
+
