@@ -19,5 +19,5 @@ fn main() {
                   .map_in_place(|x| *x += 1)
                   .connect_loop(helper);
         });
-    });
+    }).unwrap();
 }

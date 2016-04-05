@@ -25,5 +25,5 @@ fn main() {
                 computation.step();
             }
         }
-    });
+    }).unwrap();
 }

@@ -50,7 +50,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///         handle2.replay_into(scope2)
     ///                .inspect(|x| println!("replayed: {:?}", x));
     ///     })
-    /// });
+    /// }).unwrap();
     /// ```
     ///
     /// The types `EventWriter<T, D, W>` and `EventReader<T, D, R>` can be
@@ -81,7 +81,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///             .replay_into(scope2)
     ///             .inspect(|x| println!("replayed: {:?}", x));
     ///     })
-    /// });
+    /// }).unwrap();
     /// ```
     fn capture_into<P: EventPusher<T, D>+'static>(&self, pusher: P);
 }
@@ -403,7 +403,7 @@ mod tests {
                 handle2.replay_into(builder)
                        .inspect(|x| println!("replayed: {:?}", x));
             })
-        });
+        }).unwrap();
     }
 
 
@@ -428,7 +428,7 @@ mod tests {
                     .replay_into(scope2)
                     .inspect(|x| println!("replayed: {:?}", x));
             })
-        });
+        }).unwrap();
     }
 
 }

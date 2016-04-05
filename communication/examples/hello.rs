@@ -1,11 +1,11 @@
-extern crate communication;
+extern crate timely_communication;
 
 fn main() {
     // configure for two threads, just one process.
-    let config = communication::Configuration::Process(2);
+    let config = timely_communication::Configuration::Process(2);
 
     // initailizes communication, spawns workers
-    communication::initialize(config, |mut allocator| {
+    let guards = timely_communication::initialize(config, |mut allocator| {
         println!("worker {} started", allocator.index());
 
         // allocates pair of senders list and one receiver.
@@ -24,5 +24,15 @@ fn main() {
                 expecting -= 1;
             }
         }
+
+        allocator.index()
     });
+
+    // computation runs until guards are joined or dropped.
+    if let Ok(mut guards) = guards {
+        for guard in guards.join() {
+            println!("result: {:?}", guard);
+        }
+    }
+    else { println!("error in computation"); }
 }

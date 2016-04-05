@@ -6,7 +6,8 @@ use std::mem::size_of;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
-use std::thread::sleep_ms;
+use std::thread::sleep;
+use std::time::Duration;
 
 // TODO : Would be nice to remove this dependence
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -272,7 +273,7 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
                 },
                 Err(error) => {
                     println!("worker {}:\terror connecting to worker {}: {}; retrying", my_index, index, error);
-                    sleep_ms(1000);
+                    sleep(Duration::from_secs(1));
                 },
             }
         }

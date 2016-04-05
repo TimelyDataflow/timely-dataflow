@@ -17,10 +17,10 @@
 //! #Examples
 //! ```
 //! // configure for two threads, just one process.
-//! let config = communication::Configuration::Process(2);
+//! let config = timely_communication::Configuration::Process(2);
 //!
 //! // initailizes communication, spawns workers
-//! communication::initialize(config, |mut allocator| {
+//! let guards = timely_communication::initialize(config, |mut allocator| {
 //!     println!("worker {} started", allocator.index());
 //!
 //!     // allocates pair of senders list and one receiver.
@@ -39,7 +39,18 @@
 //!             expecting -= 1;
 //!         }
 //!     }
+//!
+//!     // optionally, return something
+//!     allocator.index()
 //! });
+//!
+//! // computation runs until guards are joined or dropped.
+//! if let Ok(mut guards) = guards {
+//!     for guard in guards.join() {
+//!         println!("result: {:?}", guard);
+//!     }
+//! }
+//! else { println!("error in computation"); }
 //! ```
 //!
 //! The should produce output like:
@@ -51,6 +62,8 @@
 //! worker 1: received: <hello, 1>
 //! worker 0: received: <hello, 0>
 //! worker 1: received: <hello, 1>
+//! result: Ok(0)
+//! result: Ok(1)
 //! ```
 //!
 
@@ -68,7 +81,7 @@ use abomonation::{Abomonation, encode, decode};
 
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
-pub use initialize::{initialize, Configuration};
+pub use initialize::{initialize, Configuration, WorkerGuards};
 
 /// A composite trait for types that may be used with channels.
 pub trait Data : Send+Any+Serialize+Clone+'static { }

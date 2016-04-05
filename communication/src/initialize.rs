@@ -1,6 +1,4 @@
 //! Initialization logic for a generic instance of the `Allocate` channel allocation trait.
-//!
-//!
 
 use std::thread;
 use std::io::BufRead;
@@ -10,61 +8,16 @@ use std::sync::Arc;
 use allocator::{Thread, Process, Generic};
 use networking::initialize_networking;
 
-// /// Configuration information for the desired number of threads, processes, and locations thereof.
-// pub struct Configuration {
-//     /// The number of threads each process should use.
-//     pub threads: usize,
-//
-//     /// A process identifier in range `(0..addresses.len())`.
-//     pub process: usize,
-//
-//     /// The list of host:port strings indicating where each process will bind.
-//     pub addresses: Vec<String>,
-//
-//     /// Enables or suppresses network connection progress.
-//     pub report: bool,
-// }
-
 pub enum Configuration {
     Thread,
     Process(usize),
     Cluster(usize, usize, Vec<String>, bool)
 }
 
-// impl Configuration {
-//     fn threads(&self) -> usize {
-//         match *self {
-//             Configuration::Thread => 1,
-//             Configuration::Process(t) => t,
-//             Configuration::Cluster(t,_,_,_) => t,
-//         }
-//     }
-//     fn process(&self) -> usize {
-//         match *self {
-//             Configuration::Thread => 0,
-//             Configuration::Process(_) => 0,
-//             Configuration::Cluster(_,p,_,_) => p,
-//         }
-//     }
-//     fn addresses(&self) -> &[String] {
-//         match *self {
-//             Configuration::Thread => &[],
-//             Configuration::Process(_) => &[],
-//             Configuration::Cluster(_,_, ref a,_) => &a[..],
-//         }
-//     }
-//     fn report(&self) -> bool {
-//         match *self {
-//             Configuration::Cluster(_,_,_,b) => b,
-//             _ => false,
-//         }
-//     }
-// }
-
 impl Configuration {
 
     /// Constructs a new configuration by parsing supplied text arguments.
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Option<Configuration> {
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Configuration,String> {
 
         let mut opts = getopts::Options::new();
         opts.optopt("w", "threads", "number of per-process worker threads", "NUM");
@@ -73,7 +26,9 @@ impl Configuration {
         opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
         opts.optflag("r", "report", "reports connection progress");
 
-        opts.parse(args).ok().map(|matches| {
+        opts.parse(args)
+            .map_err(|e| format!("{:?}", e))
+            .map(|matches| {
 
             // let mut config = Configuration::new(1, 0, Vec::new());
             let threads = matches.opt_str("w").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
@@ -111,31 +66,77 @@ impl Configuration {
     }
 }
 
-/// Initializes an `allocator::Generic` for each thread, spawns the local threads, and invokes the
-/// supplied function with the allocator. Returns only once all threads have returned.
-pub fn initialize<F: Fn(Generic)+Send+Sync+'static>(config: Configuration, func: F) {
-
-    let allocators = match config {
-        Configuration::Thread => vec![Generic::Thread(Thread)],
-        Configuration::Process(threads) => Process::new_vector(threads).into_iter().map(|x| Generic::Process(x)).collect(),
+fn create_allocators(config: Configuration) -> Result<Vec<Generic>,String> {
+    match config {
+        Configuration::Thread => Ok(vec![Generic::Thread(Thread)]),
+        Configuration::Process(threads) => Ok(Process::new_vector(threads).into_iter().map(|x| Generic::Process(x)).collect()),
         Configuration::Cluster(threads, process, addresses, report) => {
-            initialize_networking(addresses, process, threads, report)
-                .ok()
-                .expect("error initializing networking")
-                .into_iter()
-                .map(|x| Generic::Binary(x)).collect()
+            if let Ok(stuff) = initialize_networking(addresses, process, threads, report) {
+                Ok(stuff.into_iter().map(|x| Generic::Binary(x)).collect())
+            }
+            else {
+                Err("failed to initialize networking".to_owned())
+            }
         },
-    };
+    }
+}
 
+/// Initializes communication and executes a distributed computation.
+///
+/// This method allocates an `allocator::Generic` for each thread, spawns local worker threads, 
+/// and invokes the supplied function with the allocator. 
+/// The method returns a `WorkerGuards<T>` which can be `join`ed to retrieve the return values
+/// (or errors) of the workers.
+///
+///
+/// #Examples
+/// ```
+/// use timely::dataflow::operators::{ToStream, Inspect};
+///
+/// timely::example(|scope| {
+///     (0..10).to_stream(scope)
+///            .inspect(|x| println!("seen: {:?}", x));
+/// });
+/// ```
+pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> {
+
+    let allocators = try!(create_allocators(config));
     let logic = Arc::new(func);
 
     let mut guards = Vec::new();
     for allocator in allocators.into_iter() {
         let clone = logic.clone();
-        guards.push(thread::Builder::new().name(format!("worker thread {}", allocator.index()))
-                                          .spawn(move || (*clone)(allocator))
-                                          .unwrap());
+        guards.push(try!(thread::Builder::new()
+                            .name(format!("worker thread {}", allocator.index()))
+                            .spawn(move || (*clone)(allocator))
+                            .map_err(|e| format!("{:?}", e))));
     }
 
-    for guard in guards { guard.join().unwrap(); }
+    Ok(WorkerGuards { guards: guards })
+}
+
+pub struct WorkerGuards<T:Send+'static> {
+    guards: Vec<::std::thread::JoinHandle<T>>
+}
+
+impl<T:Send+'static> WorkerGuards<T> {
+    /// Waits on the worker threads and returns the results they produce
+    ///
+    /// This method drains the worker guards, which means that while one 
+    /// can call this method repeatedly, one shouldn't. It would be great
+    /// for the signature to use `self`, but since it also implements `Drop`
+    /// this is not possible.
+    pub fn join(&mut self) -> Vec<Result<T,String>> {
+        self.guards.drain(..)
+                   .map(|guard| guard.join().map_err(|e| format!("{:?}", e)))
+                   .collect()
+    }
+}
+
+impl<T:Send+'static> Drop for WorkerGuards<T> {
+    fn drop(&mut self) {
+        for guard in self.guards.drain(..) {
+            guard.join().unwrap();
+        }
+    }
 }

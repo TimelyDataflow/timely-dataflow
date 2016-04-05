@@ -15,5 +15,5 @@ fn main() {
                 .replay_into(scope2)
                 .inspect(|x| println!("replayed: {:?}", x));
         })
-    });
+    }).unwrap(); // asserts error-free execution
 }

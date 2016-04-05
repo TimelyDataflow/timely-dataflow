@@ -30,5 +30,5 @@ fn main() {
             )
             .connect_loop(handle);
         });
-    })
+    }).unwrap(); // asserts error-free execution;
 }

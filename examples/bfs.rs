@@ -137,5 +137,5 @@ fn main() {
             .concat(&(0..1).map(|x| (x,x)).to_stream(scope))
             .connect_loop(handle);
         });
-    });
+    }).unwrap(); // asserts error-free execution;
 }

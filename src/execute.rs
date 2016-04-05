@@ -1,6 +1,6 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use timely_communication::{initialize, Configuration, Allocator};
+use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
 use dataflow::scopes::{Root, Child, Scope};
 
 /// Executes a single-threaded timely dataflow computation.
@@ -18,12 +18,13 @@ use dataflow::scopes::{Root, Child, Scope};
 ///            .inspect(|x| println!("seen: {:?}", x));
 /// });
 /// ```
-pub fn example<F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static>(func: F) {
+pub fn example<F>(func: F) 
+where F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static {
     initialize(Configuration::Thread, move |allocator| {
         let mut root = Root::new(allocator);
         root.scoped::<u64,_,_>(|x| func(x));
         while root.step() { }
-    })
+    }).unwrap();
 }
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
@@ -45,11 +46,13 @@ pub fn example<F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static>(func: 
 ///     })
 /// });
 /// ```
-pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configuration, func: F) {
+pub fn execute<T:Send+'static, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
+where F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     initialize(config, move |allocator| {
         let mut root = Root::new(allocator);
-        func(&mut root);
+        let result = func(&mut root);
         while root.step() { }
+        result
     })
 }
 
@@ -98,11 +101,8 @@ pub fn execute<F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(config: Configurat
 /// host2:port
 /// host3:port
 /// ```
-pub fn execute_from_args<I: Iterator<Item=String>, F: Fn(&mut Root<Allocator>)+Send+Sync+'static>(iter: I, func: F) {
-    if let Some(config) = Configuration::from_args(iter) {
-        execute(config, func);
-    }
-    else {
-        println!("failed to initialize communication fabric");
-    }
-}
+pub fn execute_from_args<I, T:Send+'static, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String> 
+    where I: Iterator<Item=String>, 
+          F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
+    execute(try!(Configuration::from_args(iter)), func)
+ }

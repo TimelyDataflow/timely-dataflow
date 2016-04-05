@@ -48,7 +48,7 @@ pub trait Probe<G: Scope, D: Data> {
     ///             root.step();
     ///         }
     ///     }
-    /// });
+    /// }).unwrap();
     /// ```
     fn probe(&self) -> (Handle<G::Timestamp>, Stream<G, D>);
 }
@@ -171,7 +171,7 @@ mod tests {
             // finish off any remaining work
             computation.step();
             assert!(probe.done());
-        });
+        }).unwrap();
     }
 
 }
