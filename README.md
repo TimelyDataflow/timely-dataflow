@@ -40,7 +40,7 @@ fn main() {
             input.advance_to(round + 1);
             root.step();
         }
-    });
+    }).unwrap();
 }
 ```
 

@@ -16,7 +16,7 @@ use dataflow::scopes::{Root, Child, Scope};
 /// timely::example(|scope| {
 ///     (0..10).to_stream(scope)
 ///            .inspect(|x| println!("seen: {:?}", x));
-/// });
+/// }).unwrap();
 /// ```
 pub fn example<F>(func: F) 
 where F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static {
@@ -44,7 +44,7 @@ where F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
-/// });
+/// }).unwrap();
 /// ```
 pub fn execute<T:Send+'static, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
 where F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
@@ -86,7 +86,7 @@ where F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
-/// });
+/// }).unwrap();
 /// ```
 /// ```ignore
 /// host0% cargo run -- -w 2 -n 4 -h hosts.txt -p 0
