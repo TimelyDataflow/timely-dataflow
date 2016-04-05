@@ -16,7 +16,7 @@ use dataflow::scopes::{Root, Child, Scope};
 /// timely::example(|scope| {
 ///     (0..10).to_stream(scope)
 ///            .inspect(|x| println!("seen: {:?}", x));
-/// }).unwrap();
+/// });
 /// ```
 pub fn example<F>(func: F) 
 where F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static {
