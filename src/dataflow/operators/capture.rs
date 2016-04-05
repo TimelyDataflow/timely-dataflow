@@ -1,6 +1,70 @@
-//! An operator which captures the streams of records and notifications to play back later.
+//! Operators which capture and replay streams of records.
 //!
-//! Not yet tested; please be careful using!
+//! The `capture_into` and `replay_into` operators respectively capture what a unary operator
+//! sees as input (both data and progress information), and play this information back as a new
+//! input.
+//!
+//! The `capture_into` method requires a `P: EventPusher<T, D>`, which is some type accepting 
+//! `Event<T, D>` inputs. This module provides several examples, including the linked list 
+//! `EventLink<T, D>`, and the binary `EventWriter<T, D, W>` wrapping any `W: Write`.
+//!
+//! #Examples
+//!
+//! The type `Rc<EventLink<T,D>>` implements a typed linked list,
+//! and can be captured into and replayed from.
+//!
+//! ```
+//! use std::rc::Rc;
+//! use timely::dataflow::Scope;
+//! use timely::dataflow::operators::{Capture, ToStream, Inspect};
+//! use timely::dataflow::operators::capture::{EventLink, Replay};
+//!
+//! timely::execute(timely::Configuration::Thread, |computation| {
+//!     let handle1 = Rc::new(EventLink::new());
+//!     let handle2 = handle1.clone();
+//!
+//!     computation.scoped::<u64,_,_>(|scope1|
+//!         (0..10).to_stream(scope1)
+//!                .capture_into(handle1)
+//!     );
+//!
+//!     computation.scoped(|scope2| {
+//!         handle2.replay_into(scope2)
+//!                .inspect(|x| println!("replayed: {:?}", x));
+//!     })
+//! }).unwrap();
+//! ```
+//!
+//! The types `EventWriter<T, D, W>` and `EventReader<T, D, R>` can be
+//! captured into and replayed from, respectively. The use binary writers
+//! and readers respectively, and can be backed by files, network sockets,
+//! etc.
+//!
+//! ```
+//! use std::rc::Rc;
+//! use std::net::{TcpListener, TcpStream};
+//! use timely::dataflow::Scope;
+//! use timely::dataflow::operators::{Capture, ToStream, Inspect};
+//! use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay};
+//!
+//! timely::execute(timely::Configuration::Thread, |computation| {
+//!     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
+//!     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
+//!     let recv = list.incoming().next().unwrap().unwrap();
+//!
+//!     computation.scoped::<u64,_,_>(|scope1|
+//!         (0..10u64)
+//!             .to_stream(scope1)
+//!             .capture_into(EventWriter::new(send))
+//!     );
+//!
+//!     computation.scoped::<u64,_,_>(|scope2| {
+//!         EventReader::<_,u64,_>::new(recv)
+//!             .replay_into(scope2)
+//!             .inspect(|x| println!("replayed: {:?}", x));
+//!     })
+//! }).unwrap();
+//! ```
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -103,7 +167,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
     }
 }
 
-/// Possible events that the captured stream may provide.
+/// Data and progres events of the captured stream.
 pub enum Event<T, D> {
     Start,
     /// Progress received via `push_external_progress`.
@@ -136,7 +200,7 @@ impl<T: Abomonation, D: Abomonation> Abomonation for Event<T,D> {
 }
 
 
-/// Linked list of events.
+/// A linked list of Event<T, D>.
 pub struct EventLink<T, D> {
     /// An event.
     pub event: Event<T, D>,
@@ -146,11 +210,15 @@ pub struct EventLink<T, D> {
 
 impl<T, D> EventLink<T, D> { pub fn new() -> EventLink<T, D> { EventLink { event: Event::Start, next: RefCell::new(None) }}}
 
+/// Iterates over contained `Event<T, D>`.
 pub trait EventIterator<T, D> {
+    /// Iterates over references to `Event<T, D>` elements.
     fn next<'a>(&'a mut self) -> Option<&'a Event<T, D>>;
 }
 
+/// Receives `Event<T, D>` events.
 pub trait EventPusher<T, D> {
+    /// Provides a new `Event<T, D>` to the pusher.
     fn push(&mut self, event: Event<T, D>);
 }
 
@@ -179,7 +247,7 @@ impl<T, D> EventIterator<T, D> for Rc<EventLink<T, D>> {
     }
 }
 
-
+/// A wrapper for `W: Write` implementing `EventPusher<T, D>`.
 pub struct EventWriter<T, D, W: ::std::io::Write> {
     buffer: Vec<u8>,
     stream: W,
@@ -204,7 +272,7 @@ impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for 
     }
 }
 
-
+/// A Wrapper for `R: Read` implementing `EventIterator<T, D>`.
 pub struct EventReader<T, D, R: ::std::io::Read> {
     reader: R,
     bytes: Vec<u8>,
@@ -258,7 +326,9 @@ impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for
     }
 }
 
+/// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, D: Data> {
+    /// Replays `self` into the provided scope, as a `Stream<S, D>`.
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>;
 }
 
