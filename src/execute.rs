@@ -30,8 +30,12 @@ where F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static {
 /// Executes a timely dataflow from a configuration and per-communicator logic.
 ///
 /// The `execute` method takes a `Configuration` and spins up some number of
-/// workers threads, each of which execute the supplied closure to construct and run a timely
-/// dataflow computation.
+/// workers threads, each of which execute the supplied closure to construct
+/// and run a timely dataflow computation.
+///
+/// The closure may return a `T: Send+'static`, and `execute` returns a result
+/// containing a `WorkerGuards<T>` (or error information), which can be joined
+/// to recover the result `T` values from the local workers.
 ///
 /// #Examples
 /// ```
@@ -62,6 +66,10 @@ where F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
 /// The `execute` method takes arguments (typically `std::env::args()`) and spins up some number of
 /// workers threads, each of which execute the supplied closure to construct and run a timely
 /// dataflow computation.
+///
+/// The closure may return a `T: Send+'static`, and `execute` returns a result
+/// containing a `WorkerGuards<T>` (or error information), which can be joined
+/// to recover the result `T` values from the local workers.
 ///
 /// The arguments `execute` currently understands are:
 ///
