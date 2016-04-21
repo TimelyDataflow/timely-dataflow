@@ -33,7 +33,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
 
     /// moves the contents of
     fn flush(&mut self) {
-        if self.buffer.len() > 0 {
+        if !self.buffer.is_empty() {
             let time = self.time.as_ref().unwrap().clone();
             Content::push_at(&mut self.buffer, time, &mut self.pusher);
         }
@@ -50,7 +50,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
     /// Gives an entire message at a specific time.
     fn give_content(&mut self, content: &mut Content<D>) {
         // flush to ensure fifo-ness
-        if self.buffer.len() > 0 {
+        if !self.buffer.is_empty() {
             self.flush();
         }
 

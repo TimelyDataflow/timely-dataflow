@@ -29,10 +29,10 @@ pub struct Stream<S: Scope, D:Data> {
 
 impl<S: Scope, D:Data> Stream<S, D> {
 
-    pub fn connect_to<P: Push<(S::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P, _identifier: usize) {
+    pub fn connect_to<P: Push<(S::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         ::logging::log(&::logging::CHANNELS, ::logging::ChannelsEvent {
-            id: _identifier,
+            id: identifier,
             scope_addr: self.scope.addr(),
             source: (self.name.index, self.name.port),
             target: (target.index, target.port),

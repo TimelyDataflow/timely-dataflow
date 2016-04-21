@@ -179,22 +179,22 @@ pub enum Event<T, D> {
 
 impl<T: Abomonation, D: Abomonation> Abomonation for Event<T,D> {
     #[inline] unsafe fn embalm(&mut self) {
-        if let &mut Event::Progress(ref mut vec) = self { vec.embalm(); }
-        if let &mut Event::Messages(ref mut time, ref mut data) = self { time.embalm(); data.embalm(); }
+        if let Event::Progress(ref mut vec) = *self { vec.embalm(); }
+        if let Event::Messages(ref mut time, ref mut data) = *self { time.embalm(); data.embalm(); }
     }
     #[inline] unsafe fn entomb(&self, bytes: &mut Vec<u8>) {
-        if let &Event::Progress(ref vec) = self { vec.entomb(bytes); }
-        if let &Event::Messages(ref time, ref data) = self { time.entomb(bytes); data.entomb(bytes); }
+        if let Event::Progress(ref vec) = *self { vec.entomb(bytes); }
+        if let Event::Messages(ref time, ref data) = *self { time.entomb(bytes); data.entomb(bytes); }
     }
     #[inline] unsafe fn exhume<'a, 'b>(&'a mut self, mut bytes: &'b mut[u8]) -> Option<&'b mut [u8]> {
-        match self {
-            &mut Event::Progress(ref mut vec) => { vec.exhume(bytes) },
-            &mut Event::Messages(ref mut time, ref mut data) => {
+        match *self {
+            Event::Progress(ref mut vec) => { vec.exhume(bytes) },
+            Event::Messages(ref mut time, ref mut data) => {
                 let temp = bytes; bytes = if let Some(bytes) = time.exhume(temp) { bytes } else { return None; };
                 let temp = bytes; bytes = if let Some(bytes) = data.exhume(temp) { bytes } else { return None; };
                 Some(bytes)
             }
-            &mut Event::Start => Some(bytes),
+            Event::Start => Some(bytes),
         }
     }
 }
@@ -213,7 +213,7 @@ impl<T, D> EventLink<T, D> { pub fn new() -> EventLink<T, D> { EventLink { event
 /// Iterates over contained `Event<T, D>`.
 pub trait EventIterator<T, D> {
     /// Iterates over references to `Event<T, D>` elements.
-    fn next<'a>(&'a mut self) -> Option<&'a Event<T, D>>;
+    fn next(&mut self) -> Option<&Event<T, D>>;
 }
 
 /// Receives `Event<T, D>` events.
@@ -234,7 +234,7 @@ impl<T, D> EventPusher<T, D> for Rc<EventLink<T, D>> {
 }
 
 impl<T, D> EventIterator<T, D> for Rc<EventLink<T, D>> {
-    fn next<'a>(&'a mut self) -> Option<&'a Event<T, D>> {
+    fn next(&mut self) -> Option<&Event<T, D>> {
         let is_some = self.next.borrow().is_some();
         if is_some {
             let next = self.next.borrow().as_ref().unwrap().clone();
@@ -298,7 +298,7 @@ impl<T, D, R: ::std::io::Read> EventReader<T, D, R> {
 }
 
 impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for EventReader<T, D, R> {
-    fn next<'a>(&'a mut self) -> Option<&'a Event<T, D>> {
+    fn next(&mut self) -> Option<&Event<T, D>> {
 
         // if we can decode something, we should just return it! :D
         if unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buff1[self.consumed..]) }.is_some() {
@@ -306,23 +306,21 @@ impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for
             self.consumed = self.valid - rest.len();
             return Some(item);
         }
-        else {
-            // if we exhaust data we should shift back (if any shifting to do)
-            if self.consumed > 0 {
-                self.buff2.clear();
-                self.buff2.write_all(&mut self.buff1[self.consumed..]).unwrap();
-                ::std::mem::swap(&mut self.buff1, &mut self.buff2);
-                self.valid = self.buff1.len();
-                self.consumed = 0;
-            }
-
-            if let Ok(len) = self.reader.read(&mut self.bytes[..]) {
-                self.buff1.write_all(&self.bytes[..len]).unwrap();
-                self.valid = self.buff1.len();
-            }
-
-            return None;
+        // if we exhaust data we should shift back (if any shifting to do)
+        if self.consumed > 0 {
+            self.buff2.clear();
+            self.buff2.write_all(&self.buff1[self.consumed..]).unwrap();
+            ::std::mem::swap(&mut self.buff1, &mut self.buff2);
+            self.valid = self.buff1.len();
+            self.consumed = 0;
         }
+
+        if let Ok(len) = self.reader.read(&mut self.bytes[..]) {
+            self.buff1.write_all(&self.bytes[..len]).unwrap();
+            self.valid = self.buff1.len();
+        }
+
+        None
     }
 }
 
@@ -369,7 +367,7 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],  _: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> bool {
         while let Some((time, data)) = self.input.next() {
-            self.events.push(Event::Messages(time.clone(), data.deref_mut().clone()));
+            self.events.push(Event::Messages(*time, data.deref_mut().clone()));
         }
         self.input.pull_progress(&mut consumed[0]);
         false

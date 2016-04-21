@@ -146,7 +146,7 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Push<(TOuter, Content<TD
     fn push(&mut self, message: &mut Option<(TOuter, Content<TData>)>) {
         if let Some((ref time, ref mut data)) = *message {
             let content = ::std::mem::replace(data, Content::Typed(Vec::new()));
-            let mut message = Some((Product::new(time.clone(), Default::default()), content));
+            let mut message = Some((Product::new(*time, Default::default()), content));
             self.targets.push(&mut message);
             if let Some((_, content)) = message {
                 *data = content;
@@ -167,7 +167,7 @@ where TOuter: Timestamp, TInner: Timestamp, TData: Data {
     fn push(&mut self, message: &mut Option<(Product<TOuter, TInner>, Content<TData>)>) {
         if let Some((ref time, ref mut data)) = *message {
             let content = ::std::mem::replace(data, Content::Typed(Vec::new()));
-            let mut message = Some((time.outer.clone(), content));
+            let mut message = Some((time.outer, content));
             self.targets.push(&mut message);
             if let Some((_, content)) = message {
                 *data = content;

@@ -92,7 +92,7 @@ impl<T: Timestamp> Notificator<T> {
     /// representing how many capabilities were requested for that specific timestamp.
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64)>(&mut self, mut logic: F) {
-        while let Some((cap, count)) = self.next() {
+        for (cap, count) in self {
             ::logging::log(&::logging::GUARDED_PROGRESS, true);
             logic(cap, count);
             ::logging::log(&::logging::GUARDED_PROGRESS, false);
@@ -110,7 +110,7 @@ impl<T: Timestamp> Iterator for Notificator<T> {
     /// how many notifications (out of those requested) are being delivered for that specific
     /// timestamp.
     fn next(&mut self) -> Option<(Capability<T>, u64)> {
-        if self.available.len() == 0 {
+        if self.available.is_empty() {
             let mut available = &mut self.available; // available is empty
             let mut pending = &mut self.pending;
             let mut candidates = &mut self.candidates;
@@ -122,7 +122,7 @@ impl<T: Timestamp> Iterator for Notificator<T> {
             });
 
             while let Some((cap, count)) = candidates.pop() {
-                let mut cap_in_minimal_antichain = available.len() == 0;
+                let mut cap_in_minimal_antichain = available.is_empty();
                 available.drain_into_if(&mut pending, |&(ref avail_cap, _)| {
                     let cap_lt_available = cap.time().lt(&avail_cap.time());
                     cap_in_minimal_antichain |= cap_lt_available ||

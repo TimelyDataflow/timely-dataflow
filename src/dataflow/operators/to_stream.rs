@@ -45,7 +45,7 @@ impl<D: Data, I: Iterator<Item=D>+'static> ToStream<D> for I {
             output: Buffer::new(Counter::new(output, Rc::new(RefCell::new(CountMap::new())))),
         });
 
-        return Stream::new(Source { index: index, port: 0 }, registrar, scope.clone());
+        Stream::new(Source { index: index, port: 0 }, registrar, scope.clone())
     }
 }
 
