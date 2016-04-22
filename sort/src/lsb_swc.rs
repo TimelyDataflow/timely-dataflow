@@ -187,7 +187,36 @@ mod test {
         }
 
         assert_eq!(result, vector);
+    }
 
+
+    #[test]
+    fn test_large() {
+
+        let size = 1_000_000;
+
+        let mut vector = Vec::<[usize; 16]>::with_capacity(size);
+        for index in 0..size {
+            vector.push([index; 16]);
+        }
+        for index in 0..size {
+            vector.push([size - index; 16]);
+        }
+
+        let mut sorter = super::RadixSorter::new();
+
+        for &element in &vector {
+            sorter.push(element, &|&x| x[0]);
+        }
+
+        vector.sort_by(|x, y| x[0].cmp(&y[0]));
+
+        let mut result = Vec::new();
+        for element in sorter.finish(&|&x| x[0]).into_iter().flat_map(|x| x.into_iter()) {
+            result.push(element);
+        }
+
+        assert_eq!(result, vector);
     }
 
 }

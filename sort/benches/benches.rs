@@ -3,7 +3,7 @@ extern crate test;
 extern crate rand;
 extern crate timely_sort as haeoua;
 
-use rand::{Rng, SeedableRng, StdRng, Rand};
+use rand::{SeedableRng, StdRng, Rand};
 use test::Bencher;
 use haeoua::*;
 
@@ -79,7 +79,7 @@ fn radix_sort_swc<T: Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Bencher
 }
 
 fn merge_sort<I: Iterator+Clone>(bencher: &mut Bencher, data: I) where I::Item: Clone+Ord {
-    let mut vector = data.clone().collect::<Vec<_>>();
+    let vector = data.clone().collect::<Vec<_>>();
     bencher.bytes = (vector.len() * ::std::mem::size_of::<I::Item>()) as u64;
     bencher.iter(|| {
         let mut data = vector.clone();
