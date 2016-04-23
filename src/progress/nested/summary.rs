@@ -64,8 +64,8 @@ impl<SOuter: Display, SInner: Display> Display for Summary<SOuter, SInner> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match *self {
-            Local(ref s) => f.write_str(&format!("Local({})", s)),
-            Outer(ref s, ref t) => f.write_str(&format!("Outer({}, {})", s, t))
+            Local(ref s) => write!(f, "Local({})", s),
+            Outer(ref s, ref t) => write!(f, "Outer({}, {})", s, t)
         }
     }
 }
