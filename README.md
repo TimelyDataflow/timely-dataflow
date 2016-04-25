@@ -5,7 +5,7 @@ This project is an extended and more modular implementation of timely dataflow i
 
 Be sure to read the [documentation for timely dataflow](http://frankmcsherry.github.io/timely-dataflow). It is a work in progress, but mostly improving.
 
-The [timely dataflow wiki](https://github.com/frankmcsherry/timely-dataflow/wiki) has more long-form text, introducing programming and explaining concepts in more detail.
+The [timely dataflow wiki](https://github.com/frankmcsherry/timely-dataflow/wiki) has more long-form text, introducing programming and explaining concepts in more detail. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow a different way.
 
 # An example
 
@@ -16,7 +16,39 @@ To use timely dataflow, add the following to the dependencies section of your pr
 timely="*"
 ```
 
-This will bring in the [`timely` crate](https://crates.io/crates/timely) from [crates.io](http://crates.io), which should allow you to start writing timely dataflow programs like this one (also available in [examples/hello.rs](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/hello.rs)):
+This will bring in the [`timely` crate](https://crates.io/crates/timely) from [crates.io](http://crates.io), which should allow you to start writing timely dataflow programs like this one (also available in [examples/simple.rs](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/simple.rs)):
+
+```rust
+extern crate timely;
+
+use timely::dataflow::operators::*;
+
+fn main() {
+    timely::example(|scope| {
+        (0..10).to_stream(scope)
+               .inspect(|x| println!("seen: {:?}", x));
+    });
+}
+```
+
+You can run this example from the root directory of the `timely-dataflow` repository by typing
+
+```
+% cargo run --example simple
+Running `target/debug/examples/simple`
+seen: 0
+seen: 1
+seen: 2
+seen: 3
+seen: 4
+seen: 5
+seen: 6
+seen: 7
+seen: 8
+seen: 9
+```
+
+This is a very simple example (it's in the name), which only just suggests at how you might write dataflow programs. For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/hello.rs), which creates and drives the dataflow separately:
 
 ```rust
 extern crate timely;
@@ -44,26 +76,9 @@ fn main() {
 }
 ```
 
-You can run this example from the root directory of the `timely-dataflow` repository by typing
-
-```
-% cargo run --example hello
-Running `target/debug/examples/hello`
-hello world: 0
-hello world: 1
-hello world: 2
-hello world: 3
-hello world: 4
-hello world: 5
-hello world: 6
-hello world: 7
-hello world: 8
-hello world: 9
-```
-
 # Execution
 
-The program above will by default use a single worker thread. To use multiple threads in a process, use the `-w` or `--workers` options followed by the number of threads you would like to use.
+The `hello.rs` program above will by default use a single worker thread. To use multiple threads in a process, use the `-w` or `--workers` options followed by the number of threads you would like to use.
 
 To use multiple processes, you will need to use the `-h` or `--hostfile` option to specify a text file whose lines are `hostname:port` entries corresponding to the locations you plan on spawning the processes. You will need to use the `-n` or `--processes` argument to indicate how many processes you will spawn (a prefix of the host file), and each process must use the `-p` or `--process` argument to indicate their index out of this number.
 
@@ -95,7 +110,7 @@ There are currently a few options for writing timely dataflow programs. Ideally 
 
 * [**Differential dataflow**](https://github.com/frankmcsherry/differential-dataflow): A higher-level language built on timely dataflow, differential dataflow includes operators like `group`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
 
-There are also a few application built on timely dataflow, including [a streaming worst-case optimal join implementation](https://github.com/frankmcsherry/dataflow_join) and a [PageRank](https://github.com/frankmcsherry/pagerank) implementation, both of which should provide helpful examples of writing timely dataflow programs.
+There are also a few applications built on timely dataflow, including [a streaming worst-case optimal join implementation](https://github.com/frankmcsherry/dataflow_join) and a [PageRank](https://github.com/frankmcsherry/pagerank) implementation, both of which should provide helpful examples of writing timely dataflow programs.
 
 
 # To-do list
