@@ -147,7 +147,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
         self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
         self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);
-        return false;
+        false
     }
 
     fn notify_me(&self) -> bool { false }

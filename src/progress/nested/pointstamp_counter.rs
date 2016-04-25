@@ -20,9 +20,9 @@ impl<T:Timestamp> PointstampCounter<T> {
         self.source[source.index][source.port].update(time, value);
     }
     pub fn clear(&mut self) {
-        for vec in self.source.iter_mut() { for map in vec.iter_mut() { map.clear(); } }
-        for vec in self.target.iter_mut() { for map in vec.iter_mut() { map.clear(); } }
-        for vec in self.pushed.iter_mut() { for map in vec.iter_mut() { map.clear(); } }
+        for vec in &mut self.source { for map in vec.iter_mut() { map.clear(); } }
+        for vec in &mut self.target { for map in vec.iter_mut() { map.clear(); } }
+        for vec in &mut self.pushed { for map in vec.iter_mut() { map.clear(); } }
     }
 
     pub fn allocate_for_operator(&mut self, inputs: usize, outputs: usize) {

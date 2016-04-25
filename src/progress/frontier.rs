@@ -18,22 +18,20 @@ impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
     /// Returns true if element is added to the set
     pub fn insert(&mut self, element: T) -> bool {
         // bail if any element exceeds the candidate
-        if !self.elements.iter().any(|x| element.ge(x)) {
-            let mut removed = 0;
-            for index in 0..self.elements.len() {
-                let new_index = index - removed;
-                if element.lt(&self.elements[new_index]) {
-                    self.elements.swap_remove(new_index);
-                    removed += 1;
-                }
-            }
-
-            self.elements.push(element);
-            return true;
-        }
-        else {
+        if self.elements.iter().any(|x| element.ge(x)) {
             return false;
         }
+        let mut removed = 0;
+        for index in 0..self.elements.len() {
+            let new_index = index - removed;
+            if element.lt(&self.elements[new_index]) {
+                self.elements.swap_remove(new_index);
+                removed += 1;
+            }
+        }
+
+        self.elements.push(element);
+        true
     }
 
     /// Creates a new empty `Antichain`.
@@ -82,11 +80,11 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
     pub fn new_bottom(bottom: T) -> MutableAntichain<T> {
         let mut result = MutableAntichain::new();
         result.update_weight(&bottom, 1, &mut Default::default());
-        return result;
+        result
     }
 
     /// Returns true if there are no elements in the `MutableAntichain`.
-    pub fn empty(&self) -> bool { self.elements.len() == 0 }
+    pub fn empty(&self) -> bool { self.elements.is_empty() }
 
     /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
     #[inline]
@@ -151,7 +149,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
                 let mut preceded_by = 0;
 
                 // maintain precedent counts relative to the set
-                for &mut (ref key, ref mut val) in self.precedents.iter_mut() {
+                for &mut (ref key, ref mut val) in &mut self.precedents {
                     if let Some(comparison) = elem.partial_cmp(key) {
                         match comparison {
                             Ordering::Less    => {
@@ -178,7 +176,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
             // if the value went from positive to non-positive we need to update self.precedents.
             if old_value > 0 && new_value <= 0 {
                 // maintain precedent counts relative to the set
-                for &mut (ref key, ref mut val) in self.precedents.iter_mut() {
+                for &mut (ref key, ref mut val) in &mut self.precedents {
                     if elem < key {
                         *val -= 1;
                         if *val == 0 {

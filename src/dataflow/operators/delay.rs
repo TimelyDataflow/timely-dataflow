@@ -22,13 +22,13 @@ where G::Timestamp: Hash {
                 for datum in data.drain(..) {
                     let new_time = func(&datum, &time);
                     assert!(new_time >= time.time());
-                    elements.entry(new_time.clone())
+                    elements.entry(new_time)
                             .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                             .push(datum);
                 }
             }
             // for each available notification, send corresponding set
-            while let Some((time, _count)) = notificator.next() {
+            for (time, _count) in notificator {
                 if let Some(mut data) = elements.remove(&time) {
                     output.session(&time).give_iterator(data.drain(..));
                 }
@@ -43,16 +43,16 @@ where G::Timestamp: Hash {
             while let Some((time, data)) = input.next() {
                 let new_time = func(&time);
                 assert!(new_time >= time.time());
-                let spare = stash.pop().unwrap_or_else(|| Vec::new());
+                let spare = stash.pop().unwrap_or_else(Vec::new);
                 let data = ::std::mem::replace(data.deref_mut(), spare);
 
-                elements.entry(new_time.clone())
+                elements.entry(new_time)
                         .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                         .push(data);
             }
 
             // for each available notification, send corresponding set
-            while let Some((time, _count)) = notificator.next() {
+            for (time, _count) in notificator {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain(..) {
                         let mut message = Content::from_typed(&mut data);

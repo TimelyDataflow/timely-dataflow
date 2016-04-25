@@ -35,7 +35,7 @@ impl Timestamp for RootTimestamp { type Summary = RootSummary; }
 impl Debug for RootTimestamp {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        f.write_str(&format!("Root"))
+        f.write_str("Root")
     }
 }
 

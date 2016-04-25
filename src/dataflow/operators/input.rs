@@ -80,7 +80,7 @@ impl<A: Allocate, T: Timestamp+Ord> Input<A, T> for Child<Root<A>, T> {
             copies:   copies,
         });
 
-        return (helper, Stream::new(Source { index: index, port: 0 }, registrar, self.clone()));
+        (helper, Stream::new(Source { index: index, port: 0 }, registrar, self.clone()))
     }
 }
 
@@ -111,7 +111,7 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
     {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
         self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
-        return false;
+        false
     }
 
     fn notify_me(&self) -> bool { false }
@@ -145,12 +145,12 @@ impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
 
     // flushes any data we are sitting on. may need to initialize self.now_at if no one has yet.
     fn flush(&mut self) {
-        Content::push_at(&mut self.buffer, self.now_at.clone(), &mut self.pusher);
+        Content::push_at(&mut self.buffer, self.now_at, &mut self.pusher);
     }
 
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
     fn close_epoch(&mut self) {
-        if self.buffer.len() > 0 { self.flush(); }
+        if !self.buffer.is_empty() { self.flush(); }
         self.pusher.done();
         self.frontier.borrow_mut().update_weight(&self.now_at, -1, &mut (*self.progress.borrow_mut()));
     }

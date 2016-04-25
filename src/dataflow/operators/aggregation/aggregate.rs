@@ -85,16 +85,16 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> Aggregate<S, K, V> for Stream<S, (K, V)
 
 			// read each input, fold into aggregates
 			while let Some((time, data)) = input.next() {
-				let agg_time = aggregates.entry(time.time()).or_insert(HashMap::new());
+				let agg_time = aggregates.entry(time.time()).or_insert_with(HashMap::new);
 				for (key, val) in data.drain(..) {
-					let agg = agg_time.entry(key.clone()).or_insert(Default::default());
+					let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
 					fold(&key, val, agg);
 				}
 				notificator.notify_at(time);
 			}
 
 			// pop completed aggregates, send along whatever
-			while let Some((time, _)) = notificator.next() {
+			for (time, _) in notificator {
 				if let Some(aggs) = aggregates.remove(&time.time()) {
 					let mut session = output.session(&time);
 					for (key, agg) in aggs {

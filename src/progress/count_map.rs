@@ -36,16 +36,17 @@ impl<T:Eq+Clone> CountMap<T> {
     }
 
     pub fn into_inner(self) -> Vec<(T, i64)> { self.updates }
-    pub fn iter<'a>(&'a self) -> Iter<'a, (T, i64)> { self.updates.iter() }
+    pub fn iter(&self) -> Iter<(T, i64)> { self.updates.iter() }
     pub fn clear(&mut self) { self.updates.clear(); }
     pub fn len(&self) -> usize { self.updates.len() }
+    pub fn is_empty(&self) -> bool { self.updates.is_empty() }
     pub fn pop(&mut self) -> Option<(T, i64)> { self.updates.pop() }
 
     pub fn new() -> CountMap<T> { CountMap { updates: Vec::new() } }
     pub fn new_from(key: &T, val: i64) -> CountMap<T> {
         let mut result = CountMap::new();
         result.update(key, val);
-        return result;
+        result
     }
 
     pub fn drain_into(&mut self, other: &mut CountMap<T>) {

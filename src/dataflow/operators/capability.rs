@@ -29,7 +29,7 @@ impl<T: Timestamp> Capability<T> {
 }
 
 /// Creates a new capability at `t` while incrementing (and keeping a reference to) the provided
-/// CountMap.
+/// `CountMap`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
 pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<CountMap<T>>>) -> Capability<T> {
     internal.borrow_mut().update(&time, 1);
