@@ -3,18 +3,18 @@
 //!
 //! The code is organized in crates and modules that are meant to depend as little as possible on each other.
 //!
-//! **Serialization**: The [abomonation](../abomonation/index.html) crate contains simple and highly unsafe
+//! **Serialization**: The [`abomonation`](../abomonation/index.html) crate contains simple and highly unsafe
 //! serialization routines.
 //!
-//! **Communication**: The [timely_communication](../timely_communication/index.html) crate defines several primitives for
+//! **Communication**: The [`timely_communication`](../timely_communication/index.html) crate defines several primitives for
 //! communicating between dataflow workers, and across machine boundaries.
 //!
-//! **Progress tracking**: The [timely::progress](progress/index.html) module defines core dataflow structures for
+//! **Progress tracking**: The [`timely::progress`](progress/index.html) module defines core dataflow structures for
 //! tracking and reporting progress in a timely dataflow system, namely the number of outstanding
 //! dataflow messages and un-exercised message capabilities throughout the timely dataflow graph.
 //! It depends on `timely_communication` to exchange progress messages.
 //!
-//! **Dataflow construction**: The [timely::dataflow](dataflow/index.html) module defines an example dataflow system
+//! **Dataflow construction**: The [`timely::dataflow`](dataflow/index.html) module defines an example dataflow system
 //! using `communication` and `progress` to both exchange data and progress information, in support
 //! of an actual data-parallel timely dataflow computation. It depends on `timely_communication` to
 //! move data, and `timely::progress` to provide correct operator notifications.

@@ -28,8 +28,8 @@ impl<S:PartialOrd+Copy, T:PartialOrd+Copy> PartialOrd for Summary<S, T> {
         // cannot be sure that either strictly improves on the other.
         match (*self, *other) {
             (Local(t1),    Local(t2))    => t1.partial_cmp(&t2),
-            (Local(_),     Outer(_,_))   => None,
             (Outer(s1,t1), Outer(s2,t2)) => (s1,t1).partial_cmp(&(s2,t2)),
+            (Local(_),     Outer(_,_))   |
             (Outer(_,_),   Local(_))     => None,
         }
     }
@@ -45,7 +45,7 @@ where TOuter: Timestamp,
     #[inline]
     fn results_in(&self, product: &Product<TOuter, TInner>) -> Product<TOuter, TInner> {
         match *self {
-            Local(ref iters)              => Product::new(product.outer.clone(), iters.results_in(&product.inner)),
+            Local(ref iters)              => Product::new(product.outer, iters.results_in(&product.inner)),
             Outer(ref summary, ref iters) => Product::new(summary.results_in(&product.outer), iters.results_in(&Default::default())),
         }
     }
@@ -63,9 +63,9 @@ where TOuter: Timestamp,
 impl<SOuter: Display, SInner: Display> Display for Summary<SOuter, SInner> {
     #[inline]
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        match self {
-            &Local(ref s) => f.write_str(&format!("Local({})", s)),
-            &Outer(ref s, ref t) => f.write_str(&format!("Outer({}, {})", s, t))
+        match *self {
+            Local(ref s) => write!(f, "Local({})", s),
+            Outer(ref s, ref t) => write!(f, "Outer({}, {})", s, t)
         }
     }
 }

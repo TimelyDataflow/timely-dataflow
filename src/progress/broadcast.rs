@@ -8,7 +8,7 @@ use {Push, Pull};
 // TODO : Extend ProgressVec<T> to contain a source worker id and a sequence number.
 
 
-/// A list of progress updates corresponding to ((child_scope, [in/out]_port, timestamp), delta)
+/// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;
 
 /// Manages broadcasting of progress updates to and receiving updates from workers.

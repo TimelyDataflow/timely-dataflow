@@ -223,7 +223,7 @@ where T: Timestamp,
         self.output.inner().pull_progress(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 
-        return false;   // no unannounced internal work
+        false   // no unannounced internal work
     }
 
     fn name(&self) -> String { self.name.clone() }

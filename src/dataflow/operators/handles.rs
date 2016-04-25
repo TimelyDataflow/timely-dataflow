@@ -59,7 +59,7 @@ impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
 }
 
 /// Constructs an input handle.
-/// Declared separately so that it can be kept private when InputHandle is re-exported.
+/// Declared separately so that it can be kept private when `InputHandle` is re-exported.
 pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> InputHandle<'a, T, D> {
     InputHandle {
         pull_counter: pull_counter,
@@ -100,7 +100,7 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
 }
 
 /// Constructs an output handle.
-/// Declared separately so that it can be kept private when OutputHandle is re-exported.
+/// Declared separately so that it can be kept private when `OutputHandle` is re-exported.
 pub fn new_output_handle<'a, T: Timestamp, D, P: Push<(T, Content<D>)>>(push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>) -> OutputHandle<'a, T, D, P> {
     OutputHandle {
         push_buffer: push_buffer,

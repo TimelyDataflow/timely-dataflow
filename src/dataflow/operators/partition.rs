@@ -108,7 +108,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
             output.inner().pull_progress(&mut produced[index]);
         }
 
-        return false;   // no reason to keep running on Partition's account
+        false   // no reason to keep running on Partition's account
     }
 
     fn notify_me(&self) -> bool { false }

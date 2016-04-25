@@ -127,7 +127,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // summarize the scope internals by looking for source_target_summaries from id 0 to id 0.
         let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
         for input in 0..self.inputs() {
-            for &(target, ref antichain) in self.children[0].source_target_summaries[input].iter() {
+            for &(target, ref antichain) in &self.children[0].source_target_summaries[input] {
                 if target.index == 0 {
                     for &summary in antichain.elements().iter() {
                         internal_summary[input][target.port].insert(match summary {
@@ -139,7 +139,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             }
         }
 
-        return (internal_summary, initial_capabilities);
+        (internal_summary, initial_capabilities)
     }
 
     // receives connectivity summaries from outputs to inputs, as well as initial external
@@ -286,7 +286,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             let mut borrowed = self.input_messages[input].borrow_mut();
             while let Some((time, delta)) = borrowed.pop() {
                 self.local_pointstamp_internal.update(&(0, input, time), delta);
-                for target in self.children[0].edges[input].iter() {
+                for target in &self.children[0].edges[input] {
                     self.local_pointstamp_messages.update(&(target.index, target.port, time), delta);
                 }
             }
@@ -297,7 +297,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // Updates that are local to this worker must be shared with other workers, whereas updates
         // that have already been shared with other workers should *not* be shared.
 
-        for child in self.children.iter_mut() {
+        for child in &mut self.children {
 
             // if local, update into the local pointstamps, which must be exchanged. otherwise into
             // the global pointstamps, which need not be exchanged.
@@ -407,7 +407,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         self.pointstamps.clear();
 
         // if there are outstanding messages or capabilities, we must insist on continuing to run
-        for child in self.children.iter() {
+        for child in &self.children {
             // if child.messages.iter().any(|x| x.elements().len() > 0) 
             // { println!("{:?}: child {}[{}] has outstanding messages", self.path, child.name, child.index); }
             active = active || child.messages.iter().any(|x| x.elements().len() > 0);
@@ -416,7 +416,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             active = active || child.internal.iter().any(|x| x.elements().len() > 0);
         }
 
-        return active;
+        active
     }
 }
 
@@ -428,7 +428,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for index in 0..self.pointstamps.target.len() {
             for input in 0..self.pointstamps.target[index].len() {
                 while let Some((time, value)) = self.pointstamps.target[index][input].pop() {
-                    for &(target, ref antichain) in self.children[index].target_target_summaries[input].iter() {
+                    for &(target, ref antichain) in &self.children[index].target_target_summaries[input] {
                         for summary in antichain.elements().iter() {
                             self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
                         }
@@ -441,7 +441,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         for index in 0..self.pointstamps.source.len() {
             for output in 0..self.pointstamps.source[index].len() {
                 while let Some((time, value)) = self.pointstamps.source[index][output].pop() {
-                    for &(target, ref antichain) in self.children[index].source_target_summaries[output].iter() {
+                    for &(target, ref antichain) in &self.children[index].source_target_summaries[output] {
                         for summary in antichain.elements().iter() {
                             self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
                         }
@@ -572,14 +572,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         self.inputs += 1;
         self.input_messages.push(shared_counts);
         self.children[0].add_output();
-        return self.inputs - 1;
+        self.inputs - 1
     }
 
     pub fn new_output(&mut self) -> usize {
         self.outputs += 1;
         self.output_capabilities.push(MutableAntichain::new());
         self.children[0].add_input();
-        return self.outputs - 1;
+        self.outputs - 1
     }
 
     pub fn connect(&mut self, source: Source, target: Target) {
@@ -595,7 +595,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         let children = vec![PerOperatorState::empty(path.clone())];
 
         Subgraph {
-            name:                   format!("Subgraph"),
+            name:                   "Subgraph".into(),
             path:                   path,
             index:                  index,
 
@@ -621,7 +621,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     pub fn allocate_child_id(&mut self) -> usize {
         self.child_count += 1;
         // println!("returning allocation: {}", self.child_count - 1);
-        return self.child_count - 1;
+        self.child_count - 1
     }
 
     pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize, identifier: usize) {
@@ -634,7 +634,7 @@ fn try_to_add_summary<T: Eq, S: PartialOrd+Eq+Copy+Debug>(vector: &mut Vec<(T, A
         if target.eq(t) { return antichain.insert(summary); }
     }
     vector.push((target, Antichain::from_elem(summary)));
-    return true;
+    true
 }
 
 
@@ -781,12 +781,12 @@ impl<T: Timestamp> PerOperatorState<T> {
             capability.update_iter_and(work[index].iter().cloned(), |_, _| {});
         }
 
-        return result;
+        result
     }
 
     pub fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<T::Summary>>>) {
         let frontier = &mut self.external_buffer;
-        if self.index > 0 && self.notify && frontier.len() > 0 && !frontier.iter().any(|x| x.len() > 0) {
+        if self.index > 0 && self.notify && !frontier.is_empty() && !frontier.iter().any(|x| x.len() > 0) {
             println!("initializing notifiable operator {}[{}] with inputs but no external capabilities", self.name, self.index);
         }
         self.operator.as_mut().map(|scope| scope.set_external_summary(summaries, frontier));
@@ -842,7 +842,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             });
 
             if cfg!(feature = "logging") {
-                for buffer in vec![
+                for buffer in &[
                     &self.consumed_buffer,
                     &self.internal_buffer,
                     &self.produced_buffer] {
@@ -851,7 +851,7 @@ impl<T: Timestamp> PerOperatorState<T> {
                 }
             }
 
-            let result = if let &mut Some(ref mut operator) = &mut self.operator {
+            let result = if let Some(ref mut operator) = self.operator {
                 operator.pull_internal_progress(
                     &mut self.consumed_buffer[..],
                     &mut self.internal_buffer[..],
@@ -889,7 +889,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         // for each output: produced messages and internal progress
         for output in 0..self.outputs {
             while let Some((time, delta)) = self.produced_buffer[output].pop() {
-                for target in self.edges[output].iter() {
+                for target in &self.edges[output] {
                     pointstamp_messages.update(&(target.index, target.port, time), delta);
                 }
             }
@@ -907,6 +907,6 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
         }
 
-        return active;
+        active
     }
 }

@@ -91,7 +91,7 @@ impl<T: Timestamp, D: Data> Operate<T> for BroadcastOperator<T, D> {
         self.output.cease();
         self.input.pull_progress(&mut consumed[self.index]);
         self.output.inner().pull_progress(&mut produced[0]);
-        return false;
+        false
     }
 
     fn notify_me(&self) -> bool { false }

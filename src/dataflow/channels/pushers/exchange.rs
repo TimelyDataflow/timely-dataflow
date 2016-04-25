@@ -26,7 +26,7 @@ impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&D)->u64>  Exchange<T, D, P, H
     }
     #[inline]
     fn flush(&mut self, index: usize) {
-        if self.buffers[index].len() > 0 {
+        if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
                 Content::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
             }
@@ -45,7 +45,7 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
             if let Some((ref time, ref mut data)) = *message {
 
                 // if the time isn't right, flush everything.
-                if self.current.as_ref().map(|x| x != time).unwrap_or(false) {
+                if self.current.as_ref().map_or(false, |x| x != time) {
                     for index in 0..self.pushers.len() {
                         self.flush(index);
                     }
