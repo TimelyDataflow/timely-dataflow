@@ -48,37 +48,51 @@ seen: 8
 seen: 9
 ```
 
-This is a very simple example (it's in the name), which only just suggests at how you might write dataflow programs. For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/hello.rs), which creates and drives the dataflow separately:
+This is a very simple example (it's in the name), which only just suggests at how you might write dataflow programs. 
+
+## Doing more things
+
+For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/hello.rs), which creates and drives the dataflow separately:
 
 ```rust
 extern crate timely;
+extern crate timely_communication;
 
 use timely::dataflow::*;
-use timely::dataflow::operators::{Input, Inspect};
+use timely::dataflow::operators::*;
+use timely::progress::timestamp::RootTimestamp;
+use timely_communication::Allocate;
 
 fn main() {
     // initializes and runs a timely dataflow computation
-    timely::execute_from_args(std::env::args(), |root| {
-        // create a new input and inspect its output
-        let mut input = root.scoped(move |scope| {
-            let (input, stream) = scope.new_input();
-            stream.inspect(|x| println!("hello {}", x));
-            input
+    timely::execute_from_args(std::env::args(), |computation| {
+        // create a new input, and inspect its output
+        let (mut input, probe) = computation.scoped(move |builder| {
+            let index = builder.index();
+            let (input, stream) = builder.new_input();
+            let probe = stream.exchange(|x| *x)
+                              .inspect(move |x| println!("worker {}:\thello {}", index, x))
+                              .probe().0;
+            (input, probe)
         });
 
         // introduce data and watch!
         for round in 0..10 {
-            input.send(format!("world: {}", round));
+            input.send(round);
             input.advance_to(round + 1);
-            root.step();
+            while probe.le(&RootTimestamp::new(round)) {
+                computation.step();
+            }
         }
     }).unwrap();
 }
 ```
 
+This example does a fair bit more, to show off more what timely can do for you. The example first builds the dataflow computation in the `// create a new input` block, and then executes supplies the computation with data and drives it in the `// introduce data and watch!` block. It shuffles the input data across available workers, and has each report its index and the data it sees.
+
 # Execution
 
-The `hello.rs` program above will by default use a single worker thread. To use multiple threads in a process, use the `-w` or `--workers` options followed by the number of threads you would like to use.
+The `hello.rs` program above will by default use a single worker thread. To use multiple threads in a process, use the `-w` or `--workers` options followed by the number of threads you would like to use. (note: the `simple.rs` program always uses one worker thread; it uses `timely::example` which ignores user-supplied input).
 
 To use multiple processes, you will need to use the `-h` or `--hostfile` option to specify a text file whose lines are `hostname:port` entries corresponding to the locations you plan on spawning the processes. You will need to use the `-n` or `--processes` argument to indicate how many processes you will spawn (a prefix of the host file), and each process must use the `-p` or `--process` argument to indicate their index out of this number.
 
