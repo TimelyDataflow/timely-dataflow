@@ -88,7 +88,7 @@ fn main() {
 }
 ```
 
-This example does a fair bit more, to show off more what timely can do for you. The example first builds the dataflow computation in the `// create a new input, ...` block, and then executes supplies the computation with data and drives it in the `// introduce data and watch!` block. It shuffles the input data across available workers, and has each report its index and the data it sees.
+This example does a fair bit more, to show off more what timely can do for you. The example first builds the dataflow computation in the `// create a new input, ...` block, and then supplies the computation with data and drives it in the `// introduce data and watch!` block. It shuffles the input data across available workers, and has each report its index and the data it sees.
 
 # Execution
 
