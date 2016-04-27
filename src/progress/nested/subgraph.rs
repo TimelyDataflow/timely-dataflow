@@ -553,7 +553,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
             self.children[source.index].edges[source.port].push(target);
         }
 
-        let progcaster = Progcaster::new(allocator);
+        let progcaster = Progcaster::new(allocator, &self.path);
 
         Subgraph {
             name: self.name,
@@ -908,6 +908,11 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         {
             let changes = &mut self.external_buffer;
+            if changes.iter_mut().any(|ref mut c| !c.is_empty()) {
+                ::logging::log(&::logging::PUSH_PROGRESS, ::logging::PushProgressEvent {
+                    op_id: self.id,
+                });
+            }
             self.operator.as_mut().map(|x| x.push_external_progress(changes));
             if changes.iter_mut().any(|x| !x.is_empty()) {
                 println!("changes not consumed by {:?}", self.name);

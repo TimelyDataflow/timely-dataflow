@@ -114,6 +114,7 @@ pub fn initialize<A: Allocate>(root: &mut Root<A>) {
     CHANNELS.with(|x| x.set(File::create(format!("logs/channels-{}.abom", root.index())).unwrap()));
     MESSAGES.with(|x| x.set(File::create(format!("logs/messages-{}.abom", root.index())).unwrap()));
     PROGRESS.with(|x| x.set(File::create(format!("logs/progress-{}.abom", root.index())).unwrap()));
+    PUSH_PROGRESS.with(|x| x.set(File::create(format!("logs/push_progress-{}.abom", root.index())).unwrap()));
     SCHEDULE.with(|x| x.set(File::create(format!("logs/schedule-{}.abom", root.index())).unwrap()));
     GUARDED_MESSAGE.with(|x| x.set(File::create(format!("logs/guarded_message-{}.abom", root.index())).unwrap()));
     GUARDED_PROGRESS.with(|x| x.set(File::create(format!("logs/guarded_progress-{}.abom", root.index())).unwrap()));
@@ -133,6 +134,7 @@ pub fn flush_logs() {
     OPERATES.with(|x| x.flush());
     CHANNELS.with(|x| x.flush());
     PROGRESS.with(|x| x.flush());
+    PUSH_PROGRESS.with(|x| x.flush());
     MESSAGES.with(|x| x.flush());
     SCHEDULE.with(|x| x.flush());
     GUARDED_MESSAGE.with(|x| x.flush());
@@ -146,6 +148,8 @@ thread_local!{
     pub static CHANNELS: EventStreamLogger<ChannelsEvent, File> = EventStreamLogger::new();
     /// Logs progress transmission.
     pub static PROGRESS: EventStreamLogger<ProgressEvent, File> = EventStreamLogger::new();
+    /// Logs push_external_progress.
+    pub static PUSH_PROGRESS: EventStreamLogger<PushProgressEvent, File> = EventStreamLogger::new();
     /// Logs message transmission.
     pub static MESSAGES: EventStreamLogger<MessagesEvent, File> = EventStreamLogger::new();
     /// Logs operator scheduling.
@@ -167,7 +171,7 @@ pub struct OperatesEvent {
     pub name: String,
 }
 
-unsafe_abomonate!(OperatesEvent : addr, name);
+unsafe_abomonate!(OperatesEvent : id, addr, name);
 
 #[derive(Debug, Clone)]
 /// The creation of a channel between operators.
@@ -189,6 +193,10 @@ unsafe_abomonate!(ChannelsEvent : id, scope_addr, source, target);
 pub struct ProgressEvent {
     /// `true` if the event is a send, and `false` if it is a receive.
     pub is_send: bool,
+    /// Source worker index.
+    pub source: usize,
+    /// Message sequence number.
+    pub seq_no: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
     pub addr: Vec<usize>,
     /// List of message updates, containing Target descriptor, timestamp as string, and delta.
@@ -197,7 +205,16 @@ pub struct ProgressEvent {
     pub internal: Vec<(usize, usize, String, i64)>,
 }
 
-unsafe_abomonate!(ProgressEvent : is_send, addr, messages, internal);
+unsafe_abomonate!(ProgressEvent : is_send, source, seq_no, addr, messages, internal);
+
+#[derive(Debug, Clone)]
+/// External progress pushed onto an operator
+pub struct PushProgressEvent {
+    /// Worker-unique operator identifier
+    pub op_id: usize,
+}
+
+unsafe_abomonate!(PushProgressEvent: op_id);
 
 #[derive(Debug, Clone)]
 /// Message send or receive event
