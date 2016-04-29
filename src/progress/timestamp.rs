@@ -58,6 +58,11 @@ impl PathSummary<RootTimestamp> for RootSummary {
     fn followed_by(&self, _: &RootSummary) -> RootSummary { RootSummary }
 }
 
+impl Timestamp for () { type Summary = (); }
+impl PathSummary<()> for () {
+    fn results_in(&self, _src: &()) -> () { () }
+    fn followed_by(&self, _other: &()) -> () { () }
+}
 
 impl Timestamp for usize { type Summary = usize; }
 impl PathSummary<usize> for usize {
