@@ -148,6 +148,11 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// }).unwrap();
     /// ```
     fn capture_into<P: EventPusher<T, D>+'static>(&self, pusher: P);
+    fn capture(&self)->::std::sync::mpsc::Receiver<Event<T, D>> {
+        let (send, recv) = ::std::sync::mpsc::channel();
+        self.capture_into(send);
+        recv
+    }
 }
 
 impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
@@ -168,6 +173,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
 }
 
 /// Data and progres events of the captured stream.
+#[derive(Debug)]
 pub enum Event<T, D> {
     Start,
     /// Progress received via `push_external_progress`.
@@ -176,6 +182,38 @@ pub enum Event<T, D> {
     Messages(T, Vec<D>),
 }
 
+pub trait Extract<T: Ord, D: Ord> {
+    fn extract(self) -> Vec<(T, Vec<D>)>;
+}
+
+impl<T: Ord, D: Ord> Extract<T,D> for ::std::sync::mpsc::Receiver<Event<T, D>> {
+    fn extract(self) -> Vec<(T, Vec<D>)> {
+        let mut result = Vec::new();
+        for event in self {
+            if let Event::Messages(time, data) = event {
+                result.push((time, data));
+            }
+        }
+        result.sort_by(|x,y| x.0.cmp(&y.0));
+
+        let mut current = 0;
+        for i in 1 .. result.len() {
+            if result[current].0 == result[i].0 {
+                let dataz = ::std::mem::replace(&mut result[i].1, Vec::new());
+                result[current].1.extend(dataz);
+            }
+            else {
+                current = i;
+            }
+        }
+
+        for &mut (_, ref mut data) in &mut result {
+            data.sort();
+        }
+        result.retain(|x| !x.1.is_empty());
+        result
+    }
+}
 
 impl<T: Abomonation, D: Abomonation> Abomonation for Event<T,D> {
     #[inline] unsafe fn embalm(&mut self) {
@@ -223,6 +261,12 @@ pub trait EventPusher<T, D> {
 }
 
 
+// implementation for the linked list behind a `Handle`.
+impl<T, D> EventPusher<T, D> for ::std::sync::mpsc::Sender<Event<T, D>> {
+    fn push(&mut self, event: Event<T, D>) {
+        self.send(event).unwrap();
+    }
+}
 
 // implementation for the linked list behind a `Handle`.
 impl<T, D> EventPusher<T, D> for Rc<EventLink<T, D>> {
