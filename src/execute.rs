@@ -7,9 +7,18 @@ use dataflow::scopes::{Root, Child, Scope};
 ///
 /// The `example` method takes a closure on a `Scope` which it executes to initialize and run a
 /// timely dataflow computation on a single thread. This method is intended for use in examples,
-/// rather than programs that may need to run across multiple workers.
+/// rather than programs that may need to run across multiple workers. 
+///
+/// The `example` method returns whatever the single worker returns from its closure.
+/// This is often nothing, but the worker can return something about the data it saw in order to
+/// test computations.
+///
+/// The method aggressively unwraps returned `Result<_>` types.
 ///
 /// #Examples
+///
+/// The simplest example creates a stream of data and inspects it.
+///
 /// ```
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
@@ -18,13 +27,39 @@ use dataflow::scopes::{Root, Child, Scope};
 ///            .inspect(|x| println!("seen: {:?}", x));
 /// });
 /// ```
-pub fn example<F>(func: F) 
-where F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static {
-    initialize(Configuration::Thread, move |allocator| {
+///
+/// This next example captures the data and displays them once the computation is complete.
+///
+/// More precisely, the example captures a stream of events (receiving batches of data,
+/// updates to input capabilities) and displays these events.
+///
+/// ```
+/// use timely::dataflow::operators::{ToStream, Inspect, Capture};
+/// use timely::dataflow::operators::capture::Extract;
+///
+/// let data = timely::example(|scope| {
+///     (0..10).to_stream(scope)
+///            .inspect(|x| println!("seen: {:?}", x))
+///            .capture()
+/// });
+///
+/// // the extracted data should have data (0..10) at timestamp 0.
+/// assert_eq!(data.extract()[0].1, (0..10).collect::<Vec<_>>());
+/// ```
+pub fn example<T: Send+'static, F>(func: F) -> T
+where F: Fn(&mut Child<Root<Allocator>, u64>)->T+Send+Sync+'static {
+    let guards = initialize(Configuration::Thread, move |allocator| {
         let mut root = Root::new(allocator);
-        root.scoped::<u64,_,_>(|x| func(x));
+        let result = root.scoped::<u64,_,_>(|x| func(x));
         while root.step() { }
-    }).unwrap();
+        result
+    });
+
+    guards.unwrap() // assert the computation started correctly
+          .join()   // wait for the worker to finish
+          .pop()    // grab the known-to-exist result
+          .unwrap() // assert that the result exists
+          .unwrap() // crack open the result to get a T
 }
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
@@ -49,6 +84,33 @@ where F: Fn(&mut Child<Root<Allocator>, u64>)+Send+Sync+'static {
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
 /// }).unwrap();
+/// ```
+///
+/// The following example demonstrates how one can extract data from a multi-worker execution.
+/// In a multi-process setting, each process will only receive those records present at workers 
+/// in the process.
+///
+/// ```
+/// use std::sync::{Arc, Mutex};
+/// use timely::dataflow::Scope;
+/// use timely::dataflow::operators::{ToStream, Inspect, Capture};
+/// use timely::dataflow::operators::capture::Extract;
+///
+/// let (send, recv) = ::std::sync::mpsc::channel();
+/// let send = Arc::new(Mutex::new(send));
+///
+/// // execute a timely dataflow using three worker threads.
+/// timely::execute(timely::Configuration::Process(3), move |root| {
+///     let send = send.lock().unwrap().clone();
+///     root.scoped::<u64,_,_>(move |scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x))
+///                .capture_into(send);
+///     });
+/// }).unwrap();
+///
+/// // the extracted data should have data (0..10) thrice at timestamp 0.
+/// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
 pub fn execute<T:Send+'static, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
 where F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
