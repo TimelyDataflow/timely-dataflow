@@ -1,3 +1,26 @@
+//! Capabilities to send data from operators
+//!
+//! Timely dataflow operators are only able to send data if they possess a "capability",
+//! a system-created object which warns the runtime that the operator may still produce
+//! output records. 
+//! 
+//! The timely dataflow runtime creates a capability and provides it to an operator whenever
+//! the operator receives input data. The capabilities allow the operator to respond to the
+//! received data, immediately or in the future, for as long as the capability is held.
+//!
+//! Timely dataflow's progress tracking infrastructure communicates the number of outstanding
+//! capabilities across all workers. 
+//! Each operator may hold on to its capabilities, and may clone, advance, and drop them. 
+//! Each of these actions informs the timely dataflow runtime of changes to the number of outstanding
+//! capabilities, so that the runtime can notice when the count for some capability reaches zero. 
+//! While an operator can hold capabilities indefinitely, and create as many new copies of them
+//! as it would like, the progress tracking infrastructure will not move forward until the 
+//! operators eventually release their capabilities.
+//!
+//! Note that these capabilities currently lack the property of "transferability": 
+//! An operator should not hand its capabilities to some other operator. In the future, we should
+//! probably bind capabilities more strongly to a specific operator and output.
+
 use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -19,7 +42,7 @@ impl<T: Timestamp> Capability<T> {
         self.time
     }
 
-    /// Makes a new capability for a timestamp that's greater then the timestamp associated with
+    /// Makes a new capability for a timestamp `new_time` greater or equal to the timestamp of
     /// the source capability (`self`).
     #[inline]
     pub fn delayed(&self, new_time: &T) -> Capability<T> {
