@@ -183,8 +183,13 @@ impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
     pub fn close(self) { }
 
     /// Reports the current epoch.
-    pub fn epoch(&mut self) -> &T {
+    pub fn epoch(&self) -> &T {
         &self.now_at.inner
+    }
+
+    /// Reports the current timestamp.
+    pub fn time(&self) -> &Product<RootTimestamp, T> {
+        &self.now_at
     }
 }
 
