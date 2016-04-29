@@ -118,7 +118,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// ```
     ///
     /// The types `EventWriter<T, D, W>` and `EventReader<T, D, R>` can be
-    /// captured into and replayed from, respectively. The use binary writers
+    /// captured into and replayed from, respectively. They use binary writers
     /// and readers respectively, and can be backed by files, network sockets,
     /// etc.
     ///
