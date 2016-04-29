@@ -10,7 +10,7 @@
 
 pub use self::enterleave::{Enter, EnterAt, Leave};
 pub use self::unary::Unary;
-pub use self::queue::*;
+// pub use self::queue::*;
 pub use self::input::Input;
 pub use self::feedback::{LoopVariable, ConnectLoop};
 pub use self::concat::{Concat, Concatenate};
@@ -28,7 +28,7 @@ pub use self::capture::Capture;
 
 pub mod enterleave;
 pub mod unary;
-pub mod queue;
+// pub mod queue;
 pub mod input;
 pub mod feedback;
 pub mod concat;
