@@ -3,7 +3,6 @@ extern crate timely_communication;
 
 use timely::dataflow::*;
 use timely::dataflow::operators::*;
-use timely::progress::timestamp::RootTimestamp;
 use timely_communication::Allocate;
 
 fn main() {
@@ -23,7 +22,7 @@ fn main() {
         for round in 0..10 {
             input.send(round);
             input.advance_to(round + 1);
-            while probe.le(&RootTimestamp::new(round)) {
+            while probe.lt(input.time()) {
                 computation.step();
             }
         }
