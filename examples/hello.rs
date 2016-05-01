@@ -1,9 +1,7 @@
 extern crate timely;
-extern crate timely_communication;
 
 use timely::dataflow::*;
 use timely::dataflow::operators::*;
-use timely_communication::Allocate;
 
 fn main() {
     // initializes and runs a timely dataflow computation
