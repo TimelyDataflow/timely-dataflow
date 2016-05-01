@@ -85,7 +85,38 @@ fn main() {
 }
 ```
 
-This example does a fair bit more, to show off more what timely can do for you. The example first builds the dataflow computation in the `// create a new input, ...` block, and then supplies the computation with data and drives it in the `// introduce data and watch!` block. It shuffles the input data across available workers, and has each report its index and the data it sees.
+This example does a fair bit more, to show off more what timely can do for you. 
+
+We build a dataflow graph creating an input stream (with `new_input`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that we can see when the computation has processed all of a given round of data.
+
+We then drive the computation by repeatedly introducing rounds of data, where the `round` itself is used as the data. In each round, each worker introduces the same data, which are then exchanged to one specific worker. Each worker then spins its wheels until the `probe` reveals that all workers have processed all work for that epoch, at which point the computation proceeds.
+
+With two workers, the output looks like
+```
+% cargo run --example hello -- -w2
+Running `target/debug/examples/hello -w2`
+worker 0:   hello 0
+worker 0:   hello 0
+worker 1:   hello 1
+worker 1:   hello 1
+worker 0:   hello 2
+worker 0:   hello 2
+worker 1:   hello 3
+worker 1:   hello 3
+worker 0:   hello 4
+worker 0:   hello 4
+worker 1:   hello 5
+worker 1:   hello 5
+worker 0:   hello 6
+worker 0:   hello 6
+worker 1:   hello 7
+worker 1:   hello 7
+worker 0:   hello 8
+worker 0:   hello 8
+worker 1:   hello 9
+worker 1:   hello 9
+```
+
 
 # Execution
 
