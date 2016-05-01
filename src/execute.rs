@@ -46,8 +46,9 @@ use dataflow::scopes::{Root, Child, Scope};
 /// // the extracted data should have data (0..10) at timestamp 0.
 /// assert_eq!(data.extract()[0].1, (0..10).collect::<Vec<_>>());
 /// ```
-pub fn example<T: Send+'static, F>(func: F) -> T
-where F: Fn(&mut Child<Root<Allocator>, u64>)->T+Send+Sync+'static {
+pub fn example<T, F>(func: F) -> T
+where T: Send+'static,
+      F: Fn(&mut Child<Root<Allocator>, u64>)->T+Send+Sync+'static {
     let guards = initialize(Configuration::Thread, move |allocator| {
         let mut root = Root::new(allocator);
         let result = root.scoped::<u64,_,_>(|x| func(x));
@@ -96,6 +97,7 @@ where F: Fn(&mut Child<Root<Allocator>, u64>)->T+Send+Sync+'static {
 /// use timely::dataflow::operators::{ToStream, Inspect, Capture};
 /// use timely::dataflow::operators::capture::Extract;
 ///
+/// // get send and recv endpoints, wrap send to share
 /// let (send, recv) = ::std::sync::mpsc::channel();
 /// let send = Arc::new(Mutex::new(send));
 ///
@@ -112,8 +114,9 @@ where F: Fn(&mut Child<Root<Allocator>, u64>)->T+Send+Sync+'static {
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
-pub fn execute<T:Send+'static, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
-where F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
+pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
+where T:Send+'static,
+      F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     initialize(config, move |allocator| {
         let mut root = Root::new(allocator);
         let result = func(&mut root);
@@ -171,8 +174,9 @@ where F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
 /// host2:port
 /// host3:port
 /// ```
-pub fn execute_from_args<I, T:Send+'static, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String> 
+pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String> 
     where I: Iterator<Item=String>, 
+          T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
     execute(try!(Configuration::from_args(iter)), func)
  }
