@@ -17,6 +17,11 @@ pub struct Child<G: Scope, T: Timestamp> {
     pub parent:   G,
 }
 
+impl<G: Scope, T: Timestamp> Child<G, T> {
+    pub fn index(&self) -> usize { self.parent.index() }
+    pub fn peers(&self) -> usize { self.parent.peers() }
+}
+
 impl<G: Scope, T: Timestamp> Scope for Child<G, T> {
     type Timestamp = Product<G::Timestamp, T>;
 
