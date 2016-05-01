@@ -5,7 +5,7 @@ This project is an extended and more modular implementation of timely dataflow i
 
 Be sure to read the [documentation for timely dataflow](http://frankmcsherry.github.io/timely-dataflow). It is a work in progress, but mostly improving.
 
-The [timely dataflow wiki](https://github.com/frankmcsherry/timely-dataflow/wiki) has more long-form text, introducing programming and explaining concepts in more detail. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow a different way.
+The [timely dataflow wiki](https://github.com/frankmcsherry/timely-dataflow/wiki) has more long-form text, introducing programming and explaining concepts in more detail. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow in a different way.
 
 # An example
 
@@ -85,7 +85,7 @@ fn main() {
 }
 ```
 
-This example does a fair bit more, to show off more what timely can do for you. 
+This example does a fair bit more, to show off more of what timely can do for you. 
 
 We build a dataflow graph creating an input stream (with `new_input`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that we can see when the computation has processed all of a given round of data.
 
