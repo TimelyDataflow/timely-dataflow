@@ -62,11 +62,11 @@ use timely::dataflow::operators::*;
 
 fn main() {
     // initializes and runs a timely dataflow computation
-    timely::execute_from_args(std::env::args(), |computation| {
+    timely::execute_from_args(std::env::args(), |root| {
         // create a new input, exchange data, and inspect its output
-        let (mut input, probe) = computation.scoped(move |builder| {
-            let index = builder.index();
-            let (input, stream) = builder.new_input();
+        let (mut input, probe) = root.scoped(move |scope| {
+            let index = scope.index();
+            let (input, stream) = scope.new_input();
             let probe = stream.exchange(|x| *x)
                               .inspect(move |x| println!("worker {}:\thello {}", index, x))
                               .probe().0;
@@ -78,7 +78,7 @@ fn main() {
             input.send(round);
             input.advance_to(round + 1);
             while probe.lt(input.time()) {
-                computation.step();
+                root.step();
             }
         }
     }).unwrap();
@@ -87,9 +87,9 @@ fn main() {
 
 This example does a fair bit more, to show off more of what timely can do for you. 
 
-We build a dataflow graph creating an input stream (with `new_input`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that we can see when the computation has processed all of a given round of data.
+We first build a dataflow graph creating an input stream (with `new_input`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that each worker can see when the all of a given round of data has been processed.
 
-We then drive the computation by repeatedly introducing rounds of data, where the `round` itself is used as the data. In each round, each worker introduces the same data, which are then exchanged to one specific worker. Each worker then spins its wheels until the `probe` reveals that all workers have processed all work for that epoch, at which point the computation proceeds.
+We then drive the computation by repeatedly introducing rounds of data, where the `round` itself is used as the data. In each round, each worker introduces the same data, and then repeatedly takes dataflow steps until the `probe` reveals that all workers have processed all work for that epoch, at which point the computation proceeds.
 
 With two workers, the output looks like
 ```
@@ -117,6 +117,7 @@ worker 1:   hello 9
 worker 1:   hello 9
 ```
 
+Note that despite each worker introducing `(0..10)`, each element is routed to a specific worker, as we intended.
 
 # Execution
 
