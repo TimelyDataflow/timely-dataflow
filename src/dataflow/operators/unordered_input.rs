@@ -34,7 +34,6 @@ pub trait UnorderedInput<G: Scope> {
     /// The `Handle` also provides a means to indicate
     /// to timely dataflow that the input has advanced beyond certain timestamps, allowing timely
     /// to issue progress notifications.
-    /// ```
     fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G, D>, Capability<G::Timestamp>), Stream<G, D>);
 }
 
@@ -43,14 +42,16 @@ impl<G: Scope> UnorderedInput<G> for G {
     fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G, D>, Capability<G::Timestamp>), Stream<G, D>) {
 
         let (output, registrar) = Tee::<G::Timestamp, D>::new();
+        let internal = Rc::new(RefCell::new(CountMap::new()));
         let produced = Rc::new(RefCell::new(CountMap::new()));
-        let (cap, helper) = UnorderedHandle::new(PushCounter::new(output, produced.clone()));
-        let copies = self.peers();
+        let cap = mint_capability(Default::default(), internal.clone());
+        let helper = UnorderedHandle::new(PushCounter::new(output, produced.clone()));
+        let peers = self.peers();
 
         let index = self.add_operator(UnorderedOperator {
-            progress: helper.progress.clone(),
-            messages: produced.clone(),
-            copies:   copies,
+            internal: internal.clone(),
+            produced: produced.clone(),
+            peers:    peers,
         });
 
         return ((helper, cap), Stream::new(Source { index: index, port: 0 }, registrar, self.clone()));
@@ -58,9 +59,9 @@ impl<G: Scope> UnorderedInput<G> for G {
 }
 
 struct UnorderedOperator<T:Timestamp> {
-    progress:   Rc<RefCell<CountMap<T>>>,           // times closed since last asked
-    messages:   Rc<RefCell<CountMap<T>>>,           // messages sent since last asked
-    copies:     usize,
+    internal:   Rc<RefCell<CountMap<T>>>,
+    produced:   Rc<RefCell<CountMap<T>>>,
+    peers:     usize,
 }
 
 impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
@@ -70,17 +71,23 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>,
                                            Vec<CountMap<T>>) {
-        let mut map = CountMap::new();
-        map.update(&Default::default(), self.copies as i64 - 1);
-        (Vec::new(), vec![map])
+        let mut internal = CountMap::new();
+        // augment the counts for each reserved capability.
+        for &(ref time, count) in self.internal.borrow().iter() {
+            internal.update(time, count * (self.peers as i64 - 1));
+        }
+
+        // drain the changes to empty out, and complete the counts for internal.
+        self.internal.borrow_mut().drain_into(&mut internal);
+        (Vec::new(), vec![internal])
     }
 
-    fn pull_internal_progress(&mut self,_messages_consumed: &mut [CountMap<T>],
-                                         frontier_progress: &mut [CountMap<T>],
-                                         messages_produced: &mut [CountMap<T>]) -> bool
+    fn pull_internal_progress(&mut self,_consumed: &mut [CountMap<T>],
+                                         internal: &mut [CountMap<T>],
+                                         produced: &mut [CountMap<T>]) -> bool
     {
-        self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
-        self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
+        self.produced.borrow_mut().drain_into(&mut produced[0]);
+        self.internal.borrow_mut().drain_into(&mut internal[0]);
         return false;
     }
 
@@ -90,19 +97,14 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct UnorderedHandle<G: Scope, D: Data> {
-    progress: Rc<RefCell<CountMap<G::Timestamp>>>,           // times closed since last asked
     buffer: PushBuffer<G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>>,
 }
 
 impl<G: Scope, D: Data> UnorderedHandle<G, D> {
-    fn new(pusher: PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>) -> (Capability<G::Timestamp>, UnorderedHandle<G, D>) {
-        let progress = Rc::new(RefCell::new(CountMap::new()));
-        let cap = mint_capability(Default::default(), progress.clone());
-        let handle = UnorderedHandle {
-            progress: progress,
+    fn new(pusher: PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>) -> UnorderedHandle<G, D> {
+        UnorderedHandle {
             buffer: PushBuffer::new(pusher),
-        };
-        (cap, handle)
+        }
     }
 
     pub fn session<'b>(&'b mut self, cap: &Capability<G::Timestamp>) -> Session<'b, G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>> {
