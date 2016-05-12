@@ -15,7 +15,7 @@ use timely_communication::Allocate;
 use {Data, Push};
 use dataflow::channels::Content;
 use dataflow::channels::pushers::{Tee, Counter as PushCounter};
-use dataflow::channels::pushers::buffer::{Buffer as PushBuffer, Session};
+use dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
 
 use dataflow::operators::Capability;
 use dataflow::operators::capability::mint as mint_capability;
@@ -94,7 +94,6 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     fn notify_me(&self) -> bool { false }
 }
 
-
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct UnorderedHandle<G: Scope, D: Data> {
     buffer: PushBuffer<G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>>,
@@ -107,12 +106,8 @@ impl<G: Scope, D: Data> UnorderedHandle<G, D> {
         }
     }
 
-    pub fn session<'b>(&'b mut self, cap: &Capability<G::Timestamp>) -> Session<'b, G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>> {
-        self.buffer.session(cap)
-    }
-
-    pub fn flush(&mut self) {
-        self.buffer.cease();
+    pub fn session<'b>(&'b mut self, cap: Capability<G::Timestamp>) -> AutoflushSession<'b, G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>> {
+        self.buffer.autoflush_session(cap)
     }
 }
 

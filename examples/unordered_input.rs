@@ -15,10 +15,9 @@ fn main() {
         });
 
         for round in 0..10 {
-            input.session(&cap).give(round);
-            input.flush();
+            input.session(cap.clone()).give(round);
             cap = cap.delayed(&RootTimestamp::new(round + 1));
             root.step();
         }
-    });
+    }).unwrap();
 }
