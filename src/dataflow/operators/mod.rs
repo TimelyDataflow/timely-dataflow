@@ -26,6 +26,8 @@ pub use self::probe::Probe;
 pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
 
+pub use self::reclock::Reclock;
+
 pub mod enterleave;
 pub mod unary;
 // pub mod queue;
@@ -45,6 +47,8 @@ pub mod to_stream;
 pub mod capture;
 
 pub mod aggregation;
+
+pub mod reclock;
 
 // keep the handle constructors private
 mod handles;
