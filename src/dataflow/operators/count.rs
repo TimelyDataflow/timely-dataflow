@@ -8,6 +8,24 @@ use dataflow::operators::unary::Unary;
 
 pub trait Count<G: Scope> {
     /// Counts the number of records observed at each time.
+    ///
+    /// #Examples
+    ///
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Count, Capture};
+    /// use timely::dataflow::operators::capture::Extract;
+    /// use timely::progress::timestamp::RootTimestamp;
+    ///
+    /// let captured = timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .count()
+    ///            .capture()
+    /// });
+    ///
+    /// let extracted = captured.extract();
+    /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![10])]);
+    /// ```        
+
     fn count(&self) -> Stream<G, usize>;
 }
 
