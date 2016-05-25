@@ -27,6 +27,7 @@ pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
 
 pub use self::reclock::Reclock;
+pub use self::count::Count;
 
 pub mod enterleave;
 pub mod unary;
@@ -49,6 +50,7 @@ pub mod capture;
 pub mod aggregation;
 
 pub mod reclock;
+pub mod count;
 
 // keep the handle constructors private
 mod handles;
