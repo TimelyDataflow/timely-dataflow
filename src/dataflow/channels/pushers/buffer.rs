@@ -1,4 +1,6 @@
 use dataflow::channels::Content;
+use progress::Timestamp;
+use dataflow::operators::Capability;
 use timely_communication::Push;
 
 pub struct Buffer<T, D, P: Push<(T, Content<D>)>> {
@@ -22,6 +24,15 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
         if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
         self.time = Some(time.clone());
         Session { buffer: self }
+    }
+
+    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, D, P> where T: Timestamp {
+        if let Some(true) = self.time.as_ref().map(|x| *x != cap.time()) { self.flush(); }
+        self.time = Some(cap.time());
+        AutoflushSession {
+            buffer: self,
+            capability: cap,
+        }
     }
 
     pub fn inner(&mut self) -> &mut P { &mut self.pusher }
@@ -87,5 +98,39 @@ impl<'a, T, D, P: Push<(T, Content<D>)>+'a> Session<'a, T, D, P>  where T: Eq+Cl
         if message.len() > 0 {
             self.buffer.give_content(message);
         }
+    }
+}
+
+pub struct AutoflushSession<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> where
+    T: Eq+Clone+'a, D: 'a {
+
+    pub buffer: &'a mut Buffer<T, D, P>,
+    pub capability: Capability<T>,
+}
+
+impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {
+    #[inline(always)]
+    pub fn give(&mut self, data: D) {
+        self.buffer.give(data);
+    }
+
+    #[inline(always)]
+    pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
+        for item in iter {
+            self.give(item);
+        }
+    }
+
+    #[inline(always)]
+    pub fn give_content(&mut self, message: &mut Content<D>) {
+        if message.len() > 0 {
+            self.buffer.give_content(message);
+        }
+    }
+}
+
+impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> Drop for AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {
+    fn drop(&mut self) {
+        self.buffer.cease();
     }
 }
