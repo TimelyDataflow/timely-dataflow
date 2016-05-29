@@ -25,15 +25,19 @@ use dataflow::scopes::{Child, Root};
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
-    /// Create a new `Stream` and `Handle` through which to supply input.
+    /// Create a new capability-based `Stream` and `Handle` through which to supply input. This
+    /// input supports multiple open epochs (timestamps) at the same time.
     ///
-    /// The `new_input` method returns a pair `(Handle, Stream)` where the `Stream` can be used
-    /// immediately for timely dataflow construction, and the `Handle` is later used to introduce
+    /// The `new_unordered_input` method returns `((Handle, Capability), Stream)` where the `Stream` can be used
+    /// immediately for timely dataflow construction, `Handle` and `Capability` are later used to introduce
     /// data into the timely dataflow computation.
     ///
-    /// The `Handle` also provides a means to indicate
-    /// to timely dataflow that the input has advanced beyond certain timestamps, allowing timely
-    /// to issue progress notifications.
+    /// The `Capability` returned is for the default value of the timestamp type in use. The
+    /// capability can be dropped to inform the system that the input has advanced beyond the
+    /// capability's timestamp. To retain the ability to send, a new capability at a later timestamp
+    /// should be obtained first, via the `delayed` function for `Capability`.
+    ///
+    /// To communicate the end-of-input drop all available capabilities.
     fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G, D>, Capability<G::Timestamp>), Stream<G, D>);
 }
 
