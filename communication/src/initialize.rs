@@ -8,15 +8,21 @@ use std::sync::Arc;
 use allocator::{Thread, Process, Generic};
 use networking::initialize_networking;
 
+/// Possible configurations for the communication infrastructure.
 pub enum Configuration {
+    /// Use one thread.
     Thread,
+    /// Use one process with an indicated number of threads.
     Process(usize),
+    /// Expect multiple processes indicated by `(threads, process, host_list, report)`.
     Cluster(usize, usize, Vec<String>, bool)
 }
 
 impl Configuration {
 
     /// Constructs a new configuration by parsing supplied text arguments.
+    ///
+    /// Most commonly, this uses `std::env::Args()` as the supplied iterator.
     pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Configuration,String> {
 
         let mut opts = getopts::Options::new();
@@ -91,12 +97,54 @@ fn create_allocators(config: Configuration) -> Result<Vec<Generic>,String> {
 ///
 /// #Examples
 /// ```
-/// use timely::dataflow::operators::{ToStream, Inspect};
+/// // configure for two threads, just one process.
+/// let config = timely_communication::Configuration::Process(2);
 ///
-/// timely::example(|scope| {
-///     (0..10).to_stream(scope)
-///            .inspect(|x| println!("seen: {:?}", x));
+/// // initializes communication, spawns workers
+/// let guards = timely_communication::initialize(config, |mut allocator| {
+///     println!("worker {} started", allocator.index());
+///
+///     // allocates pair of senders list and one receiver.
+///     let (mut senders, mut receiver) = allocator.allocate();
+///
+///     // send typed data along each channel
+///     senders[0].send(format!("hello, {}", 0));
+///     senders[1].send(format!("hello, {}", 1));
+///
+///     // no support for termination notification,
+///     // we have to count down ourselves.
+///     let mut expecting = 2;
+///     while expecting > 0 {
+///         if let Some(message) = receiver.recv() {
+///             println!("worker {}: received: <{}>", allocator.index(), message);
+///             expecting -= 1;
+///         }
+///     }
+///
+///     // optionally, return something
+///     allocator.index()
 /// });
+///
+/// // computation runs until guards are joined or dropped.
+/// if let Ok(guards) = guards {
+///     for guard in guards.join() {
+///         println!("result: {:?}", guard);
+///     }
+/// }
+/// else { println!("error in computation"); }
+/// ```
+///
+/// The should produce output like:
+///
+/// ```ignore
+/// worker 0 started
+/// worker 1 started
+/// worker 0: received: <hello, 0>
+/// worker 1: received: <hello, 1>
+/// worker 0: received: <hello, 0>
+/// worker 1: received: <hello, 1>
+/// result: Ok(0)
+/// result: Ok(1)
 /// ```
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> {
 
@@ -115,18 +163,14 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: C
     Ok(WorkerGuards { guards: guards })
 }
 
+/// Maintains `JoinHandle`s for worker threads.
 pub struct WorkerGuards<T:Send+'static> {
     guards: Vec<::std::thread::JoinHandle<T>>
 }
 
 impl<T:Send+'static> WorkerGuards<T> {
-    /// Waits on the worker threads and returns the results they produce
-    ///
-    /// This method drains the worker guards, which means that while one 
-    /// can call this method repeatedly, one shouldn't. It would be great
-    /// for the signature to use `self`, but since it also implements `Drop`
-    /// this is not possible.
-    pub fn join(&mut self) -> Vec<Result<T,String>> {
+    /// Waits on the worker threads and returns the results they produce.
+    pub fn join(mut self) -> Vec<Result<T,String>> {
         self.guards.drain(..)
                    .map(|guard| guard.join().map_err(|e| format!("{:?}", e)))
                    .collect()

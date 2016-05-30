@@ -29,7 +29,7 @@ fn main() {
     });
 
     // computation runs until guards are joined or dropped.
-    if let Ok(mut guards) = guards {
+    if let Ok(guards) = guards {
         for guard in guards.join() {
             println!("result: {:?}", guard);
         }

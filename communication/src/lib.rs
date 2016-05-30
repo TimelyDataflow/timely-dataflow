@@ -19,7 +19,7 @@
 //! // configure for two threads, just one process.
 //! let config = timely_communication::Configuration::Process(2);
 //!
-//! // initailizes communication, spawns workers
+//! // initializes communication, spawns workers
 //! let guards = timely_communication::initialize(config, |mut allocator| {
 //!     println!("worker {} started", allocator.index());
 //!
@@ -45,7 +45,7 @@
 //! });
 //!
 //! // computation runs until guards are joined or dropped.
-//! if let Ok(mut guards) = guards {
+//! if let Ok(guards) = guards {
 //!     for guard in guards.join() {
 //!         println!("result: {:?}", guard);
 //!     }
@@ -65,7 +65,6 @@
 //! result: Ok(0)
 //! result: Ok(1)
 //! ```
-//!
 
 extern crate getopts;
 extern crate byteorder;
