@@ -28,7 +28,7 @@ pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
 
 pub use self::reclock::Reclock;
-pub use self::count::Count;
+pub use self::count::Accumulate;
 
 pub mod enterleave;
 pub mod unary;

@@ -7,13 +7,34 @@ use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
 use dataflow::operators::unary::Unary;
 
-pub trait Count<G: Scope> {
+use dataflow::channels::message::Content;
+
+pub trait Accumulate<G: Scope, D: Data> {
     /// Counts the number of records observed at each time.
     ///
     /// #Examples
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Count, Capture};
+    /// use timely::dataflow::operators::{ToStream, Accumulate, Capture};
+    /// use timely::dataflow::operators::capture::Extract;
+    /// use timely::progress::timestamp::RootTimestamp;
+    ///
+    /// let captured = timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .accumulate(0, |sum, data| { for &x in data.iter() { *sum += x; } })
+    ///            .capture()
+    /// });
+    ///
+    /// let extracted = captured.extract();
+    /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![45])]);
+    /// ```            
+    fn accumulate<A: Data, F: Fn(&mut A, &mut Content<D>)+'static>(&self, default: A, logic: F) -> Stream<G, A>;
+    /// Counts the number of records observed at each time.
+    ///
+    /// #Examples
+    ///
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Accumulate, Capture};
     /// use timely::dataflow::operators::capture::Extract;
     /// use timely::progress::timestamp::RootTimestamp;
     ///
@@ -26,23 +47,25 @@ pub trait Count<G: Scope> {
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![10])]);
     /// ```        
-    fn count(&self) -> Stream<G, usize>;
+    fn count(&self) -> Stream<G, usize> {
+        self.accumulate(0, |sum, data| *sum += data.len())
+    }
 }
 
-impl<G: Scope, D: Data> Count<G> for Stream<G, D>
+impl<G: Scope, D: Data> Accumulate<G, D> for Stream<G, D>
 where G::Timestamp: Hash {
-    fn count(&self) -> Stream<G, usize> {
+    fn accumulate<A: Data, F: Fn(&mut A, &mut Content<D>)+'static>(&self, default: A, logic: F) -> Stream<G, A> {
 
-        let mut counts = HashMap::new();
-        self.unary_notify(Pipeline, "Count", vec![], move |input, output, notificator| {
+        let mut accums = HashMap::new();
+        self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.next() {
-                *counts.entry(time.time()).or_insert(0) += data.len();
+                logic(&mut accums.entry(time.time()).or_insert(default.clone()), data);
                 notificator.notify_at(time);
             }
 
             for (time, _count) in notificator {
-                if let Some(count) = counts.remove(&time) {
-                    output.session(&time).give(count);
+                if let Some(accum) = accums.remove(&time) {
+                    output.session(&time).give(accum);
                 }
             }
         })
