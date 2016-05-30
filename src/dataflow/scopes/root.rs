@@ -7,12 +7,10 @@ use progress::nested::{Source, Target};
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
-// use ::logging::initialize;
-
 use super::Scope;
 
 /// A `Root` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
-/// and has a slot for one child `Operate`. The primary intended use of `Root` is through its
+/// and has a list of child `Operate`s. The primary intended use of `Root` is through its
 /// implementation of the `Scope` trait.
 pub struct Root<A: Allocate> {
     allocator: Rc<RefCell<A>>,
@@ -35,6 +33,10 @@ impl<A: Allocate> Root<A> {
 
         result
     }
+    /// Performs one step of the computation.
+    ///
+    /// A step gives each dataflow operator a chance to run, and is the 
+    /// main way to ensure that a computation procedes.
     pub fn step(&mut self) -> bool {
 
         if cfg!(feature = "logging") {
@@ -48,7 +50,14 @@ impl<A: Allocate> Root<A> {
         }
         active
     }
+    /// Calls `self.step()` as long as `func` evaluates to true.
+    pub fn step_while<F: FnMut()->bool>(&mut self, mut func: F) {
+        while func() { self.step(); }
+    }
+
+    /// The index of the worker out of its peers.
     pub fn index(&self) -> usize { self.allocator.borrow().index() }
+    /// The total number of peer workers.
     pub fn peers(&self) -> usize { self.allocator.borrow().peers() }
 }
 
@@ -73,13 +82,11 @@ impl<A: Allocate> Scope for Root<A> {
         scope.get_internal_summary();
         scope.set_external_summary(Vec::new(), &mut []);
         self.graph.borrow_mut().push(Box::new(scope));
-        // self.graph.borrow().len() - 1
     }
     fn new_identifier(&mut self) -> usize {
         *self.identifiers.borrow_mut() += 1;
         *self.identifiers.borrow() - 1
     }
-
 
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
         let addr = vec![self.allocator.borrow().index()];

@@ -20,9 +20,10 @@ fn main() {
         for round in 0..10 {
             input.send(round);
             input.advance_to(round + 1);
-            while probe.lt(input.time()) {
-                computation.step();
-            }
+            computation.step_while(|| probe.lt(input.time()));
+            // while probe.lt(input.time()) {
+            //     computation.step();
+            // }
         }
     }).unwrap();
 }
