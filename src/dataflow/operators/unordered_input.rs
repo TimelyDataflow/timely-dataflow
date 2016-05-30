@@ -4,16 +4,13 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::frontier::{MutableAntichain, Antichain};
+use progress::frontier::Antichain;
 use progress::{Operate, Timestamp};
 use progress::nested::subgraph::Source;
 use progress::count_map::CountMap;
-use progress::timestamp::RootTimestamp;
-use progress::nested::product::Product;
 
 use timely_communication::Allocate;
-use {Data, Push};
-use dataflow::channels::Content;
+use Data;
 use dataflow::channels::pushers::{Tee, Counter as PushCounter};
 use dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
 
@@ -21,7 +18,6 @@ use dataflow::operators::Capability;
 use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::{Stream, Scope};
-use dataflow::scopes::{Child, Root};
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
@@ -38,6 +34,47 @@ pub trait UnorderedInput<G: Scope> {
     /// should be obtained first, via the `delayed` function for `Capability`.
     ///
     /// To communicate the end-of-input drop all available capabilities.
+    ///
+    /// #Examples
+    ///
+    /// ```
+    /// use std::sync::{Arc, Mutex};
+    ///
+    /// use timely::*;
+    /// use timely::dataflow::operators::*;
+    /// use timely::dataflow::operators::capture::Extract;
+    /// use timely::dataflow::{Stream, Scope};
+    /// use timely::progress::timestamp::RootTimestamp;
+    ///
+    /// // get send and recv endpoints, wrap send to share
+    /// let (send, recv) = ::std::sync::mpsc::channel();
+    /// let send = Arc::new(Mutex::new(send));
+    ///
+    /// timely::execute(Configuration::Thread, move |root| {
+    ///
+    ///     // this is only to validate the output.
+    ///     let send = send.lock().unwrap().clone();
+    ///
+    ///     // create and capture the unordered input.
+    ///     let (mut input, mut cap) = root.scoped(|scope| {
+    ///         let (input, stream) = scope.new_unordered_input();
+    ///         stream.capture_into(send);
+    ///         input
+    ///     });
+    ///
+    ///     // feed values 0..10 at times 0..10.
+    ///     for round in 0..10 {
+    ///         input.session(cap.clone()).give(round);
+    ///         cap = cap.delayed(&RootTimestamp::new(round + 1));
+    ///         root.step();
+    ///     }
+    /// }).unwrap();
+    /// 
+    /// let extract = recv.extract();
+    /// for i in 0..10 {
+    ///     assert_eq!(extract[i], (RootTimestamp::new(i), vec![i]));
+    /// }
+    /// ```
     fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G, D>, Capability<G::Timestamp>), Stream<G, D>);
 }
 
