@@ -1,3 +1,4 @@
+//! Counts the number of records at each time.
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -25,7 +26,6 @@ pub trait Count<G: Scope> {
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![10])]);
     /// ```        
-
     fn count(&self) -> Stream<G, usize>;
 }
 
