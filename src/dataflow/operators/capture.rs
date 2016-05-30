@@ -148,7 +148,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// }).unwrap();
     /// ```
     fn capture_into<P: EventPusher<T, D>+'static>(&self, pusher: P);
-    fn capture(&self)->::std::sync::mpsc::Receiver<Event<T, D>> {
+    fn capture(&self) -> ::std::sync::mpsc::Receiver<Event<T, D>> {
         let (send, recv) = ::std::sync::mpsc::channel();
         self.capture_into(send);
         recv
@@ -162,10 +162,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
         let channel_id = scope.new_identifier();
 
         let (sender, receiver) = Pipeline.connect(&mut scope, channel_id);
-        let operator = CaptureOperator {
-            input: PullCounter::new(receiver),
-            events: pusher,
-        };
+        let operator = CaptureOperator::new(PullCounter::new(receiver), pusher);
 
         let index = scope.add_operator(operator);
         self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
@@ -392,6 +389,16 @@ struct CaptureOperator<T: Timestamp, D: Data, P: EventPusher<T, D>> {
     events: P,
 }
 
+impl<T:Timestamp, D: Data, P: EventPusher<T, D>> CaptureOperator<T, D, P> {
+    fn new(input: PullCounter<T, D>, mut events: P) -> CaptureOperator<T, D, P> {
+        events.push(Event::Progress(vec![(Default::default(), 1)]));
+        CaptureOperator {
+            input: input,
+            events: events,
+        }
+    }
+}
+
 impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<T, D, P> {
     fn name(&self) -> String { "Capture".to_owned() }
     fn inputs(&self) -> usize { 1 }
@@ -399,7 +406,11 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
 
     // we need to set the initial value of the frontier
     fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [CountMap<T>]) {
-        self.events.push(Event::Progress(counts[0].clone().into_inner()));
+        let mut map = counts[0].clone();
+        map.update(&Default::default(), -1);
+        if map.len() > 0 {
+            self.events.push(Event::Progress(map.into_inner()));
+        }
         counts[0].clear();
     }
 
