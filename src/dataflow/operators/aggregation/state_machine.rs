@@ -39,10 +39,10 @@ pub trait StateMachine<S: Scope, K: Data+Hash+Eq, V: Data> {
     ///         (0..10).to_stream(scope)
     ///                .map(|x| (x % 2, x))
     ///                .state_machine(
-    ///                |_key, val, agg| { *agg += val; (false, Some((*_key, *agg))) }, 
-    ///                |key| *key as u64
-    ///            )
-    ///            .inspect(move |x| assert!(result.contains(x)));
+    ///                    |_key, val, agg| { *agg += val; (false, Some((*_key, *agg))) }, 
+    ///                    |key| *key as u64
+    ///                )
+    ///                .inspect(move |x| assert!(result.contains(x)));
     /// });
     /// ```
     fn state_machine<
