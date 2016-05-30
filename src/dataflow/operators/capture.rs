@@ -97,11 +97,21 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///
     /// ```
     /// use std::rc::Rc;
+    /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    /// use timely::dataflow::operators::capture::{EventLink, Replay};
+    /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
     ///
-    /// timely::execute(timely::Configuration::Thread, |computation| {
+    /// // get send and recv endpoints, wrap send to share
+    /// let (send, recv) = ::std::sync::mpsc::channel();
+    /// let send = Arc::new(Mutex::new(send));
+    ///
+    /// timely::execute(timely::Configuration::Thread, move |computation| {
+    ///
+    ///     // this is only to validate the output.
+    ///     let send = send.lock().unwrap().clone();
+    ///
+    ///     // these are to capture/replay the stream.
     ///     let handle1 = Rc::new(EventLink::new());
     ///     let handle2 = handle1.clone();
     ///
@@ -112,9 +122,11 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///
     ///     computation.scoped(|scope2| {
     ///         handle2.replay_into(scope2)
-    ///                .inspect(|x| println!("replayed: {:?}", x));
-    ///     })
+    ///                .capture_into(send)
+    ///     });
     /// }).unwrap();
+    ///
+    /// assert_eq!(recv.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// ```
     ///
     /// The types `EventWriter<T, D, W>` and `EventReader<T, D, R>` can be
@@ -125,11 +137,21 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// ```
     /// use std::rc::Rc;
     /// use std::net::{TcpListener, TcpStream};
+    /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    /// use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay};
+    /// use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay, Extract};
     ///
-    /// timely::execute(timely::Configuration::Thread, |computation| {
+    /// // get send and recv endpoints, wrap send to share
+    /// let (send0, recv0) = ::std::sync::mpsc::channel();
+    /// let send0 = Arc::new(Mutex::new(send0));
+    ///
+    /// timely::execute(timely::Configuration::Thread, move |computation| {
+    /// 
+    ///     // this is only to validate the output.
+    ///     let send0 = send0.lock().unwrap().clone();
+    /// 
+    ///     // these allow us to capture / replay a timely stream.
     ///     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
     ///     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
     ///     let recv = list.incoming().next().unwrap().unwrap();
@@ -143,11 +165,15 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///     computation.scoped::<u64,_,_>(|scope2| {
     ///         EventReader::<_,u64,_>::new(recv)
     ///             .replay_into(scope2)
-    ///             .inspect(|x| println!("replayed: {:?}", x));
-    ///     })
+    ///             .capture_into(send0)
+    ///     });
     /// }).unwrap();
+    ///
+    /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// ```
     fn capture_into<P: EventPusher<T, D>+'static>(&self, pusher: P);
+
+    /// Captures a stream using Rust's MPSC channels.
     fn capture(&self) -> ::std::sync::mpsc::Receiver<Event<T, D>> {
         let (send, recv) = ::std::sync::mpsc::channel();
         self.capture_into(send);
@@ -441,16 +467,16 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
 
-        // panics if the event link has not been initialized; should only happen if no one has
-        // called set_external_summary on the `CaptureOperator`. So, please don't use this in the
-        // same graph as the `CaptureOperator`.
+        // We expect the event stream to have a progress statement as a prefix, pre-loaded 
+        // by the capture constructor. Note: It may not be there *right now* due to e.g.
+        // kernel/network involvement, but it should be on its way, so we loop.
 
-        // TODO : use Default::default() as the initial time, and in the first Event we dequeue,
-        // TODO : announce that we've moved beyond Default::default().
+        // TODO : It seems that Event::Start could have the initial configuration; not clear
+        // TODO : why it exists in the first place, but it could at least be useful.
+        // TODO : Maybe it exists so that the EventLink data structure can have a start?
 
         loop {
-            let event = self.events.next();
-            if let Some(event) = event {
+            if let Some(event) = self.events.next() {
                 let mut result = CountMap::new();
                 if let &Event::Progress(ref vec) = event {
                     for &(ref time, delta) in vec {
@@ -460,16 +486,6 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
                 return (vec![], vec![result]);
             }
         }
-        // if let Some(event) = self.events.next() {
-        //     if let &Event::Progress(ref vec) = event {
-        //         for &(ref time, delta) in vec {
-        //             result.update(time, delta);
-        //         }
-        //     }
-        // }
-        // else {
-        //     panic!("uninitialized replay; possibly in same computation as capture?");
-        // }
     }
 
     fn pull_internal_progress(&mut self, _: &mut [CountMap<T>], internal: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
@@ -496,62 +512,4 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
 
         false
     }
-}
-
-
-#[cfg(test)]
-mod tests {
-
-    use ::Configuration;
-    use dataflow::*;
-    use dataflow::operators::{Capture, ToStream, Inspect};
-    use super::{EventLink, Replay, EventWriter, EventReader};
-    use std::rc::Rc;
-
-    use std::net::{TcpListener, TcpStream};
-
-    #[test]
-    fn handle() {
-
-        // initializes and runs a timely dataflow computation
-        ::execute(Configuration::Thread, |computation| {
-            let handle1 = Rc::new(EventLink::new());
-            let handle2 = handle1.clone();
-            computation.scoped::<u64,_,_>(|builder|
-                (0..10).to_stream(builder)
-                       .capture_into(handle1)
-            );
-
-            computation.scoped(|builder| {
-                handle2.replay_into(builder)
-                       .inspect(|x| println!("replayed: {:?}", x));
-            })
-        }).unwrap();
-    }
-
-
-    #[test]
-    fn stream() {
-
-        // initializes and runs a timely dataflow computation
-        ::execute(Configuration::Thread, |computation| {
-
-            let list = TcpListener::bind("127.0.0.1:8000").unwrap();
-            let send = TcpStream::connect("127.0.0.1:8000").unwrap();
-            let recv = list.incoming().next().unwrap().unwrap();
-
-            computation.scoped::<u64,_,_>(|scope1|
-                (0..10u64)
-                    .to_stream(scope1)
-                    .capture_into(EventWriter::new(send))
-            );
-
-            computation.scoped::<u64,_,_>(|scope2| {
-                EventReader::<_,u64,_>::new(recv)
-                    .replay_into(scope2)
-                    .inspect(|x| println!("replayed: {:?}", x));
-            })
-        }).unwrap();
-    }
-
 }
