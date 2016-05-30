@@ -18,29 +18,39 @@ use dataflow::channels::pushers::buffer::Buffer;
 
 use dataflow::{Stream, Scope};
 
-pub trait ToStream<D: Data> {
-    /// Converts an iterator to a timely `Stream`, with records at the default time.
+pub trait ToStream<T: Timestamp, D: Data> {
+    /// Converts to a timely `Stream`.
     ///
     /// #Examples
-    /// ```
-    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// 
+    /// `ToStream` is implemented by any implementor of `IntoIterator` whose
+    /// associated type `Item` implements `Data`. This means that iterators, 
+    /// vectors, and other collections may be directly converted to timely 
+    /// streams.
     ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .inspect(|x| println!("seen: {:?}", x));
-    /// });
     /// ```
-    fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, D>;
+    /// use timely::dataflow::operators::{ToStream, Capture};
+    /// use timely::dataflow::operators::capture::Extract;
+    ///
+    /// let (data1, data2) = timely::example(|scope| {
+    ///     let data1 = (0..3).to_stream(scope).capture();
+    ///     let data2 = vec![0,1,2].to_stream(scope).capture();
+    ///     (data1, data2)
+    /// });
+    /// 
+    /// assert_eq!(data1.extract(), data2.extract());
+    /// ```
+    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>;
 }
 
-impl<D: Data, I: Iterator<Item=D>+'static> ToStream<D> for I {
-    fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, D> {
+impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::Item: Data {
+    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, I::Item> {
 
-        let (output, registrar) = Tee::<S::Timestamp, D>::new();
+        let (output, registrar) = Tee::<S::Timestamp, I::Item>::new();
         let copies = scope.peers();
 
         let index = scope.add_operator(Operator {
-            iterator: Some(self),
+            iterator: Some(self.into_iter()),
             copies: copies,
             output: Buffer::new(Counter::new(output, Rc::new(RefCell::new(CountMap::new())))),
         });
