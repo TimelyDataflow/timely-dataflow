@@ -7,29 +7,37 @@ use dataflow::operators::binary::Binary;
 
 use dataflow::channels::message::Content;
 
-/// Extension trait for `Stream`.
+/// Extension trait for reclocking a stream.
 pub trait Reclock<S: Scope, D: Data> {
     /// Delays records until an input is observed on the `clock` input.
+    ///
+    /// The source stream is buffered until a record is seen on the clock input,
+    /// at which point a notification is requested and all data with time less 
+    /// or equal to the clock time are sent. This method does not ensure that all 
+    /// workers receive the same clock records, which can be accomplished with 
+    /// `broadcast`.
     ///
     /// #Examples
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay, Inspect, Map, Reclock, Capture};
+    /// use timely::dataflow::operators::{ToStream, Delay, Map, Reclock, Capture};
     /// use timely::dataflow::operators::capture::Extract;
-    /// // use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// let captured = timely::example(|scope| {
+    /// 
+    ///     // produce data 0..10 at times 0..10.
     ///     let data = (0..10).to_stream(scope)
     ///                       .delay(|x,t| RootTimestamp::new(*x));
     /// 
+    ///     // product clock ticks at three times.
     ///     let clock = vec![3, 5, 8].into_iter()
     ///                              .to_stream(scope)
     ///                              .delay(|x,t| RootTimestamp::new(*x))
     ///                              .map(|_| ());
     ///
+    ///     // reclock the data.
     ///     data.reclock(&clock)
-    ///         .inspect_batch(|t,xs| println!("time: {:?}, data: {:?}", t, xs))
     ///         .capture()
     /// });
     ///
@@ -49,14 +57,17 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
 
         self.binary_notify(clock, Pipeline, Pipeline, "Reclock", vec![], move |input1, input2, output, notificator| {
 
+            // stash each data input with its timestamp.
             while let Some((time, data)) = input1.next() {
                 stash.push((time.time(), ::std::mem::replace(data, Content::Typed(vec![]))));
             }
 
+            // request notification at time, to flush stash.
             while let Some((time, _data)) = input2.next() {
                 notificator.notify_at(time);
             }
 
+            // each time with complete stash can be flushed.
             while let Some((cap, _)) = notificator.next() {
                 let time = cap.time();
                 let mut session = output.session(&cap);
@@ -67,8 +78,6 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
                 }
                 stash.retain(|x| !x.0.le(&time));
             }
-
         })
-
     }
 }
