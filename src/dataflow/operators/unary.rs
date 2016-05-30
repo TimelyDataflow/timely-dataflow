@@ -72,7 +72,7 @@ pub trait Unary<G: Scope, D1: Data> {
     ///            });
     /// });
     /// ```
-    fn unary_notify<D2, L, P> (&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>
+    fn unary_notify<D2, L, P>(&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>
     where
         D2: Data,
         L: FnMut(&mut InputHandle<G::Timestamp, D1>,
