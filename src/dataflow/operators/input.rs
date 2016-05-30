@@ -74,7 +74,6 @@ impl<A: Allocate, T: Timestamp+Ord> Input<A, T> for Child<Root<A>, T> {
         let copies = self.peers();
 
         let index = self.add_operator(Operator {
-            frontier: helper.frontier.clone(),
             progress: helper.progress.clone(),
             messages: produced.clone(),
             copies:   copies,
@@ -85,7 +84,6 @@ impl<A: Allocate, T: Timestamp+Ord> Input<A, T> for Child<Root<A>, T> {
 }
 
 struct Operator<T:Timestamp+Ord> {
-    frontier:   Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
     progress:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
     messages:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // messages sent since last asked
     copies:     usize,
@@ -99,9 +97,7 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<Product<RootTimestamp, T> as Timestamp>::Summary>>>,
                                            Vec<CountMap<Product<RootTimestamp, T>>>) {
         let mut map = CountMap::new();
-        for x in self.frontier.borrow().elements().iter() {
-            map.update(x, self.copies as i64);
-        }
+        map.update(&Default::default(), self.copies as i64);
         (Vec::new(), vec![map])
     }
 
@@ -120,7 +116,7 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct Handle<T: Timestamp+Ord, D: Data> {
-    frontier: Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
+    // frontier: Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
     progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
     pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>,
     buffer: Vec<D>,
@@ -135,7 +131,7 @@ pub struct Handle<T: Timestamp+Ord, D: Data> {
 impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
     fn new(pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>) -> Handle<T, D> {
         Handle {
-            frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
+            // frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
             progress: Rc::new(RefCell::new(CountMap::new())),
             pusher: pusher,
             buffer: Vec::with_capacity(Content::<D>::default_length()),
@@ -152,7 +148,7 @@ impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
     fn close_epoch(&mut self) {
         if !self.buffer.is_empty() { self.flush(); }
         self.pusher.done();
-        self.frontier.borrow_mut().update_weight(&self.now_at, -1, &mut (*self.progress.borrow_mut()));
+        self.progress.borrow_mut().update(&self.now_at, -1);
     }
 
     #[inline(always)]
@@ -173,7 +169,7 @@ impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
         assert!(next > self.now_at.inner);
         self.close_epoch();
         self.now_at = RootTimestamp::new(next);
-        self.frontier.borrow_mut().update_weight(&self.now_at,  1, &mut (*self.progress.borrow_mut()));
+        self.progress.borrow_mut().update(&self.now_at, 1);
     }
 
     /// Closes the input.
