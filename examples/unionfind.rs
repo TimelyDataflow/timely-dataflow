@@ -73,23 +73,20 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
                     // grow arrays if required.
                     let m = ::std::cmp::max(x, y);
                     for i in roots.len() .. (m + 1) {
-                        roots.push(i as u32);
+                        roots.push(i);
                         ranks.push(0);
                     }
 
                     // look up roots for `x` and `y`.    
-                    // while x != roots[x] { x = roots[x]; }
-                    // while y != roots[y] { y = roots[y]; }
-
-                    unsafe { while x != *roots.get_unchecked(x) as usize { x = *roots.get_unchecked(x) as usize; } }
-                    unsafe { while y != *roots.get_unchecked(y) as usize { y = *roots.get_unchecked(y) as usize; } }
+                    while x != roots[x] { x = roots[x]; }
+                    while y != roots[y] { y = roots[y]; }
 
                     if x != y {
                         session.give((x, y));
                         match ranks[x].cmp(&ranks[y]) {
-                            Ordering::Less    => { roots[x] = y as u32 },
-                            Ordering::Greater => { roots[y] = x as u32 },
-                            Ordering::Equal   => { roots[y] = x as u32; ranks[x] += 1 },
+                            Ordering::Less    => { roots[x] = y },
+                            Ordering::Greater => { roots[y] = x },
+                            Ordering::Equal   => { roots[y] = x; ranks[x] += 1 },
                         }
                     }
                 }
