@@ -48,10 +48,10 @@ use dataflow::scopes::{Root, Child, Scope};
 /// ```
 pub fn example<T, F>(func: F) -> T
 where T: Send+'static,
-      F: Fn(&mut Child<Root<Allocator>, u64>)->T+Send+Sync+'static {
+      F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
     let guards = initialize(Configuration::Thread, move |allocator| {
         let mut root = Root::new(allocator);
-        let result = root.scoped::<u64,_,_>(|x| func(x));
+        let result = root.scoped(|x| func(x));
         while root.step() { }
         result
     });
@@ -80,7 +80,7 @@ where T: Send+'static,
 ///
 /// // execute a timely dataflow using three worker threads.
 /// timely::execute(timely::Configuration::Process(3), |root| {
-///     root.scoped::<u64,_,_>(|scope| {
+///     root.scoped::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
@@ -104,7 +104,7 @@ where T: Send+'static,
 /// // execute a timely dataflow using three worker threads.
 /// timely::execute(timely::Configuration::Process(3), move |root| {
 ///     let send = send.lock().unwrap().clone();
-///     root.scoped::<u64,_,_>(move |scope| {
+///     root.scoped::<(),_,_>(move |scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x))
 ///                .capture_into(send);
@@ -155,7 +155,7 @@ where T:Send+'static,
 ///
 /// // execute a timely dataflow using command line parameters
 /// timely::execute_from_args(std::env::args(), |root| {
-///     root.scoped::<u64,_,_>(|scope| {
+///     root.scoped::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
