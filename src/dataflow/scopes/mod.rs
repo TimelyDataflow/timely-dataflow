@@ -78,8 +78,11 @@ pub trait Scope : Allocate+Clone {
 
         let result = func(&mut builder);
         let index = builder.subgraph.borrow().index;
-        // println!("adding subgraph with index: {}", index);
-        self.add_operator_with_index(builder.subgraph, index);
-        result
-    }
+        if let Ok(subgraph) = ::std::rc::Rc::try_unwrap(builder.subgraph) {
+            self.add_operator_with_index(subgraph.into_inner(), index);
+            result
+        }
+        else {
+            panic!("scoped: Rc<Subgraph> not fully released");
+        }    }
 }

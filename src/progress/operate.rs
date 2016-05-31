@@ -102,29 +102,3 @@ pub trait Operate<T: Timestamp> {
     /// Indicates of whether the operator requires `push_external_progress` information or not.
     fn notify_me(&self) -> bool { true }
 }
-
-// TODO : try_unwrap is unstable; we need this until Rust fixes that.
-impl<T: Timestamp, S: Operate<T>> Operate<T> for Rc<RefCell<S>> {
-
-    // proxy methods through the Rc<RefCell<_>>.
-    fn name(&self) -> String { self.borrow().name() }
-    fn local(&self) -> bool { self.borrow().local() }
-    fn inputs(&self) -> usize { self.borrow().inputs() }
-    fn outputs(&self) -> usize { self.borrow().outputs() }
-    fn notify_me(&self) -> bool { self.borrow().notify_me() }
-
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
-        self.borrow_mut().get_internal_summary()
-    }
-    fn set_external_summary(&mut self, x: Vec<Vec<Antichain<T::Summary>>>, y: &mut [CountMap<T>]) {
-        self.borrow_mut().set_external_summary(x, y);
-    }
-    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) {
-        self.borrow_mut().push_external_progress(external)
-    }
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
-                                         internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool {
-        self.borrow_mut().pull_internal_progress(consumed, internal, produced)
-    }
-}
