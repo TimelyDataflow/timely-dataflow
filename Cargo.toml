@@ -13,8 +13,8 @@ repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow"]
 license = "MIT"
 
-#[dependencies.timely_communication]
-#path="./communication"
+[dependencies.timely_communication]
+path="./communication"
 
 [features]
 default=[]
@@ -23,7 +23,7 @@ logging=[]
 [dependencies]
 abomonation="^0.4.2"
 timely_sort="0.1.3"
-timely_communication="^0.1.4"
+#timely_communication="^0.1.4"
 byteorder="0.4.2"
 time="0.1.34"
 

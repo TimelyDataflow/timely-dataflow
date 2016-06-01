@@ -70,19 +70,19 @@ pub trait Scope : Allocate+Clone {
     /// ```
     #[inline]
     fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
-        let subscope = Rc::new(RefCell::new(self.new_subscope()));
-        let mut builder = Child {
-            subgraph: subscope,
-            parent: self.clone(),
+        let subscope = RefCell::new(self.new_subscope());
+
+        let result = {
+            let mut builder = Child {
+                subgraph: &subscope,
+                parent: self.clone(),
+            };
+            func(&mut builder)
         };
 
-        let result = func(&mut builder);
-        let index = builder.subgraph.borrow().index;
-        if let Ok(subgraph) = ::std::rc::Rc::try_unwrap(builder.subgraph) {
-            self.add_operator_with_index(subgraph.into_inner(), index);
-            result
-        }
-        else {
-            panic!("scoped: Rc<Subgraph> not fully released");
-        }    }
+        let index = subscope.borrow().index;
+        self.add_operator_with_index(subscope.into_inner(), index);
+
+        result
+    }
 }
