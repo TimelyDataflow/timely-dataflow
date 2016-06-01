@@ -21,7 +21,7 @@ use dataflow::{Stream, Scope};
 use dataflow::scopes::Child;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
-pub trait LoopVariable<G: Scope, T: Timestamp> {
+pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
     ///
     /// The resulting `Stream` will have its data defined by a future call to `collect_loop` with
@@ -41,11 +41,11 @@ pub trait LoopVariable<G: Scope, T: Timestamp> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<G, T>, D>);
+    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>);
 }
 
-impl<G: Scope, T: Timestamp> LoopVariable<G, T> for Child<G, T> {
-    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<G, T>, D>) {
+impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T> {
+    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
         let produced: Rc<RefCell<CountMap<Product<G::Timestamp, T>>>> = Default::default();
@@ -111,7 +111,7 @@ pub trait ConnectLoop<G: Scope, T: Timestamp, D: Data> {
     fn connect_loop(&self, Handle<G::Timestamp, T, D>);
 }
 
-impl<G: Scope, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<G, T>, D> {
+impl<'a, G: Scope, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<'a, G, T>, D> {
     fn connect_loop(&self, helper: Handle<G::Timestamp, T, D>) {
         let channel_id = self.scope().new_identifier();
         self.connect_to(Target { index: helper.index, port: 0 }, helper.target, channel_id);

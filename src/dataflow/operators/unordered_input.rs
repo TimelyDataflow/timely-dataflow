@@ -75,12 +75,12 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (RootTimestamp::new(i), vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G, D>, Capability<G::Timestamp>), Stream<G, D>);
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, Capability<G::Timestamp>), Stream<G, D>);
 }
 
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G, D>, Capability<G::Timestamp>), Stream<G, D>) {
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, Capability<G::Timestamp>), Stream<G, D>) {
 
         let (output, registrar) = Tee::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(CountMap::new()));
@@ -136,23 +136,23 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 }
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-pub struct UnorderedHandle<G: Scope, D: Data> {
-    buffer: PushBuffer<G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>>,
+pub struct UnorderedHandle<T: Timestamp, D: Data> {
+    buffer: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
 
-impl<G: Scope, D: Data> UnorderedHandle<G, D> {
-    fn new(pusher: PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>) -> UnorderedHandle<G, D> {
+impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
+    fn new(pusher: PushCounter<T, D, Tee<T, D>>) -> UnorderedHandle<T, D> {
         UnorderedHandle {
             buffer: PushBuffer::new(pusher),
         }
     }
 
-    pub fn session<'b>(&'b mut self, cap: Capability<G::Timestamp>) -> AutoflushSession<'b, G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>> {
+    pub fn session<'b>(&'b mut self, cap: Capability<T>) -> AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>> {
         self.buffer.autoflush_session(cap)
     }
 }
 
-impl<G: Scope, D: Data> Drop for UnorderedHandle<G, D> {
+impl<T: Timestamp, D: Data> Drop for UnorderedHandle<T, D> {
     fn drop(&mut self) {
         // TODO: explode if not all capabilities were given up?
     }

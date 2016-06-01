@@ -15,7 +15,7 @@ use {Data, Push, Pull};
 // The Communicator trait presents the interface a worker has to the outside world.
 // The worker can see its index, the total number of peers, and acquire channels to and from the other workers.
 // There is an assumption that each worker performs the same channel allocation logic; things go wrong otherwise.
-pub trait Allocate: 'static {
+pub trait Allocate {
     /// The index of the worker out of `(0..self.peers())`.
     fn index(&self) -> usize;
     /// The number of workers.

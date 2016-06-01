@@ -53,7 +53,7 @@ pub trait Enter<G: Scope, T: Timestamp, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter(&self, &Child<G, T>) -> Stream<Child<G, T>, D>;
+    fn enter<'a>(&self, &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D>;
 }
 
 /// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
@@ -72,19 +72,19 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data>  where  G::Timestamp: Hash, T
     ///     });
     /// });
     /// ```
-    fn enter_at<F:Fn(&D)->T+'static>(&self, scope: &Child<G, T>, initial: F) -> Stream<Child<G, T>, D> ;
+    fn enter_at<'a, F:Fn(&D)->T+'static>(&self, scope: &Child<'a, G, T>, initial: F) -> Stream<Child<'a, G, T>, D> ;
 }
 
 impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, T, D>> EnterAt<G, T, D> for E
 where G::Timestamp: Hash, T: Hash {
-    fn enter_at<F:Fn(&D)->T+'static>(&self, scope: &Child<G, T>, initial: F) ->
-        Stream<Child<G, T>, D> {
+    fn enter_at<'a, F:Fn(&D)->T+'static>(&self, scope: &Child<'a, G, T>, initial: F) ->
+        Stream<Child<'a, G, T>, D> {
             self.enter(scope).delay(move |datum, time| Product::new(time.outer, initial(datum)))
     }
 }
 
 impl<T: Timestamp, G: Scope, D: Data> Enter<G, T, D> for Stream<G, D> {
-    fn enter(&self, scope: &Child<G, T>) -> Stream<Child<G, T>, D> {
+    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D> {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
@@ -118,7 +118,7 @@ pub trait Leave<G: Scope, D: Data> {
     fn leave(&self) -> Stream<G, D>;
 }
 
-impl<G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<G, T>, D> {
+impl<'a, G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<'a, G, T>, D> {
     fn leave(&self) -> Stream<G, D> {
 
         let scope = self.scope();

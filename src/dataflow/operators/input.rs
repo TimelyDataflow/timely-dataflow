@@ -27,7 +27,7 @@ use dataflow::scopes::{Child, Root};
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 /// Create a new `Stream` and `Handle` through which to supply input.
-pub trait Input<A: Allocate, T: Timestamp+Ord> {
+pub trait Input<'a, A: Allocate, T: Timestamp+Ord> {
     /// Create a new `Stream` and `Handle` through which to supply input.
     ///
     /// The `new_input` method returns a pair `(Handle, Stream)` where the `Stream` can be used
@@ -62,11 +62,11 @@ pub trait Input<A: Allocate, T: Timestamp+Ord> {
     ///     }
     /// });
     /// ```
-    fn new_input<D:Data>(&mut self) -> (Handle<T, D>, Stream<Child<Root<A>, T>, D>);
+    fn new_input<D:Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>);
 }
 
-impl<A: Allocate, T: Timestamp+Ord> Input<A, T> for Child<Root<A>, T> {
-    fn new_input<D:Data>(&mut self) -> (Handle<T, D>, Stream<Child<Root<A>, T>, D>) {
+impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T> {
+    fn new_input<D:Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>) {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
