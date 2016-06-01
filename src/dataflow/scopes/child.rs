@@ -1,10 +1,8 @@
-use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::{Timestamp, Operate, Subgraph};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
-// use progress::nested::scope_wrapper::ChildWrapper;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 

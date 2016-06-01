@@ -1,7 +1,5 @@
 //! Hierarchical organization of timely dataflow graphs.
-//!
 
-use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::{Timestamp, Operate, Subgraph};

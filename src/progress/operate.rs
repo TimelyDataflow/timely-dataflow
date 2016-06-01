@@ -1,8 +1,5 @@
 //! Methods which describe an operators topology, and the progress it makes.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use std::default::Default;
 
 use progress::{Timestamp, CountMap, Antichain};
