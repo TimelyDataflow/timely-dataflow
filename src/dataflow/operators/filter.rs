@@ -25,12 +25,12 @@ pub trait Filter<D: Data> {
 impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
     fn filter<L: Fn(&D)->bool+'static>(&self, predicate: L) -> Stream<G, D> {
         self.unary_stream(Pipeline, "Filter", move |input, output| {
-            while let Some((time, data)) = input.next() {
+            input.for_each(|time, data| {
                 data.retain(|x| predicate(x));
                 if data.len() > 0 {
                     output.session(&time).give_content(data);
                 }
-            }
+            });
         })
     }
 }

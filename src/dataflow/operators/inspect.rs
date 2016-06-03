@@ -46,10 +46,10 @@ impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
 
     fn inspect_batch<F: FnMut(&G::Timestamp, &[D])+'static>(&self, mut func: F) -> Stream<G, D> {
         self.unary_stream(Pipeline, "InspectBatch", move |input, output| {
-            while let Some((time, data)) = input.next() {
+            input.for_each(|time, data| {
                 func(&time, &data[..]);
                 output.session(&time).give_content(data);
-            }
+            });
         })
     }
 }

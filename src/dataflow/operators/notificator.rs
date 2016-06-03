@@ -91,10 +91,11 @@ impl<T: Timestamp> Notificator<T> {
     /// `logic` receives a capability for `t`, the timestamp being notified and a `count`
     /// representing how many capabilities were requested for that specific timestamp.
     #[inline]
-    pub fn for_each<F: FnMut(Capability<T>, u64)>(&mut self, mut logic: F) {
-        for (cap, count) in self {
+    pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
+        while let Some((cap, count)) = self.next() {
+        // for (cap, count) in self {
             ::logging::log(&::logging::GUARDED_PROGRESS, true);
-            logic(cap, count);
+            logic(cap, count, self);
             ::logging::log(&::logging::GUARDED_PROGRESS, false);
         }
     }
