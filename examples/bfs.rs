@@ -74,7 +74,7 @@ fn main() {
                                   .push(data.replace_with(Vec::new()));
                     });
 
-                    notify.for_each(|time, _num| {
+                    notify.for_each(|time, _num, _notify| {
 
                         // maybe process the graph
                         if time.inner == 0 {
