@@ -18,6 +18,7 @@ use dataflow::channels::pushers::buffer::Buffer;
 
 use dataflow::{Stream, Scope};
 
+/// Converts to a timely `Stream`.
 pub trait ToStream<T: Timestamp, D: Data> {
     /// Converts to a timely `Stream`.
     ///

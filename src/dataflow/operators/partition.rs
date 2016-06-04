@@ -66,14 +66,14 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
     }
 }
 
-pub struct Operator<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
+struct Operator<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
     input:   PullCounter<T, D>,
     outputs: Vec<PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>>,
     route:    F,
 }
 
 impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operator<T, D, D2, F> {
-    pub fn new(input: PullCounter<T, D>, outputs: Vec<Tee<T, D2>>, route: F) -> Operator<T, D, D2, F> {
+    fn new(input: PullCounter<T, D>, outputs: Vec<Tee<T, D2>>, route: F) -> Operator<T, D, D2, F> {
         Operator {
             input:      input,
             outputs:    outputs.into_iter().map(|x| PushBuffer::new(PushCounter::new(x, Rc::new(RefCell::new(CountMap::new()))))).collect(),

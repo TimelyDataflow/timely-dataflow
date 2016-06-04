@@ -1,3 +1,5 @@
+//! A child dataflow scope, used to build nested dataflow scopes.
+
 use std::cell::RefCell;
 
 use progress::{Timestamp, Operate, Subgraph};
@@ -11,12 +13,18 @@ use super::Scope;
 /// A `Child` wraps a `Subgraph` and a parent `G: Scope`. It manages the addition
 /// of `Operate`s to a subgraph, and the connection of edges between them.
 pub struct Child<'a, G: Scope, T: Timestamp> {
+    /// The subgraph under assembly.
     pub subgraph: &'a RefCell<Subgraph<G::Timestamp, T>>,
+    /// A copy of the child's parent scope.
     pub parent:   G,
 }
 
 impl<'a, G: Scope, T: Timestamp> Child<'a, G, T> {
+    /// This worker's unique identifier. 
+    ///
+    /// Ranges from `0` to `self.peers() - 1`. 
     pub fn index(&self) -> usize { self.parent.index() }
+    /// The total number of workers in the computation.
     pub fn peers(&self) -> usize { self.parent.peers() }
 }
 

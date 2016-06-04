@@ -1,3 +1,6 @@
+//! Buffering and session mechanisms to provide the appearance of record-at-a-time sending, 
+//! with the performance of batched sends.
+
 use dataflow::channels::Content;
 use progress::Timestamp;
 use dataflow::operators::Capability;
@@ -30,7 +33,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
         self.time = Some(time.clone());
         Session { buffer: self }
     }
-
+    /// Allocates a new `AutoflushSession` which flushes itself on drop.
     pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, D, P> where T: Timestamp {
         if let Some(true) = self.time.as_ref().map(|x| *x != cap.time()) { self.flush(); }
         self.time = Some(cap.time());
@@ -122,26 +125,29 @@ impl<'a, T, D, P: Push<(T, Content<D>)>+'a> Session<'a, T, D, P>  where T: Eq+Cl
     }
 }
 
+/// A session which will flush itself when dropped.
 pub struct AutoflushSession<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> where
     T: Eq+Clone+'a, D: 'a {
-
-    pub buffer: &'a mut Buffer<T, D, P>,
-    pub capability: Capability<T>,
+    /// A reference to the underlying buffer.
+    buffer: &'a mut Buffer<T, D, P>,
+    /// The capability being used to send the data.
+    capability: Capability<T>,
 }
 
 impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {
+    /// Transmits a single record.
     #[inline(always)]
     pub fn give(&mut self, data: D) {
         self.buffer.give(data);
     }
-
+    /// Transmits records produced by an iterator.
     #[inline(always)]
     pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
         for item in iter {
             self.give(item);
         }
     }
-
+    /// Transmits a pre-packed batch of data.
     #[inline(always)]
     pub fn give_content(&mut self, message: &mut Content<D>) {
         if message.len() > 0 {

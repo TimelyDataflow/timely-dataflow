@@ -23,15 +23,42 @@ use progress::nested::product::Product;
 // the Subgraph itself. An identifier greater than zero corresponds to an actual child, which can
 // be found at position (id - 1) in the `children` field of the Subgraph.
 
+/// Names a source of a data stream.
+///
+/// A source of data is either a child output, or an input from a parent.
+/// Conventionally, `index` zero is used for parent input.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub struct Source { pub index: usize, pub port: usize, }
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub struct Target { pub index: usize, pub port: usize, }
+pub struct Source { 
+    /// Index of the source operator.
+    pub index: usize, 
+    /// Number of the output port from the operator.
+    pub port: usize, 
+}
 
+/// Names a target of a data stream.
+///
+/// A target of data is either a child input, or an output to a parent.
+/// Conventionally, `index` zero is used for parent output.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct Target { 
+    /// Index of the target operator.
+    pub index: usize, 
+    /// Nmuber of the input port to the operator.
+    pub port: usize, 
+}
+
+/// A dataflow subgraph.
+///
+/// The subgraph type contains the infrastructure required to describe the topology of and track
+/// progress within a dataflow subgraph. 
 pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
 
     name: String,
+
+    /// A sequence of integers uniquely identifying the subgraph.
     pub path: Vec<usize>,
+
+    /// The index assigned to the subgraph by its parent.
     pub index: usize,
 
     inputs: usize,
@@ -568,6 +595,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         // }
     }
 
+    /// Allocates a new input to the subgraph and returns the assigned index.
     pub fn new_input(&mut self, shared_counts: Rc<RefCell<CountMap<Product<TOuter, TInner>>>>) -> usize {
         self.inputs += 1;
         self.input_messages.push(shared_counts);
@@ -575,6 +603,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         self.inputs - 1
     }
 
+    /// Allocates a new output from the subgraph and returns the assigned index.
     pub fn new_output(&mut self) -> usize {
         self.outputs += 1;
         self.output_capabilities.push(MutableAntichain::new());
@@ -582,12 +611,15 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         self.outputs - 1
     }
 
+    /// Introduces a dependence from the source to the target.
+    ///
+    /// This method does not effect data movement, but rather reveals to the progress tracking infrastructure
+    /// that messages produced by `source` should be expected to be consumed at `target`.
     pub fn connect(&mut self, source: Source, target: Target) {
         self.edge_stash.push((source, target));
     }
 
-
-
+    /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
     pub fn new_from<A: Allocate>(allocator: &mut A, index: usize, mut path: Vec<usize>) -> Subgraph<TOuter, TInner> {
         let progcaster = Progcaster::new(allocator);
         path.push(index);
@@ -618,12 +650,13 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         }
     }
 
+    /// Allocates a new child identifier, for later use.
     pub fn allocate_child_id(&mut self) -> usize {
         self.child_count += 1;
-        // println!("returning allocation: {}", self.child_count - 1);
         self.child_count - 1
     }
 
+    /// Adds a new child to the subgraph.
     pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize, identifier: usize) {
         self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier))
     }

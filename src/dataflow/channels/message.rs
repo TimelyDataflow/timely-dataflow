@@ -8,15 +8,21 @@ use timely_communication::{Serialize, Push};
 use std::ops::{Deref, DerefMut};
 use abomonation::{Abomonation, encode, decode};
 
+/// A serializable representation of timestamped data.
 #[derive(Clone)]
 pub struct Message<T, D> {
+    /// The timestamp associated with the message.
     pub time: T,
+    /// The data in the message.
     pub data: Content<D>,
+    /// The source worker.
     pub from: usize,
+    /// A sequence number for this worker-to-worker stream.
     pub seq: usize,
 }
 
 impl<T, D> Message<T, D> {
+    /// Allocates a new message from a time, content, source worker id, and sequence number.
     #[inline]
     pub fn new(time: T, data: Content<D>, from: usize, seq: usize) -> Message<T, D> {
         Message {
@@ -55,10 +61,15 @@ impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
     }
 }
 
-
+/// A batch of data, represented either as serialized bytes or typed Rust objects.
 #[derive(Clone)]
 pub enum Content<D> {
-    Bytes(Vec<u8>, usize, usize),  // bytes[offset..] decodes to length elements
+    /// A serialized representation of data.
+    ///
+    /// This representation may be efficiently observed as shared references, 
+    /// but may only more expensively be converted into typed data.
+    Bytes(Vec<u8>, usize, usize),
+    /// Typed data, which may be efficiently mutated or claimed for ownership.
     Typed(Vec<D>),
 }
 
@@ -109,6 +120,7 @@ impl<D> Content<D> {
         }
     }
 
+    /// Pushes `buffer` into `pusher`, ensuring that `buffer` remains valid once returned.
     #[inline]
     pub fn push_at<T, P: Push<(T, Content<D>)>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
 
@@ -135,6 +147,10 @@ impl<D> Content<D> {
 }
 
 impl<D: Clone+Abomonation> Content<D> {
+    /// Swaps the contents with another vector.
+    ///
+    /// This method is a convenient way to take ownership of the underlying data without
+    /// needing to import the `DerefMut` trait and write horrible gunk.
     #[inline]
     pub fn replace_with(&mut self, other: Vec<D>) -> Vec<D> {
         ::std::mem::replace(self.deref_mut(), other)

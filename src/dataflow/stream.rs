@@ -28,7 +28,10 @@ pub struct Stream<S: Scope, D:Data> {
 }
 
 impl<S: Scope, D:Data> Stream<S, D> {
-
+    /// Connects the stream to a destination.
+    ///
+    /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
+    /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
     pub fn connect_to<P: Push<(S::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         ::logging::log(&::logging::CHANNELS, ::logging::ChannelsEvent {
@@ -41,11 +44,12 @@ impl<S: Scope, D:Data> Stream<S, D> {
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);
     }
-
+    /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
     pub fn new(source: Source, output: TeeHelper<S::Timestamp, D>, scope: S) -> Self {
         Stream { name: source, ports: output, scope: scope }
     }
+    /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }
-
+    /// The scope immediately containing the stream.
     pub fn scope(&self) -> S { self.scope.clone() }
 }

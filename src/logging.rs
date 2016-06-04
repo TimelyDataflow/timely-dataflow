@@ -46,6 +46,7 @@ pub trait Logger {
     fn flush(&self);
 }
 
+/// Logs events to an underlying writer.
 pub struct EventStreamLogger<T: Data, S: Write> {
     buffer: RefCell<Vec<(T,u64)>>,
     stream: RefCell<Option<EventWriter<Product<RootTimestamp, u64>, (T,u64), S>>>,
@@ -139,13 +140,43 @@ pub fn flush_logs() {
     GUARDED_PROGRESS.with(|x| x.flush());
 }
 
-thread_local!(pub static OPERATES: EventStreamLogger<OperatesEvent, File> = EventStreamLogger::new());
-thread_local!(pub static CHANNELS: EventStreamLogger<ChannelsEvent, File> = EventStreamLogger::new());
-thread_local!(pub static PROGRESS: EventStreamLogger<ProgressEvent, File> = EventStreamLogger::new());
-thread_local!(pub static MESSAGES: EventStreamLogger<MessagesEvent, File> = EventStreamLogger::new());
-thread_local!(pub static SCHEDULE: EventStreamLogger<ScheduleEvent, File> = EventStreamLogger::new());
-thread_local!(pub static GUARDED_MESSAGE: EventStreamLogger<bool, File> = EventStreamLogger::new());
-thread_local!(pub static GUARDED_PROGRESS: EventStreamLogger<bool, File> = EventStreamLogger::new());
+// This macro is stolen from durka42's pull request, #34077, which languishes in Rust's queue.
+
+macro_rules! thread_local {
+    ($(#[$attr:meta])* static $name:ident: $t:ty = $init:expr; $($rest:tt)+) => (
+        thread_local!($(#[$attr])* static $name: $t = $init);
+        thread_local!($($rest)*);
+    );
+    ($(#[$attr:meta])* static $name:ident: $t:ty = $init:expr $(;)*) => (
+        $(#[$attr])* static $name: ::std::thread::LocalKey<$t> =
+            __thread_local_inner!($t, $init);
+    );
+    ($(#[$attr:meta])* pub static $name:ident: $t:ty = $init:expr; $($rest:tt)+) => (
+        thread_local!($(#[$attr])* pub static $name: $t = $init);
+        thread_local!($($rest)*);
+    );
+    ($(#[$attr:meta])* pub static $name:ident: $t:ty = $init:expr $(;)*) => (
+        $(#[$attr])* pub static $name: ::std::thread::LocalKey<$t> =
+            __thread_local_inner!($t, $init);
+    );
+}
+
+thread_local!{
+    /// Logs operator creation.
+    pub static OPERATES: EventStreamLogger<OperatesEvent, File> = EventStreamLogger::new();
+    /// Logs channel creation.
+    pub static CHANNELS: EventStreamLogger<ChannelsEvent, File> = EventStreamLogger::new();
+    /// Logs progress transmission.
+    pub static PROGRESS: EventStreamLogger<ProgressEvent, File> = EventStreamLogger::new();
+    /// Logs message transmission.
+    pub static MESSAGES: EventStreamLogger<MessagesEvent, File> = EventStreamLogger::new();
+    /// Logs operator scheduling.
+    pub static SCHEDULE: EventStreamLogger<ScheduleEvent, File> = EventStreamLogger::new();
+    /// Logs delivery of message to an operator input.
+    pub static GUARDED_MESSAGE: EventStreamLogger<bool, File> = EventStreamLogger::new();
+    /// Logs delivery of notification to an operator.
+    pub static GUARDED_PROGRESS: EventStreamLogger<bool, File> = EventStreamLogger::new();
+}
 
 #[derive(Debug, Clone)]
 /// The creation of an `Operate` implementor.
@@ -209,10 +240,16 @@ pub struct MessagesEvent {
 
 unsafe_abomonate!(MessagesEvent);
 
+/// Records the starting and stopping of an operator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StartStop {
+    /// Operator starts.
     Start,
-    Stop { activity: bool },
+    /// Operator stops; did it have any activity?
+    Stop { 
+        /// Did the operator perform non-trivial work.
+        activity: bool 
+    },
 }
 
 impl Abomonation for StartStop { }

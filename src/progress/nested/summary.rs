@@ -5,15 +5,20 @@ use std::default::Default;
 use std::fmt::{Display, Formatter};
 use std::fmt::Error;
 
-
 use progress::{Timestamp, PathSummary};
 use progress::nested::product::Product;
 use progress::nested::summary::Summary::{Local, Outer};
 
+/// Summarizes a path within a scope.
+///
+/// The path summary can either be entirely local to the scope (`Local`) or it may leave
+/// the scope and return (`Outer`).
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Summary<S, T> {
-    Local(T),    // reachable within inner scope.
-    Outer(S, T), // unreachable within scope, reachable through outer scope and then inner.
+    /// Reachable within the scope, and a summary adjusting only the inner coordinate.
+    Local(T),
+    /// Reachable outside the scope, with adjustments to both coordinates.
+    Outer(S, T),
 }
 
 impl<S, T: Default> Default for Summary<S, T> {

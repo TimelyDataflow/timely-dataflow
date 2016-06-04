@@ -8,15 +8,20 @@ use progress::nested::summary::Summary;
 
 use abomonation::Abomonation;
 
+/// A nested pair of timestamps, one outer and one inner.
+///
 /// We use `Product` rather than `(TOuter, TInner)` so that we can derive our own `PartialOrd`,
 /// because Rust just uses the lexicographic total order.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord)]
 pub struct Product<TOuter, TInner> {
+    /// Outer timestamp.
     pub outer: TOuter,
+    /// Inner timestamp.
     pub inner: TInner,
 }
 
 impl<TOuter, TInner> Product<TOuter, TInner> {
+    /// Creates a new product from outer and inner coordinates.
     pub fn new(outer: TOuter, inner: TInner) -> Product<TOuter, TInner> {
         Product {
             outer: outer,

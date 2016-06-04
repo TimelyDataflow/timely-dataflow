@@ -72,7 +72,7 @@ impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T> {
 }
 
 // implementation of the feedback vertex, essentially, as an observer
-pub struct Observer<TOuter: Timestamp, TInner: Timestamp, D:Data> {
+struct Observer<TOuter: Timestamp, TInner: Timestamp, D:Data> {
     limit:      TInner,
     summary:    TInner::Summary,
     targets:    Counter<Product<TOuter, TInner>, D, Tee<Product<TOuter, TInner>, D>>,

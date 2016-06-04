@@ -19,6 +19,7 @@ pub struct Notificator<T: Timestamp> {
 }
 
 impl<T: Timestamp> Notificator<T> {
+    /// Allocates a new `Notificator`.
     pub fn new() -> Notificator<T> {
         Notificator {
             pending: Vec::new(),

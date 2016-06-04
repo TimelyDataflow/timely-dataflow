@@ -67,6 +67,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
         }
     }
 
+    /// Removes all elements from the antichain.
     pub fn clear(&mut self) {
         self.occurrences.clear();
         self.precedents.clear();
@@ -106,16 +107,20 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
 
     // TODO : Four different versions of basically the same code. Fix that!
     // TODO : Should this drain updates through to the CM? Check out uses!
+    /// Incorporates `updates` into the antichain, pushing frontier changes into `results`.
     pub fn update_into_cm(&mut self, updates: &CountMap<T>, results: &mut CountMap<T>) -> () {
         self.update_iter_and(updates.iter().cloned(), |time, val| { results.update(time, val); });
     }
 
+    /// Performs a single update to the antichain, pushing frontier changes into `results`.
     pub fn update_weight(&mut self, elem: &T, delta: i64, results: &mut CountMap<T>) -> () {
         self.update_and(elem, delta, |time, delta| { results.update(time, delta); });
     }
 
+    /// Applies a single update to the antichain.
     #[inline] pub fn update(&mut self, elem: &T, delta: i64) { self.update_and(elem, delta, |_,_| {}); }
 
+    /// Applies updates to the antichain and applies `action` to each frontier change. 
     //#[inline(always)]
     pub fn update_iter_and<I: Iterator<Item = (T, i64)>,
                            A: FnMut(&T, i64) -> ()>(&mut self, updates: I, mut action: A) -> () {
@@ -124,6 +129,10 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
         }
     }
 
+    /// Tests the size of the antichain against a threshould.
+    ///
+    /// This is a diagnostic method in place to observe when antichains become surprisingly large.
+    /// If either `self.occurrences` or `self.precedents` exceeds the threshold, they are listed.
     #[inline]
     pub fn test_size(&self, threshold: usize, name: &str) {
         if self.occurrences.len() > threshold {
@@ -136,6 +145,7 @@ impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
         }
     }
 
+    /// Applies an update to the antichain and takes an action on any frontier changes.
     #[inline]
     pub fn update_and<A: FnMut(&T, i64)->()>(&mut self, elem: &T, delta: i64, mut action: A) -> () {
 

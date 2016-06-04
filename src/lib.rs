@@ -1,4 +1,3 @@
-
 //! Timely dataflow is framework for managing and executing data-parallel dataflow computations.
 //!
 //! The code is organized in crates and modules that are meant to depend as little as possible on each other.
@@ -56,6 +55,8 @@
 //! input using `new_input`, and add a dataflow `inspect` operator to print each observed record.
 //! We then introduce input at increasing rounds, indicate the advance to the system (promising
 //! that we will introduce no more input at prior rounds), and step the computation.
+
+#![forbid(missing_docs)]
 
 #[macro_use]
 extern crate abomonation;

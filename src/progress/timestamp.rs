@@ -13,7 +13,8 @@ use abomonation::Abomonation;
 // TODO : Change Copy requirement to Clone;
 /// A composite trait for types that serve as timestamps in timely dataflow.
 pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Any+Abomonation {
-    type Summary : PathSummary<Self> + 'static;   // summarizes cumulative action of Timestamp along a path
+    /// A type summarizing action on a timestamp along a dataflow path.
+    type Summary : PathSummary<Self> + 'static;
 }
 
 // TODO : Change Copy requirement to Clone

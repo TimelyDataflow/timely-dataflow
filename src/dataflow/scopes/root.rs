@@ -1,3 +1,5 @@
+//! The root scope of all timely dataflow computations.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -19,6 +21,7 @@ pub struct Root<A: Allocate> {
 }
 
 impl<A: Allocate> Root<A> {
+    /// Allocates a new `Root` bound to a channel allocator.
     pub fn new(c: A) -> Root<A> {
         let mut result = Root {
             allocator: Rc::new(RefCell::new(c)),

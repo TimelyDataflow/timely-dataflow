@@ -1,3 +1,5 @@
+//! Parallelization contracts, describing requirements for data movement along dataflow edges.
+
 use std::marker::PhantomData;
 
 use timely_communication::{Allocate, Push, Pull, Data};
@@ -8,12 +10,13 @@ use dataflow::channels::{Message, Content};
 
 use abomonation::Abomonation;
 
-// A ParallelizationContract transforms the output of a Allocate to an (Observer, Pullable).
+/// A ParallelizationContract transforms the output of a Allocate to an (Observer, Pullable).
 pub trait ParallelizationContract<T: 'static, D: 'static> {
+    /// Alloctes a matched pair of push and pull endpoints implementing the pact.
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>);
 }
 
-// direct connection
+/// A direct connection
 pub struct Pipeline;
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>) {
@@ -25,9 +28,10 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     }
 }
 
-// exchanges between multiple observers
+/// An exchange between multiple observers
 pub struct Exchange<D, F: Fn(&D)->u64+'static> { hash_func: F, phantom: PhantomData<D>, }
 impl<D, F: Fn(&D)->u64> Exchange<D, F> {
+    /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new(func: F) -> Exchange<D, F> {
         Exchange {
             hash_func:  func,
@@ -47,6 +51,7 @@ impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> Parall
     }
 }
 
+/// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
 pub struct Pusher<T, D> {
     pusher: Box<Push<Message<T, D>>>,
     channel: usize,
@@ -55,6 +60,7 @@ pub struct Pusher<T, D> {
     target: usize,
 }
 impl<T, D> Pusher<T, D> {
+    /// Allocates a new pusher.
     pub fn new(pusher: Box<Push<Message<T, D>>>, source: usize, target: usize, channel: usize) -> Pusher<T, D> {
         Pusher {
             pusher: pusher,
@@ -90,6 +96,7 @@ impl<T, D> Push<(T, Content<D>)> for Pusher<T, D> {
     }
 }
 
+/// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
 pub struct Puller<T, D> {
     puller: Box<Pull<Message<T, D>>>,
     current: Option<(T, Content<D>)>,
@@ -98,6 +105,7 @@ pub struct Puller<T, D> {
     index: usize,
 }
 impl<T, D> Puller<T, D> {
+    /// Allocates a new `Puller`.
     pub fn new(puller: Box<Pull<Message<T, D>>>, index: usize, channel: usize) -> Puller<T, D> {
         Puller {
             puller: puller,

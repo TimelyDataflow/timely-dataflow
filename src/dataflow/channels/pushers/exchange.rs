@@ -1,9 +1,11 @@
+//! The exchange pattern distributes pushed data between many target pushees. 
+
 use {Push, Data};
 use dataflow::channels::Content;
 use abomonation::Abomonation;
 
-// an observer routing between multiple pushers
 // TODO : Software write combining
+/// Distributes records among target pushees according to a distribution function.
 pub struct Exchange<T, D, P: Push<(T, Content<D>)>, H: Fn(&D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<Vec<D>>,
@@ -12,6 +14,7 @@ pub struct Exchange<T, D, P: Push<(T, Content<D>)>, H: Fn(&D) -> u64> {
 }
 
 impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&D)->u64>  Exchange<T, D, P, H> {
+    /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {

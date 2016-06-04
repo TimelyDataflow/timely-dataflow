@@ -198,6 +198,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
 /// Data and progres events of the captured stream.
 #[derive(Debug)]
 pub enum Event<T, D> {
+    /// An initial marker, used only to start the linked list implementation.
     Start,
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
@@ -205,7 +206,48 @@ pub enum Event<T, D> {
     Messages(T, Vec<D>),
 }
 
+/// Supports extracting a sequence of timestamp and data.
 pub trait Extract<T: Ord, D: Ord> {
+    /// Converts `self` into a sequence of timestamped data.
+    /// 
+    /// Currently this is only implemented for `Receiver<Event<T, D>>`, and is used only
+    /// to easily pull data out of a timely dataflow computation once it has completed.
+    ///
+    /// #Examples
+    ///
+    /// ```
+    /// use std::rc::Rc;
+    /// use std::sync::{Arc, Mutex};
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
+    /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
+    ///
+    /// // get send and recv endpoints, wrap send to share
+    /// let (send, recv) = ::std::sync::mpsc::channel();
+    /// let send = Arc::new(Mutex::new(send));
+    ///
+    /// timely::execute(timely::Configuration::Thread, move |computation| {
+    ///
+    ///     // this is only to validate the output.
+    ///     let send = send.lock().unwrap().clone();
+    ///
+    ///     // these are to capture/replay the stream.
+    ///     let handle1 = Rc::new(EventLink::new());
+    ///     let handle2 = handle1.clone();
+    ///
+    ///     computation.scoped::<u64,_,_>(|scope1|
+    ///         (0..10).to_stream(scope1)
+    ///                .capture_into(handle1)
+    ///     );
+    ///
+    ///     computation.scoped(|scope2| {
+    ///         handle2.replay_into(scope2)
+    ///                .capture_into(send)
+    ///     });
+    /// }).unwrap();
+    ///
+    /// assert_eq!(recv.extract()[0].1, (0..10).collect::<Vec<_>>());
+    /// ```
     fn extract(self) -> Vec<(T, Vec<D>)>;
 }
 
@@ -269,7 +311,12 @@ pub struct EventLink<T, D> {
     pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
 }
 
-impl<T, D> EventLink<T, D> { pub fn new() -> EventLink<T, D> { EventLink { event: Event::Start, next: RefCell::new(None) }}}
+impl<T, D> EventLink<T, D> { 
+    /// Allocates a new `EventLink`.
+    /// 
+    /// This could be improved with the knowledge that the first event should always be a frontier(default).
+    /// We could, in principle, remove the `Event::Start` event, and thereby no longer have to explain it.
+    pub fn new() -> EventLink<T, D> { EventLink { event: Event::Start, next: RefCell::new(None) }}}
 
 /// Iterates over contained `Event<T, D>`.
 pub trait EventIterator<T, D> {
@@ -322,6 +369,7 @@ pub struct EventWriter<T, D, W: ::std::io::Write> {
 }
 
 impl<T, D, W: ::std::io::Write> EventWriter<T, D, W> {
+    /// Allocates a new `EventWriter` wrapping a supplied writer.
     pub fn new(w: W) -> EventWriter<T, D, W> {
         EventWriter {
             buffer: vec![],
@@ -351,6 +399,7 @@ pub struct EventReader<T, D, R: ::std::io::Read> {
 }
 
 impl<T, D, R: ::std::io::Read> EventReader<T, D, R> {
+    /// Allocates a new `EventReader` wrapping a supplied reader.
     pub fn new(r: R) -> EventReader<T, D, R> {
         EventReader {
             reader: r,

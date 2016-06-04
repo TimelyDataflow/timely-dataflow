@@ -9,8 +9,9 @@ use dataflow::operators::unary::Unary;
 
 use dataflow::channels::message::Content;
 
+/// Accumulates records within a timestamp.
 pub trait Accumulate<G: Scope, D: Data> {
-    /// Counts the number of records observed at each time.
+    /// Accumulates records within a timestamp.
     ///
     /// #Examples
     ///
