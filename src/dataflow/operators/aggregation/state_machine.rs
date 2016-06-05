@@ -69,7 +69,7 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K,
         self.unary_notify(Exchange::new(move |&(ref k, _)| hash(k)), "StateMachine", vec![], move |input, output, notificator| {
 
             // stash each input and request a notification when ready
-            while let Some((time, data)) = input.next() {
+            input.for_each(|time, data| {
                 // stash if not time yet
                 if notificator.frontier(0).iter().any(|x| x.lt(&time.time())) {
                     pending.entry(time.time()).or_insert_with(Vec::new).extend(data.drain(..));
@@ -87,10 +87,10 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K,
                         session.give_iterator(output.into_iter());
                     }
                 }
-            }
+            });
 
             // go through each time with data, process each (key, val) pair.
-            for (time, _) in notificator {
+            notificator.for_each(|time,_,_| {
                 if let Some(pend) = pending.remove(&time.time()) {
                     let mut session = output.session(&time);
                     for (key, val) in pend {
@@ -102,8 +102,7 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K,
                         session.give_iterator(output.into_iter());
                     }
                 }
-            }
-
+            });
         })
     }
 }

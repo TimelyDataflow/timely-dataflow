@@ -84,24 +84,24 @@ impl<S: Scope, K: Data+Hash+Eq, V: Data> Aggregate<S, K, V> for Stream<S, (K, V)
 		self.unary_notify(Exchange::new(move |&(ref k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {
 
 			// read each input, fold into aggregates
-			while let Some((time, data)) = input.next() {
+			input.for_each(|time, data| {
 				let agg_time = aggregates.entry(time.time()).or_insert_with(HashMap::new);
 				for (key, val) in data.drain(..) {
 					let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
 					fold(&key, val, agg);
 				}
 				notificator.notify_at(time);
-			}
+			});
 
 			// pop completed aggregates, send along whatever
-			for (time, _) in notificator {
+			notificator.for_each(|time,_,_| {
 				if let Some(aggs) = aggregates.remove(&time.time()) {
 					let mut session = output.session(&time);
 					for (key, agg) in aggs {
 						session.give(emit(key, agg));
 					}
 				}
-			}
+			});
 		})
 
 	}

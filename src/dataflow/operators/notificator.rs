@@ -61,15 +61,15 @@ impl<T: Timestamp> Notificator<T> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
-    ///                while let Some((cap, data)) = input.next() {
+    ///                input.for_each(|cap, data| {
     ///                    output.session(&cap).give_content(data);
     ///                    let mut time = cap.time();
     ///                    time.inner += 1;
     ///                    notificator.notify_at(cap.delayed(&time));
-    ///                }
-    ///                while let Some((cap, count)) = notificator.next() {
+    ///                });
+    ///                notificator.for_each(|cap,_,_| {
     ///                    println!("done with time: {:?}", cap.time());
-    ///                }
+    ///                });
     ///            });
     /// });
     /// ```

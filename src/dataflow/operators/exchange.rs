@@ -25,9 +25,9 @@ pub trait Exchange<D: Data> {
 impl<G: Scope, D: Data> Exchange<D> for Stream<G, D> {
     fn exchange<F: Fn(&D)->u64+'static>(&self, route: F) -> Stream<G, D> {
         self.unary_stream(ExchangePact::new(route), "Exchange", |input, output| {
-            while let Some((time, data)) = input.next() {
+            input.for_each(|time, data| {
                 output.session(&time).give_content(data);
-            }
+            });
         })
     }
 }

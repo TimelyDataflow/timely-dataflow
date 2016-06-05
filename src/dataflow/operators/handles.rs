@@ -86,11 +86,11 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_stream(Pipeline, "example", |input, output| {
-    ///                while let Some((cap, data)) = input.next() {
+    ///                input.for_each(|cap, data| {
     ///                    let mut time = cap.time();
     ///                    time.inner += 1;
     ///                    output.session(&cap.delayed(&time)).give_content(data);
-    ///                }
+    ///                });
     ///            });
     /// });
     /// ```

@@ -37,9 +37,9 @@ pub trait Unary<G: Scope, D1: Data> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_stream(Pipeline, "example", |input, output| {
-    ///                while let Some((time, data)) = input.next() {
+    ///                input.for_each(|time, data| {
     ///                    output.session(&time).give_content(data);
-    ///                }
+    ///                });
     ///            });
     /// });
     /// ```
@@ -62,13 +62,13 @@ pub trait Unary<G: Scope, D1: Data> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
-    ///                while let Some((time, data)) = input.next() {
+    ///                input.for_each(|time, data| {
     ///                    output.session(&time).give_content(data);
     ///                    notificator.notify_at(time);
-    ///                }
-    ///                while let Some((time, count)) = notificator.next() {
+    ///                });
+    ///                notificator.for_each(|time,_,_| {
     ///                    println!("done with time: {:?}", time.time());
-    ///                }
+    ///                });
     ///            });
     /// });
     /// ```

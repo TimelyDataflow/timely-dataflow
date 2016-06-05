@@ -32,10 +32,10 @@ pub trait Delay<G: Scope, D: Data> {
     ///     (0..10).to_stream(scope)
     ///            .delay(|data, time| RootTimestamp::new(*data))
     ///            .unary_stream(Pipeline, "example", |input, output| {
-    ///                while let Some((time, data)) = input.next() {
+    ///                input.for_each(|time, data| {
     ///                    println!("data at time: {:?}", time);
     ///                    output.session(&time).give_content(data);
-    ///                }
+    ///                });
     ///            });
     /// });
     /// ```    
@@ -61,10 +61,10 @@ pub trait Delay<G: Scope, D: Data> {
     ///     (0..10).to_stream(scope)
     ///            .delay_batch(|time| RootTimestamp::new(time.inner + 1))
     ///            .unary_stream(Pipeline, "example", |input, output| {
-    ///                while let Some((time, data)) = input.next() {
+    ///                input.for_each(|time, data| {
     ///                    println!("data at time: {:?}", time);
     ///                    output.session(&time).give_content(data);
-    ///                }
+    ///                });
     ///            });
     /// });
     /// ```        
@@ -76,7 +76,7 @@ where G::Timestamp: Hash {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
-            while let Some((time, data)) = input.next() {
+            input.for_each(|time, data| {
                 for datum in data.drain(..) {
                     let new_time = func(&datum, &time);
                     assert!(new_time >= time.time());
@@ -84,13 +84,14 @@ where G::Timestamp: Hash {
                             .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                             .push(datum);
                 }
-            }
+            });
+
             // for each available notification, send corresponding set
-            for (time, _count) in notificator {
+            notificator.for_each(|time,_,_| {
                 if let Some(mut data) = elements.remove(&time) {
                     output.session(&time).give_iterator(data.drain(..));
                 }
-            }
+            });
         })
     }
 
@@ -98,7 +99,7 @@ where G::Timestamp: Hash {
         let mut stash = Vec::new();
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
-            while let Some((time, data)) = input.next() {
+            input.for_each(|time, data| {
                 let new_time = func(&time);
                 assert!(new_time >= time.time());
                 let spare = stash.pop().unwrap_or_else(Vec::new);
@@ -107,10 +108,10 @@ where G::Timestamp: Hash {
                 elements.entry(new_time)
                         .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                         .push(data);
-            }
+            });
 
             // for each available notification, send corresponding set
-            for (time, _count) in notificator {
+            notificator.for_each(|time,_,_| {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain(..) {
                         let mut message = Content::from_typed(&mut data);
@@ -119,7 +120,7 @@ where G::Timestamp: Hash {
                         if buffer.capacity() == Content::<D>::default_length() { stash.push(buffer); }
                     }
                 }
-            }
+            });
         })
     }
 }

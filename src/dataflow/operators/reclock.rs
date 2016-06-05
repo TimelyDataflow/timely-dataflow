@@ -5,8 +5,6 @@ use dataflow::{Stream, Scope};
 use dataflow::channels::pact::Pipeline;
 use dataflow::operators::binary::Binary;
 
-use dataflow::channels::message::Content;
-
 /// Extension trait for reclocking a stream.
 pub trait Reclock<S: Scope, D: Data> {
     /// Delays records until an input is observed on the `clock` input.
@@ -58,17 +56,17 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
         self.binary_notify(clock, Pipeline, Pipeline, "Reclock", vec![], move |input1, input2, output, notificator| {
 
             // stash each data input with its timestamp.
-            while let Some((time, data)) = input1.next() {
-                stash.push((time.time(), ::std::mem::replace(data, Content::Typed(vec![]))));
-            }
+            input1.for_each(|time, data| {
+                stash.push((time.time(), data.take()));
+            });
 
             // request notification at time, to flush stash.
-            while let Some((time, _data)) = input2.next() {
+            input2.for_each(|time, _data| {
                 notificator.notify_at(time);
-            }
+            });
 
             // each time with complete stash can be flushed.
-            while let Some((cap, _)) = notificator.next() {
+            notificator.for_each(|cap,_,_| {
                 let time = cap.time();
                 let mut session = output.session(&cap);
                 for &mut (ref t, ref mut data) in &mut stash {
@@ -77,7 +75,7 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
                     }
                 }
                 stash.retain(|x| !x.0.le(&time));
-            }
+            });
         })
     }
 }

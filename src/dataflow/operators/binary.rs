@@ -39,12 +39,12 @@ pub trait Binary<G: Scope, D1: Data> {
     ///     let stream2 = (0..10).to_stream(scope);
     ///
     ///     stream1.binary_stream(&stream2, Pipeline, Pipeline, "example", |input1, input2, output| {
-    ///         while let Some((time, data)) = input1.next() {
+    ///         input1.for_each(|time, data| {
     ///             output.session(&time).give_content(data);
-    ///         }
-    ///         while let Some((time, data)) = input2.next() {
+    ///         });
+    ///         input2.for_each(|time, data| {
     ///             output.session(&time).give_content(data);
-    ///         }
+    ///         });
     ///     });
     /// });
     /// ```
@@ -72,17 +72,17 @@ pub trait Binary<G: Scope, D1: Data> {
     ///     let stream2 = (0..10).to_stream(scope);
     ///
     ///     stream1.binary_notify(&stream2, Pipeline, Pipeline, "example", Vec::new(), |input1, input2, output, notificator| {
-    ///         while let Some((time, data)) = input1.next() {
+    ///         input1.for_each(|time, data| {
     ///             output.session(&time).give_content(data);
     ///             notificator.notify_at(time);
-    ///         }
-    ///         while let Some((time, data)) = input2.next() {
+    ///         });
+    ///         input2.for_each(|time, data| {
     ///             output.session(&time).give_content(data);
     ///             notificator.notify_at(time);
-    ///         }
-    ///         while let Some((time, count)) = notificator.next() {
+    ///         });
+    ///         notificator.for_each(|time,_count,_notificator| {
     ///             println!("done with time: {:?}", time.time());
-    ///         }
+    ///         });
     ///     });
     /// });
     /// ```
