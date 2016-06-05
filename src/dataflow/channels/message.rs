@@ -84,6 +84,11 @@ pub enum Content<D> {
 // }
 
 impl<D> Content<D> {
+    /// Gives ownership of the content, leaving an empty vector behind.
+    pub fn take(&mut self) -> Content<D> {
+        ::std::mem::replace(self, Content::Typed(Vec::new()))
+    }
+
     /// Default number of elements in a typed allocated message. This could vary as a function of
     /// `std::mem::size_of::<D>()`, so is left as a method rather than a constant.
     #[inline]
