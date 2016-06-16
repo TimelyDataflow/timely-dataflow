@@ -248,3 +248,92 @@ fn notificator_delivers_notifications_in_topo_order() {
     ]);
 
 }
+
+pub struct FrontierNotificator<T: Timestamp> {
+    pending: Vec<Capability<T>>,
+    available: Vec<Capability<T>>,
+    candidates: Vec<Capability<T>>,
+}
+
+impl<T: Timestamp> FrontierNotificator<T> {
+    /// Allocates a new `Notificator`.
+    pub fn new() -> FrontierNotificator<T> {
+        FrontierNotificator {
+            pending: Vec::new(),
+            available: Vec::new(),
+            candidates: Vec::new(),
+        }
+    }
+
+    #[inline]
+    pub fn notify_at(&mut self, cap: Capability<T>) {
+        if !self.pending.iter().find(|&& ref c| c.time().eq(&cap.time())).is_some() {
+            self.pending.push(cap);
+        }
+    }
+
+    pub fn iter<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> FrontierNotificatorIterator<'a, T> {
+        FrontierNotificatorIterator {
+            notificator: self,
+            frontiers: frontiers,
+        }
+    }
+
+    fn next(&mut self, frontiers: &[& MutableAntichain<T>]) -> Option<Capability<T>> {
+        if self.available.is_empty() {
+            let mut available = &mut self.available; // available is empty
+            let mut pending = &mut self.pending;
+            let mut candidates = &mut self.candidates;
+            assert!(candidates.len() == 0);
+
+            pending.drain_into_if(&mut candidates, |& ref cap| {
+                !frontiers.iter().any(|x| x.le(&cap.time()))
+            });
+
+            while let Some(cap) = candidates.pop() {
+                let mut cap_in_minimal_antichain = available.is_empty();
+                available.drain_into_if(&mut pending, |& ref avail_cap| {
+                    let cap_lt_available = cap.time().lt(&avail_cap.time());
+                    cap_in_minimal_antichain |= cap_lt_available ||
+                        cap.time().partial_cmp(&avail_cap.time()).is_none();
+                    cap_lt_available
+                });
+                if cap_in_minimal_antichain {
+                    available.push(cap);
+                } else {
+                    pending.push(cap);
+                }
+            }
+        }
+
+        self.available.pop()
+    }
+
+    #[inline]
+    pub fn for_each<F: FnMut(Capability<T>, &mut FrontierNotificator<T>)>(&mut self, frontiers: &[&MutableAntichain<T>], mut logic: F) {
+        while let Some(cap) = self.next(frontiers) {
+            ::logging::log(&::logging::GUARDED_PROGRESS, true);
+            logic(cap, self);
+            ::logging::log(&::logging::GUARDED_PROGRESS, false);
+        }
+    }
+}
+
+pub struct FrontierNotificatorIterator<'a, T: Timestamp> {
+    notificator: &'a mut FrontierNotificator<T>,
+    frontiers: &'a [&'a MutableAntichain<T>],
+}
+
+impl<'a, T: Timestamp> Iterator for FrontierNotificatorIterator<'a, T> {
+    type Item = Capability<T>;
+
+    /// Retrieve the next available notification.
+    ///
+    /// Returns `None` if no notification is available. Returns `Some(cap, count)` otherwise:
+    /// `cap` is a a capability for `t`, the timestamp being notified and, `count` represents
+    /// how many notifications (out of those requested) are being delivered for that specific
+    /// timestamp.
+    fn next(&mut self) -> Option<Capability<T>> {
+        self.notificator.next(self.frontiers)
+    }
+}

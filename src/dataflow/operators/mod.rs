@@ -62,6 +62,7 @@ pub use self::handles::{InputHandle, OutputHandle};
 
 mod notificator;
 pub use self::notificator::Notificator;
+pub use self::notificator::FrontierNotificator;
 
 // keep "mint" module-private
 mod capability;
