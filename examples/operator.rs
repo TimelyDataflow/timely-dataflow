@@ -4,14 +4,9 @@ extern crate timely_communication;
 use std::collections::HashMap;
 
 use timely_communication::Configuration;
-use timely::dataflow::operators::{ToStream, Input};
-use timely::dataflow::operators::{Operator, FrontierNotificator};
+use timely::dataflow::operators::{ToStream, Input, Inspect, Operator, FrontierNotificator};
 use timely::dataflow::channels::pact::Pipeline;
 use timely::progress::timestamp::RootTimestamp;
-use timely::dataflow::operators::{InputHandle, OutputHandle, Inspect};
-use timely::progress::Antichain;
-use timely::dataflow::channels::pushers::Tee;
-use timely::dataflow::scopes::Root;
 use timely::dataflow::Scope;
 
 fn main() {
@@ -72,7 +67,7 @@ fn main() {
         let (mut in1, mut in2) = root.scoped(|scope| {
             let (in1_handle, in1) = scope.new_input();
             let (in2_handle, in2) = scope.new_input();
-            in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut builder| {
+            in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _builder| {
                 let mut notificator = FrontierNotificator::new();
                 let mut stash = HashMap::new();
                 move |(input1, frontier1), (input2, frontier2), output| {

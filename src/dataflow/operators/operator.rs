@@ -4,7 +4,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
-use std::marker::PhantomData;
 
 use timely_communication::Push;
 use dataflow::channels::message::Content;
@@ -12,7 +11,6 @@ use dataflow::channels::message::Content;
 use progress::nested::subgraph::{Source, Target};
 
 use progress::count_map::CountMap;
-use dataflow::operators::Notificator;
 use progress::{Timestamp, Operate, Antichain};
 use progress::frontier::MutableAntichain;
 use dataflow::channels::pushers::{Tee, TeeHelper};
@@ -212,7 +210,7 @@ fn unary_base<G: Scope, D1: Data, D2: Data, P>(
     // input channel
     let channel_id = scope.new_identifier();
     let (sender, receiver) = pact.connect(&mut scope, channel_id);
-    let mut input = PullCounter::new(receiver);
+    let input = PullCounter::new(receiver);
 
     let (targets, registrar) = Tee::<G::Timestamp,D2>::new();
     (input, (sender, channel_id), (targets, registrar), scope)
@@ -220,7 +218,7 @@ fn unary_base<G: Scope, D1: Data, D2: Data, P>(
 
 #[inline]
 fn binary_base<G: Scope, D1: Data, D2: Data, D3: Data, P1, P2>(
-    slf: &Stream<G, D1>, other: &Stream<G, D2>, pact1: P1, pact2: P2) -> (
+    slf: &Stream<G, D1>, pact1: P1, pact2: P2) -> (
         PullCounter<G::Timestamp, D1>,
         (Box<Push<(G::Timestamp, Content<D1>)>>, usize),
         PullCounter<G::Timestamp, D2>,
@@ -238,8 +236,8 @@ fn binary_base<G: Scope, D1: Data, D2: Data, D3: Data, P1, P2>(
     let channel_id2 = scope.new_identifier();
     let (sender1, receiver1) = pact1.connect(&mut scope, channel_id1);
     let (sender2, receiver2) = pact2.connect(&mut scope, channel_id2);
-    let mut input1 = PullCounter::new(receiver1);
-    let mut input2 = PullCounter::new(receiver2);
+    let input1 = PullCounter::new(receiver1);
+    let input2 = PullCounter::new(receiver2);
 
     let (targets, registrar) = Tee::<G::Timestamp, D3>::new();
     (input1, (sender1, channel_id1),
@@ -328,7 +326,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let (mut input1, (sender1, channel_id1),
              mut input2, (sender2, channel_id2),
-             (targets, registrar), mut scope) = binary_base(self, other, pact1, pact2);
+             (targets, registrar), mut scope) = binary_base(self, pact1, pact2);
 
         let operator = OperatorImpl::new(
             name.to_owned(),
@@ -371,7 +369,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let (mut input1, (sender1, channel_id1),
              mut input2, (sender2, channel_id2),
-             (targets, registrar), mut scope) = binary_base(self, other, pact1, pact2);
+             (targets, registrar), mut scope) = binary_base(self, pact1, pact2);
 
         let operator = OperatorImpl::new(
             name.to_owned(),
@@ -446,6 +444,14 @@ OperatorImpl<T, L, DO> {
     }
 }
 
+fn update_frontiers<T: Timestamp>(frontiers: &mut Vec<MutableAntichain<T>>, count_maps: &mut [CountMap<T>]) {
+    for (counts, frontier) in count_maps.iter_mut().zip(frontiers.iter_mut()) {
+        while let Some((time, delta)) = counts.pop() {
+            frontier.update(&time, delta);
+        }
+    }
+}
+
 impl<T: Timestamp,
      L: FnMut(
          &mut [CountMap<T>],
@@ -474,23 +480,11 @@ Operate<T> for OperatorImpl<T, L, DO> {
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>,
                                        count_map: &mut [CountMap<T>]) {
-        // TODO use zip instead?
-        // TODO factor out
-        for (index, counts) in count_map.iter_mut().enumerate() {
-            while let Some((time, delta)) = counts.pop() {
-                self.frontier[index].update(&time, delta);
-            }
-        }
+        update_frontiers(&mut self.frontier, count_map);
     }
 
     fn push_external_progress(&mut self, count_map: &mut [CountMap<T>]) {
-        // TODO use zip instead?
-        // TODO factor out
-        for (index, counts) in count_map.iter_mut().enumerate() {
-            while let Some((time, delta)) = counts.pop() {
-                self.frontier[index].update(&time, delta);
-            }
-        }
+        update_frontiers(&mut self.frontier, count_map);
     }
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
