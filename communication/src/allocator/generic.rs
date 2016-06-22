@@ -32,7 +32,7 @@ impl Generic {
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
-    pub fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
+    pub fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
         match self {
             &mut Generic::Thread(ref mut t) => t.allocate(),
             &mut Generic::Process(ref mut p) => p.allocate(),
@@ -44,5 +44,7 @@ impl Generic {
 impl Allocate for Generic {
     fn index(&self) -> usize { self.index() }
     fn peers(&self) -> usize { self.peers() }
-    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>) { self.allocate() }
+    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) { 
+        self.allocate()
+    }
 }

@@ -24,12 +24,12 @@ impl Binary {
 impl Allocate for Binary {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T:Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
+    fn allocate<T:Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
         let mut pushers: Vec<Box<Push<T>>> = Vec::new();
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
         let inner_peers = self.inner.peers();
-        let (inner_sends, inner_recv) = self.inner.allocate();
+        let (inner_sends, inner_recv, _) = self.inner.allocate();
 
         // prep a pushable for each endpoint, multiplied by inner_peers
         for index in 0..self.readers.len() {
@@ -44,6 +44,7 @@ impl Allocate for Binary {
                     source:     self.index,
                     target:     target_index,
                     length:     0,
+                    seqno:      0,
                 };
                 pushers.push(Box::new(Pusher::new(header, self.senders[index].clone())));
             }
@@ -64,7 +65,7 @@ impl Allocate for Binary {
 
         self.allocated += 1;
 
-        return (pushers, pullable);
+        return (pushers, pullable, Some(self.allocated - 1));
     }
 }
 
@@ -92,6 +93,7 @@ impl<T:Data> Push<T> for Pusher<T> {
             let mut header = self.header;
             header.length = bytes.len();
             self.sender.send((header, bytes)).ok();     // TODO : should be unwrap()?
+            self.header.seqno += 1;
         }
     }
 }

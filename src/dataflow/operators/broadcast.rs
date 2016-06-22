@@ -35,14 +35,14 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
     fn broadcast(&self) -> Stream<G, D> {
         let mut scope = self.scope();
 
-        let (pushers, puller) = scope.allocate::<Message<G::Timestamp, D>>();
+        let (pushers, puller, comm_chan) = scope.allocate::<Message<G::Timestamp, D>>();
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
 
         let channel_id = scope.new_identifier();
 
         assert_eq!(pushers.len(), scope.peers());
 
-        let receiver = Puller::new(puller, scope.index(), channel_id);
+        let receiver = Puller::new(puller, scope.index(), channel_id, comm_chan);
 
         let operator = BroadcastOperator {
             index: scope.index(),
@@ -54,7 +54,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
         let operator_index = scope.add_operator(operator);
 
         for (i, pusher) in pushers.into_iter().enumerate() {
-            let sender = Pusher::new(pusher, scope.index(), i, channel_id);
+            let sender = Pusher::new(pusher, scope.index(), i, channel_id, comm_chan);
             self.connect_to(Target { index: operator_index, port: i }, sender, channel_id);
         }
 

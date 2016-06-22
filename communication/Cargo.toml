@@ -15,14 +15,16 @@ license = "MIT"
 [dependencies.abomonation]
 git="https://github.com/frankmcsherry/abomonation"
 
+[features]
+logging=[]
+
 [dependencies]
-#abomonation="0.4.4"
 byteorder="0.4.2"
 getopts="0.2.14"
 
-[profile.release]
 opt-level = 3
 debug = true
 rpath = false
 lto = true
 debug-assertions = false
+time="0.1.34"

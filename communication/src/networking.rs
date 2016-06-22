@@ -26,6 +26,7 @@ pub struct MessageHeader {
     pub source:     usize,   // index of worker sending message
     pub target:     usize,   // index of worker receiving message
     pub length:     usize,   // number of bytes in message
+    pub seqno:      usize,   // sequence number
 }
 
 impl MessageHeader {
@@ -40,6 +41,7 @@ impl MessageHeader {
             let source = bytes.read_u64::<LittleEndian>().unwrap() as usize;
             let target = bytes.read_u64::<LittleEndian>().unwrap() as usize;
             let length = bytes.read_u64::<LittleEndian>().unwrap() as usize;
+            let seqno  = bytes.read_u64::<LittleEndian>().unwrap() as usize;
 
             if bytes.len() >= length {
                 Some(MessageHeader {
@@ -47,6 +49,7 @@ impl MessageHeader {
                     source: source,
                     target: target,
                     length: length,
+                    seqno: seqno,
                 })
             }
             else {
@@ -63,6 +66,7 @@ impl MessageHeader {
         try!(writer.write_u64::<LittleEndian>(self.source as u64));
         try!(writer.write_u64::<LittleEndian>(self.target as u64));
         try!(writer.write_u64::<LittleEndian>(self.length as u64));
+        try!(writer.write_u64::<LittleEndian>(self.seqno as u64));
         Ok(())
     }
 }
@@ -73,19 +77,24 @@ struct BinaryReceiver<R: Read> {
     buffer:     Vec<u8>,    // current working buffer
     length:     usize,
     targets:    Switchboard<Sender<Vec<u8>>>,
+    process:    usize, // process ID this receiver belongs to
+    index:      usize, // receiver index
 }
 
 impl<R: Read> BinaryReceiver<R> {
-    fn new(reader: R, channels: Receiver<((usize, usize), Sender<Vec<u8>>)>) -> BinaryReceiver<R> {
+    fn new(reader: R, channels: Receiver<((usize, usize), Sender<Vec<u8>>)>, process: usize, index: usize) -> BinaryReceiver<R> {
         BinaryReceiver {
             reader:     reader,
             buffer:     vec![0u8; 1 << 20],
             length:     0,
             targets:    Switchboard::new(channels),
+            process:    process,
+            index:      index,
         }
     }
 
     fn recv_loop(&mut self) {
+        ::logging::initialize(self.process, "receiver", self.index);
         loop {
 
             // if we've mostly filled our buffer and still can't read a whole message from it,
@@ -101,6 +110,14 @@ impl<R: Read> BinaryReceiver<R> {
             let remaining = {
                 let mut slice = &self.buffer[..self.length];
                 while let Some(header) = MessageHeader::try_read(&mut slice) {
+                    ::logging::log(&::logging::COMMUNICATION,
+                                   ::logging::CommunicationEvent {
+                                       is_send: false,
+                                       comm_channel: header.channel,
+                                       source: header.source,
+                                       target: header.target,
+                                       seqno: header.seqno,
+                    });
                     let h_len = header.length as usize;  // length in bytes
                     let target = &mut self.targets.ensure(header.target, header.channel);
                     target.send(slice[..h_len].to_vec()).unwrap();
@@ -128,17 +145,22 @@ impl<R: Read> BinaryReceiver<R> {
 struct BinarySender<W: Write> {
     writer:     W,
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
+    process:    usize, // process ID this sender belongs to
+    index:      usize, // sender index
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)> ) -> BinarySender<W> {
+    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, process: usize, index: usize) -> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
+            process:    process,
+            index:      index,
         }
     }
 
     fn send_loop(&mut self) {
+        ::logging::initialize(self.process, "sender", self.index);
         let mut stash = Vec::new();
 
         // block until data to recv
@@ -153,6 +175,14 @@ impl<W: Write> BinarySender<W> {
 
             for (header, mut buffer) in stash.drain_temp() {
                 assert!(header.length == buffer.len());
+                ::logging::log(&::logging::COMMUNICATION,
+                               ::logging::CommunicationEvent {
+                                   is_send: true,
+                                   comm_channel: header.channel,
+                                   source: header.source,
+                                   target: header.target,
+                                   seqno: header.seqno,
+                });
                 header.write_to(&mut self.writer).unwrap();
                 self.writer.write_all(&buffer[..]).unwrap();
                 buffer.clear();
@@ -227,8 +257,13 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: u
             senders.push(sender_channels_s);    //
 
             let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()),
-                                               sender_channels_r);
-            let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), reader_channels_r);
+                                               sender_channels_r,
+                                               my_index,
+                                               index);
+            let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(),
+                                                 reader_channels_r,
+                                                 my_index,
+                                                 index);
 
             // start senders and receivers associated with this stream
             thread::Builder::new().name(format!("send thread {}", index))

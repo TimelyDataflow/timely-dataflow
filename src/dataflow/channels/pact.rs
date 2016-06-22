@@ -39,8 +39,8 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
         // ignore `&mut A` and use thread allocator
         let (pusher, puller) = Thread::new::<Message<T, D>>();
 
-        (Pusher::new(pusher, allocator.index(), allocator.index(), identifier),
-         Puller::new(puller, allocator.index(), identifier))
+        (Pusher::new(pusher, allocator.index(), allocator.index(), identifier, None),
+         Puller::new(puller, allocator.index(), identifier, None))
     }
 }
 
@@ -63,9 +63,9 @@ impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&D)->u64+'st
     type Pusher = Box<Push<(T, Content<D>)>>;
     type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
-        let (senders, receiver) = allocator.allocate::<Message<T, D>>();
-        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
-        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Puller::new(receiver, allocator.index(), identifier))
+        let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
+        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id)).collect::<Vec<_>>();
+        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Puller::new(receiver, allocator.index(), identifier, channel_id))
     }
 }
 
@@ -85,16 +85,18 @@ impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&T, &D)->u64
     type Pusher = ExchangePusher<T, D, Pusher<T, D, Box<Push<Message<T, D>>>>, F>;
     type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
-        let (senders, receiver) = allocator.allocate::<Message<T, D>>();
-        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
-        (ExchangePusher::new(senders, self.hash_func), Puller::new(receiver, allocator.index(), identifier))
+        let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
+        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id)).collect::<Vec<_>>();
+        (ExchangePusher::new(senders, self.hash_func), Puller::new(receiver, allocator.index(), identifier, channel_id))
     }
 }
+
 
 /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
 pub struct Pusher<T, D, P: Push<Message<T, D>>> {
     pusher: P,
     channel: usize,
+    comm_channel: Option<usize>,
     counter: usize,
     source: usize,
     target: usize,
@@ -102,10 +104,11 @@ pub struct Pusher<T, D, P: Push<Message<T, D>>> {
 }
 impl<T, D, P: Push<Message<T, D>>> Pusher<T, D, P> {
     /// Allocates a new pusher.
-    pub fn new(pusher: P, source: usize, target: usize, channel: usize) -> Self {
+    pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>) -> Self {
         Pusher {
             pusher: pusher,
             channel: channel,
+            comm_channel: comm_channel,
             counter: 0,
             source: source,
             target: target,
@@ -122,6 +125,7 @@ impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
             ::logging::log(&::logging::MESSAGES, ::logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
+                comm_channel: self.comm_channel,
                 source: self.source,
                 target: self.target,
                 seq_no: self.counter,
@@ -144,15 +148,17 @@ pub struct Puller<T, D, P: Pull<Message<T, D>>> {
     puller: P,
     current: Option<(T, Content<D>)>,
     channel: usize,
+    comm_channel: Option<usize>,
     counter: usize,
     index: usize,
 }
 impl<T, D, P: Pull<Message<T, D>>> Puller<T, D, P> {
     /// Allocates a new `Puller`.
-    pub fn new(puller: P, index: usize, channel: usize) -> Self {
+    pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>) -> Self {
         Puller {
             puller: puller,
             channel: channel,
+            comm_channel: comm_channel,
             current: None,
             counter: 0,
             index: index,
@@ -173,6 +179,7 @@ impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
             ::logging::log(&::logging::MESSAGES, ::logging::MessagesEvent {
                 is_send: false,
                 channel: self.channel,
+                comm_channel: self.comm_channel,
                 source: message.from,
                 target: self.index,
                 seq_no: message.seq,

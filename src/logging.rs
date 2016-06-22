@@ -157,7 +157,7 @@ thread_local!{
     /// Logs operator scheduling.
     pub static SCHEDULE: EventStreamLogger<ScheduleEvent, File> = EventStreamLogger::new();
     /// Logs application events.
-    pub static APPLICATION: EventStreamLogger<ApplicationEvent, File> = EventStreamLogger::new());
+    pub static APPLICATION: EventStreamLogger<ApplicationEvent, File> = EventStreamLogger::new();
     /// Logs delivery of message to an operator input.
     pub static GUARDED_MESSAGE: EventStreamLogger<bool, File> = EventStreamLogger::new();
     /// Logs delivery of notification to an operator.
@@ -199,6 +199,8 @@ pub struct ProgressEvent {
     pub is_send: bool,
     /// Source worker index.
     pub source: usize,
+    /// Communication channel identifier
+    pub comm_channel: Option<usize>,
     /// Message sequence number.
     pub seq_no: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
@@ -227,6 +229,8 @@ pub struct MessagesEvent {
     pub is_send: bool,
     /// Channel identifier
     pub channel: usize,
+    /// Communication channel identifier
+    pub comm_channel: Option<usize>,
     /// Source worker index.
     pub source: usize,
     /// Target worker index.

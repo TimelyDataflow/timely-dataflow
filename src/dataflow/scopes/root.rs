@@ -130,7 +130,7 @@ impl<A: Allocate> ScopeParent for Root<A> {
 impl<A: Allocate> Allocate for Root<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>) {
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>, Option<usize>) {
         self.allocator.borrow_mut().allocate()
     }
 }
