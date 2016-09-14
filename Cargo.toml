@@ -21,7 +21,7 @@ default=[]
 logging=[]
 
 [dependencies]
-abomonation="^0.4.2"
+abomonation="0.4.4"
 timely_sort="0.1.3"
 #timely_communication="^0.1.4"
 byteorder="0.4.2"
