@@ -140,27 +140,6 @@ pub fn flush_logs() {
     GUARDED_PROGRESS.with(|x| x.flush());
 }
 
-// This macro is stolen from durka42's pull request, #34077, which languishes in Rust's queue.
-
-macro_rules! thread_local {
-    ($(#[$attr:meta])* static $name:ident: $t:ty = $init:expr; $($rest:tt)+) => (
-        thread_local!($(#[$attr])* static $name: $t = $init);
-        thread_local!($($rest)*);
-    );
-    ($(#[$attr:meta])* static $name:ident: $t:ty = $init:expr $(;)*) => (
-        $(#[$attr])* static $name: ::std::thread::LocalKey<$t> =
-            __thread_local_inner!($t, $init);
-    );
-    ($(#[$attr:meta])* pub static $name:ident: $t:ty = $init:expr; $($rest:tt)+) => (
-        thread_local!($(#[$attr])* pub static $name: $t = $init);
-        thread_local!($($rest)*);
-    );
-    ($(#[$attr:meta])* pub static $name:ident: $t:ty = $init:expr $(;)*) => (
-        $(#[$attr])* pub static $name: ::std::thread::LocalKey<$t> =
-            __thread_local_inner!($t, $init);
-    );
-}
-
 thread_local!{
     /// Logs operator creation.
     pub static OPERATES: EventStreamLogger<OperatesEvent, File> = EventStreamLogger::new();
