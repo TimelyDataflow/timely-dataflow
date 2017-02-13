@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use progress::frontier::{MutableAntichain, Antichain};
+use progress::frontier::Antichain;
 use progress::{Operate, Timestamp};
 use progress::nested::subgraph::Source;
 use progress::count_map::CountMap;

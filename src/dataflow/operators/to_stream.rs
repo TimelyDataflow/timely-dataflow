@@ -9,8 +9,6 @@ use progress::{Operate, Timestamp};
 use progress::nested::subgraph::Source;
 use progress::count_map::CountMap;
 
-use timely_communication::Allocate;
-
 use Data;
 use dataflow::channels::Content;
 use dataflow::channels::pushers::{Tee, Counter};

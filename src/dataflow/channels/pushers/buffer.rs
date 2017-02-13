@@ -39,7 +39,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
         self.time = Some(cap.time());
         AutoflushSession {
             buffer: self,
-            capability: cap,
+            _capability: cap,
         }
     }
 
@@ -131,7 +131,7 @@ pub struct AutoflushSession<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> wh
     /// A reference to the underlying buffer.
     buffer: &'a mut Buffer<T, D, P>,
     /// The capability being used to send the data.
-    capability: Capability<T>,
+    _capability: Capability<T>,
 }
 
 impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {

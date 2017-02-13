@@ -69,7 +69,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use std::io::{Read, Write};
+use std::io::Write;
 use std::ops::DerefMut;
 
 use ::Data;

@@ -11,7 +11,7 @@ use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use dataflow::channels::pushers::Tee;
 use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::channels::pact::{Pusher, Puller};
-use timely_communication::{Allocate};
+
 use std::rc::Rc;
 use std::cell::RefCell;
 
