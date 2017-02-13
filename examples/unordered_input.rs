@@ -3,7 +3,7 @@ extern crate timely_communication;
 
 use timely::dataflow::operators::*;
 use timely_communication::Configuration;
-use timely::dataflow::{Stream, Scope};
+use timely::dataflow::Scope;
 use timely::progress::timestamp::RootTimestamp;
 
 fn main() {

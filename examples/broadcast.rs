@@ -3,7 +3,6 @@ extern crate timely_communication;
 
 use timely::dataflow::*;
 use timely::dataflow::operators::*;
-use timely_communication::allocator::Allocate;
 
 fn main() {
     timely::execute_from_args(std::env::args().skip(1), move |root| {

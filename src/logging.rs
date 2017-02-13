@@ -13,7 +13,6 @@ use ::progress::timestamp::RootTimestamp;
 use ::progress::nested::product::Product;
 
 use dataflow::scopes::root::Root;
-use dataflow::Scope;
 use dataflow::operators::capture::{EventWriter, Event, EventPusher};
 
 use abomonation::Abomonation;
