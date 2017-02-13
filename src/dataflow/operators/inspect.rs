@@ -30,7 +30,7 @@ pub trait Inspect<G: Scope, D: Data> {
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch<F: FnMut(&G::Timestamp, &[D])+'static>(&self, mut func: F) -> Self;
+    fn inspect_batch<F: FnMut(&G::Timestamp, &[D])+'static>(&self, func: F) -> Self;
 }
 
 impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
