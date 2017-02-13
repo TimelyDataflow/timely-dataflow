@@ -17,7 +17,7 @@ use dataflow::operators::capture::{EventWriter, Event, EventPusher};
 
 use abomonation::Abomonation;
 
-static mut precise_time_ns_delta: Option<i64> = None;
+static mut PRECISE_TIME_NS_DELTA: Option<i64> = None;
 
 /// Returns the value of an high resolution performance counter, in nanoseconds, rebased to be
 /// roughly comparable to an unix timestamp.
@@ -25,7 +25,7 @@ static mut precise_time_ns_delta: Option<i64> = None;
 /// precision of the wall clock base; clock skew effects should be taken into consideration).
 #[inline(always)]
 fn get_precise_time_ns() -> u64 {
-    (time::precise_time_ns() as i64 - unsafe { precise_time_ns_delta.unwrap() }) as u64
+    (time::precise_time_ns() as i64 - unsafe { PRECISE_TIME_NS_DELTA.unwrap() }) as u64
 }
 
 /// Logs `record` in `logger` if logging is enabled.
@@ -119,7 +119,7 @@ pub fn initialize<A: Allocate>(root: &mut Root<A>) {
     GUARDED_PROGRESS.with(|x| x.set(File::create(format!("logs/guarded_progress-{}.abom", root.index())).unwrap()));
 
     unsafe {
-        precise_time_ns_delta = Some({
+        PRECISE_TIME_NS_DELTA = Some({
             let wall_time = time::get_time();
             let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
             time::precise_time_ns() as i64 - wall_time_ns
