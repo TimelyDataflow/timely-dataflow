@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use progress::Timestamp;
 use progress::count_map::CountMap;
+use progress::frontier::MutableAntichain;
 use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::{Buffer, Session};
@@ -17,6 +18,7 @@ use dataflow::operators::capability::mint as mint_capability;
 pub struct InputHandle<'a, T: Timestamp, D: 'a> {
     pull_counter: &'a mut PullCounter<T, D>,
     internal: Rc<RefCell<CountMap<T>>>,
+    frontier: Option<&'a MutableAntichain<T>>,
 }
 
 impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
@@ -56,14 +58,20 @@ impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
             ::logging::log(&::logging::GUARDED_MESSAGE, false);
         }
     }
+
+    #[inline]
+    pub fn frontier(&self) -> &'a MutableAntichain<T> {
+        self.frontier.expect("This input does not support a frontier")
+    }
 }
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> InputHandle<'a, T, D> {
+pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>, frontier: Option<&'a MutableAntichain<T>>) -> InputHandle<'a, T, D> {
     InputHandle {
         pull_counter: pull_counter,
         internal: internal,
+        frontier: frontier,
     }
 }
 

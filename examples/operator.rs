@@ -15,7 +15,7 @@ fn main() {
             (0u64..10).to_stream(scope)
                 .unary_frontier(Pipeline, "example", |mut builder| {
                     let mut cap = Some(builder.get_cap(RootTimestamp::new(12)));
-                    move |(input, _frontier), output| {
+                    move |input, output| {
                         cap = None;
                         while let Some((time, data)) = input.next() {
                             output.session(&time).give_content(data);
@@ -70,7 +70,7 @@ fn main() {
             in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _builder| {
                 let mut notificator = FrontierNotificator::new();
                 let mut stash = HashMap::new();
-                move |(input1, frontier1), (input2, frontier2), output| {
+                move |input1, input2, output| {
                     while let Some((time, data)) = input1.next() {
                         stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
                         notificator.notify_at(time);
@@ -79,7 +79,7 @@ fn main() {
                         stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
                         notificator.notify_at(time);
                     }
-                    for time in notificator.iter(&[frontier1, frontier2]) {
+                    for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
                         if let Some(mut vec) = stash.remove(&time.time()) {
                             output.session(&time).give_iterator(vec.drain(..));
                         }

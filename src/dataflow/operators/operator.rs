@@ -97,7 +97,7 @@ pub trait Operator<G: Scope, D1: Data> {
     where
         D2: Data,
         B: Fn(OperatorBuilder<G>) -> L,
-        L: FnMut((&mut InputHandle<G::Timestamp, D1>, &MutableAntichain<G::Timestamp>), &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
@@ -162,10 +162,9 @@ pub trait Operator<G: Scope, D1: Data> {
         D2: Data,
         D3: Data,
         B: Fn(OperatorBuilder<G>) -> L,
-        L: FnMut((&mut InputHandle<G::Timestamp, D1>, &MutableAntichain<G::Timestamp>),
-                 (&mut InputHandle<G::Timestamp, D2>, &MutableAntichain<G::Timestamp>),
-                 &mut OutputHandle<G::Timestamp, D3,
-                 Tee<G::Timestamp, D3>>)+'static,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+                 &mut InputHandle<G::Timestamp, D2>,
+                 &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2>;
 
@@ -250,7 +249,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     where
         D2: Data,
         B: Fn(OperatorBuilder<G>) -> L,
-        L: FnMut((&mut InputHandle<G::Timestamp, D1>, &MutableAntichain<G::Timestamp>), &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
         let (builder, internal_changes) = builder();
@@ -264,8 +263,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
             scope.peers(),
             move |consumed, internal, frontiers, output| {
                 {
-                    let mut input_handle = new_input_handle(&mut input, internal);
-                    logic((&mut input_handle, &frontiers[0]), output);
+                    let mut input_handle = new_input_handle(&mut input, internal, Some(&frontiers[0]));
+                    logic(&mut input_handle, output);
                 }
                 input.pull_progress(&mut consumed[0]);
             },
@@ -297,7 +296,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
             scope.peers(),
             move |consumed, internal, _, output| {
                 {
-                    let mut input_handle = new_input_handle(&mut input, internal);
+                    let mut input_handle = new_input_handle(&mut input, internal, None);
                     logic(&mut input_handle, output);
                 }
                 input.pull_progress(&mut consumed[0]);
@@ -334,8 +333,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
             scope.peers(),
             move |consumed, internal, _, output| {
                 {
-                    let mut input_handle1 = new_input_handle(&mut input1, internal.clone());
-                    let mut input_handle2 = new_input_handle(&mut input2, internal);
+                    let mut input_handle1 = new_input_handle(&mut input1, internal.clone(), None);
+                    let mut input_handle2 = new_input_handle(&mut input2, internal, None);
                     logic(&mut input_handle1, &mut input_handle2, output);
                 }
                 input1.pull_progress(&mut consumed[0]);
@@ -357,10 +356,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         D2: Data,
         D3: Data,
         B: Fn(OperatorBuilder<G>) -> L,
-        L: FnMut((&mut InputHandle<G::Timestamp, D1>, &MutableAntichain<G::Timestamp>),
-                 (&mut InputHandle<G::Timestamp, D2>, &MutableAntichain<G::Timestamp>),
-                 &mut OutputHandle<G::Timestamp, D3,
-                 Tee<G::Timestamp, D3>>)+'static,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+                 &mut InputHandle<G::Timestamp, D2>,
+                 &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
@@ -377,9 +375,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
             scope.peers(),
             move |consumed, internal, frontiers, output| {
                 {
-                    let mut input_handle1 = new_input_handle(&mut input1, internal.clone());
-                    let mut input_handle2 = new_input_handle(&mut input2, internal);
-                    logic((&mut input_handle1, &frontiers[0]), (&mut input_handle2, &frontiers[1]), output);
+                    let mut input_handle1 = new_input_handle(&mut input1, internal.clone(), Some(&frontiers[0]));
+                    let mut input_handle2 = new_input_handle(&mut input2, internal, Some(&frontiers[1]));
+                    logic(&mut input_handle1, &mut input_handle2, output);
                 }
                 input1.pull_progress(&mut consumed[0]);
                 input2.pull_progress(&mut consumed[1]);
