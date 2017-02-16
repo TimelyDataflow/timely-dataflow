@@ -13,8 +13,8 @@ fn main() {
     timely::execute(Configuration::Thread, |root| {
         root.scoped(|scope| {
             (0u64..10).to_stream(scope)
-                .unary_frontier(Pipeline, "example", |mut builder| {
-                    let mut cap = Some(builder.get_cap(RootTimestamp::new(12)));
+                .unary_frontier(Pipeline, "example", |default_cap| {
+                    let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
                     move |input, output| {
                         cap = None;
                         while let Some((time, data)) = input.next() {
@@ -28,8 +28,8 @@ fn main() {
     timely::execute(Configuration::Thread, |root| {
         root.scoped(|scope| {
             (0u64..10).to_stream(scope)
-                .unary(Pipeline, "example", |mut builder| {
-                    let mut cap = Some(builder.get_cap(RootTimestamp::new(12)));
+                .unary(Pipeline, "example", |default_cap| {
+                    let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
                     move |input, output| {
                         if let Some(ref c) = cap.take() {
                             output.session(&c).give(100);
@@ -46,8 +46,8 @@ fn main() {
         root.scoped(|scope| {
             let stream2 = (0u64..10).to_stream(scope);
             (0u64..10).to_stream(scope)
-                .binary(&stream2, Pipeline, Pipeline, "example", |mut builder| {
-                    let mut cap = Some(builder.get_cap(RootTimestamp::new(12)));
+                .binary(&stream2, Pipeline, Pipeline, "example", |default_cap| {
+                    let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
                     move |input1, input2, output| {
                         if let Some(ref c) = cap.take() {
                             output.session(&c).give(100);

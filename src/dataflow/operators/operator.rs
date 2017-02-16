@@ -28,26 +28,11 @@ use ::Data;
 
 use dataflow::{Stream, Scope};
 
-/// Helper to request initial capabilities for an operator.
-pub struct OperatorBuilder<G: Scope> {
-    internal_changes: Rc<RefCell<CountMap<G::Timestamp>>>,
-}
-
-impl<G: Scope> OperatorBuilder<G> {
-    /// Obtain an initial capability at timestamp `time`.
-    pub fn get_cap(&mut self, time: G::Timestamp) -> Capability<G::Timestamp> {
-        mint_capability(time, self.internal_changes.clone())
-    }
-}
-
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeteadly invokes `logic` which can read from the input stream, write
     /// to the output stream, and inspect the frontier at the input.
-    ///
-    /// The `OperatorBuilder` provided to the function parameter can be used to request initial
-    /// capabilities.
     ///
     /// #Examples
     /// ```
@@ -71,8 +56,8 @@ pub trait Operator<G: Scope, D1: Data> {
     ///     timely::execute(Configuration::Thread, |root| {
     ///         root.scoped(|scope| {
     ///             (0u64..10).to_stream(scope)
-    ///                 .unary_frontier(Pipeline, "example", |mut builder| {
-    ///                     let mut cap = Some(builder.get_cap(RootTimestamp::new(12)));
+    ///                 .unary_frontier(Pipeline, "example", |default_cap| {
+    ///                     let mut cap = default_cap.delayed(RootTimestamp::new(12));
     ///                     let mut notificator = FrontierNotificator::new();
     ///                     let mut stash = HashMap::new();
     ///                     move |(input, frontier), output| {
@@ -96,7 +81,7 @@ pub trait Operator<G: Scope, D1: Data> {
     fn unary_frontier<D2, B, L, P>(&self, pact: P, name: &str, building: B) -> Stream<G, D2>
     where
         D2: Data,
-        B: Fn(OperatorBuilder<G>) -> L,
+        B: Fn(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
 
@@ -147,7 +132,7 @@ pub trait Operator<G: Scope, D1: Data> {
     fn unary<D2, B, L, P>(&self, pact: P, name: &str, building: B) -> Stream<G, D2>
     where
         D2: Data,
-        B: Fn(OperatorBuilder<G>) -> L,
+        B: Fn(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
 
@@ -161,7 +146,7 @@ pub trait Operator<G: Scope, D1: Data> {
     where
         D2: Data,
         D3: Data,
-        B: Fn(OperatorBuilder<G>) -> L,
+        B: Fn(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>,
                  &mut FrontieredInputHandle<G::Timestamp, D2>,
                  &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
@@ -178,20 +163,18 @@ pub trait Operator<G: Scope, D1: Data> {
     where
         D2: Data,
         D3: Data,
-        B: Fn(OperatorBuilder<G>) -> L,
+        B: Fn(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut InputHandle<G::Timestamp, D2>, &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2>;
 }
 
 #[inline]
-fn builder<G: Scope>() -> (OperatorBuilder<G>, Rc<RefCell<CountMap<G::Timestamp>>>) {
+fn make_default_cap<G: Scope>() -> (Capability<G::Timestamp>, Rc<RefCell<CountMap<G::Timestamp>>>) {
     let internal_changes = Rc::new(RefCell::new(CountMap::new()));
-    let builder = OperatorBuilder {
-        internal_changes: internal_changes.clone(),
-    };
+    let cap = mint_capability(Default::default(), internal_changes.clone());
 
-    (builder, internal_changes)
+    (cap, internal_changes)
 }
 
 #[inline]
@@ -248,12 +231,12 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     fn unary_frontier<D2, B, L, P>(&self, pact: P, name: &str, building: B) -> Stream<G, D2>
     where
         D2: Data,
-        B: Fn(OperatorBuilder<G>) -> L,
+        B: Fn(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
-        let (builder, internal_changes) = builder();
-        let mut logic = building(builder);
+        let (cap, internal_changes) = make_default_cap::<G>();
+        let mut logic = building(cap);
 
         let (mut input, (sender, channel_id), (targets, registrar), mut scope) = unary_base(self, pact);
 
@@ -281,12 +264,12 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     fn unary<D2, B, L, P>(&self, pact: P, name: &str, building: B) -> Stream<G, D2>
     where
         D2: Data,
-        B: Fn(OperatorBuilder<G>) -> L,
+        B: Fn(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
-        let (builder, internal_changes) = builder();
-        let mut logic = building(builder);
+        let (cap, internal_changes) = make_default_cap::<G>();
+        let mut logic = building(cap);
 
         let (mut input, (sender, channel_id), (targets, registrar), mut scope) = unary_base(self, pact);
 
@@ -315,13 +298,13 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     where
         D2: Data,
         D3: Data,
-        B: Fn(OperatorBuilder<G>) -> L,
+        B: Fn(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut InputHandle<G::Timestamp, D2>, &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
-        let (builder, internal_changes) = builder();
-        let mut logic = building(builder);
+        let (cap, internal_changes) = make_default_cap::<G>();
+        let mut logic = building(cap);
 
         let (mut input1, (sender1, channel_id1),
              mut input2, (sender2, channel_id2),
@@ -355,15 +338,15 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     where
         D2: Data,
         D3: Data,
-        B: Fn(OperatorBuilder<G>) -> L,
+        B: Fn(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>,
                  &mut FrontieredInputHandle<G::Timestamp, D2>,
                  &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
-        let (builder, internal_changes) = builder();
-        let mut logic = building(builder);
+        let (cap, internal_changes) = make_default_cap::<G>();
+        let mut logic = building(cap);
 
         let (mut input1, (sender1, channel_id1),
              mut input2, (sender2, channel_id2),
