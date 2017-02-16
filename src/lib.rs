@@ -61,8 +61,9 @@
 extern crate abomonation;
 extern crate timely_communication;
 extern crate time;
+extern crate timely_logging;
 
-pub use execute::{execute, execute_from_args, example};
+pub use execute::{execute, execute_logging, execute_from_args, execute_from_args_logging, example};
 pub use timely_communication::{Push, Pull, Configuration};
 pub use order::PartialOrder;
 

@@ -65,9 +65,9 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
         while let Some((cap, data)) = self.next() {
-            ::logging::log(&::logging::GUARDED_MESSAGE, true);
+            ::logging::log(&::logging::GUARDED_MESSAGE, ::timely_logging::GuardedMessageEvent { is_start: true });
             logic(cap, data);
-            ::logging::log(&::logging::GUARDED_MESSAGE, false);
+            ::logging::log(&::logging::GUARDED_MESSAGE, ::timely_logging::GuardedMessageEvent { is_start: false });
         }
     }
 

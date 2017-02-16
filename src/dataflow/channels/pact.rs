@@ -122,20 +122,24 @@ impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
     fn push(&mut self, pair: &mut Option<(T, Content<D>)>) {
         if let Some((time, data)) = pair.take() {
 
+            let length = data.len();
+
+            let counter = self.counter;
+
+            let mut message = Some(Message::new(time, data, self.source, self.counter));
+            self.counter += 1;
+            self.pusher.push(&mut message);
+            *pair = message.map(|x| (x.time, x.data));
+
             ::logging::log(&::logging::MESSAGES, ::logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
                 comm_channel: self.comm_channel,
                 source: self.source,
                 target: self.target,
-                seq_no: self.counter,
-                length: data.len(),
+                seq_no: counter,
+                length: length,
             });
-
-            let mut message = Some(Message::new(time, data, self.source, self.counter));
-            self.counter += 1;
-            self.pusher.push(&mut message);
-            *pair = message.map(|x| (x.time, x.data));
 
             // Log something about (index, counter, time?, length?);
         }

@@ -29,6 +29,10 @@ impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied allocator.
     pub fn new<A: Allocate>(allocator: &mut A, path: &Vec<usize>) -> Progcaster<T> {
         let (pushers, puller, chan) = allocator.allocate();
+        ::logging::log(&::logging::COMM_CHANNELS, ::logging::CommChannelsEvent {
+            comm_channel: chan,
+            comm_channel_kind: ::timely_logging::CommChannelKind::Progress,
+        });
         let worker = allocator.index();
         let addr = path.clone();
         Progcaster { pushers: pushers, puller: puller, source: worker,
@@ -61,6 +65,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     pusher.push(&mut Some((self.source, self.counter, messages.clone().into_inner(), internal.clone().into_inner())));
 
                 }
+
                 self.counter += 1;
 
                 messages.clear();

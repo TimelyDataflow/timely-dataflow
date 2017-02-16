@@ -88,11 +88,19 @@ impl<T> Pusher<T> {
 impl<T:Data> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(ref mut element) = *element {
+            ::logging::log(&::logging::SERIALIZATION, ::logging::SerializationEvent {
+                seq_no: Some(self.header.seqno),
+                is_start: true,
+            });
             let mut bytes = Vec::new();
             <T as Serialize>::into_bytes(element, &mut bytes);
             let mut header = self.header;
             header.length = bytes.len();
             self.sender.send((header, bytes)).ok();     // TODO : should be unwrap()?
+            ::logging::log(&::logging::SERIALIZATION, ::logging::SerializationEvent {
+                seq_no: Some(self.header.seqno),
+                is_start: false,
+            });
             self.header.seqno += 1;
         }
     }
@@ -116,7 +124,16 @@ impl<T:Data> Pull<T> for Puller<T> {
         if inner.is_some() { inner }
         else {
             self.current = self.receiver.try_recv().ok().map(|mut bytes| {
-                <T as Serialize>::from_bytes(&mut bytes)
+                ::logging::log(&::logging::SERIALIZATION, ::logging::SerializationEvent {
+                    seq_no: None,
+                    is_start: true,
+                });
+                let result = <T as Serialize>::from_bytes(&mut bytes);
+                ::logging::log(&::logging::SERIALIZATION, ::logging::SerializationEvent {
+                    seq_no: None,
+                    is_start: false,
+                });
+                result
             });
             &mut self.current
         }

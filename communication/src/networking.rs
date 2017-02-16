@@ -79,10 +79,21 @@ struct BinaryReceiver<R: Read> {
     targets:    Switchboard<Sender<Vec<u8>>>,
     process:    usize, // process ID this receiver belongs to
     index:      usize, // receiver index
+    threads:    usize,
+    logger:     Option<::logging::LogSender>,
 }
 
 impl<R: Read> BinaryReceiver<R> {
-    fn new(reader: R, channels: Receiver<((usize, usize), Sender<Vec<u8>>)>, process: usize, index: usize) -> BinaryReceiver<R> {
+    fn new(
+            reader: R,
+            channels: Receiver<((usize,
+            usize),
+            Sender<Vec<u8>>)>,
+            process: usize,
+            index: usize,
+            threads: usize,
+            logger: Option<::logging::LogSender>) -> BinaryReceiver<R> {
+        eprintln!("process {}, index {}, threads {}", process, index, threads);
         BinaryReceiver {
             reader:     reader,
             buffer:     vec![0u8; 1 << 20],
@@ -90,11 +101,13 @@ impl<R: Read> BinaryReceiver<R> {
             targets:    Switchboard::new(channels),
             process:    process,
             index:      index,
+            threads:    threads,
+            logger:     logger,
         }
     }
 
     fn recv_loop(&mut self) {
-        ::logging::initialize(self.process, "receiver", self.index);
+        ::logging::initialize(self.process, false, self.index, self.logger.clone());
         loop {
 
             // if we've mostly filled our buffer and still can't read a whole message from it,
@@ -147,20 +160,22 @@ struct BinarySender<W: Write> {
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
     process:    usize, // process ID this sender belongs to
     index:      usize, // sender index
+    logger:     Option<::logging::LogSender>,
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, process: usize, index: usize) -> BinarySender<W> {
+    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, process: usize, index: usize, logger: Option<::logging::LogSender>) -> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
             process:    process,
             index:      index,
+            logger:     logger,
         }
     }
 
     fn send_loop(&mut self) {
-        ::logging::initialize(self.process, "sender", self.index);
+        ::logging::initialize(self.process, true, self.index, self.logger.clone());
         let mut stash = Vec::new();
 
         // block until data to recv
@@ -226,7 +241,8 @@ impl<T:Send> Switchboard<T> {
 }
 
 /// Initializes network connections
-pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool) -> Result<Vec<Binary>> {
+pub fn initialize_networking(
+    addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, logger: Option<::logging::LogSender>) -> Result<Vec<Binary>> {
 
     let processes = addresses.len();
     let hosts1 = Arc::new(addresses);
@@ -259,11 +275,14 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: u
             let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()),
                                                sender_channels_r,
                                                my_index,
-                                               index);
+                                               index,
+                                               logger.clone());
             let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(),
                                                  reader_channels_r,
                                                  my_index,
-                                                 index);
+                                                 index,
+                                                 threads,
+                                                 logger.clone());
 
             // start senders and receivers associated with this stream
             thread::Builder::new().name(format!("send thread {}", index))

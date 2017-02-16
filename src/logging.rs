@@ -1,304 +1,331 @@
 //! Traits, implementations, and macros related to logging timely events.
 
-extern crate time;
 
 use std::cell::RefCell;
 use std::io::Write;
 use std::fs::File;
+use std::rc::Rc;
 
 use ::Data;
 
 use timely_communication::Allocate;
+use timely_communication;
 use ::progress::timestamp::RootTimestamp;
 use ::progress::nested::product::Product;
+use ::progress::timestamp::Timestamp;
 
 use dataflow::scopes::root::Root;
 use dataflow::operators::capture::{EventWriter, Event, EventPusher};
 
 use abomonation::Abomonation;
 
-static mut PRECISE_TIME_NS_DELTA: Option<i64> = None;
+use std::io::BufWriter;
+use std::net::TcpStream;
 
-/// Returns the value of an high resolution performance counter, in nanoseconds, rebased to be
-/// roughly comparable to an unix timestamp.
-/// Useful for comparing and merging logs from different machines (precision is limited by the
-/// precision of the wall clock base; clock skew effects should be taken into consideration).
-#[inline(always)]
-fn get_precise_time_ns() -> u64 {
-    (time::precise_time_ns() as i64 - unsafe { PRECISE_TIME_NS_DELTA.unwrap() }) as u64
-}
+use timely_logging;
+use timely_logging::Event as LogEvent;
+use timely_logging::EventsSetup;
+use timely_logging::{CommEvent, CommsSetup};
+
+use timely_communication::Logging;
+
+pub use timely_logging::OperatesEvent;
+pub use timely_logging::ChannelsEvent;
+pub use timely_logging::ProgressEvent;
+pub use timely_logging::MessagesEvent;
+pub use timely_logging::ScheduleEvent;
+pub use timely_logging::StartStop;
+pub use timely_logging::PushProgressEvent;
+pub use timely_logging::ApplicationEvent;
+pub use timely_logging::GuardedProgressEvent;
+pub use timely_logging::GuardedMessageEvent;
+pub use timely_logging::CommChannelsEvent;
 
 /// Logs `record` in `logger` if logging is enabled.
-pub fn log<T: Logger>(logger: &'static ::std::thread::LocalKey<T>, record: T::Record) {
+pub fn log<T: ::timely_logging::Logger>(logger: &'static ::std::thread::LocalKey<T>, record: T::Record) {
     if cfg!(feature = "logging") {
         logger.with(|x| x.log(record));
     }
 }
 
-/// Logging methods
-pub trait Logger {
-    /// The type of loggable record.
-    type Record;
-    /// Adds `record` to the log.
-    fn log(&self, record: Self::Record);
-    /// Called with some frequency; behavior unspecified.
-    fn flush(&self);
+/// TODO(andreal)
+pub struct TimelyLogger<V: Abomonation> where LogEvent: From<V> {
+    stream: Rc<RefCell<LogEventStream<EventsSetup, LogEvent>>>,
+    _v: ::std::marker::PhantomData<V>,
 }
 
-/// Logs events to an underlying writer.
-pub struct EventStreamLogger<T: Data, S: Write> {
-    buffer: RefCell<Vec<(T,u64)>>,
-    stream: RefCell<Option<EventWriter<Product<RootTimestamp, u64>, (T,u64), S>>>,
-    last_time: RefCell<u64>,
-}
-
-impl<T: Data, S: Write> Logger for EventStreamLogger<T, S> {
-    type Record = T;
-    #[inline]
-    fn log(&self, record: T) {
-        self.buffer.borrow_mut().push((record, get_precise_time_ns()));
-    }
-    fn flush(&self) {
-        // TODO : sends progress update even if nothing happened.
-        // TODO : consider a minimum interval from prior update to
-        // TODO : cut down on the amount on logging, at the expense 
-        // TODO : of freshness on the side of the reader.
-        if let Some(ref mut writer) = *self.stream.borrow_mut() {
-            let time = get_precise_time_ns();
-            if self.buffer.borrow().len() > 0 {
-                writer.push(Event::Messages(RootTimestamp::new(*self.last_time.borrow()), self.buffer.borrow().clone()));
-            }
-            writer.push(Event::Progress(vec![(RootTimestamp::new(*self.last_time.borrow()),-1), (RootTimestamp::new(time), 1)]));
-            *self.last_time.borrow_mut() = time;
-            self.buffer.borrow_mut().clear();
-        }
-        else {
-            panic!("logging file not initialized!!!!");
+impl<V: Abomonation> TimelyLogger<V> where LogEvent: From<V> {
+    fn new(stream: Rc<RefCell<LogEventStream<EventsSetup, LogEvent>>>) -> TimelyLogger<V> {
+        TimelyLogger {
+            stream: stream,
+            _v: ::std::marker::PhantomData,
         }
     }
 }
 
-impl<T: Data, S: Write> EventStreamLogger<T, S> {
-    fn new() -> EventStreamLogger<T, S> {
-        EventStreamLogger {
-            buffer: RefCell::new(Vec::new()),
-            stream: RefCell::new(None),
-            last_time: RefCell::new(0),
-        }
-    }
-    fn set(&self, stream: S) {
-        let mut stream = EventWriter::new(stream);
-        stream.push(Event::Progress(vec![(RootTimestamp::new(0), 1)]));
-        *self.stream.borrow_mut() = Some(stream);
-    }
-}
-
-impl<T: Data, S: Write> Drop for EventStreamLogger<T, S> {
-    fn drop(&mut self) {
-        if let Some(ref mut writer) = *self.stream.borrow_mut() {
-            if self.buffer.borrow().len() > 0 {
-                writer.push(Event::Messages(RootTimestamp::new(*self.last_time.borrow()), self.buffer.borrow().clone()));
-            }
-            writer.push(Event::Progress(vec![(RootTimestamp::new(*self.last_time.borrow()),-1)]));
-        }
-        else {
-            panic!("logging file not initialized!!!!");
-        }
+impl<V: Abomonation> ::timely_logging::Logger for TimelyLogger<V> where timely_logging::Event: From<V> {
+    type Record = V;
+    fn log(&self, record: V) {
+        self.stream.borrow_mut().log(LogEvent::from(record));
     }
 }
 
 /// Initializes logging; called as part of `Root` initialization.
 pub fn initialize<A: Allocate>(root: &mut Root<A>) {
-
-    OPERATES.with(|x| x.set(File::create(format!("logs/operates-{}.abom", root.index())).unwrap()));
-    CHANNELS.with(|x| x.set(File::create(format!("logs/channels-{}.abom", root.index())).unwrap()));
-    MESSAGES.with(|x| x.set(File::create(format!("logs/messages-{}.abom", root.index())).unwrap()));
-    PROGRESS.with(|x| x.set(File::create(format!("logs/progress-{}.abom", root.index())).unwrap()));
-    PUSH_PROGRESS.with(|x| x.set(File::create(format!("logs/push_progress-{}.abom", root.index())).unwrap()));
-    SCHEDULE.with(|x| x.set(File::create(format!("logs/schedule-{}.abom", root.index())).unwrap()));
-    APPLICATION.with(|x| x.set(File::create(format!("logs/application-{}.abom", root.index())).unwrap()));
-    GUARDED_MESSAGE.with(|x| x.set(File::create(format!("logs/guarded_message-{}.abom", root.index())).unwrap()));
-    GUARDED_PROGRESS.with(|x| x.set(File::create(format!("logs/guarded_progress-{}.abom", root.index())).unwrap()));
-
-    unsafe {
-        PRECISE_TIME_NS_DELTA = Some({
-            let wall_time = time::get_time();
-            let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
-            time::precise_time_ns() as i64 - wall_time_ns
+    eprintln!("logging: index {}/{}", root.index(), root.peers());
+    LOG_EVENT_STREAM.with(|x| {
+        x.borrow_mut().setup = Some(EventsSetup {
+            index: root.index(),
         });
-    }
-
+    });
 }
 
 /// Flushes logs; called by `Root::step`.
 pub fn flush_logs() {
-    OPERATES.with(|x| x.flush());
-    CHANNELS.with(|x| x.flush());
-    PROGRESS.with(|x| x.flush());
-    PUSH_PROGRESS.with(|x| x.flush());
-    MESSAGES.with(|x| x.flush());
-    SCHEDULE.with(|x| x.flush());
-    APPLICATION.with(|x| x.flush());
-    GUARDED_MESSAGE.with(|x| x.flush());
-    GUARDED_PROGRESS.with(|x| x.flush());
+    LOG_EVENT_STREAM.with(|x| {
+        x.borrow_mut().flush();
+    });
+}
+
+// trait ScheduleLogger {
+//     fn contains_active_ops(&self) -> bool;
+// }
+// 
+// impl<S: Write> ScheduleLogger for LogEventStream<ScheduleEvent, S> {
+//     fn contains_active_ops(&self) -> bool {
+//         self.buffer.borrow().iter().any(|&(ref evt, ts) | {
+//             match evt.start_stop {
+//                 StartStop::Stop { activity } => activity,
+//                 _ => false,
+//             }
+//         })
+//     }
+// }
+
+struct LogEventStream<S: Copy, E: Clone> {
+    setup: Option<S>,
+    writer: Option<Box<EventStreamInput<Product<RootTimestamp, u64>, (u64, S, E)>>>,
+    _s: ::std::marker::PhantomData<S>,
+    _e: ::std::marker::PhantomData<E>,
+}
+
+impl<S: Copy, E: Clone> LogEventStream<S, E> {
+    fn new() -> Self {
+        LogEventStream {
+            setup: None,
+            writer: None,
+            _s: ::std::marker::PhantomData,
+            _e: ::std::marker::PhantomData,
+        }
+    }
+
+    fn flush(&mut self) {
+        if let Some(ref mut writer) = self.writer {
+            writer.advance_by(RootTimestamp::new(::timely_logging::get_precise_time_ns()));
+        }
+    }
+
+    fn log(&mut self, record: E) {
+        if let Some(ref mut writer) = self.writer {
+            writer.send(
+                (::timely_logging::get_precise_time_ns(), self.setup.expect("logging not initialized"), record));
+        }
+    }
+}
+
+trait EventStreamInput<T: Timestamp, V: Clone> {
+    fn send(&mut self, value: V);
+    fn flush(&mut self);
+    fn advance_by(&mut self, timestamp: T);
+    fn clear(&mut self);
+}
+
+/// Logs events to an underlying writer.
+pub struct EventStreamWriter<T: Timestamp, V: Clone, P: EventPusher<T, V>> {
+    buffer: Vec<V>,
+    pusher: P, // RefCell<Option<Box<EventPusher<Product<RootTimestamp, u64>, (u64, S, E)>+Send>>>,
+    cur_time: T,
+    _v: ::std::marker::PhantomData<V>,
+}
+
+impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> EventStreamWriter<T, V, P> {
+    fn new(mut event_pusher: P) -> EventStreamWriter<T, V, P> {
+        let cur_time: T = Default::default();
+        event_pusher.push(Event::Progress(vec![(cur_time.clone(), 1)]));
+        EventStreamWriter {
+            buffer: Vec::new(),
+            pusher: event_pusher,
+            cur_time: cur_time,
+            _v: ::std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> EventStreamInput<T, V> for EventStreamWriter<T, V, P> {
+    fn send(&mut self, value: V) {
+        self.buffer.push(value);
+    }
+    fn flush(&mut self) {
+        if self.buffer.len() > 0 {
+            self.pusher.push(Event::Messages(self.cur_time.clone(), self.buffer.clone()));
+        }
+        self.buffer.clear();
+    }
+    fn advance_by(&mut self, timestamp: T) {
+        assert!(self.cur_time.less_equal(&timestamp));
+        self.flush();
+        self.pusher.push(Event::Progress(vec![(self.cur_time.clone(), -1), (timestamp.clone(), 1)]));
+        self.cur_time = timestamp;
+    }
+    fn clear(&mut self) {
+        self.buffer.clear();
+    }
+}
+
+impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> Drop for EventStreamWriter<T, V, P> {
+    fn drop(&mut self) {
+        if self.buffer.len() > 0 {
+            self.pusher.push(Event::Messages(self.cur_time.clone(), self.buffer.clone()));
+            self.buffer.clear();
+        }
+        self.pusher.push(Event::Progress(vec![(self.cur_time.clone(), -1)]));
+    }
+}
+
+// /// Special logger for ScheduleEvents
+// pub struct ScheduleLogEventStream<S: Write> {
+//     logger: LogEventStream<ScheduleEvent, S>,
+//     seen_inactive_step: RefCell<bool>,
+// }
+// 
+// impl<S: Write> ScheduleLogEventStream<S> {
+//     fn new() -> ScheduleLogEventStream<S> {
+//         ScheduleLogEventStream {
+//             logger: LogEventStream::new(),
+//             seen_inactive_step: RefCell::new(false),
+//         }
+//     }
+// 
+//     fn set(&self, stream: S) {
+//         self.logger.set(stream)
+//     }
+// 
+//     fn flush_forced(&self) {
+//         self.flush();
+//         *self.seen_inactive_step.borrow_mut() = false;
+//     }
+// 
+//     fn flush_maybe(&self) {
+//         if self.logger.contains_active_ops() {
+//             self.flush_forced();
+//             return;
+//         }
+//         if !*self.seen_inactive_step.borrow() {
+//             self.flush_forced();
+//             *self.seen_inactive_step.borrow_mut() = true
+//         } else {
+//             self.logger.clear();
+//         }
+// 
+//     }
+// }
+// 
+// impl<S: Write> Logger for ScheduleLogEventStream<S> {
+//     type Record = ScheduleEvent;
+//     fn log(&self, record: Self::Record) {
+//         self.logger.log(record)
+//     }
+//     fn flush(&self) {
+//         self.logger.flush()
+//     }
+//     // fn record_count(&self) -> usize {
+//     //     self.logger.record_count()
+//     // }
+//     // fn clear(&self) {
+//     //     self.logger.clear()
+//     // }
+// 
+// }
+
+/// TODO(andreal)
+pub fn blackhole() -> Logging {
+    Logging::new(
+        None,
+        Box::new(move || {
+            LOG_EVENT_STREAM.with(|x| {
+                x.borrow_mut().writer = None;
+            });
+        }))
+}
+
+/// TODO(andreal)
+pub fn to_tcp_socket() -> Logging {
+    let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
+    let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34254");
+    let (comms_snd, comms_rcv) = ::std::sync::mpsc::channel();
+
+    // comms
+    let comm_writer = BufWriter::with_capacity(4096,
+        TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
+    let comm_thread = ::std::thread::spawn(move || {
+        let mut writer = EventStreamWriter::new(EventWriter::new(comm_writer));
+        let mut cur_time = timely_logging::get_precise_time_ns();
+        writer.advance_by(RootTimestamp::new(cur_time));
+
+        let mut receiver = comms_rcv;
+        loop {
+            let mut new_time = timely_logging::get_precise_time_ns();
+            while let Some((ts, setup, event)) = match receiver.try_recv() {
+                Ok(msg) => {
+                    Some(msg)
+                },
+                Err(::std::sync::mpsc::TryRecvError::Empty) => None,
+                Err(::std::sync::mpsc::TryRecvError::Disconnected) => return,
+            } {
+                writer.send((ts, setup, event));
+            }
+            writer.flush();
+            writer.advance_by(RootTimestamp::new(new_time));
+            cur_time = new_time;
+        }
+    });
+
+    Logging::new(
+        Some(comms_snd),
+        Box::new(move || {
+            // timely
+            let socket = BufWriter::with_capacity(4096,
+                TcpStream::connect(&target).expect("failed to connect to logging destination"));
+            let mut timely_writer = EventStreamWriter::new(EventWriter::new(socket));
+            timely_writer.advance_by(RootTimestamp::new(timely_logging::get_precise_time_ns()));
+            LOG_EVENT_STREAM.with(|x| {
+                x.borrow_mut().writer = Some(Box::new(timely_writer));
+            });
+        }))
 }
 
 thread_local!{
+    /// TODO(andreal)
+    static LOG_EVENT_STREAM: Rc<RefCell<LogEventStream<EventsSetup, LogEvent>>> = Rc::new(RefCell::new(LogEventStream::new()));
+    /// TODO(andreal)
     /// Logs operator creation.
-    pub static OPERATES: EventStreamLogger<OperatesEvent, File> = EventStreamLogger::new();
+    pub static OPERATES: TimelyLogger<OperatesEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
     /// Logs channel creation.
-    pub static CHANNELS: EventStreamLogger<ChannelsEvent, File> = EventStreamLogger::new();
+    pub static CHANNELS: TimelyLogger<ChannelsEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
     /// Logs progress transmission.
-    pub static PROGRESS: EventStreamLogger<ProgressEvent, File> = EventStreamLogger::new();
-    /// Logs push_external_progress.
-    pub static PUSH_PROGRESS: EventStreamLogger<PushProgressEvent, File> = EventStreamLogger::new();
+    pub static PROGRESS: TimelyLogger<ProgressEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
     /// Logs message transmission.
-    pub static MESSAGES: EventStreamLogger<MessagesEvent, File> = EventStreamLogger::new();
+    pub static MESSAGES: TimelyLogger<MessagesEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
     /// Logs operator scheduling.
-    pub static SCHEDULE: EventStreamLogger<ScheduleEvent, File> = EventStreamLogger::new();
-    /// Logs application events.
-    pub static APPLICATION: EventStreamLogger<ApplicationEvent, File> = EventStreamLogger::new();
+    pub static SCHEDULE: TimelyLogger<ScheduleEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
     /// Logs delivery of message to an operator input.
-    pub static GUARDED_MESSAGE: EventStreamLogger<bool, File> = EventStreamLogger::new();
+    pub static GUARDED_MESSAGE: TimelyLogger<GuardedMessageEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
     /// Logs delivery of notification to an operator.
-    pub static GUARDED_PROGRESS: EventStreamLogger<bool, File> = EventStreamLogger::new();
+    pub static GUARDED_PROGRESS: TimelyLogger<GuardedProgressEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
+    /// Logs push_external_progress() calls for each operator
+    pub static PUSH_PROGRESS: TimelyLogger<PushProgressEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
+    /// Logs application-defined log events
+    pub static APPLICATION: TimelyLogger<ApplicationEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
+    /// Logs application-defined log events
+    pub static COMM_CHANNELS: TimelyLogger<CommChannelsEvent> = LOG_EVENT_STREAM.with(|x| TimelyLogger::new(x.clone()));
 }
-
-#[derive(Debug, Clone)]
-/// The creation of an `Operate` implementor.
-pub struct OperatesEvent {
-    /// Worker-unique identifier for the operator.
-    pub id: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
-    pub addr: Vec<usize>,
-    /// A helpful name.
-    pub name: String,
-}
-
-unsafe_abomonate!(OperatesEvent : id, addr, name);
-
-#[derive(Debug, Clone)]
-/// The creation of a channel between operators.
-pub struct ChannelsEvent {
-    /// Worker-unique identifier for the channel
-    pub id: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
-    pub scope_addr: Vec<usize>,
-    /// Source descriptor, indicating operator index and output port.
-    pub source: (usize, usize),
-    /// Target descriptor, indicating operator index and input port.
-    pub target: (usize, usize),
-}
-
-unsafe_abomonate!(ChannelsEvent : id, scope_addr, source, target);
-
-#[derive(Debug, Clone)]
-/// Send or receive of progress information.
-pub struct ProgressEvent {
-    /// `true` if the event is a send, and `false` if it is a receive.
-    pub is_send: bool,
-    /// Source worker index.
-    pub source: usize,
-    /// Communication channel identifier
-    pub comm_channel: Option<usize>,
-    /// Message sequence number.
-    pub seq_no: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
-    pub addr: Vec<usize>,
-    /// List of message updates, containing Target descriptor, timestamp as string, and delta.
-    pub messages: Vec<(usize, usize, String, i64)>,
-    /// List of capability updates, containing Source descriptor, timestamp as string, and delta.
-    pub internal: Vec<(usize, usize, String, i64)>,
-}
-
-unsafe_abomonate!(ProgressEvent : is_send, source, seq_no, addr, messages, internal);
-
-#[derive(Debug, Clone)]
-/// External progress pushed onto an operator
-pub struct PushProgressEvent {
-    /// Worker-unique operator identifier
-    pub op_id: usize,
-}
-
-unsafe_abomonate!(PushProgressEvent: op_id);
-
-#[derive(Debug, Clone)]
-/// Message send or receive event
-pub struct MessagesEvent {
-    /// `true` if send event, `false` if receive event.
-    pub is_send: bool,
-    /// Channel identifier
-    pub channel: usize,
-    /// Communication channel identifier
-    pub comm_channel: Option<usize>,
-    /// Source worker index.
-    pub source: usize,
-    /// Target worker index.
-    pub target: usize,
-    /// Message sequence number.
-    pub seq_no: usize,
-    /// Number of typed records in the message.
-    pub length: usize,
-}
-
-unsafe_abomonate!(MessagesEvent);
-
-/// Records the starting and stopping of an operator.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StartStop {
-    /// Operator starts.
-    Start,
-    /// Operator stops; did it have any activity?
-    Stop { 
-        /// Did the operator perform non-trivial work.
-        activity: bool 
-    },
-}
-
-impl Abomonation for StartStop { }
-
-#[test]
-fn start_stop_abomonation_roundtrip() {
-    use abomonation::{encode, decode};
-    fn check(data: StartStop) -> () {
-        let mut bytes = Vec::new();
-        unsafe {
-            encode(&data, &mut bytes).unwrap();
-        }
-        if let Some((result, remaining)) = unsafe { decode::<StartStop>(&mut bytes) } {
-            assert!(result == &data);
-            assert!(remaining.len() == 0);
-        }
-    }
-    for data in vec![
-        StartStop::Stop { activity: true },
-        StartStop::Stop { activity: false },
-        StartStop::Start,
-    ] {
-        check(data);
-    }
-}
-
-#[derive(Debug, Clone)]
-/// Operator start or stop.
-pub struct ScheduleEvent {
-    /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
-    pub id: usize,
-    /// `Start` if the operator is starting, `Stop` if it is stopping.
-    /// activiy is true if it looks like some useful work was performed during this call (data was
-    /// read or written, notifications were requested / delivered)
-    pub start_stop: StartStop,
-}
-
-unsafe_abomonate!(ScheduleEvent : id, start_stop);
-
-#[derive(Debug, Clone)]
-/// Application-defined code startor stop
-pub struct ApplicationEvent {
-    /// Unique event type identifier
-    pub id: usize,
-    /// True when activity begins, false when it stops 
-    pub is_start: bool,
-}
-
-unsafe_abomonate!(ApplicationEvent: id, is_start);

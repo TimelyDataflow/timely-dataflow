@@ -73,9 +73,9 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
-            ::logging::log(&::logging::GUARDED_PROGRESS, true);
+            ::logging::log(&::logging::GUARDED_PROGRESS, ::timely_logging::GuardedProgressEvent { is_start: true });
             logic(cap, count, self);
-            ::logging::log(&::logging::GUARDED_PROGRESS, false);
+            ::logging::log(&::logging::GUARDED_PROGRESS, ::timely_logging::GuardedProgressEvent { is_start: false });
         }
     }
 }
@@ -342,10 +342,14 @@ impl<T: Timestamp> FrontierNotificator<T> {
     #[inline]
     pub fn for_each<'a, F: FnMut(Capability<T>, &mut FrontierNotificator<T>)>(&mut self, frontiers: &'a [&'a MutableAntichain<T>], mut logic: F) {
         self.make_available(frontiers);
-        while let Some(cap) = self.next(frontiers) {
-            ::logging::log(&::logging::GUARDED_PROGRESS, true);
+        while let Some(cap) = self.available.pop_front() {
+            ::logging::log(&::logging::GUARDED_PROGRESS, ::logging::GuardedProgressEvent {
+                is_start: true,
+            });
             logic(cap, self);
-            ::logging::log(&::logging::GUARDED_PROGRESS, false);
+            ::logging::log(&::logging::GUARDED_PROGRESS, ::logging::GuardedProgressEvent {
+                is_start: false,
+            });
         }
     }
 

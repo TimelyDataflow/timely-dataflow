@@ -1,6 +1,6 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
+use timely_communication::{initialize, Configuration, Allocator, WorkerGuards, Logging};
 use dataflow::scopes::{Root, Child};
 
 /// Executes a single-threaded timely dataflow computation.
@@ -49,12 +49,13 @@ use dataflow::scopes::{Root, Child};
 pub fn example<T, F>(func: F) -> T
 where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
+    // let (log, comms_snd) = Logging::new();
     let guards = initialize(Configuration::Thread, move |allocator| {
         let mut root = Root::new(allocator);
         let result = root.dataflow(|x| func(x));
         while root.step() { }
         result
-    });
+    }, unimplemented!());
 
     guards.unwrap() // assert the computation started correctly
           .join()   // wait for the worker to finish
@@ -115,14 +116,22 @@ where T: Send+'static,
 pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
+    let logging_config = ::logging::blackhole();
+    execute_logging(config, logging_config, func)
+}
+
+/// TODO(andreal)
+pub fn execute_logging<T, F>(config: Configuration, logging_config: Logging, func: F) -> Result<WorkerGuards<T>,String> 
+where T:Send+'static,
+      F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
+    ::timely_logging::initialize_precise_time_ns();
     initialize(config, move |allocator| {
         let mut root = Root::new(allocator);
         let result = func(&mut root);
         while root.step() { }
         result
-    })
+    }, logging_config)
 }
-
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
 ///
@@ -175,5 +184,14 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>, 
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-    execute(try!(Configuration::from_args(iter)), func)
- }
+    let logging_config = ::logging::blackhole();
+    execute_from_args_logging(iter, logging_config, func)
+}
+
+/// TODO(andreal)
+pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: Logging, func: F) -> Result<WorkerGuards<T>,String> 
+    where I: Iterator<Item=String>, 
+          T:Send+'static,
+          F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
+    execute_logging(try!(Configuration::from_args(iter)), logging_config, func)
+}
