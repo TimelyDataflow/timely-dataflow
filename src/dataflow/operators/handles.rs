@@ -18,7 +18,11 @@ use dataflow::operators::capability::mint as mint_capability;
 pub struct InputHandle<'a, T: Timestamp, D: 'a> {
     pull_counter: &'a mut PullCounter<T, D>,
     internal: Rc<RefCell<CountMap<T>>>,
-    frontier: Option<&'a MutableAntichain<T>>,
+}
+
+pub struct FrontieredInputHandle<'a, T: Timestamp, D: 'a> {
+    handle: InputHandle<'a, T, D>,
+    frontier: &'a MutableAntichain<T>,
 }
 
 impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
@@ -59,18 +63,57 @@ impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
         }
     }
 
+}
+
+impl<'a, T: Timestamp, D> FrontieredInputHandle<'a, T, D> {
+    /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
+    /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
+    /// Returns `None` when there's no more data available.
+    #[inline]
+    pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
+        self.handle.next()
+    }
+
+    /// Repeatedly calls `logic` till exhaustion of the available input data.
+    /// `logic` receives a capability and an input buffer.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///                input.for_each(|cap, data| {
+    ///                    output.session(&cap).give_content(data);
+    ///                });
+    ///            });
+    /// });
+    /// ```
+    #[inline]
+    fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
+        self.handle.for_each(logic)
+    }
+
     #[inline]
     pub fn frontier(&self) -> &'a MutableAntichain<T> {
-        self.frontier.expect("This input does not support a frontier")
+        self.frontier
     }
 }
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>, frontier: Option<&'a MutableAntichain<T>>) -> InputHandle<'a, T, D> {
+pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>) -> InputHandle<'a, T, D> {
     InputHandle {
         pull_counter: pull_counter,
         internal: internal,
+    }
+}
+
+pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>, frontier: &'a MutableAntichain<T>) -> FrontieredInputHandle<'a, T, D> {
+    FrontieredInputHandle {
+        handle: new_input_handle(pull_counter, internal),
         frontier: frontier,
     }
 }

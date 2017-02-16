@@ -211,7 +211,7 @@ where T: Timestamp,
                                          produced: &mut [CountMap<T>]) -> bool
     {
         {
-            let mut input_handle = new_input_handle(&mut self.input, self.internal_changes.clone(), None);
+            let mut input_handle = new_input_handle(&mut self.input, self.internal_changes.clone());
             let mut output_handle = new_output_handle(&mut self.output);
             (self.logic)(&mut input_handle, &mut output_handle, &mut self.notificator);
         }
