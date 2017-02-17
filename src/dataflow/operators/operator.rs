@@ -31,55 +31,42 @@ use dataflow::{Stream, Scope};
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
-    /// strategy `pact`, and repeteadly invokes `logic` which can read from the input stream, write
-    /// to the output stream, and inspect the frontier at the input.
-    /// `logic` can read from the input stream, and write to the output stream.
+    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
     ///
     /// #Examples
     /// ```
-    /// extern crate timely;
-    /// extern crate timely_communication;
-    ///
     /// use std::collections::HashMap;
-    ///
-    /// use timely_communication::Configuration;
-    ///
     /// use timely::dataflow::operators::{ToStream, Operator, FrontierNotificator};
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
-    /// use timely::dataflow::operators::{InputHandle, OutputHandle};
-    /// use timely::progress::Antichain;
-    /// use timely::dataflow::channels::pushers::Tee;
-    /// use timely::dataflow::scopes::Root;
     /// use timely::dataflow::Scope;
-    /// 
+    ///
     /// fn main() {
-    ///     timely::execute(Configuration::Thread, |root| {
-    ///         root.scoped(|scope| {
-    ///             (0u64..10).to_stream(scope)
-    ///                 .unary_frontier(Pipeline, "example", |default_cap| {
-    ///                     let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
-    ///                     let mut notificator = FrontierNotificator::new();
-    ///                     let mut stash = HashMap::new();
-    ///                     move |input, output| {
-    ///                         if let Some(ref c) = cap.take() {
-    ///                             output.session(&c).give(12);
-    ///                         }
-    ///                         while let Some((time, data)) = input.next() {
-    ///                             stash.entry(time.time()).or_insert(Vec::new());
-    ///                         }
-    ///                         for time in notificator.iter(&[input.frontier()]) {
-    ///                             if let Some(mut vec) = stash.remove(&time.time()) {
-    ///                                 output.session(&time).give_iterator(vec.drain(..));
-    ///                             }
+    ///     timely::example(|scope| {
+    ///         (0u64..10).to_stream(scope)
+    ///             .unary_frontier(Pipeline, "example", |default_cap| {
+    ///                 let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///                 let mut notificator = FrontierNotificator::new();
+    ///                 let mut stash = HashMap::new();
+    ///                 move |input, output| {
+    ///                     if let Some(ref c) = cap.take() {
+    ///                         output.session(&c).give(12);
+    ///                     }
+    ///                     while let Some((time, data)) = input.next() {
+    ///                         stash.entry(time.time()).or_insert(Vec::new());
+    ///                     }
+    ///                     for time in notificator.iter(&[input.frontier()]) {
+    ///                         if let Some(mut vec) = stash.remove(&time.time()) {
+    ///                             output.session(&time).give_iterator(vec.drain(..));
     ///                         }
     ///                     }
-    ///                 });
-    ///         });
+    ///                 }
+    ///             });
     ///     });
     /// }
     /// ```
-    fn unary_frontier<D2, B, L, P>(&self, pact: P, name: &str, building: B) -> Stream<G, D2>
+    fn unary_frontier<D2, B, L, P>(&self, pact: P, name: &str, constructor: B) -> Stream<G, D2>
     where
         D2: Data,
         B: Fn(Capability<G::Timestamp>) -> L,
@@ -87,47 +74,32 @@ pub trait Operator<G: Scope, D1: Data> {
         P: ParallelizationContract<G::Timestamp, D1>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
-    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function parameter.
+    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, and write to the output stream.
     ///
     /// #Examples
     /// ```
-    /// extern crate timely;
-    /// extern crate timely_communication;
-    ///
-    /// use std::collections::HashMap;
-    ///
-    /// use timely_communication::Configuration;
-    ///
     /// use timely::dataflow::operators::{ToStream, Operator, FrontierNotificator};
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
-    /// use timely::dataflow::operators::{InputHandle, OutputHandle};
-    /// use timely::progress::Antichain;
-    /// use timely::dataflow::channels::pushers::Tee;
-    /// use timely::dataflow::scopes::Root;
     /// use timely::dataflow::Scope;
-    /// 
-    /// fn main() {
-    ///     timely::execute(Configuration::Thread, |root| {
-    ///         root.scoped(|scope| {
-    ///             (0u64..10).to_stream(scope)
-    ///                 .unary(Pipeline, "example", |default_cap| {
-    ///                     let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
-    ///                     move |input, output| {
-    ///                         if let Some(ref c) = cap.take() {
-    ///                             output.session(&c).give(12);
-    ///                         }
-    ///                         while let Some((time, data)) = input.next() {
-    ///                             output.session(&time).give_content(data);
-    ///                         }
-    ///                     }
-    ///                 });
+    ///
+    /// timely::example(|scope| {
+    ///     (0u64..10).to_stream(scope)
+    ///         .unary(Pipeline, "example", |default_cap| {
+    ///             let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///             move |input, output| {
+    ///                 if let Some(ref c) = cap.take() {
+    ///                     output.session(&c).give(100);
+    ///                 }
+    ///                 while let Some((time, data)) = input.next() {
+    ///                     output.session(&time).give_content(data);
+    ///                 }
+    ///             }
     ///         });
-    ///     });
-    /// }
+    /// });
     /// ```
-    fn unary<D2, B, L, P>(&self, pact: P, name: &str, building: B) -> Stream<G, D2>
+    fn unary<D2, B, L, P>(&self, pact: P, name: &str, constructor: B) -> Stream<G, D2>
     where
         D2: Data,
         B: Fn(Capability<G::Timestamp>) -> L,
@@ -135,9 +107,52 @@ pub trait Operator<G: Scope, D1: Data> {
         P: ParallelizationContract<G::Timestamp, D1>;
 
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
-    /// strategy `pact`, and repeteadly invokes `logic` which can read from the input streams, write
-    /// to the output stream, and inspect the frontier at the inputs.
-    fn binary_frontier<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, building: B) -> Stream<G, D3>
+    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
+    ///
+    /// #Examples
+    /// ```
+    /// use std::collections::HashMap;
+    /// use timely::dataflow::operators::{Input, Operator, Inspect, FrontierNotificator};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    /// use timely::dataflow::Scope;
+    ///
+    /// timely::execute(timely::Configuration::Thread, |root| {
+    ///    let (mut in1, mut in2) = root.scoped(|scope| {
+    ///        let (in1_handle, in1) = scope.new_input();
+    ///        let (in2_handle, in2) = scope.new_input();
+    ///        in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _builder| {
+    ///            let mut notificator = FrontierNotificator::new();
+    ///            let mut stash = HashMap::new();
+    ///            move |input1, input2, output| {
+    ///                while let Some((time, data)) = input1.next() {
+    ///                    stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
+    ///                    notificator.notify_at(time);
+    ///                }
+    ///                while let Some((time, data)) = input2.next() {
+    ///                    stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
+    ///                    notificator.notify_at(time);
+    ///                }
+    ///                for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
+    ///                    if let Some(mut vec) = stash.remove(&time.time()) {
+    ///                        output.session(&time).give_iterator(vec.drain(..));
+    ///                    }
+    ///                }
+    ///            }
+    ///        }).inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
+    ///
+    ///        (in1_handle, in2_handle)
+    ///    });
+    ///
+    ///    for i in 1..10 {
+    ///        in1.send(i - 1);
+    ///        in1.advance_to(i);
+    ///        in2.send(i - 1);
+    ///        in2.advance_to(i);
+    ///    }
+    /// }).unwrap();
+    /// ```
+    fn binary_frontier<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<G, D3>
     where
         D2: Data,
         D3: Data,
@@ -149,9 +164,36 @@ pub trait Operator<G: Scope, D1: Data> {
         P2: ParallelizationContract<G::Timestamp, D2>;
 
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
-    /// strategy `pact`, and repeteadly invokes `logic` which can read from the input streams, and write
-    /// to the output stream.
-    fn binary<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, building: B) -> Stream<G, D3>
+    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Operator, Inspect, FrontierNotificator};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    /// use timely::progress::timestamp::RootTimestamp;
+    /// use timely::dataflow::Scope;
+    ///
+    /// timely::example(|scope| {
+    ///     let stream2 = (0u64..10).to_stream(scope);
+    ///     (0u64..10).to_stream(scope)
+    ///         .binary(&stream2, Pipeline, Pipeline, "example", |default_cap| {
+    ///             let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///             move |input1, input2, output| {
+    ///                 if let Some(ref c) = cap.take() {
+    ///                     output.session(&c).give(100);
+    ///                 }
+    ///                 while let Some((time, data)) = input1.next() {
+    ///                     output.session(&time).give_content(data);
+    ///                 }
+    ///                 while let Some((time, data)) = input2.next() {
+    ///                     output.session(&time).give_content(data);
+    ///                 }
+    ///             }
+    ///         }).inspect(|x| println!("{:?}", x));
+    /// });
+    /// ```
+    fn binary<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<G, D3>
     where
         D2: Data,
         D3: Data,
@@ -220,7 +262,7 @@ fn binary_base<G: Scope, D1: Data, D2: Data, D3: Data, P1, P2>(
 }
 
 impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
-    fn unary_frontier<D2, B, L, P>(&self, pact: P, name: &str, building: B) -> Stream<G, D2>
+    fn unary_frontier<D2, B, L, P>(&self, pact: P, name: &str, constructor: B) -> Stream<G, D2>
     where
         D2: Data,
         B: Fn(Capability<G::Timestamp>) -> L,
@@ -228,7 +270,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P: ParallelizationContract<G::Timestamp, D1> {
 
         let (cap, internal_changes) = make_default_cap::<G>();
-        let mut logic = building(cap);
+        let mut logic = constructor(cap);
 
         let (mut input, (sender, channel_id), (targets, registrar), mut scope) = unary_base(self, pact);
 
@@ -253,7 +295,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         Stream::new(Source { index: index, port: 0 }, registrar, scope)
     }
 
-    fn unary<D2, B, L, P>(&self, pact: P, name: &str, building: B) -> Stream<G, D2>
+    fn unary<D2, B, L, P>(&self, pact: P, name: &str, constructor: B) -> Stream<G, D2>
     where
         D2: Data,
         B: Fn(Capability<G::Timestamp>) -> L,
@@ -261,7 +303,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P: ParallelizationContract<G::Timestamp, D1> {
 
         let (cap, internal_changes) = make_default_cap::<G>();
-        let mut logic = building(cap);
+        let mut logic = constructor(cap);
 
         let (mut input, (sender, channel_id), (targets, registrar), mut scope) = unary_base(self, pact);
 
@@ -286,7 +328,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         Stream::new(Source { index: index, port: 0 }, registrar, scope)
     }
 
-    fn binary<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, building: B) -> Stream<G, D3>
+    fn binary<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<G, D3>
     where
         D2: Data,
         D3: Data,
@@ -296,7 +338,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P2: ParallelizationContract<G::Timestamp, D2> {
 
         let (cap, internal_changes) = make_default_cap::<G>();
-        let mut logic = building(cap);
+        let mut logic = constructor(cap);
 
         let (mut input1, (sender1, channel_id1),
              mut input2, (sender2, channel_id2),
@@ -326,7 +368,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         Stream::new(Source { index: index, port: 0 }, registrar, scope)
     }
 
-    fn binary_frontier<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, building: B) -> Stream<G, D3>
+    fn binary_frontier<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<G, D3>
     where
         D2: Data,
         D3: Data,
@@ -338,7 +380,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P2: ParallelizationContract<G::Timestamp, D2> {
 
         let (cap, internal_changes) = make_default_cap::<G>();
-        let mut logic = building(cap);
+        let mut logic = constructor(cap);
 
         let (mut input1, (sender1, channel_id1),
              mut input2, (sender2, channel_id2),
