@@ -2,7 +2,7 @@
 use std::hash::Hash;
 use std::collections::HashMap;
 
-use ::Data;
+use ::{Data, ExchangeData};
 use dataflow::{Stream, Scope};
 use dataflow::operators::unary::Unary;
 use dataflow::channels::pact::Exchange;
@@ -11,7 +11,7 @@ use dataflow::channels::pact::Exchange;
 /// 
 /// Extension method supporting aggregation of keyed data within timestamp. 
 /// For inter-timestamp aggregation, consider `StateMachine`.
-pub trait Aggregate<S: Scope, K: Data+Hash, V: Data> {
+pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
 	/// Aggregates data of the form `(key, val)`, using user-supplied logic.
 	///
 	/// The `aggregate` method is implemented for streams of `(K, V)` data, 
@@ -69,7 +69,7 @@ pub trait Aggregate<S: Scope, K: Data+Hash, V: Data> {
 	>(&self, fold: F, emit: G, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq;
 } 
 
-impl<S: Scope, K: Data+Hash+Eq, V: Data> Aggregate<S, K, V> for Stream<S, (K, V)> {
+impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
 
 		fn aggregate<
 			R: Data, 

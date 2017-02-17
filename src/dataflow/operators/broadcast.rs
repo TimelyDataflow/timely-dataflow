@@ -1,6 +1,6 @@
 //! Broadcast records to all workers.
 
-use ::Data;
+use ::ExchangeData;
 use progress::nested::subgraph::{Source, Target};
 use dataflow::{Stream, Scope};
 use progress::count_map::CountMap;
@@ -16,7 +16,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 /// Broadcast records to all workers.
-pub trait Broadcast<D: Data> {
+pub trait Broadcast<D: ExchangeData> {
     /// Broadcast records to all workers.
     ///
     /// #Examples
@@ -32,7 +32,7 @@ pub trait Broadcast<D: Data> {
     fn broadcast(&self) -> Self;
 }
 
-impl<G: Scope, D: Data> Broadcast<D> for Stream<G, D> {
+impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
     fn broadcast(&self) -> Stream<G, D> {
         let mut scope = self.scope();
 
@@ -63,14 +63,14 @@ impl<G: Scope, D: Data> Broadcast<D> for Stream<G, D> {
     }
 }
 
-struct BroadcastOperator<T: Timestamp, D: Data> {
+struct BroadcastOperator<T: Timestamp, D: ExchangeData> {
     index: usize,
     peers: usize,
     input: PullCounter<T, D>,
     output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
 
-impl<T: Timestamp, D: Data> Operate<T> for BroadcastOperator<T, D> {
+impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
     fn name(&self) -> String { "Broadcast".to_owned() }
     fn inputs(&self) -> usize { self.peers }
     fn outputs(&self) -> usize { 1 }

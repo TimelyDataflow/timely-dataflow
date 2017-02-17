@@ -74,6 +74,20 @@ pub mod execute;
 // #[cfg(feature = "logging")]
 pub mod logging;
 
-/// A composite trait for types usable in timely dataflow.
-pub trait Data: timely_communication::Data + abomonation::Abomonation { }
-impl<T: timely_communication::Data+abomonation::Abomonation> Data for T { }
+/// A composite trait for types usable as data in timely dataflow.
+///
+/// The `Data` trait is necessary for all types that go along timely dataflow channels.
+pub trait Data: ::abomonation::Abomonation+Clone+'static { }
+impl<T: ::abomonation::Abomonation+Clone+'static> Data for T { }
+
+/// A composite trait for types usable on exchange channels in timely dataflow.
+///
+/// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication` 
+/// `Data` trait, which describes requirements for communication along channels. 
+pub trait ExchangeData: Data + timely_communication::Data { }
+impl<T: Data + timely_communication::Data> ExchangeData for T { }
+
+
+// /// A composite trait for types usable in timely dataflow.
+// pub trait Data: timely_communication::Data + abomonation::Abomonation { }
+// impl<T: timely_communication::Data+abomonation::Abomonation> Data for T { }
