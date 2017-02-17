@@ -1,12 +1,12 @@
 //! Exchange records between workers.
 
-use ::Data;
+use ::ExchangeData;
 use dataflow::channels::pact::Exchange as ExchangePact;
 use dataflow::{Stream, Scope};
 use dataflow::operators::unary::Unary;
 
 /// Exchange records between workers.
-pub trait Exchange<D: Data> {
+pub trait Exchange<D: ExchangeData> {
     /// Exchange records so that all records with the same `route` are at the same worker.
     ///
     /// #Examples
@@ -22,7 +22,7 @@ pub trait Exchange<D: Data> {
     fn exchange<F: Fn(&D)->u64+'static>(&self, route: F) -> Self;
 }
 
-impl<G: Scope, D: Data> Exchange<D> for Stream<G, D> {
+impl<G: Scope, D: ExchangeData> Exchange<D> for Stream<G, D> {
     fn exchange<F: Fn(&D)->u64+'static>(&self, route: F) -> Stream<G, D> {
         self.unary_stream(ExchangePact::new(route), "Exchange", |input, output| {
             input.for_each(|time, data| {

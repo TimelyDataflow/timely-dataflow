@@ -168,7 +168,8 @@ Operator<T, D1, D2, L> {
 
 impl<T, D1, D2, L> Operate<T> for Operator<T, D1, D2, L>
 where T: Timestamp,
-      D1: Data, D2: Data,
+      D1: Data, 
+      D2: Data,
       L: FnMut(&mut InputHandle<T, D1>,
                &mut OutputHandle<T, D2, Tee<T, D2>>,
                &mut Notificator<T>) {

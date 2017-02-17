@@ -2,7 +2,7 @@
 use std::hash::Hash;
 use std::collections::HashMap;
 
-use ::Data;
+use ::{Data, ExchangeData};
 use dataflow::{Stream, Scope};
 use dataflow::operators::unary::Unary;
 use dataflow::channels::pact::Exchange;
@@ -17,7 +17,7 @@ use dataflow::channels::pact::Exchange;
 /// is some total order on times respecting the total order (updates may be interleaved).
 
 /// Provides the `state_machine` method.
-pub trait StateMachine<S: Scope, K: Data+Hash+Eq, V: Data> {
+pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     /// Tracks a state for each presented key, using user-supplied state transition logic.
     ///
     /// The transition logic `fold` may mutate the state, and produce both output records and 
@@ -54,7 +54,7 @@ pub trait StateMachine<S: Scope, K: Data+Hash+Eq, V: Data> {
     >(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq ;
 } 
 
-impl<S: Scope, K: Data+Hash+Eq, V: Data> StateMachine<S, K, V> for Stream<S, (K, V)> {
+impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> for Stream<S, (K, V)> {
     fn state_machine<
             R: Data,                                    // output type
             D: Default+'static,                         // per-key state (data)

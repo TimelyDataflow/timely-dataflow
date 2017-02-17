@@ -62,11 +62,11 @@ pub trait Input<'a, A: Allocate, T: Timestamp+Ord> {
     ///     }
     /// });
     /// ```
-    fn new_input<D:Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>);
+    fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>);
 }
 
 impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T> {
-    fn new_input<D:Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>) {
+    fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>) {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));

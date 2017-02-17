@@ -6,7 +6,7 @@
 
 use progress::nested::subgraph::{Source, Target};
 
-use {Data, Push};
+use Push;
 use dataflow::Scope;
 use dataflow::channels::pushers::tee::TeeHelper;
 use dataflow::channels::Content;
@@ -18,7 +18,7 @@ use dataflow::channels::Content;
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
 #[derive(Clone)]
-pub struct Stream<S: Scope, D:Data> {
+pub struct Stream<S: Scope, D> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
@@ -27,7 +27,7 @@ pub struct Stream<S: Scope, D:Data> {
     ports: TeeHelper<S::Timestamp, D>,
 }
 
-impl<S: Scope, D:Data> Stream<S, D> {
+impl<S: Scope, D> Stream<S, D> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
