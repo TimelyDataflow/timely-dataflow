@@ -26,6 +26,7 @@ pub use self::broadcast::Broadcast;
 pub use self::probe::Probe;
 pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
+pub use self::operator::Operator;
 
 pub use self::reclock::Reclock;
 pub use self::count::Accumulate;
@@ -48,6 +49,7 @@ pub mod broadcast;
 pub mod probe;
 pub mod to_stream;
 pub mod capture;
+pub mod operator;
 
 pub mod aggregation;
 
@@ -56,10 +58,11 @@ pub mod count;
 
 // keep the handle constructors private
 mod handles;
-pub use self::handles::{InputHandle, OutputHandle};
+pub use self::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
 
 mod notificator;
 pub use self::notificator::Notificator;
+pub use self::notificator::FrontierNotificator;
 
 // keep "mint" module-private
 mod capability;

@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use progress::Timestamp;
 use progress::count_map::CountMap;
+use progress::frontier::MutableAntichain;
 use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::{Buffer, Session};
@@ -17,6 +18,12 @@ use dataflow::operators::capability::mint as mint_capability;
 pub struct InputHandle<'a, T: Timestamp, D: 'a> {
     pull_counter: &'a mut PullCounter<T, D>,
     internal: Rc<RefCell<CountMap<T>>>,
+}
+
+/// Handle to an operator's input stream and frontier.
+pub struct FrontieredInputHandle<'a, T: Timestamp, D: 'a> {
+    handle: InputHandle<'a, T, D>,
+    frontier: &'a MutableAntichain<T>,
 }
 
 impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
@@ -56,6 +63,45 @@ impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
             ::logging::log(&::logging::GUARDED_MESSAGE, false);
         }
     }
+
+}
+
+impl<'a, T: Timestamp, D> FrontieredInputHandle<'a, T, D> {
+    /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
+    /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
+    /// Returns `None` when there's no more data available.
+    #[inline]
+    pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
+        self.handle.next()
+    }
+
+    /// Repeatedly calls `logic` till exhaustion of the available input data.
+    /// `logic` receives a capability and an input buffer.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///                input.for_each(|cap, data| {
+    ///                    output.session(&cap).give_content(data);
+    ///                });
+    ///            });
+    /// });
+    /// ```
+    #[inline]
+    pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
+        self.handle.for_each(logic)
+    }
+
+    /// Inspect the frontier associated with this input.
+    #[inline]
+    pub fn frontier(&self) -> &'a MutableAntichain<T> {
+        self.frontier
+    }
 }
 
 /// Constructs an input handle.
@@ -64,6 +110,13 @@ pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCount
     InputHandle {
         pull_counter: pull_counter,
         internal: internal,
+    }
+}
+
+pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<CountMap<T>>>, frontier: &'a MutableAntichain<T>) -> FrontieredInputHandle<'a, T, D> {
+    FrontieredInputHandle {
+        handle: new_input_handle(pull_counter, internal),
+        frontier: frontier,
     }
 }
 

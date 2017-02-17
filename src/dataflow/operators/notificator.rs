@@ -248,3 +248,179 @@ fn notificator_delivers_notifications_in_topo_order() {
     ]);
 
 }
+
+/// Tracks requests for notification and delivers available notifications.
+///
+/// FrontierNotificator is meant to manage the delivery of requested notifications in the
+/// presence of inputs that may have outstanding messages to deliver.
+/// The notificator inspects the frontiers, as presented from the outside, for each input.
+/// Requested notifications can be served only once there are no frontier elements less-or-equal
+/// to them, and there are no other pending notification requests less than them. Each will be
+/// less-or-equal to itself, so we want to dodge that corner case.
+///
+/// #Examples
+/// ```
+/// use std::collections::HashMap;
+/// use timely::dataflow::Scope;
+/// use timely::dataflow::operators::{Input, Operator, Inspect, FrontierNotificator};
+/// use timely::dataflow::channels::pact::Pipeline;
+///
+/// timely::execute(timely::Configuration::Thread, |root| {
+///     let (mut in1, mut in2) = root.scoped(|scope| {
+///         let (in1_handle, in1) = scope.new_input();
+///         let (in2_handle, in2) = scope.new_input();
+///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap| {
+///             let mut notificator = FrontierNotificator::new();
+///             let mut stash = HashMap::new();
+///             move |input1, input2, output| {
+///                 while let Some((time, data)) = input1.next() {
+///                     stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
+///                     notificator.notify_at(time);
+///                 }
+///                 while let Some((time, data)) = input2.next() {
+///                     stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
+///                     notificator.notify_at(time);
+///                 }
+///                 for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
+///                     if let Some(mut vec) = stash.remove(&time.time()) {
+///                         output.session(&time).give_iterator(vec.drain(..));
+///                     }
+///                 }
+///             }
+///         }).inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
+///
+///         (in1_handle, in2_handle)
+///     });
+///
+///     for i in 1..10 {
+///         in1.send(i - 1);
+///         in1.advance_to(i);
+///         in2.send(i - 1);
+///         in2.advance_to(i);
+///     }
+///     in1.close();
+///     in2.close();
+/// }).unwrap();
+/// ```
+pub struct FrontierNotificator<T: Timestamp> {
+    pending: Vec<Capability<T>>,
+    available: Vec<Capability<T>>,
+    candidates: Vec<Capability<T>>,
+}
+
+impl<T: Timestamp> FrontierNotificator<T> {
+    /// Allocates a new `Notificator`.
+    pub fn new() -> FrontierNotificator<T> {
+        FrontierNotificator {
+            pending: Vec::new(),
+            available: Vec::new(),
+            candidates: Vec::new(),
+        }
+    }
+
+    /// Requests a notification at the time associated with capability `cap`. Takes ownership of
+    /// the capability.
+    ///
+    /// In order to request a notification at future timestamp, obtain a capability for the new
+    /// timestamp first, as shown in the example.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Operator, FrontierNotificator};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary_frontier(Pipeline, "example", |_| {
+    ///                let mut notificator = FrontierNotificator::new();
+    ///                move |input, output| {
+    ///                    input.for_each(|cap, data| {
+    ///                        output.session(&cap).give_content(data);
+    ///                        let mut time = cap.time();
+    ///                        time.inner += 1;
+    ///                        notificator.notify_at(cap.delayed(&time));
+    ///                    });
+    ///                    notificator.for_each(&[input.frontier()], |cap, _| {
+    ///                        println!("done with time: {:?}", cap.time());
+    ///                    });
+    ///                }
+    ///            });
+    /// });
+    /// ```
+    #[inline]
+    pub fn notify_at(&mut self, cap: Capability<T>) {
+        if !self.pending.iter().find(|&& ref c| c.time().eq(&cap.time())).is_some() {
+            self.pending.push(cap);
+        }
+    }
+
+    /// Iterate over the notifications made available by inspecting the frontiers.
+    pub fn iter<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> FrontierNotificatorIterator<'a, T> {
+        FrontierNotificatorIterator {
+            notificator: self,
+            frontiers: frontiers,
+        }
+    }
+
+    fn next(&mut self, frontiers: &[& MutableAntichain<T>]) -> Option<Capability<T>> {
+        if self.available.is_empty() {
+            let mut available = &mut self.available; // available is empty
+            let mut pending = &mut self.pending;
+            let mut candidates = &mut self.candidates;
+            assert!(candidates.len() == 0);
+
+            pending.drain_into_if(&mut candidates, |& ref cap| {
+                !frontiers.iter().any(|x| x.le(&cap.time()))
+            });
+
+            while let Some(cap) = candidates.pop() {
+                let mut cap_in_minimal_antichain = available.is_empty();
+                available.drain_into_if(&mut pending, |& ref avail_cap| {
+                    let cap_lt_available = cap.time().lt(&avail_cap.time());
+                    cap_in_minimal_antichain |= cap_lt_available ||
+                        cap.time().partial_cmp(&avail_cap.time()).is_none();
+                    cap_lt_available
+                });
+                if cap_in_minimal_antichain {
+                    available.push(cap);
+                } else {
+                    pending.push(cap);
+                }
+            }
+        }
+
+        self.available.pop()
+    }
+
+    /// Repeatedly calls `logic` till exhaustion of the notifications made available by inspecting
+    /// the frontiers.
+    ///
+    /// `logic` receives a capability for `t`, the timestamp being notified.
+    #[inline]
+    pub fn for_each<F: FnMut(Capability<T>, &mut FrontierNotificator<T>)>(&mut self, frontiers: &[&MutableAntichain<T>], mut logic: F) {
+        while let Some(cap) = self.next(frontiers) {
+            ::logging::log(&::logging::GUARDED_PROGRESS, true);
+            logic(cap, self);
+            ::logging::log(&::logging::GUARDED_PROGRESS, false);
+        }
+    }
+}
+
+pub struct FrontierNotificatorIterator<'a, T: Timestamp> {
+    notificator: &'a mut FrontierNotificator<T>,
+    frontiers: &'a [&'a MutableAntichain<T>],
+}
+
+impl<'a, T: Timestamp> Iterator for FrontierNotificatorIterator<'a, T> {
+    type Item = Capability<T>;
+
+    /// Retrieve the next available notification.
+    ///
+    /// Returns `None` if no notification is available. Returns `Some(cap, count)` otherwise:
+    /// `cap` is a a capability for `t` - the timestamp being notified - and `count` represents
+    /// how many notifications (out of those requested) are being delivered for that specific
+    /// timestamp.
+    fn next(&mut self) -> Option<Capability<T>> {
+        self.notificator.next(self.frontiers)
+    }
+}
