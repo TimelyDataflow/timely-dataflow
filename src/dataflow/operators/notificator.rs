@@ -249,6 +249,37 @@ fn notificator_delivers_notifications_in_topo_order() {
 
 }
 
+/// Tracks requests for notification and delivers available notifications.
+///
+/// FrontierNotificator is meant to manage the delivery of requested notifications in the
+/// presence of inputs that may have outstanding messages to deliver.
+/// The notificator inspects the frontiers, as presented from the outside, for each input.
+/// Requested notifications can be served only once there are no frontier elements less-or-equal
+/// to them, and there are no other pending notification requests less than them. Each will be
+/// less-or-equal to itself, so we want to dodge that corner case.
+///
+/// #Examples
+/// ```
+/// use timely::dataflow::operators::{ToStream, Operator, FrontierNotificator};
+/// use timely::dataflow::channels::pact::Pipeline;
+///
+/// timely::example(|scope| {
+///     (0..10).to_stream(scope)
+///            .unary_frontier(Pipeline, "example", |_| {
+///                let mut notificator = FrontierNotificator::new();
+///                move |input, output| {
+///                    input.for_each(|cap, data| {
+///                        let mut time = cap.time();
+///                        time.inner += 1;
+///                        notificator.notify_at(cap.delayed(&time));
+///                    });
+///                    notificator.for_each(&[input.frontier()], |cap, _| {
+///                        println!("notification for time: {:?}", cap.time());
+///                    });
+///                }
+///            });
+/// });
+/// ```
 pub struct FrontierNotificator<T: Timestamp> {
     pending: Vec<Capability<T>>,
     available: Vec<Capability<T>>,
@@ -265,6 +296,35 @@ impl<T: Timestamp> FrontierNotificator<T> {
         }
     }
 
+    /// Requests a notification at the time associated with capability `cap`. Takes ownership of
+    /// the capability.
+    ///
+    /// In order to request a notification at future timestamp, obtain a capability for the new
+    /// timestamp first, as show in the example.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Operator, FrontierNotificator};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary_frontier(Pipeline, "example", |_| {
+    ///                let mut notificator = FrontierNotificator::new();
+    ///                move |input, output| {
+    ///                    input.for_each(|cap, data| {
+    ///                        output.session(&cap).give_content(data);
+    ///                        let mut time = cap.time();
+    ///                        time.inner += 1;
+    ///                        notificator.notify_at(cap.delayed(&time));
+    ///                    });
+    ///                    notificator.for_each(&[input.frontier()], |cap, _| {
+    ///                        println!("done with time: {:?}", cap.time());
+    ///                    });
+    ///                }
+    ///            });
+    /// });
+    /// ```
     #[inline]
     pub fn notify_at(&mut self, cap: Capability<T>) {
         if !self.pending.iter().find(|&& ref c| c.time().eq(&cap.time())).is_some() {
@@ -272,6 +332,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
         }
     }
 
+    /// Iterate over the notifications made available by inspecting the provided frontiers.
     pub fn iter<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> FrontierNotificatorIterator<'a, T> {
         FrontierNotificatorIterator {
             notificator: self,
@@ -309,6 +370,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
         self.available.pop()
     }
 
+    /// wip
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, &mut FrontierNotificator<T>)>(&mut self, frontiers: &[&MutableAntichain<T>], mut logic: F) {
         while let Some(cap) = self.next(frontiers) {

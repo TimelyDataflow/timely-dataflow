@@ -20,6 +20,7 @@ pub struct InputHandle<'a, T: Timestamp, D: 'a> {
     internal: Rc<RefCell<CountMap<T>>>,
 }
 
+/// Handle to an operator's input stream and frontier.
 pub struct FrontieredInputHandle<'a, T: Timestamp, D: 'a> {
     handle: InputHandle<'a, T, D>,
     frontier: &'a MutableAntichain<T>,
@@ -92,10 +93,11 @@ impl<'a, T: Timestamp, D> FrontieredInputHandle<'a, T, D> {
     /// });
     /// ```
     #[inline]
-    fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
+    pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
         self.handle.for_each(logic)
     }
 
+    /// Inspect the frontier associated with this input.
     #[inline]
     pub fn frontier(&self) -> &'a MutableAntichain<T> {
         self.frontier

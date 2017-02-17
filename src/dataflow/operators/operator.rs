@@ -33,6 +33,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeteadly invokes `logic` which can read from the input stream, write
     /// to the output stream, and inspect the frontier at the input.
+    /// `logic` can read from the input stream, and write to the output stream.
     ///
     /// #Examples
     /// ```
@@ -57,17 +58,17 @@ pub trait Operator<G: Scope, D1: Data> {
     ///         root.scoped(|scope| {
     ///             (0u64..10).to_stream(scope)
     ///                 .unary_frontier(Pipeline, "example", |default_cap| {
-    ///                     let mut cap = default_cap.delayed(RootTimestamp::new(12));
+    ///                     let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
     ///                     let mut notificator = FrontierNotificator::new();
     ///                     let mut stash = HashMap::new();
-    ///                     move |(input, frontier), output| {
+    ///                     move |input, output| {
     ///                         if let Some(ref c) = cap.take() {
     ///                             output.session(&c).give(12);
     ///                         }
     ///                         while let Some((time, data)) = input.next() {
     ///                             stash.entry(time.time()).or_insert(Vec::new());
     ///                         }
-    ///                         for time in notificator.iter(&[frontier]) {
+    ///                         for time in notificator.iter(&[input.frontier()]) {
     ///                             if let Some(mut vec) = stash.remove(&time.time()) {
     ///                                 output.session(&time).give_iterator(vec.drain(..));
     ///                             }
@@ -88,9 +89,6 @@ pub trait Operator<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function parameter.
     /// `logic` can read from the input stream, and write to the output stream.
-    ///
-    /// The `OperatorBuilder` provided to the function parameter can be used to request initial
-    /// capabilities.
     ///
     /// #Examples
     /// ```
@@ -114,8 +112,8 @@ pub trait Operator<G: Scope, D1: Data> {
     ///     timely::execute(Configuration::Thread, |root| {
     ///         root.scoped(|scope| {
     ///             (0u64..10).to_stream(scope)
-    ///                 .unary(Pipeline, "example", |mut builder| {
-    ///                     let mut cap = Some(builder.get_cap(RootTimestamp::new(12)));
+    ///                 .unary(Pipeline, "example", |default_cap| {
+    ///                     let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
     ///                     move |input, output| {
     ///                         if let Some(ref c) = cap.take() {
     ///                             output.session(&c).give(12);
@@ -139,9 +137,6 @@ pub trait Operator<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
     /// strategy `pact`, and repeteadly invokes `logic` which can read from the input streams, write
     /// to the output stream, and inspect the frontier at the inputs.
-    ///
-    /// The `OperatorBuilder` provided to the function parameter can be used to request initial
-    /// capabilities.
     fn binary_frontier<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, building: B) -> Stream<G, D3>
     where
         D2: Data,
@@ -156,9 +151,6 @@ pub trait Operator<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
     /// strategy `pact`, and repeteadly invokes `logic` which can read from the input streams, and write
     /// to the output stream.
-    ///
-    /// The `OperatorBuilder` provided to the function parameter can be used to request initial
-    /// capabilities.
     fn binary<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, building: B) -> Stream<G, D3>
     where
         D2: Data,
