@@ -93,7 +93,7 @@ impl<'a, T: Timestamp, D> FrontieredInputHandle<'a, T, D> {
     /// });
     /// ```
     #[inline]
-    pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
+    pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, logic: F) {
         self.handle.for_each(logic)
     }
 
