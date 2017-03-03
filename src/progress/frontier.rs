@@ -1,6 +1,5 @@
 //! Tracks minimal sets of mutually incomparable elements of a partial order.
 
-use std::fmt::Debug;
 use std::default::Default;
 use std::cmp::Ordering;
 
@@ -57,7 +56,7 @@ pub struct MutableAntichain<T:Eq> {
     elements:       Vec<T>,         // the set of times with precedent count == 0
 }
 
-impl<T: PartialOrd+Eq+Clone+Debug+'static> MutableAntichain<T> {
+impl<T: PartialOrd+Eq+Clone+'static> MutableAntichain<T> {
     /// Creates a new empty `MutableAntichain`.
     pub fn new() -> MutableAntichain<T> {
         MutableAntichain {
