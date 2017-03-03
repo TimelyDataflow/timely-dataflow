@@ -12,7 +12,7 @@ pub struct Antichain<T> {
     elements: Vec<T>
 }
 
-impl<T: PartialOrd+Eq+Copy+Debug> Antichain<T> {
+impl<T: PartialOrd> Antichain<T> {
     /// Updates the `Antichain` if the element is not greater than or equal to some present element.
     ///
     /// Returns true if element is added to the set
