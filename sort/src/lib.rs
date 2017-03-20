@@ -1,10 +1,10 @@
 mod lsb;
 mod lsb_swc;
-
-// mod msb;
+mod msb;
 
 pub use lsb::RadixSorter as LSBRadixSorter;
 pub use lsb_swc::RadixSorter as LSBSWCRadixSorter;
+pub use msb::RadixSorter as MSBRadixSorter;
 
 // pub use msb::RadixSorter as MSBRadixSorter;
 

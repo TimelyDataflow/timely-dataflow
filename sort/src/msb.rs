@@ -1,4 +1,22 @@
+//! Most-significant bit (MSB) radix sorting.
+//!
+//! MSB radix sorting works by partitioning elements first by their highest byte, and then recursively
+//! processing each part. Our plan is to do this in a depth-first manner, to minimize the outlay of 
+//! partially empty buffers and such.
+//! 
+//! One advantage of MSB radix sorting is that we can stop at any point and fall into a traditional sort
+//! implementation. I expect this to be useful, in that many instances of radix sorting are based on a 
+//! hash of keys, and still require a final sort in any case.
+//!
+//! This advantage is likely also an important performance detail: we should eventually fall into a more 
+//! traditional sort if the number of elements becomes small, as our implementation will have non-trivial
+//! (i.e. 256) overhead for each invocation. Once we have less than some fixed amount of work (e.g. one 
+//! buffer's full of elements) we should fall into the final sort.
+
+use ::std::mem::replace;
+
 use ::Unsigned;
+
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::min(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -8,136 +26,285 @@ macro_rules! lines_per_page {
     () => {{ 1024 }}
 }
 
+// pub struct RadixSorter<T> {
+//     shuffler: RadixShuffler<T>,
+// }
+
+// impl<T> RadixSorter<T> {
+//     pub fn new() -> RadixSorter<T> {
+//         RadixSorter {
+//             shuffler: RadixShuffler::new(),
+//         }
+//     }
+//     #[inline]
+//     pub fn extend<F: Fn(&T)->&[u8], I: Iterator<Item=T>>(&mut self, iterator: I, function: &F) {
+//         for element in iterator {
+//             self.push(element, function);
+//         }
+//     }
+//     #[inline]
+//     pub fn push<F: Fn(&T)->&[u8]>(&mut self, element: T, function: &F) {
+//         self.shuffler.push(element, &|x| (function(x).as_u64() % 256) as u8);
+//     }
+//     #[inline]
+//     pub fn push_batch<F: Fn(&T)->&[u8]>(&mut self, batch: Vec<T>, function: &F) {
+//         self.shuffler.push_batch(batch,  &|x| (function(x).as_u64() % 256) as u8);
+//     }
+//     pub fn sort<F: Fn(&T)->&[u8]>(&mut self, batches: &mut Vec<Vec<T>>, function: &F) {
+//         for batch in batches.drain(..) { self.push_batch(batch, function); }
+//         *batches = self.finish(function);
+//     }
+
+//     pub fn finish<F: Fn(&T)->&[u8]>(&mut self, function: &F) -> Vec<Vec<T>> {
+//         let mut sorted = self.shuffler.finish();
+//         for byte in 1..(<U as Unsigned>::bytes()) { 
+//             sorted = self.reshuffle(sorted, &|x| ((function(x).as_u64() >> (8 * byte)) % 256) as u8);
+//         }
+//         sorted
+//     }
+//     pub fn recycle(&mut self, mut buffers: Vec<Vec<T>>) {
+//         for mut buffer in buffers.drain(..) {
+//             buffer.clear();
+//             self.shuffler.push_batch(buffer, &|_| 0);
+//         }
+//     }
+//     #[inline(always)]
+//     fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: Vec<Vec<T>>, function: &F) -> Vec<Vec<T>> {
+//         for buffer in buffers.into_iter() {
+//             self.shuffler.push_batch(buffer, function);
+//         }
+//         self.shuffler.finish()
+//     }
+// }
+
+// At any point in time, we have some outstanding work to do, 
 pub struct RadixSorter<T> {
-    shuffler: RadixShuffler<T>,
+
+    work: Vec<(usize, Vec<Vec<T>>)>,    // a stack of (level, items) of work to do.
+
+    done_list: Vec<Vec<T>>,             // where we put the assembled data.
+    done_tail: Vec<T>,
+
+    tails: Vec<Vec<T>>,               // tails of 256 lists (where we push data).
+    lists: Vec<Vec<Vec<T>>>,          // lists of 256 lists (where we push full buffers).
+
+    stash: Vec<Vec<T>>,                 // empty buffers we might be able to use.
+    stage: Vec<T>,                      // where we may have to stage data if it is too large.
 }
 
 impl<T> RadixSorter<T> {
-    pub fn new() -> RadixSorter<T> {
+
+    pub fn new() -> Self {
         RadixSorter {
-            shuffler: RadixShuffler::new(),
+            work: Vec::new(),
+            done_list: Vec::new(),
+            done_tail: Vec::new(),
+            tails: (0..256).map(|_| Vec::new()).collect(),
+            lists: (0..256).map(|_| Vec::new()).collect(),
+
+            stash: Vec::new(),
+            stage: Vec::new(),
         }
-    }
-    #[inline]
-    pub fn extend<F: Fn(&T)->&[u8], I: Iterator<Item=T>>(&mut self, iterator: I, function: &F) {
-        for element in iterator {
-            self.push(element, function);
-        }
-    }
-    #[inline]
-    pub fn push<F: Fn(&T)->&[u8]>(&mut self, element: T, function: &F) {
-        self.shuffler.push(element, &|x| (function(x).as_u64() % 256) as u8);
-    }
-    #[inline]
-    pub fn push_batch<F: Fn(&T)->&[u8]>(&mut self, batch: Vec<T>, function: &F) {
-        self.shuffler.push_batch(batch,  &|x| (function(x).as_u64() % 256) as u8);
-    }
-    pub fn sort<F: Fn(&T)->&[u8]>(&mut self, batches: &mut Vec<Vec<T>>, function: &F) {
-        for batch in batches.drain(..) { self.push_batch(batch, function); }
-        *batches = self.finish(function);
     }
 
-    pub fn finish<F: Fn(&T)->&[u8]>(&mut self, function: &F) -> Vec<Vec<T>> {
-        let mut sorted = self.shuffler.finish();
-        for byte in 1..(<U as Unsigned>::bytes()) { 
-            sorted = self.reshuffle(sorted, &|x| ((function(x).as_u64() >> (8 * byte)) % 256) as u8);
+    #[inline(always)]
+    pub fn push<U: Unsigned, F: Fn(&T)->U>(&mut self, element: T, bytes: F) {
+
+        let depth = U::bytes();
+        let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
+        if self.tails[byte].len() == self.tails[byte].capacity() {
+            let empty = self.empty();
+            let tail = replace(&mut self.tails[byte], empty);
+            if tail.len() > 0 {
+                self.lists[byte].push(tail);
+            }
         }
-        sorted
+        self.tails[byte].push(element);
+
     }
+
+    pub fn push_batch<U: Unsigned, F: Fn(&T)->U>(&mut self, mut batch: Vec<T>, bytes: F) {
+        for element in batch.drain(..) {
+            self.push(element, |x| bytes(x));
+        }
+        self.stash.push(batch);
+    }
+
+    pub fn finish<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut [T])>(&mut self, bytes: F, action: L) -> Vec<Vec<T>> {
+
+        let depth = U::bytes() - 1;
+        for byte in (0 .. 256).rev() {
+            if self.tails[byte].len() > 0 {
+                let empty = self.empty();
+                self.lists[byte].push(replace(&mut self.tails[byte], empty));
+                self.work.push((depth, replace(&mut self.lists[byte], Vec::new())));
+            }
+        }
+
+        while let Some((depth, mut list)) = self.work.pop() {
+            self.ingest(&mut list, &bytes, depth, &action);
+        }
+
+        if self.done_tail.len() > 0 { 
+            let empty = self.empty();
+            self.done_list.push(replace(&mut self.done_tail, empty)); 
+        }
+
+        ::std::mem::replace(&mut self.done_list, Vec::new())
+    }
+
     pub fn recycle(&mut self, mut buffers: Vec<Vec<T>>) {
         for mut buffer in buffers.drain(..) {
             buffer.clear();
-            self.shuffler.push_batch(buffer, &|_| 0);
-        }
-    }
-    #[inline(always)]
-    fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: Vec<Vec<T>>, function: &F) -> Vec<Vec<T>> {
-        for buffer in buffers.into_iter() {
-            self.shuffler.push_batch(buffer, function);
-        }
-        self.shuffler.finish()
-    }
-}
-
-///
-struct RadixShuffler<T> {
-    fronts: Vec<Vec<T>>,
-    buffers: Vec<Vec<Vec<T>>>, // for each byte, a list of segments
-    stashed: Vec<Vec<T>>,      // spare segments
-    default_capacity: usize,
-}
-
-impl<T> RadixShuffler<T> {
-
-    /// Creates a new `RadixShuffler` with a default capacity of `1024`.
-    fn new() -> RadixShuffler<T> {
-        RadixShuffler::with_capacities(1024)
-    }
-
-    /// Creates a new `RadixShuffler` with a specified default capacity.
-    fn with_capacities(size: usize) -> RadixShuffler<T> {
-        let mut buffers = vec![]; for _ in 0..256 { buffers.push(Vec::new()); }
-        let mut fronts = vec![]; for _ in 0..256 { fronts.push(Vec::new()); }
-
-        RadixShuffler {
-            buffers: buffers,
-            stashed: vec![],
-            fronts: fronts,
-            default_capacity: size,
+            self.stash.push(buffer);
         }
     }
 
-    /// Pushes a batch of elements into the `RadixShuffler` and stashes the memory backing the batch.
-    #[inline]
-    fn push_batch<F: Fn(&T)->u8>(&mut self, mut elements: Vec<T>, function: &F) {
-        for element in elements.drain(..) {
-            self.push(element, function);
-        }
-        // TODO : determine some discipline for when to keep buffers vs not.
-        // if elements.capacity() == self.default_capacity {
-            self.stashed.push(elements);
-        // }
+    fn empty(&mut self) -> Vec<T> {
+        self.stash.pop().unwrap_or_else(|| Vec::with_capacity(1 << 10))
     }
 
-    /// Pushes an element into the `RadixShuffler`, into a one of `256` arrays based on its least
-    /// significant byte.
-    #[inline]
-    fn push<F: Fn(&T)->u8>(&mut self, element: T, function: &F) {
+    pub fn sort<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut [T])>(&mut self, source: &mut Vec<Vec<T>>, bytes: F, action: L) {
+        self.work.push((U::bytes(), replace(source, Vec::new())));
+        while let Some((depth, mut list)) = self.work.pop() {
+            self.ingest(&mut list, &bytes, depth, &action);
+        }
 
-        let byte = function(&element) as usize;
+        if self.done_tail.len() > 0 { 
+            let empty = self.empty();
+            self.done_list.push(replace(&mut self.done_tail, empty)); 
+        }
+        ::std::mem::swap(&mut self.done_list, source);
+    }
 
-        // write the element to our scratch buffer space and consider it taken care of.
-        // test the buffer capacity first, so that we can leave them uninitialized.
-        unsafe {
-            if self.fronts.get_unchecked(byte).len() == self.fronts.get_unchecked(byte).capacity() {
-                let replacement = self.stashed.pop().unwrap_or_else(|| Vec::with_capacity(self.default_capacity));
-                let complete = ::std::mem::replace(&mut self.fronts[byte], replacement);
-                if complete.len() > 0 {
-                    self.buffers[byte].push(complete);
+    // digests a list of batches, which we assume (for some reason) to be densely packed.
+    fn ingest<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut [T])>(&mut self, source: &mut Vec<Vec<T>>, bytes: &F, depth: usize, action: &L) {
+
+        if source.len() > 1 {
+
+            // in this case, we should have a non-trivial number of elements, and so we can spend some effort
+            // looking at the current radix and going to work. of course, we can only do this if bytes remain;
+            // otherwise we will need to stage the data in self.stage and apply `action` to it.
+
+            if depth > 0 {
+
+                let depth = depth - 1;
+
+                // push all of source into lists and tails.
+                for mut batch in source.drain(..) {
+                    for element in batch.drain(..) {
+
+                        let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
+                        // if self.tails[byte].len() == self.tails[byte].capacity() {
+                        //     let empty = self.empty();
+                        //     let tail = replace(&mut self.tails[byte], empty);
+                        //     if tail.len() > 0 {
+                        //         self.lists[byte].push(tail);
+                        //     }
+                        // }
+                        // self.tails[byte].push(element);
+
+                        unsafe {
+                            if self.tails.get_unchecked(byte).len() == self.tails.get_unchecked(byte).capacity() {
+                                let empty = self.empty();
+                                let tail = replace(&mut self.tails[byte], empty);
+                                if tail.len() > 0 {
+                                    self.lists[byte].push(tail);
+                                }
+                            }
+
+                            let len = self.tails.get_unchecked(byte).len();
+                            ::std::ptr::write((*self.tails.get_unchecked_mut(byte)).get_unchecked_mut(len), element);
+                            self.tails.get_unchecked_mut(byte).set_len(len + 1);
+                        }
+
+                    }
+                    self.stash.push(batch);
+                }
+
+                // we are actually doing this is reverse, so that popping the stack goes in the right order.
+                for byte in (0 .. 256).rev() {
+                    if self.tails[byte].len() > 0 {
+                        let empty = self.empty();
+                        self.lists[byte].push(replace(&mut self.tails[byte], empty));
+                        self.work.push((depth, replace(&mut self.lists[byte], Vec::new())));
+                    }
+                }
+            }
+            else {
+                for mut batch in source.drain(..) {
+                    for element in batch.drain(..) {
+                        self.stage.push(element);
+                    }
+
+                    self.stash.push(batch);
+                }
+
+                action(&mut self.stage[..]);
+
+                for element in self.stage.drain(..) {
+                    if self.done_tail.len() == self.done_tail.capacity() {
+                        // let empty = self.empty();
+                        let empty = self.stash.pop().unwrap_or_else(|| Vec::with_capacity(1 << 10));
+                        let tail = replace(&mut self.done_tail, empty);
+                        if tail.len() > 0 {
+                            self.done_list.push(tail);
+                        }
+                    }
+                    self.done_tail.push(element);
                 }
             }
 
-            let len = self.fronts.get_unchecked(byte).len();
-            ::std::ptr::write((*self.fronts.get_unchecked_mut(byte)).get_unchecked_mut(len), element);
-            self.fronts.get_unchecked_mut(byte).set_len(len + 1);
         }
-    }
+        else if let Some(mut batch) = source.pop() {
 
-    /// Finishes the shuffling, returning a sequence of elements as a vector of buffers.
-    fn finish(&mut self) -> Vec<Vec<T>> {
+            action(&mut batch[..]);
 
-        for byte in 0..256 {
-            if self.fronts[byte].len() > 0 {
-                let replacement = self.stashed.pop().unwrap_or_else(|| Vec::with_capacity(1024));
-                let complete = ::std::mem::replace(&mut self.fronts[byte], replacement);
-                self.buffers[byte].push(complete);
+            // ideally we would move part of this batch into done_tail, and the rest within itself, 
+            // using at most two memcpys. I don't know how to do this without `unsafe`. Could do that.
+
+            let available = self.done_tail.capacity() - self.done_tail.len();
+            let to_move = ::std::cmp::min(available, batch.len());
+
+            self.done_tail.extend(batch.drain(.. to_move));
+
+            if batch.len() > 0 {
+                let tail = replace(&mut self.done_tail, batch);
+                if tail.len() > 0 {
+                    self.done_list.push(tail);
+                }
+            }
+            else {
+                self.stash.push(batch);
             }
         }
-
-        let mut result = vec![];
-        for byte in 0..256 {
-            result.extend(self.buffers[byte].drain(..));
-        }
-        result
     }
+}
+
+#[test]
+fn test_msb() {
+
+    let size = (1 << 25) as usize;
+    let mut batch = Vec::with_capacity(1 << 10);
+    let mut vector = Vec::new();
+    for i in 1..(size+1) {
+        if batch.len() == batch.capacity() {
+            vector.push(replace(&mut batch, Vec::with_capacity(1 << 10)));
+        }
+        batch.push(i);
+    }
+    vector.push(replace(&mut batch, Vec::with_capacity(1 << 10)));
+
+    let timer = ::std::time::Instant::now();
+    let mut sorter = RadixSorter::new();
+
+    sorter.sort(&mut vector, |&x| x, |xs| xs.sort());
+
+    let mut prev = 0;
+    for item in vector.drain(..).flat_map(|batch| batch.into_iter()) {
+        assert!(prev < item);
+        prev = item;
+    }
+
+    assert!(prev == size);
 }
