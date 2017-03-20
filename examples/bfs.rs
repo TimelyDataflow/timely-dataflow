@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, StdRng};
 use timely_sort::LSBRadixSorter as RadixSorter;
 
-use timely::dataflow::*;
 use timely::dataflow::operators::*;
 use timely::dataflow::channels::pact::Exchange;
 fn main() {
@@ -17,12 +16,12 @@ fn main() {
     let nodes: usize = std::env::args().nth(1).unwrap().parse().unwrap();
     let edges: usize = std::env::args().nth(2).unwrap().parse().unwrap();
 
-    timely::execute_from_args(std::env::args().skip(3), move |root| {
+    timely::execute_from_args(std::env::args().skip(3), move |worker| {
 
-        let index = root.index();
-        let peers = root.peers();
+        let index = worker.index();
+        let peers = worker.peers();
 
-        let seed: &[_] = &[1, 2, 3, root.index()];
+        let seed: &[_] = &[1, 2, 3, index];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
         let mut sorter = RadixSorter::new();
 
@@ -39,14 +38,14 @@ fn main() {
 
         let start = time::precise_time_s();
 
-        root.scoped(move |scope| {
+        worker.dataflow(move |scope| {
 
             // generate part of a random graph.
             let graph = (0..edges / peers)
                 .map(move |_| (rng.gen_range(0u32, nodes as u32), rng.gen_range(0u32, nodes as u32)))
                 .to_stream(scope);
 
-            // define a loop variable, for the (node, root) pairs.
+            // define a loop variable, for the (node, worker) pairs.
             let (handle, stream) = scope.loop_variable(usize::max_value(), 1);
 
             // use the stream of edges
@@ -64,7 +63,7 @@ fn main() {
                         edge_list.push(data.replace_with(Vec::new()));
                     });
 
-                    // receive (node, root) pairs, note any new ones.
+                    // receive (node, worker) pairs, note any new ones.
                     input2.for_each(|time, data| {
                         node_lists.entry(time.time())
                                   .or_insert_with(|| {
