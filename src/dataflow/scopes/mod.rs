@@ -59,9 +59,9 @@ pub trait Scope : Allocate+Clone {
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Enter, Leave};
     ///
-    /// timely::execute_from_args(std::env::args(), |root| {
+    /// timely::execute_from_args(std::env::args(), |worker| {
     ///     // must specify types as nothing else drives inference.
-    ///     let input = root.scoped::<u64,_,_>(|child1| {
+    ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<String>();
     ///         let output = child1.scoped::<u32,_,_>(|child2| {
     ///             stream.enter(child2).leave()

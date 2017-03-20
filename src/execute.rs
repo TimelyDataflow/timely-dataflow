@@ -1,7 +1,7 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
 use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
-use dataflow::scopes::{Root, Child, Scope};
+use dataflow::scopes::{Root, Child};
 
 /// Executes a single-threaded timely dataflow computation.
 ///
@@ -51,7 +51,7 @@ where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
     let guards = initialize(Configuration::Thread, move |allocator| {
         let mut root = Root::new(allocator);
-        let result = root.scoped(|x| func(x));
+        let result = root.dataflow(|x| func(x));
         while root.step() { }
         result
     });
@@ -75,12 +75,11 @@ where T: Send+'static,
 ///
 /// #Examples
 /// ```
-/// use timely::dataflow::Scope;
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
-/// timely::execute(timely::Configuration::Process(3), |root| {
-///     root.scoped::<(),_,_>(|scope| {
+/// timely::execute(timely::Configuration::Process(3), |worker| {
+///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
@@ -93,7 +92,6 @@ where T: Send+'static,
 ///
 /// ```
 /// use std::sync::{Arc, Mutex};
-/// use timely::dataflow::Scope;
 /// use timely::dataflow::operators::{ToStream, Inspect, Capture};
 /// use timely::dataflow::operators::capture::Extract;
 ///
@@ -102,9 +100,9 @@ where T: Send+'static,
 /// let send = Arc::new(Mutex::new(send));
 ///
 /// // execute a timely dataflow using three worker threads.
-/// timely::execute(timely::Configuration::Process(3), move |root| {
+/// timely::execute(timely::Configuration::Process(3), move |worker| {
 ///     let send = send.lock().unwrap().clone();
-///     root.scoped::<(),_,_>(move |scope| {
+///     worker.dataflow::<(),_,_>(move |scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x))
 ///                .capture_into(send);
@@ -150,12 +148,11 @@ where T:Send+'static,
 ///
 /// #Examples
 /// ```
-/// use timely::dataflow::*;
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using command line parameters
-/// timely::execute_from_args(std::env::args(), |root| {
-///     root.scoped::<(),_,_>(|scope| {
+/// timely::execute_from_args(std::env::args(), |worker| {
+///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })

@@ -42,20 +42,20 @@ pub trait UnorderedInput<G: Scope> {
     /// use timely::*;
     /// use timely::dataflow::operators::*;
     /// use timely::dataflow::operators::capture::Extract;
-    /// use timely::dataflow::{Stream, Scope};
+    /// use timely::dataflow::Stream;
     /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
     /// let send = Arc::new(Mutex::new(send));
     ///
-    /// timely::execute(Configuration::Thread, move |root| {
+    /// timely::execute(Configuration::Thread, move |worker| {
     ///
     ///     // this is only to validate the output.
     ///     let send = send.lock().unwrap().clone();
     ///
     ///     // create and capture the unordered input.
-    ///     let (mut input, mut cap) = root.scoped(|scope| {
+    ///     let (mut input, mut cap) = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_unordered_input();
     ///         stream.capture_into(send);
     ///         input
@@ -65,7 +65,7 @@ pub trait UnorderedInput<G: Scope> {
     ///     for round in 0..10 {
     ///         input.session(cap.clone()).give(round);
     ///         cap = cap.delayed(&RootTimestamp::new(round + 1));
-    ///         root.step();
+    ///         worker.step();
     ///     }
     /// }).unwrap();
     /// 
