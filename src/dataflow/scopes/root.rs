@@ -9,7 +9,7 @@ use progress::nested::{Source, Target};
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
-use super::Scope;
+use super::{Scope, Child};
 
 /// A `Root` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a list of child `Operate`s. The primary intended use of `Root` is through its
@@ -62,7 +62,27 @@ impl<A: Allocate> Root<A> {
     pub fn index(&self) -> usize { self.allocator.borrow().index() }
     /// The total number of peer workers.
     pub fn peers(&self) -> usize { self.allocator.borrow().peers() }
-}
+
+    /// Introduces a new dataflow constructed in the supplied closure.
+    ///
+    /// NOTE: This is the same code as in the `scoped` method for scopes, but it has been extracted
+    /// so that the `Root` type does not need to implement `Scope`.
+    pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
+        let subscope = RefCell::new(self.new_subscope());
+
+        let result = {
+            let mut builder = Child {
+                subgraph: &subscope,
+                parent: self.clone(),
+            };
+            func(&mut builder)
+        };
+
+        let index = subscope.borrow().index;
+        self.add_operator_with_index(subscope.into_inner(), index);
+
+        result
+    }}
 
 impl<A: Allocate> Scope for Root<A> {
     type Timestamp = RootTimestamp;
