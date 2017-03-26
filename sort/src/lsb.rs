@@ -8,58 +8,78 @@ macro_rules! lines_per_page {
     () => {{ 2 * 4096 / 64 }}
 }
 
+/// A few buffers capable of radix sorting by least significant byte.
+///
+/// The sorter allows the use of multiple different key bytes, determined by a type `U: Unsigned`.
+/// Currently, one is allowed to mix and match these as records are pushed, which may be a design
+/// bug.
 pub struct RadixSorter<T> {
     shuffler: RadixShuffler<T>,
 }
 
 impl<T> RadixSorter<T> {
+    /// Constructs a new radix sorter.
     pub fn new() -> RadixSorter<T> {
         RadixSorter {
             shuffler: RadixShuffler::new(),
         }
     }
+    /// Pushes a sequence of elements into the sorter.
     #[inline]
     pub fn extend<U: Unsigned, F: Fn(&T)->U, I: Iterator<Item=T>>(&mut self, iterator: I, function: &F) {
         for element in iterator {
             self.push(element, function);
         }
     }
+    /// Pushes a single element into the sorter.
     #[inline]
     pub fn push<U: Unsigned, F: Fn(&T)->U>(&mut self, element: T, function: &F) {
         self.shuffler.push(element, &|x| (function(x).as_u64() % 256) as u8);
     }
+    /// Pushes a batch of elements into the sorter, and transfers ownership of the containing allocation.
     #[inline]
     pub fn push_batch<U: Unsigned, F: Fn(&T)->U>(&mut self, batch: Vec<T>, function: &F) {
         self.shuffler.push_batch(batch,  &|x| (function(x).as_u64() % 256) as u8);
     }
+    /// Sorts a sequence of batches, re-using the allocations where possible and re-populating `batches`.
     pub fn sort<U: Unsigned, F: Fn(&T)->U>(&mut self, batches: &mut Vec<Vec<T>>, function: &F) {
-        for batch in batches.drain(..) { self.push_batch(batch, function); }
-        *batches = self.finish(function);
+        for batch in batches.drain(..) { 
+            self.push_batch(batch, function); 
+        }
+        self.finish_into(batches, function);
     }
-
+    /// Finishes a sorting session by allocating and populating a sequence of batches.
     pub fn finish<U: Unsigned, F: Fn(&T)->U>(&mut self, function: &F) -> Vec<Vec<T>> {
-        let mut sorted = self.shuffler.finish();
-        for byte in 1..(<U as Unsigned>::bytes()) { 
-            sorted = self.reshuffle(sorted, &|x| ((function(x).as_u64() >> (8 * byte)) % 256) as u8);
-        }
-        sorted
+        let mut result = Vec::new();
+        self.finish_into(&mut result, function);
+        result
     }
-    pub fn recycle(&mut self, mut buffers: Vec<Vec<T>>) {
-        for mut buffer in buffers.drain(..) {
-            buffer.clear();
-            self.shuffler.push_batch(buffer, &|_| 0);
+    /// Finishes a sorting session by populating a supplied sequence.
+    pub fn finish_into<U: Unsigned, F: Fn(&T)->U>(&mut self, target: &mut Vec<Vec<T>>, function: &F) {
+        self.shuffler.finish_into(target);
+        for byte in 1..(<U as Unsigned>::bytes()) { 
+            self.reshuffle(target, &|x| ((function(x).as_u64() >> (8 * byte)) % 256) as u8);
         }
+    }
+    /// Consumes supplied buffers for future re-use by the sorter.
+    ///
+    /// This method is equivalent to `self.rebalance(buffers, usize::max_value())`.
+    pub fn recycle(&mut self, buffers: &mut Vec<Vec<T>>) {
+        self.rebalance(buffers, usize::max_value());
+    }
+    /// Either consumes from or pushes into `buffers` to leave `intended` spare buffers with the sorter.
+    pub fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize) {
+        self.shuffler.rebalance(buffers, intended);
     }
     #[inline(always)]
-    fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: Vec<Vec<T>>, function: &F) -> Vec<Vec<T>> {
-        for buffer in buffers.into_iter() {
+    fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: &mut Vec<Vec<T>>, function: &F) {
+        for buffer in buffers.drain(..) {
             self.shuffler.push_batch(buffer, function);
         }
-        self.shuffler.finish()
+        self.shuffler.finish_into(buffers);
     }
 }
 
-///
 struct RadixShuffler<T> {
     fronts: Vec<Vec<T>>,
     buffers: Vec<Vec<Vec<T>>>, // for each byte, a list of segments
@@ -123,22 +143,32 @@ impl<T> RadixShuffler<T> {
         }
     }
 
-    /// Finishes the shuffling, returning a sequence of elements as a vector of buffers.
-    fn finish(&mut self) -> Vec<Vec<T>> {
-
+    /// Finishes the shuffling into a target vector.
+    fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
         for byte in 0..256 {
             if self.fronts[byte].len() > 0 {
-                let replacement = self.stashed.pop().unwrap_or_else(|| Vec::with_capacity(1024));
+                let replacement = self.stashed.pop().unwrap_or_else(|| Vec::new());
                 let complete = ::std::mem::replace(&mut self.fronts[byte], replacement);
-                self.buffers[byte].push(complete);
+                if complete.len() > 0 {
+                    self.buffers[byte].push(complete);
+                }
             }
         }
 
-        let mut result = vec![];
         for byte in 0..256 {
-            result.extend(self.buffers[byte].drain(..));
+            target.extend(self.buffers[byte].drain(..));
         }
-        result
+    }
+
+    fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize) {
+        while self.stashed.len() > intended {
+            buffers.push(self.stashed.pop().unwrap());
+        }
+        while self.stashed.len() < intended && buffers.len() > 0 {
+            let mut buffer = buffers.pop().unwrap();
+            buffer.clear();
+            self.stashed.push(buffer);
+        }
     }
 }
 

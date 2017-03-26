@@ -26,57 +26,6 @@ macro_rules! lines_per_page {
     () => {{ 1024 }}
 }
 
-// pub struct RadixSorter<T> {
-//     shuffler: RadixShuffler<T>,
-// }
-
-// impl<T> RadixSorter<T> {
-//     pub fn new() -> RadixSorter<T> {
-//         RadixSorter {
-//             shuffler: RadixShuffler::new(),
-//         }
-//     }
-//     #[inline]
-//     pub fn extend<F: Fn(&T)->&[u8], I: Iterator<Item=T>>(&mut self, iterator: I, function: &F) {
-//         for element in iterator {
-//             self.push(element, function);
-//         }
-//     }
-//     #[inline]
-//     pub fn push<F: Fn(&T)->&[u8]>(&mut self, element: T, function: &F) {
-//         self.shuffler.push(element, &|x| (function(x).as_u64() % 256) as u8);
-//     }
-//     #[inline]
-//     pub fn push_batch<F: Fn(&T)->&[u8]>(&mut self, batch: Vec<T>, function: &F) {
-//         self.shuffler.push_batch(batch,  &|x| (function(x).as_u64() % 256) as u8);
-//     }
-//     pub fn sort<F: Fn(&T)->&[u8]>(&mut self, batches: &mut Vec<Vec<T>>, function: &F) {
-//         for batch in batches.drain(..) { self.push_batch(batch, function); }
-//         *batches = self.finish(function);
-//     }
-
-//     pub fn finish<F: Fn(&T)->&[u8]>(&mut self, function: &F) -> Vec<Vec<T>> {
-//         let mut sorted = self.shuffler.finish();
-//         for byte in 1..(<U as Unsigned>::bytes()) { 
-//             sorted = self.reshuffle(sorted, &|x| ((function(x).as_u64() >> (8 * byte)) % 256) as u8);
-//         }
-//         sorted
-//     }
-//     pub fn recycle(&mut self, mut buffers: Vec<Vec<T>>) {
-//         for mut buffer in buffers.drain(..) {
-//             buffer.clear();
-//             self.shuffler.push_batch(buffer, &|_| 0);
-//         }
-//     }
-//     #[inline(always)]
-//     fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: Vec<Vec<T>>, function: &F) -> Vec<Vec<T>> {
-//         for buffer in buffers.into_iter() {
-//             self.shuffler.push_batch(buffer, function);
-//         }
-//         self.shuffler.finish()
-//     }
-// }
-
 // At any point in time, we have some outstanding work to do, 
 pub struct RadixSorter<T> {
 
@@ -164,6 +113,13 @@ impl<T> RadixSorter<T> {
         self.stash.pop().unwrap_or_else(|| Vec::with_capacity(1 << 10))
     }
 
+    /// Radix sorts a sequence of buffers, possibly stopping early on small batches and calling `action`.
+    ///
+    /// The intent of `sort` is to allow us to do top-down radix sorting with the option to exit early if
+    /// the sizes of elements to sort are small enough. Of course, just exiting early doesn't sort the data,
+    /// so we have an `action` you get to apply to finish things off. We could make this sort by radix, but
+    /// there are several use cases where we need to follow up with additional sorting / compaction and would
+    /// like to hook this clean-up method anyhow.
     pub fn sort<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut [T])>(&mut self, source: &mut Vec<Vec<T>>, bytes: F, action: L) {
         self.work.push((U::bytes(), replace(source, Vec::new())));
         while let Some((depth, mut list)) = self.work.pop() {
@@ -284,7 +240,7 @@ impl<T> RadixSorter<T> {
 #[test]
 fn test_msb() {
 
-    let size = (1 << 25) as usize;
+    let size = (1 << 20) as usize;
     let mut batch = Vec::with_capacity(1 << 10);
     let mut vector = Vec::new();
     for i in 1..(size+1) {
@@ -295,7 +251,6 @@ fn test_msb() {
     }
     vector.push(replace(&mut batch, Vec::with_capacity(1 << 10)));
 
-    let timer = ::std::time::Instant::now();
     let mut sorter = RadixSorter::new();
 
     sorter.sort(&mut vector, |&x| x, |xs| xs.sort());

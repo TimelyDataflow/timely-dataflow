@@ -6,8 +6,6 @@ pub use lsb::RadixSorter as LSBRadixSorter;
 pub use lsb_swc::RadixSorter as LSBSWCRadixSorter;
 pub use msb::RadixSorter as MSBRadixSorter;
 
-// pub use msb::RadixSorter as MSBRadixSorter;
-
 pub trait Unsigned : Ord {
     fn bytes() -> usize;
     fn as_u64(&self) -> u64;
