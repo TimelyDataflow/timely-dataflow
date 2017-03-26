@@ -11,38 +11,13 @@ use {Push, Pull};
 
 use super::{Scope, Child};
 
-struct Wrapper {
-    index: usize,
-    operate: Option<Box<Operate<RootTimestamp>>>,
-    resources: Option<Box<Drop>>,
-}
-
-impl Wrapper {
-    fn step(&mut self) -> bool {
-        self.operate.as_mut().map(|op| op.pull_internal_progress(&mut [], &mut [], &mut [])).unwrap_or(false)
-    }
-    fn active(&self) -> bool { self.operate.is_some() }
-}
-
-impl Drop for Wrapper {
-    fn drop(&mut self) {
-        println!("dropping dataflow {:?}", self.index);
-        // ensure drop order
-        self.operate = None;
-        self.resources = None;
-    }
-}
-
 /// A `Root` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a list of child `Operate`s. The primary intended use of `Root` is through its
 /// implementation of the `Scope` trait.
 pub struct Root<A: Allocate> {
     allocator: Rc<RefCell<A>>,
     identifiers: Rc<RefCell<usize>>,
-
-    // list of currently active dataflows.
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
-    // how many dataflows have we had (to allocate unique identifiers).
     dataflow_counter: Rc<RefCell<usize>>,
 }
 
@@ -75,8 +50,11 @@ impl<A: Allocate> Root<A> {
 
         let mut active = false;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
-            active = dataflow.step() || active;
+            let sub_active = dataflow.step();
+            active = active || sub_active;
         }
+
+        // discard completed dataflows.
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
 
         active
@@ -110,9 +88,6 @@ impl<A: Allocate> Root<A> {
             func(&mut builder)
         };
 
-        // let index = subscope.borrow().index;
-        // self.add_operator_with_index(subscope.into_inner(), index);
-
         let mut operator = subscope.into_inner();
 
         operator.get_internal_summary();
@@ -145,11 +120,11 @@ impl<A: Allocate> Root<A> {
         self.dataflows.borrow_mut().push(wrapper);
     }
 
+    // sane way to get new dataflow identifiers; used to be self.dataflows.len(). =/
     fn allocate_dataflow_index(&mut self) -> usize {
         *self.dataflow_counter.borrow_mut() += 1;
         *self.dataflow_counter.borrow() - 1
     }
-
 }
 
 impl<A: Allocate> Scope for Root<A> {
@@ -163,23 +138,10 @@ impl<A: Allocate> Scope for Root<A> {
 
     fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, _scope: SC) -> usize {
         panic!("deprecated");
-
-        // let index = self.allocate_dataflow_index();
-        // self.add_operator_with_index(scope, index);
-        // index
     }
 
     fn add_operator_with_index<SC: Operate<RootTimestamp>+'static>(&mut self, _scope: SC, _index: usize) {
         panic!("deprecated");
-
-        // scope.get_internal_summary();
-        // scope.set_external_summary(Vec::new(), &mut []);
-
-        // let wrapper = Wrapper {
-        //     operate: Some(Box::new(scope)),
-        //     resources: None,
-        // };
-        // self.dataflows.borrow_mut().push(wrapper);
     }
     fn new_identifier(&mut self) -> usize {
         *self.identifiers.borrow_mut() += 1;
@@ -187,10 +149,7 @@ impl<A: Allocate> Scope for Root<A> {
     }
 
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
-        panic!("use of Root::scoped() deprecated; use Root::dataflow instead");
-        // let addr = vec![self.allocator.borrow().index()];
-        // let dataflow_index = self.allocate_dataflow_index();
-        // Subgraph::new_from(&mut (*self.allocator.borrow_mut()), dataflow_index, addr)
+        panic!("use of Root::scoped() deprecated; use Root::dataflow() instead");
     }
 }
 
@@ -206,9 +165,31 @@ impl<A: Allocate> Clone for Root<A> {
     fn clone(&self) -> Self {
         Root {
             allocator: self.allocator.clone(),
-            dataflows: self.dataflows.clone(),
             identifiers: self.identifiers.clone(),
+            dataflows: self.dataflows.clone(),
             dataflow_counter: self.dataflow_counter.clone(),
         }
+    }
+}
+
+struct Wrapper {
+    index: usize,
+    operate: Option<Box<Operate<RootTimestamp>>>,
+    resources: Option<Box<Drop>>,
+}
+
+impl Wrapper {
+    fn step(&mut self) -> bool {
+        self.operate.as_mut().map(|op| op.pull_internal_progress(&mut [], &mut [], &mut [])).unwrap_or(false)
+    }
+    fn active(&self) -> bool { self.operate.is_some() }
+}
+
+impl Drop for Wrapper {
+    fn drop(&mut self) {
+        println!("dropping dataflow {:?}", self.index);
+        // ensure drop order
+        self.operate = None;
+        self.resources = None;
     }
 }
