@@ -84,12 +84,16 @@ impl<'a, T> BatchedVecRef<'a, T> {
     }
 }
 
+/// An efficiently-appendable collection of `T`s. Unlike `Vec<T>`, which stores all elements contiguously,
+/// `BatchedVec<T>` stores elements in a bunch of independent batches, avoiding the need to periodically
+/// copy lots of elements.
 pub struct BatchedVec<T> {
     tail: Vec<T>,
     batches: Vec<Vec<T>>
 }
 
 impl<T> BatchedVec<T> {
+    /// Create an empty `BatchedVec<T>`
     pub fn new() -> BatchedVec<T> {
         BatchedVec {
             tail: Vec::new(),
@@ -97,6 +101,10 @@ impl<T> BatchedVec<T> {
         }
     }
 
+    /// Actually access this `BatchedVec<T>`. Because of the `BatchedVecX256` optimization,
+    /// we don't want to implement all the methods on `&mut BatchedVec<T>`, since `BatchedVecX256`
+    /// has no way of getting those thin references. Instead, we have a custom "fat pointer" type
+    /// that all access is done through, generalizing `BatchedVec` and `BatchedVecX256`.
     pub fn ref_mut(&mut self) -> BatchedVecRef<T> {
         BatchedVecRef {
             tail: &mut self.tail,
@@ -105,12 +113,16 @@ impl<T> BatchedVec<T> {
     }
 }
 
+/// An optimized equivalent of `Box<[BatchedVec<T>; 256]>`. Since the tails are the most
+/// commonly used parts of `BatchedVec`s, it is advantageous to store them in a separate,
+/// parallel array.
 pub struct BatchedVecX256<T> {
     tails: Vec<Vec<T>>,
     batches: Vec<Vec<Vec<T>>>
 }
 
 impl<T> BatchedVecX256<T> {
+    /// Create a new set of 256 empty `BatchedVec`s.
     pub fn new() -> BatchedVecX256<T> {
         let mut tails = Vec::with_capacity(256);
         let mut batches = Vec::with_capacity(256);
@@ -125,6 +137,7 @@ impl<T> BatchedVecX256<T> {
         }
     }
 
+    /// Access the `BatchedVec` at the `byte` position.
     #[inline(always)]
     pub fn get_mut(&mut self, byte: u8) -> BatchedVecRef<T> {
         unsafe {
