@@ -1,5 +1,6 @@
 use ::Unsigned;
 use stash::Stash;
+use batched_vec::BatchedVecX256;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::max(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -91,8 +92,7 @@ impl<T> RadixSorter<T> {
 }
 
 struct RadixShuffler<T> {
-    fronts: Vec<Vec<T>>,
-    buffers: Vec<Vec<Vec<T>>>, // for each byte, a list of segments
+    buckets: BatchedVecX256<T>,
     stash: Stash<T>
 }
 
@@ -105,12 +105,8 @@ impl<T> RadixShuffler<T> {
 
     /// Creates a new `RadixShuffler` with a specified default capacity.
     fn with_capacities(size: usize) -> RadixShuffler<T> {
-        let mut buffers = vec![]; for _ in 0..256 { buffers.push(Vec::new()); }
-        let mut fronts = vec![]; for _ in 0..256 { fronts.push(Vec::new()); }
-
         RadixShuffler {
-            buffers: buffers,
-            fronts: fronts,
+            buckets: BatchedVecX256::new(),
             stash: Stash::new(size)
         }
     }
@@ -128,38 +124,14 @@ impl<T> RadixShuffler<T> {
     /// significant byte.
     #[inline]
     fn push<F: Fn(&T)->u8>(&mut self, element: T, function: &F) {
-
-        let byte = function(&element) as usize;
-
-        // write the element to our scratch buffer space and consider it taken care of.
-        // test the buffer capacity first, so that we can leave them uninitialized.
-        unsafe {
-            if self.fronts.get_unchecked(byte).len() == self.fronts.get_unchecked(byte).capacity() {
-                let complete = ::std::mem::replace(&mut self.fronts[byte], self.stash.get());
-                if complete.len() > 0 {
-                    self.buffers[byte].push(complete);
-                }
-            }
-
-            let len = self.fronts.get_unchecked(byte).len();
-            ::std::ptr::write((*self.fronts.get_unchecked_mut(byte)).get_unchecked_mut(len), element);
-            self.fronts.get_unchecked_mut(byte).set_len(len + 1);
-        }
+        let byte = function(&element);
+        self.buckets.get_mut(byte).push(element, &mut self.stash);
     }
 
     /// Finishes the shuffling into a target vector.
     fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
         for byte in 0..256 {
-            if self.fronts[byte].len() > 0 {
-                let complete = ::std::mem::replace(&mut self.fronts[byte], self.stash.get());
-                if complete.len() > 0 {
-                    self.buffers[byte].push(complete);
-                }
-            }
-        }
-
-        for byte in 0..256 {
-            target.extend(self.buffers[byte].drain(..));
+            self.buckets.get_mut(byte as u8).finish_into(target, &mut self.stash);
         }
     }
 }

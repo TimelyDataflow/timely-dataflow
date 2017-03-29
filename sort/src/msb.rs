@@ -17,6 +17,7 @@ use ::std::mem::replace;
 
 use ::Unsigned;
 use stash::Stash;
+use batched_vec::BatchedVecX256;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::min(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -34,11 +35,8 @@ pub struct RadixSorter<T> {
     done_list: Vec<Vec<T>>,             // where we put the assembled data.
     done_tail: Vec<T>,
 
-    tails: Vec<Vec<T>>,               // tails of 256 lists (where we push data).
-    lists: Vec<Vec<Vec<T>>>,          // lists of 256 lists (where we push full buffers).
-
+    buckets: BatchedVecX256<T>,
     stage: Vec<T>,                      // where we may have to stage data if it is too large.
-
     stash: Stash<T>,                 // empty buffers we might be able to use.
 }
 
@@ -49,9 +47,7 @@ impl<T> RadixSorter<T> {
             work: Vec::new(),
             done_list: Vec::new(),
             done_tail: Vec::new(),
-            tails: (0..256).map(|_| Vec::new()).collect(),
-            lists: (0..256).map(|_| Vec::new()).collect(),
-
+            buckets: BatchedVecX256::new(),
             stage: Vec::new(),
             stash: Stash::new(1 << 10),
         }
@@ -59,18 +55,9 @@ impl<T> RadixSorter<T> {
 
     #[inline(always)]
     pub fn push<U: Unsigned, F: Fn(&T)->U>(&mut self, element: T, bytes: F) {
-
         let depth = U::bytes();
-        let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
-        if self.tails[byte].len() == self.tails[byte].capacity() {
-            let empty = self.empty();
-            let tail = replace(&mut self.tails[byte], empty);
-            if tail.len() > 0 {
-                self.lists[byte].push(tail);
-            }
-        }
-        self.tails[byte].push(element);
-
+        let byte = (bytes(&element).as_u64() >> (8 * depth)) as u8;
+        self.buckets.get_mut(byte).push(element, &mut self.stash);
     }
 
     pub fn push_batch<U: Unsigned, F: Fn(&T)->U>(&mut self, mut batch: Vec<T>, bytes: F) {
@@ -84,10 +71,9 @@ impl<T> RadixSorter<T> {
 
         let depth = U::bytes() - 1;
         for byte in (0 .. 256).rev() {
-            if self.tails[byte].len() > 0 {
-                let empty = self.empty();
-                self.lists[byte].push(replace(&mut self.tails[byte], empty));
-                self.work.push((depth, replace(&mut self.lists[byte], Vec::new())));
+            let mut bucket = self.buckets.get_mut(byte as u8); 
+            if !bucket.is_empty() {
+                self.work.push((depth, bucket.finish(&mut self.stash)));
             }
         }
 
@@ -150,41 +136,17 @@ impl<T> RadixSorter<T> {
                 // push all of source into lists and tails.
                 for mut batch in source.drain(..) {
                     for element in batch.drain(..) {
-
-                        let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
-                        // if self.tails[byte].len() == self.tails[byte].capacity() {
-                        //     let empty = self.empty();
-                        //     let tail = replace(&mut self.tails[byte], empty);
-                        //     if tail.len() > 0 {
-                        //         self.lists[byte].push(tail);
-                        //     }
-                        // }
-                        // self.tails[byte].push(element);
-
-                        unsafe {
-                            if self.tails.get_unchecked(byte).len() == self.tails.get_unchecked(byte).capacity() {
-                                let empty = self.empty();
-                                let tail = replace(&mut self.tails[byte], empty);
-                                if tail.len() > 0 {
-                                    self.lists[byte].push(tail);
-                                }
-                            }
-
-                            let len = self.tails.get_unchecked(byte).len();
-                            ::std::ptr::write((*self.tails.get_unchecked_mut(byte)).get_unchecked_mut(len), element);
-                            self.tails.get_unchecked_mut(byte).set_len(len + 1);
-                        }
-
+                        let byte = (bytes(&element).as_u64() >> (8 * depth)) as u8;
+                        self.buckets.get_mut(byte).push(element, &mut self.stash);
                     }
                     self.stash.give(batch);
                 }
 
                 // we are actually doing this is reverse, so that popping the stack goes in the right order.
                 for byte in (0 .. 256).rev() {
-                    if self.tails[byte].len() > 0 {
-                        let empty = self.empty();
-                        self.lists[byte].push(replace(&mut self.tails[byte], empty));
-                        self.work.push((depth, replace(&mut self.lists[byte], Vec::new())));
+                    let mut bucket = self.buckets.get_mut(byte as u8);
+                    if !bucket.is_empty() {
+                        self.work.push((depth, bucket.finish(&mut self.stash)));
                     }
                 }
             }
