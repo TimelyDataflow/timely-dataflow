@@ -1,4 +1,5 @@
 use ::Unsigned;
+use stash::Stash;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::max(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -69,7 +70,7 @@ impl<T> RadixSorter<T> {
     }
     /// Either consumes from or pushes into `buffers` to leave `intended` spare buffers with the sorter.
     pub fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize) {
-        self.shuffler.rebalance(buffers, intended);
+        self.shuffler.stash.rebalance(buffers, intended);
     }
     #[inline(always)]
     fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: &mut Vec<Vec<T>>, function: &F) {
@@ -92,7 +93,8 @@ pub struct RadixShuffler<T> {
 
     fronts: Vec<Vec<T>>,
     buffers: Vec<Vec<Vec<T>>>, // for each byte, a list of segments
-    stashed: Vec<Vec<T>>,      // spare segments
+
+    stash: Stash<T>,      // spare segments
 }
 
 impl<T> RadixShuffler<T> {
@@ -110,17 +112,19 @@ impl<T> RadixShuffler<T> {
             staged: staged,
             counts: [0; 256],
             buffers: buffers,
-            stashed: vec![],
             fronts: fronts,
+            stash: Stash::new(lines_per_page!() * per_cache_line!(T)),
         }
     }
+
     fn push_batch<F: Fn(&T)->u8>(&mut self, mut elements: Vec<T>, function: &F) {
         for element in elements.drain(..) {
             self.push(element, function);
         }
 
-        self.stashed.push(elements);
+        self.stash.give(elements);
     }
+
     #[inline]
     fn push<F: Fn(&T)->u8>(&mut self, element: T, function: &F) {
 
@@ -133,8 +137,7 @@ impl<T> RadixShuffler<T> {
             if *self.counts.get_unchecked(byte) as usize == per_cache_line!(T) {
 
                 if self.fronts.get_unchecked(byte).len() == self.fronts.get_unchecked(byte).capacity() {
-                    let replacement = self.stashed.pop().unwrap_or_else(|| Vec::with_capacity(lines_per_page!() * per_cache_line!(T)));
-                    let complete = ::std::mem::replace(&mut self.fronts[byte], replacement);
+                    let complete = ::std::mem::replace(&mut self.fronts[byte], self.stash.get());
                     if complete.len() > 0 {
                         self.buffers[byte].push(complete);
                     }
@@ -162,6 +165,7 @@ impl<T> RadixShuffler<T> {
             *self.counts.get_unchecked_mut(byte) += 1;
         }
     }
+
     fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
 
         // This does the slightly clever thing of moving allocated data to `target` and then checking
@@ -171,13 +175,12 @@ impl<T> RadixShuffler<T> {
         for byte in 0..256 {
             target.extend(self.buffers[byte].drain(..));
             if self.fronts[byte].len() > 0 {
-                let replacement = self.stashed.pop().unwrap_or_else(|| Vec::new());
-                let complete = ::std::mem::replace(&mut self.fronts[byte], replacement);
+                let complete = ::std::mem::replace(&mut self.fronts[byte], Vec::new());
                 target.push(complete);
             }
 
             if target.last().map(|x| x.capacity() - x.len() >= self.counts[byte] as usize) != Some(true) {
-                target.push(self.stashed.pop().unwrap_or_else(|| Vec::with_capacity(lines_per_page!() * per_cache_line!(T))));
+                target.push(self.stash.get());
             }
 
             let last = target.last_mut().unwrap();
@@ -187,16 +190,6 @@ impl<T> RadixShuffler<T> {
                 }
             }
             self.counts[byte] = 0;
-        }
-    }
-    fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize) {
-        while self.stashed.len() > intended {
-            buffers.push(self.stashed.pop().unwrap());
-        }
-        while self.stashed.len() < intended && buffers.len() > 0 {
-            let mut buffer = buffers.pop().unwrap();
-            buffer.clear();
-            self.stashed.push(buffer);
         }
     }
 }

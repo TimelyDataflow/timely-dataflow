@@ -16,7 +16,7 @@
 use ::std::mem::replace;
 
 use ::Unsigned;
-
+use stash::Stash;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::min(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -37,8 +37,9 @@ pub struct RadixSorter<T> {
     tails: Vec<Vec<T>>,               // tails of 256 lists (where we push data).
     lists: Vec<Vec<Vec<T>>>,          // lists of 256 lists (where we push full buffers).
 
-    stash: Vec<Vec<T>>,                 // empty buffers we might be able to use.
     stage: Vec<T>,                      // where we may have to stage data if it is too large.
+
+    stash: Stash<T>,                 // empty buffers we might be able to use.
 }
 
 impl<T> RadixSorter<T> {
@@ -51,8 +52,8 @@ impl<T> RadixSorter<T> {
             tails: (0..256).map(|_| Vec::new()).collect(),
             lists: (0..256).map(|_| Vec::new()).collect(),
 
-            stash: Vec::new(),
             stage: Vec::new(),
+            stash: Stash::new(1 << 10),
         }
     }
 
@@ -76,7 +77,7 @@ impl<T> RadixSorter<T> {
         for element in batch.drain(..) {
             self.push(element, |x| bytes(x));
         }
-        self.stash.push(batch);
+        self.stash.give(batch);
     }
 
     pub fn finish<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut [T])>(&mut self, bytes: F, action: L) -> Vec<Vec<T>> {
@@ -105,12 +106,12 @@ impl<T> RadixSorter<T> {
     pub fn recycle(&mut self, mut buffers: Vec<Vec<T>>) {
         for mut buffer in buffers.drain(..) {
             buffer.clear();
-            self.stash.push(buffer);
+            self.stash.give(buffer);
         }
     }
 
     fn empty(&mut self) -> Vec<T> {
-        self.stash.pop().unwrap_or_else(|| Vec::with_capacity(1 << 10))
+        self.stash.get()
     }
 
     /// Radix sorts a sequence of buffers, possibly stopping early on small batches and calling `action`.
@@ -175,7 +176,7 @@ impl<T> RadixSorter<T> {
                         }
 
                     }
-                    self.stash.push(batch);
+                    self.stash.give(batch);
                 }
 
                 // we are actually doing this is reverse, so that popping the stack goes in the right order.
@@ -193,7 +194,7 @@ impl<T> RadixSorter<T> {
                         self.stage.push(element);
                     }
 
-                    self.stash.push(batch);
+                    self.stash.give(batch);
                 }
 
                 action(&mut self.stage[..]);
@@ -201,7 +202,7 @@ impl<T> RadixSorter<T> {
                 for element in self.stage.drain(..) {
                     if self.done_tail.len() == self.done_tail.capacity() {
                         // let empty = self.empty();
-                        let empty = self.stash.pop().unwrap_or_else(|| Vec::with_capacity(1 << 10));
+                        let empty = self.stash.get();
                         let tail = replace(&mut self.done_tail, empty);
                         if tail.len() > 0 {
                             self.done_list.push(tail);
@@ -231,7 +232,7 @@ impl<T> RadixSorter<T> {
                 }
             }
             else {
-                self.stash.push(batch);
+                self.stash.give(batch);
             }
         }
     }
