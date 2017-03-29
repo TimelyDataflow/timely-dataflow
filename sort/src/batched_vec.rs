@@ -1,4 +1,4 @@
-use std::{mem, ptr};
+use std::{cmp, mem, ptr};
 use stash::Stash;
 
 pub struct BatchedVecRef<'a, T: 'a> {
@@ -37,6 +37,23 @@ impl<'a, T> BatchedVecRef<'a, T> {
         }
     }
 
+    pub fn push_vec(&mut self, mut elements: Vec<T>, stash: &mut Stash<T>) {
+        // Fill up tail so that we keep the batches fully filled (we don't
+        // want to waste memory).
+        let available = self.tail.capacity() - self.tail.len();
+        let to_move = cmp::min(available, elements.len());
+        self.tail.extend(elements.drain(..to_move)); // This ought to compile to just 2 memcpys
+
+        if elements.is_empty() {
+            stash.give(elements);
+        } else {
+            let tail = mem::replace(self.tail, elements);
+            if !tail.is_empty() {
+                self.batches.push(tail);
+            }
+        }
+    }
+
     #[inline(always)]
     pub unsafe fn push_all(&mut self, elements: &[T], stash: &mut Stash<T>) {
         self.reserve(stash);
@@ -64,6 +81,27 @@ impl<'a, T> BatchedVecRef<'a, T> {
             self.batches.push(mem::replace(&mut self.tail, stash.get()));
         }
         mem::replace(&mut self.batches, Vec::new())
+    }
+}
+
+pub struct BatchedVec<T> {
+    tail: Vec<T>,
+    batches: Vec<Vec<T>>
+}
+
+impl<T> BatchedVec<T> {
+    pub fn new() -> BatchedVec<T> {
+        BatchedVec {
+            tail: Vec::new(),
+            batches: Vec::new()
+        }
+    }
+
+    pub fn ref_mut(&mut self) -> BatchedVecRef<T> {
+        BatchedVecRef {
+            tail: &mut self.tail,
+            batches: &mut self.batches
+        }
     }
 }
 
