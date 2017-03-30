@@ -156,7 +156,7 @@ impl<T> RadixShuffler<T> {
         // If there is room, we just copy them into the buffer, potentially saving on allocation churn.
 
         for byte in 0..256 {
-            self.buckets.get_mut(byte as u8).finish_into(target, &mut self.stash);
+            self.buckets.get_mut(byte as u8).finish_into(target);
 
             if target.last().map(|x| x.capacity() - x.len() >= self.counts[byte] as usize) != Some(true) {
                 target.push(self.stash.get());

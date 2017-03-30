@@ -70,7 +70,7 @@ impl<T> RadixSorter<T> {
         for byte in (0 .. 256).rev() {
             let mut bucket = self.buckets.get_mut(byte as u8); 
             if !bucket.is_empty() {
-                self.work.push((depth, bucket.finish(&mut self.stash)));
+                self.work.push((depth, bucket.finish()));
             }
         }
 
@@ -78,7 +78,7 @@ impl<T> RadixSorter<T> {
             self.ingest(&mut list, &bytes, depth, &action);
         }
 
-        self.done.ref_mut().finish(&mut self.stash)
+        self.done.ref_mut().finish()
     }
 
     pub fn recycle(&mut self, mut buffers: Vec<Vec<T>>) {
@@ -101,7 +101,7 @@ impl<T> RadixSorter<T> {
             self.ingest(&mut list, &bytes, depth, &action);
         }
 
-        self.done.ref_mut().finish_into(source, &mut self.stash);
+        self.done.ref_mut().finish_into(source);
     }
 
     // digests a list of batches, which we assume (for some reason) to be densely packed.
@@ -130,7 +130,7 @@ impl<T> RadixSorter<T> {
                 for byte in (0 .. 256).rev() {
                     let mut bucket = self.buckets.get_mut(byte as u8);
                     if !bucket.is_empty() {
-                        self.work.push((depth, bucket.finish(&mut self.stash)));
+                        self.work.push((depth, bucket.finish()));
                     }
                 }
             }

@@ -68,17 +68,17 @@ impl<'a, T> BatchedVecRef<'a, T> {
     }
 
     #[inline(always)]
-    pub fn finish_into(&mut self, target: &mut Vec<Vec<T>>, stash: &mut Stash<T>) {
+    pub fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
         target.extend(self.batches.drain(..));
         if !self.tail.is_empty() {
-            target.push(mem::replace(&mut self.tail, stash.get()));
+            target.push(mem::replace(&mut self.tail, Vec::new()));
         }
     }
 
     #[inline(always)]
-    pub fn finish(&mut self, stash: &mut Stash<T>) -> Vec<Vec<T>> {
+    pub fn finish(&mut self) -> Vec<Vec<T>> {
         if !self.tail.is_empty() {
-            self.batches.push(mem::replace(&mut self.tail, stash.get()));
+            self.batches.push(mem::replace(&mut self.tail, Vec::new()));
         }
         mem::replace(&mut self.batches, Vec::new())
     }

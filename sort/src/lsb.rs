@@ -131,7 +131,7 @@ impl<T> RadixShuffler<T> {
     /// Finishes the shuffling into a target vector.
     fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
         for byte in 0..256 {
-            self.buckets.get_mut(byte as u8).finish_into(target, &mut self.stash);
+            self.buckets.get_mut(byte as u8).finish_into(target);
         }
     }
 }
