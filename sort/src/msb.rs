@@ -16,7 +16,8 @@
 use ::std::mem::replace;
 
 use ::Unsigned;
-
+use stash::Stash;
+use batched_vec::{BatchedVec, BatchedVecX256};
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::min(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -31,14 +32,11 @@ pub struct RadixSorter<T> {
 
     work: Vec<(usize, Vec<Vec<T>>)>,    // a stack of (level, items) of work to do.
 
-    done_list: Vec<Vec<T>>,             // where we put the assembled data.
-    done_tail: Vec<T>,
+    done: BatchedVec<T>,             // where we put the assembled data.
+    buckets: BatchedVecX256<T>,
 
-    tails: Vec<Vec<T>>,               // tails of 256 lists (where we push data).
-    lists: Vec<Vec<Vec<T>>>,          // lists of 256 lists (where we push full buffers).
-
-    stash: Vec<Vec<T>>,                 // empty buffers we might be able to use.
     stage: Vec<T>,                      // where we may have to stage data if it is too large.
+    stash: Stash<T>,                 // empty buffers we might be able to use.
 }
 
 impl<T> RadixSorter<T> {
@@ -46,47 +44,33 @@ impl<T> RadixSorter<T> {
     pub fn new() -> Self {
         RadixSorter {
             work: Vec::new(),
-            done_list: Vec::new(),
-            done_tail: Vec::new(),
-            tails: (0..256).map(|_| Vec::new()).collect(),
-            lists: (0..256).map(|_| Vec::new()).collect(),
-
-            stash: Vec::new(),
+            done: BatchedVec::new(),
+            buckets: BatchedVecX256::new(),
             stage: Vec::new(),
+            stash: Stash::new(1 << 10),
         }
     }
 
     #[inline(always)]
     pub fn push<U: Unsigned, F: Fn(&T)->U>(&mut self, element: T, bytes: F) {
-
         let depth = U::bytes();
-        let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
-        if self.tails[byte].len() == self.tails[byte].capacity() {
-            let empty = self.empty();
-            let tail = replace(&mut self.tails[byte], empty);
-            if tail.len() > 0 {
-                self.lists[byte].push(tail);
-            }
-        }
-        self.tails[byte].push(element);
-
+        let byte = (bytes(&element).as_u64() >> (8 * depth)) as u8;
+        self.buckets.get_mut(byte).push(element, &mut self.stash);
     }
 
     pub fn push_batch<U: Unsigned, F: Fn(&T)->U>(&mut self, mut batch: Vec<T>, bytes: F) {
         for element in batch.drain(..) {
             self.push(element, |x| bytes(x));
         }
-        self.stash.push(batch);
+        self.stash.give(batch);
     }
 
     pub fn finish<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut [T])>(&mut self, bytes: F, action: L) -> Vec<Vec<T>> {
-
         let depth = U::bytes() - 1;
         for byte in (0 .. 256).rev() {
-            if self.tails[byte].len() > 0 {
-                let empty = self.empty();
-                self.lists[byte].push(replace(&mut self.tails[byte], empty));
-                self.work.push((depth, replace(&mut self.lists[byte], Vec::new())));
+            let mut bucket = self.buckets.get_mut(byte as u8); 
+            if !bucket.is_empty() {
+                self.work.push((depth, bucket.finish()));
             }
         }
 
@@ -94,23 +78,14 @@ impl<T> RadixSorter<T> {
             self.ingest(&mut list, &bytes, depth, &action);
         }
 
-        if self.done_tail.len() > 0 { 
-            let empty = self.empty();
-            self.done_list.push(replace(&mut self.done_tail, empty)); 
-        }
-
-        ::std::mem::replace(&mut self.done_list, Vec::new())
+        self.done.ref_mut().finish()
     }
 
     pub fn recycle(&mut self, mut buffers: Vec<Vec<T>>) {
         for mut buffer in buffers.drain(..) {
             buffer.clear();
-            self.stash.push(buffer);
+            self.stash.give(buffer);
         }
-    }
-
-    fn empty(&mut self) -> Vec<T> {
-        self.stash.pop().unwrap_or_else(|| Vec::with_capacity(1 << 10))
     }
 
     /// Radix sorts a sequence of buffers, possibly stopping early on small batches and calling `action`.
@@ -126,11 +101,7 @@ impl<T> RadixSorter<T> {
             self.ingest(&mut list, &bytes, depth, &action);
         }
 
-        if self.done_tail.len() > 0 { 
-            let empty = self.empty();
-            self.done_list.push(replace(&mut self.done_tail, empty)); 
-        }
-        ::std::mem::swap(&mut self.done_list, source);
+        self.done.ref_mut().finish_into(source);
     }
 
     // digests a list of batches, which we assume (for some reason) to be densely packed.
@@ -149,41 +120,17 @@ impl<T> RadixSorter<T> {
                 // push all of source into lists and tails.
                 for mut batch in source.drain(..) {
                     for element in batch.drain(..) {
-
-                        let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
-                        // if self.tails[byte].len() == self.tails[byte].capacity() {
-                        //     let empty = self.empty();
-                        //     let tail = replace(&mut self.tails[byte], empty);
-                        //     if tail.len() > 0 {
-                        //         self.lists[byte].push(tail);
-                        //     }
-                        // }
-                        // self.tails[byte].push(element);
-
-                        unsafe {
-                            if self.tails.get_unchecked(byte).len() == self.tails.get_unchecked(byte).capacity() {
-                                let empty = self.empty();
-                                let tail = replace(&mut self.tails[byte], empty);
-                                if tail.len() > 0 {
-                                    self.lists[byte].push(tail);
-                                }
-                            }
-
-                            let len = self.tails.get_unchecked(byte).len();
-                            ::std::ptr::write((*self.tails.get_unchecked_mut(byte)).get_unchecked_mut(len), element);
-                            self.tails.get_unchecked_mut(byte).set_len(len + 1);
-                        }
-
+                        let byte = (bytes(&element).as_u64() >> (8 * depth)) as u8;
+                        self.buckets.get_mut(byte).push(element, &mut self.stash);
                     }
-                    self.stash.push(batch);
+                    self.stash.give(batch);
                 }
 
                 // we are actually doing this is reverse, so that popping the stack goes in the right order.
                 for byte in (0 .. 256).rev() {
-                    if self.tails[byte].len() > 0 {
-                        let empty = self.empty();
-                        self.lists[byte].push(replace(&mut self.tails[byte], empty));
-                        self.work.push((depth, replace(&mut self.lists[byte], Vec::new())));
+                    let mut bucket = self.buckets.get_mut(byte as u8);
+                    if !bucket.is_empty() {
+                        self.work.push((depth, bucket.finish()));
                     }
                 }
             }
@@ -193,46 +140,20 @@ impl<T> RadixSorter<T> {
                         self.stage.push(element);
                     }
 
-                    self.stash.push(batch);
+                    self.stash.give(batch);
                 }
 
                 action(&mut self.stage[..]);
 
                 for element in self.stage.drain(..) {
-                    if self.done_tail.len() == self.done_tail.capacity() {
-                        // let empty = self.empty();
-                        let empty = self.stash.pop().unwrap_or_else(|| Vec::with_capacity(1 << 10));
-                        let tail = replace(&mut self.done_tail, empty);
-                        if tail.len() > 0 {
-                            self.done_list.push(tail);
-                        }
-                    }
-                    self.done_tail.push(element);
+                    self.done.ref_mut().push(element, &mut self.stash);
                 }
             }
 
         }
         else if let Some(mut batch) = source.pop() {
-
             action(&mut batch[..]);
-
-            // ideally we would move part of this batch into done_tail, and the rest within itself, 
-            // using at most two memcpys. I don't know how to do this without `unsafe`. Could do that.
-
-            let available = self.done_tail.capacity() - self.done_tail.len();
-            let to_move = ::std::cmp::min(available, batch.len());
-
-            self.done_tail.extend(batch.drain(.. to_move));
-
-            if batch.len() > 0 {
-                let tail = replace(&mut self.done_tail, batch);
-                if tail.len() > 0 {
-                    self.done_list.push(tail);
-                }
-            }
-            else {
-                self.stash.push(batch);
-            }
+            self.done.ref_mut().push_vec(batch, &mut self.stash);
         }
     }
 }

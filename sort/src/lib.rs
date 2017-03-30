@@ -1,6 +1,8 @@
 mod lsb;
 mod lsb_swc;
 mod msb;
+mod stash;
+mod batched_vec;
 
 pub use lsb::RadixSorter as LSBRadixSorter;
 pub use lsb_swc::RadixSorter as LSBSWCRadixSorter;
