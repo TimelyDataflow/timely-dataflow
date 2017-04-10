@@ -6,7 +6,7 @@ extern crate timely_sort;
 use std::collections::HashMap;
 
 use rand::{Rng, SeedableRng, StdRng};
-use timely_sort::LSBRadixSorter as RadixSorter;
+use timely_sort::{RadixSorter, RadixSorterBase, LSBRadixSorter};
 
 use timely::dataflow::operators::*;
 use timely::dataflow::channels::pact::Exchange;
@@ -23,7 +23,7 @@ fn main() {
 
         let seed: &[_] = &[1, 2, 3, index];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
-        let mut sorter = RadixSorter::new();
+        let mut sorter = LSBRadixSorter::new();
 
         // pending edges and node updates.
         let mut edge_list = Vec::new();
