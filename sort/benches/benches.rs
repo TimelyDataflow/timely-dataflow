@@ -16,13 +16,18 @@ use haeoua::*;
 // #[bench] fn rsort_u32_16(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 16, &|&x| x); }
 // #[bench] fn rsort_u32_17(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 17, &|&x| x); }
 // #[bench] fn rsort_u32_18(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 18, &|&x| x); }
-#[bench] fn rsort_u32_19(bencher: &mut Bencher) { radix_sort::<((u32,u32),isize),_,_>(bencher, 1 << 19, &|&x| (x.0).0 as u64); }
-#[bench] fn rsort_u32_20(bencher: &mut Bencher) { radix_sort::<((u32,u32),isize),_,_>(bencher, 1 << 20, &|&x| (x.0).0 as u64); }
-#[bench] fn rsort_u32_21(bencher: &mut Bencher) { radix_sort::<((u32,u32),isize),_,_>(bencher, 1 << 21, &|&x| (x.0).0 as u64); }
+// #[bench] fn rsort_u32_19(bencher: &mut Bencher) { radix_sort::<((u32,u32),isize),_,_>(bencher, 1 << 19, &|&x| (x.0).0 as u64); }
+// #[bench] fn rsort_u32_20(bencher: &mut Bencher) { radix_sort::<((u32,u32),isize),_,_>(bencher, 1 << 20, &|&x| (x.0).0 as u64); }
+// #[bench] fn rsort_u32_21(bencher: &mut Bencher) { radix_sort::<((u32,u32),isize),_,_>(bencher, 1 << 21, &|&x| (x.0).0 as u64); }
 // #[bench] fn rsort_u32_22(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 22, &|&x| x); }
 // #[bench] fn rsort_u32_23(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 23, &|&x| x); }
 // #[bench] fn rsort_u32_24(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 24, &|&x| x); }
 // #[bench] fn rsort_u32_25(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 25, &|&x| x); }
+
+#[bench] fn rsort_u64_10m(bencher: &mut Bencher) { radix_sort::<u64,_,_>(bencher, 10_000_000, &|&x| x); }
+#[bench] fn rsortmsb_u64_10m(bencher: &mut Bencher) { radix_sort_msb::<u64,_,_>(bencher, 10_000_000, &|&x| x); }
+#[bench] fn rsortswc_u64_10m(bencher: &mut Bencher) { radix_sort_swc::<u64,_,_>(bencher, 10_000_000, &|&x| x); }
+
 
 // #[bench] fn rsortmsb_u32_10(bencher: &mut Bencher) { radix_sort_msb::<u32,_,_>(bencher, 1 << 10, &|&x| x); }
 // #[bench] fn rsortmsb_u32_11(bencher: &mut Bencher) { radix_sort_msb::<u32,_,_>(bencher, 1 << 11, &|&x| x); }
@@ -33,9 +38,9 @@ use haeoua::*;
 // #[bench] fn rsortmsb_u32_16(bencher: &mut Bencher) { radix_sort_msb::<u32,_,_>(bencher, 1 << 16, &|&x| x); }
 // #[bench] fn rsortmsb_u32_17(bencher: &mut Bencher) { radix_sort_msb::<u32,_,_>(bencher, 1 << 17, &|&x| x); }
 // #[bench] fn rsortmsb_u32_18(bencher: &mut Bencher) { radix_sort_msb::<u32,_,_>(bencher, 1 << 18, &|&x| x); }
-#[bench] fn rsortmsb_u32_19(bencher: &mut Bencher) { radix_sort_msb::<((u32,u32),isize),_,_>(bencher, 1 << 19, &|&x| (x.0).0); }
-#[bench] fn rsortmsb_u32_20(bencher: &mut Bencher) { radix_sort_msb::<((u32,u32),isize),_,_>(bencher, 1 << 20, &|&x| (x.0).0); }
-#[bench] fn rsortmsb_u32_21(bencher: &mut Bencher) { radix_sort_msb::<((u32,u32),isize),_,_>(bencher, 1 << 21, &|&x| (x.0).0); }
+// #[bench] fn rsortmsb_u32_19(bencher: &mut Bencher) { radix_sort_msb::<((u32,u32),isize),_,_>(bencher, 1 << 19, &|&x| (x.0).0); }
+// #[bench] fn rsortmsb_u32_20(bencher: &mut Bencher) { radix_sort_msb::<((u32,u32),isize),_,_>(bencher, 1 << 20, &|&x| (x.0).0); }
+// #[bench] fn rsortmsb_u32_21(bencher: &mut Bencher) { radix_sort_msb::<((u32,u32),isize),_,_>(bencher, 1 << 21, &|&x| (x.0).0); }
 // #[bench] fn rsortmsb_u32_22(bencher: &mut Bencher) { radix_sort_msb::<u32,_,_>(bencher, 1 << 22, &|&x| x); }
 // #[bench] fn rsortmsb_u32_23(bencher: &mut Bencher) { radix_sort_msb::<u32,_,_>(bencher, 1 << 23, &|&x| x); }
 // #[bench] fn rsortmsb_u32_24(bencher: &mut Bencher) { radix_sort_msb::<u32,_,_>(bencher, 1 << 24, &|&x| x); }
@@ -57,9 +62,9 @@ use haeoua::*;
 // #[bench] fn rsortswc_u32_16(bencher: &mut Bencher) { radix_sort_swc::<u32,_,_>(bencher, 1 << 16, &|&x| x); }
 // #[bench] fn rsortswc_u32_17(bencher: &mut Bencher) { radix_sort_swc::<u32,_,_>(bencher, 1 << 17, &|&x| x); }
 // #[bench] fn rsortswc_u32_18(bencher: &mut Bencher) { radix_sort_swc::<u32,_,_>(bencher, 1 << 18, &|&x| x); }
-#[bench] fn rsortswc_u32_19(bencher: &mut Bencher) { radix_sort_swc::<((u32,u32),isize),_,_>(bencher, 1 << 19, &|&x| (x.0).0); }
-#[bench] fn rsortswc_u32_20(bencher: &mut Bencher) { radix_sort_swc::<((u32,u32),isize),_,_>(bencher, 1 << 20, &|&x| (x.0).0); }
-#[bench] fn rsortswc_u32_21(bencher: &mut Bencher) { radix_sort_swc::<((u32,u32),isize),_,_>(bencher, 1 << 21, &|&x| (x.0).0); }
+// #[bench] fn rsortswc_u32_19(bencher: &mut Bencher) { radix_sort_swc::<((u32,u32),isize),_,_>(bencher, 1 << 19, &|&x| (x.0).0); }
+// #[bench] fn rsortswc_u32_20(bencher: &mut Bencher) { radix_sort_swc::<((u32,u32),isize),_,_>(bencher, 1 << 20, &|&x| (x.0).0); }
+// #[bench] fn rsortswc_u32_21(bencher: &mut Bencher) { radix_sort_swc::<((u32,u32),isize),_,_>(bencher, 1 << 21, &|&x| (x.0).0); }
 // #[bench] fn rsortswc_u32_22(bencher: &mut Bencher) { radix_sort_swc::<u32,_,_>(bencher, 1 << 22, &|&x| x); }
 // #[bench] fn rsortswc_u32_23(bencher: &mut Bencher) { radix_sort_swc::<u32,_,_>(bencher, 1 << 23, &|&x| x); }
 // #[bench] fn rsortswc_u32_24(bencher: &mut Bencher) { radix_sort_swc::<u32,_,_>(bencher, 1 << 24, &|&x| x); }
