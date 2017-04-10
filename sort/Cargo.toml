@@ -1,6 +1,6 @@
 [package]
 name = "timely_sort"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 description = "Sorting infrastructure for timely dataflow"
