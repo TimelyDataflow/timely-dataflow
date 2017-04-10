@@ -1,12 +1,12 @@
 mod lsb;
 mod lsb_swc;
 mod msb;
+mod stash;
+mod batched_vec;
 
 pub use lsb::RadixSorter as LSBRadixSorter;
 pub use lsb_swc::RadixSorter as LSBSWCRadixSorter;
 pub use msb::RadixSorter as MSBRadixSorter;
-
-// pub use msb::RadixSorter as MSBRadixSorter;
 
 pub trait Unsigned : Ord {
     fn bytes() -> usize;
