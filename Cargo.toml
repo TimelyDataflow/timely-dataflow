@@ -19,7 +19,7 @@ logging=[]
 
 [dependencies]
 abomonation="0.4.4"
-timely_sort="0.1.4"
+timely_sort="0.1.5"
 timely_communication="^0.1.5"
 byteorder="0.4.2"
 time="0.1.34"
