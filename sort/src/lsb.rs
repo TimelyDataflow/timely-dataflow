@@ -1,4 +1,6 @@
 use ::Unsigned;
+use stash::Stash;
+use batched_vec::BatchedVecX256;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::max(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -24,6 +26,7 @@ impl<T> RadixSorter<T> {
             shuffler: RadixShuffler::new(),
         }
     }
+
     /// Pushes a sequence of elements into the sorter.
     #[inline]
     pub fn extend<U: Unsigned, F: Fn(&T)->U, I: Iterator<Item=T>>(&mut self, iterator: I, function: &F) {
@@ -31,16 +34,19 @@ impl<T> RadixSorter<T> {
             self.push(element, function);
         }
     }
+
     /// Pushes a single element into the sorter.
     #[inline]
     pub fn push<U: Unsigned, F: Fn(&T)->U>(&mut self, element: T, function: &F) {
         self.shuffler.push(element, &|x| (function(x).as_u64() % 256) as u8);
     }
+
     /// Pushes a batch of elements into the sorter, and transfers ownership of the containing allocation.
     #[inline]
     pub fn push_batch<U: Unsigned, F: Fn(&T)->U>(&mut self, batch: Vec<T>, function: &F) {
         self.shuffler.push_batch(batch,  &|x| (function(x).as_u64() % 256) as u8);
     }
+
     /// Sorts a sequence of batches, re-using the allocations where possible and re-populating `batches`.
     pub fn sort<U: Unsigned, F: Fn(&T)->U>(&mut self, batches: &mut Vec<Vec<T>>, function: &F) {
         for batch in batches.drain(..) { 
@@ -48,12 +54,14 @@ impl<T> RadixSorter<T> {
         }
         self.finish_into(batches, function);
     }
+
     /// Finishes a sorting session by allocating and populating a sequence of batches.
     pub fn finish<U: Unsigned, F: Fn(&T)->U>(&mut self, function: &F) -> Vec<Vec<T>> {
         let mut result = Vec::new();
         self.finish_into(&mut result, function);
         result
     }
+
     /// Finishes a sorting session by populating a supplied sequence.
     pub fn finish_into<U: Unsigned, F: Fn(&T)->U>(&mut self, target: &mut Vec<Vec<T>>, function: &F) {
         self.shuffler.finish_into(target);
@@ -61,16 +69,19 @@ impl<T> RadixSorter<T> {
             self.reshuffle(target, &|x| ((function(x).as_u64() >> (8 * byte)) % 256) as u8);
         }
     }
+
     /// Consumes supplied buffers for future re-use by the sorter.
     ///
     /// This method is equivalent to `self.rebalance(buffers, usize::max_value())`.
     pub fn recycle(&mut self, buffers: &mut Vec<Vec<T>>) {
         self.rebalance(buffers, usize::max_value());
     }
+
     /// Either consumes from or pushes into `buffers` to leave `intended` spare buffers with the sorter.
     pub fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize) {
-        self.shuffler.rebalance(buffers, intended);
+        self.shuffler.stash.rebalance(buffers, intended);
     }
+
     #[inline(always)]
     fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: &mut Vec<Vec<T>>, function: &F) {
         for buffer in buffers.drain(..) {
@@ -81,10 +92,8 @@ impl<T> RadixSorter<T> {
 }
 
 struct RadixShuffler<T> {
-    fronts: Vec<Vec<T>>,
-    buffers: Vec<Vec<Vec<T>>>, // for each byte, a list of segments
-    stashed: Vec<Vec<T>>,      // spare segments
-    default_capacity: usize,
+    buckets: BatchedVecX256<T>,
+    stash: Stash<T>
 }
 
 impl<T> RadixShuffler<T> {
@@ -96,14 +105,9 @@ impl<T> RadixShuffler<T> {
 
     /// Creates a new `RadixShuffler` with a specified default capacity.
     fn with_capacities(size: usize) -> RadixShuffler<T> {
-        let mut buffers = vec![]; for _ in 0..256 { buffers.push(Vec::new()); }
-        let mut fronts = vec![]; for _ in 0..256 { fronts.push(Vec::new()); }
-
         RadixShuffler {
-            buffers: buffers,
-            stashed: vec![],
-            fronts: fronts,
-            default_capacity: size,
+            buckets: BatchedVecX256::new(),
+            stash: Stash::new(size)
         }
     }
 
@@ -113,61 +117,21 @@ impl<T> RadixShuffler<T> {
         for element in elements.drain(..) {
             self.push(element, function);
         }
-        // TODO : determine some discipline for when to keep buffers vs not.
-        // if elements.capacity() == self.default_capacity {
-            self.stashed.push(elements);
-        // }
+        self.stash.give(elements);
     }
 
     /// Pushes an element into the `RadixShuffler`, into a one of `256` arrays based on its least
     /// significant byte.
     #[inline]
     fn push<F: Fn(&T)->u8>(&mut self, element: T, function: &F) {
-
-        let byte = function(&element) as usize;
-
-        // write the element to our scratch buffer space and consider it taken care of.
-        // test the buffer capacity first, so that we can leave them uninitialized.
-        unsafe {
-            if self.fronts.get_unchecked(byte).len() == self.fronts.get_unchecked(byte).capacity() {
-                let replacement = self.stashed.pop().unwrap_or_else(|| Vec::with_capacity(self.default_capacity));
-                let complete = ::std::mem::replace(&mut self.fronts[byte], replacement);
-                if complete.len() > 0 {
-                    self.buffers[byte].push(complete);
-                }
-            }
-
-            let len = self.fronts.get_unchecked(byte).len();
-            ::std::ptr::write((*self.fronts.get_unchecked_mut(byte)).get_unchecked_mut(len), element);
-            self.fronts.get_unchecked_mut(byte).set_len(len + 1);
-        }
+        let byte = function(&element);
+        self.buckets.get_mut(byte).push(element, &mut self.stash);
     }
 
     /// Finishes the shuffling into a target vector.
     fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
         for byte in 0..256 {
-            if self.fronts[byte].len() > 0 {
-                let replacement = self.stashed.pop().unwrap_or_else(|| Vec::new());
-                let complete = ::std::mem::replace(&mut self.fronts[byte], replacement);
-                if complete.len() > 0 {
-                    self.buffers[byte].push(complete);
-                }
-            }
-        }
-
-        for byte in 0..256 {
-            target.extend(self.buffers[byte].drain(..));
-        }
-    }
-
-    fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize) {
-        while self.stashed.len() > intended {
-            buffers.push(self.stashed.pop().unwrap());
-        }
-        while self.stashed.len() < intended && buffers.len() > 0 {
-            let mut buffer = buffers.pop().unwrap();
-            buffer.clear();
-            self.stashed.push(buffer);
+            self.buckets.get_mut(byte as u8).finish_into(target);
         }
     }
 }
