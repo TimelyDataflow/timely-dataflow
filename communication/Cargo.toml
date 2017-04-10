@@ -1,6 +1,6 @@
 [package]
 name = "timely_communication"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 description = "Communication layer for timely dataflow"
