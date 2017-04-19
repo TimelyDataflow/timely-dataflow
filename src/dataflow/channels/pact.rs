@@ -28,7 +28,7 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     }
 }
 
-/// An exchange between multiple observers
+/// An exchange between multiple observers by data
 pub struct Exchange<D, F: Fn(&D)->u64+'static> { hash_func: F, phantom: PhantomData<D>, }
 impl<D, F: Fn(&D)->u64> Exchange<D, F> {
     /// Allocates a new `Exchange` pact from a distribution function.
@@ -51,10 +51,10 @@ impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> Parall
     }
 }
 
-/// An exchange between multiple observers
+/// An exchange between multiple observers by time and data
 pub struct TimeExchange<D, T, F: Fn(&T, &D)->u64+'static> { hash_func: F, phantom: PhantomData<(T, D)>, }
 impl<D, T, F: Fn(&T, &D)->u64> TimeExchange<D, T, F> {
-    /// Allocates a new `Exchange` pact from a distribution function.
+    /// Allocates a new `TimeExchange` pact from a distribution function.
     pub fn new(func: F) -> TimeExchange<D, T, F> {
         TimeExchange {
             hash_func:  func,

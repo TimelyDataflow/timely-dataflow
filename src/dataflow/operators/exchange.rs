@@ -23,7 +23,8 @@ pub trait Exchange<T, D: ExchangeData> {
     /// ```
     fn exchange<F: Fn(&D)->u64+'static>(&self, route: F) -> Self;
 
-    /// Exchange records by time so that all records with the same `route` are at the same worker.
+    /// Exchange records by time so that all records whose time and data
+    /// evaluate to the same `route` are at the same worker.
     ///
     /// #Examples
     /// ```
