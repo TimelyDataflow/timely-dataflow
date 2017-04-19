@@ -52,14 +52,13 @@ impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> Parall
 }
 
 /// An exchange between multiple observers
-pub struct TimeExchange<D, T, F: Fn(&T, &D)->u64+'static> { hash_func: F, phantom: PhantomData<D>, phantom_t: PhantomData<T>, }
+pub struct TimeExchange<D, T, F: Fn(&T, &D)->u64+'static> { hash_func: F, phantom: PhantomData<(T, D)>, }
 impl<D, T, F: Fn(&T, &D)->u64> TimeExchange<D, T, F> {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new(func: F) -> TimeExchange<D, T, F> {
         TimeExchange {
             hash_func:  func,
             phantom:    PhantomData,
-            phantom_t:  PhantomData,
         }
     }
 }
