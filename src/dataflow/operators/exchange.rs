@@ -2,11 +2,13 @@
 
 use ::ExchangeData;
 use dataflow::channels::pact::Exchange as ExchangePact;
+use dataflow::channels::pact::TimeExchange as TimeExchangePact;
 use dataflow::{Stream, Scope};
 use dataflow::operators::unary::Unary;
+use progress::timestamp::Timestamp;
 
 /// Exchange records between workers.
-pub trait Exchange<D: ExchangeData> {
+pub trait Exchange<T, D: ExchangeData> {
     /// Exchange records so that all records with the same `route` are at the same worker.
     ///
     /// #Examples
@@ -20,11 +22,33 @@ pub trait Exchange<D: ExchangeData> {
     /// });
     /// ```
     fn exchange<F: Fn(&D)->u64+'static>(&self, route: F) -> Self;
+
+    /// Exchange records by time so that all records with the same `route` are at the same worker.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, ExchangeExtension, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .exchange_ts(|&t, &x| t.inner & 1 ^ x)
+    ///            .inspect(|x| println!("seen: {:?}", x));
+    /// });
+    /// ```
+    fn exchange_ts<F: Fn(&T, &D)->u64+'static>(&self, route: F) -> Self;
 }
 
-impl<G: Scope, D: ExchangeData> Exchange<D> for Stream<G, D> {
+impl<T: Timestamp, G: Scope<Timestamp=T>, D: ExchangeData> Exchange<T, D> for Stream<G, D> {
     fn exchange<F: Fn(&D)->u64+'static>(&self, route: F) -> Stream<G, D> {
         self.unary_stream(ExchangePact::new(route), "Exchange", |input, output| {
+            input.for_each(|time, data| {
+                output.session(&time).give_content(data);
+            });
+        })
+    }
+
+    fn exchange_ts<F: Fn(&T, &D)->u64+'static>(&self, route: F) -> Stream<G, D> {
+        self.unary_stream(TimeExchangePact::new(route), "Exchange", |input, output| {
             input.for_each(|time, data| {
                 output.session(&time).give_content(data);
             });

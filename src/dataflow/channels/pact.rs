@@ -47,6 +47,27 @@ impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> Parall
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>) {
         let (senders, receiver) = allocator.allocate::<Message<T, D>>();
         let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
+        (Box::new(ExchangeObserver::new(senders, move |_, d| (self.hash_func)(d))), Box::new(Puller::new(receiver, allocator.index(), identifier)))
+    }
+}
+
+/// An exchange between multiple observers
+pub struct TimeExchange<D, T, F: Fn(&T, &D)->u64+'static> { hash_func: F, phantom: PhantomData<D>, phantom_t: PhantomData<T>, }
+impl<D, T, F: Fn(&T, &D)->u64> TimeExchange<D, T, F> {
+    /// Allocates a new `Exchange` pact from a distribution function.
+    pub fn new(func: F) -> TimeExchange<D, T, F> {
+        TimeExchange {
+            hash_func:  func,
+            phantom:    PhantomData,
+            phantom_t:  PhantomData,
+        }
+    }
+}
+
+impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&T, &D)->u64+'static> ParallelizationContract<T, D> for TimeExchange<D, T, F> {
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>) {
+        let (senders, receiver) = allocator.allocate::<Message<T, D>>();
+        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
         (Box::new(ExchangeObserver::new(senders, self.hash_func)), Box::new(Puller::new(receiver, allocator.index(), identifier)))
     }
 }
