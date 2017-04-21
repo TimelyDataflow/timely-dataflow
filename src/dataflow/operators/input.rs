@@ -160,6 +160,14 @@ impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
         }
     }
 
+    /// Sends a batch of records into the corresponding timely dataflow `Stream`, at the current epoch.
+    ///
+    /// This method flushes single elements previously sent with `send`, to keep the insertion order.
+    pub fn send_batch(&mut self, buffer: &mut Vec<D>) {
+        self.flush();
+        Content::push_at(buffer, self.now_at, &mut self.pusher);        
+    }
+
     /// Advances the current epoch to `next`.
     ///
     /// This method allows timely dataflow to issue progress notifications as it can now determine
