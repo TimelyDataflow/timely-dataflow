@@ -33,7 +33,7 @@ use {Data, Push};
 use dataflow::channels::pushers::{Counter, Tee};
 use dataflow::channels::Content;
 
-use dataflow::{Stream, Scope};
+use dataflow::{Stream, Scope, ScopeParent};
 use dataflow::scopes::Child;
 use dataflow::operators::delay::*;
 

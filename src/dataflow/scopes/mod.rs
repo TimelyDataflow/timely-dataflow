@@ -12,16 +12,21 @@ pub mod child;
 pub use self::child::Child;
 pub use self::root::Root;
 
+/// The information a child scope needs from its parent.
+pub trait ScopeParent: Allocate+Clone {
+    /// The timestamp associated with data in this scope.
+    type Timestamp : Timestamp;
+
+    /// Allocates a new locally unique identifier.
+    fn new_identifier(&mut self) -> usize;
+}
+
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
 ///
 /// Importantly, this is often a *shared* object, backed by a `Rc<RefCell<>>` wrapper. Each method
 /// takes a shared reference, but can be thought of as first calling .clone() and then calling the
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
-pub trait Scope : Allocate+Clone {
-
-    /// The timestamp associated with data in this scope.
-    type Timestamp : Timestamp;
-
+pub trait Scope: ScopeParent {
     /// A useful name describing the scope.
     fn name(&self) -> String;
 
@@ -44,9 +49,6 @@ pub trait Scope : Allocate+Clone {
     /// Creates a new `Subgraph` with timestamp `T`. Used by `scoped`, but unlikely to be
     /// commonly useful to end users.
     fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T>;
-
-    /// Allocates a new locally unique identifier.
-    fn new_identifier(&mut self) -> usize;
 
     /// Creates a `Subgraph` from a closure acting on a `Child` scope, and returning
     /// whatever the closure returns.

@@ -8,29 +8,35 @@ use progress::nested::product::Product;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
-use super::Scope;
+use super::{ScopeParent, Scope};
 
 /// A `Child` wraps a `Subgraph` and a parent `G: Scope`. It manages the addition
 /// of `Operate`s to a subgraph, and the connection of edges between them.
-pub struct Child<'a, G: Scope, T: Timestamp> {
+pub struct Child<'a, G: ScopeParent, T: Timestamp> {
     /// The subgraph under assembly.
     pub subgraph: &'a RefCell<Subgraph<G::Timestamp, T>>,
     /// A copy of the child's parent scope.
     pub parent:   G,
 }
 
-impl<'a, G: Scope, T: Timestamp> Child<'a, G, T> {
-    /// This worker's unique identifier. 
+impl<'a, G: ScopeParent, T: Timestamp> Child<'a, G, T> {
+    /// This worker's unique identifier.
     ///
-    /// Ranges from `0` to `self.peers() - 1`. 
+    /// Ranges from `0` to `self.peers() - 1`.
     pub fn index(&self) -> usize { self.parent.index() }
     /// The total number of workers in the computation.
     pub fn peers(&self) -> usize { self.parent.peers() }
 }
 
-impl<'a, G: Scope, T: Timestamp> Scope for Child<'a, G, T> {
+impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
     type Timestamp = Product<G::Timestamp, T>;
 
+    fn new_identifier(&mut self) -> usize {
+        self.parent.new_identifier()
+    }
+}
+
+impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
     fn name(&self) -> String { self.subgraph.borrow().name().to_owned() }
     fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
     fn add_edge(&self, source: Source, target: Target) {
@@ -48,10 +54,6 @@ impl<'a, G: Scope, T: Timestamp> Scope for Child<'a, G, T> {
         index
     }
 
-    fn new_identifier(&mut self) -> usize {
-        self.parent.new_identifier()
-    }
-
     fn new_subscope<T2: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, T>, T2> {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
@@ -59,7 +61,7 @@ impl<'a, G: Scope, T: Timestamp> Scope for Child<'a, G, T> {
     }
 }
 
-impl<'a, G: Scope, T: Timestamp> Allocate for Child<'a, G, T> {
+impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
     fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>) {
@@ -67,6 +69,6 @@ impl<'a, G: Scope, T: Timestamp> Allocate for Child<'a, G, T> {
     }
 }
 
-impl<'a, G: Scope, T: Timestamp> Clone for Child<'a, G, T> {
+impl<'a, G: ScopeParent, T: Timestamp> Clone for Child<'a, G, T> {
     fn clone(&self) -> Self { Child { subgraph: self.subgraph, parent: self.parent.clone() }}
 }

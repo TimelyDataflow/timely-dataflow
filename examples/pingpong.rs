@@ -1,6 +1,5 @@
 extern crate timely;
 
-use timely::dataflow::Scope;
 use timely::dataflow::operators::*;
 
 fn main() {
@@ -10,7 +9,7 @@ fn main() {
     // initializes and runs a timely dataflow
     timely::execute_from_args(std::env::args().skip(2), move |worker| {
         let index = worker.index();
-        worker.scoped(move |scope| {
+        worker.dataflow(move |scope| {
             let (helper, cycle) = scope.loop_variable(iterations, 1);
             (0..1).take(if index == 0 { 1 } else { 0 })
                   .to_stream(scope)
