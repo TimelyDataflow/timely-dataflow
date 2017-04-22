@@ -5,11 +5,10 @@ use std::cell::RefCell;
 
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, Subgraph};
-use progress::nested::{Source, Target};
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
-use super::{ScopeParent, Scope, Child};
+use super::{ScopeParent, Child};
 
 /// A `Root` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a list of child `Operate`s. The primary intended use of `Root` is through its
@@ -38,6 +37,7 @@ impl<A: Allocate> Root<A> {
 
         result
     }
+
     /// Performs one step of the computation.
     ///
     /// A step gives each dataflow operator a chance to run, and is the 
@@ -133,26 +133,6 @@ impl<A: Allocate> ScopeParent for Root<A> {
     fn new_identifier(&mut self) -> usize {
         *self.identifiers.borrow_mut() += 1;
         *self.identifiers.borrow() - 1
-    }
-}
-
-impl<A: Allocate> Scope for Root<A> {
-    fn name(&self) -> String { format!("Worker[{}]", self.allocator.borrow().index()) }
-    fn addr(&self) -> Vec<usize> { vec![self.allocator.borrow().index() ] }
-    fn add_edge(&self, _source: Source, _target: Target) {
-        panic!("Root::connect(): root doesn't maintain edges; who are you, how did you get here?")
-    }
-
-    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, _scope: SC) -> usize {
-        panic!("deprecated");
-    }
-
-    fn add_operator_with_index<SC: Operate<RootTimestamp>+'static>(&mut self, _scope: SC, _index: usize) {
-        panic!("deprecated");
-    }
-
-    fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<RootTimestamp, T>  {
-        panic!("use of Root::scoped() deprecated; use Root::dataflow() instead");
     }
 }
 

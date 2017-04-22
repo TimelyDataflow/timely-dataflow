@@ -36,7 +36,7 @@ impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
     }
 }
 
-impl<'a, G: ScopeParent+Clone, T: Timestamp> Scope for Child<'a, G, T> {
+impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
     fn name(&self) -> String { self.subgraph.borrow().name().to_owned() }
     fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
     fn add_edge(&self, source: Source, target: Target) {
@@ -69,6 +69,6 @@ impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
     }
 }
 
-impl<'a, G: ScopeParent+Clone, T: Timestamp> Clone for Child<'a, G, T> {
+impl<'a, G: ScopeParent, T: Timestamp> Clone for Child<'a, G, T> {
     fn clone(&self) -> Self { Child { subgraph: self.subgraph, parent: self.parent.clone() }}
 }

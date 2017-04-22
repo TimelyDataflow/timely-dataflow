@@ -13,7 +13,7 @@ pub use self::child::Child;
 pub use self::root::Root;
 
 /// The information a child scope needs from its parent.
-pub trait ScopeParent: Allocate {
+pub trait ScopeParent: Allocate+Clone {
     /// The timestamp associated with data in this scope.
     type Timestamp : Timestamp;
 
@@ -26,7 +26,7 @@ pub trait ScopeParent: Allocate {
 /// Importantly, this is often a *shared* object, backed by a `Rc<RefCell<>>` wrapper. Each method
 /// takes a shared reference, but can be thought of as first calling .clone() and then calling the
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
-pub trait Scope: ScopeParent+Clone {
+pub trait Scope: ScopeParent {
     /// A useful name describing the scope.
     fn name(&self) -> String;
 

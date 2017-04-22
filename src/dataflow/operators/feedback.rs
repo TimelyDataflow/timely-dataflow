@@ -21,7 +21,7 @@ use dataflow::{Stream, Scope, ScopeParent};
 use dataflow::scopes::Child;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
-pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
+pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
     /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
     ///
     /// The resulting `Stream` will have its data defined by a future call to `collect_loop` with
@@ -44,7 +44,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>);
 }
 
-impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T> {
+impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T> {
     fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
@@ -92,7 +92,7 @@ impl<TOuter: Timestamp, TInner: Timestamp, D: Data> Push<(Product<TOuter, TInner
 }
 
 /// Connect a `Stream` to the input of a loop variable.
-pub trait ConnectLoop<G: Scope, T: Timestamp, D: Data> {
+pub trait ConnectLoop<G: ScopeParent, T: Timestamp, D: Data> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
     /// #Examples
@@ -111,7 +111,7 @@ pub trait ConnectLoop<G: Scope, T: Timestamp, D: Data> {
     fn connect_loop(&self, Handle<G::Timestamp, T, D>);
 }
 
-impl<'a, G: Scope, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<'a, G, T>, D> {
+impl<'a, G: ScopeParent, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<'a, G, T>, D> {
     fn connect_loop(&self, helper: Handle<G::Timestamp, T, D>) {
         let channel_id = self.scope().new_identifier();
         self.connect_to(Target { index: helper.index, port: 0 }, helper.target, channel_id);
