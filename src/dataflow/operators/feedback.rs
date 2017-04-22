@@ -17,7 +17,7 @@ use progress::nested::Summary::Local;
 use dataflow::channels::Content;
 use dataflow::channels::pushers::{Counter, Tee};
 
-use dataflow::{Stream, Scope};
+use dataflow::{Stream, Scope, ScopeParent};
 use dataflow::scopes::Child;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
