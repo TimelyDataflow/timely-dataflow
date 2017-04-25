@@ -41,14 +41,13 @@ pub trait Input<'a, A: Allocate, T: Timestamp+Ord> {
     /// #Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
-    /// timely::execute(Configuration::Thread, |root| {
+    /// timely::execute(Configuration::Thread, |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = root.scoped(|scope| {
+    ///     let mut input = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input();
     ///         stream.inspect(|x| println!("hello {:?}", x));
     ///         input
@@ -58,7 +57,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp+Ord> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         root.step();
+    ///         worker.step();
     ///     }
     /// });
     /// ```

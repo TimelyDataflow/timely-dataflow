@@ -39,7 +39,10 @@ impl<T: PartialOrd> Antichain<T> {
     /// Creates a new singleton `Antichain`.
     pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
 
-    /// Reveals the elements in the `Antichain`.
+    /// Clears the contents of the antichain.
+    pub fn clear(&mut self) { self.elements.clear() }
+
+    /// Reveals the elements in the antichain.
     pub fn elements(&self) -> &[T] { &self.elements[..] }
 }
 

@@ -18,12 +18,12 @@ fn main() {
     let edges: usize = std::env::args().nth(2).unwrap().parse().unwrap();
     let batch: usize = std::env::args().nth(3).unwrap().parse().unwrap();
 
-    timely::execute_from_args(std::env::args().skip(4), move |root| {
+    timely::execute_from_args(std::env::args().skip(4), move |worker| {
 
-        let index = root.index();
-        let peers = root.peers();
+        let index = worker.index();
+        let peers = worker.peers();
 
-        let (mut input, probe) = root.scoped(move |scope| {
+        let (mut input, probe) = worker.dataflow(move |scope| {
 
             let (handle, stream) = scope.new_input();
 
@@ -45,7 +45,7 @@ fn main() {
                 let next = input.epoch() + 1;
                 input.advance_to(next);
                 while probe.lt(input.time()) {
-                    root.step();
+                    worker.step();
                 }
             }
         }
@@ -60,7 +60,7 @@ trait UnionFind {
 impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
     fn union_find(&self) -> Stream<G, (usize, usize)> {
 
-        let mut roots = vec![];  // u32 works, and is smaller than uint/u64
+        let mut workers = vec![];  // u32 works, and is smaller than uint/u64
         let mut ranks = vec![];  // u8 should be large enough (n < 2^256)
 
         self.unary_stream(Pipeline, "UnionFind", move |input, output| {
@@ -72,21 +72,21 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
 
                     // grow arrays if required.
                     let m = ::std::cmp::max(x, y);
-                    for i in roots.len() .. (m + 1) {
-                        roots.push(i);
+                    for i in workers.len() .. (m + 1) {
+                        workers.push(i);
                         ranks.push(0);
                     }
 
-                    // look up roots for `x` and `y`.    
-                    while x != roots[x] { x = roots[x]; }
-                    while y != roots[y] { y = roots[y]; }
+                    // look up workers for `x` and `y`.    
+                    while x != workers[x] { x = workers[x]; }
+                    while y != workers[y] { y = workers[y]; }
 
                     if x != y {
                         session.give((x, y));
                         match ranks[x].cmp(&ranks[y]) {
-                            Ordering::Less    => { roots[x] = y },
-                            Ordering::Greater => { roots[y] = x },
-                            Ordering::Equal   => { roots[y] = x; ranks[x] += 1 },
+                            Ordering::Less    => { workers[x] = y },
+                            Ordering::Greater => { workers[y] = x },
+                            Ordering::Equal   => { workers[y] = x; ranks[x] += 1 },
                         }
                     }
                 }

@@ -1,17 +1,16 @@
 extern crate timely;
 
 use std::net::TcpStream;
-use timely::dataflow::Scope;
 use timely::dataflow::operators::{Capture, ToStream};
 use timely::dataflow::operators::capture::EventWriter;
 
 fn main() {
-    timely::execute(timely::Configuration::Thread, |computation| {
+    timely::execute(timely::Configuration::Thread, |worker| {
         let send = TcpStream::connect("127.0.0.1:8000").unwrap();
 
-        computation.scoped::<u64,_,_>(|scope1|
+        worker.dataflow::<u64,_,_>(|scope|
             (0..10u64)
-                .to_stream(scope1)
+                .to_stream(scope)
                 .capture_into(EventWriter::new(send))
         );
     }).unwrap();

@@ -261,12 +261,11 @@ fn notificator_delivers_notifications_in_topo_order() {
 /// #Examples
 /// ```
 /// use std::collections::HashMap;
-/// use timely::dataflow::Scope;
 /// use timely::dataflow::operators::{Input, Operator, Inspect, FrontierNotificator};
 /// use timely::dataflow::channels::pact::Pipeline;
 ///
-/// timely::execute(timely::Configuration::Thread, |root| {
-///     let (mut in1, mut in2) = root.scoped(|scope| {
+/// timely::execute(timely::Configuration::Thread, |worker| {
+///     let (mut in1, mut in2) = worker.dataflow(|scope| {
 ///         let (in1_handle, in1) = scope.new_input();
 ///         let (in2_handle, in2) = scope.new_input();
 ///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap| {

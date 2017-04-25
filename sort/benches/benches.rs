@@ -7,6 +7,8 @@ use rand::{SeedableRng, StdRng, Rand};
 use test::Bencher;
 use haeoua::*;
 
+use haeoua::{RadixSorter, RadixSorterBase};
+
 #[bench] fn rsort_lsb_u32_10(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 10, &|&x| x); }
 #[bench] fn rsort_lsb_u32_11(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 11, &|&x| x); }
 #[bench] fn rsort_lsb_u32_12(bencher: &mut Bencher) { radix_sort::<u32,_,_>(bencher, 1 << 12, &|&x| x); }
@@ -142,8 +144,8 @@ fn radix_sort_msb<T: Ord+Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Ben
         for &element in &vector {
             sorter.push(element, &function);
         }
-        let output = sorter.finish(&function, |xs| xs.sort());
-        sorter.recycle(output);
+        let mut output = sorter.finish(&function);
+        sorter.recycle(&mut output);
     });
 }
 

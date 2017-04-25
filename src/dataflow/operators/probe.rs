@@ -30,10 +30,10 @@ pub trait Probe<G: Scope, D: Data> {
     /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// // construct and execute a timely dataflow
-    /// timely::execute(Configuration::Thread, |root| {
+    /// timely::execute(Configuration::Thread, |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let (mut input, probe) = root.scoped(|scope| {
+    ///     let (mut input, probe) = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input();
     ///         let (probe, stream) = stream.inspect(|x| println!("hello {:?}", x))
     ///                                     .probe();
@@ -44,9 +44,7 @@ pub trait Probe<G: Scope, D: Data> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         while probe.le(&RootTimestamp::new(round)) {
-    ///             root.step();
-    ///         }
+    ///         worker.step_while(|| probe.lt(input.time()));
     ///     }
     /// }).unwrap();
     /// ```
@@ -140,18 +138,17 @@ mod tests {
 
     use ::Configuration;
     use ::progress::timestamp::RootTimestamp;
-    use dataflow::*;
     use dataflow::operators::{Input, Probe};
 
     #[test]
     fn probe() {
 
         // initializes and runs a timely dataflow computation
-        ::execute(Configuration::Thread, |computation| {
+        ::execute(Configuration::Thread, |worker| {
 
             // create a new input, and inspect its output
-            let (mut input, probe) = computation.scoped(move |builder| {
-                let (input, stream) = builder.new_input::<String>();
+            let (mut input, probe) = worker.dataflow(move |scope| {
+                let (input, stream) = scope.new_input::<String>();
                 (input, stream.probe().0)
             });
 
@@ -162,14 +159,14 @@ mod tests {
                 assert!(!probe.lt(&RootTimestamp::new(round)));
                 assert!(probe.lt(&RootTimestamp::new(round + 1)));
                 input.advance_to(round + 1);
-                computation.step();
+                worker.step();
             }
 
             // seal the input
             input.close();
 
             // finish off any remaining work
-            computation.step();
+            worker.step();
             assert!(probe.done());
         }).unwrap();
     }

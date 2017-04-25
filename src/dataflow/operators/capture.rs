@@ -19,16 +19,16 @@
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventLink, Replay};
 //!
-//! timely::execute(timely::Configuration::Thread, |computation| {
+//! timely::execute(timely::Configuration::Thread, |worker| {
 //!     let handle1 = Rc::new(EventLink::new());
 //!     let handle2 = handle1.clone();
 //!
-//!     computation.scoped::<u64,_,_>(|scope1|
+//!     worker.dataflow::<u64,_,_>(|scope1|
 //!         (0..10).to_stream(scope1)
 //!                .capture_into(handle1)
 //!     );
 //!
-//!     computation.scoped(|scope2| {
+//!     worker.dataflow(|scope2| {
 //!         handle2.replay_into(scope2)
 //!                .inspect(|x| println!("replayed: {:?}", x));
 //!     })
@@ -47,18 +47,18 @@
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay};
 //!
-//! timely::execute(timely::Configuration::Thread, |computation| {
+//! timely::execute(timely::Configuration::Thread, |worker| {
 //!     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
 //!     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
 //!     let recv = list.incoming().next().unwrap().unwrap();
 //!
-//!     computation.scoped::<u64,_,_>(|scope1|
+//!     worker.dataflow::<u64,_,_>(|scope1|
 //!         (0..10u64)
 //!             .to_stream(scope1)
 //!             .capture_into(EventWriter::new(send))
 //!     );
 //!
-//!     computation.scoped::<u64,_,_>(|scope2| {
+//!     worker.dataflow::<u64,_,_>(|scope2| {
 //!         EventReader::<_,u64,_>::new(recv)
 //!             .replay_into(scope2)
 //!             .inspect(|x| println!("replayed: {:?}", x));
@@ -106,7 +106,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// let (send, recv) = ::std::sync::mpsc::channel();
     /// let send = Arc::new(Mutex::new(send));
     ///
-    /// timely::execute(timely::Configuration::Thread, move |computation| {
+    /// timely::execute(timely::Configuration::Thread, move |worker| {
     ///
     ///     // this is only to validate the output.
     ///     let send = send.lock().unwrap().clone();
@@ -115,12 +115,12 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///     let handle1 = Rc::new(EventLink::new());
     ///     let handle2 = handle1.clone();
     ///
-    ///     computation.scoped::<u64,_,_>(|scope1|
+    ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10).to_stream(scope1)
     ///                .capture_into(handle1)
     ///     );
     ///
-    ///     computation.scoped(|scope2| {
+    ///     worker.dataflow(|scope2| {
     ///         handle2.replay_into(scope2)
     ///                .capture_into(send)
     ///     });
@@ -146,7 +146,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// let (send0, recv0) = ::std::sync::mpsc::channel();
     /// let send0 = Arc::new(Mutex::new(send0));
     ///
-    /// timely::execute(timely::Configuration::Thread, move |computation| {
+    /// timely::execute(timely::Configuration::Thread, move |worker| {
     /// 
     ///     // this is only to validate the output.
     ///     let send0 = send0.lock().unwrap().clone();
@@ -156,13 +156,13 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
     ///     let recv = list.incoming().next().unwrap().unwrap();
     ///
-    ///     computation.scoped::<u64,_,_>(|scope1|
+    ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10u64)
     ///             .to_stream(scope1)
     ///             .capture_into(EventWriter::new(send))
     ///     );
     ///
-    ///     computation.scoped::<u64,_,_>(|scope2| {
+    ///     worker.dataflow::<u64,_,_>(|scope2| {
     ///         EventReader::<_,u64,_>::new(recv)
     ///             .replay_into(scope2)
     ///             .capture_into(send0)
@@ -226,7 +226,7 @@ pub trait Extract<T: Ord, D: Ord> {
     /// let (send, recv) = ::std::sync::mpsc::channel();
     /// let send = Arc::new(Mutex::new(send));
     ///
-    /// timely::execute(timely::Configuration::Thread, move |computation| {
+    /// timely::execute(timely::Configuration::Thread, move |worker| {
     ///
     ///     // this is only to validate the output.
     ///     let send = send.lock().unwrap().clone();
@@ -235,12 +235,12 @@ pub trait Extract<T: Ord, D: Ord> {
     ///     let handle1 = Rc::new(EventLink::new());
     ///     let handle2 = handle1.clone();
     ///
-    ///     computation.scoped::<u64,_,_>(|scope1|
+    ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10).to_stream(scope1)
     ///                .capture_into(handle1)
     ///     );
     ///
-    ///     computation.scoped(|scope2| {
+    ///     worker.dataflow(|scope2| {
     ///         handle2.replay_into(scope2)
     ///                .capture_into(send)
     ///     });

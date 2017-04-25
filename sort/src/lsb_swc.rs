@@ -1,6 +1,6 @@
 use std::slice;
 
-use ::Unsigned;
+use ::{Unsigned, RadixSorter, RadixSorterBase};
 use stash::Stash;
 use batched_vec::BatchedVecX256;
 
@@ -17,68 +17,42 @@ macro_rules! lines_per_page {
 /// The sorter allows the use of multiple different key bytes, determined by a type `U: Unsigned`.
 /// Currently, one is allowed to mix and match these as records are pushed, which may be a design
 /// bug.
-pub struct RadixSorter<T> {
-    shuffler: RadixShuffler<T>,
+pub struct Sorter<T> {
+    shuffler: Shuffler<T>,
 }
 
-impl<T> RadixSorter<T> {
-    /// Constructs a new radix sorter.
-    pub fn new() -> RadixSorter<T> {
-        RadixSorter {
-            shuffler: RadixShuffler::new(),
-        }
+impl<T, U: Unsigned> RadixSorter<T, U> for Sorter<T> {
+
+    #[inline(always)]
+    fn push<F: Fn(&T)->U>(&mut self, element: T, key: &F) {
+        self.shuffler.push(element, &|x| (key(x).as_u64() % 256) as u8);
     }
-    /// Pushes a sequence of elements into the sorter.
+
     #[inline]
-    pub fn extend<U: Unsigned, F: Fn(&T)->U, I: Iterator<Item=T>>(&mut self, iterator: I, function: &F) {
-        for element in iterator {
-            self.push(element, function);
-        }
+    fn push_batch<F: Fn(&T)->U>(&mut self, batch: Vec<T>, key: &F) {
+        self.shuffler.push_batch(batch,  &|x| (key(x).as_u64() % 256) as u8);
     }
-    /// Pushes a single element into the sorter.
-    #[inline]
-    pub fn push<U: Unsigned, F: Fn(&T)->U>(&mut self, element: T, function: &F) {
-        self.shuffler.push(element, &|x| (function(x).as_u64() % 256) as u8);
-    }
-    /// Pushes a batch of elements into the sorter, and transfers ownership of the containing allocation.
-    #[inline]
-    pub fn push_batch<U: Unsigned, F: Fn(&T)->U>(&mut self, batch: Vec<T>, function: &F) {
-        self.shuffler.push_batch(batch,  &|x| (function(x).as_u64() % 256) as u8);
-    }
-    /// Sorts a sequence of batches, re-using the allocations where possible and re-populating `batches`.
-    pub fn sort<U: Unsigned, F: Fn(&T)->U>(&mut self, batches: &mut Vec<Vec<T>>, function: &F) {
-        for batch in batches.drain(..) { 
-            self.push_batch(batch, function); 
-        }
-        self.finish_into(batches, function);
-    }
-    /// Finishes a sorting session by allocating and populating a sequence of batches.
-    pub fn finish<U: Unsigned, F: Fn(&T)->U>(&mut self, function: &F) -> Vec<Vec<T>> {
-        let mut result = Vec::new();
-        self.finish_into(&mut result, function);
-        result
-    }
-    /// Finishes a sorting session by populating a supplied sequence.
-    pub fn finish_into<U: Unsigned, F: Fn(&T)->U>(&mut self, target: &mut Vec<Vec<T>>, function: &F) {
+
+    fn finish_into<F: Fn(&T)->U>(&mut self, target: &mut Vec<Vec<T>>, key: &F) {
         self.shuffler.finish_into(target);
         for byte in 1..(<U as Unsigned>::bytes()) { 
-            self.reshuffle(target, &|x| ((function(x).as_u64() >> (8 * byte)) % 256) as u8);
+            self.reshuffle(target, &|x| ((key(x).as_u64() >> (8 * byte)) % 256) as u8);
         }
     }
-    /// Consumes supplied buffers for future re-use by the sorter.
-    ///
-    /// This method is equivalent to `self.rebalance(buffers, usize::max_value())`.
-    pub fn recycle(&mut self, buffers: &mut Vec<Vec<T>>) {
-        self.rebalance(buffers, usize::max_value());
-    }
-    /// Either consumes from or pushes into `buffers` to leave `intended` spare buffers with the sorter.
-    pub fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize) {
+}
+
+impl<T> RadixSorterBase<T> for Sorter<T> {
+    fn new() -> Self { Sorter { shuffler: Shuffler::new() } }
+    fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize) {
         self.shuffler.stash.rebalance(buffers, intended);
     }
+}
+
+impl<T> Sorter<T> {
     #[inline(always)]
-    fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: &mut Vec<Vec<T>>, function: &F) {
+    fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: &mut Vec<Vec<T>>, key: &F) {
         for buffer in buffers.drain(..) {
-            self.shuffler.push_batch(buffer, function);
+            self.shuffler.push_batch(buffer, key);
         }
         self.shuffler.finish_into(buffers);
     }
@@ -90,7 +64,7 @@ impl<T> RadixSorter<T> {
 // time this changes, either because the implementation improves, or I get a laptop with seventy
 // bazillion cores.
 
-pub struct RadixShuffler<T> {
+pub struct Shuffler<T> {
     staged: Vec<T>,     // ideally: 256 * number of T element per cache line.
     counts: [u8; 256],
 
@@ -98,15 +72,15 @@ pub struct RadixShuffler<T> {
     stash: Stash<T>,      // spare segments
 }
 
-impl<T> RadixShuffler<T> {
-    fn new() -> RadixShuffler<T> {
+impl<T> Shuffler<T> {
+    fn new() -> Shuffler<T> {
         let staged = Vec::with_capacity(256 * per_cache_line!(T));
 
         // looks like this is often cache-line aligned; yay!
         let addr: usize = unsafe { ::std::mem::transmute(staged.as_ptr()) };
         assert_eq!(addr % 64, 0);
 
-        RadixShuffler {
+        Shuffler {
             staged: staged,
             counts: [0; 256],
             buckets: BatchedVecX256::new(),
@@ -114,18 +88,18 @@ impl<T> RadixShuffler<T> {
         }
     }
 
-    fn push_batch<F: Fn(&T)->u8>(&mut self, mut elements: Vec<T>, function: &F) {
+    fn push_batch<F: Fn(&T)->u8>(&mut self, mut elements: Vec<T>, key: &F) {
         for element in elements.drain(..) {
-            self.push(element, function);
+            self.push(element, key);
         }
 
         self.stash.give(elements);
     }
 
     #[inline]
-    fn push<F: Fn(&T)->u8>(&mut self, element: T, function: &F) {
+    fn push<F: Fn(&T)->u8>(&mut self, element: T, key: &F) {
 
-        let byte = function(&element);
+        let byte = key(&element);
 
         // write the element to our scratch buffer space and consider it taken care of.
         unsafe {
@@ -188,7 +162,8 @@ mod test {
             vector.push(size - index);
         }
 
-        let mut sorter = super::RadixSorter::new();
+        use {RadixSorter, RadixSorterBase};
+        let mut sorter = super::Sorter::new();
 
         for &element in &vector {
             sorter.push(element, &|&x| x);
@@ -218,7 +193,8 @@ mod test {
             vector.push([size - index; 16]);
         }
 
-        let mut sorter = super::RadixSorter::new();
+        use {RadixSorter, RadixSorterBase};
+        let mut sorter = super::Sorter::new();
 
         for &element in &vector {
             sorter.push(element, &|&x| x[0]);

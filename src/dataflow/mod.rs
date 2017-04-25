@@ -14,7 +14,7 @@
 //! ```
 
 pub use self::stream::Stream;
-pub use self::scopes::Scope;
+pub use self::scopes::{Scope, ScopeParent};
 
 pub mod operators;
 pub mod channels;
