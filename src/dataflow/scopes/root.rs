@@ -11,8 +11,7 @@ use {Push, Pull};
 use super::{ScopeParent, Child};
 
 /// A `Root` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
-/// and has a list of child `Operate`s. The primary intended use of `Root` is through its
-/// implementation of the `Scope` trait.
+/// and has a list of child `Operate`s.
 pub struct Root<A: Allocate> {
     allocator: Rc<RefCell<A>>,
     identifiers: Rc<RefCell<usize>>,
