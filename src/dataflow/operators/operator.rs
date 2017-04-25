@@ -386,7 +386,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
             },
             internal_changes,
             targets,
-            true);
+            false);
 
         let index = scope.add_operator(operator);
         self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
@@ -425,7 +425,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
             },
             internal_changes,
             targets,
-            true);
+            false);
 
         let index = scope.add_operator(operator);
         self.connect_to(Target { index: index, port: 0 }, sender1, channel_id1);
