@@ -35,8 +35,8 @@ pub trait Probe<G: Scope, D: Data> {
     ///     // add an input and base computation off of it
     ///     let (mut input, probe) = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input();
-    ///         let (probe, stream) = stream.inspect(|x| println!("hello {:?}", x))
-    ///                                     .probe();
+    ///         let probe = stream.inspect(|x| println!("hello {:?}", x))
+    ///                           .probe();
     ///         (input, probe)
     ///     });
     ///
@@ -48,15 +48,47 @@ pub trait Probe<G: Scope, D: Data> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe(&self) -> (Handle<G::Timestamp>, Stream<G, D>);
+    fn probe(&self) -> Handle<G::Timestamp>;
+
+    /// Inserts a progress probe in a stream.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::*;
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Probe, Inspect};
+    /// use timely::dataflow::operators::probe::Handle;
+    /// use timely::progress::timestamp::RootTimestamp;
+    ///
+    /// // construct and execute a timely dataflow
+    /// timely::execute(Configuration::Thread, |worker| {
+    ///
+    ///     // add an input and base computation off of it
+    ///     let mut probe = Handle::new();
+    ///     let mut input = worker.dataflow(|scope| {
+    ///         let (input, stream) = scope.new_input();
+    ///         stream.probe_with(&mut probe)
+    ///               .inspect(|x| println!("hello {:?}", x));
+    ///
+    ///         input
+    ///     });
+    ///
+    ///     // introduce input, advance computation
+    ///     for round in 0..10 {
+    ///         input.send(round);
+    ///         input.advance_to(round + 1);
+    ///         worker.step_while(|| probe.lt(input.time()));
+    ///     }
+    /// }).unwrap();
+    /// ```
+    fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> Stream<G, D>;
 }
 
 impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
-    fn probe(&self) -> (Handle<G::Timestamp>, Stream<G, D>) {
+    fn probe(&self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
-        let frontier = Rc::new(RefCell::new(MutableAntichain::new()));
-        let handle = Handle { frontier: frontier.clone() };
+        let handle = Handle::new();
 
         let mut scope = self.scope();   // clones the scope
         let channel_id = scope.new_identifier();
@@ -66,12 +98,30 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         let operator = Operator {
             input: PullCounter::new(receiver),
             output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
-            frontier: frontier,
+            frontier: handle.frontier.clone(),
         };
 
         let index = scope.add_operator(operator);
         self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
-        (handle, Stream::new(Source { index: index, port: 0 }, registrar, scope))
+        Stream::new(Source { index: index, port: 0 }, registrar, scope);
+        handle
+    }
+    fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> Stream<G, D> {
+
+        let mut scope = self.scope();   // clones the scope
+        let channel_id = scope.new_identifier();
+
+        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id);
+        let (targets, registrar) = Tee::<G::Timestamp,D>::new();
+        let operator = Operator {
+            input: PullCounter::new(receiver),
+            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            frontier: handle.frontier.clone(),
+        };
+
+        let index = scope.add_operator(operator);
+        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
+        Stream::new(Source { index: index, port: 0 }, registrar, scope)
     }
 }
 
@@ -87,6 +137,16 @@ impl<T: Timestamp> Handle<T> {
     #[inline] pub fn le(&self, time: &T) -> bool { self.frontier.borrow().le(time) }
     /// returns true iff the frontier is empty.
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().elements().len() == 0 }
+    /// Allocates a new handle.
+    #[inline] pub fn new() -> Self { Handle { frontier: Rc::new(RefCell::new(MutableAntichain::new())) } }
+}
+
+impl<T: Timestamp> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        Handle {
+            frontier: self.frontier.clone()
+        }
+    }
 }
 
 struct Operator<T:Timestamp, D: Data> {
@@ -149,7 +209,7 @@ mod tests {
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {
                 let (input, stream) = scope.new_input::<String>();
-                (input, stream.probe().0)
+                (input, stream.probe())
             });
 
             // introduce data and watch!

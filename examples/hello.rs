@@ -11,7 +11,7 @@ fn main() {
             let (input, stream) = scope.new_input();
             let probe = stream.exchange(|x| *x)
                               .inspect(move |x| println!("worker {}:\thello {}", index, x))
-                              .probe().0;
+                              .probe();
             (input, probe)
         });
 

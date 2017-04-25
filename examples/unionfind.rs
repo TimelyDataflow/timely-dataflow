@@ -31,7 +31,7 @@ fn main() {
                               .union_find()
                               .exchange(|_| 0)
                               .union_find()
-                              .probe().0;
+                              .probe();
 
             (handle, probe)
         });
