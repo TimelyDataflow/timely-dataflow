@@ -45,7 +45,7 @@ pub trait Map<S: Scope, D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<I: Iterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data;
+    fn flat_map<I: IntoIterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data;
 }
 
 impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
@@ -67,10 +67,10 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<I: Iterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data {
+    fn flat_map<I: IntoIterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data {
         self.unary_stream(Pipeline, "FlatMap", move |input, output| {
             input.for_each(|time, data| {
-                output.session(&time).give_iterator(data.drain(..).flat_map(|x| logic(x)));
+                output.session(&time).give_iterator(data.drain(..).flat_map(|x| logic(x).into_iter()));
             });
         })
     }
