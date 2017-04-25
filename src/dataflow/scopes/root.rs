@@ -169,7 +169,7 @@ impl Wrapper {
 
 impl Drop for Wrapper {
     fn drop(&mut self) {
-        println!("dropping dataflow {:?}", self.index);
+        // println!("dropping dataflow {:?}", self.index);
         // ensure drop order
         self.operate = None;
         self.resources = None;
