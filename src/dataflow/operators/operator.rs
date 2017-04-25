@@ -299,7 +299,7 @@ fn binary_base<G: Scope, D1: Data, D2: Data, D3: Data, P1, P2>(
 pub fn source<G: Scope, D, B, L>(scope: &G, name: &str, constructor: B) -> Stream<G, D>
 where
     D: Data,
-    B: Fn(Capability<G::Timestamp>) -> L,
+    B: FnOnce(Capability<G::Timestamp>) -> L,
     L: FnMut(&mut OutputHandle<G::Timestamp, D, Tee<G::Timestamp, D>>)+'static {
 
     let (cap, internal_changes) = make_default_cap::<G>();
@@ -329,7 +329,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     fn unary_frontier<D2, B, L, P>(&self, pact: P, name: &str, constructor: B) -> Stream<G, D2>
     where
         D2: Data,
-        B: Fn(Capability<G::Timestamp>) -> L,
+        B: FnOnce(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
@@ -362,7 +362,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     fn unary<D2, B, L, P>(&self, pact: P, name: &str, constructor: B) -> Stream<G, D2>
     where
         D2: Data,
-        B: Fn(Capability<G::Timestamp>) -> L,
+        B: FnOnce(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
@@ -396,7 +396,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     where
         D2: Data,
         D3: Data,
-        B: Fn(Capability<G::Timestamp>) -> L,
+        B: FnOnce(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut InputHandle<G::Timestamp, D2>, &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
@@ -436,7 +436,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     where
         D2: Data,
         D3: Data,
-        B: Fn(Capability<G::Timestamp>) -> L,
+        B: FnOnce(Capability<G::Timestamp>) -> L,
         L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>,
                  &mut FrontieredInputHandle<G::Timestamp, D2>,
                  &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
