@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::any::Any;
 
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, Subgraph};
@@ -68,11 +69,18 @@ impl<A: Allocate> Root<A> {
     /// The total number of peer workers.
     pub fn peers(&self) -> usize { self.allocator.borrow().peers() }
 
-    /// Introduces a new dataflow constructed in the supplied closure.
-    ///
-    /// NOTE: This is the same code as in the `scoped` method for scopes, but it has been extracted
-    /// so that the `Root` type does not need to implement `Scope`.
+    /// Construct a new dataflow.
     pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
+        self.dataflow_using(Box::new(()), |_, child| func(child))
+    }
+
+    /// Construct a new dataflow binding resources that are released only after the dataflow is dropped.
+    ///
+    /// This method is designed to allow the dataflow builder to use certain resources that are then stashed
+    /// with the dataflow until it has completed running. Once complete, the resources are dropped. The most
+    /// common use of this method at present is with loading shared libraries, where the library is important
+    /// for building the dataflow, and must be kept around until after the dataflow has completed operation.
+    pub fn dataflow_using<T: Timestamp, R, F:FnOnce(&mut V, &mut Child<Self, T>)->R, V: Any+'static>(&mut self, mut resources: V, func: F) -> R {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
@@ -84,7 +92,7 @@ impl<A: Allocate> Root<A> {
                 subgraph: &subscope,
                 parent: self.clone(),
             };
-            func(&mut builder)
+            func(&mut resources, &mut builder)
         };
 
         let mut operator = subscope.into_inner();
@@ -95,28 +103,12 @@ impl<A: Allocate> Root<A> {
         let wrapper = Wrapper {
             index: dataflow_index,
             operate: Some(Box::new(operator)),
-            resources: None,
+            resources: Some(Box::new(resources)),
         };
         self.dataflows.borrow_mut().push(wrapper);
 
         result
-    }
 
-    /// Manually construct a dataflow.
-    pub fn construct_dataflow<O: Operate<RootTimestamp>+'static, F: FnOnce(usize)->O>(&mut self, func: F) {
-        let index = self.allocate_dataflow_index();
-        let mut operator = func(index);
-
-        // prepare progress tracking for operator.
-        operator.get_internal_summary();
-        operator.set_external_summary(Vec::new(), &mut []);
-
-        let wrapper = Wrapper {
-            index: index,
-            operate: Some(Box::new(operator)),
-            resources: None,
-        };
-        self.dataflows.borrow_mut().push(wrapper);
     }
 
     // sane way to get new dataflow identifiers; used to be self.dataflows.len(). =/
@@ -157,7 +149,7 @@ impl<A: Allocate> Clone for Root<A> {
 struct Wrapper {
     index: usize,
     operate: Option<Box<Operate<RootTimestamp>>>,
-    resources: Option<Box<Drop>>,
+    resources: Option<Box<Any>>,
 }
 
 impl Wrapper {
