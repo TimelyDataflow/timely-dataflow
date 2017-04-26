@@ -1,19 +1,10 @@
 //! Conversion to the `Stream` type from iterators.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::default::Default;
-
-use progress::frontier::Antichain;
-use progress::{Operate, Timestamp};
-use progress::nested::subgraph::Source;
-use progress::count_map::CountMap;
+use progress::Timestamp;
 
 use Data;
 use dataflow::channels::Content;
-use dataflow::channels::pushers::{Tee, Counter};
-use dataflow::channels::pushers::buffer::Buffer;
-
+use dataflow::operators::operator::source;
 use dataflow::{Stream, Scope};
 
 /// Converts to a timely `Stream`.
@@ -21,11 +12,6 @@ pub trait ToStream<T: Timestamp, D: Data> {
     /// Converts to a timely `Stream`.
     ///
     /// #Examples
-    /// 
-    /// `ToStream` is implemented by any implementor of `IntoIterator` whose
-    /// associated type `Item` implements `Data`. This means that iterators, 
-    /// vectors, and other collections may be directly converted to timely 
-    /// streams.
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Capture};
@@ -45,63 +31,23 @@ pub trait ToStream<T: Timestamp, D: Data> {
 impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::Item: Data {
     fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, I::Item> {
 
-        let (output, registrar) = Tee::<S::Timestamp, I::Item>::new();
-        let copies = scope.peers();
+        source(scope, "ToStream", |capability| {
+            let mut iterator = self.into_iter().fuse();
+            let mut capability = Some(capability);
 
-        let index = scope.add_operator(Operator {
-            iterator: Some(self.into_iter()),
-            copies: copies,
-            output: Buffer::new(Counter::new(output, Rc::new(RefCell::new(CountMap::new())))),
-        });
+            move |output| {
 
-        Stream::new(Source { index: index, port: 0 }, registrar, scope.clone())
-    }
-}
-
-struct Operator<T:Timestamp, D: Data, I: Iterator<Item=D>> {
-    iterator: Option<I>,
-    copies: usize,
-    output: Buffer<T, D, Counter<T, D, Tee<T, D>>>,
-}
-
-impl<T:Timestamp, D: Data, I: Iterator<Item=D>> Operate<T> for Operator<T, D, I> {
-    fn name(&self) -> String { "ToStream".to_owned() }
-    fn inputs(&self) -> usize { 0 }
-    fn outputs(&self) -> usize { 1 }
-
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
-        let mut map = CountMap::new();
-        map.update(&Default::default(), self.copies as i64);
-        (Vec::new(), vec![map])
-    }
-
-    fn pull_internal_progress(&mut self,_messages_consumed: &mut [CountMap<T>],
-                                         frontier_progress: &mut [CountMap<T>],
-                                         messages_produced: &mut [CountMap<T>]) -> bool
-    {
-        if self.iterator.is_some() {
-
-            // if we find that there is a next element, send a bunch.
-            if let Some(element) = self.iterator.as_mut().unwrap().next() {
-
-                // send 4096 messages, or whatever the buffer size is.
-                let mut session = self.output.session(&Default::default());
-                session.give(element);
-                for element in self.iterator.as_mut().unwrap().take((256 * Content::<D>::default_length()) - 1) {
+                if let Some(element) = iterator.next() {
+                    let mut session = output.session(capability.as_ref().unwrap());
                     session.give(element);
+                    for element in iterator.by_ref().take((256 * Content::<I::Item>::default_length()) - 1) {
+                        session.give(element);
+                    }
+                }
+                else {
+                    capability = None;
                 }
             }
-            else {
-
-                self.output.cease();
-                self.output.inner().pull_progress(&mut messages_produced[0]);
-                frontier_progress[0].update(&Default::default(), -1);
-                self.iterator = None;
-            }
-        }
-
-        false
+        })
     }
-
-    fn notify_me(&self) -> bool { false }
 }
