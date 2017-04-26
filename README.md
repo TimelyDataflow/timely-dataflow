@@ -70,7 +70,7 @@ fn main() {
             let (input, stream) = scope.new_input();
             let probe = stream.exchange(|x| *x)
                               .inspect(move |x| println!("worker {}:\thello {}", index, x))
-                              .probe().0;
+                              .probe();
             (input, probe)
         });
 
@@ -175,11 +175,15 @@ The timely communication layer currently discards most buffers it moves through 
 
 The communication layer is based on a type `Content<T>` which can be backed by typed or binary data. Consequently, it requires that the type it supports be serializable, because it needs to have logic for the case that the data is binary, even if this case is not used. It seems like the `Stream` type should be extendable to be parametric in the type of storage used for the data, so that we can express the fact that some types are not serializable and that this is ok.
 
+**NOTE**: Differential dataflow demonstrates how to do this at the user level in its `operators/arrange.rs`, if somewhat sketchily. 
+
 This would allow us to safely pass Rc<T> types around, as long as we use the `Pipeline` parallelization contract.
 
 ## Coarse- vs fine-grained timestamps
 
 The progress tracking machinery involves some non-trivial overhead per timestamp. This means that using very fine-grained timestamps, for example the nanosecond at which a record is processed, swamps the progress tracking logic. By contrast, the logging infrastructure demotes nanoseconds to data, part of the logged payload, and approximates batches of events with the largest (should probably be the smallest) timestamp in the batch. This is less accurate from a progress tracking point of view, but more performant. It may be possible to generalize this so that users can write programs without thinking about granularity of timestamp, and the system automatically coarsens when possible (essentially boxcar-ing times).
+
+**NOTE**: Differential dataflow demonstrates how to do this at the user level in its `collection.rs`. The lack of system support means that the user ends up indicating the granularity, which isn't horrible but could plausibly be improved. It may also be that leaving the user with control of the granularity leaves them with more control over the latency/throughput trade-off, which could be a good thing for the system to do.
 
 <!--  ## Capability-based operators
 
