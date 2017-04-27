@@ -33,7 +33,7 @@ fn main() {
         for round in 0..10 {
             input.send(Test { field: Rc::new(round) } );
             input.advance_to(round + 1);
-            worker.step_while(|| probe.lt(input.time()));
+            worker.step_while(|| probe.less_than(input.time()));
         }
     }).unwrap();
 }

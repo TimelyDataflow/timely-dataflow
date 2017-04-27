@@ -44,7 +44,7 @@ fn main() {
             if edge % batch == (batch - 1) {
                 let next = input.epoch() + 1;
                 input.advance_to(next);
-                while probe.lt(input.time()) {
+                while probe.less_than(input.time()) {
                     worker.step();
                 }
             }

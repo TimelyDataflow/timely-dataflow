@@ -3,8 +3,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use order::PartialOrder;
-
 use progress::{Timestamp, Operate, Antichain};
 use progress::frontier::MutableAntichain;
 use progress::nested::subgraph::{Source, Target};
@@ -46,7 +44,7 @@ pub trait Probe<G: Scope, D: Data> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step_while(|| probe.lt(input.time()));
+    ///         worker.step_while(|| probe.less_than(input.time()));
     ///     }
     /// }).unwrap();
     /// ```
@@ -79,7 +77,7 @@ pub trait Probe<G: Scope, D: Data> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step_while(|| probe.lt(input.time()));
+    ///         worker.step_while(|| probe.less_than(input.time()));
     ///     }
     /// }).unwrap();
     /// ```
@@ -134,9 +132,9 @@ pub struct Handle<T:Timestamp> {
 
 impl<T: Timestamp> Handle<T> {
     /// returns true iff the frontier is strictly less than `time`.
-    #[inline] pub fn lt(&self, time: &T) -> bool { self.frontier.borrow().less_than(time) }
+    #[inline] pub fn less_than(&self, time: &T) -> bool { self.frontier.borrow().less_than(time) }
     /// returns true iff the frontier is less than or equal to `time`.
-    #[inline] pub fn le(&self, time: &T) -> bool { self.frontier.borrow().less_equal(time) }
+    #[inline] pub fn less_equal(&self, time: &T) -> bool { self.frontier.borrow().less_equal(time) }
     /// returns true iff the frontier is empty.
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().elements().len() == 0 }
     /// Allocates a new handle.
@@ -217,9 +215,9 @@ mod tests {
             // introduce data and watch!
             for round in 0..10 {
                 assert!(!probe.done());
-                assert!(probe.le(&RootTimestamp::new(round)));
-                assert!(!probe.lt(&RootTimestamp::new(round)));
-                assert!(probe.lt(&RootTimestamp::new(round + 1)));
+                assert!(probe.less_equal(&RootTimestamp::new(round)));
+                assert!(!probe.less_than(&RootTimestamp::new(round)));
+                assert!(probe.less_than(&RootTimestamp::new(round + 1)));
                 input.advance_to(round + 1);
                 worker.step();
             }
