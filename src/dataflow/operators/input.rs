@@ -114,7 +114,7 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
 
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-pub struct Handle<T: Timestamp+Ord, D: Data> {
+pub struct Handle<T: Timestamp, D: Data> {
     // frontier: Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
     progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
     pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>,
@@ -127,7 +127,7 @@ pub struct Handle<T: Timestamp+Ord, D: Data> {
 // if now_at == None the pusher has not been opened, else it is open with the specific time.
 
 
-impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
+impl<T:Timestamp, D: Data> Handle<T, D> {
     fn new(pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>) -> Handle<T, D> {
         Handle {
             // frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
@@ -173,7 +173,7 @@ impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
     /// This method allows timely dataflow to issue progress notifications as it can now determine
     /// that this input can no longer produce data at earlier timestamps.
     pub fn advance_to(&mut self, next: T) {
-        assert!(next > self.now_at.inner);
+        assert!(self.now_at.inner.less_than(&next));
         self.close_epoch();
         self.now_at = RootTimestamp::new(next);
         self.progress.borrow_mut().update(&self.now_at, 1);
@@ -196,7 +196,7 @@ impl<T:Timestamp+Ord, D: Data> Handle<T, D> {
     }
 }
 
-impl<T:Timestamp+Ord, D: Data> Drop for Handle<T, D> {
+impl<T:Timestamp, D: Data> Drop for Handle<T, D> {
     fn drop(&mut self) {
         self.close_epoch();
     }
