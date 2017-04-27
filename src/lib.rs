@@ -65,10 +65,12 @@ extern crate time;
 
 pub use execute::{execute, execute_from_args, example};
 pub use timely_communication::{Push, Pull, Configuration};
+pub use order::PartialOrder;
 
 pub mod progress;
 pub mod dataflow;
 pub mod execute;
+pub mod order;
 
 // #[cfg(feature = "logging")]
 pub mod logging;

@@ -3,6 +3,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use order::PartialOrder;
+
 use progress::{Timestamp, Operate, Antichain};
 use progress::frontier::MutableAntichain;
 use progress::nested::subgraph::{Source, Target};
@@ -132,9 +134,9 @@ pub struct Handle<T:Timestamp> {
 
 impl<T: Timestamp> Handle<T> {
     /// returns true iff the frontier is strictly less than `time`.
-    #[inline] pub fn lt(&self, time: &T) -> bool { self.frontier.borrow().lt(time) }
+    #[inline] pub fn lt(&self, time: &T) -> bool { self.frontier.borrow().less_than(time) }
     /// returns true iff the frontier is less than or equal to `time`.
-    #[inline] pub fn le(&self, time: &T) -> bool { self.frontier.borrow().le(time) }
+    #[inline] pub fn le(&self, time: &T) -> bool { self.frontier.borrow().less_equal(time) }
     /// returns true iff the frontier is empty.
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().elements().len() == 0 }
     /// Allocates a new handle.

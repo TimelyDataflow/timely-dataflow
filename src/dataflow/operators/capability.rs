@@ -24,9 +24,11 @@
 use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::fmt::{self, Debug};
+
+use order::PartialOrder;
 use progress::Timestamp;
 use progress::count_map::CountMap;
-use std::fmt::{self, Debug};
 
 /// A capability for timestamp `t` represents a permit for an operator that holds the capability
 /// to send data and request notifications at timestamp `t`.
@@ -46,7 +48,7 @@ impl<T: Timestamp> Capability<T> {
     /// the source capability (`self`).
     #[inline]
     pub fn delayed(&self, new_time: &T) -> Capability<T> {
-        assert!(new_time >= &self.time);
+        assert!(self.time.less_equal(new_time));
         mint(*new_time, self.internal.clone())
     }
 }

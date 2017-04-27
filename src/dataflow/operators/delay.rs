@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 
 use Data;
+use order::PartialOrder;
 use dataflow::channels::pact::Pipeline;
 use dataflow::channels::Content;
 use dataflow::{Stream, Scope};
@@ -79,7 +80,7 @@ where G::Timestamp: Hash {
             input.for_each(|time, data| {
                 for datum in data.drain(..) {
                     let new_time = func(&datum, &time);
-                    assert!(new_time >= time.time());
+                    assert!(time.time().less_equal(&new_time));
                     elements.entry(new_time)
                             .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                             .push(datum);
@@ -101,7 +102,7 @@ where G::Timestamp: Hash {
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
                 let new_time = func(&time);
-                assert!(new_time >= time.time());
+                assert!(time.time().less_equal(&new_time));
                 let spare = stash.pop().unwrap_or_else(Vec::new);
                 let data = ::std::mem::replace(data.deref_mut(), spare);
 

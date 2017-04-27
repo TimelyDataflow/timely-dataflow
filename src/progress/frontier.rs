@@ -1,9 +1,10 @@
 //! Tracks minimal sets of mutually incomparable elements of a partial order.
 
 use std::default::Default;
-use std::cmp::Ordering;
+// use std::cmp::Ordering;
 
 use progress::CountMap;
+use order::PartialOrder;
 
 /// A set of mutually incomparable elements.
 #[derive(Default, Clone, Debug)]
@@ -11,26 +12,19 @@ pub struct Antichain<T> {
     elements: Vec<T>
 }
 
-impl<T: PartialOrd> Antichain<T> {
+impl<T: PartialOrder> Antichain<T> {
     /// Updates the `Antichain` if the element is not greater than or equal to some present element.
     ///
     /// Returns true if element is added to the set
     pub fn insert(&mut self, element: T) -> bool {
-        // bail if any element exceeds the candidate
-        if self.elements.iter().any(|x| element.ge(x)) {
-            return false;
+        if !self.elements.iter().any(|x| x.less_equal(&element)) {
+            self.elements.retain(|x| !element.less_equal(x));
+            self.elements.push(element);
+            true
         }
-        let mut removed = 0;
-        for index in 0..self.elements.len() {
-            let new_index = index - removed;
-            if element.lt(&self.elements[new_index]) {
-                self.elements.swap_remove(new_index);
-                removed += 1;
-            }
+        else {
+            false
         }
-
-        self.elements.push(element);
-        true
     }
 
     /// Creates a new empty `Antichain`.
@@ -42,6 +36,18 @@ impl<T: PartialOrd> Antichain<T> {
     /// Clears the contents of the antichain.
     pub fn clear(&mut self) { self.elements.clear() }
 
+    /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
+    #[inline]
+    pub fn less_than(&self, time: &T) -> bool {
+        self.elements.iter().any(|x| x.less_than(time))
+    }
+
+    /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
+    #[inline]
+    pub fn less_equal(&self, time: &T) -> bool {
+        self.elements.iter().any(|x| x.less_equal(time))
+    }
+    
     /// Reveals the elements in the antichain.
     pub fn elements(&self) -> &[T] { &self.elements[..] }
 }
@@ -59,7 +65,7 @@ pub struct MutableAntichain<T:Eq> {
     elements:       Vec<T>,         // the set of times with precedent count == 0
 }
 
-impl<T: PartialOrd+Eq+Clone+'static> MutableAntichain<T> {
+impl<T: PartialOrder+Eq+Clone+'static> MutableAntichain<T> {
     /// Creates a new empty `MutableAntichain`.
     pub fn new() -> MutableAntichain<T> {
         MutableAntichain {
@@ -91,14 +97,14 @@ impl<T: PartialOrd+Eq+Clone+'static> MutableAntichain<T> {
 
     /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
     #[inline]
-    pub fn lt(&self, time: &T) -> bool {
-        self.elements.iter().any(|x| x.lt(time))
+    pub fn less_than(&self, time: &T) -> bool {
+        self.elements.iter().any(|x| x.less_than(time))
     }
 
     /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
     #[inline]
-    pub fn le(&self, time: &T) -> bool {
-        self.elements.iter().any(|x| x.le(time))
+    pub fn less_equal(&self, time: &T) -> bool {
+        self.elements.iter().any(|x| x.less_equal(time))
     }
 
     /// Returns the number of times an element exists in the set.
@@ -162,19 +168,29 @@ impl<T: PartialOrd+Eq+Clone+'static> MutableAntichain<T> {
 
                 // maintain precedent counts relative to the set
                 for &mut (ref key, ref mut val) in &mut self.precedents {
-                    if let Some(comparison) = elem.partial_cmp(key) {
-                        match comparison {
-                            Ordering::Less    => {
-                                if *val == 0 {
-                                    self.elements.retain(|x| x != key);
-                                    action(key, -1);
-                                }
-                                *val += 1;
-                            },
-                            Ordering::Equal   => { panic!("surprising!"); },
-                            Ordering::Greater => { preceded_by += 1; },
+                    if elem.less_than(key) {
+                        if *val == 0 {
+                            self.elements.retain(|x| x != key);
+                            action(key, -1);
                         }
+                        *val += 1;
                     }
+                    else if key.less_than(elem) {
+                        preceded_by += 1;
+                    }
+                    // if let Some(comparison) = elem.partial_cmp(key) {
+                    //     match comparison {
+                    //         Ordering::Less    => {
+                    //             if *val == 0 {
+                    //                 self.elements.retain(|x| x != key);
+                    //                 action(key, -1);
+                    //             }
+                    //             *val += 1;
+                    //         },
+                    //         Ordering::Equal   => { panic!("surprising!"); },
+                    //         Ordering::Greater => { preceded_by += 1; },
+                    //     }
+                    // }
                 }
 
                 // insert count always; maybe put in elements
@@ -189,7 +205,7 @@ impl<T: PartialOrd+Eq+Clone+'static> MutableAntichain<T> {
             if old_value > 0 && new_value <= 0 {
                 // maintain precedent counts relative to the set
                 for &mut (ref key, ref mut val) in &mut self.precedents {
-                    if elem < key {
+                    if elem.less_than(key) {
                         *val -= 1;
                         if *val == 0 {
                             self.elements.push(key.clone());

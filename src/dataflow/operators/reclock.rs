@@ -1,6 +1,7 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
 use Data;
+use order::PartialOrder;
 use dataflow::{Stream, Scope};
 use dataflow::channels::pact::Pipeline;
 use dataflow::operators::binary::Binary;
@@ -70,11 +71,11 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
                 let time = cap.time();
                 let mut session = output.session(&cap);
                 for &mut (ref t, ref mut data) in &mut stash {
-                    if t.le(&time) {
+                    if t.less_equal(&time) {
                         session.give_content(data);
                     }
                 }
-                stash.retain(|x| !x.0.le(&time));
+                stash.retain(|x| !x.0.less_equal(&time));
             });
         })
     }

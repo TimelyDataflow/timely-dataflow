@@ -6,13 +6,14 @@ use std::default::Default;
 use std::fmt::Formatter;
 use std::fmt::Error;
 
+use order::PartialOrder;
 use progress::nested::product::Product;
 
 use abomonation::Abomonation;
 
 // TODO : Change Copy requirement to Clone;
 /// A composite trait for types that serve as timestamps in timely dataflow.
-pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Any+Abomonation {
+pub trait Timestamp: Copy+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
 }
@@ -22,7 +23,7 @@ pub trait Timestamp: Copy+Eq+PartialOrd+Default+Debug+Send+Any+Abomonation {
 // TODO : This can be important when a summary would "overflow", as we want neither to overflow,
 // TODO : nor wrap around, nor saturate.
 /// A summary of how a timestamp advances along a timely dataflow path.
-pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrd+Debug+Default {
+pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrder+Debug+Default {
     /// Advances a timestamp according to the timestamp actions on the path.
     fn results_in(&self, src: &T) -> T;
     /// Composes this path summary with another path summary.
@@ -39,6 +40,8 @@ impl Debug for RootTimestamp {
         f.write_str("Root")
     }
 }
+
+impl PartialOrder for RootTimestamp { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { true } }
 
 impl Abomonation for RootTimestamp { }
 impl RootTimestamp {
@@ -58,6 +61,9 @@ impl PathSummary<RootTimestamp> for RootSummary {
     #[inline]
     fn followed_by(&self, _: &RootSummary) -> RootSummary { RootSummary }
 }
+
+impl PartialOrder for RootSummary { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { true } }
+
 
 impl Timestamp for () { type Summary = (); }
 impl PathSummary<()> for () {

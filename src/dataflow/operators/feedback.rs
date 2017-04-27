@@ -83,7 +83,7 @@ impl<TOuter: Timestamp, TInner: Timestamp, D: Data> Push<(Product<TOuter, TInner
     fn push(&mut self, message: &mut Option<(Product<TOuter, TInner>, Content<D>)>) {
         let active = if let Some((ref mut time, _)) = *message {
             time.inner = self.summary.results_in(&time.inner);
-            self.limit.ge(&time.inner)
+            time.inner.less_equal(&self.limit)
         }
         else { true };
 
