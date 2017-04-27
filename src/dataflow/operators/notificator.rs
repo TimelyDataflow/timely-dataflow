@@ -1,3 +1,4 @@
+use order::PartialOrder;
 use progress::frontier::MutableAntichain;
 use progress::Timestamp;
 use progress::count_map::CountMap;
@@ -120,15 +121,15 @@ impl<T: Timestamp> Iterator for Notificator<T> {
             let frontier = &self.frontier;
 
             pending.drain_into_if(&mut candidates, |&(ref cap, _)| {
-                !frontier.iter().any(|x| x.le(&cap.time()))
+                !frontier.iter().any(|x| x.less_equal(&cap.time()))
             });
 
             while let Some((cap, count)) = candidates.pop() {
                 let mut cap_in_minimal_antichain = available.is_empty();
                 available.drain_into_if(&mut pending, |&(ref avail_cap, _)| {
-                    let cap_lt_available = cap.time().lt(&avail_cap.time());
+                    let cap_lt_available = cap.time().less_than(&avail_cap.time());
                     cap_in_minimal_antichain |= cap_lt_available ||
-                        cap.time().partial_cmp(&avail_cap.time()).is_none();
+                        (!cap.time().less_equal(&avail_cap.time()) && !avail_cap.time().less_equal(&cap.time()));
                     cap_lt_available
                 });
                 if cap_in_minimal_antichain {
@@ -220,7 +221,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 
         let notified = notificator.by_ref().collect::<Vec<_>>();
         for (i, &(ref cap, _)) in notified.iter().enumerate() {
-            assert!(notified.iter().skip(i + 1).all(|&(ref c, _)| !c.time().lt(&cap.time())));
+            assert!(notified.iter().skip(i + 1).all(|&(ref c, _)| !c.time().less_equal(&cap.time())));
         }
         let mut counts = notified.iter().map(|&(ref cap, count)| {
             let ts = cap.time();
@@ -369,15 +370,16 @@ impl<T: Timestamp> FrontierNotificator<T> {
             assert!(candidates.len() == 0);
 
             pending.drain_into_if(&mut candidates, |& ref cap| {
-                !frontiers.iter().any(|x| x.le(&cap.time()))
+                !frontiers.iter().any(|x| x.less_equal(&cap.time()))
             });
 
             while let Some(cap) = candidates.pop() {
                 let mut cap_in_minimal_antichain = available.is_empty();
                 available.drain_into_if(&mut pending, |& ref avail_cap| {
-                    let cap_lt_available = cap.time().lt(&avail_cap.time());
+                    let cap_lt_available = cap.time().less_than(&avail_cap.time());
                     cap_in_minimal_antichain |= cap_lt_available ||
-                        cap.time().partial_cmp(&avail_cap.time()).is_none();
+                        (!cap.time().less_equal(&avail_cap.time()) && !avail_cap.time().less_equal(&cap.time()));
+                        // cap.time().partial_cmp(&avail_cap.time()).is_none();
                     cap_lt_available
                 });
                 if cap_in_minimal_antichain {

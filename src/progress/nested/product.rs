@@ -1,8 +1,9 @@
 //! A pair timestamp suitable for use with the product partial order.
 
-use std::cmp::Ordering;
+// use std::cmp::Ordering;
 use std::fmt::{Formatter, Error, Debug};
 
+use order::PartialOrder;
 use progress::Timestamp;
 use progress::nested::summary::Summary;
 
@@ -12,7 +13,7 @@ use abomonation::Abomonation;
 ///
 /// We use `Product` rather than `(TOuter, TInner)` so that we can derive our own `PartialOrd`,
 /// because Rust just uses the lexicographic total order.
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd)]
 pub struct Product<TOuter, TInner> {
     /// Outer timestamp.
     pub outer: TOuter,
@@ -37,25 +38,31 @@ impl<TOuter: Debug, TInner: Debug> Debug for Product<TOuter, TInner> {
     }
 }
 
-impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInner> {
+impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for Product<TOuter, TInner> {
     #[inline(always)]
-    fn partial_cmp(&self, other: &Product<TOuter, TInner>) -> Option<Ordering> {
-        match (self <= other, other <= self) {
-            (true, true)   => Some(Ordering::Equal),
-            (true, false)  => Some(Ordering::Less),
-            (false, true)  => Some(Ordering::Greater),
-            (false, false) => None,
-        }
-    }
-    #[inline(always)]
-    fn le(&self, other: &Product<TOuter, TInner>) -> bool {
-        self.inner <= other.inner && self.outer <= other.outer
-    }
-    #[inline(always)]
-    fn ge(&self, other: &Product<TOuter, TInner>) -> bool {
-        self.inner >= other.inner && self.outer >= other.outer
+    fn less_equal(&self, other: &Self) -> bool {
+        self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
     }
 }
+// impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInner> {
+//     #[inline(always)]
+//     fn partial_cmp(&self, other: &Product<TOuter, TInner>) -> Option<Ordering> {
+//         match (self <= other, other <= self) {
+//             (true, true)   => Some(Ordering::Equal),
+//             (true, false)  => Some(Ordering::Less),
+//             (false, true)  => Some(Ordering::Greater),
+//             (false, false) => None,
+//         }
+//     }
+//     #[inline(always)]
+//     fn le(&self, other: &Product<TOuter, TInner>) -> bool {
+//         self.inner <= other.inner && self.outer <= other.outer
+//     }
+//     #[inline(always)]
+//     fn ge(&self, other: &Product<TOuter, TInner>) -> bool {
+//         self.inner >= other.inner && self.outer >= other.outer
+//     }
+// }
 
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner> {
     type Summary = Summary<TOuter::Summary, TInner::Summary>;

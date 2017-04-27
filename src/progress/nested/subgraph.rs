@@ -7,6 +7,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use timely_communication::Allocate;
 
+use order::PartialOrder;
+
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, PathSummary, Operate};
 
@@ -662,7 +664,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 }
 
-fn try_to_add_summary<T: Eq, S: PartialOrd+Eq+Copy+Debug>(vector: &mut Vec<(T, Antichain<S>)>, target: T, summary: S) -> bool {
+fn try_to_add_summary<T: Eq, S: PartialOrder+Eq+Copy+Debug>(vector: &mut Vec<(T, Antichain<S>)>, target: T, summary: S) -> bool {
     for &mut (ref t, ref mut antichain) in vector.iter_mut() {
         if target.eq(t) { return antichain.insert(summary); }
     }
