@@ -66,4 +66,4 @@ pub use self::notificator::FrontierNotificator;
 
 // keep "mint" module-private
 mod capability;
-pub use self::capability::Capability;
+pub use self::capability::{Capability, CapabilitySet};
