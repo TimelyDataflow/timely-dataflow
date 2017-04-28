@@ -85,7 +85,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for 
 
 			// read each input, fold into aggregates
 			input.for_each(|time, data| {
-				let agg_time = aggregates.entry(time.time()).or_insert_with(HashMap::new);
+				let agg_time = aggregates.entry(time.time().clone()).or_insert_with(HashMap::new);
 				for (key, val) in data.drain(..) {
 					let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
 					fold(&key, val, agg);

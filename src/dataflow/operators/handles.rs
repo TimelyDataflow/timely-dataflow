@@ -33,8 +33,8 @@ impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
     #[inline]
     pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
         let internal = &mut self.internal;
-        self.pull_counter.next().map(|(&time, content)| {
-            (mint_capability(time, internal.clone()), content)
+        self.pull_counter.next().map(|(time, content)| {
+            (mint_capability(time.clone(), internal.clone()), content)
         })
     }
 
@@ -140,7 +140,7 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
     ///     (0..10).to_stream(scope)
     ///            .unary_stream(Pipeline, "example", |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    let mut time = cap.time();
+    ///                    let mut time = cap.time().clone();
     ///                    time.inner += 1;
     ///                    output.session(&cap.delayed(&time)).give_content(data);
     ///                });

@@ -73,7 +73,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             input.for_each(|time, data| {
                 // stash if not time yet
                 if notificator.frontier(0).iter().any(|x| x.less_than(&time.time())) {
-                    pending.entry(time.time()).or_insert_with(Vec::new).extend(data.drain(..));
+                    pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
                     notificator.notify_at(time);
                 }
                 else {
@@ -92,7 +92,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
 
             // go through each time with data, process each (key, val) pair.
             notificator.for_each(|time,_,_| {
-                if let Some(pend) = pending.remove(&time.time()) {
+                if let Some(pend) = pending.remove(time.time()) {
                     let mut session = output.session(&time);
                     for (key, val) in pend {
                         let (remove, output) = {

@@ -81,7 +81,7 @@ where G::Timestamp: Hash {
                 for datum in data.drain(..) {
                     let new_time = func(&datum, &time);
                     assert!(time.time().less_equal(&new_time));
-                    elements.entry(new_time)
+                    elements.entry(new_time.clone())
                             .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                             .push(datum);
                 }
@@ -106,7 +106,7 @@ where G::Timestamp: Hash {
                 let spare = stash.pop().unwrap_or_else(Vec::new);
                 let data = ::std::mem::replace(data.deref_mut(), spare);
 
-                elements.entry(new_time)
+                elements.entry(new_time.clone())
                         .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                         .push(data);
             });

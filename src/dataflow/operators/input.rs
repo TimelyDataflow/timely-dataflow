@@ -140,7 +140,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
     // flushes any data we are sitting on. may need to initialize self.now_at if no one has yet.
     fn flush(&mut self) {
-        Content::push_at(&mut self.buffer, self.now_at, &mut self.pusher);
+        Content::push_at(&mut self.buffer, self.now_at.clone(), &mut self.pusher);
     }
 
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
@@ -165,7 +165,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.
     pub fn send_batch(&mut self, buffer: &mut Vec<D>) {
         self.flush();
-        Content::push_at(buffer, self.now_at, &mut self.pusher);        
+        Content::push_at(buffer, self.now_at.clone(), &mut self.pusher);        
     }
 
     /// Advances the current epoch to `next`.

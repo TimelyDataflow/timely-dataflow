@@ -39,8 +39,8 @@ pub struct Capability<T: Timestamp> {
 impl<T: Timestamp> Capability<T> {
     /// The timestamp associated with this capability.
     #[inline]
-    pub fn time(&self) -> T {
-        self.time
+    pub fn time(&self) -> &T {
+        &self.time
     }
 
     /// Makes a new capability for a timestamp `new_time` greater or equal to the timestamp of
@@ -48,7 +48,7 @@ impl<T: Timestamp> Capability<T> {
     #[inline]
     pub fn delayed(&self, new_time: &T) -> Capability<T> {
         assert!(self.time.less_equal(new_time));
-        mint(*new_time, self.internal.clone())
+        mint(new_time.clone(), self.internal.clone())
     }
 }
 
@@ -74,7 +74,7 @@ impl<T: Timestamp> Drop for Capability<T> {
 
 impl<T: Timestamp> Clone for Capability<T> {
     fn clone(&self) -> Capability<T> {
-        mint(self.time, self.internal.clone())
+        mint(self.time.clone(), self.internal.clone())
     }
 }
 

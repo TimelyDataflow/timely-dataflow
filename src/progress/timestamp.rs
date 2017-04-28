@@ -13,7 +13,7 @@ use abomonation::Abomonation;
 
 // TODO : Change Copy requirement to Clone;
 /// A composite trait for types that serve as timestamps in timely dataflow.
-pub trait Timestamp: Copy+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation {
+pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
 }
@@ -23,7 +23,7 @@ pub trait Timestamp: Copy+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation {
 // TODO : This can be important when a summary would "overflow", as we want neither to overflow,
 // TODO : nor wrap around, nor saturate.
 /// A summary of how a timestamp advances along a timely dataflow path.
-pub trait PathSummary<T> : 'static+Copy+Eq+PartialOrder+Debug+Default {
+pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// Advances a timestamp according to the timestamp actions on the path.
     ///
     /// The path may advance the timestamp sufficiently that it is no longer valid, for example if

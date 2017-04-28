@@ -57,8 +57,8 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
         self.binary_notify(clock, Pipeline, Pipeline, "Reclock", vec![], move |input1, input2, output, notificator| {
 
             // stash each data input with its timestamp.
-            input1.for_each(|time, data| {
-                stash.push((time.time(), data.take()));
+            input1.for_each(|cap, data| {
+                stash.push((cap.time().clone(), data.take()));
             });
 
             // request notification at time, to flush stash.
@@ -68,14 +68,13 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
 
             // each time with complete stash can be flushed.
             notificator.for_each(|cap,_,_| {
-                let time = cap.time();
                 let mut session = output.session(&cap);
                 for &mut (ref t, ref mut data) in &mut stash {
-                    if t.less_equal(&time) {
+                    if t.less_equal(&cap.time()) {
                         session.give_content(data);
                     }
                 }
-                stash.retain(|x| !x.0.less_equal(&time));
+                stash.retain(|x| !x.0.less_equal(&cap.time()));
             });
         })
     }

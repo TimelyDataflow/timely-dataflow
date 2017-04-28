@@ -53,10 +53,10 @@ pub trait Operator<G: Scope, D1: Data> {
     ///                         output.session(&c).give(12);
     ///                     }
     ///                     while let Some((time, data)) = input.next() {
-    ///                         stash.entry(time.time()).or_insert(Vec::new());
+    ///                         stash.entry(time.time().clone()).or_insert(Vec::new());
     ///                     }
     ///                     for time in notificator.iter(&[input.frontier()]) {
-    ///                         if let Some(mut vec) = stash.remove(&time.time()) {
+    ///                         if let Some(mut vec) = stash.remove(time.time()) {
     ///                             output.session(&time).give_iterator(vec.drain(..));
     ///                         }
     ///                     }
@@ -124,15 +124,15 @@ pub trait Operator<G: Scope, D1: Data> {
     ///            let mut stash = HashMap::new();
     ///            move |input1, input2, output| {
     ///                while let Some((time, data)) = input1.next() {
-    ///                    stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
+    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
     ///                    notificator.notify_at(time);
     ///                }
     ///                while let Some((time, data)) = input2.next() {
-    ///                    stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
+    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
     ///                    notificator.notify_at(time);
     ///                }
     ///                for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
-    ///                    if let Some(mut vec) = stash.remove(&time.time()) {
+    ///                    if let Some(mut vec) = stash.remove(time.time()) {
     ///                        output.session(&time).give_iterator(vec.drain(..));
     ///                    }
     ///                }
@@ -280,7 +280,7 @@ fn binary_base<G: Scope, D1: Data, D2: Data, D3: Data, P1, P2>(
 ///             let mut done = false;
 ///             if let Some(cap) = cap.as_mut() {
 ///                 // get some data and send it.
-///                 let mut time = cap.time();
+///                 let mut time = cap.time().clone();
 ///                 output.session(&cap)
 ///                       .give(cap.time().inner);
 ///
