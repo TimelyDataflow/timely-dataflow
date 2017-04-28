@@ -459,7 +459,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                 while let Some((time, value)) = self.pointstamps.target[index][input].pop() {
                     for &(target, ref antichain) in &self.children[index].target_target_summaries[input] {
                         for summary in antichain.elements().iter() {
-                            self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
+                            if let Some(new_time) = summary.results_in(&time) {
+                                self.pointstamps.pushed[target.index][target.port].update(&new_time, value);
+                            }
                         }
                     }
                 }
@@ -472,7 +474,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                 while let Some((time, value)) = self.pointstamps.source[index][output].pop() {
                     for &(target, ref antichain) in &self.children[index].source_target_summaries[output] {
                         for summary in antichain.elements().iter() {
-                            self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
+                            if let Some(new_time) = summary.results_in(&time) {
+                                self.pointstamps.pushed[target.index][target.port].update(&new_time, value);
+                            }
                         }
                     }
                 }
@@ -532,11 +536,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             let temp = self.children[target.index].target_source_summaries[target.port].clone();
             for &(new_source, ref new_summaries) in &temp {
                 for new_summary in new_summaries.elements() {
-                    let summary = summary.followed_by(new_summary);
-                    let edges = self.children[new_source.index].edges[new_source.port].clone();
-                    for &new_target in &edges {
-                        if try_to_add_summary(&mut self.children[source.index].source_target_summaries[source.port], new_target, summary) {
-                            additions.push_back((source, new_target, summary));
+                    if let Some(summary) = summary.followed_by(new_summary) {
+                        let edges = self.children[new_source.index].edges[new_source.port].clone();
+                        for &new_target in &edges {
+                            if try_to_add_summary(&mut self.children[source.index].source_target_summaries[source.port], new_target, summary) {
+                                additions.push_back((source, new_target, summary));
+                            }
                         }
                     }
                 }
@@ -560,8 +565,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                         let temp2 = self.children[source.index].source_target_summaries[source.port].clone();
                         for &(target, ref new_summaries) in &temp2 {
                             for new_summary in new_summaries.elements() {
-                                let summary = summary.followed_by(new_summary);
-                                try_to_add_summary(&mut self.children[child_index].target_target_summaries[input], target, summary);
+                                if let Some(summary) = summary.followed_by(new_summary) {
+                                    try_to_add_summary(&mut self.children[child_index].target_target_summaries[input], target, summary);
+                                }
                             }
                         }
                     }

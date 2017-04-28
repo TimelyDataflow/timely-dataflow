@@ -72,19 +72,19 @@ where TOuter: Timestamp,
 {
     // this makes sense for a total order, but less clear for a partial order.
     #[inline]
-    fn results_in(&self, product: &Product<TOuter, TInner>) -> Product<TOuter, TInner> {
+    fn results_in(&self, product: &Product<TOuter, TInner>) -> Option<Product<TOuter, TInner>> {
         match *self {
-            Local(ref iters)              => Product::new(product.outer, iters.results_in(&product.inner)),
-            Outer(ref summary, ref iters) => Product::new(summary.results_in(&product.outer), iters.results_in(&Default::default())),
+            Local(ref iters)              => iters.results_in(&product.inner).map(|x| Product::new(product.outer, x)),
+            Outer(ref summary, ref iters) => summary.results_in(&product.outer).map(|x| Product::new(x, iters.results_in(&Default::default()).unwrap())),
         }
     }
     #[inline]
-    fn followed_by(&self, other: &Summary<SOuter, SInner>) -> Summary<SOuter, SInner> {
+    fn followed_by(&self, other: &Summary<SOuter, SInner>) -> Option<Summary<SOuter, SInner>> {
         match (*self, *other) {
-            (Local(inner1), Local(inner2))             => Local(inner1.followed_by(&inner2)),
-            (Local(_), Outer(_, _))                    => *other,
-            (Outer(outer1, inner1), Local(inner2))     => Outer(outer1, inner1.followed_by(&inner2)),
-            (Outer(outer1, _), Outer(outer2, inner2))  => Outer(outer1.followed_by(&outer2), inner2),
+            (Local(inner1), Local(inner2))             => inner1.followed_by(&inner2).map(|x| Local(x)),
+            (Local(_), Outer(_, _))                    => Some(*other),
+            (Outer(outer1, inner1), Local(inner2))     => inner1.followed_by(&inner2).map(|x| Outer(outer1, x)),
+            (Outer(outer1, _), Outer(outer2, inner2))  => outer1.followed_by(&outer2).map(|x| Outer(x, inner2)),
         }
     }
 }
