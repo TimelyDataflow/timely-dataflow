@@ -13,7 +13,7 @@ fn main() {
             .to_stream(scope)
             .unary_stream(Pipeline, "Distinct", move |input, output| {
                 input.for_each(|time, data| {
-                    let mut counts = counts_by_time.entry(time.time())
+                    let mut counts = counts_by_time.entry(time.time().clone())
                                                    .or_insert(HashMap::new());
                     let mut session = output.session(&time);
                     for &datum in data.iter() {

@@ -101,7 +101,7 @@ impl<A: Allocate> Root<A> {
         operator.set_external_summary(Vec::new(), &mut []);
 
         let wrapper = Wrapper {
-            index: dataflow_index,
+            _index: dataflow_index,
             operate: Some(Box::new(operator)),
             resources: Some(Box::new(resources)),
         };
@@ -147,7 +147,7 @@ impl<A: Allocate> Clone for Root<A> {
 }
 
 struct Wrapper {
-    index: usize,
+    _index: usize,
     operate: Option<Box<Operate<RootTimestamp>>>,
     resources: Option<Box<Any>>,
 }

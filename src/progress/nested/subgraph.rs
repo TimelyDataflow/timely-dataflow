@@ -144,7 +144,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // that they are `Product<TOuter, TInner>`, and we just want `TOuter`.
         let mut initial_capabilities = vec![CountMap::new(); self.outputs()];
         for (o_port, capabilities) in self.pointstamps.pushed[0].iter().enumerate() {
-            for &(time, val) in capabilities.iter() {
+            for &(ref time, val) in capabilities.iter() {
                 // make a note to self and inform scope of our capability.
                 self.output_capabilities[o_port].update(&time.outer, val);
                 initial_capabilities[o_port].update(&time.outer, val);
@@ -158,10 +158,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for input in 0..self.inputs() {
             for &(target, ref antichain) in &self.children[0].source_target_summaries[input] {
                 if target.index == 0 {
-                    for &summary in antichain.elements().iter() {
+                    for summary in antichain.elements().iter() {
                         internal_summary[input][target.port].insert(match summary {
-                            Local(_)    => Default::default(),
-                            Outer(y, _) => y,
+                            &Local(_)    => Default::default(),
+                            &Outer(ref y, _) => y.clone(),
                         });
                     };
                 }
@@ -185,11 +185,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // external capabilities on the subgraph's inputs.
         for output in 0..self.outputs {
             for input in 0..self.inputs {
-                for &summary in summaries[output][input].elements() {
+                for summary in summaries[output][input].elements() {
                     try_to_add_summary(
                         &mut self.children[0].target_source_summaries[output],
                         Source { index: 0, port: input },
-                        Outer(summary, Default::default())
+                        Outer(summary.clone(), Default::default())
                     );
                 }
             }
@@ -253,7 +253,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             for output in 0..child.outputs {
                 for &(source, ref antichain) in &child.source_target_summaries[output] {
                     if source.index == child.index {
-                        summary[output][source.port] = antichain.clone();
+                        summary[output][source.port] = (*antichain).clone();
                     }
                 }
             }
@@ -314,9 +314,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for input in 0..self.inputs {
             let mut borrowed = self.input_messages[input].borrow_mut();
             while let Some((time, delta)) = borrowed.pop() {
-                self.local_pointstamp_internal.update(&(0, input, time), delta);
+                self.local_pointstamp_internal.update(&(0, input, time.clone()), delta);
                 for target in &self.children[0].edges[input] {
-                    self.local_pointstamp_messages.update(&(target.index, target.port, time), delta);
+                    self.local_pointstamp_messages.update(&(target.index, target.port, time.clone()), delta);
                 }
             }
         }
@@ -459,7 +459,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                 while let Some((time, value)) = self.pointstamps.target[index][input].pop() {
                     for &(target, ref antichain) in &self.children[index].target_target_summaries[input] {
                         for summary in antichain.elements().iter() {
-                            self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
+                            if let Some(new_time) = summary.results_in(&time) {
+                                self.pointstamps.pushed[target.index][target.port].update(&new_time, value);
+                            }
                         }
                     }
                 }
@@ -472,7 +474,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                 while let Some((time, value)) = self.pointstamps.source[index][output].pop() {
                     for &(target, ref antichain) in &self.children[index].source_target_summaries[output] {
                         for summary in antichain.elements().iter() {
-                            self.pointstamps.pushed[target.index][target.port].update(&summary.results_in(&time), value);
+                            if let Some(new_time) = summary.results_in(&time) {
+                                self.pointstamps.pushed[target.index][target.port].update(&new_time, value);
+                            }
                         }
                     }
                 }
@@ -532,11 +536,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             let temp = self.children[target.index].target_source_summaries[target.port].clone();
             for &(new_source, ref new_summaries) in &temp {
                 for new_summary in new_summaries.elements() {
-                    let summary = summary.followed_by(new_summary);
-                    let edges = self.children[new_source.index].edges[new_source.port].clone();
-                    for &new_target in &edges {
-                        if try_to_add_summary(&mut self.children[source.index].source_target_summaries[source.port], new_target, summary) {
-                            additions.push_back((source, new_target, summary));
+                    if let Some(summary) = summary.followed_by(new_summary) {
+                        let edges = self.children[new_source.index].edges[new_source.port].clone();
+                        for &new_target in &edges {
+                            if try_to_add_summary(&mut self.children[source.index].source_target_summaries[source.port], new_target, summary.clone()) {
+                                additions.push_back((source, new_target, summary.clone()));
+                            }
                         }
                     }
                 }
@@ -560,8 +565,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
                         let temp2 = self.children[source.index].source_target_summaries[source.port].clone();
                         for &(target, ref new_summaries) in &temp2 {
                             for new_summary in new_summaries.elements() {
-                                let summary = summary.followed_by(new_summary);
-                                try_to_add_summary(&mut self.children[child_index].target_target_summaries[input], target, summary);
+                                if let Some(summary) = summary.followed_by(new_summary) {
+                                    try_to_add_summary(&mut self.children[child_index].target_target_summaries[input], target, summary);
+                                }
                             }
                         }
                     }
@@ -664,7 +670,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 }
 
-fn try_to_add_summary<T: Eq, S: PartialOrder+Eq+Copy+Debug>(vector: &mut Vec<(T, Antichain<S>)>, target: T, summary: S) -> bool {
+fn try_to_add_summary<T: Eq, S: PartialOrder+Eq+Debug>(vector: &mut Vec<(T, Antichain<S>)>, target: T, summary: S) -> bool {
     for &mut (ref t, ref mut antichain) in vector.iter_mut() {
         if target.eq(t) { return antichain.insert(summary); }
     }
@@ -775,8 +781,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         let mut new_summary = vec![Vec::new(); inputs];
         for input in 0..inputs {
             for output in 0..outputs {
-                for &summary in summary[input][output].elements() {
-                    try_to_add_summary(&mut new_summary[input], Source { index: index, port: output }, summary);
+                for summary in summary[input][output].elements() {
+                    try_to_add_summary(&mut new_summary[input], Source { index: index, port: output }, summary.clone());
                 }
             }
         }
@@ -925,7 +931,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         for output in 0..self.outputs {
             while let Some((time, delta)) = self.produced_buffer[output].pop() {
                 for target in &self.edges[output] {
-                    pointstamp_messages.update(&(target.index, target.port, time), delta);
+                    pointstamp_messages.update(&(target.index, target.port, time.clone()), delta);
                 }
             }
 

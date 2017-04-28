@@ -497,7 +497,7 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
 
     fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],  _: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> bool {
         while let Some((time, data)) = self.input.next() {
-            self.events.push(Event::Messages(*time, data.deref_mut().clone()));
+            self.events.push(Event::Messages(time.clone(), data.deref_mut().clone()));
         }
         self.input.pull_progress(&mut consumed[0]);
         false

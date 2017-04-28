@@ -1,4 +1,3 @@
-use order::PartialOrder;
 use progress::frontier::MutableAntichain;
 use progress::Timestamp;
 use progress::count_map::CountMap;
@@ -64,7 +63,7 @@ impl<T: Timestamp> Notificator<T> {
     ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
     ///                input.for_each(|cap, data| {
     ///                    output.session(&cap).give_content(data);
-    ///                    let mut time = cap.time();
+    ///                    let mut time = cap.time().clone();
     ///                    time.inner += 1;
     ///                    notificator.notify_at(cap.delayed(&time));
     ///                });
@@ -182,6 +181,7 @@ fn drain_into_if_behaves_correctly() {
 fn notificator_delivers_notifications_in_topo_order() {
     use std::rc::Rc;
     use std::cell::RefCell;
+    use order::PartialOrder;
     use progress::nested::product::Product;
     use progress::timestamp::RootTimestamp;
     use dataflow::operators::capability::mint as mint_capability;
@@ -274,15 +274,15 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///             let mut stash = HashMap::new();
 ///             move |input1, input2, output| {
 ///                 while let Some((time, data)) = input1.next() {
-///                     stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
+///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
 ///                     notificator.notify_at(time);
 ///                 }
 ///                 while let Some((time, data)) = input2.next() {
-///                     stash.entry(time.time()).or_insert(Vec::new()).extend(data.drain(..));
+///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
 ///                     notificator.notify_at(time);
 ///                 }
 ///                 for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
-///                     if let Some(mut vec) = stash.remove(&time.time()) {
+///                     if let Some(mut vec) = stash.remove(time.time()) {
 ///                         output.session(&time).give_iterator(vec.drain(..));
 ///                     }
 ///                 }
@@ -336,7 +336,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_content(data);
-    ///                        let mut time = cap.time();
+    ///                        let mut time = cap.time().clone();
     ///                        time.inner += 1;
     ///                        notificator.notify_at(cap.delayed(&time));
     ///                    });

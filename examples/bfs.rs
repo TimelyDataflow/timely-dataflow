@@ -66,7 +66,7 @@ fn main() {
 
                     // receive (node, worker) pairs, note any new ones.
                     input2.for_each(|time, data| {
-                        node_lists.entry(time.time())
+                        node_lists.entry(time.time().clone())
                                   .or_insert_with(|| {
                                       notify.notify_at(time.clone());
                                       Vec::new()

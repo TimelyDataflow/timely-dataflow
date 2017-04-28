@@ -36,20 +36,26 @@ impl<T: PartialOrder> Antichain<T> {
     /// Clears the contents of the antichain.
     pub fn clear(&mut self) { self.elements.clear() }
 
-    /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
+    /// Returns true if any item in the antichain is strictly less than the argument.
     #[inline]
     pub fn less_than(&self, time: &T) -> bool {
         self.elements.iter().any(|x| x.less_than(time))
     }
 
-    /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
+    /// Returns true if any item in the antichain is less than or equal to the argument.
     #[inline]
     pub fn less_equal(&self, time: &T) -> bool {
         self.elements.iter().any(|x| x.less_equal(time))
     }
+
+    /// Returns true if every element of `other` is greater or equal to some element of `self`.
+    #[inline]
+    pub fn dominates(&self, other: &Antichain<T>) -> bool {
+        other.elements().iter().all(|t2| self.elements().iter().any(|t1| t1.less_equal(t2)))
+    }
     
     /// Reveals the elements in the antichain.
-    pub fn elements(&self) -> &[T] { &self.elements[..] }
+    #[inline] pub fn elements(&self) -> &[T] { &self.elements[..] }
 }
 
 /// An antichain based on a multiset whose elements frequencies can be updated.

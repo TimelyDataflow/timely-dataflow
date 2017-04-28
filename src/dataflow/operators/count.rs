@@ -60,7 +60,7 @@ where G::Timestamp: Hash {
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
-                logic(&mut accums.entry(time.time()).or_insert(default.clone()), data);
+                logic(&mut accums.entry(time.time().clone()).or_insert(default.clone()), data);
                 notificator.notify_at(time);
             });
 

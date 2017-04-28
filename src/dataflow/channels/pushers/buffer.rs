@@ -35,8 +35,8 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
     pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, D, P> where T: Timestamp {
-        if let Some(true) = self.time.as_ref().map(|x| *x != cap.time()) { self.flush(); }
-        self.time = Some(cap.time());
+        if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
+        self.time = Some(cap.time().clone());
         AutoflushSession {
             buffer: self,
             _capability: cap,

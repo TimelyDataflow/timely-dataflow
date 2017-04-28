@@ -53,7 +53,7 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
 
         let feedback_output = Counter::new(targets, produced.clone());
         let feedback_input =  Counter::new(Observer {
-            limit: limit, summary: summary, targets: feedback_output
+            limit: limit, summary: summary.clone(), targets: feedback_output
         }, consumed.clone());
 
         let index = self.add_operator(Operator {
@@ -82,8 +82,13 @@ impl<TOuter: Timestamp, TInner: Timestamp, D: Data> Push<(Product<TOuter, TInner
     #[inline]
     fn push(&mut self, message: &mut Option<(Product<TOuter, TInner>, Content<D>)>) {
         let active = if let Some((ref mut time, _)) = *message {
-            time.inner = self.summary.results_in(&time.inner);
-            time.inner.less_equal(&self.limit)
+            if let Some(new_time) = self.summary.results_in(&time.inner) {
+                time.inner = new_time;
+                time.inner.less_equal(&self.limit)
+            }
+            else {
+                false
+            }
         }
         else { true };
 
@@ -138,7 +143,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     fn outputs(&self) -> usize { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
-        (vec![vec![Antichain::from_elem(self.summary)]], vec![CountMap::new()])
+        (vec![vec![Antichain::from_elem(self.summary.clone())]], vec![CountMap::new()])
     }
 
     fn pull_internal_progress(&mut self, messages_consumed: &mut [CountMap<T>],
