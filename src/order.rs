@@ -26,4 +26,4 @@ impl PartialOrder for i32 { #[inline(always)] fn less_equal(&self, other: &Self)
 impl PartialOrder for i64 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
 impl PartialOrder for isize { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
 
-impl PartialOrder for () { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { true } }
+impl PartialOrder for () { #[inline(always)] fn less_equal(&self, _other: &Self) -> bool { true } }

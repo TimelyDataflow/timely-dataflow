@@ -26,7 +26,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{self, Debug};
 
-use order::PartialOrder;
 use progress::Timestamp;
 use progress::count_map::CountMap;
 

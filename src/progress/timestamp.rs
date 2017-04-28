@@ -78,7 +78,7 @@ impl Debug for RootTimestamp {
     }
 }
 
-impl PartialOrder for RootTimestamp { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { true } }
+impl PartialOrder for RootTimestamp { #[inline(always)] fn less_equal(&self, _other: &Self) -> bool { true } }
 
 impl Abomonation for RootTimestamp { }
 impl RootTimestamp {
@@ -99,7 +99,7 @@ impl PathSummary<RootTimestamp> for RootSummary {
     fn followed_by(&self, _: &RootSummary) -> Option<RootSummary> { Some(RootSummary) }
 }
 
-impl PartialOrder for RootSummary { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { true } }
+impl PartialOrder for RootSummary { #[inline(always)] fn less_equal(&self, _other: &Self) -> bool { true } }
 
 
 impl Timestamp for () { type Summary = (); }

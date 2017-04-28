@@ -1,4 +1,3 @@
-use order::PartialOrder;
 use progress::frontier::MutableAntichain;
 use progress::Timestamp;
 use progress::count_map::CountMap;
