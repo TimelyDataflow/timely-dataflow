@@ -139,6 +139,24 @@ impl<T: Timestamp> Handle<T> {
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().elements().len() == 0 }
     /// Allocates a new handle.
     #[inline] pub fn new() -> Self { Handle { frontier: Rc::new(RefCell::new(MutableAntichain::new())) } }
+    
+    /// Invokes a method on the frontier, returning its result.
+    ///
+    /// This method allows inspection of the frontier, which cannot be returned by reference as 
+    /// it is on the other side of a `RefCell`.
+    ///
+    /// #Examples
+    ///
+    /// ```
+    /// use timely::dataflow::operators::probe::Handle;
+    ///
+    /// let handle = Handle::<usize>::new();
+    /// let frontier = handle.with_frontier(|frontier| frontier.to_vec());
+    /// ```
+    #[inline]
+    pub fn with_frontier<R, F: Fn(&[T])->R>(&self, function: F) -> R {
+        function(self.frontier.borrow().elements())
+    }
 }
 
 impl<T: Timestamp> Clone for Handle<T> {
