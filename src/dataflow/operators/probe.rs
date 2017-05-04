@@ -137,6 +137,8 @@ impl<T: Timestamp> Handle<T> {
     #[inline] pub fn less_equal(&self, time: &T) -> bool { self.frontier.borrow().less_equal(time) }
     /// returns true iff the frontier is empty.
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().elements().len() == 0 }
+    /// retrieves the frontier.
+    pub fn with_frontier<R, F: FnMut(&[T])->R>(&self, mut logic: F) -> R { (logic)(self.frontier.borrow().elements()) }
     /// Allocates a new handle.
     #[inline] pub fn new() -> Self { Handle { frontier: Rc::new(RefCell::new(MutableAntichain::new())) } }
 }
