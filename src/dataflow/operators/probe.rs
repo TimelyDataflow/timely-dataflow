@@ -88,22 +88,8 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
     fn probe(&self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
-        let handle = Handle::new();
-
-        let mut scope = self.scope();   // clones the scope
-        let channel_id = scope.new_identifier();
-
-        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id);
-        let (targets, registrar) = Tee::<G::Timestamp,D>::new();
-        let operator = Operator {
-            input: PullCounter::new(receiver),
-            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
-            frontier: handle.frontier.clone(),
-        };
-
-        let index = scope.add_operator(operator);
-        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
-        Stream::new(Source { index: index, port: 0 }, registrar, scope);
+        let mut handle = Handle::<G::Timestamp>::new();
+        self.probe_with(&mut handle);
         handle
     }
     fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> Stream<G, D> {
