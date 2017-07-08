@@ -65,7 +65,7 @@ fn main() {
     // initializes and runs a timely dataflow computation
     timely::execute_from_args(std::env::args(), |root| {
         // create a new input, exchange data, and inspect its output
-        let (mut input, probe) = root.scoped(move |scope| {
+        let (mut input, probe) = root.dataflow(move |scope| {
             let index = scope.index();
             let (input, stream) = scope.new_input();
             let probe = stream.exchange(|x| *x)
