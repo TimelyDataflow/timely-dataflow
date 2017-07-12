@@ -2,7 +2,7 @@ extern crate timely_communication;
 
 fn main() {
     // configure for two threads, just one process.
-    let config = timely_communication::Configuration::Process(2);
+    let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
 
     // initailizes communication, spawns workers
     let guards = timely_communication::initialize(config, |mut allocator| {
