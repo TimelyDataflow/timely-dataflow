@@ -266,11 +266,7 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
         while !connected {
             match TcpStream::connect(&addresses[index][..]) {
                 Ok(mut stream) => {
-                    if let Ok(result) = stream.nodelay() {
-                        if !result {
-                            stream.set_nodelay(true).expect("set_nodelay call failed");
-                        }
-                    }
+                    stream.set_nodelay(true).expect("set_nodelay call failed");
                     try!(stream.write_u64::<LittleEndian>(my_index as u64));
                     results[index as usize] = Some(stream);
                     if noisy { println!("worker {}:\tconnection to worker {}", my_index, index); }
@@ -294,6 +290,7 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
 
     for _ in (my_index + 1) .. addresses.len() {
         let mut stream = try!(listener.accept()).0;
+        stream.set_nodelay(true).expect("set_nodelay call failed");
         let identifier = try!(stream.read_u64::<LittleEndian>()) as usize;
         results[identifier - my_index - 1] = Some(stream);
         if noisy { println!("worker {}:\tconnection from worker {}", my_index, identifier); }
