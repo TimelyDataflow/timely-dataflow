@@ -268,7 +268,6 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
                 Ok(mut stream) => {
                     if let Ok(result) = stream.nodelay() {
                         if !result {
-                            println!("nodelay false; setting");
                             stream.set_nodelay(true).expect("set_nodelay call failed");
                         }
                     }
