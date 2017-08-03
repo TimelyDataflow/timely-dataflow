@@ -164,7 +164,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     ///
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.
     pub fn send_batch(&mut self, buffer: &mut Vec<D>) {
-        self.flush();
+        if !self.buffer.is_empty() { self.flush(); }
         Content::push_at(buffer, self.now_at.clone(), &mut self.pusher);        
     }
 
