@@ -1,6 +1,5 @@
 //! Operators acting on timestamps to logically delay records
 
-use std::hash::Hash;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 
@@ -72,8 +71,7 @@ pub trait Delay<G: Scope, D: Data> {
     fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
 }
 
-impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D>
-where G::Timestamp: Hash {
+impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {

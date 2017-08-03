@@ -5,6 +5,7 @@ use std::any::Any;
 use std::default::Default;
 use std::fmt::Formatter;
 use std::fmt::Error;
+use std::hash::Hash;
 
 use order::PartialOrder;
 use progress::nested::product::Product;
@@ -13,7 +14,7 @@ use abomonation::Abomonation;
 
 // TODO : Change Copy requirement to Clone;
 /// A composite trait for types that serve as timestamps in timely dataflow.
-pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation {
+pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation+Hash {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
 }

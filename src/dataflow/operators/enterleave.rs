@@ -19,7 +19,6 @@
 //! });
 //! ```
 
-use std::hash::Hash;
 use std::default::Default;
 
 use std::rc::Rc;
@@ -57,7 +56,7 @@ pub trait Enter<G: Scope, T: Timestamp, D: Data> {
 }
 
 /// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
-pub trait EnterAt<G: Scope, T: Timestamp, D: Data>  where  G::Timestamp: Hash, T: Hash {
+pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     /// Moves the `Stream` argument into a child of its current `Scope` setting the timestamp for each element by `initial`.
     ///
     /// # Examples
@@ -75,8 +74,7 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data>  where  G::Timestamp: Hash, T
     fn enter_at<'a, F:Fn(&D)->T+'static>(&self, scope: &Child<'a, G, T>, initial: F) -> Stream<Child<'a, G, T>, D> ;
 }
 
-impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, T, D>> EnterAt<G, T, D> for E
-where G::Timestamp: Hash, T: Hash {
+impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, T, D>> EnterAt<G, T, D> for E {
     fn enter_at<'a, F:Fn(&D)->T+'static>(&self, scope: &Child<'a, G, T>, initial: F) ->
         Stream<Child<'a, G, T>, D> {
             self.enter(scope).delay(move |datum, time| Product::new(time.outer.clone(), initial(datum)))
