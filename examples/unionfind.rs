@@ -60,7 +60,7 @@ trait UnionFind {
 impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
     fn union_find(&self) -> Stream<G, (usize, usize)> {
 
-        let mut workers = vec![];  // u32 works, and is smaller than uint/u64
+        let mut roots = vec![];  // u32 works, and is smaller than uint/u64
         let mut ranks = vec![];  // u8 should be large enough (n < 2^256)
 
         self.unary_stream(Pipeline, "UnionFind", move |input, output| {
@@ -72,21 +72,21 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
 
                     // grow arrays if required.
                     let m = ::std::cmp::max(x, y);
-                    for i in workers.len() .. (m + 1) {
-                        workers.push(i);
+                    for i in roots.len() .. (m + 1) {
+                        roots.push(i);
                         ranks.push(0);
                     }
 
-                    // look up workers for `x` and `y`.    
-                    while x != workers[x] { x = workers[x]; }
-                    while y != workers[y] { y = workers[y]; }
+                    // look up roots for `x` and `y`.
+                    while x != roots[x] { x = roots[x]; }
+                    while y != roots[y] { y = roots[y]; }
 
                     if x != y {
                         session.give((x, y));
                         match ranks[x].cmp(&ranks[y]) {
-                            Ordering::Less    => { workers[x] = y },
-                            Ordering::Greater => { workers[y] = x },
-                            Ordering::Equal   => { workers[y] = x; ranks[x] += 1 },
+                            Ordering::Less    => { roots[x] = y },
+                            Ordering::Greater => { roots[y] = x },
+                            Ordering::Equal   => { roots[y] = x; ranks[x] += 1 },
                         }
                     }
                 }
