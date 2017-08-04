@@ -1,6 +1,6 @@
 [package]
 name = "timely_sort"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 description = "Sorting infrastructure for timely dataflow"
@@ -12,5 +12,15 @@ repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow", "radix", "sort"]
 license = "MIT"
 
+[dependencies]
+rand="*"
+
 [dev-dependencies]
 rand="0.3.13"
+
+[profile.release]
+opt-level = 3
+debug = true
+rpath = false
+lto = false
+debug-assertions = false

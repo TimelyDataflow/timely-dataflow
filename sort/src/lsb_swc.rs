@@ -1,7 +1,8 @@
-use std::slice;
+// use std::slice;
 
 use ::{Unsigned, RadixSorter, RadixSorterBase};
 use stash::Stash;
+use swc_buffer::SWCBuffer;
 use batched_vec::BatchedVecX256;
 
 macro_rules! per_cache_line {
@@ -9,7 +10,7 @@ macro_rules! per_cache_line {
 }
 
 macro_rules! lines_per_page {
-    () => {{ 2 * 4096 / 64 }}
+    () => {{ 4096 / 64 }}
 }
 
 /// A few buffers capable of radix sorting by least significant byte.
@@ -65,8 +66,9 @@ impl<T> Sorter<T> {
 // bazillion cores.
 
 pub struct Shuffler<T> {
-    staged: Vec<T>,     // ideally: 256 * number of T element per cache line.
-    counts: [u8; 256],
+    buffer: SWCBuffer<T>,
+    // staged: Vec<T>,     // ideally: 256 * number of T element per cache line.
+    // counts: [u8; 256],
 
     buckets: BatchedVecX256<T>,
     stash: Stash<T>,      // spare segments
@@ -74,15 +76,16 @@ pub struct Shuffler<T> {
 
 impl<T> Shuffler<T> {
     fn new() -> Shuffler<T> {
-        let staged = Vec::with_capacity(256 * per_cache_line!(T));
+        // let staged = Vec::with_capacity(256 * per_cache_line!(T));
 
-        // looks like this is often cache-line aligned; yay!
-        let addr: usize = unsafe { ::std::mem::transmute(staged.as_ptr()) };
-        assert_eq!(addr % 64, 0);
+        // // looks like this is often cache-line aligned; yay!
+        // let addr: usize = unsafe { ::std::mem::transmute(staged.as_ptr()) };
+        // assert_eq!(addr % 64, 0);
 
         Shuffler {
-            staged: staged,
-            counts: [0; 256],
+            buffer: SWCBuffer::new(),
+            // staged: staged,
+            // counts: [0; 256],
             buckets: BatchedVecX256::new(),
             stash: Stash::new(lines_per_page!() * per_cache_line!(T)),
         }
@@ -99,28 +102,13 @@ impl<T> Shuffler<T> {
     #[inline]
     fn push<F: Fn(&T)->u8>(&mut self, element: T, key: &F) {
 
-        let byte = key(&element);
+        let byte = key(&element) as usize;
 
-        // write the element to our scratch buffer space and consider it taken care of.
-        unsafe {
-
-            // if we have saturated the buffer for byte, flush it out
-            if *self.counts.get_unchecked(byte as usize) as usize == per_cache_line!(T) {
-                let staged_elements = slice::from_raw_parts(
-                    self.staged.as_ptr().offset(per_cache_line!(T) as isize * byte as isize),
-                    per_cache_line!(T)
-                );
-
-                self.buckets.get_mut(byte).push_all(staged_elements, &mut self.stash);
-
-                self.counts[byte as usize] = 0;
-            }
-
-            // self.staged[byte * stride + self.counts[byte]] = element; self.counts[byte] += 1
-            let offset = per_cache_line!(T) as isize * byte as isize + *self.counts.get_unchecked(byte as usize) as isize;
-            ::std::ptr::write(self.staged.as_mut_ptr().offset(offset), element);
-            *self.counts.get_unchecked_mut(byte as usize) += 1;
+        if self.buffer.full(byte) {
+            self.buffer.drain_into(byte, &mut self.buckets.get_mut(byte), &mut self.stash);
         }
+
+        self.buffer.push(element, byte);
     }
 
     fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
@@ -130,19 +118,14 @@ impl<T> Shuffler<T> {
         // If there is room, we just copy them into the buffer, potentially saving on allocation churn.
 
         for byte in 0..256 {
-            self.buckets.get_mut(byte as u8).finish_into(target);
+            self.buckets.get_mut(byte).finish_into(target);
 
-            if target.last().map(|x| x.capacity() - x.len() >= self.counts[byte] as usize) != Some(true) {
+            if target.last().map(|x| x.capacity() - x.len() >= self.buffer.count(byte)) != Some(true) {
                 target.push(self.stash.get());
             }
 
             let last = target.last_mut().unwrap();
-            for i in 0..self.counts[byte] {
-                unsafe {
-                    last.push(::std::ptr::read(self.staged.as_mut_ptr().offset(per_cache_line!(T) as isize * byte as isize + i as isize)));
-                }
-            }
-            self.counts[byte] = 0;
+            self.buffer.drain_into_vec(byte, last, &mut self.stash);
         }
     }
 }
@@ -209,5 +192,4 @@ mod test {
 
         assert_eq!(result, vector);
     }
-
 }

@@ -54,6 +54,8 @@ impl<'a, T> BatchedVecRef<'a, T> {
         }
     }
 
+    // Note: this method is unsafe because it simply copies `elements`, and relies on the data backing it
+    // to be discarded without being dropped.
     #[inline(always)]
     pub unsafe fn push_all(&mut self, elements: &[T], stash: &mut Stash<T>) {
         self.reserve(stash);
@@ -139,11 +141,11 @@ impl<T> BatchedVecX256<T> {
 
     /// Access the `BatchedVec` at the `byte` position.
     #[inline(always)]
-    pub fn get_mut(&mut self, byte: u8) -> BatchedVecRef<T> {
+    pub fn get_mut(&mut self, byte: usize) -> BatchedVecRef<T> {
         unsafe {
             BatchedVecRef {
-                tail: self.tails.get_unchecked_mut(byte as usize),
-                batches: self.batches.get_unchecked_mut(byte as usize)
+                tail: self.tails.get_unchecked_mut(byte),
+                batches: self.batches.get_unchecked_mut(byte)
             }
         }
     }

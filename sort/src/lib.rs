@@ -11,12 +11,16 @@
 mod lsb;
 mod lsb_swc;
 mod msb;
+mod msb_swc;
 mod stash;
 mod batched_vec;
+mod swc_buffer;
 
 pub use lsb::Sorter as LSBRadixSorter;
 pub use lsb_swc::Sorter as LSBSWCRadixSorter;
 pub use msb::Sorter as MSBRadixSorter;
+pub use msb_swc::Sorter as MSBSWCRadixSorter;
+pub use swc_buffer::SWCBuffer;
 
 /// An unsigned integer fit for use as a radix key.
 pub trait Unsigned : Ord {

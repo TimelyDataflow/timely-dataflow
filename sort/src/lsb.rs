@@ -7,7 +7,7 @@ macro_rules! per_cache_line {
 }
 
 macro_rules! lines_per_page {
-    () => {{ 2 * 4096 / 64 }}
+    () => {{ 4096 / 64 }}
 }
 
 /// A few buffers capable of radix sorting by least significant byte.
@@ -92,13 +92,13 @@ impl<T> Shuffler<T> {
     #[inline]
     fn push<F: Fn(&T)->u8>(&mut self, element: T, function: &F) {
         let byte = function(&element);
-        self.buckets.get_mut(byte).push(element, &mut self.stash);
+        self.buckets.get_mut(byte as usize).push(element, &mut self.stash);
     }
 
     /// Finishes the shuffling into a target vector.
     fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
         for byte in 0..256 {
-            self.buckets.get_mut(byte as u8).finish_into(target);
+            self.buckets.get_mut(byte).finish_into(target);
         }
     }
 }

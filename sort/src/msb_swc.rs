@@ -14,17 +14,19 @@
 //! buffer's full of elements) we should fall into the final sort.
 
 use ::std::mem::replace;
+// use ::std::collections::VecDeque;
 
 use ::{Unsigned, RadixSorter, RadixSorterBase};
 use stash::Stash;
 use batched_vec::{BatchedVec, BatchedVecX256};
+use swc_buffer::SWCBuffer;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::max(64 / ::std::mem::size_of::<$t>(), 4) }}
 }
 
 macro_rules! lines_per_page {
-    () => {{ 2 * 4096 / 64 }}
+    () => {{ 4096 / 64 }}
 }
 
 /// A "most-significant byte" (MSB) radix sorter. 
@@ -39,7 +41,9 @@ macro_rules! lines_per_page {
 /// and one must re-sort by the actual key). See the `finish_into_and` and `sort_and` methods.
 pub struct Sorter<T> {
 
-    work: Vec<(usize, Vec<Vec<T>>)>,    // a stack of (level, items) of work to do.
+    buffer: SWCBuffer<T>,
+
+    work: Vec<Work<T>>,    // a stack of (level, items) of work to do.
 
     done: BatchedVec<T>,                // where we put the assembled data.
     buckets: BatchedVecX256<T>,
@@ -48,13 +52,27 @@ pub struct Sorter<T> {
     stash: Stash<T>,                    // empty buffers we might be able to use.
 }
 
+/// Describes work queued (stacked, actually) up to perform.
+pub enum Work<T> {
+    /// Indicates sorted and compacted results, which simply need to be moved into place.
+    Done(Vec<T>),
+    /// Indicates sorting still to be done, by byte position and list of elements to sort.
+    Sort(usize, Vec<Vec<T>>),
+}
+
 impl<T, U: Unsigned> RadixSorter<T, U> for Sorter<T> {
 
     #[inline(always)]
     fn push<F: Fn(&T)->U>(&mut self, element: T, bytes: &F) {
         let depth = U::bytes() - 1;
         let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
-        self.buckets.get_mut(byte).push(element, &mut self.stash);
+
+        // write the element to our scratch buffer space and consider it taken care of.
+        if self.buffer.full(byte) {
+            self.buffer.drain_into(byte, &mut self.buckets.get_mut(byte), &mut self.stash);
+        }
+
+        self.buffer.push(element, byte);
     }
 
     #[inline]
@@ -66,17 +84,18 @@ impl<T, U: Unsigned> RadixSorter<T, U> for Sorter<T> {
     }
 
     fn finish_into<F: Fn(&T)->U>(&mut self, target: &mut Vec<Vec<T>>, bytes: &F) {
-        self.finish_into_and(target, bytes, |slice| slice.sort_by(|x,y| bytes(x).cmp(&bytes(y))));
+        self.finish_into_and(target, bytes, |vec| if vec.len() > 1 { vec.sort_by(|x,y| bytes(x).cmp(&bytes(y))) });
     }
 
     fn sort<F: Fn(&T)->U>(&mut self, batches: &mut Vec<Vec<T>>, bytes: &F) {
-        self.sort_and(batches, bytes, |slice| slice.sort_by(|x,y| bytes(x).cmp(&bytes(y))));
+        self.sort_and(batches, bytes, |vec| vec.sort_by(|x,y| bytes(x).cmp(&bytes(y))));
     }
 }
 
 impl<T> RadixSorterBase<T> for Sorter<T> {
     fn new() -> Self {
         Sorter {
+            buffer: SWCBuffer::new(),
             work: Vec::new(),
             done: BatchedVec::new(),
             buckets: BatchedVecX256::new(),
@@ -92,19 +111,32 @@ impl<T> RadixSorterBase<T> for Sorter<T> {
 impl<T> Sorter<T> {
 
     /// Finishes the sorting for the session, using the supplied finalizing action when given the option to exit early.
+    #[inline(always)]
     pub fn finish_into_and<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, target: &mut Vec<Vec<T>>, bytes: F, action: L) {
+
         let depth = U::bytes() - 1;
+
+        // temp space to `finish_into`.
+        let mut temp = Vec::new();
+
         for byte in (0 .. 256).rev() {
             let mut bucket = self.buckets.get_mut(byte); 
+            self.buffer.drain_into(byte, &mut bucket, &mut self.stash);
             if !bucket.is_empty() {
-                self.work.push((depth, bucket.finish()));
+                bucket.finish_into(&mut temp);
+                if temp.len() == 1 {
+                    let mut buffer = temp.pop().unwrap();
+                    action(&mut buffer);
+                    self.work.push(Work::Done(buffer));
+                }
+                else {
+                    self.work.push(Work::Sort(depth, temp));
+                    temp = Vec::new();
+                }
             }
         }
 
-        while let Some((depth, mut list)) = self.work.pop() {
-            self.ingest(&mut list, &bytes, depth, &action);
-        }
-
+        self.grind(&bytes, &action);
         self.done.ref_mut().finish_into(target)
     }
 
@@ -115,13 +147,11 @@ impl<T> Sorter<T> {
     /// so we have an `action` you get to apply to finish things off. We could make this sort by radix, but
     /// there are several use cases where we need to follow up with additional sorting / compaction and would
     /// like to hook this clean-up method anyhow.
+    #[inline(always)]
     pub fn sort_and<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, source: &mut Vec<Vec<T>>, bytes: F, action: L) {
         if source.len() > 1 {
-            self.work.push((U::bytes(), replace(source, Vec::new())));
-            while let Some((depth, mut list)) = self.work.pop() {
-                self.ingest(&mut list, &bytes, depth, &action);
-            }
-
+            self.work.push(Work::Sort(U::bytes(), replace(source, Vec::new())));
+            self.grind(&bytes, &action);
             self.done.ref_mut().finish_into(source);
         }
         else if source.len() == 1 {
@@ -129,56 +159,77 @@ impl<T> Sorter<T> {
         }
     }
 
+    #[inline(always)]
+    fn grind<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, bytes: &F, action: &L) {
+
+        while let Some(work) = self.work.pop() {
+            match work {
+                // TODO : Should this just be a push, not a copy? Risk if sparsely occupied.
+                Work::Done(batch) => self.done.ref_mut().push_vec(batch, &mut self.stash),
+                Work::Sort(depth, mut list) => {
+                    self.ingest(&mut list, bytes, depth, action);
+                }
+            }
+        }
+    }
+
     // digests a list of batches, which we assume (for some reason) to be densely packed.
+    #[inline(always)]
     fn ingest<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, source: &mut Vec<Vec<T>>, bytes: &F, depth: usize, action: &L) {
 
-        if source.len() > 1 {
+        // in this case, we should have a non-trivial number of elements, and so we can spend some effort
+        // looking at the current radix and going to work. of course, we can only do this if bytes remain;
+        // otherwise we will need to stage the data in self.stage and apply `action` to it.
 
-            // in this case, we should have a non-trivial number of elements, and so we can spend some effort
-            // looking at the current radix and going to work. of course, we can only do this if bytes remain;
-            // otherwise we will need to stage the data in self.stage and apply `action` to it.
+        if depth > 0 {
 
-            if depth > 0 {
+            let depth = depth - 1;
 
-                let depth = depth - 1;
-
-                // push all of source into lists and tails.
-                for mut batch in source.drain(..) {
-                    for element in batch.drain(..) {
-                        let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
-                        self.buckets.get_mut(byte).push(element, &mut self.stash);
+            // push all of source into lists and tails.
+            for mut batch in source.drain(..) {
+                for element in batch.drain(..) {
+                    let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
+                    if self.buffer.full(byte) {
+                        self.buffer.drain_into(byte, &mut self.buckets.get_mut(byte), &mut self.stash);
                     }
-                    self.stash.give(batch);
+                    self.buffer.push(element, byte);
                 }
+                self.stash.give(batch);
+            }
 
-                // we are actually doing this is reverse, so that popping the stack goes in the right order.
-                for byte in (0 .. 256).rev() {
-                    let mut bucket = self.buckets.get_mut(byte);
-                    if !bucket.is_empty() {
-                        self.work.push((depth, bucket.finish()));
+            let mut temp = Vec::new();
+            for byte in (0 .. 256).rev() {
+                let mut bucket = self.buckets.get_mut(byte);
+                self.buffer.drain_into(byte, &mut bucket, &mut self.stash);
+                if !bucket.is_empty() {
+                    bucket.finish_into(&mut temp);
+                    if temp.len() == 1 {
+                        let mut buffer = temp.pop().unwrap();
+                        action(&mut buffer);
+                        self.work.push(Work::Done(buffer));
+                    }
+                    else {
+                        self.work.push(Work::Sort(depth, temp));
+                        temp = Vec::new();
                     }
                 }
             }
-            else {
-                for mut batch in source.drain(..) {
-                    for element in batch.drain(..) {
-                        self.stage.push(element);
-                    }
-
-                    self.stash.give(batch);
-                }
-
-                action(&mut self.stage);
-
-                for element in self.stage.drain(..) {
-                    self.done.ref_mut().push(element, &mut self.stash);
-                }
-            }
-
         }
-        else if let Some(mut batch) = source.pop() {
-            action(&mut batch);
-            self.done.ref_mut().push_vec(batch, &mut self.stash);
+        else {
+            let len = source.iter().map(|x| x.len()).sum();
+            self.stage.reserve(len);
+            for mut batch in source.drain(..) {
+                for element in batch.drain(..) {
+                    self.stage.push(element);
+                }
+                self.stash.give(batch);
+            }
+
+            action(&mut self.stage);
+
+            for element in self.stage.drain(..) {
+                self.done.ref_mut().push(element, &mut self.stash);
+            }
         }
     }
 }
