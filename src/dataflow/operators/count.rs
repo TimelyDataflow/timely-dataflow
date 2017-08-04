@@ -1,6 +1,5 @@
 //! Counts the number of records at each time.
 use std::collections::HashMap;
-use std::hash::Hash;
 
 use Data;
 use dataflow::channels::pact::Pipeline;
@@ -53,8 +52,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     }
 }
 
-impl<G: Scope, D: Data> Accumulate<G, D> for Stream<G, D>
-where G::Timestamp: Hash {
+impl<G: Scope, D: Data> Accumulate<G, D> for Stream<G, D> {
     fn accumulate<A: Data, F: Fn(&mut A, &mut Content<D>)+'static>(&self, default: A, logic: F) -> Stream<G, A> {
 
         let mut accums = HashMap::new();

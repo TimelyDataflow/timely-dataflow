@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 
 use Data;
 use dataflow::channels::pact::Pipeline;
@@ -10,8 +9,7 @@ pub trait Queue {
     fn queue(&self) -> Self;
 }
 
-impl<G: Scope, D: Data> Queue for Stream<G, D>
-where G::Timestamp: Hash {
+impl<G: Scope, D: Data> Queue for Stream<G, D> {
     fn queue(&self) -> Stream<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Queue", vec![], move |input, output, notificator| {

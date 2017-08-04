@@ -66,7 +66,7 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
 		F: Fn(&K, V, &mut D)+'static, 
 		G: Fn(K, D)->R+'static,
 		H: Fn(&K)->u64+'static,
-	>(&self, fold: F, emit: G, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq;
+	>(&self, fold: F, emit: G, hash: H) -> Stream<S, R> where S::Timestamp: Eq;
 } 
 
 impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
@@ -77,7 +77,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for 
 			F: Fn(&K, V, &mut D)+'static, 
 			G: Fn(K, D)->R+'static,
 			H: Fn(&K)->u64+'static,
-		>(&self, fold: F, emit: G, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq {
+		>(&self, fold: F, emit: G, hash: H) -> Stream<S, R> where S::Timestamp: Eq {
 
 		let mut aggregates = HashMap::new(); 
 
