@@ -105,7 +105,9 @@ fn main() {
                                     targets.push(edge);
                                 }
                             }
-                            offsets.push(targets.len() as u32);
+                            while offsets.len() < offsets.capacity() {
+                                offsets.push(targets.len() as u32);
+                            }
                         }
 
                         // print some diagnostic timing information
