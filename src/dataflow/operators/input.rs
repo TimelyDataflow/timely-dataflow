@@ -260,7 +260,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// This method allows timely dataflow to issue progress notifications as it can now determine
     /// that this input can no longer produce data at earlier timestamps.
     pub fn advance_to(&mut self, next: T) {
-        assert!(self.now_at.inner.less_than(&next));
+        assert!(self.now_at.inner.less_equal(&next));
         self.close_epoch();
         self.now_at = RootTimestamp::new(next);
         for progress in self.progress.iter() {
