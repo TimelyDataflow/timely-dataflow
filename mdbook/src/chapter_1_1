@@ -1,0 +1,40 @@
+
+
+
+
+
+When you write a dataflow program, you give the computer flexibility in how it executes your program. Rather than insisting on a specific execution plan, your 
+
+Dataflow programming is in contrast with 
+
+
+
+If you've programmed much before, you are probably used to *imperative programming*, where your program tells your computer what specifically it should do next. Your program directly drives the computer by producing a sequence of instructions, and the computer is supposed to do them. Typically, the computer has relatively little additional insight into the logical structure of your program.
+
+As your program executes, the ["flow of control"](https://en.wikipedia.org/wiki/Control_flow) indirectly determines the state of the computer, including what data the computer reads and writes, which feed back into the actions the program asks the computer to take next. 
+
+Control flow programming can be easy to reason about, as there is a clear sequence of steps the computer should follow. If something goes awry, we can investigate when in the sequence this happened and try to understand how to fix it. At the same time, the computer generally has very little insight into the structure of your program and very little flexibility in how it executes your program.
+
+---
+
+Let's consider an analogy to baking: perhaps you would like to bake a cake, which involves several steps printed in order on a card: various dry ingredients need to be mixed, then wet ingredients need to be mixed, then the two combined, and then ultimately baked. This only works if you follow the instructions in order: if you skip a step or do them out of order you could end up with a very different recipe. Perhaps you'll get a very large cookie.
+
+Of course, we know that you have some flexibility when baking. You probably don't have to mix the dry ingredients before the wet ingredients, even if that is what the card says. You do have to mix each separately before mixing them together, which you might not have known, and certainly need to mix everything together before baking. If you want to bake two cakes, perhaps you can double the mixed ingredients, but you may need to bake the cakes in sequence depending on your oven. You could certainly start mixing the ingredients for the second cake before the first has finished baking, though.
+
+These are a few of the ways we as thoughtful humans could make the baking process more flexible. The computer, however, is not thoughtful, in part because computer programs tend to be much less forgiving than the cake baking process. The hyperliteral computer must follow the instructions to the letter, as it has very little capacity to understand what happens if it improvises with your program.
+
+---
+
+By contrast with *control flow programming*, [dataflow](https://en.wikipedia.org/wiki/Dataflow) programming is a style of programming where your program is described not as a sequence of instructions to follow, but as separate independent programs, each of which operate (or not) based on the availability of input data. 
+
+Think of a dataflow program as a set of instructions for different participants, each reading "when your input arrives, do the following with it", including possibly instructions to hand some data to other participants. There are no specific rules about who has to act in which order, other than the implicit property that nothing gets done other than according to the flow of data. Hence the name "dataflow programming".
+
+---
+
+Let's return to our baking analogy. Perhaps we have been so successful at the cake baking business that we want to scale our enterprise up. We could hire a number of bakers, supply each with their own independent kitchen, and ask them each to follow the sequence of instructions on our cake recipe card. This would probably work, but it isn't the most efficient way to make cakes.
+
+Instead, you can probably imagine that we could make more cakes by pooling resources. Our bakers could get their ingredients from a common pantry, share measuring and mixing bowls as appropriate, things like that. You could also probably imagine the comedy that results when mutually dysfunctional bakers lose track of who is in charge of which bowl, trusting that the bowl placed just a moment ago remains in place as they start to pour in the wet ingredients.
+
+Our life becomes simpler if we shift, from independent bakers each with a card explaining the cake baking process, to bakers each with a stage of the cake baking process and instructions about how to collaborate. One baker can mix dry ingredients, one can mix wet ingredients, one can portion them out and mix enough for a cake at a time, and the last baker can hang out by the oven watching the timer. We could go even further and identify that with multiple independent ovens we can simultaneously bake several cakes, as long as we have a baker watching each oven (and presumably looking online for a more interesting job).
+
+---
