@@ -62,23 +62,66 @@ pub trait Input<'a, A: Allocate, T: Timestamp+Ord> {
     /// });
     /// ```
     fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>);
+
+    /// Create a new stream from a supplied interactive handle.
+    ///
+    /// This method creates a new timely stream whose data are supplied interactively through the `handle`
+    /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate 
+    /// if it as attached to more than one stream.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::*;
+    /// use timely::dataflow::operators::{Input, Inspect};
+    /// use timely::dataflow::operators::input::Handle;
+    ///
+    /// // construct and execute a timely dataflow
+    /// timely::execute(Configuration::Thread, |worker| {
+    ///
+    ///     // add an input and base computation off of it
+    ///     let mut input = Handle::new();
+    ///     worker.dataflow(|scope| {
+    ///         scope.input_from(&mut input)
+    ///              .inspect(|x| println!("hello {:?}", x));
+    ///     });
+    ///
+    ///     // introduce input, advance computation
+    ///     for round in 0..10 {
+    ///         input.send(round);
+    ///         input.advance_to(round + 1);
+    ///         worker.step();
+    ///     }
+    /// });
+    /// ```
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Root<A>, T>, D>;
 }
 
 impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T> {
     fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>) {
+        let mut handle = Handle::new();
+        let stream = self.input_from(&mut handle);
+        (handle, stream)
+    }
+
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Root<A>, T>, D> {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
         let produced = Rc::new(RefCell::new(CountMap::new()));
-        let helper = Handle::new(Counter::new(output, produced.clone()));
+        let counter = Counter::new(output, produced.clone());
+
+        let progress = Rc::new(RefCell::new(CountMap::new()));
+
+        handle.register(counter, progress.clone());
+
         let copies = self.peers();
 
         let index = self.add_operator(Operator {
-            progress: helper.progress.clone(),
+            progress: progress.clone(),
             messages: produced.clone(),
             copies:   copies,
         });
 
-        (helper, Stream::new(Source { index: index, port: 0 }, registrar, self.clone()))
+        Stream::new(Source { index: index, port: 0 }, registrar, self.clone())
     }
 }
 
@@ -115,47 +158,73 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct Handle<T: Timestamp, D: Data> {
-    // frontier: Rc<RefCell<MutableAntichain<Product<RootTimestamp, T>>>>,   // times available for sending
-    progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
-    pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>,
-    buffer: Vec<D>,
+    progress: Vec<Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>>,
+    pushers: Vec<Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>>,
+    buffer1: Vec<D>,
+    buffer2: Vec<D>,
     now_at: Product<RootTimestamp, T>,
 }
 
-// an input helper's state is either uninitialized, with now_at == None, or at some specific time.
-// if now_at == None it has a hold on Default::default(), else it has a hold on the specific time.
-// if now_at == None the pusher has not been opened, else it is open with the specific time.
-
-
 impl<T:Timestamp, D: Data> Handle<T, D> {
-    fn new(pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>) -> Handle<T, D> {
+
+    /// Allocates a new input handle, from which one can create timely streams.
+    pub fn new() -> Self {
         Handle {
-            // frontier: Rc::new(RefCell::new(MutableAntichain::new_bottom(Default::default()))),
-            progress: Rc::new(RefCell::new(CountMap::new())),
-            pusher: pusher,
-            buffer: Vec::with_capacity(Content::<D>::default_length()),
+            progress: Vec::new(),
+            pushers: Vec::new(),
+            buffer1: Vec::with_capacity(Content::<D>::default_length()),
+            buffer2: Vec::with_capacity(Content::<D>::default_length()),
             now_at: Default::default(),
         }
     }
 
-    // flushes any data we are sitting on. may need to initialize self.now_at if no one has yet.
+    fn register(
+        &mut self,
+        pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>,
+        progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>
+    ) {
+        // we need to produce an appropriate update to the capabilities for `progress`, in case a
+        // user has decided to drive the handle around a bit before registering it.
+        progress.borrow_mut().update(&Default::default(), -1);
+        progress.borrow_mut().update(&self.now_at, 1);
+
+        self.progress.push(progress);
+        self.pushers.push(pusher);
+    }
+
+    // flushes our buffer at each of the destinations. there can be more than one; clone if needed.
     fn flush(&mut self) {
-        Content::push_at(&mut self.buffer, self.now_at.clone(), &mut self.pusher);
+        for index in 0 .. self.pushers.len() {
+            if index < self.pushers.len() - 1 {
+                self.buffer2.extend_from_slice(&self.buffer1[..]);
+                Content::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
+                assert!(self.buffer2.is_empty());
+            }
+            else {
+                Content::push_at(&mut self.buffer1, self.now_at.clone(), &mut self.pushers[index]);
+                assert!(self.buffer1.is_empty());
+            }
+        }
+        self.buffer1.clear();
     }
 
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
     fn close_epoch(&mut self) {
-        if !self.buffer.is_empty() { self.flush(); }
-        self.pusher.done();
-        self.progress.borrow_mut().update(&self.now_at, -1);
+        if !self.buffer1.is_empty() { self.flush(); }
+        for pusher in self.pushers.iter_mut() {
+            pusher.done();
+        }
+        for progress in self.progress.iter() {
+            progress.borrow_mut().update(&self.now_at, -1);
+        }
     }
 
     #[inline(always)]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     pub fn send(&mut self, data: D) {
         // assert!(self.buffer.capacity() == Content::<D>::default_length());
-        self.buffer.push(data);
-        if self.buffer.len() == self.buffer.capacity() {
+        self.buffer1.push(data);
+        if self.buffer1.len() == self.buffer1.capacity() {
             self.flush();
         }
     }
@@ -164,8 +233,23 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     ///
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.
     pub fn send_batch(&mut self, buffer: &mut Vec<D>) {
-        if !self.buffer.is_empty() { self.flush(); }
-        Content::push_at(buffer, self.now_at.clone(), &mut self.pusher);        
+
+        // flush buffered elements to ensure local fifo.
+        if !self.buffer1.is_empty() { self.flush(); }
+
+        // push buffer (or clone of buffer) at each destination.
+        for index in 0 .. self.pushers.len() {
+            if index < self.pushers.len() - 1 {
+                self.buffer2.extend_from_slice(&buffer[..]);
+                Content::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
+                assert!(self.buffer2.is_empty());
+            }
+            else {
+                Content::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
+                assert!(buffer.is_empty());
+            }
+        }
+        buffer.clear();
     }
 
     /// Advances the current epoch to `next`.
@@ -176,7 +260,9 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         assert!(self.now_at.inner.less_than(&next));
         self.close_epoch();
         self.now_at = RootTimestamp::new(next);
-        self.progress.borrow_mut().update(&self.now_at, 1);
+        for progress in self.progress.iter() {
+            progress.borrow_mut().update(&self.now_at, 1);
+        }
     }
 
     /// Closes the input.

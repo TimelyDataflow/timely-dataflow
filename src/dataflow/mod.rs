@@ -16,6 +16,9 @@
 pub use self::stream::Stream;
 pub use self::scopes::{Scope, ScopeParent};
 
+pub use self::operators::input::Handle as InputHandle;
+pub use self::operators::probe::Handle as ProbeHandle;
+
 pub mod operators;
 pub mod channels;
 pub mod scopes;

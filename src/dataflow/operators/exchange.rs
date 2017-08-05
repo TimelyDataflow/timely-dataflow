@@ -13,7 +13,7 @@ pub trait Exchange<T, D: ExchangeData> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, ExchangeExtension, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Exchange, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
@@ -28,7 +28,7 @@ pub trait Exchange<T, D: ExchangeData> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, ExchangeExtension, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Exchange, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)

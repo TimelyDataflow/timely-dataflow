@@ -2,7 +2,8 @@ extern crate abomonation;
 extern crate timely;
 
 use std::rc::Rc;
-use timely::dataflow::operators::*;
+use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::operators::{Input, Inspect, Probe};
 use abomonation::Abomonation;
 
 #[derive(Debug, Clone)]
@@ -21,12 +22,13 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         // create a new input, exchange data, and inspect its output
         let index = worker.index();
-        let (mut input, probe) = worker.dataflow(move |scope| {
-            let (input, stream) = scope.new_input();
-            let probe = stream//.exchange(|x| *x)
-                           .inspect(move |x| println!("worker {}:\thello {:?}", index, x))
-                           .probe();
-            (input, probe)
+        let mut input = InputHandle::new();
+        let mut probe = ProbeHandle::new();
+        worker.dataflow(|scope| {
+            scope.input_from(&mut input)
+                 //.exchange(|x| *x) // <-- cannot exchange this; Rc is not Send.
+                 .inspect(move |x| println!("worker {}:\thello {:?}", index, x))
+                 .probe_with(&mut probe);
         });
 
         // introduce data and watch!

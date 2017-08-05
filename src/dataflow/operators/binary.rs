@@ -17,7 +17,7 @@ use dataflow::channels::pullers::counter::Counter as PullCounter;
 use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 
-use dataflow::operators::{InputHandle, OutputHandle};
+use dataflow::operators::handles::{InputHandle, OutputHandle};
 use dataflow::operators::handles::{new_input_handle, new_output_handle};
 use dataflow::operators::capability::mint as mint_capability;
 
