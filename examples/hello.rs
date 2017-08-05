@@ -1,18 +1,22 @@
 extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
 fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
+
+        let index = worker.index();
+        let mut input = InputHandle::new();
+        let mut probe = ProbeHandle::new();
+
         // create a new input, exchange data, and inspect its output
-        let (mut input, probe) = worker.dataflow(move |scope| {
-            let index = scope.index();
-            let (input, stream) = scope.new_input();
-            let probe = stream.exchange(|x| *x)
-                              .inspect(move |x| println!("worker {}:\thello {}", index, x))
-                              .probe();
-            (input, probe)
+        worker.dataflow(|scope| {
+            scope.input_from(&mut input)
+                 .exchange(|x| *x)
+                 .inspect(move |x| println!("worker {}:\thello {}", index, x))
+                 .probe_with(&mut probe);
         });
 
         // introduce data and watch!

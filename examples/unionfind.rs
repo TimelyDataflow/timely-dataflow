@@ -23,17 +23,16 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
 
-        let (mut input, probe) = worker.dataflow(move |scope| {
+        let mut input = InputHandle::new();
+        let mut probe = ProbeHandle::new();
 
-            let (handle, stream) = scope.new_input();
-
-            let probe = stream//.exchange(move |x: &(usize, usize)| (x.0 % (peers - 1)) as u64 + 1)
-                              .union_find()
-                              .exchange(|_| 0)
-                              .union_find()
-                              .probe();
-
-            (handle, probe)
+        worker.dataflow(|scope| {
+            scope.input_from(&mut input)
+                //  .exchange(move |x: &(usize, usize)| (x.0 % (peers - 1)) as u64 + 1)
+                 .union_find()
+                 .exchange(|_| 0)
+                 .union_find()
+                 .probe_with(&mut probe);
         });
 
         let seed: &[_] = &[1, 2, 3, index];

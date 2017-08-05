@@ -21,7 +21,7 @@ pub use self::inspect::Inspect;
 pub use self::filter::Filter;
 pub use self::binary::Binary;
 pub use self::delay::Delay;
-pub use self::exchange::Exchange as ExchangeExtension;
+pub use self::exchange::Exchange;
 pub use self::broadcast::Broadcast;
 pub use self::probe::Probe;
 pub use self::to_stream::ToStream;
@@ -58,7 +58,7 @@ pub mod count;
 
 // keep the handle constructors private
 mod handles;
-pub use self::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
+// pub use self::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
 
 mod notificator;
 pub use self::notificator::Notificator;
