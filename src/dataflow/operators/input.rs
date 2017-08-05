@@ -183,6 +183,9 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>,
         progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>
     ) {
+        // flush current contents, so new registrant does not see existing data.
+        if !self.buffer1.is_empty() { self.flush(); }
+
         // we need to produce an appropriate update to the capabilities for `progress`, in case a
         // user has decided to drive the handle around a bit before registering it.
         progress.borrow_mut().update(&Default::default(), -1);
