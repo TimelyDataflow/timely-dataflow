@@ -12,7 +12,7 @@ Timely dataflow means to capture a large number of idioms, and so it is a bit tr
 
 The following complete program initializes a timely dataflow computation, in which participants can supply a stream of numbers which are exchanged between the workers based on their value. Workers print to the screen when they see numbers. You can also find this as [`examples/hello.rs`](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/hello.rs) in the [timely dataflow repository](https://github.com/frankmcsherry/timely-dataflow/tree/master/examples).
 
-```rust
+```rust,no_run
 extern crate timely;
 
 use timely::dataflow::InputHandle;

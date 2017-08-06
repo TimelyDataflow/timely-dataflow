@@ -13,6 +13,8 @@ repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow"]
 license = "MIT"
 
+build = "booktests.rs"
+
 [features]
 default=[]
 logging=[]
@@ -27,3 +29,7 @@ time="0.1.34"
 [dev-dependencies]
 getopts="0.2.14"
 rand="0.3.13"
+skeptic = "0.12"
+
+[build-dependencies]
+skeptic = "0.12"

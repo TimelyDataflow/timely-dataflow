@@ -8,7 +8,7 @@ Let's write an overly simple dataflow program. Remember our `examples/hello.rs` 
 
 Here is a reduced version of `examples/hello.rs` that just feeds data in to our dataflow, without paying any attention to progress made. In particular, we have removed the `probe()` operation, the resulting `probe` variable, and the use of `probe` to determine how long we should step the worker before introducing more data.
 
-```rust
+```rust,no_run
 extern crate timely;
 
 use timely::dataflow::InputHandle;
@@ -45,7 +45,7 @@ This program is a *dataflow program*. There are two dataflow operators here, `ex
 
 Importantly, we haven't imposed any constraints on how these operators need to run. We removed the code that caused the input to be delayed until a certain amount of progress had been made, and it shows in the results when we run with more than one worker:
 
-    Echidnatron% cargo run --example hello -- -w2
+Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
     worker 1:	hello 1
@@ -66,7 +66,7 @@ What a mess. Nothing in our dataflow program requires that workers zero and one 
 
 However, this is only a mess if we are concerned about the order, and in many cases we are not. Imagine instead of just printing the number to the screen, we want to find out which numbers are prime and print *them* to the screen.
 
-```rust
+```rust,ignore
 .inspect(|x| {
     // we only need to test factors up to sqrt(x) 
     let limit = (*x as f64).sqrt() as u64;
@@ -105,6 +105,7 @@ The time is basically halved, from one minute to thirty seconds, which is a grea
 
 This is probably as good a time as any to tell you about Rust's `--release` flag. I haven't been using it up above to keep things simple, but adding the `--release` flag to cargo's arguments makes the compilation take a little longer, but the resulting program run a *lot* faster. Let's do that now, to get a sense for how much of a difference it makes:
 
+```ignore
     Echidnatron% time cargo run --release --example hello -- -w1 > output1.txt
         Finished release [optimized] target(s) in 0.0 secs
         Running `target/release/examples/hello -w1`
@@ -113,12 +114,13 @@ This is probably as good a time as any to tell you about Rust's `--release` flag
         Finished release [optimized] target(s) in 0.0 secs
         Running `target/release/examples/hello -w2`
     cargo run --release --example hello -- -w2 > output2.txt  0.73s user 0.05s system 165% cpu 0.474 total
+```
 
 That is about a 60x speed-up. The good news is that we are still getting approximately a 2x speed-up going from one worker to two, but you can see that dataflow programming does not magically extract all performance from your computer.
 
 This is also a fine time to point out that dataflow programming is not religion. There is an important part of our program up above that is imperative:
 
-```rust
+```ignore, rust
     let limit = (*x as f64).sqrt() as u64;
     if *x > 1 && (2 .. limit + 1).all(|i| x % i > 0) {
         println!("{} is prime", x);
