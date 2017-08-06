@@ -58,7 +58,8 @@ pub mod count;
 
 // keep the handle constructors private
 mod handles;
-// pub use self::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
+// pub use self::handles::{InputHandle, FrontieredInputHandle};
+pub use self::handles::OutputHandle;
 
 mod notificator;
 pub use self::notificator::Notificator;
