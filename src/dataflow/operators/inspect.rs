@@ -3,7 +3,7 @@
 use Data;
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
-use dataflow::operators::unary::Unary;
+use dataflow::operators::generic::unary::Unary;
 
 /// Methods to inspect records and batches of records on a stream.
 pub trait Inspect<G: Scope, D: Data> {

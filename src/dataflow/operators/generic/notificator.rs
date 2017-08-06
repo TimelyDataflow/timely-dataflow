@@ -55,7 +55,8 @@ impl<T: Timestamp> Notificator<T> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -262,7 +263,8 @@ fn notificator_delivers_notifications_in_topo_order() {
 /// #Examples
 /// ```
 /// use std::collections::HashMap;
-/// use timely::dataflow::operators::{Input, Operator, Inspect, FrontierNotificator};
+/// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
+/// use timely::dataflow::operators::generic::operator::Operator;
 /// use timely::dataflow::channels::pact::Pipeline;
 ///
 /// timely::execute(timely::Configuration::Thread, |worker| {
@@ -326,7 +328,8 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Operator, FrontierNotificator};
+    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {

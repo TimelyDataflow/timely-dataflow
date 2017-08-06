@@ -9,8 +9,10 @@ use rand::{Rng, SeedableRng, StdRng};
 use timely_sort::{RadixSorter, RadixSorterBase};
 use timely_sort::LSBRadixSorter as Sorter;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, Concat, LoopVariable, ConnectLoop};
+use timely::dataflow::operators::generic::binary::Binary;
 use timely::dataflow::channels::pact::Exchange;
+
 fn main() {
 
     // command-line args: numbers of nodes and edges in the random graph.

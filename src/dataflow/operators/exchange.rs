@@ -4,7 +4,7 @@ use ::ExchangeData;
 use dataflow::channels::pact::Exchange as ExchangePact;
 use dataflow::channels::pact::TimeExchange as TimeExchangePact;
 use dataflow::{Stream, Scope};
-use dataflow::operators::unary::Unary;
+use dataflow::operators::generic::unary::Unary;
 use progress::timestamp::Timestamp;
 
 /// Exchange records between workers.

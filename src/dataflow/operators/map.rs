@@ -3,7 +3,7 @@
 use Data;
 use dataflow::{Stream, Scope};
 use dataflow::channels::pact::Pipeline;
-use dataflow::operators::unary::Unary;
+use dataflow::operators::generic::unary::Unary;
 
 /// Extension trait for `Stream`.
 pub trait Map<S: Scope, D: Data> {

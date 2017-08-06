@@ -4,7 +4,7 @@ use progress::Timestamp;
 
 use Data;
 use dataflow::channels::Content;
-use dataflow::operators::operator::source;
+use dataflow::operators::generic::operator::source;
 use dataflow::{Stream, Scope};
 
 /// Converts to a timely `Stream`.
