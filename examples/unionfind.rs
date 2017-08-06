@@ -8,7 +8,8 @@ use std::cmp::Ordering;
 use rand::{Rng, SeedableRng, StdRng};
 
 use timely::dataflow::*;
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Input, Exchange, Probe};
+use timely::dataflow::operators::generic::unary::Unary;
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {

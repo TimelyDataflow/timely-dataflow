@@ -8,7 +8,7 @@ use order::PartialOrder;
 use dataflow::channels::pact::Pipeline;
 use dataflow::channels::Content;
 use dataflow::{Stream, Scope};
-use dataflow::operators::unary::Unary;
+use dataflow::operators::generic::unary::Unary;
 
 /// Methods to advance the timestamps of records or batches of records.
 pub trait Delay<G: Scope, D: Data> {
@@ -24,7 +24,8 @@ pub trait Delay<G: Scope, D: Data> {
     /// and delays each element `i` to time `RootTimestamp(i)`.
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay, Unary};
+    /// use timely::dataflow::operators::{ToStream, Delay};
+    /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     ///
@@ -53,7 +54,8 @@ pub trait Delay<G: Scope, D: Data> {
     /// and delays each batch (there is just one) to time `RootTimestamp(1)`.
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay, Unary};
+    /// use timely::dataflow::operators::{ToStream, Delay};
+    /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     ///

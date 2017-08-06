@@ -1,4 +1,7 @@
 //! Handles to an operator's input and output streams.
+//!
+//! These handles are used by the generic operator interfaces to allow user closures to interact as 
+//! the operator would with its input and output streams.
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -43,7 +46,8 @@ impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -80,7 +84,8 @@ impl<'a, T: Timestamp, D> FrontieredInputHandle<'a, T, D> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -133,7 +138,8 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {

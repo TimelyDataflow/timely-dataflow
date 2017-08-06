@@ -19,8 +19,8 @@ use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pullers::Counter as PullCounter;
 
-use dataflow::operators::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
-use dataflow::operators::handles::{new_input_handle, new_frontier_input_handle, new_output_handle};
+use dataflow::operators::generic::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
+use dataflow::operators::generic::handles::{new_input_handle, new_frontier_input_handle, new_output_handle};
 use dataflow::operators::capability::Capability;
 use dataflow::operators::capability::mint as mint_capability;
 
@@ -37,7 +37,8 @@ pub trait Operator<G: Scope, D1: Data> {
     /// #Examples
     /// ```
     /// use std::collections::HashMap;
-    /// use timely::dataflow::operators::{ToStream, Operator, FrontierNotificator};
+    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     ///
@@ -78,7 +79,8 @@ pub trait Operator<G: Scope, D1: Data> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Operator, FrontierNotificator};
+    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     /// use timely::dataflow::Scope;
@@ -112,7 +114,8 @@ pub trait Operator<G: Scope, D1: Data> {
     /// #Examples
     /// ```
     /// use std::collections::HashMap;
-    /// use timely::dataflow::operators::{Input, Operator, Inspect, FrontierNotificator};
+    /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::execute(timely::Configuration::Thread, |worker| {
@@ -167,7 +170,8 @@ pub trait Operator<G: Scope, D1: Data> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Operator, Inspect, FrontierNotificator};
+    /// use timely::dataflow::operators::{ToStream, Inspect, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     /// use timely::dataflow::Scope;
@@ -268,7 +272,7 @@ fn binary_base<G: Scope, D1: Data, D2: Data, D3: Data, P1, P2>(
 /// #Examples
 /// ```
 /// use timely::dataflow::operators::Inspect;
-/// use timely::dataflow::operators::operator::source;
+/// use timely::dataflow::operators::generic::operator::source;
 /// use timely::dataflow::Scope;
 ///
 /// timely::example(|scope| {

@@ -2,7 +2,8 @@ extern crate timely;
 
 use std::collections::HashMap;
 
-use timely::dataflow::operators::{ToStream, Unary, Inspect};
+use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::generic::unary::Unary;
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use ::{Data, ExchangeData};
 use dataflow::{Stream, Scope};
-use dataflow::operators::unary::Unary;
+use dataflow::operators::generic::unary::Unary;
 use dataflow::channels::pact::Exchange;
 
 /// Generic intra-timestamp aggregation

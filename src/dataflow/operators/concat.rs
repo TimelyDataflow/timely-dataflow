@@ -4,16 +4,7 @@
 use Data;
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
-use dataflow::operators::binary::Binary;
-
-// NOTE : These used to have more exotic implementations that connected observers in a tangle.
-// NOTE : It was defective when used with the Observer protocol, because it just forwarded open and
-// NOTE : shut messages, without concern for the fact that there would be multiple opens and shuts,
-// NOTE : from each of its inputs. This implementation does more staging of data, but should be
-// NOTE : less wrong.
-
-// NOTE : Observers don't exist any more, so maybe it could become a horrible tangle again! :D
-// NOTE : Not clear that the tangle buys much, as buffers are simply passed along without copying.
+use dataflow::operators::generic::binary::Binary;
 
 /// Merge the contents of two streams.
 pub trait Concat<G: Scope, D: Data> {

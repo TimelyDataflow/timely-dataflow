@@ -15,8 +15,8 @@ use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pullers::Counter as PullCounter;
 
-use dataflow::operators::handles::{InputHandle, OutputHandle};
-use dataflow::operators::handles::{new_input_handle, new_output_handle};
+use dataflow::operators::generic::handles::{InputHandle, OutputHandle};
+use dataflow::operators::generic::handles::{new_input_handle, new_output_handle};
 use dataflow::operators::capability::mint as mint_capability;
 
 use ::Data;
@@ -31,7 +31,8 @@ pub trait Unary<G: Scope, D1: Data> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -56,7 +57,8 @@ pub trait Unary<G: Scope, D1: Data> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Unary};
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {

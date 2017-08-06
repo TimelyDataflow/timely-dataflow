@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use Data;
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
-use dataflow::operators::unary::Unary;
+use dataflow::operators::generic::unary::Unary;
 
 use dataflow::channels::message::Content;
 

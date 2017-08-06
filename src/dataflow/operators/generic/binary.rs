@@ -17,8 +17,8 @@ use dataflow::channels::pullers::counter::Counter as PullCounter;
 use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 
-use dataflow::operators::handles::{InputHandle, OutputHandle};
-use dataflow::operators::handles::{new_input_handle, new_output_handle};
+use dataflow::operators::generic::handles::{InputHandle, OutputHandle};
+use dataflow::operators::generic::handles::{new_input_handle, new_output_handle};
 use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::{Stream, Scope};
@@ -31,7 +31,8 @@ pub trait Binary<G: Scope, D1: Data> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Binary};
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::binary::Binary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -64,7 +65,8 @@ pub trait Binary<G: Scope, D1: Data> {
     ///
     /// #Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Binary};
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::binary::Binary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {

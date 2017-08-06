@@ -3,7 +3,8 @@ extern crate timely;
 use timely::dataflow::channels::pact::Pipeline;
 use timely::progress::timestamp::RootTimestamp;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{LoopVariable, ConnectLoop};
+use timely::dataflow::operators::generic::unary::Unary;
 
 fn main() {
 
