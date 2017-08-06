@@ -12,13 +12,13 @@ Remember from the dataflow section how when we remove the coordination from our 
 
 Let's change the program to print out the timestamp with each record. This shouldn't be very thrilling output, because the timestamp is exactly the same as the number itself, but that didn't have to be the case. We are just going to replace the line
 
-```rust
+```rust,ignore
 .inspect(move |x| println!("worker {}:\thello {}", index, x))
 ```
 
 with a slightly more complicated operator, `inspect_batch`.
 
-```rust
+```rust,ignore
 .inspect_batch(move |t,xs| {
     for x in xs.iter() {
         println!("worker {}:\thello {} @ {:?}", index, x, t)

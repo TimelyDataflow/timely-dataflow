@@ -4,7 +4,7 @@ Both dataflow and timestamps are valuable in the own right, but when we bring th
 
 Let's recall that bit of code we commented out from `examples/hello.rs`, which had to do with consulting something named `probe`.
 
-```rust
+```rust,no_run
 extern crate timely;
 
 use timely::dataflow::InputHandle;
@@ -39,7 +39,7 @@ fn main() {
 
 We'll put the whole program up here, but there are really just two lines that deal with progress tracking:
 
-```rust
+```rust,ignore
 input.advance_to(round + 1);
 worker.step_while(|| probe.less_than(input.time()));
 ```

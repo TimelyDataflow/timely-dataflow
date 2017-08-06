@@ -10,8 +10,9 @@
 - [Building Timely Dataflows](./chapter_2.md)
     - [Creating Inputs](./chapter_2_1.md)
     - [Probing Outputs](./chapter_2_2.md)
-    - [Introducing Operators](./chapter_2_3.md)
-    - [Introducing Scopes](./chapter_2_4.md)
+    - [Adding Operators](./chapter_2_3.md)
+    - [Creating Operators](./chapter_2_4.md)
+    - [Iteration and Scopes](./chapter_2_5.md)
 
 - [Running Timely Dataflows](./chapter_3.md)
 
