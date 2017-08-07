@@ -2,7 +2,9 @@
 
 Communication in timely dataflow starts from the `timely_communication` crate. This crate includes not only communication, but is actually where we start up the various worker threads and establish their identities. As in timely dataflow, everything starts by providing a per-worker closure, but this time we are given only a channel allocator as an argument.
 
-Let's take a look at the example from the `timely_communication` documentation, which is not brief but shouldn't be wildly surprising either.
+Before continuing, I want to remind you that this is the *internals* section; you could write your code against this crate if you really want, but one of the nice features of timely dataflow is that you don't have to. You can use a nice higher level layer, as discussed previously in the document. 
+
+That being said, let's take a look at the example from the `timely_communication` documentation, which is not brief but shouldn't be wildly surprising either.
 
 ```rust,ignore
 extern crate timely_communication;
@@ -21,7 +23,7 @@ fn main() {
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
             senders[i].send(format!("hello, {}", i));
-            senders[i].send(None);
+            senders[i].done();
         }
 
         // no support for termination notification,
@@ -61,7 +63,7 @@ pub enum Configuration {
 }
 ```
 
-The first variant `Thread` indicates that we will simply have one worker thread. This is a helpful thing to know because it means that all of our exchange channels can be dramatically simplified, just down to simple queues. The second variant `Process(usize)` corresponds to multiple worker threads within one process. The number indicates the parameters. The third variant `Cluster` is how we indicate that this process will participate in a larger clustered computation; we supply the number of threads, this process' identifier, a list of addresses of all participants, and a boolean for whether we would like some diagnostics about the established connections.
+The first variant `Thread` indicates that we will simply have one worker thread. This is a helpful thing to know because it means that all of our exchange channels can be dramatically simplified, just down to simple queues. The second variant `Process` corresponds to multiple worker threads within one process. The number indicates the parameters. The third variant `Cluster` is how we indicate that this process will participate in a larger clustered computation; we supply the number of threads, this process' identifier, a list of addresses of all participants, and a boolean for whether we would like some diagnostics about the established connections.
 
 The configuration is important because it determines how we build the channel allocator `allocator` that we eventually provide to each worker: `allocator` will be responsible for building communication channels to other workers, and it will need to know where these other workers are.
 
