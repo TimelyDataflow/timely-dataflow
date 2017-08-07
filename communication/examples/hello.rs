@@ -14,6 +14,7 @@ fn main() {
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
             senders[i].send(format!("hello, {}", i));
+            senders[i].done();
         }
 
         // no support for termination notification,
