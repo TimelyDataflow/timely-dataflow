@@ -5,6 +5,8 @@ Let's start with the first thing we'll want for a dataflow computation: a source
 Almost all operators in timely can only be defined from a source of data, with a few exceptions. One of those exceptions is the input operator. How do we get such an operator? As it turns out, there are some handy methods that dataflow scopes provide for us. One of these is `new_input()`. 
 
 ```rust,no_run
+#![allow(unused_variables)]
+#![allow(unused_variables)]
 extern crate timely;
 
 use timely::dataflow::operators::Input;
@@ -30,6 +32,8 @@ The call to `new_input()` returns two things: a `handle` that we the Rust progra
 The `dataflow()` method we invoked can return things. Anything our closure returns, the method will return. This is handy if we want to extract the handle so that we can use it after the dataflow is constructed. We might reasonably write:
 
 ```rust,no_run
+#![allow(unused_variables)]
+#![allow(unused_mut)]
 extern crate timely;
 
 use timely::dataflow::operators::Input;
@@ -55,6 +59,8 @@ Up about we've bound the handle to another variable named `handle` using `let mu
 There are other ways of constructing inputs, that vary according to taste. Another way you can accomplish what we've just done above is to first create `handle` outside of the dataflow, unattached to any stream, and then use the `input_from` method to bind it to a stream:
 
 ```rust,no_run
+#![allow(unused_variables)]
+#![allow(unused_variables)]
 extern crate timely;
 
 use timely::dataflow::InputHandle;
@@ -86,6 +92,8 @@ Also notice that while we do have to specific `<(), String>` to create the new i
 You can also create non-interactive inputs, if you'd like part of your computation to run even without your help. The `to_stream` method is defined on any iterator, and introduces all of the data the iterator produces into a dataflow stream.
 
 ```rust,no_run
+#![allow(unused_variables)]
+#![allow(unused_variables)]
 extern crate timely;
 
 use timely::dataflow::operators::ToStream;

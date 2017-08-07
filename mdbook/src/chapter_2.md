@@ -7,6 +7,7 @@ This section will be a bit of a tour through the dataflow construction process, 
 Everything to do with dataflow construction happens within the timely worker, and we'll want to write it all inside the closure we supply to timely for each worker:
 
 ```rust,no_run
+#![allow(unused_variables)]
 extern crate timely;
 
 fn main() {

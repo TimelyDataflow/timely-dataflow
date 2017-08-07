@@ -9,6 +9,7 @@ Let's write an overly simple dataflow program. Remember our `examples/hello.rs` 
 Here is a reduced version of `examples/hello.rs` that just feeds data in to our dataflow, without paying any attention to progress made. In particular, we have removed the `probe()` operation, the resulting `probe` variable, and the use of `probe` to determine how long we should step the worker before introducing more data.
 
 ```rust,no_run
+#![allow(unused_variables)]
 extern crate timely;
 
 use timely::dataflow::InputHandle;

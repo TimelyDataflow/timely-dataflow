@@ -1,27 +1,28 @@
 extern crate timely_communication;
 
 fn main() {
-    // configure for two threads, just one process.
-    let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
 
-    // initailizes communication, spawns workers
+    // extract the configuration from user-supplied arguments, initialize the computation.
+    let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
     let guards = timely_communication::initialize(config, |mut allocator| {
-        println!("worker {} started", allocator.index());
+
+        println!("worker {} of {} started", allocator.index(), allocator.peers());
 
         // allocates pair of senders list and one receiver.
         let (mut senders, mut receiver) = allocator.allocate();
 
         // send typed data along each channel
-        senders[0].send(format!("hello, {}", 0));
-        senders[1].send(format!("hello, {}", 1));
+        for i in 0 .. allocator.peers() {
+            senders[i].send(format!("hello, {}", i));
+        }
 
         // no support for termination notification,
         // we have to count down ourselves.
-        let mut expecting = 2;
-        while expecting > 0 {
+        let mut received = 0;
+        while received < allocator.peers() {
             if let Some(message) = receiver.recv() {
                 println!("worker {}: received: <{}>", allocator.index(), message);
-                expecting -= 1;
+                received += 1;
             }
         }
 
