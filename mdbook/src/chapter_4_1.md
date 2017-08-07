@@ -54,13 +54,9 @@ There are a few steps here, and we'll talk through the important parts in each o
 There is only a limited amount of configuration you can currently do in a timely dataflow computation, and it all lives in the `initialize::Configuration` type. This type is a simple enumeration of three ways a timely computation could run:
 
 ```rust,ignore
-/// Possible configurations for the communication infrastructure.
 pub enum Configuration {
-    /// Use one thread.
     Thread,
-    /// Use one process with an indicated number of threads.
     Process(usize),
-    /// Expect multiple processes indicated by `(threads, process, host_list, report)`.
     Cluster(usize, usize, Vec<String>, bool)
 }
 ```
@@ -98,7 +94,8 @@ The `Push` trait looks like so (with two helper methods elided):
 ```rust,ignore
 pub trait Push<T> {
     fn push(&mut self, element: &mut Option<T>);
-}```
+}
+```
 
 That's all of it.
 
@@ -114,9 +111,11 @@ Although not used by timely at the moment, this is also designed to support zero
 
 The `Pull` trait is the dual to `Push`: it allows someone on the other end of a channel to request whatever the channel has in store next, also as a mutable reference to an option wrapped around the type.
 
+```rust,ignore
 pub trait Pull<T> {
     fn pull(&mut self) -> &mut Option<T>;
 }
+```
 
 As before, the mutable reference and option allow the two participants to communicate about the availability of data, and to return resources if appropriate. For example, it is very natural in the call to `pull` to claim any `T` made available with a `::std::mem::swap` which puts something else in its place (either `Some(other)` or `None`). If the puller has some data to return, perhaps data it received from wherever it was pushing data at, this is a great opportunity to move it back up the communication chain.
 
