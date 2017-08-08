@@ -87,6 +87,26 @@ The channels are various and interesting, but should be smartly arranged. The ch
 
 One crucial assumption made in this design is that the channels can be identified by their order of creation. If two workers start executing in different processes, allocating multiple channels, the only way we will know how to align these channels is by identifiers handed out as the channels are allocated. I strongly recommend against non-deterministic channel construction, or "optimizing out" some channels from some workers.
 
+### The Data Trait
+
+The `Data` trait that we impose on all types that we exchange is a "marker trait": it wraps several constraints together, like so
+
+```rust,ignore
+pub trait Data : Send+Any+Serialize+Clone+'static { }
+impl<T: Clone+Send+Any+Serialize+'static> Data for T { }
+```
+
+These traits are all Rust traits, except for `Serialize`, and they mostly just say that we can clone and send the data around. The `Serialize` trait is something we introduce, and asks for methods to get into and out of a sequence of bytes.
+
+```rust,ignore
+pub trait Serialize {
+    fn into_bytes(&mut self, &mut Vec<u8>);
+    fn from_bytes(&mut Vec<u8>) -> Self;
+}
+```
+
+We have a blanket implementation of `Serialize` for any type that implements `Abomonation`. Ideally, you shouldn't have to worry about this, unless you are introducing a new type and need an `Abomonation` implementation or you are hoping to move some types containing fields that do not satisfy those Rust traits.
+
 ## Push and Pull
 
 The two traits `Push` and `Pull` are the heart of the communication underlying timely dataflow. They are very simple, but relatively subtle and interesting and perhaps even under-exploited.
