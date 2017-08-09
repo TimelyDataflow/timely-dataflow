@@ -168,6 +168,31 @@ pub struct Handle<T: Timestamp, D: Data> {
 impl<T:Timestamp, D: Data> Handle<T, D> {
 
     /// Allocates a new input handle, from which one can create timely streams.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::*;
+    /// use timely::dataflow::operators::{Input, Inspect};
+    /// use timely::dataflow::operators::input::Handle;
+    ///
+    /// // construct and execute a timely dataflow
+    /// timely::execute(Configuration::Thread, |worker| {
+    ///
+    ///     // add an input and base computation off of it
+    ///     let mut input = Handle::new();
+    ///     worker.dataflow(|scope| {
+    ///         scope.input_from(&mut input)
+    ///              .inspect(|x| println!("hello {:?}", x));
+    ///     });
+    ///
+    ///     // introduce input, advance computation
+    ///     for round in 0..10 {
+    ///         input.send(round);
+    ///         input.advance_to(round + 1);
+    ///         worker.step();
+    ///     }
+    /// });
+    /// ```
     pub fn new() -> Self {
         Handle {
             progress: Vec::new(),
@@ -176,6 +201,37 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
             buffer2: Vec::with_capacity(Content::<D>::default_length()),
             now_at: Default::default(),
         }
+    }
+
+    /// Creates an input stream from the handle in the supplied scope.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::*;
+    /// use timely::dataflow::operators::{Input, Inspect};
+    /// use timely::dataflow::operators::input::Handle;
+    ///
+    /// // construct and execute a timely dataflow
+    /// timely::execute(Configuration::Thread, |worker| {
+    ///
+    ///     // add an input and base computation off of it
+    ///     let mut input = Handle::new();
+    ///     worker.dataflow(|scope| {
+    ///         input.to_stream(scope)
+    ///              .inspect(|x| println!("hello {:?}", x));
+    ///     });
+    ///
+    ///     // introduce input, advance computation
+    ///     for round in 0..10 {
+    ///         input.send(round);
+    ///         input.advance_to(round + 1);
+    ///         worker.step();
+    ///     }
+    /// });
+    /// ```
+    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Root<A>, T>) -> Stream<Child<'a, Root<A>, T>, D> 
+    where T: Ord {
+        scope.input_from(self)
     }
 
     fn register(
