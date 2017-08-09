@@ -2,32 +2,24 @@
 
 Let's talk about how to create timely dataflows.
 
-This section will be a bit of a tour through the dataflow construction process, starting with getting data in to and out of a dataflow, through the main classes of operators you might like to use, as well as how to build your own operators.
+This section will be a bit of a tour through the dataflow construction process, ignoring for the moment details about the interesting ways in which you can get data in to and out of your dataflow; those will show up in the "Running Timely Dataflows" section. For now we are going to work with examples with fixed input data and no interactivity to speak of, focusing on what we can cause to happen to that data.
 
-Everything to do with dataflow construction happens within the timely worker, and we'll want to write it all inside the closure we supply to timely for each worker:
+Here is a relatively simple example, taken from `examples/simple.rs`, that turns the numbers zero through nine into a stream, and then feeds them through an `inspect` operator printing them to the screen. 
 
 ```rust,no_run
-#![allow(unused_variables)]
 extern crate timely;
 
+use timely::dataflow::operators::{ToStream, Inspect};
+
 fn main() {
-    // initializes and runs a timely dataflow.
-    timely::execute_from_args(std::env::args(), |worker| {
-
-        // define a new dataflow
-        worker.dataflow::<(),_,_>(|scope| {
-
-            // WE ARE GOING TO WRITE THIS STUFF!!!
-
-        });
-
-    }).unwrap();
+    timely::example(|scope| {
+        (0..10).to_stream(scope)
+               .inspect(|x| println!("seen: {:?}", x));
+    });
 }
 ```
 
-Timely should keep us honest here, because we will need access to a dataflow scope (named `scope` in the example above) to create any dataflow operators. However, with that access we can start building up pretty exciting dataflows!
-
-You may have notice that we had to supply some weird `<(),_,_>` decorator to the call to `dataflow`, and why is that, huh? The `dataflow` method is "generic", in that it works with many different types of .. "things". In this case, we need to specify three types to use `dataflow`: the timestamp type it should use, the type of closure we are asking it to invoke, and the type of data we plan to return. In most cases Rust can use type inference to infer these without the `<...>` nonsense, but since we aren't *doing* anything in the dataflow, we didn't give it enough hints. Here we are saying "use timestamp type `()`", and the `_` is special and means: "figure it out yourself" using type inference.
+We are going to develop out this example, showing off both the built-in operators as well as timely's generic operator construction features.
 
 ---
 
