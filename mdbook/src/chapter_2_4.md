@@ -6,7 +6,7 @@ Timely has several "generic" dataflow operators that are pretty much ready to ru
 
 Let's look at an example
 
-```
+```rust,ignore
 use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
@@ -110,7 +110,7 @@ It may seem that we have only considered stateless operators, those that are onl
 
 Our `unary` example from way back just incremented the value and passed it along. What if we wanted to only pass values larger than any value we have seen so far? We just define a variable `max` which we check and update as we would normally. Importantly, we should define it *outside* the closure we return, so that it persists across calls, and we need to use the `move` keyword so that the closure knows it is supposed to take ownership of the variable. 
 
-```
+```rust,ignore
 use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
