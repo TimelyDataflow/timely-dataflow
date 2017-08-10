@@ -24,7 +24,7 @@ use dataflow::scopes::Child;
 pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
     /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
     ///
-    /// The resulting `Stream` will have its data defined by a future call to `collect_loop` with
+    /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
     /// its `Handle` passed as an argument. Data will be passed through the stream will have their
     /// timestampsas advanced by `summary`, and will be dropped if the result exceeds `limit`.
     ///
