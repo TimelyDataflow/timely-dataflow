@@ -124,7 +124,6 @@ where T:Send+'static,
 pub fn execute_logging<T, F>(config: Configuration, logging_config: Logging, func: F) -> Result<WorkerGuards<T>,String> 
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
-    ::timely_logging::initialize_precise_time_ns();
     initialize(config, move |allocator| {
         let mut root = Root::new(allocator);
         let result = func(&mut root);

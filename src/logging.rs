@@ -14,6 +14,8 @@ use ::progress::timestamp::RootTimestamp;
 use ::progress::nested::product::Product;
 use ::progress::timestamp::Timestamp;
 
+use byteorder::{LittleEndian, WriteBytesExt};
+
 use dataflow::scopes::root::Root;
 use dataflow::operators::capture::{EventWriter, Event, EventPusher};
 
@@ -260,6 +262,7 @@ pub fn blackhole() -> Logging {
 
 /// TODO(andreal)
 pub fn to_tcp_socket() -> Logging {
+    ::timely_logging::initialize_precise_time_ns();
     let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
     let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34254");
     let (comms_snd, comms_rcv) = ::std::sync::mpsc::channel();

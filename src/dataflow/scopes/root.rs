@@ -44,10 +44,6 @@ impl<A: Allocate> Root<A> {
     /// main way to ensure that a computation procedes.
     pub fn step(&mut self) -> bool {
 
-        if cfg!(feature = "logging") {
-            ::logging::flush_logs();
-        }
-
         let mut active = false;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
             let sub_active = dataflow.step();
@@ -56,6 +52,10 @@ impl<A: Allocate> Root<A> {
 
         // discard completed dataflows.
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
+
+        if cfg!(feature = "logging") {
+            ::logging::flush_logs();
+        }
 
         active
     }
