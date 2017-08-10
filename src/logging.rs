@@ -270,7 +270,7 @@ pub fn to_tcp_socket() -> Logging {
     // comms
     let comm_writer = BufWriter::with_capacity(4096,
         TcpStream::connect(comm_target).expect("failed to connect to logging destination"));
-    let comm_thread = ::std::thread::spawn(move || {
+    /* thread is detached */ ::std::thread::spawn(move || {
         let mut writer = EventStreamWriter::new(EventWriter::new(comm_writer));
         let mut cur_time = timely_logging::get_precise_time_ns();
         writer.advance_by(RootTimestamp::new(cur_time));
