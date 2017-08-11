@@ -71,7 +71,7 @@ fn main() {
 }
 ```
 
-Alternately, the `flat_map` method takes input data and allows your closure to transform each element to an iterator, which it then enumerates into the output stream. The following fragment takes each number from zero through nine and has each produce all numbers less than it. The result should be nine zeros, eight ones, and so on up to one eight.
+Alternately, the `flat_map` method takes input data and allows your closure to transform each element to an iterator, which it then enumerates into the output stream. The following fragment takes each number from zero through nine and has each produce all numbers less than it. The result should be a one, two twos, and so on up to nine nines.
 
 ```rust,no_run
 extern crate timely;
