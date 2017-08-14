@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use progress::{Timestamp, Operate, Antichain};
 use progress::frontier::MutableAntichain;
 use progress::nested::subgraph::{Source, Target};
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 
 use dataflow::channels::pushers::Tee;
 use dataflow::channels::pushers::Counter as PushCounter;
@@ -101,7 +101,7 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         let (targets, registrar) = Tee::<G::Timestamp,D>::new();
         let operator = Operator {
             input: PullCounter::new(receiver),
-            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
             frontier: handle.frontier.clone(),
         };
 
@@ -165,7 +165,7 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
     fn outputs(&self) -> usize { 1 }
 
     // we need to set the initial value of the frontier
-    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [CountMap<T>]) {
+    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [ChangeBatch<T>]) {
         let mut borrow = self.frontier.borrow_mut();
         borrow.update_iter_and(counts[0].drain(), |_,_| { });
         // for (time, delta) in counts[0].drain() {
@@ -174,7 +174,7 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
     }
 
     // each change to the frontier should be shared
-    fn push_external_progress(&mut self, counts: &mut [CountMap<T>]) {
+    fn push_external_progress(&mut self, counts: &mut [ChangeBatch<T>]) {
         let mut borrow = self.frontier.borrow_mut();
         borrow.update_iter_and(counts[0].drain(), |_,_| { });
         // for (time, delta) in counts[0].drain() {
@@ -183,7 +183,7 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
     }
 
     // the scope does nothing. this is actually a problem, because "reachability" assumes all messages on each edge.
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>], _: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>], _: &mut [ChangeBatch<T>], produced: &mut [ChangeBatch<T>]) -> bool {
 
         while let Some((time, data)) = self.input.next() {
             self.output.session(time).give_content(data);

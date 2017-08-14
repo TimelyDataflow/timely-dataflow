@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use progress::frontier::MutableAntichain;
 use progress::Timestamp;
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use dataflow::operators::Capability;
 
 /// Tracks requests for notification and delivers available notifications.
@@ -29,8 +29,8 @@ impl<T: Timestamp> Notificator<T> {
         }
     }
 
-    /// Updates the `Notificator`'s frontiers from a `CountMap` per input.
-    pub fn update_frontier_from_cm(&mut self, count_map: &mut [CountMap<T>]) {
+    /// Updates the `Notificator`'s frontiers from a `ChangeBatch` per input.
+    pub fn update_frontier_from_cm(&mut self, count_map: &mut [ChangeBatch<T>]) {
         while self.frontier.len() < count_map.len() {
             self.frontier.push(MutableAntichain::new());
         }
@@ -197,8 +197,8 @@ fn notificator_delivers_notifications_in_topo_order() {
         Product::new(RootTimestamp::new(a), b)
     }
     let mut notificator = Notificator::<Product<Product<RootTimestamp, u64>, u64>>::new();
-    notificator.update_frontier_from_cm(&mut vec![CountMap::new_from(&ts_from_tuple((0, 0)), 1)]);
-    let internal_changes = Rc::new(RefCell::new(CountMap::new()));
+    notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(&ts_from_tuple((0, 0)), 1)]);
+    let internal_changes = Rc::new(RefCell::new(ChangeBatch::new()));
     let times = vec![
         (3, 5),
         (5, 4),
@@ -213,7 +213,7 @@ fn notificator_delivers_notifications_in_topo_order() {
         notificator.notify_at(t);
     }
     notificator.update_frontier_from_cm(&mut {
-        let mut cm = CountMap::new();
+        let mut cm = ChangeBatch::new();
         cm.update(&ts_from_tuple((0, 0)), -1);
         cm.update(&ts_from_tuple((5, 7)), 1);
         cm.update(&ts_from_tuple((6, 0)), 1);
@@ -244,7 +244,7 @@ fn notificator_delivers_notifications_in_topo_order() {
         ((5, 4), 2),
     ]);
     notificator.update_frontier_from_cm(&mut {
-        let mut cm = CountMap::new();
+        let mut cm = ChangeBatch::new();
         cm.update(&ts_from_tuple((5, 7)), -1);
         cm.update(&ts_from_tuple((6, 0)), -1);
         cm.update(&ts_from_tuple((6, 10)), 1);

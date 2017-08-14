@@ -7,7 +7,7 @@ use std::default::Default;
 use progress::frontier::Antichain;
 use progress::{Operate, Timestamp};
 use progress::nested::subgraph::Source;
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
 
@@ -106,10 +106,10 @@ impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T
     fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Root<A>, T>, D> {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
-        let produced = Rc::new(RefCell::new(CountMap::new()));
+        let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let counter = Counter::new(output, produced.clone());
 
-        let progress = Rc::new(RefCell::new(CountMap::new()));
+        let progress = Rc::new(RefCell::new(ChangeBatch::new()));
 
         handle.register(counter, progress.clone());
 
@@ -126,8 +126,8 @@ impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T
 }
 
 struct Operator<T:Timestamp+Ord> {
-    progress:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // times closed since last asked
-    messages:   Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>,           // messages sent since last asked
+    progress:   Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>,           // times closed since last asked
+    messages:   Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>,           // messages sent since last asked
     copies:     usize,
 }
 
@@ -137,15 +137,15 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
     fn outputs(&self) -> usize { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<Product<RootTimestamp, T> as Timestamp>::Summary>>>,
-                                           Vec<CountMap<Product<RootTimestamp, T>>>) {
-        let mut map = CountMap::new();
+                                           Vec<ChangeBatch<Product<RootTimestamp, T>>>) {
+        let mut map = ChangeBatch::new();
         map.update(&Default::default(), self.copies as i64);
         (Vec::new(), vec![map])
     }
 
-    fn pull_internal_progress(&mut self,_messages_consumed: &mut [CountMap<Product<RootTimestamp, T>>],
-                                         frontier_progress: &mut [CountMap<Product<RootTimestamp, T>>],
-                                         messages_produced: &mut [CountMap<Product<RootTimestamp, T>>]) -> bool
+    fn pull_internal_progress(&mut self,_messages_consumed: &mut [ChangeBatch<Product<RootTimestamp, T>>],
+                                         frontier_progress: &mut [ChangeBatch<Product<RootTimestamp, T>>],
+                                         messages_produced: &mut [ChangeBatch<Product<RootTimestamp, T>>]) -> bool
     {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
         self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
@@ -158,7 +158,7 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct Handle<T: Timestamp, D: Data> {
-    progress: Vec<Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>>,
+    progress: Vec<Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>>,
     pushers: Vec<Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>>,
     buffer1: Vec<D>,
     buffer2: Vec<D>,
@@ -237,7 +237,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     fn register(
         &mut self,
         pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>,
-        progress: Rc<RefCell<CountMap<Product<RootTimestamp, T>>>>
+        progress: Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>
     ) {
         // flush current contents, so new registrant does not see existing data.
         if !self.buffer1.is_empty() { self.flush(); }

@@ -1,7 +1,7 @@
 //! Broadcasts progress information among workers.
 
 use progress::Timestamp;
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use timely_communication::Allocate;
 use {Push, Pull};
 
@@ -30,8 +30,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
     /// and updating each with updates from other workers.
     pub fn send_and_recv(
         &mut self,
-        messages: &mut CountMap<(usize, usize, T)>,
-        internal: &mut CountMap<(usize, usize, T)>)
+        messages: &mut ChangeBatch<(usize, usize, T)>,
+        internal: &mut ChangeBatch<(usize, usize, T)>)
     {
 
         // // we should not be sending zero deltas.

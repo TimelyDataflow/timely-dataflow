@@ -1,13 +1,13 @@
 //! A wrapper which accounts records pulled past in a shared count map.
 
 use dataflow::channels::Content;
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use Pull;
 
 /// A wrapper which accounts records pulled past in a shared count map.
 pub struct Counter<T: Ord+Clone+'static, D> {
     pullable: Box<Pull<(T, Content<D>)>>,
-    consumed: CountMap<T>,
+    consumed: ChangeBatch<T>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
@@ -32,11 +32,11 @@ impl<T:Ord+Clone+'static, D> Counter<T, D> {
         Counter {
             phantom: ::std::marker::PhantomData,
             pullable: pullable,
-            consumed: CountMap::new(),
+            consumed: ChangeBatch::new(),
         }
     }
     /// Extracts progress information into `consumed`. 
-    pub fn pull_progress(&mut self, consumed: &mut CountMap<T>) {
+    pub fn pull_progress(&mut self, consumed: &mut ChangeBatch<T>) {
         for (time, value) in self.consumed.drain() {
             consumed.update(&time, value);
         }

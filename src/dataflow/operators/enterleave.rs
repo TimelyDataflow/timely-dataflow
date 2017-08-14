@@ -25,7 +25,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::marker::PhantomData;
 
-use progress::{Timestamp, CountMap};
+use progress::{Timestamp, ChangeBatch};
 use progress::nested::subgraph::{Source, Target};
 use progress::nested::product::Product;
 use {Data, Push};
@@ -85,7 +85,7 @@ impl<T: Timestamp, G: Scope, D: Data> Enter<G, T, D> for Stream<G, D> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D> {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
-        let produced = Rc::new(RefCell::new(CountMap::new()));
+        let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let ingress = IngressNub { targets: Counter::new(targets, produced.clone()) };
 
         let scope_index = scope.subgraph.borrow().index;

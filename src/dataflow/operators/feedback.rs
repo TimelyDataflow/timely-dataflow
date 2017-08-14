@@ -8,7 +8,7 @@ use {Data, Push};
 use progress::{Timestamp, Operate, PathSummary};
 use progress::frontier::Antichain;
 use progress::nested::{Source, Target};
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 
 use progress::nested::product::Product;
 use progress::nested::Summary::Local;
@@ -47,8 +47,8 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
     fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
-        let produced = Rc::new(RefCell::new(CountMap::<Product<G::Timestamp, T>>::new()));
-        let consumed = Rc::new(RefCell::new(CountMap::<Product<G::Timestamp, T>>::new()));
+        let produced = Rc::new(RefCell::new(ChangeBatch::<Product<G::Timestamp, T>>::new()));
+        let consumed = Rc::new(RefCell::new(ChangeBatch::<Product<G::Timestamp, T>>::new()));
 
         let feedback_output = Counter::new(targets, produced.clone());
         let feedback_input =  Counter::new(Observer {
@@ -130,8 +130,8 @@ pub struct Handle<TOuter: Timestamp, TInner: Timestamp, D: Data> {
 
 // the scope that the progress tracker interacts with
 struct Operator<T:Timestamp> {
-    consumed_messages:  Rc<RefCell<CountMap<T>>>,
-    produced_messages:  Rc<RefCell<CountMap<T>>>,
+    consumed_messages:  Rc<RefCell<ChangeBatch<T>>>,
+    produced_messages:  Rc<RefCell<ChangeBatch<T>>>,
     summary:            T::Summary,
 }
 
@@ -141,13 +141,13 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
-        (vec![vec![Antichain::from_elem(self.summary.clone())]], vec![CountMap::new()])
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
+        (vec![vec![Antichain::from_elem(self.summary.clone())]], vec![ChangeBatch::new()])
     }
 
-    fn pull_internal_progress(&mut self, messages_consumed: &mut [CountMap<T>],
-                                        _frontier_progress: &mut [CountMap<T>],
-                                         messages_produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, messages_consumed: &mut [ChangeBatch<T>],
+                                        _frontier_progress: &mut [ChangeBatch<T>],
+                                         messages_produced: &mut [ChangeBatch<T>]) -> bool {
 
         self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
         self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);

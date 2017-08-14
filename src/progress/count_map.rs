@@ -5,12 +5,12 @@
 /// The implementation is currently a `Vec<(T, i64)>` as the use cases are currently for small
 /// buffers of updates rather than large storage. This could change as needs evolve.
 #[derive(Clone, Debug)]
-pub struct CountMap<T> {
+pub struct ChangeBatch<T> {
     updates: Vec<(T, i64)>,
     dirty: usize,
 }
 
-impl<T:Ord+Clone> CountMap<T> {
+impl<T:Ord+Clone> ChangeBatch<T> {
     /// Adds `val` to the value associated with `key`, returning the new value.
     // #[inline(never)]
     pub fn update(&mut self, key: &T, val: i64) {
@@ -73,24 +73,24 @@ impl<T:Ord+Clone> CountMap<T> {
     }
     /// Returns an element of the map, or `None` if it is empty.
     // pub fn pop(&mut self) -> Option<(T, i64)> { self.updates.pop() }
-    /// Allocates a new empty `CountMap`.
-    pub fn new() -> CountMap<T> { 
-        CountMap { 
+    /// Allocates a new empty `ChangeBatch`.
+    pub fn new() -> ChangeBatch<T> { 
+        ChangeBatch { 
             updates: Vec::new(), 
             dirty: 0 
         } 
     }
 
-    /// Allocates a new `CountMap` with a single entry.
-    pub fn new_from(key: &T, val: i64) -> CountMap<T> {
-        let mut result = CountMap::new();
+    /// Allocates a new `ChangeBatch` with a single entry.
+    pub fn new_from(key: &T, val: i64) -> ChangeBatch<T> {
+        let mut result = ChangeBatch::new();
         result.update(key, val);
         result
     }
 
     /// Drains `self` into `other`.
     #[inline(never)]
-    pub fn drain_into(&mut self, other: &mut CountMap<T>) {
+    pub fn drain_into(&mut self, other: &mut ChangeBatch<T>) {
         while let Some((ref key, val)) = self.updates.pop() {
             other.update(key, val);
         }

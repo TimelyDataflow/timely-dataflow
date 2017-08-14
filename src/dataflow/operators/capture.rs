@@ -80,7 +80,7 @@ use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use dataflow::channels::pushers::Tee;
 
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use progress::nested::subgraph::{Source, Target};
 use progress::{Timestamp, Operate, Antichain};
 
@@ -450,7 +450,7 @@ impl<T: Timestamp, D: Data, I: EventIterator<T, D>+'static> Replay<T, D> for I {
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>{
        let (targets, registrar) = Tee::<S::Timestamp, D>::new();
        let operator = ReplayOperator {
-           output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+           output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
            events: self,
        };
 
@@ -480,7 +480,7 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
     fn outputs(&self) -> usize { 0 }
 
     // we need to set the initial value of the frontier
-    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [CountMap<T>]) {
+    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [ChangeBatch<T>]) {
         let mut map = counts[0].clone();
         map.update(&Default::default(), -1);
         if !map.is_empty() {
@@ -490,12 +490,12 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
     }
 
     // each change to the frontier should be shared
-    fn push_external_progress(&mut self, counts: &mut [CountMap<T>]) {
+    fn push_external_progress(&mut self, counts: &mut [ChangeBatch<T>]) {
         self.events.push(Event::Progress(counts[0].clone().into_inner()));
         counts[0].clear();
     }
 
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],  _: &mut [CountMap<T>], _: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],  _: &mut [ChangeBatch<T>], _: &mut [ChangeBatch<T>]) -> bool {
         while let Some((time, data)) = self.input.next() {
             self.events.push(Event::Messages(time.clone(), data.deref_mut().clone()));
         }
@@ -514,7 +514,7 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
 
         // We expect the event stream to have a progress statement as a prefix, pre-loaded 
         // by the capture constructor. Note: It may not be there *right now* due to e.g.
@@ -526,7 +526,7 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
 
         loop {
             if let Some(event) = self.events.next() {
-                let mut result = CountMap::new();
+                let mut result = ChangeBatch::new();
                 if let &Event::Progress(ref vec) = event {
                     for &(ref time, delta) in vec {
                         result.update(time, delta);
@@ -537,7 +537,7 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
         }
     }
 
-    fn pull_internal_progress(&mut self, _: &mut [CountMap<T>], internal: &mut [CountMap<T>], produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, _: &mut [ChangeBatch<T>], internal: &mut [ChangeBatch<T>], produced: &mut [ChangeBatch<T>]) -> bool {
 
         while let Some(event) = self.events.next() {
             match *event {

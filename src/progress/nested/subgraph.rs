@@ -12,7 +12,7 @@ use order::PartialOrder;
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, PathSummary, Operate};
 
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 
 use progress::broadcast::Progcaster;
 use progress::nested::summary::Summary;
@@ -73,16 +73,16 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     edge_stash: Vec<(Source, Target)>,
 
     // shared state written to by the datapath, counting records entering this subgraph instance.
-    input_messages: Vec<Rc<RefCell<CountMap<Product<TOuter, TInner>>>>>,
+    input_messages: Vec<Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>>,
 
     // expressed capabilities, used to filter changes against.
     output_capabilities: Vec<MutableAntichain<TOuter>>,
 
     // pointstamp messages to exchange. ultimately destined for `messages` or `internal`.
-    local_pointstamp_messages: CountMap<(usize, usize, Product<TOuter, TInner>)>,
-    local_pointstamp_internal: CountMap<(usize, usize, Product<TOuter, TInner>)>,
-    final_pointstamp_messages: CountMap<(usize, usize, Product<TOuter, TInner>)>,
-    final_pointstamp_internal: CountMap<(usize, usize, Product<TOuter, TInner>)>,
+    local_pointstamp_messages: ChangeBatch<(usize, usize, Product<TOuter, TInner>)>,
+    local_pointstamp_internal: ChangeBatch<(usize, usize, Product<TOuter, TInner>)>,
+    final_pointstamp_messages: ChangeBatch<(usize, usize, Product<TOuter, TInner>)>,
+    final_pointstamp_internal: ChangeBatch<(usize, usize, Product<TOuter, TInner>)>,
 
     // something about staging to make pointstamp propagation easier. I'll probably remember as I
     // walk through all this again. ><
@@ -102,7 +102,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Vec<CountMap<TOuter>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Vec<ChangeBatch<TOuter>>) {
 
         // println!("in GIS for subgraph: {:?}", self.path);
 
@@ -142,7 +142,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // the initial capabilities should now be in `self.pointstamps.target_pushed[0]`, except
         // that they are `Product<TOuter, TInner>`, and we just want `TOuter`.
-        let mut initial_capabilities = vec![CountMap::new(); self.outputs()];
+        let mut initial_capabilities = vec![ChangeBatch::new(); self.outputs()];
         for (o_port, capabilities) in self.pointstamps.pushed[0].iter_mut().enumerate() {
 
             let iterator = capabilities.drain().map(|(time, diff)| { initial_capabilities[o_port].update(&time.outer, diff); (time.outer, diff) });
@@ -178,7 +178,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     // receives connectivity summaries from outputs to inputs, as well as initial external
     // capabilities on inputs. prepares internal summaries, and recursively calls the method on
     // contained scopes.
-    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [CountMap<TOuter>]) {
+    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [ChangeBatch<TOuter>]) {
 
         // println!("in SES for subgraph: {:?}", self.path);
         // for (input, frontier) in frontier.iter().enumerate() {
@@ -273,7 +273,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     }
 
     // changes in the message possibilities for each of the subgraph's inputs.
-    fn push_external_progress(&mut self, external: &mut [CountMap<TOuter>]) {
+    fn push_external_progress(&mut self, external: &mut [ChangeBatch<TOuter>]) {
 
         // I believe we can simply move these into our pointstamp staging area.
         // Nothing will happen until we call `step`, but that is to be expected.
@@ -311,9 +311,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     // scope; although the scope may exchange progress information to determine whether something is runnable,
     // the exchanged information should probably *not* be what is reported back. only the locally
     // produced/consumed messages, and local internal work should be reported back up.
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<TOuter>],
-                                         internal: &mut [CountMap<TOuter>],
-                                         produced: &mut [CountMap<TOuter>]) -> bool
+    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<TOuter>],
+                                         internal: &mut [ChangeBatch<TOuter>],
+                                         produced: &mut [ChangeBatch<TOuter>]) -> bool
     {
         // should be false when there is nothing left to do
         let mut active = false;
@@ -550,9 +550,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         self.pointstamps.pushed = vec![Vec::new(); self.children.len()];
 
         for child in &self.children {
-            self.pointstamps.source[child.index] = vec![CountMap::new(); child.outputs];
-            self.pointstamps.target[child.index] = vec![CountMap::new(); child.inputs];
-            self.pointstamps.pushed[child.index] = vec![CountMap::new(); child.inputs];
+            self.pointstamps.source[child.index] = vec![ChangeBatch::new(); child.outputs];
+            self.pointstamps.target[child.index] = vec![ChangeBatch::new(); child.inputs];
+            self.pointstamps.pushed[child.index] = vec![ChangeBatch::new(); child.inputs];
         }
 
         let mut additions = ::std::collections::VecDeque::<(Source, Target, Summary<TOuter::Summary, TInner::Summary>)>::new();
@@ -646,7 +646,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
     }
 
     /// Allocates a new input to the subgraph and returns the assigned index.
-    pub fn new_input(&mut self, shared_counts: Rc<RefCell<CountMap<Product<TOuter, TInner>>>>) -> usize {
+    pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>) -> usize {
         self.inputs += 1;
         self.input_messages.push(shared_counts);
         self.children[0].add_output();
@@ -692,10 +692,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             output_capabilities:    Default::default(),
 
             pointstamps:            Default::default(),
-            local_pointstamp_messages:    CountMap::new(),
-            local_pointstamp_internal:    CountMap::new(),
-            final_pointstamp_messages:    CountMap::new(),
-            final_pointstamp_internal:    CountMap::new(),
+            local_pointstamp_messages:    ChangeBatch::new(),
+            local_pointstamp_internal:    ChangeBatch::new(),
+            final_pointstamp_messages:    ChangeBatch::new(),
+            final_pointstamp_internal:    ChangeBatch::new(),
             progcaster:             progcaster,
         }
     }
@@ -748,11 +748,11 @@ struct PerOperatorState<T: Timestamp> {
     internal: Vec<MutableAntichain<T>>, // output capabilities expressed by the operator
     external: Vec<MutableAntichain<T>>, // input capabilities expressed by outer scope
 
-    consumed_buffer: Vec<CountMap<T>>, // per-input: temp buffer used for pull_internal_progress.
-    internal_buffer: Vec<CountMap<T>>, // per-output: temp buffer used for pull_internal_progress.
-    produced_buffer: Vec<CountMap<T>>, // per-output: temp buffer used for pull_internal_progress.
+    consumed_buffer: Vec<ChangeBatch<T>>, // per-input: temp buffer used for pull_internal_progress.
+    internal_buffer: Vec<ChangeBatch<T>>, // per-output: temp buffer used for pull_internal_progress.
+    produced_buffer: Vec<ChangeBatch<T>>, // per-output: temp buffer used for pull_internal_progress.
 
-    external_buffer: Vec<CountMap<T>>, // per-input: temp buffer used for push_external_progress.
+    external_buffer: Vec<ChangeBatch<T>>, // per-input: temp buffer used for push_external_progress.
 }
 
 impl<T: Timestamp> PerOperatorState<T> {
@@ -763,15 +763,15 @@ impl<T: Timestamp> PerOperatorState<T> {
         self.target_source_summaries.push(vec![]);
         self.messages.push(Default::default());
         self.external.push(Default::default());
-        self.external_buffer.push(CountMap::new());
-        self.consumed_buffer.push(CountMap::new());
+        self.external_buffer.push(ChangeBatch::new());
+        self.consumed_buffer.push(ChangeBatch::new());
     }
     fn add_output(&mut self) {
         self.outputs += 1;
         self.edges.push(vec![]);
         self.internal.push(Default::default());
-        self.internal_buffer.push(CountMap::new());
-        self.produced_buffer.push(CountMap::new());
+        self.internal_buffer.push(ChangeBatch::new());
+        self.produced_buffer.push(ChangeBatch::new());
         self.source_target_summaries.push(vec![]);
     }
 
@@ -847,11 +847,11 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             external: vec![Default::default(); inputs],
 
-            external_buffer: vec![CountMap::new(); inputs],
+            external_buffer: vec![ChangeBatch::new(); inputs],
 
-            consumed_buffer: vec![CountMap::new(); inputs],
-            internal_buffer: vec![CountMap::new(); outputs],
-            produced_buffer: vec![CountMap::new(); outputs],
+            consumed_buffer: vec![ChangeBatch::new(); inputs],
+            internal_buffer: vec![ChangeBatch::new(); outputs],
+            produced_buffer: vec![ChangeBatch::new(); outputs],
 
             target_target_summaries: vec![vec![]; inputs],
             source_target_summaries: vec![vec![]; outputs],
@@ -876,7 +876,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
 
-    pub fn push_pointstamps(&mut self, external_progress: &mut [CountMap<T>]) {
+    pub fn push_pointstamps(&mut self, external_progress: &mut [ChangeBatch<T>]) {
 
         // TODO : Introduce correct assertion
         // assert the "uprighted-ness" property for updates to each input
@@ -918,8 +918,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         }
     }
 
-    pub fn pull_pointstamps(&mut self, pointstamp_messages: &mut CountMap<(usize, usize, T)>,
-                                       pointstamp_internal: &mut CountMap<(usize, usize, T)>) -> bool {
+    pub fn pull_pointstamps(&mut self, pointstamp_messages: &mut ChangeBatch<(usize, usize, T)>,
+                                       pointstamp_internal: &mut ChangeBatch<(usize, usize, T)>) -> bool {
 
         let active = {
 

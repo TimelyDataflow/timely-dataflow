@@ -7,7 +7,7 @@ use std::default::Default;
 use progress::frontier::Antichain;
 use progress::{Operate, Timestamp};
 use progress::nested::subgraph::Source;
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 
 use Data;
 use dataflow::channels::pushers::{Tee, Counter as PushCounter};
@@ -82,8 +82,8 @@ impl<G: Scope> UnorderedInput<G> for G {
     fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, Capability<G::Timestamp>), Stream<G, D>) {
 
         let (output, registrar) = Tee::<G::Timestamp, D>::new();
-        let internal = Rc::new(RefCell::new(CountMap::new()));
-        let produced = Rc::new(RefCell::new(CountMap::new()));
+        let internal = Rc::new(RefCell::new(ChangeBatch::new()));
+        let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = mint_capability(Default::default(), internal.clone());
         let helper = UnorderedHandle::new(PushCounter::new(output, produced.clone()));
         let peers = self.peers();
@@ -99,8 +99,8 @@ impl<G: Scope> UnorderedInput<G> for G {
 }
 
 struct UnorderedOperator<T:Timestamp> {
-    internal:   Rc<RefCell<CountMap<T>>>,
-    produced:   Rc<RefCell<CountMap<T>>>,
+    internal:   Rc<RefCell<ChangeBatch<T>>>,
+    produced:   Rc<RefCell<ChangeBatch<T>>>,
     peers:     usize,
 }
 
@@ -110,8 +110,8 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     fn outputs(&self) -> usize { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>,
-                                           Vec<CountMap<T>>) {
-        let mut internal = CountMap::new();
+                                           Vec<ChangeBatch<T>>) {
+        let mut internal = ChangeBatch::new();
         // augment the counts for each reserved capability.
         for &(ref time, count) in self.internal.borrow_mut().iter() {
             internal.update(time, count * (self.peers as i64 - 1));
@@ -122,9 +122,9 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
         (Vec::new(), vec![internal])
     }
 
-    fn pull_internal_progress(&mut self,_consumed: &mut [CountMap<T>],
-                                         internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool
+    fn pull_internal_progress(&mut self,_consumed: &mut [ChangeBatch<T>],
+                                         internal: &mut [ChangeBatch<T>],
+                                         produced: &mut [ChangeBatch<T>]) -> bool
     {
         self.produced.borrow_mut().drain_into(&mut produced[0]);
         self.internal.borrow_mut().drain_into(&mut internal[0]);

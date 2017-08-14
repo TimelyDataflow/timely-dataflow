@@ -3,14 +3,14 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::CountMap;
+use progress::ChangeBatch;
 use dataflow::channels::Content;
 use Push;
 
 /// A wrapper which updates shared `counts` based on the number of records pushed.
 pub struct Counter<T: Ord, D, P: Push<(T, Content<D>)>> {
     pushee: P,
-    counts: Rc<RefCell<CountMap<T>>>,
+    counts: Rc<RefCell<ChangeBatch<T>>>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
@@ -30,7 +30,7 @@ impl<T: Ord, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D
 
 impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
-    pub fn new(pushee: P, counts: Rc<RefCell<CountMap<T>>>) -> Counter<T, D, P> {
+    pub fn new(pushee: P, counts: Rc<RefCell<ChangeBatch<T>>>) -> Counter<T, D, P> {
         Counter {
             pushee: pushee,
             counts: counts,
@@ -41,7 +41,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'stati
     ///
     /// It is unclear why this method exists at the same time the counts are shared.
     /// Perhaps this should be investigated, and only one pattern used. Seriously.
-    #[inline] pub fn pull_progress(&mut self, updates: &mut CountMap<T>) {
+    #[inline] pub fn pull_progress(&mut self, updates: &mut ChangeBatch<T>) {
         let mut borrow = self.counts.borrow_mut();
         for (time, delta) in borrow.drain() {
             updates.update(&time, delta);

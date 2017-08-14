@@ -2,7 +2,7 @@
 
 use std::default::Default;
 
-use progress::{Timestamp, CountMap, Antichain};
+use progress::{Timestamp, ChangeBatch, Antichain};
 
 
 /// Methods for describing an operators topology, and the progress it makes.
@@ -43,9 +43,9 @@ pub trait Operate<T: Timestamp> {
     ///
     /// The default behavior is to indicate that timestamps on any input can emerge unchanged on
     /// any output, and no initial capabilities are held.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
         (vec![vec![Antichain::from_elem(Default::default()); self.outputs()]; self.inputs()],
-         vec![CountMap::new(); self.outputs()])
+         vec![ChangeBatch::new(); self.outputs()])
     }
 
     /// Presents summary information about the external structure around the operator.
@@ -60,7 +60,7 @@ pub trait Operate<T: Timestamp> {
     /// include capabilities expressed by the operator itself. It seems possible to exclude such
     /// capabilities, if it would help the operator, but the operator should not yet rely on any
     /// specific behavior.
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, _frontier: &mut [CountMap<T>]) { }
+    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, _frontier: &mut [ChangeBatch<T>]) { }
 
     /// Reports a summary of progress statements external to the operator and its peer group.
     ///
@@ -72,7 +72,7 @@ pub trait Operate<T: Timestamp> {
     /// noting the consequences of those actions, will be in a bit of a pickle.
     ///
     /// Note: Callee is expected to consume the contents of _external to indicate acknowledgement.
-    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) {
+    fn push_external_progress(&mut self, external: &mut [ChangeBatch<T>]) {
         // default implementation just drains the external updates
         for updates in external.iter_mut() {
             updates.clear();
@@ -89,9 +89,9 @@ pub trait Operate<T: Timestamp> {
     /// with this information (mostly likely exchange it with its peers). There does seem to be the
     /// opportunity to optimize this, but it may complicate the life of the parent to know which of
     /// its children are reporting partial information and which are complete.
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],          // to populate
-                                         internal: &mut [CountMap<T>],          // to populate
-                                         produced: &mut [CountMap<T>]) -> bool; // to populate
+    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],          // to populate
+                                         internal: &mut [ChangeBatch<T>],          // to populate
+                                         produced: &mut [ChangeBatch<T>]) -> bool; // to populate
 
     /// A descripitive name for the operator
     fn name(&self) -> String;
