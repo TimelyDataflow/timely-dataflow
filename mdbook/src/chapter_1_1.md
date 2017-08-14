@@ -46,7 +46,7 @@ This program is a *dataflow program*. There are two dataflow operators here, `ex
 
 Importantly, we haven't imposed any constraints on how these operators need to run. We removed the code that caused the input to be delayed until a certain amount of progress had been made, and it shows in the results when we run with more than one worker:
 
-Echidnatron% cargo run --example hello -- -w2
+    Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
     worker 1:	hello 1
