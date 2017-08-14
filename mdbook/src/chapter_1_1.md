@@ -46,19 +46,19 @@ This program is a *dataflow program*. There are two dataflow operators here, `ex
 
 Importantly, we haven't imposed any constraints on how these operators need to run. We removed the code that caused the input to be delayed until a certain amount of progress had been made, and it shows in the results when we run with more than one worker:
 
-Echidnatron% cargo run --example hello -- -w2
-        Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
-        Running `target/debug/examples/hello -w2`
-    worker 1:	hello 1
-    worker 1:	hello 3
-    worker 0:	hello 0
-    worker 1:	hello 5
-    worker 0:	hello 2
-    worker 1:	hello 7
-    worker 1:	hello 9
-    worker 0:	hello 4
-    worker 0:	hello 6
-    worker 0:	hello 8
+    Echidnatron% cargo run --example hello -- -w2
+            Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
+            Running `target/debug/examples/hello -w2`
+        worker 1:	hello 1
+        worker 1:	hello 3
+        worker 0:	hello 0
+        worker 1:	hello 5
+        worker 0:	hello 2
+        worker 1:	hello 7
+        worker 1:	hello 9
+        worker 0:	hello 4
+        worker 0:	hello 6
+        worker 0:	hello 8
     Echidnatron% 
 
 What a mess. Nothing in our dataflow program requires that workers zero and one alternate printing to the screen, and you can even see that worker one is *done* before worker zero even gets to printing `hello 4`.
