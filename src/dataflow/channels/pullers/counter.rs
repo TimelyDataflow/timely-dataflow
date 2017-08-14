@@ -5,13 +5,13 @@ use progress::count_map::CountMap;
 use Pull;
 
 /// A wrapper which accounts records pulled past in a shared count map.
-pub struct Counter<T: Eq+Clone+'static, D> {
+pub struct Counter<T: Ord+Clone+'static, D> {
     pullable: Box<Pull<(T, Content<D>)>>,
     consumed: CountMap<T>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
-impl<T:Eq+Clone+'static, D> Counter<T, D> {
+impl<T:Ord+Clone+'static, D> Counter<T, D> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
     pub fn next(&mut self) -> Option<(&T, &mut Content<D>)> {
@@ -26,7 +26,7 @@ impl<T:Eq+Clone+'static, D> Counter<T, D> {
     }
 }
 
-impl<T:Eq+Clone+'static, D> Counter<T, D> {
+impl<T:Ord+Clone+'static, D> Counter<T, D> {
     /// Allocates a new `Counter` from a boxed puller.
     pub fn new(pullable: Box<Pull<(T, Content<D>)>>) -> Counter<T, D> {
         Counter {
@@ -37,8 +37,8 @@ impl<T:Eq+Clone+'static, D> Counter<T, D> {
     }
     /// Extracts progress information into `consumed`. 
     pub fn pull_progress(&mut self, consumed: &mut CountMap<T>) {
-        while let Some((ref time, value)) = self.consumed.pop() {
-            consumed.update(time, value);
+        for (time, value) in self.consumed.drain() {
+            consumed.update(&time, value);
         }
     }
 }

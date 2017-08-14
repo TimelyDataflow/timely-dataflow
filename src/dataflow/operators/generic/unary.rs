@@ -190,7 +190,7 @@ where T: Timestamp,
             }
 
             // augment the counts for each reserved capability.
-            for &(ref time, count) in self.internal_changes.borrow().iter() {
+            for &(ref time, count) in self.internal_changes.borrow_mut().iter() {
                 internal[0].update(time, count * (peers as i64 - 1));
             }
 

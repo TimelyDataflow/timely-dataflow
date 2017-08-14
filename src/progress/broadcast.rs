@@ -38,7 +38,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
         // assert!(messages.iter().all(|x| x.1 != 0));
         // assert!(internal.iter().all(|x| x.1 != 0));
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
-            if messages.len() > 0 || internal.len() > 0 {
+            if !messages.is_empty() || !internal.is_empty() {
                 for pusher in self.pushers.iter_mut() {
                     // TODO : Feels like an Arc might be not horrible here... less allocation,
                     // TODO : at least, but more "contention" in the deallocation.
@@ -50,11 +50,34 @@ impl<T:Timestamp+Send> Progcaster<T> {
             }
 
             // TODO : Could take ownership, and recycle / reuse for next broadcast ...
-            while let Some((ref recv_messages, ref recv_internal)) = *self.puller.pull() {
-                for &(ref update, delta) in recv_messages {
+            while let Some((ref mut recv_messages, ref mut recv_internal)) = *self.puller.pull() {
+
+                // if recv_messages.len() > 10 {
+                //     recv_messages.sort_by(|x,y| x.0.cmp(&y.0));
+                //     for i in 1 .. recv_messages.len() {
+                //         if recv_messages[i-1].0 == recv_messages[i].0 {
+                //             recv_messages[i].1 += recv_messages[i-1].1;
+                //             recv_messages[i-1].1 = 0;
+                //         }
+                //     }
+                // }
+
+                for &(ref update, delta) in recv_messages.iter() {
                     messages.update(update, delta);
                 }
-                for &(ref update, delta) in recv_internal {
+
+                // if recv_internal.len() > 10 {
+                //     recv_internal.sort_by(|x,y| x.0.cmp(&y.0));
+                //     for i in 1 .. recv_internal.len() {
+                //         if recv_internal[i-1].0 == recv_internal[i].0 {
+                //             recv_internal[i].1 += recv_internal[i-1].1;
+                //             recv_internal[i-1].1 = 0;
+                //         }
+                //     }
+                // }
+
+
+                for &(ref update, delta) in recv_internal.iter() {
                     internal.update(update, delta);
                 }
             }

@@ -483,7 +483,7 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
     fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [CountMap<T>]) {
         let mut map = counts[0].clone();
         map.update(&Default::default(), -1);
-        if map.len() > 0 {
+        if !map.is_empty() {
             self.events.push(Event::Progress(map.into_inner()));
         }
         counts[0].clear();

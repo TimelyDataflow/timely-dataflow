@@ -122,7 +122,7 @@ impl<T: Timestamp> Handle<T> {
     /// returns true iff the frontier is less than or equal to `time`.
     #[inline] pub fn less_equal(&self, time: &T) -> bool { self.frontier.borrow().less_equal(time) }
     /// returns true iff the frontier is empty.
-    #[inline] pub fn done(&self) -> bool { self.frontier.borrow().elements().len() == 0 }
+    #[inline] pub fn done(&self) -> bool { self.frontier.borrow().is_empty() }
     /// Allocates a new handle.
     #[inline] pub fn new() -> Self { Handle { frontier: Rc::new(RefCell::new(MutableAntichain::new())) } }
     
@@ -141,7 +141,7 @@ impl<T: Timestamp> Handle<T> {
     /// ```
     #[inline]
     pub fn with_frontier<R, F: FnMut(&[T])->R>(&self, mut function: F) -> R {
-        function(self.frontier.borrow().elements())
+        function(self.frontier.borrow().frontier())
     }
 }
 
@@ -167,17 +167,19 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
     // we need to set the initial value of the frontier
     fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [CountMap<T>]) {
         let mut borrow = self.frontier.borrow_mut();
-        while let Some((time, delta)) = counts[0].pop() {
-            borrow.update(&time, delta);
-        }
+        borrow.update_iter_and(counts[0].drain(), |_,_| { });
+        // for (time, delta) in counts[0].drain() {
+        //     borrow.update(&time, delta);
+        // }
     }
 
     // each change to the frontier should be shared
     fn push_external_progress(&mut self, counts: &mut [CountMap<T>]) {
         let mut borrow = self.frontier.borrow_mut();
-        while let Some((time, delta)) = counts[0].pop() {
-            borrow.update(&time, delta);
-        }
+        borrow.update_iter_and(counts[0].drain(), |_,_| { });
+        // for (time, delta) in counts[0].drain() {
+        //     borrow.update(&time, delta);
+        // }
     }
 
     // the scope does nothing. this is actually a problem, because "reachability" assumes all messages on each edge.

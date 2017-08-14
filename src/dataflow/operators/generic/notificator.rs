@@ -36,15 +36,16 @@ impl<T: Timestamp> Notificator<T> {
         }
 
         for (index, counts) in count_map.iter_mut().enumerate() {
-            while let Some((time, delta)) = counts.pop() {
-                self.frontier[index].update(&time, delta);
-            }
+            self.frontier[index].update_iter_and(counts.drain(), |_,_| { });
+            // for (time, delta) in counts.drain() {
+            //     self.frontier[index].update(&time, delta);
+            // }
         }
     }
 
     /// Reveals the elements in the frontier of the indicated input.
     pub fn frontier(&self, input: usize) -> &[T] {
-        self.frontier[input].elements()
+        self.frontier[input].frontier()
     }
 
     /// Requests a notification at the time associated with capability `cap`. Takes ownership of
@@ -92,7 +93,7 @@ impl<T: Timestamp> Notificator<T> {
     ///
     /// `logic` receives a capability for `t`, the timestamp being notified and a `count`
     /// representing how many capabilities were requested for that specific timestamp.
-    #[inline]
+    #[inline(never)]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
         // for (cap, count) in self {
@@ -112,6 +113,7 @@ impl<T: Timestamp> Iterator for Notificator<T> {
     /// `cap` is a a capability for `t`, the timestamp being notified and, `count` represents
     /// how many notifications (out of those requested) are being delivered for that specific
     /// timestamp.
+    #[inline(never)]
     fn next(&mut self) -> Option<(Capability<T>, u64)> {
         if self.available.is_empty() {
             let mut available = &mut self.available; // available is empty

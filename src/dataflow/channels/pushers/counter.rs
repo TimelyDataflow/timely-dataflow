@@ -8,13 +8,13 @@ use dataflow::channels::Content;
 use Push;
 
 /// A wrapper which updates shared `counts` based on the number of records pushed.
-pub struct Counter<T, D, P: Push<(T, Content<D>)>> {
+pub struct Counter<T: Ord, D, P: Push<(T, Content<D>)>> {
     pushee: P,
     counts: Rc<RefCell<CountMap<T>>>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
-impl<T, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D, P> where T : Eq+Clone+'static {
+impl<T: Ord, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D, P> where T : Eq+Clone+'static {
     #[inline] 
     fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
         if let Some((ref time, ref data)) = *message {
@@ -22,13 +22,13 @@ impl<T, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D, P> 
         }
 
         // only propagate `None` if dirty (indicates flush)
-        if message.is_some() || self.counts.borrow().len() > 0 {
+        if message.is_some() || !self.counts.borrow_mut().is_empty() {
             self.pushee.push(message);            
         }
     }
 }
 
-impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Eq+Clone+'static {
+impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
     pub fn new(pushee: P, counts: Rc<RefCell<CountMap<T>>>) -> Counter<T, D, P> {
         Counter {
@@ -42,8 +42,9 @@ impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Eq+Clone+'static
     /// It is unclear why this method exists at the same time the counts are shared.
     /// Perhaps this should be investigated, and only one pattern used. Seriously.
     #[inline] pub fn pull_progress(&mut self, updates: &mut CountMap<T>) {
-        while let Some((ref time, delta)) = self.counts.borrow_mut().pop() {
-            updates.update(time, delta);
+        let mut borrow = self.counts.borrow_mut();
+        for (time, delta) in borrow.drain() {
+            updates.update(&time, delta);
         }
     }
 }

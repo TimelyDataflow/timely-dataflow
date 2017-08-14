@@ -113,7 +113,7 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
                                            Vec<CountMap<T>>) {
         let mut internal = CountMap::new();
         // augment the counts for each reserved capability.
-        for &(ref time, count) in self.internal.borrow().iter() {
+        for &(ref time, count) in self.internal.borrow_mut().iter() {
             internal.update(time, count * (self.peers as i64 - 1));
         }
 

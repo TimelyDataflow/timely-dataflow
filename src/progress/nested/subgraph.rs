@@ -131,7 +131,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
             // introduce capabilities as pre-pushed pointstamps; will push to outputs.
             for (output, capability) in child.internal.iter().enumerate() {
-                for time in capability.elements() {
+                for time in capability.frontier() {
                     self.pointstamps.source[child.index][output].update(time, 1);
                 }
             }
@@ -143,12 +143,16 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // the initial capabilities should now be in `self.pointstamps.target_pushed[0]`, except
         // that they are `Product<TOuter, TInner>`, and we just want `TOuter`.
         let mut initial_capabilities = vec![CountMap::new(); self.outputs()];
-        for (o_port, capabilities) in self.pointstamps.pushed[0].iter().enumerate() {
-            for &(ref time, val) in capabilities.iter() {
-                // make a note to self and inform scope of our capability.
-                self.output_capabilities[o_port].update(&time.outer, val);
-                initial_capabilities[o_port].update(&time.outer, val);
-            }
+        for (o_port, capabilities) in self.pointstamps.pushed[0].iter_mut().enumerate() {
+
+            let iterator = capabilities.drain().map(|(time, diff)| { initial_capabilities[o_port].update(&time.outer, diff); (time.outer, diff) });
+            self.output_capabilities[o_port].update_iter(iterator);
+
+            // for (time, val) in capabilities.drain() {
+            //     // make a note to self and inform scope of our capability.
+            //     self.output_capabilities[o_port].update(&time.outer, val);
+            //     initial_capabilities[o_port].update(&time.outer, val);
+            // }
         }
         // done with the pointstamps, so we should clean up.
         self.pointstamps.clear();
@@ -209,17 +213,16 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // initialize pointstamps for capabilities, from `frontier` and from child capabitilies.
         // change frontier to local times; introduce as pointstamps
         for input in 0..self.inputs {
-            while let Some((time, val)) = frontier[input].pop() {
-                self.children[0].internal[input].update_and(&Product::new(time, Default::default()), val, |_t, _v| {
-                    // println!("initializing external input[{}] at {:?} with {}", input, _t, _v);
-                });
-            }
+            let iterator = frontier[input].drain().map(|(time, diff)| (Product::new(time, Default::default()), diff));
+            self.children[0].internal[input].update_iter_and(iterator, |_t, _v| {
+                // println!("initializing external input[{}] at {:?} with {}", input, _t, _v);
+            });
         }
 
         // identify all capabilities expressed locally
         for child in &self.children {
             for output in 0..child.outputs {
-                for time in child.internal[output].elements().iter() {
+                for time in child.internal[output].frontier().iter() {
                     // println!("internal capability expressed! ({}, {}): {:?}", child.index, output, time);
                     self.pointstamps.update_source(
                         Source { index: child.index, port: output },
@@ -239,13 +242,17 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
             // set the initial capabilities based on the contents of self.pointstamps.target_pushed[child.index]
             for input in 0..child.inputs {
-                while let Some((time, val)) = self.pointstamps.pushed[child.index][input].pop() {
-                    // println!("found a pushed pointstamp! ({}, {}): {:?}", child.index, input, time);
-                    // pushes changes through `external[input]` into `external_buffer[input]`.
-                    // at this point all changes should be meaningful, but need to prime state.
-                    let buffer = &mut child.external_buffer[input];
-                    child.external[input].update_and(&time, val, |t, v| { buffer.update(t, v); });
-                }
+                let buffer = &mut child.external_buffer[input];
+
+                let iterator = self.pointstamps.pushed[child.index][input].drain();
+                child.external[input].update_iter_and(iterator, |t, v| { buffer.update(t, v); });
+                
+                // while let Some((time, val)) = self.pointstamps.pushed[child.index][input].pop() {
+                //     // println!("found a pushed pointstamp! ({}, {}): {:?}", child.index, input, time);
+                //     // pushes changes through `external[input]` into `external_buffer[input]`.
+                //     // at this point all changes should be meaningful, but need to prime state.
+                //     child.external[input].update_and(&time, val, |t, v| { buffer.update(t, v); });
+                // }
             }
 
             // summarize the subgraph by the path summaries from the child's output to its inputs.
@@ -271,14 +278,19 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // I believe we can simply move these into our pointstamp staging area.
         // Nothing will happen until we call `step`, but that is to be expected.
         for (port, changes) in external.iter_mut().enumerate() {
-            while let Some((time, val)) = changes.pop() {
-                // println!("updating external input[{}] at {:?} with {}", port, time, val);
-                let pointstamps = &mut self.pointstamps;
-                self.children[0].internal[port].update_and(&Product::new(time, Default::default()), val, |t, v| {
-                    // println!("  difference made![{}] at {:?} with {}", port, t, v);
-                    pointstamps.update_source(Source { index: 0, port: port }, t, v)
-                });
-            }
+
+            let pointstamps = &mut self.pointstamps;
+            let iterator = changes.drain().map(|(time, diff)| (Product::new(time, Default::default()), diff));
+            self.children[0].internal[port].update_iter_and(iterator, |t, v| {
+                pointstamps.update_source(Source { index: 0, port: port }, t, v);
+            });
+            // while let Some((time, val)) = changes.pop() {
+            //     // println!("updating external input[{}] at {:?} with {}", port, time, val);
+            //     self.children[0].internal[port].update_and(&Product::new(time, Default::default()), val, |t, v| {
+            //         // println!("  difference made![{}] at {:?} with {}", port, t, v);
+            //         pointstamps.update_source(Source { index: 0, port: port }, t, v)
+            //     });
+            // }
         }
 
         // we should also take this opportunity to clean out any messages in self.children[0].messages.
@@ -287,7 +299,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // we assume that a call to `push_external_progress` reflects all updates previously produced by
         // `pull_internal_progress`.
         for (port, messages) in self.children[0].messages.iter_mut().enumerate() {
-            for time in messages.elements() {
+            for time in messages.frontier() {
                 self.pointstamps.update_target(Target { index: 0, port: port }, time, -1)
             }
             messages.clear();
@@ -313,7 +325,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // The "resulting" increments to message counts should also be exchanged at the same time.
         for input in 0..self.inputs {
             let mut borrowed = self.input_messages[input].borrow_mut();
-            while let Some((time, delta)) = borrowed.pop() {
+            for (time, delta) in borrowed.drain() {
                 self.local_pointstamp_internal.update(&(0, input, time.clone()), delta);
                 for target in &self.children[0].edges[input] {
                     self.local_pointstamp_messages.update(&(target.index, target.port, time.clone()), delta);
@@ -384,7 +396,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // fold exchanged messages into the view of global progress.
         self.local_pointstamp_messages.drain_into(&mut self.final_pointstamp_messages);
 
-        while let Some(((index, port, timestamp), delta)) = self.local_pointstamp_internal.pop() {
+        for ((index, port, timestamp), delta) in self.local_pointstamp_internal.drain() {
             if index == 0 { consumed[port].update(&timestamp.outer, delta); }
             else { self.final_pointstamp_internal.update(&(index, port, timestamp), delta); }
         }
@@ -400,37 +412,67 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // which indicates changes to the discrete frontier of the the antichain. This suppresses
         // changes that do not change the discrete frontier, even if they change counts or add new
         // elements beyond the frontier.
-        while let Some(((index, input, time), delta)) = self.final_pointstamp_messages.pop() {
-            let pointstamps = &mut self.pointstamps;
-            self.children[index].messages[input].update_and(&time, delta, |time, delta|
-                pointstamps.update_target(Target { index: index, port: input }, time, delta)
-            );
+
+        // de-multiplex changes first, then determine changes in consequences second.
+        for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
             // if the message went to the output, tell someone I guess.
             if index == 0 { produced[input].update(&time.outer, delta); }
+            self.children[index].messages[input].update_dirty(time.clone(), delta);
         }
-        while let Some(((index, output, time), delta)) = self.final_pointstamp_internal.pop() {
+        // here is the change determination
+        for index in 0 .. self.children.len() {
             let pointstamps = &mut self.pointstamps;
-            self.children[index].internal[output].update_and(&time, delta, |time, delta| {
-                pointstamps.update_source(Source { index: index, port: output }, time, delta);
-            });
+            for input in 0 .. self.children[index].messages.len() {
+                self.children[index].messages[input].update_iter_and(None, |time, delta| 
+                    pointstamps.update_target(Target { index: index, port: input }, time, delta)
+                );
+            }
         }
+
+        // de-multiplex changes first, then determine changes in consequences second.
+        for ((index, output, time), delta) in self.final_pointstamp_internal.drain() {
+            self.children[index].internal[output].update_dirty(time.clone(), delta);
+        }
+        // here is the change determination
+        for index in 0 .. self.children.len() {
+            let pointstamps = &mut self.pointstamps;
+            for output in 0 .. self.children[index].internal.len() {
+                self.children[index].internal[output].update_iter_and(None, |time, delta| 
+                    pointstamps.update_source(Source { index: index, port: output }, time, delta)
+                );
+            }
+        }
+
+        // for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
+        //     let pointstamps = &mut self.pointstamps;
+        //     self.children[index].messages[input].update_and(&time, delta, |time, delta|
+        //         pointstamps.update_target(Target { index: index, port: input }, time, delta)
+        //     );
+        //     // if the message went to the output, tell someone I guess.
+        //     if index == 0 { produced[input].update(&time.outer, delta); }
+        // }
+        // for ((index, output, time), delta) in self.final_pointstamp_internal.drain() {
+        //     let pointstamps = &mut self.pointstamps;
+        //     self.children[index].internal[output].update_and(&time, delta, |time, delta| {
+        //         pointstamps.update_source(Source { index: index, port: output }, time, delta);
+        //     });
+        // }
 
         // push implications of outstanding work at each location to other locations in the graph.
         self.push_pointstamps();
 
         // update input capabilities for actual children.
         for child in self.children.iter_mut().skip(1) {
-            let pointstamps = &self.pointstamps.pushed[child.index][..];
-            child.push_pointstamps(&pointstamps);
+            let pointstamps = &mut self.pointstamps.pushed[child.index][..];
+            child.push_pointstamps(pointstamps);
         }
 
         // produce output data for `internal`. `consumed` and `produced` have already been filled.
         for (output, pointstamps) in self.pointstamps.pushed[0].iter_mut().enumerate() {
-            while let Some((time, val)) = pointstamps.pop() {
-                self.output_capabilities[output].update_and(&time.outer, val, |t,v|
-                    { internal[output].update(t, v); }
-                );
-            }
+            let iterator = pointstamps.drain().map(|(time, diff)| (time.outer, diff));
+            self.output_capabilities[output].update_iter_and(iterator, |t, v| {
+                internal[output].update(t, v);
+            });
         }
 
         self.pointstamps.clear();
@@ -439,10 +481,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for child in &self.children {
             // if child.messages.iter().any(|x| x.elements().len() > 0) 
             // { println!("{:?}: child {}[{}] has outstanding messages", self.path, child.name, child.index); }
-            active = active || child.messages.iter().any(|x| x.elements().len() > 0);
+            active = active || child.messages.iter().any(|x| !x.is_empty());
             // if child.internal.iter().any(|x| x.elements().len() > 0) 
             // { println!("{:?} child {}[{}] has outstanding capabilities", self.path, child.name, child.index); }
-            active = active || child.internal.iter().any(|x| x.elements().len() > 0);
+            active = active || child.internal.iter().any(|x| !x.is_empty());
         }
 
         active
@@ -456,7 +498,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
         for index in 0..self.pointstamps.target.len() {
             for input in 0..self.pointstamps.target[index].len() {
-                while let Some((time, value)) = self.pointstamps.target[index][input].pop() {
+                for (time, value) in self.pointstamps.target[index][input].drain() {
                     for &(target, ref antichain) in &self.children[index].target_target_summaries[input] {
                         for summary in antichain.elements().iter() {
                             if let Some(new_time) = summary.results_in(&time) {
@@ -471,7 +513,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         // push pointstamps from sources to targets.
         for index in 0..self.pointstamps.source.len() {
             for output in 0..self.pointstamps.source[index].len() {
-                while let Some((time, value)) = self.pointstamps.source[index][output].pop() {
+                for (time, value) in self.pointstamps.source[index][output].drain() {
                     for &(target, ref antichain) in &self.children[index].source_target_summaries[output] {
                         for summary in antichain.elements().iter() {
                             if let Some(new_time) = summary.results_in(&time) {
@@ -773,7 +815,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let outputs = scope.outputs();
         let notify = scope.notify_me();
 
-        let (summary, work) = scope.get_internal_summary();
+        let (summary, mut work) = scope.get_internal_summary();
 
         assert!(summary.len() == inputs);
         assert!(!summary.iter().any(|x| x.len() != outputs));
@@ -819,7 +861,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         // TODO : Gross. Fix.
         for (index, capability) in result.internal.iter_mut().enumerate() {
-            capability.update_iter_and(work[index].iter().cloned(), |_, _| {});
+            capability.update_iter(work[index].iter().cloned());
         }
 
         result
@@ -827,14 +869,14 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     pub fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<T::Summary>>>) {
         let frontier = &mut self.external_buffer;
-        if self.index > 0 && self.notify && !frontier.is_empty() && !frontier.iter().any(|x| x.len() > 0) {
+        if self.index > 0 && self.notify && !frontier.is_empty() && !frontier.iter_mut().any(|x| !x.is_empty()) {
             println!("initializing notifiable operator {}[{}] with inputs but no external capabilities", self.name, self.index);
         }
         self.operator.as_mut().map(|scope| scope.set_external_summary(summaries, frontier));
     }
 
 
-    pub fn push_pointstamps(&mut self, external_progress: &[CountMap<T>]) {
+    pub fn push_pointstamps(&mut self, external_progress: &mut [CountMap<T>]) {
 
         // TODO : Introduce correct assertion
         // assert the "uprighted-ness" property for updates to each input
@@ -851,25 +893,28 @@ impl<T: Timestamp> PerOperatorState<T> {
         // }
 
         // we shouldn't be pushing progress updates at finished operators. would be a bug!
-        if !(self.operator.is_some() || external_progress.iter().all(|x| x.len() == 0)) {
+        if !(self.operator.is_some() || external_progress.iter_mut().all(|x| x.is_empty())) {
             println!("Operator prematurely shut down: {}", self.name);
         }
-        assert!(self.operator.is_some() || external_progress.iter().all(|x| x.len() == 0));
+        assert!(self.operator.is_some() || external_progress.iter_mut().all(|x| x.is_empty()));
 
         // TODO : re-introduce use of self.notify
         assert_eq!(external_progress.len(), self.external.len());
         assert_eq!(external_progress.len(), self.external_buffer.len());
-        for (input, updates) in external_progress.iter().enumerate() {
-            self.external[input].update_into_cm(updates, &mut self.external_buffer[input]);
+        for (input, updates) in external_progress.iter_mut().enumerate() {
+            let buffer = &mut self.external_buffer[input];
+            self.external[input].update_iter_and(updates.iter().cloned(), |time, val| { 
+                buffer.update(time, val); 
+            });
         }
 
         {
             let changes = &mut self.external_buffer;
             self.operator.as_mut().map(|x| x.push_external_progress(changes));
-            if changes.iter().any(|x| x.len() > 0) {
+            if changes.iter_mut().any(|x| !x.is_empty()) {
                 println!("changes not consumed by {:?}", self.name);
             }
-            debug_assert!(!changes.iter().any(|x| x.len() > 0));
+            debug_assert!(!changes.iter_mut().any(|x| !x.is_empty()));
         }
     }
 
@@ -883,13 +928,9 @@ impl<T: Timestamp> PerOperatorState<T> {
             });
 
             if cfg!(feature = "logging") {
-                for buffer in &[
-                    &self.consumed_buffer,
-                    &self.internal_buffer,
-                    &self.produced_buffer] {
-
-                    assert!(buffer.iter().all(|cm| cm.len() == 0));
-                }
+                assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
+                assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
+                assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
             }
 
             let result = if let Some(ref mut operator) = self.operator {
@@ -902,11 +943,12 @@ impl<T: Timestamp> PerOperatorState<T> {
             else { false };
 
             if cfg!(feature = "logging") {
-                let did_work = vec![
-                    &self.consumed_buffer,
-                    &self.internal_buffer,
-                    &self.produced_buffer].iter().any(|buffer|
-                        buffer.iter().any(|cm| cm.len() > 0));
+
+                let did_work = 
+                    self.consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
+                    self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
+                    self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
+
                 ::logging::log(&::logging::SCHEDULE,
                                ::logging::ScheduleEvent {
                                    id: self.id, start_stop: ::logging::StartStop::Stop { activity: did_work }
@@ -920,8 +962,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         if self.operator.is_some() &&
            !active &&
            self.notify && // we don't track guarantees and capabilities for non-notify scopes. bug?
-           self.external.iter().all(|x| x.empty()) &&
-           self.internal.iter().all(|x| x.empty()) {
+           self.external.iter().all(|x| x.is_empty()) &&
+           self.internal.iter().all(|x| x.is_empty()) {
             //    println!("Shutting down {}", self.name);
                self.operator = None;
                self.name = format!("{}(tombstone)", self.name);
@@ -929,13 +971,13 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         // for each output: produced messages and internal progress
         for output in 0..self.outputs {
-            while let Some((time, delta)) = self.produced_buffer[output].pop() {
+            for (time, delta) in self.produced_buffer[output].drain() {
                 for target in &self.edges[output] {
                     pointstamp_messages.update(&(target.index, target.port, time.clone()), delta);
                 }
             }
 
-            while let Some((time, delta)) = self.internal_buffer[output].pop() {
+            for (time, delta) in self.internal_buffer[output].drain() {
                 let index = self.index;
                 pointstamp_internal.update(&(index, output, time), delta);
             }
@@ -943,7 +985,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         // for each input: consumed messages
         for input in 0..self.inputs {
-            while let Some((time, delta)) = self.consumed_buffer[input].pop() {
+            for (time, delta) in self.consumed_buffer[input].drain() {
                 pointstamp_messages.update(&(self.index, input, time), -delta);
             }
         }
