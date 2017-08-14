@@ -2,7 +2,6 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::default::Default;
 
 use {Data, Push};
 
@@ -48,8 +47,8 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
     fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
-        let produced: Rc<RefCell<CountMap<Product<G::Timestamp, T>>>> = Default::default();
-        let consumed: Rc<RefCell<CountMap<Product<G::Timestamp, T>>>> = Default::default();
+        let produced = Rc::new(RefCell::new(CountMap::<Product<G::Timestamp, T>>::new()));
+        let consumed = Rc::new(RefCell::new(CountMap::<Product<G::Timestamp, T>>::new()));
 
         let feedback_output = Counter::new(targets, produced.clone());
         let feedback_input =  Counter::new(Observer {

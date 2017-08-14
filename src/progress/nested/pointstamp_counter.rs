@@ -32,8 +32,8 @@ impl<T:Timestamp> PointstampCounter<T> {
     }
     /// Allocates internal state given an operator's inputs and outputs.
     pub fn allocate_for_operator(&mut self, inputs: usize, outputs: usize) {
-        self.pushed.push(vec![Default::default(); inputs]);
-        self.target.push(vec![Default::default(); inputs]);
-        self.source.push(vec![Default::default(); outputs]);
+        self.pushed.push(vec![CountMap::new(); inputs]);
+        self.target.push(vec![CountMap::new(); inputs]);
+        self.source.push(vec![CountMap::new(); outputs]);
     }
 }

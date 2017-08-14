@@ -1,21 +1,13 @@
 //! A mapping from general types `T` to `i64`, with zero values absent.
 
-use std::default::Default;
-use std::slice::Iter;
-
 /// Represents a map from `T` to `i64` with values mapping to zero removed.
 ///
 /// The implementation is currently a `Vec<(T, i64)>` as the use cases are currently for small
 /// buffers of updates rather than large storage. This could change as needs evolve.
 #[derive(Clone, Debug)]
 pub struct CountMap<T> {
-    peak: usize,
     updates: Vec<(T, i64)>,
     dirty: usize,
-}
-
-impl<T> Default for CountMap<T> {
-    fn default() -> CountMap<T> { CountMap { peak: 0, updates: Vec::new(), dirty: 0 } }
 }
 
 impl<T:Ord+Clone> CountMap<T> {
@@ -56,7 +48,7 @@ impl<T:Ord+Clone> CountMap<T> {
     }
     /// Iterates over the contents of the map.
     #[inline(never)]
-    pub fn iter(&mut self) -> Iter<(T, i64)> { 
+    pub fn iter(&mut self) -> ::std::slice::Iter<(T, i64)> { 
         self.compact();
         self.updates.iter() 
     }
@@ -84,7 +76,6 @@ impl<T:Ord+Clone> CountMap<T> {
     /// Allocates a new empty `CountMap`.
     pub fn new() -> CountMap<T> { 
         CountMap { 
-            peak: 0, 
             updates: Vec::new(), 
             dirty: 0 
         } 

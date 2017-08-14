@@ -4,6 +4,11 @@
 use order::PartialOrder;
 
 /// A set of mutually incomparable elements.
+///
+/// An antichain is a set of partially ordered elements, each of which is incomparable to the others.
+/// This antichain implementation allows you to repeatedly introduce elements to the antichain, and 
+/// which will evict larger elements to maintain the *minimal* antichain, those incomparable elements 
+/// no greater than any other element.
 #[derive(Default, Clone, Debug)]
 pub struct Antichain<T> {
     elements: Vec<T>
@@ -84,6 +89,15 @@ pub struct MutableAntichain<T: PartialOrder+Ord> {
 
 impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// Creates a new empty `MutableAntichain`.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let frontier = MutableAntichain::<usize>::new();
+    /// assert!(frontier.is_empty());
+    ///```
     #[inline]
     pub fn new() -> MutableAntichain<T> {
         MutableAntichain {
@@ -95,6 +109,16 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     }
 
     /// Removes all elements.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let mut frontier = MutableAntichain::<usize>::new();
+    /// frontier.clear();
+    /// assert!(frontier.is_empty());
+    ///```
     #[inline]
     pub fn clear(&mut self) {
         self.dirty = 0;
@@ -104,6 +128,15 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     }
 
     /// Reveals the minimal elements with positive count.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let mut frontier = MutableAntichain::<usize>::new();
+    /// assert!(frontier.frontier().len() == 0);
+    ///```
     #[inline]
     pub fn frontier(&self) -> &[T] { 
         assert!(self.dirty == 0);
@@ -111,6 +144,15 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     }
 
     /// Creates a new singleton `MutableAntichain`.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let mut frontier = MutableAntichain::new_bottom(0u64);
+    /// assert_eq!(frontier.frontier(), &[0u64]);
+    ///```
     #[inline]
     pub fn new_bottom(bottom: T) -> MutableAntichain<T> {
         MutableAntichain {
@@ -122,6 +164,15 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     }
 
     /// Returns true if there are no elements in the `MutableAntichain`.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let mut frontier = MutableAntichain::<usize>::new();
+    /// assert!(frontier.is_empty());
+    ///```
     #[inline]
     pub fn is_empty(&self) -> bool { 
         assert!(self.dirty == 0);        
@@ -129,6 +180,17 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     }
 
     /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// assert!(!frontier.less_than(&0));
+    /// assert!(!frontier.less_than(&1));
+    /// assert!(frontier.less_than(&2));
+    ///```
     #[inline]
     pub fn less_than(&self, time: &T) -> bool {
         assert!(self.dirty == 0);
@@ -137,6 +199,17 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
 
     /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
     #[inline]
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// assert!(!frontier.less_equal(&0));
+    /// assert!(frontier.less_equal(&1));
+    /// assert!(frontier.less_equal(&2));
+    ///```
     pub fn less_equal(&self, time: &T) -> bool {
         assert!(self.dirty == 0);
         self.frontier.iter().any(|x| x.less_equal(time))
@@ -157,6 +230,16 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// Applies updates to the antichain and applies `action` to each frontier change.
     ///
     /// This method applies a batch of updates and if any affects the frontier it is rebuilt.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// frontier.update_iter(vec![(1, -1), (2, 1)].into_iter());
+    /// assert_eq!(frontier.frontier(), &[2]);
+    ///```
     #[inline]
     pub fn update_iter<I>(&mut self, updates: I)
     where 
@@ -168,6 +251,23 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// Applies updates to the antichain and applies `action` to each frontier change.
     ///
     /// This method applies a batch of updates and if any affects the frontier it is rebuilt.
+    /// Once rebuilt, `action` is called with the corresponding changes to the frontier, which 
+    /// should be various times and `{ +1, -1 }` differences.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::MutableAntichain;
+    ///
+    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// let mut changes = Vec::new();
+    /// frontier.update_iter_and(vec![(1, -1), (2, 1)].into_iter(), |time, diff| {
+    ///     changes.push((time.clone(), diff));
+    /// });
+    /// assert_eq!(frontier.frontier(), &[2]);
+    /// changes.sort();
+    /// assert_eq!(&changes[..], &[(1, -1), (2, 1)]);
+    ///```
     #[inline]
     pub fn update_iter_and<I, A>(&mut self, updates: I, action: A)
     where 

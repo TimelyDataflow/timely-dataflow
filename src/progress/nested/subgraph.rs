@@ -550,9 +550,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         self.pointstamps.pushed = vec![Vec::new(); self.children.len()];
 
         for child in &self.children {
-            self.pointstamps.source[child.index] = vec![Default::default(); child.outputs];
-            self.pointstamps.target[child.index] = vec![Default::default(); child.inputs];
-            self.pointstamps.pushed[child.index] = vec![Default::default(); child.inputs];
+            self.pointstamps.source[child.index] = vec![CountMap::new(); child.outputs];
+            self.pointstamps.target[child.index] = vec![CountMap::new(); child.inputs];
+            self.pointstamps.pushed[child.index] = vec![CountMap::new(); child.inputs];
         }
 
         let mut additions = ::std::collections::VecDeque::<(Source, Target, Summary<TOuter::Summary, TInner::Summary>)>::new();
@@ -692,10 +692,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
             output_capabilities:    Default::default(),
 
             pointstamps:            Default::default(),
-            local_pointstamp_messages:    Default::default(),
-            local_pointstamp_internal:    Default::default(),
-            final_pointstamp_messages:    Default::default(),
-            final_pointstamp_internal:    Default::default(),
+            local_pointstamp_messages:    CountMap::new(),
+            local_pointstamp_internal:    CountMap::new(),
+            final_pointstamp_messages:    CountMap::new(),
+            final_pointstamp_internal:    CountMap::new(),
             progcaster:             progcaster,
         }
     }
@@ -763,15 +763,15 @@ impl<T: Timestamp> PerOperatorState<T> {
         self.target_source_summaries.push(vec![]);
         self.messages.push(Default::default());
         self.external.push(Default::default());
-        self.external_buffer.push(Default::default());
-        self.consumed_buffer.push(Default::default());
+        self.external_buffer.push(CountMap::new());
+        self.consumed_buffer.push(CountMap::new());
     }
     fn add_output(&mut self) {
         self.outputs += 1;
         self.edges.push(vec![]);
         self.internal.push(Default::default());
-        self.internal_buffer.push(Default::default());
-        self.produced_buffer.push(Default::default());
+        self.internal_buffer.push(CountMap::new());
+        self.produced_buffer.push(CountMap::new());
         self.source_target_summaries.push(vec![]);
     }
 
@@ -847,7 +847,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             external: vec![Default::default(); inputs],
 
-            external_buffer: vec![Default::default(); inputs],
+            external_buffer: vec![CountMap::new(); inputs],
 
             consumed_buffer: vec![CountMap::new(); inputs],
             internal_buffer: vec![CountMap::new(); outputs],
