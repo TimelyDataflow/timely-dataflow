@@ -446,12 +446,30 @@ pub trait Replay<T: Timestamp, D: Data> {
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>;
 }
 
-impl<T: Timestamp, D: Data, I: EventIterator<T, D>+'static> Replay<T, D> for I {
+// impl<T: Timestamp, D: Data, I: EventIterator<T, D>+'static> Replay<T, D> for I {
+//     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>{
+//        let (targets, registrar) = Tee::<S::Timestamp, D>::new();
+//        let operator = ReplayOperator {
+//            peers: scope.peers(),
+//            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
+//            events: self,
+//        };
+
+//        let index = scope.add_operator(operator);
+//        Stream::new(Source { index: index, port: 0 }, registrar, scope.clone())
+//    }
+// }
+
+impl<T: Timestamp, D: Data, I> Replay<T, D> for I
+where I : IntoIterator,
+      <I as IntoIterator>::Item: EventIterator<T, D>+'static {
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>{
        let (targets, registrar) = Tee::<S::Timestamp, D>::new();
        let operator = ReplayOperator {
+           peers: scope.peers(),
+           started: false,
            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
-           events: self,
+           event_streams: self.into_iter().collect(),
        };
 
        let index = scope.add_operator(operator);
@@ -465,8 +483,8 @@ struct CaptureOperator<T: Timestamp, D: Data, P: EventPusher<T, D>> {
 }
 
 impl<T:Timestamp, D: Data, P: EventPusher<T, D>> CaptureOperator<T, D, P> {
-    fn new(input: PullCounter<T, D>, mut events: P) -> CaptureOperator<T, D, P> {
-        events.push(Event::Progress(vec![(Default::default(), 1)]));
+    fn new(input: PullCounter<T, D>, events: P) -> CaptureOperator<T, D, P> {
+        // events.push(Event::Progress(vec![(Default::default(), 1)]));
         CaptureOperator {
             input: input,
             events: events,
@@ -505,7 +523,9 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
 }
 
 struct ReplayOperator<T:Timestamp, D: Data, I: EventIterator<T, D>> {
-    events: I,
+    peers: usize,
+    started: bool,
+    event_streams: Vec<I>,
     output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
 
@@ -516,41 +536,37 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
 
-        // We expect the event stream to have a progress statement as a prefix, pre-loaded 
-        // by the capture constructor. Note: It may not be there *right now* due to e.g.
-        // kernel/network involvement, but it should be on its way, so we loop.
+        // This initial configuration assumes the worst about the stream, but the first progress indication
+        // will amend initial capabilities. In principle, we could try and read some first few event messages,
+        // but we want to avoid blocking graph construction.
 
-        // TODO : It seems that Event::Start could have the initial configuration; not clear
-        // TODO : why it exists in the first place, but it could at least be useful.
-        // TODO : Maybe it exists so that the EventLink data structure can have a start?
-
-        loop {
-            if let Some(event) = self.events.next() {
-                let mut result = ChangeBatch::new();
-                if let &Event::Progress(ref vec) = event {
-                    for &(ref time, delta) in vec {
-                        result.update(time.clone(), delta);
-                    }
-                }
-                return (vec![], vec![result]);
-            }
+        let mut result = ChangeBatch::new();
+        for _ in 0 .. self.peers {
+            result.update(Default::default(), 1);
         }
+
+        (vec![], vec![result])
     }
 
     fn pull_internal_progress(&mut self, _: &mut [ChangeBatch<T>], internal: &mut [ChangeBatch<T>], produced: &mut [ChangeBatch<T>]) -> bool {
 
-        while let Some(event) = self.events.next() {
-            match *event {
-                Event::Start => { },
-                Event::Progress(ref vec) => {
-                    for &(ref time, delta) in vec {
-                        internal[0].update(time.clone(), delta);
-                    }
-                },
-                Event::Messages(ref time, ref data) => {
-                    let mut session = self.output.session(time);
-                    for datum in data {
-                        session.give(datum.clone());
+        if !self.started {
+            // The first thing we do is modify our capabilities to match the number of streams we manage.
+            // This should be a simple change of `self.event_streams.len() - 1`. We only do this once, as
+            // our very first action.
+            internal[0].update(Default::default(), (self.event_streams.len() as i64) - 1);
+            self.started = true;
+        }
+
+        for event_stream in self.event_streams.iter_mut() {
+            while let Some(event) = event_stream.next() {
+                match *event {
+                    Event::Start => { },
+                    Event::Progress(ref vec) => {
+                        internal[0].extend(vec.iter().cloned());
+                    },
+                    Event::Messages(ref time, ref data) => {
+                        self.output.session(time).give_iterator(data.iter().cloned());
                     }
                 }
             }

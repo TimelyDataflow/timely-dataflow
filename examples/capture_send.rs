@@ -5,8 +5,10 @@ use timely::dataflow::operators::{Capture, ToStream};
 use timely::dataflow::operators::capture::EventWriter;
 
 fn main() {
-    timely::execute(timely::Configuration::Thread, |worker| {
-        let send = TcpStream::connect("127.0.0.1:8000").unwrap();
+    timely::execute_from_args(std::env::args(), |worker| {
+
+        let addr = format!("127.0.0.1:{}", 8000 + worker.index());
+        let send = TcpStream::connect(addr).unwrap();
 
         worker.dataflow::<u64,_,_>(|scope|
             (0..10u64)
