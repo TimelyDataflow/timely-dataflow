@@ -2,6 +2,12 @@
 
 [Timely Dataflow](./introduction.md)
 
+- [Motivation](./chapter_0.md)
+    - Simple but useful example.
+    - What problems does timely dataflow solve?
+    - For what tasks should you use it for?
+    - When shouldn't you use it?
+
 - [Core Concepts](./chapter_1.md)
     - [Dataflow](./chapter_1_1.md)
     - [Timestamps](./chapter_1_2.md)    
