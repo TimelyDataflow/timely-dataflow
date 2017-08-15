@@ -75,23 +75,13 @@ impl<T: Timestamp> Notificator<T> {
     #[inline]
     pub fn notify_at(&mut self, cap: Capability<T>) {
         self.pending.push((cap, 1));
-        // let push = if let Some(&mut (_, ref mut count)) =
-        //     self.pending.iter_mut().find(|&&mut (ref c, _)| c.time().eq(&cap.time())) {
-        //         *count += 1;
-        //         None
-        //     } else {
-        //         Some((cap, 1))
-        //     };
-        // if let Some(p) = push {
-        //     self.pending.push(p);
-        // }
     }
 
     /// Repeatedly calls `logic` till exhaustion of the available notifications.
     ///
     /// `logic` receives a capability for `t`, the timestamp being notified and a `count`
     /// representing how many capabilities were requested for that specific timestamp.
-    #[inline(never)]
+    #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
             ::logging::log(&::logging::GUARDED_PROGRESS, true);
@@ -110,7 +100,7 @@ impl<T: Timestamp> Iterator for Notificator<T> {
     /// `cap` is a a capability for `t`, the timestamp being notified and, `count` represents
     /// how many notifications (out of those requested) are being delivered for that specific
     /// timestamp.
-    #[inline(never)]
+    #[inline]
     fn next(&mut self) -> Option<(Capability<T>, u64)> {
         if self.available.is_empty() {
             self.make_available();
@@ -313,7 +303,6 @@ fn notificator_delivers_notifications_in_topo_order() {
 pub struct FrontierNotificator<T: Timestamp> {
     pending: Vec<(Capability<T>, u64)>,
     available: VecDeque<Capability<T>>,
-    // candidates: Vec<Capability<T>>,
 }
 
 impl<T: Timestamp> FrontierNotificator<T> {
@@ -322,7 +311,6 @@ impl<T: Timestamp> FrontierNotificator<T> {
         FrontierNotificator {
             pending: Vec::new(),
             available: VecDeque::new(),
-            // candidates: Vec::new(),
         }
     }
 
@@ -359,9 +347,6 @@ impl<T: Timestamp> FrontierNotificator<T> {
     #[inline]
     pub fn notify_at(&mut self, cap: Capability<T>) {
         self.pending.push((cap, 1));
-        // if !self.pending.iter().find(|&& ref c| c.time().eq(&cap.time())).is_some() {
-        //     self.pending.push(cap);
-        // }
     }
 
     /// Iterate over the notifications made available by inspecting the frontiers.
@@ -400,39 +385,12 @@ impl<T: Timestamp> FrontierNotificator<T> {
         }
     }
 
+    #[inline]
     fn next(&mut self, frontiers: &[& MutableAntichain<T>]) -> Option<Capability<T>> {
         if self.available.is_empty() {
             self.make_available(frontiers);
         }
         self.available.pop_front()
-
-        //     let mut available = &mut self.available; // available is empty
-        //     let mut pending = &mut self.pending;
-        //     let mut candidates = &mut self.candidates;
-        //     assert!(candidates.len() == 0);
-
-        //     pending.drain_into_if(&mut candidates, |& ref cap| {
-        //         !frontiers.iter().any(|x| x.less_equal(&cap.time()))
-        //     });
-
-        //     while let Some(cap) = candidates.pop() {
-        //         let mut cap_in_minimal_antichain = available.is_empty();
-        //         available.drain_into_if(&mut pending, |& ref avail_cap| {
-        //             let cap_lt_available = cap.time().less_than(&avail_cap.time());
-        //             cap_in_minimal_antichain |= cap_lt_available ||
-        //                 (!cap.time().less_equal(&avail_cap.time()) && !avail_cap.time().less_equal(&cap.time()));
-        //                 // cap.time().partial_cmp(&avail_cap.time()).is_none();
-        //             cap_lt_available
-        //         });
-        //         if cap_in_minimal_antichain {
-        //             available.push(cap);
-        //         } else {
-        //             pending.push(cap);
-        //         }
-        //     }
-        // }
-
-        // self.available.pop()
     }
 
     /// Repeatedly calls `logic` till exhaustion of the notifications made available by inspecting
