@@ -37,8 +37,6 @@ impl<T:Ord+Clone+'static, D> Counter<T, D> {
     }
     /// Extracts progress information into `consumed`. 
     pub fn pull_progress(&mut self, consumed: &mut ChangeBatch<T>) {
-        for (time, value) in self.consumed.drain() {
-            consumed.update(time, value);
-        }
+        self.consumed.drain_into(consumed);
     }
 }

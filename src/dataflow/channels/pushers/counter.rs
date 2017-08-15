@@ -42,9 +42,6 @@ impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'stati
     /// It is unclear why this method exists at the same time the counts are shared.
     /// Perhaps this should be investigated, and only one pattern used. Seriously.
     #[inline] pub fn pull_progress(&mut self, updates: &mut ChangeBatch<T>) {
-        let mut borrow = self.counts.borrow_mut();
-        for (time, delta) in borrow.drain() {
-            updates.update(time, delta);
-        }
+        self.counts.borrow_mut().drain_into(updates);
     }
 }
