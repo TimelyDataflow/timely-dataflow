@@ -153,7 +153,7 @@ pub struct EventStreamWriter<T: Timestamp, V: Clone, P: EventPusher<T, V>> {
 impl<T: Timestamp, V: Clone, P: EventPusher<T, V>> EventStreamWriter<T, V, P> {
     fn new(mut event_pusher: P) -> EventStreamWriter<T, V, P> {
         let cur_time: T = Default::default();
-        event_pusher.push(Event::Progress(vec![(cur_time.clone(), 1)]));
+        // event_pusher.push(Event::Progress(vec![(cur_time.clone(), 1)]));
         EventStreamWriter {
             buffer: Vec::new(),
             pusher: event_pusher,
