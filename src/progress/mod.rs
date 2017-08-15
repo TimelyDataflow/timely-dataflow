@@ -3,10 +3,10 @@
 pub use self::operate::Operate;
 pub use self::nested::{Subgraph, Source, Target};
 pub use self::timestamp::{Timestamp, PathSummary};
-pub use self::count_map::ChangeBatch;
+pub use self::change_batch::ChangeBatch;
 pub use self::frontier::Antichain;
 
-pub mod count_map;
+pub mod change_batch;
 pub mod frontier;
 pub mod nested;
 pub mod timestamp;
