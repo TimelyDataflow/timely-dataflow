@@ -2,26 +2,26 @@
 
 use progress::Timestamp;
 use progress::nested::{Source, Target};
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 
 /// Represents changes to pointstamps before and after transmission along a scope's topology.
 #[derive(Default)]
 pub struct PointstampCounter<T:Timestamp> {
     /// timestamp updates indexed by (scope, output)
-    pub source:  Vec<Vec<CountMap<T>>>,
+    pub source:  Vec<Vec<ChangeBatch<T>>>,
     /// timestamp updates indexed by (scope, input)
-    pub target:  Vec<Vec<CountMap<T>>>,
+    pub target:  Vec<Vec<ChangeBatch<T>>>,
     /// pushed updates indexed by (scope, input)
-    pub pushed:  Vec<Vec<CountMap<T>>>,
+    pub pushed:  Vec<Vec<ChangeBatch<T>>>,
 }
 
 impl<T:Timestamp> PointstampCounter<T> {
     /// Updates the count for a time at a target.
-    pub fn update_target(&mut self, target: Target, time: &T, value: i64) {
+    pub fn update_target(&mut self, target: Target, time: T, value: i64) {
         self.target[target.index][target.port].update(time, value);
     }
     /// Updates the count for a time at a source.
-    pub fn update_source(&mut self, source: Source, time: &T, value: i64) {
+    pub fn update_source(&mut self, source: Source, time: T, value: i64) {
         self.source[source.index][source.port].update(time, value);
     }
     /// Clears the pointstamp counter.
@@ -32,8 +32,8 @@ impl<T:Timestamp> PointstampCounter<T> {
     }
     /// Allocates internal state given an operator's inputs and outputs.
     pub fn allocate_for_operator(&mut self, inputs: usize, outputs: usize) {
-        self.pushed.push(vec![Default::default(); inputs]);
-        self.target.push(vec![Default::default(); inputs]);
-        self.source.push(vec![Default::default(); outputs]);
+        self.pushed.push(vec![ChangeBatch::new(); inputs]);
+        self.target.push(vec![ChangeBatch::new(); inputs]);
+        self.source.push(vec![ChangeBatch::new(); outputs]);
     }
 }

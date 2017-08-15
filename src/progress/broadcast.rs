@@ -1,7 +1,7 @@
 //! Broadcasts progress information among workers.
 
 use progress::Timestamp;
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use timely_communication::Allocate;
 use {Push, Pull};
 
@@ -30,18 +30,12 @@ impl<T:Timestamp+Send> Progcaster<T> {
     /// and updating each with updates from other workers.
     pub fn send_and_recv(
         &mut self,
-        messages: &mut CountMap<(usize, usize, T)>,
-        internal: &mut CountMap<(usize, usize, T)>)
+        messages: &mut ChangeBatch<(usize, usize, T)>,
+        internal: &mut ChangeBatch<(usize, usize, T)>)
     {
-
-        // // we should not be sending zero deltas.
-        // assert!(messages.iter().all(|x| x.1 != 0));
-        // assert!(internal.iter().all(|x| x.1 != 0));
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
-            if messages.len() > 0 || internal.len() > 0 {
+            if !messages.is_empty() || !internal.is_empty() {
                 for pusher in self.pushers.iter_mut() {
-                    // TODO : Feels like an Arc might be not horrible here... less allocation,
-                    // TODO : at least, but more "contention" in the deallocation.
                     pusher.push(&mut Some((messages.clone().into_inner(), internal.clone().into_inner())));
                 }
 
@@ -50,11 +44,13 @@ impl<T:Timestamp+Send> Progcaster<T> {
             }
 
             // TODO : Could take ownership, and recycle / reuse for next broadcast ...
-            while let Some((ref recv_messages, ref recv_internal)) = *self.puller.pull() {
-                for &(ref update, delta) in recv_messages {
+            while let Some((ref mut recv_messages, ref mut recv_internal)) = *self.puller.pull() {
+
+                for (update, delta) in recv_messages.drain(..) {
                     messages.update(update, delta);
                 }
-                for &(ref update, delta) in recv_internal {
+
+                for (update, delta) in recv_internal.drain(..) {
                     internal.update(update, delta);
                 }
             }

@@ -3,7 +3,7 @@
 use ::ExchangeData;
 use progress::nested::subgraph::{Source, Target};
 use dataflow::{Stream, Scope};
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use progress::{Timestamp, Operate, Antichain};
 use dataflow::channels::{Message};
 use dataflow::channels::pushers::Counter as PushCounter;
@@ -49,7 +49,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
             index: scope.index(),
             peers: scope.peers(),
             input: PullCounter::new(Box::new(receiver)),
-            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
         };
 
         let operator_index = scope.add_operator(operator);
@@ -75,15 +75,15 @@ impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
     fn inputs(&self) -> usize { self.peers }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
         // TODO: (optimization) some of these internal paths do not actually exist
         let summary = (0..self.peers).map(|_| vec![Antichain::from_elem(Default::default())]).collect::<Vec<_>>();
-        (summary, vec![CountMap::new()])
+        (summary, vec![ChangeBatch::new()])
     }
 
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
-                                         _internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
+                                         _internal: &mut [ChangeBatch<T>],
+                                         produced: &mut [ChangeBatch<T>]) -> bool {
 
         while let Some((time, data)) = self.input.next() {
             self.output.session(time).give_content(data);

@@ -28,7 +28,7 @@ use std::fmt::{self, Debug};
 
 use order::PartialOrder;
 use progress::Timestamp;
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 
 /// The capability to send data with a certain timestamp on a dataflow edge.
 ///
@@ -38,7 +38,7 @@ use progress::count_map::CountMap;
 /// a capability (for whatever reason) will cause timely dataflow's progress tracking to stall.
 pub struct Capability<T: Timestamp> {
     time: T,
-    internal: Rc<RefCell<CountMap<T>>>,
+    internal: Rc<RefCell<ChangeBatch<T>>>,
 }
 
 impl<T: Timestamp> Capability<T> {
@@ -71,22 +71,22 @@ impl<T: Timestamp> Capability<T> {
 }
 
 /// Creates a new capability at `t` while incrementing (and keeping a reference to) the provided
-/// `CountMap`.
+/// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
-pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<CountMap<T>>>) -> Capability<T> {
-    internal.borrow_mut().update(&time, 1);
+pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T> {
+    internal.borrow_mut().update(time.clone(), 1);
     Capability {
         time: time,
         internal: internal
     }
 }
 
-// Necessary for correctness. When a capability is dropped, the "internal" `CountMap` needs to be
+// Necessary for correctness. When a capability is dropped, the "internal" `ChangeBatch` needs to be
 // updated accordingly to inform the rest of the system that the operator has released its permit
 // to send data and request notification at the associated timestamp.
 impl<T: Timestamp> Drop for Capability<T> {
     fn drop(&mut self) {
-        self.internal.borrow_mut().update(&self.time, -1);
+        self.internal.borrow_mut().update(self.time.clone(), -1);
     }
 }
 

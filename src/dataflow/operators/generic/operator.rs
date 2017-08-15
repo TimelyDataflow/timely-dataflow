@@ -10,7 +10,7 @@ use dataflow::channels::message::Content;
 
 use progress::nested::subgraph::{Source, Target};
 
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use progress::{Timestamp, Operate, Antichain};
 use progress::frontier::MutableAntichain;
 use dataflow::channels::pushers::{Tee, TeeHelper};
@@ -206,8 +206,8 @@ pub trait Operator<G: Scope, D1: Data> {
 }
 
 #[inline]
-fn make_default_cap<G: Scope>() -> (Capability<G::Timestamp>, Rc<RefCell<CountMap<G::Timestamp>>>) {
-    let internal_changes = Rc::new(RefCell::new(CountMap::new()));
+fn make_default_cap<G: Scope>() -> (Capability<G::Timestamp>, Rc<RefCell<ChangeBatch<G::Timestamp>>>) {
+    let internal_changes = Rc::new(RefCell::new(ChangeBatch::new()));
     let cap = mint_capability(Default::default(), internal_changes.clone());
 
     (cap, internal_changes)
@@ -483,8 +483,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 // L: (consumed, internal, frontier, handle)
 struct OperatorImpl<T: Timestamp,
                     L: FnMut(
-                        &mut [CountMap<T>],
-                        Rc<RefCell<CountMap<T>>>,
+                        &mut [ChangeBatch<T>],
+                        Rc<RefCell<ChangeBatch<T>>>,
                         &[MutableAntichain<T>],
                         &mut OutputHandle<T, DO, Tee<T, DO>>),
                     DO: Data> {
@@ -493,15 +493,15 @@ struct OperatorImpl<T: Timestamp,
     peers:            usize,
     logic:            L,
     frontier:         Vec<MutableAntichain<T>>,
-    internal_changes: Rc<RefCell<CountMap<T>>>,
+    internal_changes: Rc<RefCell<ChangeBatch<T>>>,
     output:           PushBuffer<T, DO, PushCounter<T, DO, Tee<T, DO>>>,
     notify:           bool,
 }
 
 impl<T: Timestamp,
      L: FnMut(
-         &mut [CountMap<T>],
-         Rc<RefCell<CountMap<T>>>,
+         &mut [ChangeBatch<T>],
+         Rc<RefCell<ChangeBatch<T>>>,
          &[MutableAntichain<T>],
          &mut OutputHandle<T, DO, Tee<T, DO>>),
      DO: Data>
@@ -511,7 +511,7 @@ OperatorImpl<T, L, DO> {
            input_count: usize,
            peers: usize,
            logic: L,
-           internal_changes: Rc<RefCell<CountMap<T>>>,
+           internal_changes: Rc<RefCell<ChangeBatch<T>>>,
            targets: Tee<T, DO>,
            notify: bool) -> OperatorImpl<T, L, DO> {
         OperatorImpl {
@@ -521,24 +521,22 @@ OperatorImpl<T, L, DO> {
             logic: logic,
             frontier: (0..input_count).map(|_| MutableAntichain::new()).collect(),
             internal_changes: internal_changes,
-            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
             notify: notify,
         }
     }
 }
 
-fn update_frontiers<T: Timestamp>(frontiers: &mut Vec<MutableAntichain<T>>, count_maps: &mut [CountMap<T>]) {
+fn update_frontiers<T: Timestamp>(frontiers: &mut Vec<MutableAntichain<T>>, count_maps: &mut [ChangeBatch<T>]) {
     for (counts, frontier) in count_maps.iter_mut().zip(frontiers.iter_mut()) {
-        while let Some((time, delta)) = counts.pop() {
-            frontier.update(&time, delta);
-        }
+        frontier.update_iter(counts.drain());
     }
 }
 
 impl<T: Timestamp,
      L: FnMut(
-         &mut [CountMap<T>],
-         Rc<RefCell<CountMap<T>>>,
+         &mut [ChangeBatch<T>],
+         Rc<RefCell<ChangeBatch<T>>>,
          &[MutableAntichain<T>],
          &mut OutputHandle<T, DO, Tee<T, DO>>),
      DO: Data>
@@ -547,11 +545,11 @@ Operate<T> for OperatorImpl<T, L, DO> {
     fn inputs(&self) -> usize { self.input_count }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
-        let mut internal = vec![CountMap::new()];
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
+        let mut internal = vec![ChangeBatch::new()];
         // augment the counts for each reserved capability.
-        for &(ref time, count) in self.internal_changes.borrow().iter() {
-            internal[0].update(time, count * (self.peers as i64 - 1));
+        for &(ref time, count) in self.internal_changes.borrow_mut().iter() {
+            internal[0].update(time.clone(), count * (self.peers as i64 - 1));
         }
 
         // drain the changes to empty out, and complete the counts for internal.
@@ -562,17 +560,17 @@ Operate<T> for OperatorImpl<T, L, DO> {
     }
 
     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>,
-                                       count_map: &mut [CountMap<T>]) {
+                                       count_map: &mut [ChangeBatch<T>]) {
         update_frontiers(&mut self.frontier, count_map);
     }
 
-    fn push_external_progress(&mut self, count_map: &mut [CountMap<T>]) {
+    fn push_external_progress(&mut self, count_map: &mut [ChangeBatch<T>]) {
         update_frontiers(&mut self.frontier, count_map);
     }
 
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
-                                         internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool
+    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
+                                         internal: &mut [ChangeBatch<T>],
+                                         produced: &mut [ChangeBatch<T>]) -> bool
     {
         {
             let mut output_handle = new_output_handle(&mut self.output);

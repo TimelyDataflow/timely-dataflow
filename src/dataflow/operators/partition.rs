@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 use progress::{Timestamp, Operate};
 use progress::nested::{Source, Target};
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 
 use Data;
 
@@ -76,7 +76,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operator<T, D, D2, F> 
     fn new(input: PullCounter<T, D>, outputs: Vec<Tee<T, D2>>, route: F) -> Operator<T, D, D2, F> {
         Operator {
             input:      input,
-            outputs:    outputs.into_iter().map(|x| PushBuffer::new(PushCounter::new(x, Rc::new(RefCell::new(CountMap::new()))))).collect(),
+            outputs:    outputs.into_iter().map(|x| PushBuffer::new(PushCounter::new(x, Rc::new(RefCell::new(ChangeBatch::new()))))).collect(),
             route:       route,
         }
     }
@@ -87,9 +87,9 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { self.outputs.len() }
 
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
-                                        _internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool {
+    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
+                                        _internal: &mut [ChangeBatch<T>],
+                                         produced: &mut [ChangeBatch<T>]) -> bool {
 
         while let Some((time, data)) = self.input.next() {
             let outputs = self.outputs.iter_mut();

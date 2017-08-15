@@ -6,7 +6,7 @@ use std::default::Default;
 
 use progress::nested::subgraph::{Source, Target};
 
-use progress::count_map::CountMap;
+use progress::ChangeBatch;
 use dataflow::operators::Notificator;
 use progress::{Timestamp, Antichain, Operate};
 
@@ -171,7 +171,7 @@ struct Operator<T: Timestamp,
     notificator:      Notificator<T>,
     logic:            L,
     notify:           Option<(Vec<T>, usize)>,  // initial notifications and peers
-    internal_changes: Rc<RefCell<CountMap<T>>>,
+    internal_changes: Rc<RefCell<ChangeBatch<T>>>,
 }
 
 impl<T: Timestamp,
@@ -194,11 +194,11 @@ Operator<T, D1, D2, D3, L> {
             name: name,
             input1:      receiver1,
             input2:      receiver2,
-            output:      PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(CountMap::new())))),
+            output:      PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
             notificator: Notificator::new(),
             logic: logic,
             notify: notify,
-            internal_changes: Rc::new(RefCell::new(CountMap::new())),
+            internal_changes: Rc::new(RefCell::new(ChangeBatch::new())),
         }
     }
 }
@@ -213,21 +213,21 @@ where T: Timestamp,
     fn inputs(&self) -> usize { 2 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<CountMap<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
 
-        // by the end of the method, we want the return Vec<CountMap<T>> to contain each reserved capability, 
+        // by the end of the method, we want the return Vec<ChangeBatch<T>> to contain each reserved capability, 
         // *multiplied by the number of peers*. This is so that each worker knows to wait for each other worker
         // instance. Importantly, we do not want to multiply the number of capabilities by the number of peers.
 
-        let mut internal = vec![CountMap::new()];
+        let mut internal = vec![ChangeBatch::new()];
         if let Some((ref mut initial, peers)) = self.notify {
             for time in initial.drain(..) {
                 self.notificator.notify_at(mint_capability(time, self.internal_changes.clone()));
             }
 
             // augment the counts for each reserved capability.
-            for &(ref time, count) in self.internal_changes.borrow().iter() {
-                internal[0].update(time, count * (peers as i64 - 1));
+            for &(ref time, count) in self.internal_changes.borrow_mut().iter() {
+                internal[0].update(time.clone(), count * (peers as i64 - 1));
             }
 
             // drain the changes to empty out, and complete the counts for internal.
@@ -237,17 +237,17 @@ where T: Timestamp,
               vec![Antichain::from_elem(Default::default())]], internal)
     }
 
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [CountMap<T>]) -> () {
+    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [ChangeBatch<T>]) -> () {
         self.notificator.update_frontier_from_cm(frontier);
     }
 
-    fn push_external_progress(&mut self, external: &mut [CountMap<T>]) -> () {
+    fn push_external_progress(&mut self, external: &mut [ChangeBatch<T>]) -> () {
         self.notificator.update_frontier_from_cm(external);
     }
 
-    fn pull_internal_progress(&mut self, consumed: &mut [CountMap<T>],
-                                         internal: &mut [CountMap<T>],
-                                         produced: &mut [CountMap<T>]) -> bool
+    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
+                                         internal: &mut [ChangeBatch<T>],
+                                         produced: &mut [ChangeBatch<T>]) -> bool
     {
         {
             let mut input1_handle = new_input_handle(&mut self.input1, self.internal_changes.clone());
