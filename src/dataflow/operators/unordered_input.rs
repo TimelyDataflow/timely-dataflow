@@ -114,7 +114,7 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
         let mut internal = ChangeBatch::new();
         // augment the counts for each reserved capability.
         for &(ref time, count) in self.internal.borrow_mut().iter() {
-            internal.update(time, count * (self.peers as i64 - 1));
+            internal.update(time.clone(), count * (self.peers as i64 - 1));
         }
 
         // drain the changes to empty out, and complete the counts for internal.

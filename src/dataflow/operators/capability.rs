@@ -74,7 +74,7 @@ impl<T: Timestamp> Capability<T> {
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
 pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T> {
-    internal.borrow_mut().update(&time, 1);
+    internal.borrow_mut().update(time.clone(), 1);
     Capability {
         time: time,
         internal: internal
@@ -86,7 +86,7 @@ pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Cap
 // to send data and request notification at the associated timestamp.
 impl<T: Timestamp> Drop for Capability<T> {
     fn drop(&mut self) {
-        self.internal.borrow_mut().update(&self.time, -1);
+        self.internal.borrow_mut().update(self.time.clone(), -1);
     }
 }
 

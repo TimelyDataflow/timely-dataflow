@@ -62,7 +62,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 //     }
                 // }
 
-                for &(ref update, delta) in recv_messages.iter() {
+                for (update, delta) in recv_messages.drain(..) {
                     messages.update(update, delta);
                 }
 
@@ -77,7 +77,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 // }
 
 
-                for &(ref update, delta) in recv_internal.iter() {
+                for (update, delta) in recv_internal.drain(..) {
                     internal.update(update, delta);
                 }
             }

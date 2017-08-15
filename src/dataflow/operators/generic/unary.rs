@@ -191,7 +191,7 @@ where T: Timestamp,
 
             // augment the counts for each reserved capability.
             for &(ref time, count) in self.internal_changes.borrow_mut().iter() {
-                internal[0].update(time, count * (peers as i64 - 1));
+                internal[0].update(time.clone(), count * (peers as i64 - 1));
             }
 
             // drain the changes to empty out, and complete the counts for internal.
@@ -225,7 +225,7 @@ where T: Timestamp,
         self.input.pull_progress(&mut consumed[0]);
         self.output.inner().pull_progress(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
-
+        
         false   // no unannounced internal work
     }
 

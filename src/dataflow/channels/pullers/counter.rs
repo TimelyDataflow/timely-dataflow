@@ -17,7 +17,7 @@ impl<T:Ord+Clone+'static, D> Counter<T, D> {
     pub fn next(&mut self) -> Option<(&T, &mut Content<D>)> {
         if let Some((ref time, ref mut data)) = *self.pullable.pull() {
             if data.len() > 0 {
-                self.consumed.update(time, data.len() as i64);
+                self.consumed.update(time.clone(), data.len() as i64);
                 Some((time, data))
             }
             else { None }
@@ -38,7 +38,7 @@ impl<T:Ord+Clone+'static, D> Counter<T, D> {
     /// Extracts progress information into `consumed`. 
     pub fn pull_progress(&mut self, consumed: &mut ChangeBatch<T>) {
         for (time, value) in self.consumed.drain() {
-            consumed.update(&time, value);
+            consumed.update(time, value);
         }
     }
 }

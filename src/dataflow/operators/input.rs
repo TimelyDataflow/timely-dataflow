@@ -139,7 +139,7 @@ impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<Product<RootTimestamp, T> as Timestamp>::Summary>>>,
                                            Vec<ChangeBatch<Product<RootTimestamp, T>>>) {
         let mut map = ChangeBatch::new();
-        map.update(&Default::default(), self.copies as i64);
+        map.update(Default::default(), self.copies as i64);
         (Vec::new(), vec![map])
     }
 
@@ -244,8 +244,8 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
         // we need to produce an appropriate update to the capabilities for `progress`, in case a
         // user has decided to drive the handle around a bit before registering it.
-        progress.borrow_mut().update(&Default::default(), -1);
-        progress.borrow_mut().update(&self.now_at, 1);
+        progress.borrow_mut().update(Default::default(), -1);
+        progress.borrow_mut().update(self.now_at.clone(), 1);
 
         self.progress.push(progress);
         self.pushers.push(pusher);
@@ -274,7 +274,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
             pusher.done();
         }
         for progress in self.progress.iter() {
-            progress.borrow_mut().update(&self.now_at, -1);
+            progress.borrow_mut().update(self.now_at.clone(), -1);
         }
     }
 
@@ -320,7 +320,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         self.close_epoch();
         self.now_at = RootTimestamp::new(next);
         for progress in self.progress.iter() {
-            progress.borrow_mut().update(&self.now_at, 1);
+            progress.borrow_mut().update(self.now_at.clone(), 1);
         }
     }
 

@@ -529,10 +529,7 @@ OperatorImpl<T, L, DO> {
 
 fn update_frontiers<T: Timestamp>(frontiers: &mut Vec<MutableAntichain<T>>, count_maps: &mut [ChangeBatch<T>]) {
     for (counts, frontier) in count_maps.iter_mut().zip(frontiers.iter_mut()) {
-        frontier.update_iter_and(counts.drain(), |_,_| { });
-        // for (time, delta) in counts.drain() {
-        //     frontier.update(&time, delta);
-        // }
+        frontier.update_iter(counts.drain());
     }
 }
 
@@ -552,7 +549,7 @@ Operate<T> for OperatorImpl<T, L, DO> {
         let mut internal = vec![ChangeBatch::new()];
         // augment the counts for each reserved capability.
         for &(ref time, count) in self.internal_changes.borrow_mut().iter() {
-            internal[0].update(time, count * (self.peers as i64 - 1));
+            internal[0].update(time.clone(), count * (self.peers as i64 - 1));
         }
 
         // drain the changes to empty out, and complete the counts for internal.

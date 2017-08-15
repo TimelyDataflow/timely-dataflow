@@ -166,20 +166,12 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
 
     // we need to set the initial value of the frontier
     fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [ChangeBatch<T>]) {
-        let mut borrow = self.frontier.borrow_mut();
-        borrow.update_iter_and(counts[0].drain(), |_,_| { });
-        // for (time, delta) in counts[0].drain() {
-        //     borrow.update(&time, delta);
-        // }
+        self.frontier.borrow_mut().update_iter(counts[0].drain());
     }
 
     // each change to the frontier should be shared
     fn push_external_progress(&mut self, counts: &mut [ChangeBatch<T>]) {
-        let mut borrow = self.frontier.borrow_mut();
-        borrow.update_iter_and(counts[0].drain(), |_,_| { });
-        // for (time, delta) in counts[0].drain() {
-        //     borrow.update(&time, delta);
-        // }
+        self.frontier.borrow_mut().update_iter(counts[0].drain());
     }
 
     // the scope does nothing. this is actually a problem, because "reachability" assumes all messages on each edge.

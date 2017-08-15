@@ -79,7 +79,7 @@ impl<T: Timestamp> ChildWrapper<T> {
 
         // TODO : Gross. Fix.
         for (index, capability) in result.capabilities.iter_mut().enumerate() {
-            capability.update_iter_and(work[index].elements().iter().map(|x|x.clone()), |_, _| {});
+            capability.update_iter(work[index].elements().iter().map(|x|x.clone()));
         }
 
         return result;

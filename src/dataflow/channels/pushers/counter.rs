@@ -18,7 +18,7 @@ impl<T: Ord, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D
     #[inline] 
     fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
         if let Some((ref time, ref data)) = *message {
-            self.counts.borrow_mut().update(time, data.len() as i64);
+            self.counts.borrow_mut().update(time.clone(), data.len() as i64);
         }
 
         // only propagate `None` if dirty (indicates flush)
@@ -44,7 +44,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'stati
     #[inline] pub fn pull_progress(&mut self, updates: &mut ChangeBatch<T>) {
         let mut borrow = self.counts.borrow_mut();
         for (time, delta) in borrow.drain() {
-            updates.update(&time, delta);
+            updates.update(time, delta);
         }
     }
 }

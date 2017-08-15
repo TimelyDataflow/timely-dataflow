@@ -197,7 +197,7 @@ fn notificator_delivers_notifications_in_topo_order() {
         Product::new(RootTimestamp::new(a), b)
     }
     let mut notificator = Notificator::<Product<Product<RootTimestamp, u64>, u64>>::new();
-    notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(&ts_from_tuple((0, 0)), 1)]);
+    notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(ts_from_tuple((0, 0)), 1)]);
     let internal_changes = Rc::new(RefCell::new(ChangeBatch::new()));
     let times = vec![
         (3, 5),
@@ -214,9 +214,9 @@ fn notificator_delivers_notifications_in_topo_order() {
     }
     notificator.update_frontier_from_cm(&mut {
         let mut cm = ChangeBatch::new();
-        cm.update(&ts_from_tuple((0, 0)), -1);
-        cm.update(&ts_from_tuple((5, 7)), 1);
-        cm.update(&ts_from_tuple((6, 0)), 1);
+        cm.update(ts_from_tuple((0, 0)), -1);
+        cm.update(ts_from_tuple((5, 7)), 1);
+        cm.update(ts_from_tuple((6, 0)), 1);
         vec![cm]
     });
     // Drains all the available notifications and checks they're being delivered in some
@@ -245,9 +245,9 @@ fn notificator_delivers_notifications_in_topo_order() {
     ]);
     notificator.update_frontier_from_cm(&mut {
         let mut cm = ChangeBatch::new();
-        cm.update(&ts_from_tuple((5, 7)), -1);
-        cm.update(&ts_from_tuple((6, 0)), -1);
-        cm.update(&ts_from_tuple((6, 10)), 1);
+        cm.update(ts_from_tuple((5, 7)), -1);
+        cm.update(ts_from_tuple((6, 0)), -1);
+        cm.update(ts_from_tuple((6, 10)), 1);
         vec![cm]
     });
     check_notifications(&mut notificator, vec![

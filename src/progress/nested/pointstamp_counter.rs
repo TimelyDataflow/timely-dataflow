@@ -17,11 +17,11 @@ pub struct PointstampCounter<T:Timestamp> {
 
 impl<T:Timestamp> PointstampCounter<T> {
     /// Updates the count for a time at a target.
-    pub fn update_target(&mut self, target: Target, time: &T, value: i64) {
+    pub fn update_target(&mut self, target: Target, time: T, value: i64) {
         self.target[target.index][target.port].update(time, value);
     }
     /// Updates the count for a time at a source.
-    pub fn update_source(&mut self, source: Source, time: &T, value: i64) {
+    pub fn update_source(&mut self, source: Source, time: T, value: i64) {
         self.source[source.index][source.port].update(time, value);
     }
     /// Clears the pointstamp counter.

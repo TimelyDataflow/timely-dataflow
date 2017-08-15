@@ -482,7 +482,7 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
     // we need to set the initial value of the frontier
     fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [ChangeBatch<T>]) {
         let mut map = counts[0].clone();
-        map.update(&Default::default(), -1);
+        map.update(Default::default(), -1);
         if !map.is_empty() {
             self.events.push(Event::Progress(map.into_inner()));
         }
@@ -529,7 +529,7 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
                 let mut result = ChangeBatch::new();
                 if let &Event::Progress(ref vec) = event {
                     for &(ref time, delta) in vec {
-                        result.update(time, delta);
+                        result.update(time.clone(), delta);
                     }
                 }
                 return (vec![], vec![result]);
@@ -544,7 +544,7 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
                 Event::Start => { },
                 Event::Progress(ref vec) => {
                     for &(ref time, delta) in vec {
-                        internal[0].update(time, delta);
+                        internal[0].update(time.clone(), delta);
                     }
                 },
                 Event::Messages(ref time, ref data) => {
