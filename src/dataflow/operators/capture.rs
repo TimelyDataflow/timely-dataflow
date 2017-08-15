@@ -554,6 +554,7 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
             // The first thing we do is modify our capabilities to match the number of streams we manage.
             // This should be a simple change of `self.event_streams.len() - 1`. We only do this once, as
             // our very first action.
+            internal[0].update(Default::default(), - (self.peers as i64));
             internal[0].update(Default::default(), (self.event_streams.len() as i64) - 1);
             self.started = true;
         }
