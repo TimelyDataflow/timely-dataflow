@@ -9,20 +9,16 @@ fn main() {
 
         let source_peers = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
 
-        let mut listeners = Vec::new();
-
-        for source_peer in 0 .. source_peers {
-            if source_peer % worker.peers() == worker.index() {
-                let addr = format!("127.0.0.1:{}", 8000 + source_peer);
-                listeners.push(TcpListener::bind(addr).unwrap());
-            }
-        }
-
-        let mut replayers = Vec::new();
-        for listener in listeners {
-            let recv = listener.incoming().next().unwrap().unwrap();
-            replayers.push(EventReader::<_,u64,_>::new(recv));
-        }
+        // create replayers from disjoint partition of source worker identifiers.
+        let replayers = 
+        (0 .. source_peers)
+            .filter(|i| i % worker.peers() == worker.index())
+            .map(|i| TcpListener::bind(format!("127.0.0.1:{}", 8000 + i)).unwrap())
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|l| l.incoming().next().unwrap().unwrap())
+            .map(|r| EventReader::<_,u64,_>::new(r))
+            .collect::<Vec<_>>();
 
         worker.dataflow::<u64,_,_>(|scope| {
             replayers
