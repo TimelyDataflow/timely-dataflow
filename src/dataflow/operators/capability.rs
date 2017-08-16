@@ -122,6 +122,12 @@ impl<T: Timestamp> PartialOrder for Capability<T> {
     }
 }
 
+impl<T: Timestamp> ::std::hash::Hash for Capability<T> {
+    fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
+        self.time.hash(state);
+    }
+}
+
 /// A set of capabilities, for possibly incomparable times.
 pub struct CapabilitySet<T: Timestamp> {
     elements: Vec<Capability<T>>,
