@@ -1,6 +1,6 @@
 # A Meaningful Example
 
-You may have heard of `word_count` as the archetypical "big data" problem: you have a large collection of text, and what you want most in life is to know how many of each word are present in the text. The data are too large to load into memory, but let's assume that the set of distinct words, each with an associated count, is small enough to find it memory.
+You may have heard of `word_count` as the archetypical "big data" problem: you have a large collection of text, and what you want most in life is to know how many of each word are present in the text. The data are too large to load into memory, but let's assume that the set of distinct words, each with an associated count, is small enough to fit in memory.
 
 Let's take the `word_count` example in the streaming direction. For whatever reason, your collection of text *changes*. As time moves along, some new texts are added and some old texts are retracted. We don't know why this happens, we just get told about the changes. Our new job is to *maintain* the `word_count` computation, in the face of arbitrary changes to the collection of texts, as promptly as possible.
 
@@ -49,7 +49,7 @@ This example code is pretty close to a minimal non-trivial timely dataflow compu
         let mut probe = ProbeHandle::new();
 ```
 
-This code captures the workers identity, so that we can report different things at different workers, and also allocates an input handle and a probe handle. The input handle is how we supply data to the computation, and the probe handle is how we check whether the computation is complete up through certain inputs. Since a streaming computation may never "finish", `probe` is the only way to grok how much progress we've made.
+The input handle is how we supply data to the computation, and the probe handle is how we check whether the computation is complete up through certain inputs. Since a streaming computation may never "finish", `probe` is the only way to understand how much progress we've made.
 
 The next step is to build a timely dataflow. Here we use `input` as a source of data, and attach `probe` to the end so that we can watch for completion of work.
 
@@ -77,7 +77,7 @@ Having constructed the dataflow, we feed it some data.
         }
 ```
 
-There are several things going on here. First, we `send` some data into the input, which allows the data to circulate through the workers along the dataflow. This data will be of type `(String, i64)`, because our example wants to send some text  Second, we `advance_to` to tell timely dataflow that we have ceased sending data for `round` and anything before it. At this point timely can start to reason about `round` becoming complete, once all the associated data make their way through the dataflow. Finally, we repeatedly `step` the worker until `probe` reports that it has caught up to `round + 1`, meaning that data for `round` are fully flushed from the system (and printed to the screen, one hopes).
+There are several things going on here. First, we `send` some data into the input, which allows the data to circulate through the workers along the dataflow. This data will be of type `(String, i64)`, because our example wants to send some text and annotate each with the change in the count (we add or remove text with `+1` or `-1`, respectively). Second, we `advance_to` to tell timely dataflow that we have ceased sending data for `round` and anything before it. At this point timely can start to reason about `round` becoming complete, once all the associated data make their way through the dataflow. Finally, we repeatedly `step` the worker until `probe` reports that it has caught up to `round + 1`, meaning that data for `round` are fully flushed from the system (and printed to the screen, one hopes).
 
 ## Breaking text into words
 
@@ -162,7 +162,7 @@ First, we tell it how it should distribute the data (pairs of strings and differ
 
 Second, we give a descriptive name so that the operator is recognizable in logging and diagnostic code; you probably don't care at the moment, but you might later on if you wonder what is going on. 
 
-Third and finally, we specify a closure. The closure has an argument, which we ignore in the code (it has to do with writing operators that can send output data before they receive any input data) and will ignore now. This closure is actually a "closure builder": it is a closure that just returns another closure:
+Third and finally, we specify a closure. The closure has an argument, which we ignore in the code (it has to do with writing operators that can send output data before they receive any input data) and we will ignore it now. This closure is actually a "closure builder": it is a closure that just returns another closure:
 
 ```rust,ignore
     // allocate operator-local storage.
@@ -176,7 +176,7 @@ Third and finally, we specify a closure. The closure has an argument, which we i
 
 The closure that we end up returning is the `|input, output|` closure. It describes what we the operator would do when presented with a handle to the input and a handle to the output. We've also named two hash maps we will need, and provided the `move` keyword to Rust so that it knows that the resulting closure *owns* these hash maps, rather than *borrows* them.
 
-Inside the closure, we do two things: read inputs, and updated counts and send outputs. Let's do the input reading first:
+Inside the closure, we do two things: (i) read inputs and (ii) update counts and send outputs. Let's do the input reading first:
 
 ```rust,ignore
         // for each input batch, stash it at `time`.
@@ -187,7 +187,7 @@ Inside the closure, we do two things: read inputs, and updated counts and send o
         }
 ```
 
-The `input` handle has a `next` method, and it optionally returns a pair of `time` and `data`, representing a timely dataflow timestamp and a hunk of data bearing that timestamp, respectively. Our plan is to iterate through all available input (the `next` method doesn't block, it just returns `None` when it runs out of data), accepting it from the timely dataflow system and moving it in to our `queue` hash map.
+The `input` handle has a `next` method, and it optionally returns a pair of `time` and `data`, representing a timely dataflow timestamp and a hunk of data bearing that timestamp, respectively. Our plan is to iterate through all available input (the `next` method doesn't block, it just returns `None` when it runs out of data), accepting it from the timely dataflow system and moving it into our `queue` hash map.
 
 Why do we do this? Because this is a streaming system, we could be getting data out of order. Our goal is to update the counts in time order, and to do this we'll need to enqueue what we get until we also get word that the associated `time` is complete. That happens in the next hunk of code:
 
