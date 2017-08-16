@@ -2,6 +2,11 @@
 
 [Timely Dataflow](./introduction.md)
 
+- [Motivation](./chapter_0.md)
+    - [A Meaningful Example](./chapter_0_1.md)
+    - [When to use Timely Dataflow](./chapter_0_2.md)
+    - [When not to use Timely Dataflow](./chapter_0_3.md)
+
 - [Core Concepts](./chapter_1.md)
     - [Dataflow](./chapter_1_1.md)
     - [Timestamps](./chapter_1_2.md)    
