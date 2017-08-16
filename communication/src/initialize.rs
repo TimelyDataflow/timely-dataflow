@@ -4,10 +4,10 @@ use std::thread;
 use std::io::BufRead;
 use getopts;
 use std::sync::Arc;
+use std::rc::Rc;
 
 use allocator::{Thread, Process, Generic};
 use networking::initialize_networking;
-use logging::Logging;
 
 /// Possible configurations for the communication infrastructure.
 pub enum Configuration {
@@ -73,7 +73,7 @@ impl Configuration {
     }
 }
 
-fn create_allocators(config: Configuration, logger: Option<::logging::LogSender>) -> Result<Vec<Generic>,String> {
+fn create_allocators(config: Configuration, logger: Arc<Fn(::timely_logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Generic>,String> {
     match config {
         Configuration::Thread => Ok(vec![Generic::Thread(Thread)]),
         Configuration::Process(threads) => Ok(Process::new_vector(threads).into_iter().map(|x| Generic::Process(x)).collect()),
@@ -147,22 +147,17 @@ fn create_allocators(config: Configuration, logger: Option<::logging::LogSender>
 /// result: Ok(0)
 /// result: Ok(1)
 /// ```
-pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: Configuration, func: F, logger: Logging) -> Result<WorkerGuards<T>,String> {
+pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: Configuration, func: F, log_sender: Arc<Fn(::timely_logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<WorkerGuards<T>,String> {
 
-    let (comms_logger, init_thread_logging) = logger.unpack();
-    let init_thread_logging = Arc::new(init_thread_logging);
-
-    let allocators = try!(create_allocators(config, comms_logger));
+    let allocators = try!(create_allocators(config, log_sender));
     let logic = Arc::new(func);
 
     let mut guards = Vec::new();
     for allocator in allocators.into_iter() {
         let clone = logic.clone();
-        let init_thread_logging = init_thread_logging.clone();
         guards.push(try!(thread::Builder::new()
                             .name(format!("worker thread {}", allocator.index()))
                             .spawn(move || {
-                                init_thread_logging();
                                 (*clone)(allocator)
                             })
                             .map_err(|e| format!("{:?}", e))));

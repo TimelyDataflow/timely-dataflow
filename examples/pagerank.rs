@@ -11,10 +11,31 @@ use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{LoopVariable, ConnectLoop, Probe};
 use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::channels::pact::Exchange;
+use timely::logging::{LogManager, LoggerConfig};
+
+use timely::logging::LogFilter;
+
+fn ridiculous_shuffle(from: u64) -> u64 {
+    from
+//    if from % 16 < 8 {
+//        0
+//    } else {
+//        (from % 16) - 7
+//    }
+}
 
 fn main() {
 
-    timely::execute_from_args(std::env::args().skip(3), move |worker| {
+    let mut log_manager = LogManager::new();
+    let logger_config = LoggerConfig::new(&mut log_manager);
+
+    let start = time::precise_time_ns();
+
+    // let buf: Option<::std::sync::Arc<::std::sync::Mutex<Vec<u8>>>> = None;
+    let buf: Option<Vec<::std::sync::Arc<::std::sync::Mutex<Vec<u8>>>>> = Some(log_manager.workers().to_bufs());
+    // log_manager.workers().to_tcp_socket();
+
+    timely::execute_from_args_logging(std::env::args().skip(3), logger_config, move |worker| {
 
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
@@ -30,8 +51,8 @@ fn main() {
             // bring edges and ranks together!
             let changes = edge_stream.binary_frontier(
                 &rank_stream, 
-                Exchange::new(|x: &((usize, usize), i64)| (x.0).0 as u64),
-                Exchange::new(|x: &(usize, i64)| x.0 as u64),
+                Exchange::new(|x: &((usize, usize), i64)| ridiculous_shuffle((x.0).0 as u64)),
+                Exchange::new(|x: &(usize, i64)| ridiculous_shuffle(x.0 as u64)),
                 "PageRank",
                 |_capability| {
 
@@ -173,6 +194,7 @@ fn main() {
             worker.step();
         }
 
+        let mut prev_time = time::precise_time_ns();
         for i in 1 .. 1000 {
             input.send(((rng1.gen_range(0, nodes), rng1.gen_range(0, nodes)), 1));
             input.send(((rng2.gen_range(0, nodes), rng2.gen_range(0, nodes)), -1));
@@ -180,9 +202,30 @@ fn main() {
             while probe.less_than(input.time()) {
                 worker.step();
             }
+            // eprintln!("EPOCH TIME {}", (time::precise_time_ns() - prev_time) as f64 / 1_000_000_000f64);
+            prev_time = time::precise_time_ns();
         }
 
     }).unwrap(); // asserts error-free execution;
+
+    eprintln!("duration: {} sec", (time::precise_time_ns() - start) as f64 / 1_000_000_000f64);
+    if let Some(buf) = buf {
+        eprintln!("computation done, writing to socket");
+        use std::io::Write;
+        //let mut file = ::std::fs::File::create("log.out").expect("cannot create logging file");
+        let mut threads = Vec::new();
+        for v in buf.into_iter() {
+            threads.push(std::thread::spawn(move || {
+                let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
+                let mut writer = std::io::BufWriter::with_capacity(4096, std::net::TcpStream::connect(target).expect("failed to connect to logging destination"));
+                eprintln!("buf len: {}", v.lock().unwrap().len());
+                writer.write(&(*v.lock().unwrap())[..]).expect("ABASDF");
+            }));
+        }
+        for t in threads.into_iter() {
+            t.join().unwrap();
+        }
+    }
 }
 
 fn compact<T: Ord>(list: &mut Vec<(T, i64)>) {

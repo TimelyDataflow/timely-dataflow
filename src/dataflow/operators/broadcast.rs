@@ -42,7 +42,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
 
         assert_eq!(pushers.len(), scope.peers());
 
-        let receiver = Puller::new(puller, scope.index(), channel_id, comm_chan);
+        let receiver = Puller::new(puller, scope.index(), channel_id, comm_chan, scope.logging());
 
         let operator = BroadcastOperator {
             index: scope.index(),
@@ -54,7 +54,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
         let operator_index = scope.add_operator(operator);
 
         for (i, pusher) in pushers.into_iter().enumerate() {
-            let sender = Pusher::new(pusher, scope.index(), i, channel_id, comm_chan);
+            let sender = Pusher::new(pusher, scope.index(), i, channel_id, comm_chan, scope.logging());
             self.connect_to(Target { index: operator_index, port: i }, sender, channel_id);
         }
 

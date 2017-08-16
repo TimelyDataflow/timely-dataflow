@@ -9,6 +9,8 @@ use timely_communication::Allocate;
 
 use order::PartialOrder;
 
+use logging::Logger;
+
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, PathSummary, Operate};
 
@@ -75,6 +77,9 @@ pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
 
     // expressed capabilities, used to filter changes against.
     output_capabilities: Vec<MutableAntichain<TOuter>>,
+
+    /// Logging handle
+    logging: Logger,
 
 }
 
@@ -507,10 +512,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
     }
 
     /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
-    pub fn new_from(index: usize, mut path: Vec<usize>) -> SubgraphBuilder<TOuter, TInner> {
+    pub fn new_from(index: usize, mut path: Vec<usize>, logging: Logger) -> SubgraphBuilder<TOuter, TInner> {
         path.push(index);
 
-        let children = vec![PerOperatorState::empty(path.clone())];
+        let children = vec![PerOperatorState::empty(path.clone(), logging.clone())];
 
         SubgraphBuilder {
             name:                   "Subgraph".into(),
@@ -523,6 +528,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
 
             input_messages:         Default::default(),
             output_capabilities:    Default::default(),
+
+            logging:                logging,
         }
     }
 
@@ -534,7 +541,16 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
 
     /// Adds a new child to the subgraph.
     pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize, identifier: usize) {
-        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier))
+        {
+            let mut child_path = self.path.clone();
+            child_path.push(index);
+            self.logging.log(::timely_logging::Event::Operates(::timely_logging::OperatesEvent {
+                id: identifier,
+                addr: child_path,
+                name: child.name().to_owned(),
+            }));
+        }
+        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
     }
 
     /// Now that initialization is complete, actually build a subgraph.
@@ -553,7 +569,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
             self.children[source.index].edges[source.port].push(target);
         }
 
-        let progcaster = Progcaster::new(allocator, &self.path);
+        let progcaster = Progcaster::new(allocator, &self.path, self.logging.clone());
 
         Subgraph {
             name: self.name,
@@ -759,6 +775,8 @@ struct PerOperatorState<T: Timestamp> {
     produced_buffer: Vec<ChangeBatch<T>>, // per-output: temp buffer used for pull_internal_progress.
 
     external_buffer: Vec<ChangeBatch<T>>, // per-input: temp buffer used for push_external_progress.
+
+    logging: Logger,
 }
 
 impl<T: Timestamp> PerOperatorState<T> {
@@ -781,7 +799,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         self.source_target_summaries.push(vec![]);
     }
 
-    fn empty(mut path: Vec<usize>) -> PerOperatorState<T> {
+    fn empty(mut path: Vec<usize>, logging: Logger) -> PerOperatorState<T> {
         path.push(0);
         PerOperatorState {
             name:       "External".to_owned(),
@@ -806,15 +824,12 @@ impl<T: Timestamp> PerOperatorState<T> {
             target_target_summaries: Vec::new(),
             source_target_summaries: Vec::new(),
             target_source_summaries: Vec::new(),
+
+            logging: logging,
         }
     }
 
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>, identifier: usize) -> PerOperatorState<T> {
-
-        // LOGGING
-        path.push(index);
-
-        ::logging::log(&::logging::OPERATES, ::logging::OperatesEvent { id: identifier, addr: path.clone(), name: scope.name().to_owned() });
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>, identifier: usize, logging: Logger) -> PerOperatorState<T> {
 
         let local = scope.local();
         let inputs = scope.inputs();
@@ -837,7 +852,6 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let mut result = PerOperatorState {
             name:       scope.name(),
-            // addr:       path,
             operator:      Some(scope),
             index:      index,
             id:         identifier,
@@ -863,6 +877,8 @@ impl<T: Timestamp> PerOperatorState<T> {
             source_target_summaries: vec![vec![]; outputs],
 
             target_source_summaries:    new_summary,
+
+            logging:                    logging,
         };
 
         for index in 0 .. work.len() {
@@ -909,9 +925,9 @@ impl<T: Timestamp> PerOperatorState<T> {
         {
             let changes = &mut self.external_buffer;
             if changes.iter_mut().any(|ref mut c| !c.is_empty()) {
-                ::logging::log(&::logging::PUSH_PROGRESS, ::logging::PushProgressEvent {
+                self.logging.log(::timely_logging::Event::PushProgress(::timely_logging::PushProgressEvent {
                     op_id: self.id,
-                });
+                }));
             }
             self.operator.as_mut().map(|x| x.push_external_progress(changes));
             if changes.iter_mut().any(|x| !x.is_empty()) {
@@ -926,15 +942,15 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            ::logging::log(&::logging::SCHEDULE, ::logging::ScheduleEvent {
-                id: self.id, start_stop: ::logging::StartStop::Start
-            });
+            self.logging.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+                id: self.id, start_stop: ::timely_logging::StartStop::Start
+            }));
 
-            if cfg!(feature = "logging") {
-                assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
-                assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
-                assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
-            }
+            // TODO(andreal) formerly behind "logging" feature flag {
+            //     assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
+            //     assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
+            //     assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
+            // }
 
             let result = if let Some(ref mut operator) = self.operator {
                 operator.pull_internal_progress(
@@ -945,18 +961,15 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
             else { false };
 
-            if cfg!(feature = "logging") {
+            // TODO(andreal): for logging, do we want this always enabled?
+            let did_work = 
+                self.consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
+                self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
+                self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
 
-                let did_work = 
-                    self.consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
-                    self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
-                    self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
-
-                ::logging::log(&::logging::SCHEDULE,
-                               ::logging::ScheduleEvent {
-                                   id: self.id, start_stop: ::logging::StartStop::Stop { activity: did_work }
-                               });
-            }
+            self.logging.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+                id: self.id, start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
+            }));
 
             result
         };

@@ -71,7 +71,8 @@ impl<G: Scope> OperatorBuilder<G> {
         P: ParallelizationContract<G::Timestamp, D> {
 
         let channel_id = self.scope.new_identifier();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id);
+        let logging = self.scope.logging();
+        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, logging);
         let target = Target { index: self.index, port: self.shape.inputs };
         stream.connect_to(target, sender, channel_id);
         

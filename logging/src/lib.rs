@@ -6,13 +6,13 @@ extern crate time;
 
 use abomonation::Abomonation;
 
+use std::rc::Rc;
 use std::cell::RefCell;
 use std::io::Write;
 use std::io::Read;
 use std::io::BufWriter;
 use std::fs::{self, File};
 use std::path::Path;
-use std::net::TcpStream;
 
 pub struct StructMapWriter;
 
@@ -36,10 +36,6 @@ pub fn initialize_precise_time_ns() {
             time::precise_time_ns() as i64 - wall_time_ns
         });
     }
-}
-
-thread_local!{
-    pub static TCP_CHANNEL: RefCell<Option<BufWriter<TcpStream>>> = RefCell::new(None);
 }
 
 /// Logging methods
@@ -210,18 +206,18 @@ pub struct GuardedProgressEvent {
 
 unsafe_abomonate!(GuardedProgressEvent : is_start);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct EventsSetup {
     pub index: usize,
 }
 
 unsafe_abomonate!(EventsSetup : index);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct CommsSetup {
     pub sender: bool,
     pub process: usize,
-    pub remote: usize,
+    pub remote: Option<usize>,
 }
 
 unsafe_abomonate!(CommsSetup : sender, process, remote);
@@ -265,17 +261,17 @@ pub enum Event {
 }
 
 #[derive(Debug, Clone, Abomonation)]
-pub enum CommEvent {
+pub enum CommsEvent {
     /*  0 */ Communication(CommunicationEvent),
     /*  1 */ Serialization(SerializationEvent),
 }
 
-impl From<CommunicationEvent> for CommEvent {
-    fn from(v: CommunicationEvent) -> CommEvent { CommEvent::Communication(v) }
+impl From<CommunicationEvent> for CommsEvent {
+    fn from(v: CommunicationEvent) -> CommsEvent { CommsEvent::Communication(v) }
 }
 
-impl From<SerializationEvent> for CommEvent {
-    fn from(v: SerializationEvent) -> CommEvent { CommEvent::Serialization(v) }
+impl From<SerializationEvent> for CommsEvent {
+    fn from(v: SerializationEvent) -> CommsEvent { CommsEvent::Serialization(v) }
 }
 
 impl From<OperatesEvent> for Event {
@@ -322,3 +318,45 @@ impl From<InputEvent> for Event {
     fn from(v: InputEvent) -> Event { Event::Input(v) }
 }
 
+const BUFFERING_LOGGER_CAPACITY: usize = 1024;
+
+pub enum LoggerBatch<'a, S: Clone+'a, L: Clone+'a> {
+    Logs(&'a Vec<(u64, S, L)>),
+    End,
+}
+
+pub struct BufferingLogger<S: Clone, L: Clone> {
+    setup: S,
+    buffer: RefCell<Vec<(u64, S, L)>>,
+    pushers: RefCell<Box<Fn(LoggerBatch<S, L>)->()>>,
+}
+
+impl<S: Clone, L: Clone> BufferingLogger<S, L> {
+    pub fn new(setup: S, pushers: Box<Fn(LoggerBatch<S, L>)->()>) -> Self {
+        BufferingLogger {
+            setup: setup,
+            buffer: RefCell::new(Vec::with_capacity(BUFFERING_LOGGER_CAPACITY)),
+            pushers: RefCell::new(pushers),
+        }
+    }
+
+    pub fn log(&self, l: L) {
+        let ts = get_precise_time_ns();
+        let mut buf = self.buffer.borrow_mut();
+        buf.push((ts, self.setup.clone(), l));
+        if buf.len() >= BUFFERING_LOGGER_CAPACITY {
+            (*self.pushers.borrow_mut())(LoggerBatch::Logs(&buf));
+            buf.clear();
+        }
+    }
+}
+
+impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
+    fn drop(&mut self) {
+        let mut buf = self.buffer.borrow_mut();
+        if buf.len() > 0 {
+            (*self.pushers.borrow_mut())(LoggerBatch::Logs(&buf));
+        }
+        (*self.pushers.borrow_mut())(LoggerBatch::End);
+    }
+}

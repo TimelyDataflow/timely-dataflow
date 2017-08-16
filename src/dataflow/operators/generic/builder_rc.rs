@@ -20,6 +20,8 @@ use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::operators::generic::handles::{InputHandle, new_input_handle};
 
+use logging::Logger;
+
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
 /// Builds operators with generic shape.
@@ -29,18 +31,21 @@ pub struct OperatorBuilder<G: Scope> {
     consumed: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     internal: Rc<RefCell<ChangeBatch<G::Timestamp>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
+    logging: Logger,
 }
 
 impl<G: Scope> OperatorBuilder<G> {
 
     /// Allocates a new generic operator builder from its containing scope.
     pub fn new(name: String, scope: G) -> Self {
+        let logging = scope.logging();
         OperatorBuilder {
             builder: OperatorBuilderRaw::new(name, scope),
             frontier: Vec::new(),
             consumed: Vec::new(),
             internal: Rc::new(RefCell::new(ChangeBatch::new())),
             produced: Vec::new(),            
+            logging: logging,
         }
     }
 
@@ -60,7 +65,7 @@ impl<G: Scope> OperatorBuilder<G> {
         self.frontier.push(MutableAntichain::new());
         self.consumed.push(input.consumed().clone());
 
-        new_input_handle(input, self.internal.clone())
+        new_input_handle(input, self.internal.clone(), self.logging.clone())
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.

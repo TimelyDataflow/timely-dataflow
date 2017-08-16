@@ -5,12 +5,11 @@ version = "0.0.1"
 description = "Logging infrastructure for timely dataflow"
 
 [features]
-logging=[]
-default=[] # ["logging"]
+default=[]
 
 [dependencies]
-abomonation="0.4.4"
-abomonation_derive = "0.1.2"
+abomonation = { git = "https://github.com/frankmcsherry/abomonation" }
+abomonation_derive = { git = "https://github.com/mystor/abomonation_derive.git" }
 byteorder="0.4.2"
 getopts="0.2.14"
 time="0.1.34"

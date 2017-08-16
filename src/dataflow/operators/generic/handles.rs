@@ -13,6 +13,7 @@ use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::{Buffer, Session};
 use dataflow::channels::Content;
 use timely_communication::{Push, Pull};
+use logging::Logger;
 
 use dataflow::operators::Capability;
 use dataflow::operators::capability::mint as mint_capability;
@@ -21,6 +22,7 @@ use dataflow::operators::capability::mint as mint_capability;
 pub struct InputHandle<T: Timestamp, D, P: Pull<(T, Content<D>)>> {
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<ChangeBatch<T>>>,
+    logging: Logger,
 }
 
 /// Handle to an operator's input stream and frontier.
@@ -64,10 +66,13 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
     /// ```
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
+        let logging = self.logging.clone();
         while let Some((cap, data)) = self.next() {
-            ::logging::log(&::logging::GUARDED_MESSAGE, ::timely_logging::GuardedMessageEvent { is_start: true });
+            logging.log(::timely_logging::Event::GuardedMessage(
+                    ::timely_logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            ::logging::log(&::logging::GUARDED_MESSAGE, ::timely_logging::GuardedMessageEvent { is_start: false });
+            logging.log(::timely_logging::Event::GuardedMessage(
+                    ::timely_logging::GuardedMessageEvent { is_start: false }));
         }
     }
 
@@ -118,10 +123,11 @@ pub fn _access_pull_counter<T: Timestamp, D, P: Pull<(T, Content<D>)>>(input: &m
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D, P: Pull<(T, Content<D>)>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<ChangeBatch<T>>>) -> InputHandle<T, D, P> {
+pub fn new_input_handle<T: Timestamp, D, P: Pull<(T, Content<D>)>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<ChangeBatch<T>>>, logging: Logger) -> InputHandle<T, D, P> {
     InputHandle {
         pull_counter: pull_counter,
         internal: internal,
+        logging: logging,
     }
 }
 

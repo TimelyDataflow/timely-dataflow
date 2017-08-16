@@ -1,5 +1,6 @@
 //! Networking code for sending and receiving fixed size `Vec<u8>` between machines.
 
+use std::rc::Rc;
 use std::io::{Read, Write, Result, BufWriter};
 use std::net::{TcpListener, TcpStream};
 use std::mem::size_of;
@@ -80,7 +81,7 @@ struct BinaryReceiver<R: Read> {
     process:    usize, // process ID this receiver belongs to
     index:      usize, // receiver index
     threads:    usize,
-    logger:     Option<::logging::LogSender>,
+    log_sender:     ::logging::CommsLogger,
 }
 
 impl<R: Read> BinaryReceiver<R> {
@@ -92,7 +93,7 @@ impl<R: Read> BinaryReceiver<R> {
             process: usize,
             index: usize,
             threads: usize,
-            logger: Option<::logging::LogSender>) -> BinaryReceiver<R> {
+            log_sender: ::logging::CommsLogger) -> BinaryReceiver<R> {
         eprintln!("process {}, index {}, threads {}", process, index, threads);
         BinaryReceiver {
             reader:     reader,
@@ -102,12 +103,11 @@ impl<R: Read> BinaryReceiver<R> {
             process:    process,
             index:      index,
             threads:    threads,
-            logger:     logger,
+            log_sender:     log_sender,
         }
     }
 
     fn recv_loop(&mut self) {
-        ::logging::initialize(self.process, false, self.index, self.logger.clone());
         loop {
 
             // if we've mostly filled our buffer and still can't read a whole message from it,
@@ -123,14 +123,14 @@ impl<R: Read> BinaryReceiver<R> {
             let remaining = {
                 let mut slice = &self.buffer[..self.length];
                 while let Some(header) = MessageHeader::try_read(&mut slice) {
-                    ::logging::log(&::logging::COMMUNICATION,
-                                   ::logging::CommunicationEvent {
-                                       is_send: false,
-                                       comm_channel: header.channel,
-                                       source: header.source,
-                                       target: header.target,
-                                       seqno: header.seqno,
-                    });
+                    self.log_sender.log(
+                        ::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
+                            is_send: false,
+                            comm_channel: header.channel,
+                            source: header.source,
+                            target: header.target,
+                            seqno: header.seqno,
+                        }));
                     let h_len = header.length as usize;  // length in bytes
                     let target = &mut self.targets.ensure(header.target, header.channel);
                     target.send(slice[..h_len].to_vec()).unwrap();
@@ -160,22 +160,21 @@ struct BinarySender<W: Write> {
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
     process:    usize, // process ID this sender belongs to
     index:      usize, // sender index
-    logger:     Option<::logging::LogSender>,
+    log_sender:     ::logging::CommsLogger,
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, process: usize, index: usize, logger: Option<::logging::LogSender>) -> BinarySender<W> {
+    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, process: usize, index: usize, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
             process:    process,
             index:      index,
-            logger:     logger,
+            log_sender:     log_sender,
         }
     }
 
     fn send_loop(&mut self) {
-        ::logging::initialize(self.process, true, self.index, self.logger.clone());
         let mut stash = Vec::new();
 
         // block until data to recv
@@ -190,14 +189,14 @@ impl<W: Write> BinarySender<W> {
 
             for (header, mut buffer) in stash.drain_temp() {
                 assert!(header.length == buffer.len());
-                ::logging::log(&::logging::COMMUNICATION,
-                               ::logging::CommunicationEvent {
-                                   is_send: true,
-                                   comm_channel: header.channel,
-                                   source: header.source,
-                                   target: header.target,
-                                   seqno: header.seqno,
-                });
+                self.log_sender.log(
+                    ::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
+                        is_send: true,
+                        comm_channel: header.channel,
+                        source: header.source,
+                        target: header.target,
+                        seqno: header.seqno,
+                    }));
                 header.write_to(&mut self.writer).unwrap();
                 self.writer.write_all(&buffer[..]).unwrap();
                 buffer.clear();
@@ -242,7 +241,7 @@ impl<T:Send> Switchboard<T> {
 
 /// Initializes network connections
 pub fn initialize_networking(
-    addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, logger: Option<::logging::LogSender>) -> Result<Vec<Binary>> {
+    addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, log_sender: Arc<Fn(::timely_logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Binary>> {
 
     let processes = addresses.len();
     let hosts1 = Arc::new(addresses);
@@ -272,25 +271,46 @@ pub fn initialize_networking(
             readers.push(reader_channels_s);    //
             senders.push(sender_channels_s);    //
 
-            let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()),
-                                               sender_channels_r,
-                                               my_index,
-                                               index,
-                                               logger.clone());
-            let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(),
-                                                 reader_channels_r,
-                                                 my_index,
-                                                 index,
-                                                 threads,
-                                                 logger.clone());
 
-            // start senders and receivers associated with this stream
-            thread::Builder::new().name(format!("send thread {}", index))
-                                  .spawn(move || sender.send_loop())
-                                  .unwrap();
-            thread::Builder::new().name(format!("recv thread {}", index))
-                                  .spawn(move || recver.recv_loop())
-                                  .unwrap();
+            {
+                let log_sender = log_sender.clone();
+                let stream = stream.try_clone().unwrap();
+                // start senders and receivers associated with this stream
+                thread::Builder::new().name(format!("send thread {}", index))
+                                      .spawn(move || {
+                                          let log_sender = log_sender(::timely_logging::CommsSetup {
+                                              process: my_index,
+                                              sender: true,
+                                              remote: Some(index),
+                                          });
+                                          let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream),
+                                                                             sender_channels_r,
+                                                                             my_index,
+                                                                             index,
+                                                                             log_sender);
+                                          sender.send_loop()
+                                      }).unwrap();
+            }
+
+            {
+                let log_sender = log_sender.clone();
+                let stream = stream.try_clone().unwrap();
+                thread::Builder::new().name(format!("recv thread {}", index))
+                                      .spawn(move || {
+                                          let log_sender = log_sender(::timely_logging::CommsSetup {
+                                              process: my_index,
+                                              sender: false,
+                                              remote: Some(index),
+                                          });
+                                          let mut recver = BinaryReceiver::new(stream,
+                                                                               reader_channels_r,
+                                                                               my_index,
+                                                                               index,
+                                                                               threads,
+                                                                               log_sender);
+                                          recver.recv_loop()
+                                      }).unwrap();
+            }
 
         }
     }
@@ -306,6 +326,7 @@ pub fn initialize_networking(
             allocated:      0,
             readers:        readers.clone(),
             senders:        senders.clone(),
+            log_sender:     log_sender.clone(),
         });
     }
 

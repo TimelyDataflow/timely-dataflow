@@ -2,7 +2,10 @@
 
 use progress::{Timestamp, Operate};
 use progress::nested::{Source, Target};
+use logging::Logger;
 use timely_communication::Allocate;
+
+use std::rc::Rc;
 
 pub mod root;
 pub mod child;
@@ -74,4 +77,7 @@ pub trait Scope: ScopeParent {
     /// });
     /// ```
     fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R;
+
+    /// TODO(andreal)
+    fn logging(&self) -> Logger;
 }

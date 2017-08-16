@@ -6,7 +6,7 @@ use std::net::TcpListener;
 use std::io;
 use std::io::Read;
 
-use timely_logging::{CommsSetup, EventsSetup, Event as LogEvent, CommEvent};
+use timely_logging::{CommsSetup, EventsSetup, Event as LogEvent, CommsEvent};
 use timely::dataflow::operators::capture::{Event, EventReader};
 use timely::progress::nested::product::Product;
 use timely::progress::timestamp::RootTimestamp;
@@ -26,7 +26,7 @@ fn main() {
         let thread = ::std::thread::spawn(move || {
             let mut socket = io::BufReader::new(socket.unwrap());
             if communication {
-                let mut reader = EventReader::<Product<RootTimestamp, u64>, (u64, CommsSetup, CommEvent), _>::new(socket);
+                let mut reader = EventReader::<Product<RootTimestamp, u64>, (u64, CommsSetup, CommsEvent), _>::new(socket);
                 println!("communication");
                 loop {
                     if let Some(e) = reader.next() {

@@ -17,12 +17,11 @@ license = "MIT"
 
 [features]
 default=[]
-logging=["timely_communication/logging", "timely_logging/logging"]
 
 [dependencies]
 abomonation = { git = "https://github.com/frankmcsherry/abomonation" }
 timely_sort="0.1.6"
-timely_communication = { version = "0.1.7", path = "./communication" }
+timely_communication = { version = "0.1.8", path = "./communication" }
 byteorder="0.4.2"
 time="0.1.34"
 timely_logging = { path = "logging/" }
