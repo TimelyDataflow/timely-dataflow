@@ -64,7 +64,6 @@ extern crate timely;
 
 use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::generic::operator::source;
-use timely::dataflow::Scope;
 
 fn main() {
     timely::example(|scope| {

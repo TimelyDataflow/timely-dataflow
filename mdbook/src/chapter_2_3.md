@@ -13,7 +13,7 @@ The following program should print out the numbers one through ten.
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::{ToStream, Inspect, Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -32,7 +32,7 @@ The closure `map` takes gets *owned* data as input, which means you are able to 
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::{ToStream, Inspect, Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -40,7 +40,7 @@ fn main() {
             (0 .. 9)
                 .to_stream(scope)
                 .map(|x| x.to_string())
-                .map(|x| x.to_upper())
+                .map(|mut x| { x.truncate(5); x } )
                 .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
@@ -56,7 +56,7 @@ For example, the `map_in_place` method takes a closure which receives a mutable 
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::{ToStream, Inspect, Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -64,7 +64,7 @@ fn main() {
             (0 .. 9)
                 .to_stream(scope)
                 .map(|x| x.to_string())
-                .map_in_place(|x| x.to_upper())
+                .map_in_place(|x| x.truncate(5))
                 .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
@@ -76,7 +76,7 @@ Alternately, the `flat_map` method takes input data and allows your closure to t
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::{ToStream, Inspect, Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -97,7 +97,7 @@ Another fundamental operation is *filtering*, in which a predicate dictates a su
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::{ToStream, Inspect, Filter};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -143,7 +143,7 @@ In the other direction, `concat` takes two streams and produces one output strea
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Partition, Inspect};
+use timely::dataflow::operators::{ToStream, Partition, Concat, Inspect};
 
 fn main() {
     timely::example(|scope| {
@@ -162,7 +162,7 @@ There is also a `concatenate` method defined for scopes which collects all strea
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Partition, Inspect};
+use timely::dataflow::operators::{ToStream, Partition, Concatenate, Inspect};
 
 fn main() {
     timely::example(|scope| {

@@ -10,11 +10,11 @@ Timely dataflow may be a different programming model than you are used to, but i
 
 There are many domains where streaming and scalability are important, and I'm not sure I can name them all. If you would like to build a scalable monitoring application for a service you run, timely dataflow can express this. If you would like to work with big data computations processing more data than your computer can load into memory, timely dataflow streams can represent this efficiently. If you would like to build an incremental iterative computation over massive data (e.g. matrices, large graphs, text corpora), time dataflow has done these things.
 
-At the same time, dataflow computation is also another way of thinking about your program. Much like Rust causes you to think a bit harder about program structure, timely dataflow helps you tease out some structure to your program that results in a more effective computation. Even just writing something like `grep`, by stating your program as a dataflow computation its implementation immediately scales out to multiple threads, and even across multiple computers.
+At the same time, dataflow computation is also another way of thinking about your program. Much like Rust causes you to think a bit harder about program structure, timely dataflow helps you tease out some structure to your program that results in a more effective computation. Even when writing something like `grep`, a program that scans lines of text looking for patterns, by stating your program as a dataflow computation its implementation immediately scales out to multiple threads, and even across multiple computers.
 
 ## Generality
 
-Is timely dataflow always applicable? The intent of the research project is to remove layers of abstraction fat that prevent you from expressing anything your computer can do efficiently in parallel. 
+Is timely dataflow always applicable? The intent of this research project is to remove layers of abstraction fat that prevent you from expressing anything your computer can do efficiently in parallel. 
 
 Under the covers, your computer (the one on which you are reading this text) is a dataflow processor. When your computer *reads memory* it doesn't actually wander off to find the memory, it introduces a read request into your memory controller, an independent component that will eventually return with the associated cache line. Your computer then gets back to work on whatever it was doing, hoping the responses from the controller return in a timely fashion.
 

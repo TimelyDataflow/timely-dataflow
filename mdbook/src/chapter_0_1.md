@@ -4,6 +4,27 @@ You may have heard of `word_count` as the archetypical "big data" problem: you h
 
 Let's take the `word_count` example in the streaming direction. For whatever reason, your collection of text *changes*. As time moves along, some new texts are added and some old texts are retracted. We don't know why this happens, we just get told about the changes. Our new job is to *maintain* the `word_count` computation, in the face of arbitrary changes to the collection of texts, as promptly as possible.
 
+We are going to write a program that is the moral equivalent of the following sequential Rust program:
+
+```rust,ignore
+/// From a sequence of changes to the occurrences of text, 
+/// produce the changing counts of words in that text.
+fn word_count(history: Vec<(u64, Vec<(String, i64)>)>) {
+    for (time, changes) in history.drain(..) {
+        for (text, diff) in changes.drain(..) {
+            for word in text.split_whitespace() {
+                let mut entry = counts.entry(word.to_owned())
+                                      .or_insert(0i64);
+                *entry += diff;
+                println!("seen: {:?}", (word, *entry));
+            }
+        }
+    }
+}
+```
+
+Our program will be a bit larger, but it will come with the ability to scale out to multiple workers across multiple machines.
+
 ## Starting out with text streams
 
 Let's first build a timely computation into which we can send text and which will show us the text back. Our next steps will be to put more clever logic in place, but let's start here to get some boiler-plate out of the way.
@@ -87,7 +108,7 @@ More specifically, we will take `(String, i64)` pairs and break them into many `
 
 Rather than repeat all the code up above, I'm just going to show you the fragment you insert between `to_stream` and `inspect`:
 
-```rust
+```rust,ignore
 .flat_map(|(text, diff): (String, i64)| 
     text.split_whitespace()
         .map(move |word| (word.to_owned(), diff))
@@ -103,7 +124,13 @@ This code should now show us the stream of `(word, diff)` pairs that fly by, but
 
 This gets a bit more interesting. We don't have an operator to maintain word counts, so we are going to write one.
 
-Again, I'm just going to show you the new code, which now lives just after `flat_map` and just before `inspect`:
+We start with a stream of words and differences coming at us. This stream has no particular structure, and in particular if they stream is distributed across multiple workers we have no assurance that all instances of the same word are at the same worker. This means that if each worker just adds up the counts for each word, we will get a bunch of partial results, local to each worker.
+
+We will need to introduce *data exchange*, where the workers communicate with each other to shuffle the data so that the resulting distribution provides correct results. Specifically, we are going to distribute the data so that each word goes to the same worker, but the words themselves are distributed across workers.
+
+Having exchanged the data, each worker will need a moment of care where it ensures that it hasn't raced ahead of the others and might be processing data out of order. The operator will enqueue batches of word updates, and await the signal that all such batches at that time have been consumed.
+
+As before, I'm just going to show you the new code, which now lives just after `flat_map` and just before `inspect`:
 
 ```rust,ignore
 .unary_frontier(
@@ -207,7 +234,7 @@ Why do we do this? Because this is a streaming system, we could be getting data 
         }
 ```
 
-Here we look through each `(key, val)` pair that we've queued up, where `key` was `time` before. We then check `input.frontier`, which is what tells us whether we might expect more times or not. If the frontier is `less_equal` to the time, then it is possible there might be more data.
+Here we look through each `(key, val)` pair that we've queued up, where `key` was `time` before. We then check `input.frontier`, which is what tells us whether we might expect more times or not. The `input.frontier()` describes times we may yet see on the input; if it is `less_equal` to the time, then it is possible there might be more data.
 
 If the time is complete, we create a new output session from `output`. We need to specify the time for the output session, and so we use `key`. More importantly, this actually needs to be the same type as `time` from before; the system is smart and knows that if you drop all references to a time you cannot create new output sessions. It's a feature, not a bug.
 
