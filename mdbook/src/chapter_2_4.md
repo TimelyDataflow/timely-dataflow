@@ -202,9 +202,9 @@ fn main() {
 }
 ```
 
-As an exercise, this example could be improved in a few ways. How you might change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.
+As an exercise, this example could be improved in a few ways. How might you change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.
 
-Before ending the section, let's rewrite this example without the `notificator`, in an attempt to de-mystify how it works. Whether you use a notificator or not is up to you; they are mostly about staying sane in what can be a confusing setting, and you can totally skip them once you have internalized how frontiers work.
+Before ending the section, let's rewrite this example without the `notificator`, in an attempt to de-mystify how it works. Whether you use a notificator or not is up to you; they are mostly about staying sane in what can be a confusing setting, and you can totally skip them once you have internalized how capabilities and frontiers work.
 
 ```rust,no_run
 extern crate timely;
