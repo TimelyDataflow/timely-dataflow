@@ -2,11 +2,9 @@
 
 Timely dataflow is a low-latency cyclic dataflow computational model, introduced in the paper [Naiad: a timely dataflow system](http://dl.acm.org/citation.cfm?id=2522738). This project is an extended and more modular implementation of timely dataflow in Rust.
 
-This project is something akin to a distributed data-parallel compute engine, which scales the same program up from a single thread on your laptop to distributed execution across a cluster of computers. The main goals are expressive power and high performance. Statistically speaking it is probably strictly more expressive and faster than whatever you are currently using. I "strictly more" because statistically speaking you probably aren't using timely dataflow yet.
+This project is something akin to a distributed data-parallel compute engine, which scales the same program up from a single thread on your laptop to distributed execution across a cluster of computers. The main goals are expressive power and high performance. It is probably strictly more expressive and faster than whatever you are currently using, assuming you aren't yet using timely dataflow.
 
-Be sure to read the [documentation for timely dataflow](http://frankmcsherry.github.io/timely-dataflow). It is a work in progress, but mostly improving.
-
-The [timely dataflow wiki](https://github.com/frankmcsherry/timely-dataflow/wiki) has more long-form text, introducing programming and explaining concepts in more detail. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow in a different way.
+Be sure to read the [documentation for timely dataflow](http://frankmcsherry.github.io/timely-dataflow). It is a work in progress, but mostly improving. There is more [long-form text](https://github.com/frankmcsherry/timely-dataflow/blob/master/mdbook/src/SUMMARY.md) in `mdbook` format with examples tested against the current builds. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow in a different way, though be warned that the examples there may need tweaks to build against the current code.
 
 # An example
 
@@ -64,21 +62,25 @@ use timely::dataflow::operators::*;
 fn main() {
     // initializes and runs a timely dataflow computation
     timely::execute_from_args(std::env::args(), |root| {
-        // create a new input, exchange data, and inspect its output
-        let (mut input, probe) = root.dataflow(move |scope| {
-            let index = scope.index();
-            let (input, stream) = scope.new_input();
-            let probe = stream.exchange(|x| *x)
-                              .inspect(move |x| println!("worker {}:\thello {}", index, x))
-                              .probe();
-            (input, probe)
+
+        // create a new input, output probe.
+        let index = scope.index();        
+        let mut input = InputHandle::new();
+        let mut probe = ProbeHandle::new();
+
+        // exchange data and inspect its output.
+        root.dataflow(move |scope| {
+            input.to_stream(scope)
+                 .exchange(|x| *x)
+                 .inspect(move |x| println!("worker {}:\thello {}", index, x))
+                 .probe_with(&mut probe);
         });
 
         // introduce data and watch!
         for round in 0..10 {
             input.send(round);
             input.advance_to(round + 1);
-            while probe.lt(input.time()) {
+            while probe.less_than(input.time()) {
                 root.step();
             }
         }
