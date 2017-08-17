@@ -187,4 +187,4 @@ There are times where `exchange` can be useful. For example, if a stream is used
 
 ## Other operators
 
-There are any number of other operators, most of which you should be able to find in the `timely::dataflow::operators` module. Scanning through the documentation for this module may lead you to operators that you need, and alternately it may demonstrate how to *construct* similar operators, if the one you require is not present. Operator construction is the subject of the next section.
+There are any number of other operators, most of which you should be able to find in the `timely::dataflow::operators` module. Scanning through the documentation for this module may lead you to operators that you need, and alternately their implementations may demonstrate how to *construct* similar operators, if the one you require is not present. Operator construction is the subject of the next section!

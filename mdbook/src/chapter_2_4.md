@@ -6,34 +6,38 @@ Timely has several "generic" dataflow operators that are pretty much ready to ru
 
 Let's look at an example
 
-```rust,ignore
+```rust,no_run
+extern crate timely;
+
 use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
 
-timely::example(|scope| {
-    (0u64..10)
-        .to_stream(scope)
-        .unary(Pipeline, "increment", |capability|
-            |input, output| {
-                while let Some((time, data)) = input.next() {
-                    let mut session = output.session(&time);
-                    for datum in data.drain(..) {
-                        session.give(datum + 1);
+fn main() {
+    timely::example(|scope| {
+        (0u64..10)
+            .to_stream(scope)
+            .unary(Pipeline, "increment", |capability|
+                |input, output| {
+                    while let Some((time, data)) = input.next() {
+                        let mut session = output.session(&time);
+                        for datum in data.drain(..) {
+                            session.give(datum + 1);
+                        }
                     }
                 }
-            }
-        );
-});
+            );
+    });
+}
 ```
 
 What is going on here? The heart of the mess is the dataflow operator `unary`, which is a ready-to-assemble dataflow operator with one input and one output. The `unary` operator takes three arguments (it looks like so many more!): (i) instructions about how it should distribute its inputs, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.
 
-Most of what is interesting lies in the closure, so let's first tidy up some loose ends before we dive in there. There are a few ways to request how input data should be distributed and `Pipeline` is the one that says "don't move anything". The string "increment" is utterly arbitrary. The `|capability|` stuff should be ignored for the moment; we'll explain in just a moment (it has to do with whether you would like the ability to send data before you receive any).
+Most of what is interesting lies in the closure, so let's first tidy up some loose ends before we dive in there. There are a few ways to request how input data should be distributed and `Pipeline` is the one that says "don't move anything". The string "increment" is utterly arbitrary; this happens to be what the operator does, but you could change it to be your name, or a naughty word, or whatever you like. The `|capability|` stuff should be ignored for the moment; we'll explain in just a moment (it has to do with whether you would like the ability to send data before you receive any).
 
-Where the really heart of the logic lies is in the closure that binds `input` and `output`. These two are handles respectively to the operator's input (from which it can read records) and the operator's output (to which it can send records).
+The heart of the logic lies is in the closure that binds `input` and `output`. These two are handles respectively to the operator's input (from which it can read records) and the operator's output (to which it can send records).
 
-The input handle `input` has one primary method, `next`, which may return a pair of timestamp and batch of data. Rust really likes you to demonstrate a commitment to only looking at valid data, and our `while` loop does what is called deconstruction: we acknowledge the optional structure and only execute in the case the `Option` variant is `Some`, containing data. The `next` method could also return `None`, indicating that there is no more data available at the moment. It is strongly recommended that you take the hint and drop out of your closure at that point; timely gives you the courtesy of executing whatever code you want in this closure, but if you never release control you'll break things.
+The input handle `input` has one primary method, `next`, which may return a pair of timestamp and batch of data. Rust really likes you to demonstrate a commitment to only looking at valid data, and our `while` loop does what is called deconstruction: we acknowledge the optional structure and only execute in the case the `Option` variant is `Some`, containing data. The `next` method could also return `None`, indicating that there is no more data available at the moment. It is strongly recommended that you take the hint and stop trying to read inputs at that point; timely gives you the courtesy of executing whatever code you want in this closure, but if you never release control back to the system you'll break things (timely employs ["cooperative multitasking"](https://en.wikipedia.org/wiki/Cooperative_multitasking)).
 
 The output handle `output` has one primary method, `session`, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) element at a time with `give`, (ii) iterator at a time with `give_iterator`, and (iii) vector at a time with `give_content`. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the `while` loop.
 
@@ -43,13 +47,13 @@ The `unary` method is handy if you have one input and one output. What if you wa
 
 There is a `binary` method which looks a lot like unary, except that it has twice as many inputs (and ways to distribute the inputs), and requires a closure accepting two inputs and one output. You still get to write arbitrary code to drive the operator around as you like.
 
-There is also a method `operators::source` which .. has no inputs. You can't call it on a stream, for obvious reasons, but you call it on a scope instead. It looks just like the others, except you supply a closure that just takes an output as an argument and sends whatever it wants each time it gets called. This is great for reading from external sources and moving data along as you like.
+There is also a method `operators::source` which .. has no inputs. You can't call it on a stream, for obvious reasons, but you call it with a scope as an argument. It looks just like the other methods, except you supply a closure that just takes an output as an argument and sends whatever it wants each time it gets called. This is great for reading from external sources and moving data along as you like.
 
 ### Capabilities
 
-We skipped a discussion of the `_capability` argument, and we need to dig in to that now.
+We skipped a discussion of the `capability` argument, and we need to dig in to that now.
 
-One of timely dataflow's main features is its ability to track whether an operator may or may not receive more records in the future. The way that it does this is by requiring that its operators, like the ones we have written, hold *capabilities* for sending data. A capability is an instance of the `Capability<Time>` type, which looks to the outside world like an instance of `Time`, but which `output` will demand to see before it allows you to create a session.
+One of timely dataflow's main features is its ability to track whether an operator may or may not in the future receive more records bearing a certain timestamp. The way that timely does this is by requiring that its operators, like the ones we have written, hold *capabilities* for sending data at any timestamp. A capability is an instance of the `Capability<Time>` type, which looks to the outside world like an instance of `Time`, but which `output` will demand to see before it allows you to create a session.
 
 Remember up where we got things we called `time` and from which we created a session with `session(&time)`? That type was actually a capability.
 
@@ -95,9 +99,9 @@ fn main() {
 }
 ```
 
-The details seem a bit tedious, but let's talk them out. The first thing we do is capture `capability` in the variable `cap`, whose type is optionally a capability. This type is important because it will allow us to eventually discard the capability.
+The details seem a bit tedious, but let's talk them out. The first thing we do is capture `capability` in the variable `cap`, whose type is `Option<Capability<Time>>`. This type is important because it will allow us to eventually discard the capability, replacing it with `None`. If we always held a `Capability<Time>`, the best we could do would be to continually downgrade it. Another option is `Vec<Capability<Time>>`, which we could eventually clear.
 
-Our next step is to define a closure, and as it is the last thing we do return said closure, that takes `output` as a parameter. The `move` keyword is part of Rust and is an important part of making sure that `cap` makes its way into the closure, rather than just evaporating from the local scope when we return.
+Our next step is to define and return a closure that takes `output` as a parameter. The `move` keyword is part of Rust and is an important part of making sure that `cap` makes its way into the closure, rather than just evaporating from the local scope when we return.
 
 The closure does a bit of a dance to capture the current time (not a capability, in this case), create a session with this time and send whatever the time happens to be as data, the downgrade the capability to be one timestep in the future. If it turns out that this is greater than twenty we discard the capability.
 
@@ -105,42 +109,44 @@ The system is smart enough to notice when you downgrade and discard capabilities
 
 ### Stateful operators
 
-It may seem that we have only considered stateless operators, those that are only able to read from their inputs and write to their outputs. But, you can have whatever state that you like, using the magic of Rust's closures. When we write a closure, it can capture ("close over") any state that is currently in scope, taking ownership of it. If that sounds too abstract, let's look at an example. 
+It may seem that we have only considered stateless operators, those that are only able to read from their inputs and immediately write to their outputs. But, you can have whatever state that you like, using the magic of Rust's closures. When we write a closure, it can capture ("close over") any state that is currently in scope, taking ownership of it. This is actually what we did up above with the capability. If that sounds too abstract, let's look at an example. 
 
 Our `unary` example from way back just incremented the value and passed it along. What if we wanted to only pass values larger than any value we have seen so far? We just define a variable `max` which we check and update as we would normally. Importantly, we should define it *outside* the closure we return, so that it persists across calls, and we need to use the `move` keyword so that the closure knows it is supposed to take ownership of the variable. 
 
-```rust,ignore
+```rust,no_run
+extern crate timely;
+
 use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
 
-timely::example(|scope| {
-    (0u64..10)
-        .to_stream(scope)
-        .unary(Pipeline, "increment", |capability|
+fn main() {
+    timely::example(|scope| {
+        (0u64..10)
+            .to_stream(scope)
+            .unary(Pipeline, "increment", |capability| {
 
-            let mut max = 0;    // define this here; use in the closure
+                let mut maximum = 0;    // define this here; use in the closure
 
-            move |input, output| {
-                while let Some((time, data)) = input.next() {
-                    let mut session = output.session(&time);
-                    for datum in data.drain(..) {
-                        if datum > max {
-                            session.give(datum + 1);
-                            max = datum;
+                move |input, output| {
+                    while let Some((time, data)) = input.next() {
+                        let mut session = output.session(&time);
+                        for datum in data.drain(..) {
+                            if datum > maximum {
+                                session.give(datum + 1);
+                                maximum = datum;
+                            }
                         }
                     }
                 }
-            }
-        );
-});
+            });
+    });
+}
 ```
 
 This example just captures an integer, but you could just as easily define and capture ownership of a `HashMap`, or whatever complicated state you would like repeated access to.
 
-Bear in mind that this example is probably a bit wrong, in that we update `max` without paying any attention to the times of the data that come past, and so we may report a sequence of values that doesn't seem to correspond with the sequence when sorted by time. Writing sane operators in the presence of batches of data at shuffled times requires more thought.
-
-Specifically, for an operator to put its input back in order it needs to understand which times it might see in the future, which was the reason we were so careful about those capabilities and is the subject of the next subsection.
+Bear in mind that this example is probably a bit wrong, in that we update `max` without paying any attention to the times of the data that come past, and so we may report a sequence of values that doesn't seem to correspond with the sequence when sorted by time. Writing sane operators in the presence of batches of data at shuffled times requires more thought. Specifically, for an operator to put its input back in order it needs to understand which times it might see in the future, which was the reason we were so careful about those capabilities and is the subject of the next subsection.
 
 ### Frontiered operators
 
@@ -154,49 +160,97 @@ To make life easier for you, we've written a helper type called `Notificator` wh
 
 Here is a worked example where we use a binary operator that implements the behavior of `concat`, but it puts its inputs in order, buffering its inputs until their associated timestamp is complete, and then sending all data at that time. The operator defines and captures a `HashMap<Time, Vec<Data>>` named `stash` which it uses to buffer received input data that are not yet ready to send.
 
-```rust,ignore
+```rust,no_run
+extern crate timely;
+
 use std::collections::HashMap;
-use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
+use timely::dataflow::operators::{ToStream, FrontierNotificator};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
-    timely::execute(timely::Configuration::Thread, |worker| {
+    timely::example(|scope| {
         
-        worker.dataflow(|scope| {
+        let in1 = (0 .. 10).to_stream(scope);
+        let in2 = (0 .. 10).to_stream(scope);
 
-                let in1 = (0 .. 10).to_stream(scope);
-                let in2 = (0 .. 10).to_stream(scope);
+        in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |mut _builder| {
 
-                in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |mut _builder| {
-                    let mut notificator = FrontierNotificator::new();
-                    let mut stash = HashMap::new();
-                    move |input1, input2, output| {
-                        while let Some((time, data)) = input1.next() {
-                            stash.entry(time.time().clone()).or_insert(Vec::new()).push(data.take());
-                            notificator.notify_at(time);
-                        }
-                        while let Some((time, data)) = input2.next() {
-                            stash.entry(time.time().clone()).or_insert(Vec::new()).push(data.take());
-                            notificator.notify_at(time);
-                        }
-                        for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
-                            let mut session = output.session(&time);
-                            if let Some(vec) = stash.remove(time.time()) {
-                                for data in vec.into_iter() {
-                                    session.give_content(data);
-                                }
-                            }
+            let mut notificator = FrontierNotificator::new();
+            let mut stash = HashMap::new();
+
+            move |input1, input2, output| {
+                while let Some((time, data)) = input1.next() {
+                    stash.entry(time.time().clone()).or_insert(Vec::new()).push(data.take());
+                    notificator.notify_at(time);
+                }
+                while let Some((time, data)) = input2.next() {
+                    stash.entry(time.time().clone()).or_insert(Vec::new()).push(data.take());
+                    notificator.notify_at(time);
+                }
+                for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
+                    let mut session = output.session(&time);
+                    if let Some(vec) = stash.remove(time.time()) {
+                        for mut data in vec.into_iter() {
+                            session.give_content(&mut data);
                         }
                     }
-                });
+                }
+            }
         });
     });
 }
 ```
 
-As an exercise, this example could be improved in a few ways. How you might change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint.
+As an exercise, this example could be improved in a few ways. How you might change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.
 
-### Advanced operators
+Before ending the section, let's rewrite this example without the `notificator`, in an attempt to de-mystify how it works. Whether you use a notificator or not is up to you; they are mostly about staying sane in what can be a confusing setting, and you can totally skip them once you have internalized how frontiers work.
 
-UNIMPLEMENTED!
+```rust,no_run
+extern crate timely;
+
+use std::collections::HashMap;
+use timely::dataflow::operators::{ToStream, FrontierNotificator};
+use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::channels::pact::Pipeline;
+
+fn main() {
+    timely::example(|scope| {
+        
+        let in1 = (0 .. 10).to_stream(scope);
+        let in2 = (0 .. 10).to_stream(scope);
+
+        in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |mut _builder| {
+
+            let mut stash = HashMap::new();
+
+            move |input1, input2, output| {
+
+                while let Some((time, data)) = input1.next() {
+                    stash.entry(time).or_insert(Vec::new()).push(data.take());
+                }
+                while let Some((time, data)) = input2.next() {
+                    stash.entry(time).or_insert(Vec::new()).push(data.take());
+                }
+
+                // consider sending everything in `stash`.
+                let frontiers = &[input1.frontier(), input2.frontier()];
+                for (time, list) in stash.iter_mut() {
+                    // if neither input can produce data at `time`, ship `list`.
+                    if frontiers.iter().all(|f| !f.less_equal(time.time())) {
+                        let mut session = output.session(&time);
+                        for mut data in list.drain(..) {
+                            session.give_content(&mut data);
+                        }
+                    }
+                }
+
+                // discard `time` entries with empty `list`.
+                stash.retain(|time, list| list.len() > 0);
+            }
+        });
+    });
+}
+```
+
+Take a moment and check out the differences. Mainly, `stash` is now the one source of truth about `time` and `data`, but we now have to do our own checking of `time` against the input frontiers, and *very importantly* we need to make sure to discard `time` from the `stash` when we are finished with it (otherwise we retain the ability to send at `time`, and the system will not make progress).

@@ -29,7 +29,7 @@ Our program will be a bit larger, but it will come with the ability to scale out
 
 Let's first build a timely computation into which we can send text and which will show us the text back. Our next steps will be to put more clever logic in place, but let's start here to get some boiler-plate out of the way.
 
-```rust
+```rust,no_run
 extern crate timely;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
