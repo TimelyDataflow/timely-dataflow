@@ -4,12 +4,15 @@ You may have heard of `word_count` as the archetypical "big data" problem: you h
 
 Let's take the `word_count` example in the streaming direction. For whatever reason, your collection of text *changes*. As time moves along, some new texts are added and some old texts are retracted. We don't know why this happens, we just get told about the changes. Our new job is to *maintain* the `word_count` computation, in the face of arbitrary changes to the collection of texts, as promptly as possible.
 
+Let's model a changing corpus of text as a list of pairs of *times* which will be `u64` integers with a list of *changes* which are each pairs `(String, i64)` indicating the text and whether it has been added (+1) or removed (-1).
+
 We are going to write a program that is the moral equivalent of the following sequential Rust program:
 
 ```rust,ignore
 /// From a sequence of changes to the occurrences of text, 
 /// produce the changing counts of words in that text.
 fn word_count(history: Vec<(u64, Vec<(String, i64)>)>) {
+    let mut counts = HashMap::new();
     for (time, changes) in history.drain(..) {
         for (text, diff) in changes.drain(..) {
             for word in text.split_whitespace() {
@@ -23,7 +26,9 @@ fn word_count(history: Vec<(u64, Vec<(String, i64)>)>) {
 }
 ```
 
-Our program will be a bit larger, but it will come with the ability to scale out to multiple workers across multiple machines.
+This program is fairly straightforward; hopefully you understand its intent, even if you aren't familiar with every method and type. However, the program is also very specific about what must happen: we process the history in order, and for each time we process the text changes in order. The program does not allow for any flexibility here.
+
+Our program will be a bit larger, but it will be more flexible. By specifying more about what we want to happen to the data, and less about which order this needs to happen, we will gain the ability to scale out to multiple workers across multiple machines.
 
 ## Starting out with text streams
 
@@ -62,7 +67,9 @@ fn main() {
 }
 ```
 
-This example code is pretty close to a minimal non-trivial timely dataflow computation. After some boiler-plate including the `timely` crate and some of its traits and types, we get to work:
+This example code is pretty close to a minimal non-trivial timely dataflow computation. It explains how participating timely workers (there may be many, remember) should construct and run a timely dataflow computation.
+
+After some boiler-plate including the `timely` crate and some of its traits and types, we get to work:
 
 ```rust,ignore
         // create input and output handles.
@@ -126,9 +133,9 @@ This gets a bit more interesting. We don't have an operator to maintain word cou
 
 We start with a stream of words and differences coming at us. This stream has no particular structure, and in particular if they stream is distributed across multiple workers we have no assurance that all instances of the same word are at the same worker. This means that if each worker just adds up the counts for each word, we will get a bunch of partial results, local to each worker.
 
-We will need to introduce *data exchange*, where the workers communicate with each other to shuffle the data so that the resulting distribution provides correct results. Specifically, we are going to distribute the data so that each word goes to the same worker, but the words themselves are distributed across workers.
+We will need to introduce *data exchange*, where the workers communicate with each other to shuffle the data so that the resulting distribution provides correct results. Specifically, we are going to distribute the data so that each individual word goes to the same worker, but the words themselves may be distributed across workers.
 
-Having exchanged the data, each worker will need a moment of care where it ensures that it hasn't raced ahead of the others and might be processing data out of order. The operator will enqueue batches of word updates, and await the signal that all such batches at that time have been consumed.
+Having exchanged the data, each worker will need a moment of care when it process its inputs. Because the data are coming in from multiple workers, they may no longer be in "time order"; some workers may have moved through their inputs faster than others, and may be producing data for the next time while others lag behind. This operator means to produce the word count changes *as if processed sequentially*, and it will need to delay processing changes that come early.
 
 As before, I'm just going to show you the new code, which now lives just after `flat_map` and just before `inspect`:
 
