@@ -2,16 +2,17 @@
 
 Progress tracking is a fundamental component of timely dataflow, and it is important to understand how it works to have a complete understanding of what timely dataflow does for you.
 
-Let's start with a statement about what progress tracking means to accomplish. The setting is that there are multiple workers, each of whom move timestamped data through a common dataflow graph. The data may move between workers, and as the data are processed by operators we have relatively few guarantees about the consequences: mostly that the resulting timestamps can only move forward. Nonetheless, the workers engage in a collective protocol that ensures that each worker is able to report, to each location in its hosted dataflow graph, the impossibility of ever observing certain timestamps at that location again.
+Let's start with a statement about what progress tracking means to accomplish. The setting is that there are multiple workers, each of whom move timestamped data through a common dataflow graph. The data may move between workers, and as the data are processed by operators we have relatively few guarantees about the consequences: mostly that the resulting timestamps can only move forward [it's not obvious what this means]. Nonetheless, the workers engage in a collective protocol that ensures that each worker is able to report, to each location in its hosted dataflow graph, the impossibility of ever observing certain timestamps at that location again.
 
 As an overview, timely dataflow's progress tracking is about (i) maintaining a view of *timestamp capabilities* at each location in the dataflow graph, and (ii) communicating the implications of changes in capabilities to other locations in the dataflow graph. Before we get in to these two aspects, we will first need to be able to name parts of our dataflow graph.
 
 ## Dataflow structure
 
-A dataflow graph hosts some number of operators. For progress tracking, these operators are simply identified by their index. Each operator has some number of *input ports*, each of which may independently have or not have certain timestamps in its future. Each operator has some number of *output ports*, each of which may independently express a capability to produce timestamps in the future. Each input port is connected to a single output port, and each output port may be connected to multiple input ports (a message produced at an output port is to be delivered to all attached input ports).
+A dataflow graph hosts some number of operators. For progress tracking, these operators are simply identified by their index. Each operator has some number of *input ports*, each of which may independently have or not have certain timestamps in its future [not clear what "have timestamps" and "in its future" means]. Each operator has some number of *output ports*, each of which may independently express a capability to produce [data with] timestamps in the future [again, not clear what "future" is]. Each input port is connected to a single output port, and each output port may be connected to multiple input ports (a message produced at an output port is to be delivered to all attached input ports)[should make clear that you mean the output hooking up to someone else's input. As written it sounds cyclic].
 
-In timely dataflow progress tracking, we identify output ports by the type `Source` and input ports by the type `Target`, as an output port is a source of timestamped data, and an input port is a target of timestamped data. Each can be described by their operator index and then an operator-local index of the corresponding port. The use of distinct types helps us avoid mistaking input and output ports.
+In timely dataflow progress tracking, we identify output ports by the type `Source` and input ports by the type `Target`, as an output port is a source of timestamped data, and an input port is a target of timestamped data[this nomenclature is confusing, but hopefully less so in the actual code? Would be weird if operators used their "source" to write to]. Each can be described by their operator index and then an operator-local index of the corresponding port. The use of distinct types helps us avoid mistaking input and output ports.
 
+[hmm, I would really think that data comes from Source and goes to Target. Is it really the other way?]
 ```rust,ignore
 pub struct Source { 
     /// Index of the source operator.
@@ -34,9 +35,9 @@ At this point we have the structure of a dataflow graph. We can draw a circle fo
 
 ## Maintaining Capabilities
 
-Our first goal is for the workers to collectively track the outstanding timestamp capabilities in the system, as dataflow operators run and messages are sent and received. Capabilities can live in two places in timely dataflow: an operator can hold capabilities to send timestamped messages on each of its outputs, and each timestamped message bears a capability for its timestamp.
+Our first goal is for the workers to collectively track the outstanding timestamp capabilities in the system, as dataflow operators run and messages are sent and received. Capabilities can live in two places in timely dataflow: an operator can hold capabilities to send timestamped messages on each of its outputs, and each timestamped message bears a capability for its timestamp.[Should explain that a capability is basically a tuple (timestamp, count) and means (mod my misunderstandings) "I can send up to `count` messages at t: timestamp \leq t"].
 
-When a timely dataflow computation starts, there are no messages in flight. Rather, each operator starts with the capabilities to send any timestamped message on any of its outputs. As each worker knows this, each worker starts with the view that each operator has as many capabilities on each of its outputs as there are workers in the system.
+When a timely dataflow computation starts, there are no messages in flight. Rather, each operator starts with the capabilities to send any timestamped message on any of its outputs. As each worker knows this, each worker starts with the view that each operator has as many capabilities on each of its outputs as there are workers in the system.[Give an example? It's not clear what having "three capabilities" means. Presumably every operator is seen as having the capability of sending as many messages as it likes at any zero (and can that be expressed as just holding a capability at time zero?); I wrote this before asking to define capabilities. That may already clear things up here!]
 
 As a computation proceeds, operators may perform three classes of action:
 
@@ -46,9 +47,10 @@ As a computation proceeds, operators may perform three classes of action:
 
 The results of these actions are a stream of changes to the occurrences of capabilities at each location in the dataflow graph. As input messages are consumed, capabilies located at the corresponding `Target` input port are decremented, and capabilities at the operators `Source` output ports are incremented. Cloning, downgrading, and dropping capabilities changes the counts at each of the operators corresponding `Source` output ports. Sending messages results in increments to the counts at the `Target` ports of each `Target` connected to the `Source` from which the message is sent.
 
-Concretely, a batch of changes has the form `(Vec<(Source, Time, i64)>, Vec<(Target, Time, i64)>), indicating the increments and decrements for each time, at each dataflow location. Importantly we must keep these batches intact; the safety of the progress tracking protocol relies on not communicating half-formed progress messages (for example, consuming an input message but forgetting to indicate the acquisition of its capability).
+Concretely, a batch of changes has the form `(Vec<(Source, Time, i64)>, Vec<(Target, Time, i64)>), indicating the increments and decrements for each time, at each dataflow location. Importantly we must keep these batches intact; the safety of the progress tracking protocol relies on not communicating half-formed progress messages (for example, consuming an input message but forgetting to indicate the acquisition of its capability).[Do progress change batches
+always correspond to information corresponding to some union of "data batches"?]
 
-Each worker reliably broadcasts the stream of progress change batches to all workers in the system (including itself) along FIFO channels. At any point in time, each worker has seen an arbitrary prefix of the sequence of progress change batches produced by each other worker, and it is expected that as time proceeds each worker eventually sees every prefix of each sequence.
+Each worker reliably broadcasts the stream of progress change batches to all workers in the system (including itself) along FIFO channels. At any point in time, each worker has seen an arbitrary prefix of the sequence of progress change batches produced by each other worker, and it is expected that as time proceeds each worker eventually sees every prefix of each sequence[What ordering guarantees do you have here? This looks like the kind of thing that's annoying to get completely right in practice].
 
 At any point in time, each worker's view of the capabilities is the system is defined by the accumulation of all received progress change batches, plus initial capabilities at each output (with starting multiplicity equal to the number of workers). This view may be surprising and messy (there may be negative counts), but at all times it satisfies an important safety condition, related to the communicated implications of these capabilities, which we now develop.
 
@@ -77,7 +79,7 @@ pub trait PathSummary<T> : PartialOrder {
 
 The types implementing `PathSummary` must be partially ordered, and implement two methods: 
 
-1. The `results_in` method explains what must happen to a timestamp moving along a path (note the possibility of `None`; a timestamp could *not* move along a path, for example a timestamp with a loop counter that is about to exceed the loop limit will be discarded rather than advanced).
+1. The `results_in` method explains what must happen to a timestamp moving along a path (note the possibility of `None`; a timestamp could *not* move along a path, for example a timestamp with a loop counter that is about to exceed the loop limit will be discarded rather than advanced).[OTOH, if the loop isn't about to terminate, then morally `(1,2).results_in.unwrap() == (1,3)`].
 
 2. The `followed_by` method explains how two path summaries combine. When we build the summaries we will start with paths corresponding to single edges, and build out more complex paths by combining the effects of multiple paths (and their summaries). As with `results_in`, it may be that two paths combined result in something that will never pass a timestamp, and the summary may be `None` (for example, two paths that each increment a loop counter by half of its maximum value).
 
@@ -135,11 +137,11 @@ Second, just before a worker might hypothetically receive a message at `(l1, t1)
 
 At this point, we have two important bits of knowledge:
 
-1. The accumulated values for all pointstamps less than `(l1, t1)` were initially non-positive, by assumption.
+1. The accumulated values for all pointstamps less than `(l1, t1)` were initially non-positive, by assumption.[because everything is settled except the inflight message, which means someone has decremented for it, but the receiver hasn't incremented?]
 2. The settled system has non-negative accumulations for all pointstamps.
 
 However, each progress update batch has a property, one that is easier to state if we imagine operators cannot clone capabilities, and must consume a capability to send a message: each atomic progress update batch decrements a pointstamp and optionally increments pointstamps strictly greater than it. Alternately, each progress update batch that increments a pointstamp must decrement a pointstamp strictly less than it. Inductively, any collection of progress update batches whose net effect increments a pointstamp must have a net effect decrementing some pointstamp strictly less than it.
 
 Because the initial accumulation for all pointstamps less than `(l1, t1)` was non-positive by assumption, and now accumulates to something non-negative due to settling, the collection of additional progress update batches that settled the system cannot cumulatively decrement any of their counts. Consequently, the settling updates cannot cumulatively increment the count for `(l1, t1)`, which must remain non-positive in the settled system.
 
-No message!
+No message! [huh]?
