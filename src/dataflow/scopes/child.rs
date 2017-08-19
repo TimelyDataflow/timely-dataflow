@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use progress::{Timestamp, Operate, Subgraph};
+use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use timely_communication::{Allocate, Data};
@@ -14,7 +14,7 @@ use super::{ScopeParent, Scope};
 /// of `Operate`s to a subgraph, and the connection of edges between them.
 pub struct Child<'a, G: ScopeParent, T: Timestamp> {
     /// The subgraph under assembly.
-    pub subgraph: &'a RefCell<Subgraph<G::Timestamp, T>>,
+    pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
     /// A copy of the child's parent scope.
     pub parent:   G,
 }
@@ -37,7 +37,7 @@ impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
-    fn name(&self) -> String { self.subgraph.borrow().name().to_owned() }
+    fn name(&self) -> String { self.subgraph.borrow().name.clone() }
     fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
     fn add_edge(&self, source: Source, target: Target) {
         self.subgraph.borrow_mut().connect(source, target);
@@ -54,10 +54,10 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         index
     }
 
-    fn new_subscope<T2: Timestamp>(&mut self) -> Subgraph<Product<G::Timestamp, T>, T2> {
+    fn new_subscope<T2: Timestamp>(&mut self) -> SubgraphBuilder<Product<G::Timestamp, T>, T2> {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
-        Subgraph::new_from(self, index, path)
+        SubgraphBuilder::new_from(index, path)
     }
 }
 

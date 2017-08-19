@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use progress::{Timestamp, Operate, Subgraph};
+use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::nested::{Source, Target};
 use timely_communication::Allocate;
 
@@ -48,7 +48,7 @@ pub trait Scope: ScopeParent {
 
     /// Creates a new `Subgraph` with timestamp `T`. Used by `scoped`, but unlikely to be
     /// commonly useful to end users.
-    fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T>;
+    fn new_subscope<T: Timestamp>(&mut self) -> SubgraphBuilder<Self::Timestamp, T>;
 
     /// Creates a `Subgraph` from a closure acting on a `Child` scope, and returning
     /// whatever the closure returns.
@@ -85,7 +85,8 @@ pub trait Scope: ScopeParent {
         };
 
         let index = subscope.borrow().index;
-        self.add_operator_with_index(subscope.into_inner(), index);
+        let subscope = subscope.into_inner().build(self);
+        self.add_operator_with_index(subscope, index);
 
         result
     }
