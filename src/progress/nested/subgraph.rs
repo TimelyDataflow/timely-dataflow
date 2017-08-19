@@ -64,9 +64,6 @@ pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
     /// The index assigned to the subgraph by its parent.
     index: usize,
 
-    inputs: usize,
-    outputs: usize,
-
     // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
     children: Vec<PerOperatorState<Product<TOuter, TInner>>>,
     child_count: usize,
@@ -91,9 +88,6 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
 
     /// A sequence of integers uniquely identifying the subgraph.
     pub path: Vec<usize>,
-
-    /// The index assigned to the subgraph by its parent.
-    pub index: usize,
 
     inputs: usize,
     outputs: usize,
@@ -509,18 +503,16 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
     /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
     pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>) -> Target {
-        self.inputs += 1;
         self.input_messages.push(shared_counts);
         self.children[0].add_output();
-        Target { index: self.index, port: self.inputs - 1 }
+        Target { index: self.index, port: self.input_messages.len() - 1 }
     }
 
     /// Allocates a new output from the subgraph and returns the source of that output in the outer graph.
     pub fn new_output(&mut self) -> Source {
-        self.outputs += 1;
         self.output_capabilities.push(MutableAntichain::new());
         self.children[0].add_input();
-        Source { index: self.index, port: self.outputs - 1 }
+        Source { index: self.index, port: self.output_capabilities.len() - 1 }
     }
 
     /// Introduces a dependence from the source to the target.
@@ -541,9 +533,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
             name:                   "Subgraph".into(),
             path:                   path,
             index:                  index,
-
-            inputs:                 Default::default(),
-            outputs:                Default::default(),
 
             children:               children,
             child_count:            1,
@@ -586,9 +575,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
         Subgraph {
             name: self.name,
             path: self.path,
-            index: self.index,
-            inputs: self.inputs,
-            outputs: self.outputs,
+            inputs: self.input_messages.len(),
+            outputs: self.output_capabilities.len(),
             children: self.children,
             input_messages: self.input_messages,
             output_capabilities: self.output_capabilities,
