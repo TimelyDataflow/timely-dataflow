@@ -62,7 +62,7 @@ pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
     pub path: Vec<usize>,
 
     /// The index assigned to the subgraph by its parent.
-    pub index: usize,
+    index: usize,
 
     inputs: usize,
     outputs: usize,
@@ -507,20 +507,20 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
-    /// Allocates a new input to the subgraph and returns the assigned index.
-    pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>) -> usize {
+    /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
+    pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>) -> Target {
         self.inputs += 1;
         self.input_messages.push(shared_counts);
         self.children[0].add_output();
-        self.inputs - 1
+        Target { index: self.index, port: self.inputs - 1 }
     }
 
-    /// Allocates a new output from the subgraph and returns the assigned index.
-    pub fn new_output(&mut self) -> usize {
+    /// Allocates a new output from the subgraph and returns the source of that output in the outer graph.
+    pub fn new_output(&mut self) -> Source {
         self.outputs += 1;
         self.output_capabilities.push(MutableAntichain::new());
         self.children[0].add_input();
-        self.outputs - 1
+        Source { index: self.index, port: self.outputs - 1 }
     }
 
     /// Introduces a dependence from the source to the target.

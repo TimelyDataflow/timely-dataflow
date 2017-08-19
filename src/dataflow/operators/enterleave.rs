@@ -88,12 +88,11 @@ impl<T: Timestamp, G: Scope, D: Data> Enter<G, T, D> for Stream<G, D> {
         let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let ingress = IngressNub { targets: Counter::new(targets, produced.clone()) };
 
-        let scope_index = scope.subgraph.borrow().index;
-        let input_index = scope.subgraph.borrow_mut().new_input(produced);
+        let input = scope.subgraph.borrow_mut().new_input(produced);
 
         let channel_id = scope.clone().new_identifier();
-        self.connect_to(Target { index: scope_index, port: input_index }, ingress, channel_id);
-        Stream::new(Source { index: 0, port: input_index }, registrar, scope.clone())
+        self.connect_to(input, ingress, channel_id);
+        Stream::new(Source { index: 0, port: input.port }, registrar, scope.clone())
     }
 }
 
@@ -121,14 +120,13 @@ impl<'a, G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<'a, G, T>
 
         let scope = self.scope();
 
-        let output_index = scope.subgraph.borrow_mut().new_output();
+        let output = scope.subgraph.borrow_mut().new_output();
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         let channel_id = scope.clone().new_identifier();
-        self.connect_to(Target { index: 0, port: output_index }, EgressNub { targets: targets, phantom: PhantomData }, channel_id);
-        let subgraph_index = scope.subgraph.borrow().index;
+        self.connect_to(Target { index: 0, port: output.port }, EgressNub { targets: targets, phantom: PhantomData }, channel_id);
         
         Stream::new(
-            Source { index: subgraph_index, port: output_index },
+            output,
             registrar,
             scope.parent.clone()
         )
