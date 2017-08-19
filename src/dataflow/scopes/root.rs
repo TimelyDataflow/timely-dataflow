@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::any::Any;
 
 use progress::timestamp::RootTimestamp;
-use progress::{Timestamp, Operate, Subgraph};
+use progress::{Timestamp, Operate, SubgraphBuilder};
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
@@ -84,7 +84,7 @@ impl<A: Allocate> Root<A> {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
-        let subscope = Subgraph::new_from(&mut (*self.allocator.borrow_mut()), dataflow_index, addr);
+        let subscope = SubgraphBuilder::new_from(dataflow_index, addr);
         let subscope = RefCell::new(subscope);
 
         let result = {
@@ -95,7 +95,7 @@ impl<A: Allocate> Root<A> {
             func(&mut resources, &mut builder)
         };
 
-        let mut operator = subscope.into_inner();
+        let mut operator = subscope.into_inner().build(&mut *self.allocator.borrow_mut());
 
         operator.get_internal_summary();
         operator.set_external_summary(Vec::new(), &mut []);

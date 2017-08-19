@@ -49,6 +49,35 @@ pub struct Target {
     pub port: usize, 
 }
 
+/// A builder structure for initializing `Subgraph`s.
+///
+/// This collects all the information necessary to get a `Subgraph` up and
+/// running, and is important largely through its `build` method which
+/// actually creates a `Subgraph`.
+pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
+    /// The name of this subgraph.
+    pub name: String,
+
+    /// A sequence of integers uniquely identifying the subgraph.
+    pub path: Vec<usize>,
+
+    /// The index assigned to the subgraph by its parent.
+    index: usize,
+
+    // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
+    children: Vec<PerOperatorState<Product<TOuter, TInner>>>,
+    child_count: usize,
+
+    edge_stash: Vec<(Source, Target)>,
+
+    // shared state written to by the datapath, counting records entering this subgraph instance.
+    input_messages: Vec<Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>>,
+
+    // expressed capabilities, used to filter changes against.
+    output_capabilities: Vec<MutableAntichain<TOuter>>,
+
+}
+
 /// A dataflow subgraph.
 ///
 /// The subgraph type contains the infrastructure required to describe the topology of and track
@@ -60,17 +89,11 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     /// A sequence of integers uniquely identifying the subgraph.
     pub path: Vec<usize>,
 
-    /// The index assigned to the subgraph by its parent.
-    pub index: usize,
-
     inputs: usize,
     outputs: usize,
 
     // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
     children: Vec<PerOperatorState<Product<TOuter, TInner>>>,
-    child_count: usize,
-
-    edge_stash: Vec<(Source, Target)>,
 
     // shared state written to by the datapath, counting records entering this subgraph instance.
     input_messages: Vec<Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>>,
@@ -105,20 +128,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Vec<ChangeBatch<TOuter>>) {
 
         // println!("in GIS for subgraph: {:?}", self.path);
-
-        // at this point, the subgraph is frozen. we should initialize any internal state which
-        // may have been determined after construction (e.g. the numbers of inputs and outputs).
-        // we also need to determine what to return as a summary and initial capabilities, which
-        // will depend on child summaries and capabilities, as well as edges in the subgraph.
-
-        // perhaps first check that the children are saney identified
-        self.children.sort_by(|x,y| x.index.cmp(&y.index));
-        assert!(self.children.iter().enumerate().all(|(i,x)| i == x.index));
-
-        while let Some((source, target)) = self.edge_stash.pop() {
-            // println!("  edge: {:?}", (source, target));
-            self.children[source.index].edges[source.port].push(target);
-        }
 
         // set up a bit of information about the "0th" child, reflecting the subgraph's external
         // connections
@@ -491,6 +500,97 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     }
 }
 
+impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
+    /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
+    pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>) -> Target {
+        self.input_messages.push(shared_counts);
+        self.children[0].add_output();
+        Target { index: self.index, port: self.input_messages.len() - 1 }
+    }
+
+    /// Allocates a new output from the subgraph and returns the source of that output in the outer graph.
+    pub fn new_output(&mut self) -> Source {
+        self.output_capabilities.push(MutableAntichain::new());
+        self.children[0].add_input();
+        Source { index: self.index, port: self.output_capabilities.len() - 1 }
+    }
+
+    /// Introduces a dependence from the source to the target.
+    ///
+    /// This method does not effect data movement, but rather reveals to the progress tracking infrastructure
+    /// that messages produced by `source` should be expected to be consumed at `target`.
+    pub fn connect(&mut self, source: Source, target: Target) {
+        self.edge_stash.push((source, target));
+    }
+
+    /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
+    pub fn new_from(index: usize, mut path: Vec<usize>) -> SubgraphBuilder<TOuter, TInner> {
+        path.push(index);
+
+        let children = vec![PerOperatorState::empty(path.clone())];
+
+        SubgraphBuilder {
+            name:                   "Subgraph".into(),
+            path:                   path,
+            index:                  index,
+
+            children:               children,
+            child_count:            1,
+            edge_stash: vec![],
+
+            input_messages:         Default::default(),
+            output_capabilities:    Default::default(),
+        }
+    }
+
+    /// Allocates a new child identifier, for later use.
+    pub fn allocate_child_id(&mut self) -> usize {
+        self.child_count += 1;
+        self.child_count - 1
+    }
+
+    /// Adds a new child to the subgraph.
+    pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize, identifier: usize) {
+        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier))
+    }
+
+    /// Now that initialization is complete, actually build a subgraph.
+    pub fn build<A: Allocate>(mut self, allocator: &mut A) -> Subgraph<TOuter, TInner> {
+        // at this point, the subgraph is frozen. we should initialize any internal state which
+        // may have been determined after construction (e.g. the numbers of inputs and outputs).
+        // we also need to determine what to return as a summary and initial capabilities, which
+        // will depend on child summaries and capabilities, as well as edges in the subgraph.
+
+        // perhaps first check that the children are saney identified
+        self.children.sort_by(|x,y| x.index.cmp(&y.index));
+        assert!(self.children.iter().enumerate().all(|(i,x)| i == x.index));
+
+        for (source, target) in self.edge_stash {
+            // println!("  edge: {:?}", (source, target));
+            self.children[source.index].edges[source.port].push(target);
+        }
+
+        let progcaster = Progcaster::new(allocator);
+
+        Subgraph {
+            name: self.name,
+            path: self.path,
+            inputs: self.input_messages.len(),
+            outputs: self.output_capabilities.len(),
+            children: self.children,
+            input_messages: self.input_messages,
+            output_capabilities: self.output_capabilities,
+
+            pointstamps:               Default::default(),
+            local_pointstamp_messages: ChangeBatch::new(),
+            local_pointstamp_internal: ChangeBatch::new(),
+            final_pointstamp_messages: ChangeBatch::new(),
+            final_pointstamp_internal: ChangeBatch::new(),
+            progcaster:                progcaster,
+        }
+    }
+}
+
 impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
     // pushes pointstamps to scopes using self.*_summaries; clears pre-push counts.
@@ -643,72 +743,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
         //         }
         //     }
         // }
-    }
-
-    /// Allocates a new input to the subgraph and returns the assigned index.
-    pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>) -> usize {
-        self.inputs += 1;
-        self.input_messages.push(shared_counts);
-        self.children[0].add_output();
-        self.inputs - 1
-    }
-
-    /// Allocates a new output from the subgraph and returns the assigned index.
-    pub fn new_output(&mut self) -> usize {
-        self.outputs += 1;
-        self.output_capabilities.push(MutableAntichain::new());
-        self.children[0].add_input();
-        self.outputs - 1
-    }
-
-    /// Introduces a dependence from the source to the target.
-    ///
-    /// This method does not effect data movement, but rather reveals to the progress tracking infrastructure
-    /// that messages produced by `source` should be expected to be consumed at `target`.
-    pub fn connect(&mut self, source: Source, target: Target) {
-        self.edge_stash.push((source, target));
-    }
-
-    /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
-    pub fn new_from<A: Allocate>(allocator: &mut A, index: usize, mut path: Vec<usize>) -> Subgraph<TOuter, TInner> {
-        let progcaster = Progcaster::new(allocator);
-        path.push(index);
-
-        let children = vec![PerOperatorState::empty(path.clone())];
-
-        Subgraph {
-            name:                   "Subgraph".into(),
-            path:                   path,
-            index:                  index,
-
-            inputs:                 Default::default(),
-            outputs:                Default::default(),
-
-            children:               children,
-            child_count:            1,
-            edge_stash: vec![],
-
-            input_messages:         Default::default(),
-            output_capabilities:    Default::default(),
-
-            pointstamps:            Default::default(),
-            local_pointstamp_messages:    ChangeBatch::new(),
-            local_pointstamp_internal:    ChangeBatch::new(),
-            final_pointstamp_messages:    ChangeBatch::new(),
-            final_pointstamp_internal:    ChangeBatch::new(),
-            progcaster:             progcaster,
-        }
-    }
-
-    /// Allocates a new child identifier, for later use.
-    pub fn allocate_child_id(&mut self) -> usize {
-        self.child_count += 1;
-        self.child_count - 1
-    }
-
-    /// Adds a new child to the subgraph.
-    pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize, identifier: usize) {
-        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier))
     }
 }
 

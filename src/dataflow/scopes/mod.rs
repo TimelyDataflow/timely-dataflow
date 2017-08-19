@@ -1,8 +1,6 @@
 //! Hierarchical organization of timely dataflow graphs.
 
-use std::cell::RefCell;
-
-use progress::{Timestamp, Operate, Subgraph};
+use progress::{Timestamp, Operate};
 use progress::nested::{Source, Target};
 use timely_communication::Allocate;
 
@@ -46,10 +44,6 @@ pub trait Scope: ScopeParent {
     /// child, as happens in subgraph creation.
     fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC, index: usize);
 
-    /// Creates a new `Subgraph` with timestamp `T`. Used by `scoped`, but unlikely to be
-    /// commonly useful to end users.
-    fn new_subscope<T: Timestamp>(&mut self) -> Subgraph<Self::Timestamp, T>;
-
     /// Creates a `Subgraph` from a closure acting on a `Child` scope, and returning
     /// whatever the closure returns.
     ///
@@ -72,21 +66,5 @@ pub trait Scope: ScopeParent {
     ///     });
     /// });
     /// ```
-    #[inline]
-    fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
-        let subscope = RefCell::new(self.new_subscope());
-
-        let result = {
-            let mut builder = Child {
-                subgraph: &subscope,
-                parent: self.clone(),
-            };
-            func(&mut builder)
-        };
-
-        let index = subscope.borrow().index;
-        self.add_operator_with_index(subscope.into_inner(), index);
-
-        result
-    }
+    fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R;
 }
