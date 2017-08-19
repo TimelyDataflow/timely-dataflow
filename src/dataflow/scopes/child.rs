@@ -54,10 +54,24 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         index
     }
 
-    fn new_subscope<T2: Timestamp>(&mut self) -> SubgraphBuilder<Product<G::Timestamp, T>, T2> {
+    #[inline]
+    fn scoped<T2: Timestamp, R, F: FnOnce(&mut Child<Self, T2>) -> R>(&mut self, func: F) -> R {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
-        SubgraphBuilder::new_from(index, path)
+
+        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path));
+        let result = {
+            let mut builder = Child {
+                subgraph: &subscope,
+                parent: self.clone(),
+            };
+            func(&mut builder)
+        };
+        let subscope = subscope.into_inner().build(self);
+
+        self.add_operator_with_index(subscope, index);
+
+        result
     }
 }
 
