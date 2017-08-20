@@ -25,7 +25,7 @@ fn main() {
         (1 .. 10)
             .to_stream(scope)
             .concat(stream)
-            .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x - 1} )
+            .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
             .inspect(|x| println!("{:?}", x))
             .filter(|x| x != 1)
             .connect_loop(handle);
@@ -100,7 +100,7 @@ fn main() {
             input
                 .enter(subscope)
                 .concat(stream)
-                .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x - 1} )
+                .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
                 .inspect(|x| println!("{:?}", x))
                 .filter(|x| x != 1)
                 .connect_loop(handle);
