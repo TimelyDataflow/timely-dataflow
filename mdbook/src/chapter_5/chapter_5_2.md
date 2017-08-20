@@ -8,6 +8,8 @@ What timely dataflow provides is a special stream called a `LoopVariable`. This 
 
 That may be a bit abstract, so let's look at a simple example.
 
+We are going to check the [Collatz conjecture](https://en.wikipedia.org/wiki/Collatz_conjecture), which says that if you repeatedly divide even numbers by two, and multiple odd numbers by three and add one, you eventually reach the number one. We could do this in lots of ways, but this is the timely dataflow way to do it.
+
 ```rust
 extern crate timely;
 
@@ -33,8 +35,6 @@ fn main() {
 ```
 
 This program first creates a loop variable, using the `loop_variable` method on scopes. This method comes from the `Feedback` extension trait in `dataflow::operators`, in case you can't find it. When we create a new loop variable, we have to tell timely dataflow two things, as arguments: (i) what is the upper bound on the number of iterations, and by how much should we increment the timestamp each time around the loop.
-
-We are going to check the [Collatz conjecture](https://en.wikipedia.org/wiki/Collatz_conjecture), which says that if you repeatedly divide even numbers by two, and multiple odd numbers by three and add one, you eventually reach the number one. We could do this in lots of ways, but this is the timely dataflow way to do it.
 
 We start with a stream of the numbers from one through nine, because we have to start somewhere. Our plan is to repeatedly apply the Collatz step, and then discard any numbers equal to one, but we want to apply this not only to our input but also to whatever comes back around our loop variable. So, the very first step is to `concat` our input stream with the feedback stream. Then we can apply the Collatz step, filter out the ones, and then connect the resulting stream as the definition of the feedback stream.
 
