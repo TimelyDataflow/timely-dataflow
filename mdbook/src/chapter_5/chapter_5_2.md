@@ -94,6 +94,9 @@ fn main() {
         let input = (1 .. 10).to_stream(scope);
 
         scope.scoped(|subscope| {
+
+            let (handle, stream) = scope.loop_variable(100, 1);
+        
             input
                 .enter(subscope)
                 .concat(stream)
