@@ -3,7 +3,7 @@
 [Timely Dataflow](./introduction.md)
 
 - [Motivation](./chapter_0/chapter_0.md)
-    - [A Meaningful Example](./chapter_0/chapter_0_1.md)
+    - [A Simple Example](./chapter_0/chapter_0_1.md)
     - [When to use Timely Dataflow](./chapter_0/chapter_0_2.md)
     - [When not to use Timely Dataflow](./chapter_0/chapter_0_3.md)
 
@@ -17,13 +17,15 @@
     - [Observing Outputs](./chapter_2/chapter_2_2.md)
     - [Adding Operators](./chapter_2/chapter_2_3.md)
     - [Creating Operators](./chapter_2/chapter_2_4.md)
+    - [A Worked Example](./chapter_2/chapter_2_5.md)
 
-- [Running Timely Dataflows](./chapter_3.md)
+- [Running Timely Dataflows](./chapter_3/chapter_3.md)
     - [Providing Input](./chapter_3/chapter_3_1.md)
     - [Monitoring Probes](./chapter_3/chapter_3_2.md)
-    - [Constructing Dataflows](./chapter_3/chapter_3_3.md)
+    - [Operator Execution](./chapter_3/chapter_3_3.md)
+    - [Extending Dataflows](./chapter_3/chapter_3_4.md)
 
-- [Advanced Timely Dataflow](./chapter_5.md)
+- [Advanced Timely Dataflow](./chapter_5/chapter_5.md)
     - [Scopes](./chapter_5/chapter_5_1.md)
     - [Iteration](./chapter_5/chapter_5_2.md)
     - [Flow Control](./chapter_5/chapter_5_3.md)
