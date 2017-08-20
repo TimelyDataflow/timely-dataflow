@@ -8,7 +8,7 @@ What timely dataflow provides is a special stream called a `LoopVariable`. This 
 
 That may be a bit abstract, so let's look at a simple example.
 
-We are going to check the [Collatz conjecture](https://en.wikipedia.org/wiki/Collatz_conjecture), which says that if you repeatedly divide even numbers by two, and multiple odd numbers by three and add one, you eventually reach the number one. We could do this in lots of ways, but this is the timely dataflow way to do it.
+We are going to check the [Collatz conjecture](https://en.wikipedia.org/wiki/Collatz_conjecture), which says that if you repeatedly divide even numbers by two, and multiply odd numbers by three and add one, you eventually reach the number one. We could do this in lots of ways, but this is the timely dataflow way to do it.
 
 ```rust
 extern crate timely;
