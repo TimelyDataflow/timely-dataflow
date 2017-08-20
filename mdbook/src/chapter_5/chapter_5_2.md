@@ -19,7 +19,7 @@ fn main() {
         // create a loop that cycles at most 100 times.
         let (handle, stream) = scope.loop_variable(100, 1);
 
-        // circulate numbers, decrementing each time.
+        // circulate numbers, Collatz stepping each time.
         (1 .. 10)
             .to_stream(scope)
             .concat(stream)
