@@ -6,7 +6,7 @@
 
 use abomonation::Abomonation;
 
-/// Data and progres events of the captured stream.
+/// Data and progress events of the captured stream.
 #[derive(Debug)]
 pub enum Event<T, D> {
     /// An initial marker, used only to start the linked list implementation.
