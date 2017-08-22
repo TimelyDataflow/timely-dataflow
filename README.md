@@ -61,15 +61,15 @@ use timely::dataflow::operators::*;
 
 fn main() {
     // initializes and runs a timely dataflow computation
-    timely::execute_from_args(std::env::args(), |root| {
+    timely::execute_from_args(std::env::args(), |worker| {
 
         // create a new input, output probe.
-        let index = scope.index();        
+        let index = worker.index();        
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
 
         // exchange data and inspect its output.
-        root.dataflow(move |scope| {
+        worker.dataflow(move |scope| {
             input.to_stream(scope)
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
@@ -78,10 +78,12 @@ fn main() {
 
         // introduce data and watch!
         for round in 0..10 {
-            input.send(round);
+            if index == 0 {
+                input.send(round);
+            }
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
-                root.step();
+                worker.step();
             }
         }
     }).unwrap();
@@ -99,28 +101,18 @@ With two workers, the output looks like
 % cargo run --example hello -- -w2
 Running `target/debug/examples/hello -w2`
 worker 0:   hello 0
-worker 0:   hello 0
-worker 1:   hello 1
 worker 1:   hello 1
 worker 0:   hello 2
-worker 0:   hello 2
-worker 1:   hello 3
 worker 1:   hello 3
 worker 0:   hello 4
-worker 0:   hello 4
-worker 1:   hello 5
 worker 1:   hello 5
 worker 0:   hello 6
-worker 0:   hello 6
-worker 1:   hello 7
 worker 1:   hello 7
 worker 0:   hello 8
-worker 0:   hello 8
-worker 1:   hello 9
 worker 1:   hello 9
 ```
 
-Note that despite each worker introducing `(0..10)`, each element is routed to a specific worker, as we intended.
+Note that despite worker zero introducing the data `(0..10)`, each element is routed to a specific worker, as we intended.
 
 # Execution
 
