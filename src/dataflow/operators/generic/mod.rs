@@ -3,6 +3,7 @@
 pub mod unary;
 pub mod binary;
 pub mod operator;
+pub mod builder;
 mod handles;
 mod notificator;
 

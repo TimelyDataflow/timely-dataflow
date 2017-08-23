@@ -158,6 +158,13 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
     }
 }
 
+
+impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> Drop for OutputHandle<'a, T, D, P> {
+    fn drop(&mut self) {
+        self.push_buffer.cease();
+    }
+}
+
 /// Constructs an output handle.
 /// Declared separately so that it can be kept private when `OutputHandle` is re-exported.
 pub fn new_output_handle<'a, T: Timestamp, D, P: Push<(T, Content<D>)>>(push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>) -> OutputHandle<'a, T, D, P> {
