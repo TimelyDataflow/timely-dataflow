@@ -36,7 +36,14 @@ pub trait Scope: ScopeParent {
     fn add_edge(&self, source: Source, target: Target);
 
     /// Adds a child `Operate` to the builder's scope. Returns the new child's index.
-    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC) -> usize;
+    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC) -> usize {
+        let index = self.allocate_operator_index();
+        self.add_operator_with_index(scope, index);
+        index
+    }
+
+    /// Allocates a new operator index, for use with `add_operator_with_index`.
+    fn allocate_operator_index(&mut self) -> usize;
 
     /// Adds a child `Operate` to the builder's scope using a supplied index.
     ///
