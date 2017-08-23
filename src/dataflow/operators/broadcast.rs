@@ -12,9 +12,6 @@ use dataflow::channels::pushers::Tee;
 use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::channels::pact::{Pusher, Puller};
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
 /// Broadcast records to all workers.
 pub trait Broadcast<D: ExchangeData> {
     /// Broadcast records to all workers.
@@ -49,7 +46,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
             index: scope.index(),
             peers: scope.peers(),
             input: PullCounter::new(Box::new(receiver)),
-            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
+            output: PushBuffer::new(PushCounter::new(targets)),
         };
 
         let operator_index = scope.add_operator(operator);
@@ -89,8 +86,8 @@ impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
             self.output.session(time).give_content(data);
         }
         self.output.cease();
-        self.input.pull_progress(&mut consumed[self.index]);
-        self.output.inner().pull_progress(&mut produced[0]);
+        self.input.consumed().borrow_mut().drain_into(&mut consumed[self.index]);
+        self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
         false
     }
 

@@ -101,7 +101,7 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         let (targets, registrar) = Tee::<G::Timestamp,D>::new();
         let operator = Operator {
             input: PullCounter::new(receiver),
-            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
+            output: PushBuffer::new(PushCounter::new(targets)),
             frontier: handle.frontier.clone(),
         };
 
@@ -184,8 +184,8 @@ impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
         self.output.cease();
 
         // extract what we know about progress from the input and output adapters.
-        self.input.pull_progress(&mut consumed[0]);
-        self.output.inner().pull_progress(&mut produced[0]);
+        self.input.consumed().borrow_mut().drain_into(&mut consumed[0]);
+        self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
 
         false
     }

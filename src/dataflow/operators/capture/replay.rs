@@ -38,9 +38,6 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use ::Data;
 use dataflow::{Scope, Stream};
 use dataflow::channels::pushers::Counter as PushCounter;
@@ -68,7 +65,7 @@ where I : IntoIterator,
        let operator = ReplayOperator {
            peers: scope.peers(),
            started: false,
-           output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
+           output: PushBuffer::new(PushCounter::new(targets)),
            event_streams: self.into_iter().collect(),
        };
 
@@ -129,7 +126,7 @@ impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator
         }
 
         self.output.cease();
-        self.output.inner().pull_progress(&mut produced[0]);
+        self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
 
         false
     }

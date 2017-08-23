@@ -21,11 +21,9 @@
 
 use std::default::Default;
 
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::marker::PhantomData;
 
-use progress::{Timestamp, ChangeBatch};
+use progress::Timestamp;
 use progress::nested::subgraph::{Source, Target};
 use progress::nested::product::Product;
 use {Data, Push};
@@ -34,7 +32,7 @@ use dataflow::channels::Content;
 
 use dataflow::{Stream, Scope, ScopeParent};
 use dataflow::scopes::Child;
-use dataflow::operators::delay::*;
+use dataflow::operators::delay::Delay;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
 pub trait Enter<G: Scope, T: Timestamp, D: Data> {
@@ -85,8 +83,8 @@ impl<T: Timestamp, G: Scope, D: Data> Enter<G, T, D> for Stream<G, D> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D> {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
-        let produced = Rc::new(RefCell::new(ChangeBatch::new()));
-        let ingress = IngressNub { targets: Counter::new(targets, produced.clone()) };
+        let ingress = IngressNub { targets: Counter::new(targets) };
+        let produced = ingress.targets.produced().clone();
 
         let input = scope.subgraph.borrow_mut().new_input(produced);
 

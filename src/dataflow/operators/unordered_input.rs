@@ -83,14 +83,16 @@ impl<G: Scope> UnorderedInput<G> for G {
 
         let (output, registrar) = Tee::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
-        let produced = Rc::new(RefCell::new(ChangeBatch::new()));
+        // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = mint_capability(Default::default(), internal.clone());
-        let helper = UnorderedHandle::new(PushCounter::new(output, produced.clone()));
+        let counter = PushCounter::new(output);
+        let produced = counter.produced().clone();
+        let helper = UnorderedHandle::new(counter);
         let peers = self.peers();
 
         let index = self.add_operator(UnorderedOperator {
-            internal: internal.clone(),
-            produced: produced.clone(),
+            internal: internal,
+            produced: produced,
             peers:    peers,
         });
 

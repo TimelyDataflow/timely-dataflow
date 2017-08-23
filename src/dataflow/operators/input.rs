@@ -106,8 +106,9 @@ impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T
     fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Root<A>, T>, D> {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
-        let produced = Rc::new(RefCell::new(ChangeBatch::new()));
-        let counter = Counter::new(output, produced.clone());
+        // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
+        let counter = Counter::new(output);
+        let produced = counter.produced().clone();
 
         let progress = Rc::new(RefCell::new(ChangeBatch::new()));
 
@@ -116,8 +117,8 @@ impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T
         let copies = self.peers();
 
         let index = self.add_operator(Operator {
-            progress: progress.clone(),
-            messages: produced.clone(),
+            progress: progress,
+            messages: produced,
             copies:   copies,
         });
 

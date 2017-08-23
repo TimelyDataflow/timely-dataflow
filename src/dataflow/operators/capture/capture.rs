@@ -179,7 +179,7 @@ impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<
         while let Some((time, data)) = self.input.next() {
             self.events.push(Event::Messages(time.clone(), data.deref_mut().clone()));
         }
-        self.input.pull_progress(&mut consumed[0]);
+        self.input.consumed().borrow_mut().drain_into(&mut consumed[0]);
         false
     }
 }

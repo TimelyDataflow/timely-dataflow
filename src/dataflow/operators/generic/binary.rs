@@ -194,7 +194,7 @@ Operator<T, D1, D2, D3, L> {
             name: name,
             input1:      receiver1,
             input2:      receiver2,
-            output:      PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
+            output:      PushBuffer::new(PushCounter::new(targets)),
             notificator: Notificator::new(),
             logic: logic,
             notify: notify,
@@ -259,9 +259,9 @@ where T: Timestamp,
         self.output.cease();
 
         // extract what we know about progress from the input and output adapters.
-        self.input1.pull_progress(&mut consumed[0]);
-        self.input2.pull_progress(&mut consumed[1]);
-        self.output.inner().pull_progress(&mut produced[0]);
+        self.input1.consumed().borrow_mut().drain_into(&mut consumed[0]);
+        self.input2.consumed().borrow_mut().drain_into(&mut consumed[1]);
+        self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 
         false   // no unannounced internal work

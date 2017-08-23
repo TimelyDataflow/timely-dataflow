@@ -351,7 +351,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                     let mut input_handle = new_frontier_input_handle(&mut input, internal, &frontiers[0]);
                     logic(&mut input_handle, output);
                 }
-                input.pull_progress(&mut consumed[0]);
+                input.consumed().borrow_mut().drain_into(&mut consumed[0]);
             },
             internal_changes,
             targets,
@@ -384,7 +384,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                     let mut input_handle = new_input_handle(&mut input, internal);
                     logic(&mut input_handle, output);
                 }
-                input.pull_progress(&mut consumed[0]);
+                input.consumed().borrow_mut().drain_into(&mut consumed[0]);
             },
             internal_changes,
             targets,
@@ -422,8 +422,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                     let mut input_handle2 = new_input_handle(&mut input2, internal);
                     logic(&mut input_handle1, &mut input_handle2, output);
                 }
-                input1.pull_progress(&mut consumed[0]);
-                input2.pull_progress(&mut consumed[1]);
+                input1.consumed().borrow_mut().drain_into(&mut consumed[0]);
+                input2.consumed().borrow_mut().drain_into(&mut consumed[1]);
             },
             internal_changes,
             targets,
@@ -464,8 +464,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                     let mut input_handle2 = new_frontier_input_handle(&mut input2, internal, &frontiers[1]);
                     logic(&mut input_handle1, &mut input_handle2, output);
                 }
-                input1.pull_progress(&mut consumed[0]);
-                input2.pull_progress(&mut consumed[1]);
+                input1.consumed().borrow_mut().drain_into(&mut consumed[0]);
+                input2.consumed().borrow_mut().drain_into(&mut consumed[1]);
             },
             internal_changes,
             targets,
@@ -521,7 +521,7 @@ OperatorImpl<T, L, DO> {
             logic: logic,
             frontier: (0..input_count).map(|_| MutableAntichain::new()).collect(),
             internal_changes: internal_changes,
-            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
+            output: PushBuffer::new(PushCounter::new(targets)),
             notify: notify,
         }
     }
@@ -578,7 +578,7 @@ Operate<T> for OperatorImpl<T, L, DO> {
         }
 
         self.output.cease();
-        self.output.inner().pull_progress(&mut produced[0]);
+        self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 
         false   // no unannounced internal work
