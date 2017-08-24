@@ -43,7 +43,7 @@ pub struct Capability<T: Timestamp> {
 
 impl<T: Timestamp> Capability<T> {
     /// The timestamp associated with this capability.
-    #[inline]
+    #[inline(always)]
     pub fn time(&self) -> &T {
         &self.time
     }
@@ -52,7 +52,7 @@ impl<T: Timestamp> Capability<T> {
     /// the source capability (`self`).
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
-    #[inline]
+    #[inline(always)]
     pub fn delayed(&self, new_time: &T) -> Capability<T> {
         if !self.time.less_equal(new_time) {
             panic!("Attempted to delay {:?} to {:?}, which is not `less_equal` the capability's time.", self, new_time);
@@ -63,7 +63,7 @@ impl<T: Timestamp> Capability<T> {
     /// Downgrades the capability to one corresponding to `new_time`.
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
-    #[inline]
+    #[inline(always)]
     pub fn downgrade(&mut self, new_time: &T) {
         let new_cap = self.delayed(new_time);
         *self = new_cap;
@@ -73,6 +73,7 @@ impl<T: Timestamp> Capability<T> {
 /// Creates a new capability at `t` while incrementing (and keeping a reference to) the provided
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
+#[inline(always)]
 pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T> {
     internal.borrow_mut().update(time.clone(), 1);
     Capability {
@@ -85,12 +86,14 @@ pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Cap
 // updated accordingly to inform the rest of the system that the operator has released its permit
 // to send data and request notification at the associated timestamp.
 impl<T: Timestamp> Drop for Capability<T> {
+    #[inline]
     fn drop(&mut self) {
         self.internal.borrow_mut().update(self.time.clone(), -1);
     }
 }
 
 impl<T: Timestamp> Clone for Capability<T> {
+    #[inline]
     fn clone(&self) -> Capability<T> {
         mint(self.time.clone(), self.internal.clone())
     }
@@ -98,6 +101,7 @@ impl<T: Timestamp> Clone for Capability<T> {
 
 impl<T: Timestamp> Deref for Capability<T> {
     type Target = T;
+    #[inline]
     fn deref(&self) -> &T {
         &self.time
     }
@@ -110,6 +114,7 @@ impl<T: Timestamp> Debug for Capability<T> {
 }
 
 impl<T: Timestamp> PartialEq for Capability<T> {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.time() == other.time() && Rc::ptr_eq(&self.internal, &other.internal)
     }
@@ -117,12 +122,14 @@ impl<T: Timestamp> PartialEq for Capability<T> {
 impl<T: Timestamp> Eq for Capability<T> { }
 
 impl<T: Timestamp> PartialOrder for Capability<T> {
+    #[inline]
     fn less_equal(&self, other: &Self) -> bool {
         self.time().less_equal(other.time()) && Rc::ptr_eq(&self.internal, &other.internal)
     }
 }
 
 impl<T: Timestamp> ::std::hash::Hash for Capability<T> {
+    #[inline]
     fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
         self.time.hash(state);
     }

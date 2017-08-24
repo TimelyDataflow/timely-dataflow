@@ -262,7 +262,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                  &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), false, self.scope());
+        let mut builder = OperatorBuilder::new(name.to_owned(), true, self.scope());
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
@@ -342,7 +342,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), false, self.scope());
+        let mut builder = OperatorBuilder::new(name.to_owned(), true, self.scope());
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
