@@ -18,7 +18,7 @@ use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 
 use dataflow::operators::generic::handles::{InputHandle, OutputHandle};
-use dataflow::operators::generic::handles::{new_input_handle, new_output_handle};
+use dataflow::operators::generic::handles::{access_pull_counter, new_input_handle, new_output_handle};
 use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::{Stream, Scope};
@@ -165,8 +165,8 @@ struct Operator<T: Timestamp,
                                 &mut OutputHandle<T, D3, Tee<T, D3>>,
                                 &mut Notificator<T>)> {
     name:             String,
-    input1:           PullCounter<T, D1>,
-    input2:           PullCounter<T, D2>,
+    input1:           InputHandle<T, D1>,
+    input2:           InputHandle<T, D2>,
     output:           PushBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
     notificator:      Notificator<T>,
     logic:            L,
@@ -190,15 +190,16 @@ Operator<T, D1, D2, D3, L> {
                logic: L)
         -> Operator<T, D1, D2, D3, L> {
 
+        let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         Operator {
             name: name,
-            input1:      receiver1,
-            input2:      receiver2,
+            input1:      new_input_handle(receiver1, internal.clone()),
+            input2:      new_input_handle(receiver2, internal.clone()),
             output:      PushBuffer::new(PushCounter::new(targets)),
             notificator: Notificator::new(),
             logic: logic,
             notify: notify,
-            internal_changes: Rc::new(RefCell::new(ChangeBatch::new())),
+            internal_changes: internal,
         }
     }
 }
@@ -250,17 +251,17 @@ where T: Timestamp,
                                          produced: &mut [ChangeBatch<T>]) -> bool
     {
         {
-            let mut input1_handle = new_input_handle(&mut self.input1, self.internal_changes.clone());
-            let mut input2_handle = new_input_handle(&mut self.input2, self.internal_changes.clone());
+            // let mut input1_handle = new_input_handle(&mut self.input1, self.internal_changes.clone());
+            // let mut input2_handle = new_input_handle(&mut self.input2, self.internal_changes.clone());
             let mut output_handle = new_output_handle(&mut self.output);
-            (self.logic)(&mut input1_handle, &mut input2_handle, &mut output_handle, &mut self.notificator);
+            (self.logic)(&mut self.input1, &mut self.input2, &mut output_handle, &mut self.notificator);
         }
 
-        self.output.cease();
+        // self.output.cease();
 
         // extract what we know about progress from the input and output adapters.
-        self.input1.consumed().borrow_mut().drain_into(&mut consumed[0]);
-        self.input2.consumed().borrow_mut().drain_into(&mut consumed[1]);
+        access_pull_counter(&mut self.input1).consumed().borrow_mut().drain_into(&mut consumed[0]);
+        access_pull_counter(&mut self.input2).consumed().borrow_mut().drain_into(&mut consumed[1]);
         self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
 

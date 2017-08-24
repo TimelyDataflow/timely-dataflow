@@ -18,18 +18,19 @@ use dataflow::operators::Capability;
 use dataflow::operators::capability::mint as mint_capability;
 
 /// Handle to an operator's input stream.
-pub struct InputHandle<'a, T: Timestamp, D: 'a> {
-    pull_counter: &'a mut PullCounter<T, D>,
+pub struct InputHandle<T: Timestamp, D> {
+    pull_counter: PullCounter<T, D>,
     internal: Rc<RefCell<ChangeBatch<T>>>,
 }
 
 /// Handle to an operator's input stream and frontier.
 pub struct FrontieredInputHandle<'a, T: Timestamp, D: 'a> {
-    handle: InputHandle<'a, T, D>,
+    handle: &'a mut InputHandle<T, D>,
     frontier: &'a MutableAntichain<T>,
 }
 
-impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
+impl<'a, T: Timestamp, D> InputHandle<T, D> {
+
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
@@ -109,18 +110,22 @@ impl<'a, T: Timestamp, D> FrontieredInputHandle<'a, T, D> {
     }
 }
 
+pub fn access_pull_counter<T: Timestamp, D>(input: &mut InputHandle<T, D>) -> &mut PullCounter<T, D> {
+    &mut input.pull_counter
+}
+
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<ChangeBatch<T>>>) -> InputHandle<'a, T, D> {
+pub fn new_input_handle<T: Timestamp, D>(pull_counter: PullCounter<T, D>, internal: Rc<RefCell<ChangeBatch<T>>>) -> InputHandle<T, D> {
     InputHandle {
         pull_counter: pull_counter,
         internal: internal,
     }
 }
 
-pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<ChangeBatch<T>>>, frontier: &'a MutableAntichain<T>) -> FrontieredInputHandle<'a, T, D> {
+pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a>(input_handle: &'a mut InputHandle<T, D>, frontier: &'a MutableAntichain<T>) -> FrontieredInputHandle<'a, T, D> {
     FrontieredInputHandle {
-        handle: new_input_handle(pull_counter, internal),
+        handle: input_handle,
         frontier: frontier,
     }
 }
@@ -157,7 +162,6 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
         self.push_buffer.session(cap)
     }
 }
-
 
 impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> Drop for OutputHandle<'a, T, D, P> {
     fn drop(&mut self) {

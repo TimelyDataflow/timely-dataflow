@@ -5,7 +5,7 @@ use dataflow::channels::pushers::Tee;
 use dataflow::channels::pact::ParallelizationContract;
 
 use dataflow::operators::generic::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
-use dataflow::operators::generic::handles::{new_input_handle, new_frontier_input_handle, new_output_handle};
+use dataflow::operators::generic::handles::{new_frontier_input_handle, new_output_handle};
 use dataflow::operators::capability::Capability;
 
 use ::Data;
@@ -240,7 +240,7 @@ where
 
     builder.build(|capability| {
         let mut logic = constructor(capability);
-        move |_frontier, _consumed, _internal, _produced| {
+        move |_frontier| {
             logic(&mut new_output_handle(&mut output));        
         }
     });
@@ -264,8 +264,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         builder.build(move |capability| {
             let mut logic = constructor(capability);
-            move |frontier, _consumed, internal, _produced| {
-                let mut input_handle = new_frontier_input_handle(&mut input, internal.clone(), &frontier[0]);
+            move |frontiers| {
+                let mut input_handle = new_frontier_input_handle(&mut input, &frontiers[0]);
                 let mut output_handle = new_output_handle(&mut output);
                 logic(&mut input_handle, &mut output_handle);        
             }
@@ -288,10 +288,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         builder.build(move |capability| {
             let mut logic = constructor(capability);
-            move |_frontier, _consumed, internal, _produced| {
-                let mut input_handle = new_input_handle(&mut input, internal.clone());
+            move |_frontiers| {
                 let mut output_handle = new_output_handle(&mut output);
-                logic(&mut input_handle, &mut output_handle);        
+                logic(&mut input, &mut output_handle);        
             }
         });
 
@@ -315,11 +314,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         builder.build(move |capability| {
             let mut logic = constructor(capability);
-            move |_frontier, _consumed, internal, _produced| {
-                let mut input1_handle = new_input_handle(&mut input1, internal.clone());
-                let mut input2_handle = new_input_handle(&mut input2, internal.clone());
+            move |_frontiers| {
                 let mut output_handle = new_output_handle(&mut output);
-                logic(&mut input1_handle, &mut input2_handle, &mut output_handle);        
+                logic(&mut input1, &mut input2, &mut output_handle);        
             }
         });
 
@@ -345,9 +342,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         builder.build(move |capability| {
             let mut logic = constructor(capability);
-            move |frontier, _consumed, internal, _produced| {
-                let mut input1_handle = new_frontier_input_handle(&mut input1, internal.clone(), &frontier[0]);
-                let mut input2_handle = new_frontier_input_handle(&mut input2, internal.clone(), &frontier[1]);
+            move |frontiers| {
+                let mut input1_handle = new_frontier_input_handle(&mut input1, &frontiers[0]);
+                let mut input2_handle = new_frontier_input_handle(&mut input2, &frontiers[1]);
                 let mut output_handle = new_output_handle(&mut output);
                 logic(&mut input1_handle, &mut input2_handle, &mut output_handle);        
             }

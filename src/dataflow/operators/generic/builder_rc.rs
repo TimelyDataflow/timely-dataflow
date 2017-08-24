@@ -20,6 +20,8 @@ use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::operators::capability::Capability;
 use dataflow::operators::capability::mint as mint_capability;
 
+use dataflow::operators::generic::handles::{InputHandle, new_input_handle};
+
 struct OperatorShape<T: Timestamp> {
     name: String,
     notify: bool,
@@ -67,7 +69,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P) -> PullCounter<G::Timestamp, D>
+    pub fn new_input<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P) -> InputHandle<G::Timestamp, D>
     where
         P: ParallelizationContract<G::Timestamp, D> {
 
@@ -81,7 +83,7 @@ impl<G: Scope> OperatorBuilder<G> {
         self.shape.frontier.push(MutableAntichain::new());
         self.shape.consumed.push(input.consumed().clone());
 
-        input
+        new_input_handle(input, self.shape.internal.clone())
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
@@ -102,12 +104,7 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn build<B, L>(self, constructor: B) 
     where 
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(
-            &[MutableAntichain<G::Timestamp>],
-            &mut [Rc<RefCell<ChangeBatch<G::Timestamp>>>],
-            &mut Rc<RefCell<ChangeBatch<G::Timestamp>>>,
-            &mut [Rc<RefCell<ChangeBatch<G::Timestamp>>>],
-        )+'static
+        L: FnMut(&[MutableAntichain<G::Timestamp>])+'static
     {
         let mut scope = self.scope;
         let index = self.shape.index;
@@ -129,12 +126,7 @@ impl<G: Scope> OperatorBuilder<G> {
 struct OperatorCore<T, L> 
     where 
         T: Timestamp,
-        L: FnMut(
-            &[MutableAntichain<T>],
-            &mut [Rc<RefCell<ChangeBatch<T>>>],
-            &mut Rc<RefCell<ChangeBatch<T>>>,
-            &mut [Rc<RefCell<ChangeBatch<T>>>],
-        )
+        L: FnMut(&[MutableAntichain<T>])
 {
     shape: OperatorShape<T>,
     logic: L,
@@ -143,12 +135,7 @@ struct OperatorCore<T, L>
 impl<T, L> Operate<T> for OperatorCore<T, L> 
     where 
         T: Timestamp,
-        L: FnMut(
-            &[MutableAntichain<T>],
-            &mut [Rc<RefCell<ChangeBatch<T>>>],
-            &mut Rc<RefCell<ChangeBatch<T>>>,
-            &mut [Rc<RefCell<ChangeBatch<T>>>],
-        )
+        L: FnMut(&[MutableAntichain<T>])
 {
     fn inputs(&self) -> usize { self.shape.consumed.len() }
     fn outputs(&self) -> usize { self.shape.produced.len() }
@@ -189,12 +176,7 @@ impl<T, L> Operate<T> for OperatorCore<T, L>
                                          produced: &mut [ChangeBatch<T>]) -> bool
     {
         // invoke supplied logic
-        (self.logic)(
-            &self.shape.frontier, 
-            &mut self.shape.consumed[..], 
-            &mut self.shape.internal, 
-            &mut self.shape.produced[..]
-        );
+        (self.logic)(&self.shape.frontier);
 
         // move batches of consumed changes.
         for index in 0 .. consumed.len() {

@@ -16,7 +16,7 @@ use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pullers::Counter as PullCounter;
 
 use dataflow::operators::generic::handles::{InputHandle, OutputHandle};
-use dataflow::operators::generic::handles::{new_input_handle, new_output_handle};
+use dataflow::operators::generic::handles::{access_pull_counter, new_input_handle, new_output_handle};
 use dataflow::operators::capability::mint as mint_capability;
 
 use ::Data;
@@ -134,7 +134,7 @@ struct Operator
              &mut OutputHandle<T, D2, Tee<T, D2>>,
              &mut Notificator<T>)> {
     name:             String,
-    input:            PullCounter<T, D1>,
+    input:            InputHandle<T, D1>,
     output:           PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>,
     notificator:      Notificator<T>,
     logic:            L,
@@ -156,14 +156,15 @@ Operator<T, D1, D2, L> {
                notify:   Option<(Vec<T>, usize)>)
            -> Operator<T, D1, D2, L> {
 
+        let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         Operator {
             name:    name,
-            input:       receiver,
+            input:       new_input_handle(receiver, internal.clone()),
             output:      PushBuffer::new(PushCounter::new(targets)),
             notificator: Notificator::new(),
             logic:   logic,
             notify:  notify,
-            internal_changes: Rc::new(RefCell::new(ChangeBatch::new())),
+            internal_changes: internal,
         }
     }
 }
@@ -214,15 +215,12 @@ where T: Timestamp,
                                          produced: &mut [ChangeBatch<T>]) -> bool
     {
         {
-            let mut input_handle = new_input_handle(&mut self.input, self.internal_changes.clone());
             let mut output_handle = new_output_handle(&mut self.output);
-            (self.logic)(&mut input_handle, &mut output_handle, &mut self.notificator);
+            (self.logic)(&mut self.input, &mut output_handle, &mut self.notificator);
         }
 
-        self.output.cease();
-
         // extract what we know about progress from the input and output adapters.
-        self.input.consumed().borrow_mut().drain_into(&mut consumed[0]);
+        access_pull_counter(&mut self.input).consumed().borrow_mut().drain_into(&mut consumed[0]);
         self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
         

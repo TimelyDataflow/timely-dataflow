@@ -58,6 +58,9 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Allocates a new generic operator builder from its containing scope.
     pub fn new(name: String, notify: bool, mut scope: G) -> Self {
+
+        panic!("`builder_ref.rs` is a work in progress; not yet appropriate for use");
+
         let index = scope.allocate_operator_index();
         let peers = scope.peers();
 
@@ -296,4 +299,12 @@ mod handles {
     impl<'a, T: Ord+Clone+'a, D: 'a, P: Push<(T, Content<D>)>+'a> OutputHandle<'a, T, D, P> {
         // copy/paste buffer.rs?
     }
+
+    impl<'a, T: Ord+Clone+'a, D: 'a, P: Push<(T, Content<D>)>+'a> Drop for OutputHandle<'a, T, D, P> {
+        fn drop(&mut self) {
+            // send a flush signal.
+            self.pusher.pusher.push(&mut None);
+        }
+    }
+
 }
