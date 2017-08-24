@@ -56,7 +56,8 @@ pub trait Operator<G: Scope, D1: Data> {
     where
         D2: Data,
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P::Puller>, 
+                 &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
@@ -90,7 +91,8 @@ pub trait Operator<G: Scope, D1: Data> {
     where
         D2: Data,
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>, 
+                 &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
 
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
@@ -144,8 +146,8 @@ pub trait Operator<G: Scope, D1: Data> {
         D2: Data,
         D3: Data,
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>,
-                 &mut FrontieredInputHandle<G::Timestamp, D2>,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P1::Puller>,
+                 &mut FrontieredInputHandle<G::Timestamp, D2, P2::Puller>,
                  &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2>;
@@ -186,7 +188,9 @@ pub trait Operator<G: Scope, D1: Data> {
         D2: Data,
         D3: Data,
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut InputHandle<G::Timestamp, D2>, &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>, 
+                 &mut InputHandle<G::Timestamp, D2, P2::Puller>, 
+                 &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2>;
 }
@@ -254,7 +258,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     where
         D2: Data,
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P::Puller>, 
+                 &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), false, self.scope());
@@ -278,7 +283,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     where
         D2: Data,
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>, 
+                 &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), false, self.scope());
@@ -302,7 +308,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         D2: Data,
         D3: Data,
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(&mut InputHandle<G::Timestamp, D1>, &mut InputHandle<G::Timestamp, D2>, &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>, 
+                 &mut InputHandle<G::Timestamp, D2, P2::Puller>, 
+                 &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
@@ -328,8 +336,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         D2: Data,
         D3: Data,
         B: FnOnce(Capability<G::Timestamp>) -> L,
-        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1>,
-                 &mut FrontieredInputHandle<G::Timestamp, D2>,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P1::Puller>,
+                 &mut FrontieredInputHandle<G::Timestamp, D2, P2::Puller>,
                  &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {

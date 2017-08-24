@@ -45,7 +45,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
         let operator = BroadcastOperator {
             index: scope.index(),
             peers: scope.peers(),
-            input: PullCounter::new(Box::new(receiver)),
+            input: PullCounter::new(receiver),
             output: PushBuffer::new(PushCounter::new(targets)),
         };
 
@@ -63,7 +63,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
 struct BroadcastOperator<T: Timestamp, D: ExchangeData> {
     index: usize,
     peers: usize,
-    input: PullCounter<T, D>,
+    input: PullCounter<T, D, Puller<T, D>>,
     output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
 

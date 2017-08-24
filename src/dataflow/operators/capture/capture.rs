@@ -128,12 +128,12 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
 }
 
 struct CaptureOperator<T: Timestamp, D: Data, P: EventPusher<T, D>> {
-    input: PullCounter<T, D>,
+    input: PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>,
     events: P,
 }
 
 impl<T:Timestamp, D: Data, P: EventPusher<T, D>> CaptureOperator<T, D, P> {
-    fn new(input: PullCounter<T, D>, events: P) -> CaptureOperator<T, D, P> {
+    fn new(input: PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>, events: P) -> CaptureOperator<T, D, P> {
         CaptureOperator {
             input: input,
             events: events,

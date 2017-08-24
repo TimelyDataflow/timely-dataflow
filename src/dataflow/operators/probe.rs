@@ -154,7 +154,7 @@ impl<T: Timestamp> Clone for Handle<T> {
 }
 
 struct Operator<T:Timestamp, D: Data> {
-    input: PullCounter<T, D>,
+    input: PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>,
     output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
     frontier: Rc<RefCell<MutableAntichain<T>>>
 }

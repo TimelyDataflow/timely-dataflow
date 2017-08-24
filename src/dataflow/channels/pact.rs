@@ -1,30 +1,43 @@
 //! Parallelization contracts, describing requirements for data movement along dataflow edges.
+//!
+//! Pacts describe how data should be exchanged between workers, and implement a method which 
+//! creates a pair of `Push` and `Pull` implementors from an `A: Allocate`. These two endpoints
+//! respectively distribute and collect data among workers according to the pact.
+//!
+//! The only requirement of a pact is that it not alter the number of `D` records at each time `T`.
+//! The progress tracking logic assumes that this number is independent of the pact used.
 
 use std::marker::PhantomData;
 
 use timely_communication::{Allocate, Push, Pull, Data};
 use timely_communication::allocator::Thread;
 
-use dataflow::channels::pushers::Exchange as ExchangeObserver;
+use dataflow::channels::pushers::Exchange as ExchangePusher;
 use dataflow::channels::{Message, Content};
 
 use abomonation::Abomonation;
 
-/// A ParallelizationContract transforms the output of a Allocate to an (Observer, Pullable).
+/// A ParallelizationContract allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T: 'static, D: 'static> {
+    /// Type implementing `Push` produced by this pact.
+    type Pusher: Push<(T, Content<D>)>+'static;
+    /// Type implementing `Pull` produced by this pact.
+    type Puller: Pull<(T, Content<D>)>+'static;
     /// Alloctes a matched pair of push and pull endpoints implementing the pact.
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>);
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller);
 }
 
 /// A direct connection
 pub struct Pipeline;
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>) {
+    type Pusher = Pusher<T, D>;
+    type Puller = Puller<T, D>;
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
         // ignore &mut A and use thread allocator
         let (mut pushers, puller) = Thread::new::<Message<T, D>>();
 
-        (Box::new(Pusher::new(pushers.pop().unwrap(), allocator.index(), allocator.index(), identifier)),
-         Box::new(Puller::new(puller, allocator.index(), identifier)))
+        (Pusher::new(pushers.pop().unwrap(), allocator.index(), allocator.index(), identifier),
+         Puller::new(puller, allocator.index(), identifier))
     }
 }
 
@@ -44,10 +57,12 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
 // The PactObserver will do some buffering for Exchange, cutting down on the virtual calls, but we still
 // would like to get the vectors it sends back, so that they can be re-used if possible.
 impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>) {
+    type Pusher = Box<Push<(T, Content<D>)>>;
+    type Puller = Puller<T, D>;
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, D>>();
         let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
-        (Box::new(ExchangeObserver::new(senders, move |_, d| (self.hash_func)(d))), Box::new(Puller::new(receiver, allocator.index(), identifier)))
+        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Puller::new(receiver, allocator.index(), identifier))
     }
 }
 
@@ -64,10 +79,12 @@ impl<D, T, F: Fn(&T, &D)->u64> TimeExchange<D, T, F> {
 }
 
 impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&T, &D)->u64+'static> ParallelizationContract<T, D> for TimeExchange<D, T, F> {
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>) {
+    type Pusher = ExchangePusher<T, D, Pusher<T, D>, F>;
+    type Puller = Puller<T, D>;
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, D>>();
         let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
-        (Box::new(ExchangeObserver::new(senders, self.hash_func)), Box::new(Puller::new(receiver, allocator.index(), identifier)))
+        (ExchangePusher::new(senders, self.hash_func), Puller::new(receiver, allocator.index(), identifier))
     }
 }
 

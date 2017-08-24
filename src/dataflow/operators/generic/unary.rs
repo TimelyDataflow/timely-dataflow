@@ -4,6 +4,9 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
+use timely_communication::Pull;
+use dataflow::channels::Content;
+
 use progress::nested::subgraph::{Source, Target};
 
 use progress::ChangeBatch;
@@ -47,7 +50,7 @@ pub trait Unary<G: Scope, D1: Data> {
     fn unary_stream<D2, L, P> (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>
     where
         D2: Data,
-        L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>,
                  &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
@@ -77,7 +80,7 @@ pub trait Unary<G: Scope, D1: Data> {
     fn unary_notify<D2, L, P>(&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>
     where
         D2: Data,
-        L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+        L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>,
                  &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>,
                  &mut Notificator<G::Timestamp>)+'static,
          P: ParallelizationContract<G::Timestamp, D1>;
@@ -85,7 +88,7 @@ pub trait Unary<G: Scope, D1: Data> {
 
 impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
     fn unary_notify<D2: Data,
-            L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+            L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>,
                      &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
@@ -106,7 +109,7 @@ impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
     }
 
     fn unary_stream<D2: Data,
-             L: FnMut(&mut InputHandle<G::Timestamp, D1>,
+             L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>,
                       &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&self, pact: P, name: &str, mut logic: L) -> Stream<G, D2> {
@@ -130,11 +133,12 @@ struct Operator
     T: Timestamp,
     D1: Data,
     D2: Data,
-    L: FnMut(&mut InputHandle<T, D1>,
+    P: Pull<(T, Content<D1>)>,
+    L: FnMut(&mut InputHandle<T, D1, P>,
              &mut OutputHandle<T, D2, Tee<T, D2>>,
              &mut Notificator<T>)> {
     name:             String,
-    input:            InputHandle<T, D1>,
+    input:            InputHandle<T, D1, P>,
     output:           PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>,
     notificator:      Notificator<T>,
     logic:            L,
@@ -145,16 +149,17 @@ struct Operator
 impl<T:  Timestamp,
      D1: Data,
      D2: Data,
-     L:  FnMut(&mut InputHandle<T, D1>,
+     P: Pull<(T, Content<D1>)>,
+     L:  FnMut(&mut InputHandle<T, D1, P>,
                &mut OutputHandle<T, D2, Tee<T, D2>>,
                &mut Notificator<T>)>
-Operator<T, D1, D2, L> {
-    pub fn new(receiver: PullCounter<T, D1>,
+Operator<T, D1, D2, P, L> {
+    pub fn new(receiver: PullCounter<T, D1, P>,
                targets:  Tee<T, D2>,
                name:     String,
                logic:    L,
                notify:   Option<(Vec<T>, usize)>)
-           -> Operator<T, D1, D2, L> {
+           -> Operator<T, D1, D2, P, L> {
 
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         Operator {
@@ -169,11 +174,12 @@ Operator<T, D1, D2, L> {
     }
 }
 
-impl<T, D1, D2, L> Operate<T> for Operator<T, D1, D2, L>
+impl<T, D1, D2, P, L> Operate<T> for Operator<T, D1, D2, P, L>
 where T: Timestamp,
       D1: Data, 
       D2: Data,
-      L: FnMut(&mut InputHandle<T, D1>,
+      P: Pull<(T, Content<D1>)>,
+      L: FnMut(&mut InputHandle<T, D1, P>,
                &mut OutputHandle<T, D2, Tee<T, D2>>,
                &mut Notificator<T>) {
     fn inputs(&self) -> usize { 1 }

@@ -4,6 +4,9 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
+use timely_communication::Pull;
+use dataflow::channels::Content;
+
 use progress::nested::subgraph::{Source, Target};
 
 use progress::ChangeBatch;
@@ -51,8 +54,8 @@ pub trait Binary<G: Scope, D1: Data> {
     /// ```
     fn binary_stream<D2: Data,
               D3: Data,
-              L: FnMut(&mut InputHandle<G::Timestamp, D1>,
-                       &mut InputHandle<G::Timestamp, D2>,
+              L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
+                       &mut InputHandle<G::Timestamp, D2, P2::Puller>,
                        &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
@@ -90,8 +93,8 @@ pub trait Binary<G: Scope, D1: Data> {
     /// ```
     fn binary_notify<D2: Data,
               D3: Data,
-              L: FnMut(&mut InputHandle<G::Timestamp, D1>,
-                       &mut InputHandle<G::Timestamp, D2>,
+              L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
+                       &mut InputHandle<G::Timestamp, D2, P2::Puller>,
                        &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>,
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
@@ -104,8 +107,8 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
     fn binary_stream<
              D2: Data,
              D3: Data,
-             L: FnMut(&mut InputHandle<G::Timestamp, D1>,
-                      &mut InputHandle<G::Timestamp, D2>,
+             L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
+                      &mut InputHandle<G::Timestamp, D2, P2::Puller>,
                       &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
@@ -132,8 +135,8 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
     fn binary_notify<
              D2: Data,
              D3: Data,
-             L: FnMut(&mut InputHandle<G::Timestamp, D1>,
-                      &mut InputHandle<G::Timestamp, D2>,
+             L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
+                      &mut InputHandle<G::Timestamp, D2, P2::Puller>,
                       &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>,
                       &mut Notificator<G::Timestamp>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
@@ -160,13 +163,15 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
 
 struct Operator<T: Timestamp,
                        D1: Data, D2: Data, D3: Data,
-                       L: FnMut(&mut InputHandle<T, D1>,
-                                &mut InputHandle<T, D2>,
+                       P1: Pull<(T, Content<D1>)>,
+                       P2: Pull<(T, Content<D2>)>,
+                       L: FnMut(&mut InputHandle<T, D1, P1>,
+                                &mut InputHandle<T, D2, P2>,
                                 &mut OutputHandle<T, D3, Tee<T, D3>>,
                                 &mut Notificator<T>)> {
     name:             String,
-    input1:           InputHandle<T, D1>,
-    input2:           InputHandle<T, D2>,
+    input1:           InputHandle<T, D1, P1>,
+    input2:           InputHandle<T, D2, P2>,
     output:           PushBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
     notificator:      Notificator<T>,
     logic:            L,
@@ -176,19 +181,21 @@ struct Operator<T: Timestamp,
 
 impl<T: Timestamp,
      D1: Data, D2: Data, D3: Data,
-     L: FnMut(&mut InputHandle<T, D1>,
-              &mut InputHandle<T, D2>,
+     P1: Pull<(T, Content<D1>)>,
+     P2: Pull<(T, Content<D2>)>,
+     L: FnMut(&mut InputHandle<T, D1, P1>,
+              &mut InputHandle<T, D2, P2>,
               &mut OutputHandle<T, D3, Tee<T, D3>>,
               &mut Notificator<T>)+'static>
-Operator<T, D1, D2, D3, L> {
+Operator<T, D1, D2, D3, P1, P2, L> {
     #[inline(always)]
-    pub fn new(receiver1: PullCounter<T, D1>,
-               receiver2: PullCounter<T, D2>,
+    pub fn new(receiver1: PullCounter<T, D1, P1>,
+               receiver2: PullCounter<T, D2, P2>,
                targets: Tee<T, D3>,
                name: String,
                notify: Option<(Vec<T>, usize)>,
                logic: L)
-        -> Operator<T, D1, D2, D3, L> {
+        -> Operator<T, D1, D2, D3, P1, P2, L> {
 
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         Operator {
@@ -204,11 +211,13 @@ Operator<T, D1, D2, D3, L> {
     }
 }
 
-impl<T, D1, D2, D3, L> Operate<T> for Operator<T, D1, D2, D3, L>
+impl<T, D1, D2, D3, P1, P2, L> Operate<T> for Operator<T, D1, D2, D3, P1, P2, L>
 where T: Timestamp,
       D1: Data, D2: Data, D3: Data,
-      L: FnMut(&mut InputHandle<T, D1>,
-               &mut InputHandle<T, D2>,
+      P1: Pull<(T, Content<D1>)>,
+      P2: Pull<(T, Content<D2>)>,
+      L: FnMut(&mut InputHandle<T, D1, P1>,
+               &mut InputHandle<T, D2, P2>,
                &mut OutputHandle<T, D3, Tee<T, D3>>,
                &mut Notificator<T>)+'static {
     fn inputs(&self) -> usize { 2 }

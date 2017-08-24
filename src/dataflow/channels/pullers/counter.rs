@@ -8,13 +8,13 @@ use progress::ChangeBatch;
 use Pull;
 
 /// A wrapper which accounts records pulled past in a shared count map.
-pub struct Counter<T: Ord+Clone+'static, D> {
-    pullable: Box<Pull<(T, Content<D>)>>,
+pub struct Counter<T: Ord+Clone+'static, D, P: Pull<(T, Content<D>)>> {
+    pullable: P,
     consumed: Rc<RefCell<ChangeBatch<T>>>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
-impl<T:Ord+Clone+'static, D> Counter<T, D> {
+impl<T:Ord+Clone+'static, D, P: Pull<(T, Content<D>)>> Counter<T, D, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
     pub fn next(&mut self) -> Option<(&T, &mut Content<D>)> {
@@ -29,9 +29,9 @@ impl<T:Ord+Clone+'static, D> Counter<T, D> {
     }
 }
 
-impl<T:Ord+Clone+'static, D> Counter<T, D> {
+impl<T:Ord+Clone+'static, D, P: Pull<(T, Content<D>)>> Counter<T, D, P> {
     /// Allocates a new `Counter` from a boxed puller.
-    pub fn new(pullable: Box<Pull<(T, Content<D>)>>) -> Counter<T, D> {
+    pub fn new(pullable: P) -> Self {
         Counter {
             phantom: ::std::marker::PhantomData,
             pullable: pullable,
@@ -42,8 +42,4 @@ impl<T:Ord+Clone+'static, D> Counter<T, D> {
     pub fn consumed(&self) -> &Rc<RefCell<ChangeBatch<T>>> {
         &self.consumed
     }
-    // /// Extracts progress information into `consumed`. 
-    // pub fn pull_progress(&mut self, consumed: &mut ChangeBatch<T>) {
-    //     self.consumed.drain_into(consumed);
-    // }
 }

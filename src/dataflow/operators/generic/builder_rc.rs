@@ -69,7 +69,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P) -> InputHandle<G::Timestamp, D>
+    pub fn new_input<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P) -> InputHandle<G::Timestamp, D, P::Puller>
     where
         P: ParallelizationContract<G::Timestamp, D> {
 
