@@ -12,7 +12,7 @@ use ::Data;
 
 use dataflow::{Stream, Scope};
 
-use super::builder::OperatorBuilder;
+use super::builder_rc::OperatorBuilder;
 
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Data> {
