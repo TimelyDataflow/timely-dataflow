@@ -25,8 +25,10 @@ pub struct InputHandle<T: Timestamp, D, P: Pull<(T, Content<D>)>> {
 
 /// Handle to an operator's input stream and frontier.
 pub struct FrontieredInputHandle<'a, T: Timestamp, D: 'a, P: Pull<(T, Content<D>)>+'a> {
-    handle: &'a mut InputHandle<T, D, P>,
-    frontier: &'a MutableAntichain<T>,
+    /// The underlying input handle.
+    pub handle: &'a mut InputHandle<T, D, P>,
+    /// The frontier as reported by timely progress tracking.
+    pub frontier: &'a MutableAntichain<T>,
 }
 
 impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
@@ -110,7 +112,7 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>+'a> FrontieredInputHandle<'a,
     }
 }
 
-pub fn access_pull_counter<T: Timestamp, D, P: Pull<(T, Content<D>)>>(input: &mut InputHandle<T, D, P>) -> &mut PullCounter<T, D, P> {
+pub fn _access_pull_counter<T: Timestamp, D, P: Pull<(T, Content<D>)>>(input: &mut InputHandle<T, D, P>) -> &mut PullCounter<T, D, P> {
     &mut input.pull_counter
 }
 

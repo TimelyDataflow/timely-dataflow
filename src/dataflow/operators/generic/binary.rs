@@ -1,28 +1,30 @@
 //! Methods to construct generic streaming and blocking binary operators.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::default::Default;
+// use std::rc::Rc;
+// use std::cell::RefCell;
+// use std::default::Default;
 
-use timely_communication::Pull;
-use dataflow::channels::Content;
+// use timely_communication::Pull;
+// use dataflow::channels::Content;
 
-use progress::nested::subgraph::{Source, Target};
+// use progress::nested::subgraph::{Source, Target};
 
-use progress::ChangeBatch;
-use dataflow::operators::Notificator;
-use progress::{Timestamp, Antichain, Operate};
+// use progress::ChangeBatch;
+// use dataflow::operators::Notificator;
+use dataflow::operators::generic::{Notificator, FrontierNotificator};
+// use progress::{Timestamp, Antichain, Operate};
 
 use ::Data;
-use dataflow::channels::pushers::counter::Counter as PushCounter;
+// use dataflow::channels::pushers::counter::Counter as PushCounter;
 use dataflow::channels::pushers::tee::Tee;
-use dataflow::channels::pullers::counter::Counter as PullCounter;
+// use dataflow::channels::pullers::counter::Counter as PullCounter;
 use dataflow::channels::pact::ParallelizationContract;
-use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
+// use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 
+use dataflow::operators::generic::Operator as GenericOperator;
 use dataflow::operators::generic::handles::{InputHandle, OutputHandle};
-use dataflow::operators::generic::handles::{access_pull_counter, new_input_handle, new_output_handle};
-use dataflow::operators::capability::mint as mint_capability;
+// use dataflow::operators::generic::handles::{access_pull_counter, new_input_handle, new_output_handle};
+// use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::{Stream, Scope};
 
@@ -112,23 +114,9 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
                       &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, mut logic: L) -> Stream<G, D3> {
+             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, logic: L) -> Stream<G, D3> {
 
-        let mut scope = self.scope();
-        let channel_id1 = scope.new_identifier();
-        let channel_id2 = scope.new_identifier();
-
-        let (sender1, receiver1) = pact1.connect(&mut scope, channel_id1);
-        let (sender2, receiver2) = pact2.connect(&mut scope, channel_id2);;
-        let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
-        let operator = Operator::new(PullCounter::new(receiver1), PullCounter::new(receiver2), targets, name.to_owned(), None, move |i1, i2, o, _| logic(i1, i2, o));
-        let index = scope.add_operator(operator);
-        self.connect_to(Target { index: index, port: 0 }, sender1, channel_id1);
-        other.connect_to(Target { index: index, port: 1 }, sender2, channel_id2);
-        // self.scope.connect(other.name, ChildInput(index, 1));
-        // other.ports.add_observer(sender2);
-
-        Stream::new(Source { index: index, port: 0 }, registrar, scope)
+        self.binary(other, pact1, pact2, name, |_| logic)
     }
 
     #[inline]
@@ -141,142 +129,155 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
                       &mut Notificator<G::Timestamp>)+'static,
              P1: ParallelizationContract<G::Timestamp, D1>,
              P2: ParallelizationContract<G::Timestamp, D2>>
-             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, notify: Vec<G::Timestamp>, logic: L) -> Stream<G, D3> {
+             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, init: Vec<G::Timestamp>, mut logic: L) -> Stream<G, D3> {
 
-        let mut scope = self.scope();
-        let channel_id1 = scope.new_identifier();
-        let channel_id2 = scope.new_identifier();
+        // let mut scope = self.scope();
+        // let channel_id1 = scope.new_identifier();
+        // let channel_id2 = scope.new_identifier();
 
-        let (sender1, receiver1) = pact1.connect(&mut scope, channel_id1);
-        let (sender2, receiver2) = pact2.connect(&mut scope, channel_id2);;
-        let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
-        let operator = Operator::new(PullCounter::new(receiver1), PullCounter::new(receiver2), targets, name.to_owned(), Some((notify, scope.peers())), logic);
-        let index = scope.add_operator(operator);
-        self.connect_to(Target { index: index, port: 0 }, sender1, channel_id1);
-        other.connect_to(Target { index: index, port: 1 }, sender2, channel_id2);
-        // self.scope.connect(other.name, ChildInput(index, 1));
-        // other.ports.add_observer(sender2);
+        // let (sender1, receiver1) = pact1.connect(&mut scope, channel_id1);
+        // let (sender2, receiver2) = pact2.connect(&mut scope, channel_id2);;
+        // let (targets, registrar) = Tee::<G::Timestamp,D3>::new();
+        // let operator = Operator::new(PullCounter::new(receiver1), PullCounter::new(receiver2), targets, name.to_owned(), Some((notify, scope.peers())), logic);
+        // let index = scope.add_operator(operator);
+        // self.connect_to(Target { index: index, port: 0 }, sender1, channel_id1);
+        // other.connect_to(Target { index: index, port: 1 }, sender2, channel_id2);
+        // // self.scope.connect(other.name, ChildInput(index, 1));
+        // // other.ports.add_observer(sender2);
 
-        Stream::new(Source { index: index, port: 0 }, registrar, scope)
-    }
-}
+        // Stream::new(Source { index: index, port: 0 }, registrar, scope)
 
-struct Operator<T: Timestamp,
-                       D1: Data, D2: Data, D3: Data,
-                       P1: Pull<(T, Content<D1>)>,
-                       P2: Pull<(T, Content<D2>)>,
-                       L: FnMut(&mut InputHandle<T, D1, P1>,
-                                &mut InputHandle<T, D2, P2>,
-                                &mut OutputHandle<T, D3, Tee<T, D3>>,
-                                &mut Notificator<T>)> {
-    name:             String,
-    input1:           InputHandle<T, D1, P1>,
-    input2:           InputHandle<T, D2, P2>,
-    output:           PushBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
-    notificator:      Notificator<T>,
-    logic:            L,
-    notify:           Option<(Vec<T>, usize)>,  // initial notifications and peers
-    internal_changes: Rc<RefCell<ChangeBatch<T>>>,
-}
-
-impl<T: Timestamp,
-     D1: Data, D2: Data, D3: Data,
-     P1: Pull<(T, Content<D1>)>,
-     P2: Pull<(T, Content<D2>)>,
-     L: FnMut(&mut InputHandle<T, D1, P1>,
-              &mut InputHandle<T, D2, P2>,
-              &mut OutputHandle<T, D3, Tee<T, D3>>,
-              &mut Notificator<T>)+'static>
-Operator<T, D1, D2, D3, P1, P2, L> {
-    #[inline(always)]
-    pub fn new(receiver1: PullCounter<T, D1, P1>,
-               receiver2: PullCounter<T, D2, P2>,
-               targets: Tee<T, D3>,
-               name: String,
-               notify: Option<(Vec<T>, usize)>,
-               logic: L)
-        -> Operator<T, D1, D2, D3, P1, P2, L> {
-
-        let internal = Rc::new(RefCell::new(ChangeBatch::new()));
-        Operator {
-            name: name,
-            input1:      new_input_handle(receiver1, internal.clone()),
-            input2:      new_input_handle(receiver2, internal.clone()),
-            output:      PushBuffer::new(PushCounter::new(targets)),
-            notificator: Notificator::new(),
-            logic: logic,
-            notify: notify,
-            internal_changes: internal,
-        }
-    }
-}
-
-impl<T, D1, D2, D3, P1, P2, L> Operate<T> for Operator<T, D1, D2, D3, P1, P2, L>
-where T: Timestamp,
-      D1: Data, D2: Data, D3: Data,
-      P1: Pull<(T, Content<D1>)>,
-      P2: Pull<(T, Content<D2>)>,
-      L: FnMut(&mut InputHandle<T, D1, P1>,
-               &mut InputHandle<T, D2, P2>,
-               &mut OutputHandle<T, D3, Tee<T, D3>>,
-               &mut Notificator<T>)+'static {
-    fn inputs(&self) -> usize { 2 }
-    fn outputs(&self) -> usize { 1 }
-
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
-
-        // by the end of the method, we want the return Vec<ChangeBatch<T>> to contain each reserved capability, 
-        // *multiplied by the number of peers*. This is so that each worker knows to wait for each other worker
-        // instance. Importantly, we do not want to multiply the number of capabilities by the number of peers.
-
-        let mut internal = vec![ChangeBatch::new()];
-        if let Some((ref mut initial, peers)) = self.notify {
-            for time in initial.drain(..) {
-                self.notificator.notify_at(mint_capability(time, self.internal_changes.clone()));
+        self.binary_frontier(other, pact1, pact2, name, |capability| {
+            let mut notificator = FrontierNotificator::new();
+            for time in init {
+                notificator.notify_at(capability.delayed(&time));
             }
 
-            // augment the counts for each reserved capability.
-            for &(ref time, count) in self.internal_changes.borrow_mut().iter() {
-                internal[0].update(time.clone(), count * (peers as i64 - 1));
+            move |input1, input2, output| {
+                let frontiers = &[input1.frontier(), input2.frontier()];
+                let mut notificator = &mut Notificator::new(frontiers, &mut notificator);
+                logic(&mut input1.handle, &mut input2.handle, output, notificator);
             }
-
-            // drain the changes to empty out, and complete the counts for internal.
-            self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
-        }
-        (vec![vec![Antichain::from_elem(Default::default())],
-              vec![Antichain::from_elem(Default::default())]], internal)
+        })
     }
-
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [ChangeBatch<T>]) -> () {
-        self.notificator.update_frontier_from_cm(frontier);
-    }
-
-    fn push_external_progress(&mut self, external: &mut [ChangeBatch<T>]) -> () {
-        self.notificator.update_frontier_from_cm(external);
-    }
-
-    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
-                                         internal: &mut [ChangeBatch<T>],
-                                         produced: &mut [ChangeBatch<T>]) -> bool
-    {
-        {
-            // let mut input1_handle = new_input_handle(&mut self.input1, self.internal_changes.clone());
-            // let mut input2_handle = new_input_handle(&mut self.input2, self.internal_changes.clone());
-            let mut output_handle = new_output_handle(&mut self.output);
-            (self.logic)(&mut self.input1, &mut self.input2, &mut output_handle, &mut self.notificator);
-        }
-
-        // self.output.cease();
-
-        // extract what we know about progress from the input and output adapters.
-        access_pull_counter(&mut self.input1).consumed().borrow_mut().drain_into(&mut consumed[0]);
-        access_pull_counter(&mut self.input2).consumed().borrow_mut().drain_into(&mut consumed[1]);
-        self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
-        self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
-
-        false   // no unannounced internal work
-    }
-
-    fn name(&self) -> String { self.name.clone() }
-    fn notify_me(&self) -> bool { self.notify.is_some() }
 }
+
+// struct Operator<T: Timestamp,
+//                        D1: Data, D2: Data, D3: Data,
+//                        P1: Pull<(T, Content<D1>)>,
+//                        P2: Pull<(T, Content<D2>)>,
+//                        L: FnMut(&mut InputHandle<T, D1, P1>,
+//                                 &mut InputHandle<T, D2, P2>,
+//                                 &mut OutputHandle<T, D3, Tee<T, D3>>,
+//                                 &mut Notificator<T>)> {
+//     name:             String,
+//     input1:           InputHandle<T, D1, P1>,
+//     input2:           InputHandle<T, D2, P2>,
+//     output:           PushBuffer<T, D3, PushCounter<T, D3, Tee<T, D3>>>,
+//     notificator:      FrontierNotificator<T>,
+//     logic:            L,
+//     notify:           Option<(Vec<T>, usize)>,  // initial notifications and peers
+//     internal_changes: Rc<RefCell<ChangeBatch<T>>>,
+// }
+
+// impl<T: Timestamp,
+//      D1: Data, D2: Data, D3: Data,
+//      P1: Pull<(T, Content<D1>)>,
+//      P2: Pull<(T, Content<D2>)>,
+//      L: FnMut(&mut InputHandle<T, D1, P1>,
+//               &mut InputHandle<T, D2, P2>,
+//               &mut OutputHandle<T, D3, Tee<T, D3>>,
+//               &mut Notificator<T>)+'static>
+// Operator<T, D1, D2, D3, P1, P2, L> {
+//     #[inline(always)]
+//     pub fn new(receiver1: PullCounter<T, D1, P1>,
+//                receiver2: PullCounter<T, D2, P2>,
+//                targets: Tee<T, D3>,
+//                name: String,
+//                notify: Option<(Vec<T>, usize)>,
+//                logic: L)
+//         -> Operator<T, D1, D2, D3, P1, P2, L> {
+
+//         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
+//         Operator {
+//             name: name,
+//             input1:      new_input_handle(receiver1, internal.clone()),
+//             input2:      new_input_handle(receiver2, internal.clone()),
+//             output:      PushBuffer::new(PushCounter::new(targets)),
+//             notificator: FrontierNotificator::new(),
+//             logic: logic,
+//             notify: notify,
+//             internal_changes: internal,
+//         }
+//     }
+// }
+
+// impl<T, D1, D2, D3, P1, P2, L> Operate<T> for Operator<T, D1, D2, D3, P1, P2, L>
+// where T: Timestamp,
+//       D1: Data, D2: Data, D3: Data,
+//       P1: Pull<(T, Content<D1>)>,
+//       P2: Pull<(T, Content<D2>)>,
+//       L: FnMut(&mut InputHandle<T, D1, P1>,
+//                &mut InputHandle<T, D2, P2>,
+//                &mut OutputHandle<T, D3, Tee<T, D3>>,
+//                &mut Notificator<T>)+'static {
+//     fn inputs(&self) -> usize { 2 }
+//     fn outputs(&self) -> usize { 1 }
+
+//     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
+
+//         // by the end of the method, we want the return Vec<ChangeBatch<T>> to contain each reserved capability, 
+//         // *multiplied by the number of peers*. This is so that each worker knows to wait for each other worker
+//         // instance. Importantly, we do not want to multiply the number of capabilities by the number of peers.
+
+//         let mut internal = vec![ChangeBatch::new()];
+//         if let Some((ref mut initial, peers)) = self.notify {
+//             for time in initial.drain(..) {
+//                 self.notificator.notify_at(mint_capability(time, self.internal_changes.clone()));
+//             }
+
+//             // augment the counts for each reserved capability.
+//             for &(ref time, count) in self.internal_changes.borrow_mut().iter() {
+//                 internal[0].update(time.clone(), count * (peers as i64 - 1));
+//             }
+
+//             // drain the changes to empty out, and complete the counts for internal.
+//             self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
+//         }
+//         (vec![vec![Antichain::from_elem(Default::default())],
+//               vec![Antichain::from_elem(Default::default())]], internal)
+//     }
+
+//     fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, frontier: &mut [ChangeBatch<T>]) -> () {
+//         self.notificator.update_frontier_from_cm(frontier);
+//     }
+
+//     fn push_external_progress(&mut self, external: &mut [ChangeBatch<T>]) -> () {
+//         self.notificator.update_frontier_from_cm(external);
+//     }
+
+//     fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
+//                                          internal: &mut [ChangeBatch<T>],
+//                                          produced: &mut [ChangeBatch<T>]) -> bool
+//     {
+//         {
+//             // let mut input1_handle = new_input_handle(&mut self.input1, self.internal_changes.clone());
+//             // let mut input2_handle = new_input_handle(&mut self.input2, self.internal_changes.clone());
+//             let mut output_handle = new_output_handle(&mut self.output);
+//             (self.logic)(&mut self.input1, &mut self.input2, &mut output_handle, &mut self.notificator);
+//         }
+
+//         // self.output.cease();
+
+//         // extract what we know about progress from the input and output adapters.
+//         access_pull_counter(&mut self.input1).consumed().borrow_mut().drain_into(&mut consumed[0]);
+//         access_pull_counter(&mut self.input2).consumed().borrow_mut().drain_into(&mut consumed[1]);
+//         self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
+//         self.internal_changes.borrow_mut().drain_into(&mut internal[0]);
+
+//         false   // no unannounced internal work
+//     }
+
+//     fn name(&self) -> String { self.name.clone() }
+//     fn notify_me(&self) -> bool { self.notify.is_some() }
+// }

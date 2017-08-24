@@ -2,7 +2,6 @@ use std::collections::VecDeque;
 
 use progress::frontier::MutableAntichain;
 use progress::Timestamp;
-use progress::ChangeBatch;
 use dataflow::operators::Capability;
 
 /// Tracks requests for notification and delivers available notifications.
@@ -13,36 +12,36 @@ use dataflow::operators::Capability;
 /// once there are no frontier elements less-or-equal to them, and there are no other pending
 /// notification requests less than them. Each with be less-or-equal to itself, so we want to
 /// dodge that corner case.
-pub struct Notificator<T: Timestamp> {
-    pending: Vec<(Capability<T>, u64)>,
-    frontier: Vec<MutableAntichain<T>>,
-    available: VecDeque<(Capability<T>, u64)>,
+pub struct Notificator<'a, T: Timestamp> {
+    frontiers: &'a [&'a MutableAntichain<T>],
+    inner: &'a mut FrontierNotificator<T>,
 }
 
-impl<T: Timestamp> Notificator<T> {
+impl<'a, T: Timestamp> Notificator<'a, T> {
     /// Allocates a new `Notificator`.
-    pub fn new() -> Notificator<T> {
+    pub fn new(
+        frontiers: &'a [&'a MutableAntichain<T>],
+        inner: &'a mut FrontierNotificator<T>) -> Notificator<'a, T> {
         Notificator {
-            pending: Vec::new(),
-            frontier: Vec::new(),
-            available: VecDeque::new(),
+            frontiers: frontiers,
+            inner: inner,
         }
     }
 
-    /// Updates the `Notificator`'s frontiers from a `ChangeBatch` per input.
-    pub fn update_frontier_from_cm(&mut self, count_map: &mut [ChangeBatch<T>]) {
-        while self.frontier.len() < count_map.len() {
-            self.frontier.push(MutableAntichain::new());
-        }
+    // /// Updates the `Notificator`'s frontiers from a `ChangeBatch` per input.
+    // pub fn update_frontier_from_cm(&mut self, count_map: &mut [ChangeBatch<T>]) {
+    //     while self.frontiers.len() < count_map.len() {
+    //         self.frontiers.push(MutableAntichain::new());
+    //     }
 
-        for (index, counts) in count_map.iter_mut().enumerate() {
-            self.frontier[index].update_iter(counts.drain());
-        }
-    }
+    //     for (index, counts) in count_map.iter_mut().enumerate() {
+    //         self.frontiers[index].update_iter(counts.drain());
+    //     }
+    // }
 
     /// Reveals the elements in the frontier of the indicated input.
     pub fn frontier(&self, input: usize) -> &[T] {
-        self.frontier[input].frontier()
+        self.frontiers[input].frontier()
     }
 
     /// Requests a notification at the time associated with capability `cap`. Takes ownership of
@@ -74,7 +73,7 @@ impl<T: Timestamp> Notificator<T> {
     /// ```
     #[inline]
     pub fn notify_at(&mut self, cap: Capability<T>) {
-        self.pending.push((cap, 1));
+        self.inner.notify_at(cap);
     }
 
     /// Repeatedly calls `logic` till exhaustion of the available notifications.
@@ -91,7 +90,7 @@ impl<T: Timestamp> Notificator<T> {
     }
 }
 
-impl<T: Timestamp> Iterator for Notificator<T> {
+impl<'a, T: Timestamp> Iterator for Notificator<'a, T> {
     type Item = (Capability<T>, u64);
 
     /// Retrieve the next available notification.
@@ -102,43 +101,40 @@ impl<T: Timestamp> Iterator for Notificator<T> {
     /// timestamp.
     #[inline]
     fn next(&mut self) -> Option<(Capability<T>, u64)> {
-        if self.available.is_empty() {
-            self.make_available();
-        }
-        self.available.pop_front()
+        self.inner.next(self.frontiers).map(|x| (x,1))
     }
 }
 
-impl<T: Timestamp> Notificator<T> {
+// impl<T: Timestamp> Notificator<T> {
 
-    // appends elements of `self.pending` not `greater_equal` to `self.frontier` into `self.available`.
-    fn make_available(&mut self) {
+//     // appends elements of `self.pending` not `greater_equal` to `self.frontier` into `self.available`.
+//     fn make_available(&mut self) {
 
-        // By invariant, nothing in self.available is greater_equal anything in self.pending.
-        // It should be safe to append any ordered subset of self.pending to self.available,
-        // in that the sequence of capabilities in self.available will remain non-decreasing.
+//         // By invariant, nothing in self.available is greater_equal anything in self.pending.
+//         // It should be safe to append any ordered subset of self.pending to self.available,
+//         // in that the sequence of capabilities in self.available will remain non-decreasing.
 
-        if self.pending.len() > 0 {
-            self.pending.sort_by(|x,y| x.0.time().cmp(y.0.time()));
-            for i in 0 .. self.pending.len() - 1 {
-                if self.pending[i].0.time() == self.pending[i+1].0.time() {
-                    self.pending[i+1].1 += self.pending[i].1;
-                    self.pending[i].1 = 0;
-                }
-            }
-            self.pending.retain(|x| x.1 > 0);
+//         if self.pending.len() > 0 {
+//             self.pending.sort_by(|x,y| x.0.time().cmp(y.0.time()));
+//             for i in 0 .. self.pending.len() - 1 {
+//                 if self.pending[i].0.time() == self.pending[i+1].0.time() {
+//                     self.pending[i+1].1 += self.pending[i].1;
+//                     self.pending[i].1 = 0;
+//                 }
+//             }
+//             self.pending.retain(|x| x.1 > 0);
 
-            for i in 0 .. self.pending.len() {
-                if self.frontier.iter().all(|f| !f.less_equal(&self.pending[i].0)) {
-                    // TODO : This clones a capability, whereas we could move it instead.
-                    self.available.push_back((self.pending[i].0.clone(), self.pending[i].1));
-                    self.pending[i].1 = 0;
-                }
-            }
-            self.pending.retain(|x| x.1 > 0);
-        }
-    }
-}
+//             for i in 0 .. self.pending.len() {
+//                 if self.frontier.iter().all(|f| !f.less_equal(&self.pending[i].0)) {
+//                     // TODO : This clones a capability, whereas we could move it instead.
+//                     self.available.push_back((self.pending[i].0.clone(), self.pending[i].1));
+//                     self.pending[i].1 = 0;
+//                 }
+//             }
+//             self.pending.retain(|x| x.1 > 0);
+//         }
+//     }
+// }
 
 trait DrainIntoIf<T> {
     /// Invokes "P" on each element of "source" (exactly once) and moves the matching values to
@@ -178,71 +174,66 @@ fn drain_into_if_behaves_correctly() {
 fn notificator_delivers_notifications_in_topo_order() {
     use std::rc::Rc;
     use std::cell::RefCell;
-    use order::PartialOrder;
+    // use order::PartialOrder;
+    use progress::ChangeBatch;
+    use progress::frontier::MutableAntichain;
     use progress::nested::product::Product;
-    use progress::timestamp::RootTimestamp;
+    // use progress::timestamp::RootTimestamp;
     use dataflow::operators::capability::mint as mint_capability;
-    fn ts_from_tuple(t: (u64, u64)) -> Product<Product<RootTimestamp, u64>, u64> {
-        let (a, b) = t;
-        Product::new(RootTimestamp::new(a), b)
-    }
-    let mut notificator = Notificator::<Product<Product<RootTimestamp, u64>, u64>>::new();
-    notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(ts_from_tuple((0, 0)), 1)]);
+    // fn ts_from_tuple(t: (u64, u64)) -> Product<Product<RootTimestamp, u64>, u64> {
+    //     let (a, b) = t;
+    //     Product::new(RootTimestamp::new(a), b)
+    // }
+    let mut frontier_notificator = FrontierNotificator::new();
+    let mut frontier = MutableAntichain::new_bottom(Product::new(0, 0));
+
+    // notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(ts_from_tuple((0, 0)), 1)]);
     let internal_changes = Rc::new(RefCell::new(ChangeBatch::new()));
     let times = vec![
-        (3, 5),
-        (5, 4),
-        (1, 2),
-        (1, 1),
-        (1, 1),
-        (5, 4),
-        (6, 0),
-        (5, 8),
-    ].into_iter().map(ts_from_tuple).map(|ts| mint_capability(ts, internal_changes.clone()));
+        Product::new(3, 5),
+        Product::new(5, 4),
+        Product::new(1, 2),
+        Product::new(1, 1),
+        Product::new(1, 1),
+        Product::new(5, 4),
+        Product::new(6, 0),
+        Product::new(5, 8),
+    ].into_iter().map(|ts| mint_capability(ts, internal_changes.clone()));
     for t in times {
-        notificator.notify_at(t);
+        frontier_notificator.notify_at(t);
     }
-    notificator.update_frontier_from_cm(&mut {
-        let mut cm = ChangeBatch::new();
-        cm.update(ts_from_tuple((0, 0)), -1);
-        cm.update(ts_from_tuple((5, 7)), 1);
-        cm.update(ts_from_tuple((6, 0)), 1);
-        vec![cm]
-    });
+    // notificator.update_frontier_from_cm(&mut {
+    //     let mut cm = ChangeBatch::new();
+    //     cm.update(ts_from_tuple((0, 0)), -1);
+    //     cm.update(ts_from_tuple((5, 7)), 1);
+    //     cm.update(ts_from_tuple((6, 0)), 1);
+    //     vec![cm]
+    // });
     // Drains all the available notifications and checks they're being delivered in some
     // topological ordering. Also checks that the counts returned by .next() match the expected
     // counts.
-    fn check_notifications(
-        notificator: &mut Notificator<Product<Product<RootTimestamp, u64>, u64>>,
-        expected_counts: Vec<((u64, u64), u64)>) {
+    fn check_notifications<T: Timestamp>(
+        notificator: &mut Notificator<T>,
+        expected_counts: Vec<T>) {
 
-        let notified = notificator.by_ref().collect::<Vec<_>>();
-        for (i, &(ref cap, _)) in notified.iter().enumerate() {
-            assert!(notified.iter().skip(i + 1).all(|&(ref c, _)| !c.time().less_equal(&cap.time())));
-        }
-        let mut counts = notified.iter().map(|&(ref cap, count)| {
-            let ts = cap.time();
-            ((ts.outer.inner, ts.inner), count)
-        }).collect::<Vec<_>>();
-        counts.sort_by(|&(ts1, _), &(ts2, _)| ts1.cmp(&ts2));
-        assert!(counts == expected_counts);
+        // collect all notifications
+        let mut notified = notificator.by_ref().map(|(t, _)| t.time().clone()).collect::<Vec<_>>();
+        notified.sort();
+        assert_eq!(notified, expected_counts);
     }
-    check_notifications(&mut notificator, vec![
-        ((1, 1), 2),
-        ((1, 2), 1),
-        ((3, 5), 1),
-        ((5, 4), 2),
+
+    frontier.update_iter(vec![(Product::new(0,0),-1), (Product::new(5,7), 1), (Product::new(6,0), 1)]);
+    check_notifications(&mut Notificator::new(&[&frontier], &mut frontier_notificator), vec![
+        Product::new(1, 1),
+        Product::new(1, 2),
+        Product::new(3, 5),
+        Product::new(5, 4),
     ]);
-    notificator.update_frontier_from_cm(&mut {
-        let mut cm = ChangeBatch::new();
-        cm.update(ts_from_tuple((5, 7)), -1);
-        cm.update(ts_from_tuple((6, 0)), -1);
-        cm.update(ts_from_tuple((6, 10)), 1);
-        vec![cm]
-    });
-    check_notifications(&mut notificator, vec![
-        ((5, 8), 1),
-        ((6, 0), 1),
+
+    frontier.update_iter(vec![(Product::new(5,7), -1), (Product::new(6,0), -1), (Product::new(6,10), 1)]);
+    check_notifications(&mut Notificator::new(&[&frontier], &mut frontier_notificator), vec![
+        Product::new(5, 8),
+        Product::new(6, 0),
     ]);
 
 }
@@ -279,11 +270,11 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
 ///                     notificator.notify_at(time);
 ///                 }
-///                 for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
+///                 notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _| {
 ///                     if let Some(mut vec) = stash.remove(time.time()) {
 ///                         output.session(&time).give_iterator(vec.drain(..));
 ///                     }
-///                 }
+///                 });
 ///             }
 ///         }).inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
 ///
@@ -350,21 +341,26 @@ impl<T: Timestamp> FrontierNotificator<T> {
     }
 
     /// Iterate over the notifications made available by inspecting the frontiers.
-    pub fn iter<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> FrontierNotificatorIterator<'a, T> {
-        FrontierNotificatorIterator {
-            notificator: self,
-            frontiers: frontiers,
-        }
+    pub fn drain<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> ::std::collections::vec_deque::Drain<'a, Capability<T>> {
+        self.make_available(frontiers);
+        self.available.drain(..)
     }
+    // FrontierNotificatorIterator<'a, T> {
+    //     FrontierNotificatorIterator {
+    //         notificator: self,
+    //         frontiers: frontiers,
+    //     }
+    // }
 
     // appends elements of `self.pending` not `greater_equal` to `self.frontier` into `self.available`.
-    fn make_available(&mut self, frontiers: &[&MutableAntichain<T>]) {
+    fn make_available<'a>(&mut self, frontiers: &'a [&'a MutableAntichain<T>]) {
 
         // By invariant, nothing in self.available is greater_equal anything in self.pending.
         // It should be safe to append any ordered subset of self.pending to self.available,
         // in that the sequence of capabilities in self.available will remain non-decreasing.
 
         if self.pending.len() > 0 {
+
             self.pending.sort_by(|x,y| x.0.time().cmp(y.0.time()));
             for i in 0 .. self.pending.len() - 1 {
                 if self.pending[i].0.time() == self.pending[i+1].0.time() {
@@ -386,7 +382,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     }
 
     #[inline]
-    fn next(&mut self, frontiers: &[& MutableAntichain<T>]) -> Option<Capability<T>> {
+    fn next<'a>(&mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> Option<Capability<T>> {
         if self.available.is_empty() {
             self.make_available(frontiers);
         }
@@ -398,8 +394,9 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///
     /// `logic` receives a capability for `t`, the timestamp being notified.
     #[inline]
-    pub fn for_each<F: FnMut(Capability<T>, &mut FrontierNotificator<T>)>(&mut self, frontiers: &[&MutableAntichain<T>], mut logic: F) {
-        while let Some(cap) = self.next(frontiers) {
+    pub fn for_each<'a, F: FnMut(Capability<T>, &mut FrontierNotificator<T>)>(&mut self, frontiers: &'a [&'a MutableAntichain<T>], mut logic: F) {
+        self.make_available(frontiers);
+        while let Some(cap) = self.available.pop_front() {
             ::logging::log(&::logging::GUARDED_PROGRESS, true);
             logic(cap, self);
             ::logging::log(&::logging::GUARDED_PROGRESS, false);
@@ -407,21 +404,21 @@ impl<T: Timestamp> FrontierNotificator<T> {
     }
 }
 
-pub struct FrontierNotificatorIterator<'a, T: Timestamp> {
-    notificator: &'a mut FrontierNotificator<T>,
-    frontiers: &'a [&'a MutableAntichain<T>],
-}
+// pub struct FrontierNotificatorIterator<'a, T: Timestamp, I> {
+//     notificator: &'a mut FrontierNotificator<T>,
+//     frontiers: &'a [&'a MutableAntichain<T>],
+// }
 
-impl<'a, T: Timestamp> Iterator for FrontierNotificatorIterator<'a, T> {
-    type Item = Capability<T>;
+// impl<'a, T: Timestamp> Iterator for FrontierNotificatorIterator<'a, T> {
+//     type Item = Capability<T>;
 
-    /// Retrieve the next available notification.
-    ///
-    /// Returns `None` if no notification is available. Returns `Some(cap, count)` otherwise:
-    /// `cap` is a a capability for `t` - the timestamp being notified - and `count` represents
-    /// how many notifications (out of those requested) are being delivered for that specific
-    /// timestamp.
-    fn next(&mut self) -> Option<Capability<T>> {
-        self.notificator.next(self.frontiers)
-    }
-}
+//     /// Retrieve the next available notification.
+//     ///
+//     /// Returns `None` if no notification is available. Returns `Some(cap, count)` otherwise:
+//     /// `cap` is a a capability for `t` - the timestamp being notified - and `count` represents
+//     /// how many notifications (out of those requested) are being delivered for that specific
+//     /// timestamp.
+//     fn next(&mut self) -> Option<Capability<T>> {
+//         self.notificator.next(self.frontiers.iter())
+//     }
+// }

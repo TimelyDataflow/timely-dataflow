@@ -42,11 +42,11 @@ pub trait Operator<G: Scope, D1: Data> {
     ///                     while let Some((time, data)) = input.next() {
     ///                         stash.entry(time.time().clone()).or_insert(Vec::new());
     ///                     }
-    ///                     for time in notificator.iter(&[input.frontier()]) {
+    ///                     notificator.for_each(&[input.frontier()], |time, _not| {
     ///                         if let Some(mut vec) = stash.remove(time.time()) {
     ///                             output.session(&time).give_iterator(vec.drain(..));
     ///                         }
-    ///                     }
+    ///                     });
     ///                 }
     ///             });
     ///     });
@@ -122,11 +122,11 @@ pub trait Operator<G: Scope, D1: Data> {
     ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
     ///                    notificator.notify_at(time);
     ///                }
-    ///                for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
+    ///                notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _not| {
     ///                    if let Some(mut vec) = stash.remove(time.time()) {
     ///                        output.session(&time).give_iterator(vec.drain(..));
     ///                    }
-    ///                }
+    ///                });
     ///            }
     ///        }).inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
     ///
