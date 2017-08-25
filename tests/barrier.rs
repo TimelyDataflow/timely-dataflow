@@ -13,7 +13,7 @@ fn barrier_sync() {
         stream.unary_notify(
             Pipeline,
             "Barrier",
-            vec![RootTimestamp::new(0)],
+            vec![RootTimestamp::new(0), RootTimestamp::new(1)],
             move |_, _, notificator| {
                 let mut once = true;
                 while let Some((cap, _count)) = notificator.next() {

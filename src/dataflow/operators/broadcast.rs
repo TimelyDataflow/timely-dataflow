@@ -1,5 +1,7 @@
 //! Broadcast records to all workers.
 
+use timely_communication::Pull;
+
 use ::ExchangeData;
 use progress::nested::subgraph::{Source, Target};
 use dataflow::{Stream, Scope};
@@ -63,7 +65,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
 struct BroadcastOperator<T: Timestamp, D: ExchangeData> {
     index: usize,
     peers: usize,
-    input: PullCounter<T, D, Puller<T, D>>,
+    input: PullCounter<T, D, Puller<T, D, Box<Pull<Message<T, D>>>>>,
     output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
 

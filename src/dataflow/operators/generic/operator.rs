@@ -238,9 +238,10 @@ where
     B: FnOnce(Capability<G::Timestamp>) -> L,
     L: FnMut(&mut OutputHandle<G::Timestamp, D, Tee<G::Timestamp, D>>)+'static {
 
-    let mut builder = OperatorBuilder::new(name.to_owned(), false, scope.clone());
+    let mut builder = OperatorBuilder::new(name.to_owned(), scope.clone());
 
     let (mut output, stream) = builder.new_output();
+    builder.set_notify(false);
 
     builder.build(|capability| {
         let mut logic = constructor(capability);
@@ -262,7 +263,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                  &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), true, self.scope());
+        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
@@ -287,10 +288,11 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                  &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), false, self.scope());
+        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
+        builder.set_notify(false);
 
         builder.build(move |capability| {
             let mut logic = constructor(capability);
@@ -314,11 +316,12 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), false, self.scope());
+        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
         let (mut output, stream) = builder.new_output();
+        builder.set_notify(false);
 
         builder.build(move |capability| {
             let mut logic = constructor(capability);
@@ -342,7 +345,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), true, self.scope());
+        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);

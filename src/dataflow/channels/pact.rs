@@ -30,8 +30,9 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
 /// A direct connection
 pub struct Pipeline;
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
-    type Pusher = Pusher<T, D>;
-    type Puller = Puller<T, D>;
+    // TODO: These two could mention types in communication::thread, but they are currently private.
+    type Pusher = Pusher<T, D, Box<Push<Message<T, D>>>>;
+    type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
         // ignore &mut A and use thread allocator
         let (mut pushers, puller) = Thread::new::<Message<T, D>>();
@@ -57,8 +58,10 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
 // The PactObserver will do some buffering for Exchange, cutting down on the virtual calls, but we still
 // would like to get the vectors it sends back, so that they can be re-used if possible.
 impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
+    // TODO: The closure in the type prevents us from naming it. 
+    //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<Push<(T, Content<D>)>>;
-    type Puller = Puller<T, D>;
+    type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, D>>();
         let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
@@ -79,8 +82,8 @@ impl<D, T, F: Fn(&T, &D)->u64> TimeExchange<D, T, F> {
 }
 
 impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&T, &D)->u64+'static> ParallelizationContract<T, D> for TimeExchange<D, T, F> {
-    type Pusher = ExchangePusher<T, D, Pusher<T, D>, F>;
-    type Puller = Puller<T, D>;
+    type Pusher = ExchangePusher<T, D, Pusher<T, D, Box<Push<Message<T, D>>>>, F>;
+    type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, D>>();
         let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
@@ -89,27 +92,29 @@ impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&T, &D)->u64+'static> Pa
 }
 
 /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
-pub struct Pusher<T, D> {
-    pusher: Box<Push<Message<T, D>>>,
+pub struct Pusher<T, D, P: Push<Message<T, D>>> {
+    pusher: P,
     channel: usize,
     counter: usize,
     source: usize,
     target: usize,
+    phantom: ::std::marker::PhantomData<(T, D)>,
 }
-impl<T, D> Pusher<T, D> {
+impl<T, D, P: Push<Message<T, D>>> Pusher<T, D, P> {
     /// Allocates a new pusher.
-    pub fn new(pusher: Box<Push<Message<T, D>>>, source: usize, target: usize, channel: usize) -> Pusher<T, D> {
+    pub fn new(pusher: P, source: usize, target: usize, channel: usize) -> Self {
         Pusher {
             pusher: pusher,
             channel: channel,
             counter: 0,
             source: source,
             target: target,
+            phantom: ::std::marker::PhantomData,
         }
     }
 }
 
-impl<T, D> Push<(T, Content<D>)> for Pusher<T, D> {
+impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
     fn push(&mut self, pair: &mut Option<(T, Content<D>)>) {
         if let Some((time, data)) = pair.take() {
 
@@ -134,16 +139,16 @@ impl<T, D> Push<(T, Content<D>)> for Pusher<T, D> {
 }
 
 /// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
-pub struct Puller<T, D> {
-    puller: Box<Pull<Message<T, D>>>,
+pub struct Puller<T, D, P: Pull<Message<T, D>>> {
+    puller: P, //Box<Pull<Message<T, D>>>,
     current: Option<(T, Content<D>)>,
     channel: usize,
     counter: usize,
     index: usize,
 }
-impl<T, D> Puller<T, D> {
+impl<T, D, P: Pull<Message<T, D>>> Puller<T, D, P> {
     /// Allocates a new `Puller`.
-    pub fn new(puller: Box<Pull<Message<T, D>>>, index: usize, channel: usize) -> Puller<T, D> {
+    pub fn new(puller: P, index: usize, channel: usize) -> Self {
         Puller {
             puller: puller,
             channel: channel,
@@ -154,7 +159,7 @@ impl<T, D> Puller<T, D> {
     }
 }
 
-impl<T, D> Pull<(T, Content<D>)> for Puller<T, D> {
+impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
     fn pull(&mut self) -> &mut Option<(T, Content<D>)> {
         let mut previous = self.current.take().map(|(time, data)| Message::new(time, data, self.index, self.counter));
         self.counter += 1;
