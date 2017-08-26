@@ -5,16 +5,18 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::ops::DerefMut;
 
 use ::Data;
 use dataflow::{Scope, Stream};
-use dataflow::channels::pact::{ParallelizationContract, Pipeline};
+use dataflow::channels::pact::Pipeline;
 use dataflow::channels::pullers::Counter as PullCounter;
+use dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 use progress::ChangeBatch;
-use progress::nested::subgraph::Target;
-use progress::{Timestamp, Operate, Antichain};
+use progress::Timestamp;
 
 use super::{Event, EventPusher};
 
@@ -114,72 +116,35 @@ pub trait Capture<T: Timestamp, D: Data> {
 }
 
 impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
-    fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, pusher: P) {
+    fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, event_pusher: P) {
 
-        let mut scope = self.scope();   // clones the scope
-        let channel_id = scope.new_identifier();
+        let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
+        let mut input = PullCounter::new(builder.new_input(self, Pipeline));
+        let mut started = false;
 
-        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id);
-        let operator = CaptureOperator::new(PullCounter::new(receiver), pusher);
+        let event_pusher1 = Rc::new(RefCell::new(event_pusher));
+        let event_pusher2 = event_pusher1.clone();
 
-        let index = scope.add_operator(operator);
-        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
-    }
-}
-
-struct CaptureOperator<T: Timestamp, D: Data, P: EventPusher<T, D>> {
-    input: PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>,
-    events: P,
-}
-
-impl<T:Timestamp, D: Data, P: EventPusher<T, D>> CaptureOperator<T, D, P> {
-    fn new(input: PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>, events: P) -> CaptureOperator<T, D, P> {
-        CaptureOperator {
-            input: input,
-            events: events,
-        }
-    }
-}
-
-impl<T:Timestamp, D: Data, P: EventPusher<T, D>> Operate<T> for CaptureOperator<T, D, P> {
-
-    fn name(&self) -> String { "Capture".to_owned() }
-    fn inputs(&self) -> usize { 1 }
-    fn outputs(&self) -> usize { 0 }
-
-    // we need to set the initial value of the frontier
-    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [ChangeBatch<T>]) {
-
-        // Any replayer will start with the assumption that we have `(Default::default(), 1)` as our initial
-        // capability. Our first update should be to substitute the contents of `counts[0]` for that, which
-        // may result in no change (if this is the initially expressed capability) but should still be correct.
-
-        let mut map = counts[0].clone();
-        map.update(Default::default(), -1);
-        if !map.is_empty() {
-            self.events.push(Event::Progress(map.into_inner()));
-        }
-        counts[0].clear();
-    }
-
-    // each change to the frontier should be shared
-    fn push_external_progress(&mut self, counts: &mut [ChangeBatch<T>]) {
-        // turn all received progress information into an event.
-        self.events.push(Event::Progress(counts[0].clone().into_inner()));
-        counts[0].clear();
-    }
-
-    fn pull_internal_progress(
-        &mut self, 
-        consumed: &mut [ChangeBatch<T>],  
-        _: &mut [ChangeBatch<T>], 
-        _: &mut [ChangeBatch<T>]) -> bool 
-    {
-        // turn each received message into an event.
-        while let Some((time, data)) = self.input.next() {
-            self.events.push(Event::Messages(time.clone(), data.deref_mut().clone()));
-        }
-        self.input.consumed().borrow_mut().drain_into(&mut consumed[0]);
-        false
+        builder.build(
+            move |frontier| {
+                if !started {
+                    frontier[0].update(Default::default(), -1);
+                    started = true;
+                }
+                if !frontier[0].is_empty() {
+                    let to_send = ::std::mem::replace(&mut frontier[0], ChangeBatch::new());
+                    event_pusher1.borrow_mut().push(Event::Progress(to_send.into_inner()));
+                }
+            },
+            move |consumed, _internal, _external| {
+                // turn each received message into an event.
+                let mut borrow = event_pusher2.borrow_mut();
+                while let Some((time, data)) = input.next() {
+                    borrow.push(Event::Messages(time.clone(), data.deref_mut().clone()));
+                }
+                input.consumed().borrow_mut().drain_into(&mut consumed[0]);
+                false
+            }
+        );
     }
 }
