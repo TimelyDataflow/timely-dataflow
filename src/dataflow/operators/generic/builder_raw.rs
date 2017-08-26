@@ -1,4 +1,8 @@
 //! Types to build operators with general shapes.
+//!
+//! These types expose some raw timely interfaces, and while public so that others can build on them,
+//! they require some sophistication to use correctly. I recommend checking out `builder_rc.rs` for 
+//! an interface that is intentionally harder to mis-use.
 
 use std::default::Default;
 
@@ -12,12 +16,13 @@ use dataflow::{Stream, Scope};
 use dataflow::channels::pushers::Tee;
 use dataflow::channels::pact::ParallelizationContract;
 
+/// Contains type-free information about the operator properties.
 struct OperatorShape {
-    name: String,
-    notify: bool,
-    peers: usize,
-    inputs: usize,
-    outputs: usize,
+    name: String,   // A meaningful name for the operator.
+    notify: bool,   // Does the operator require progress notifications.
+    peers: usize,   // The total number of workers in the computation.
+    inputs: usize,  // The number of input ports.
+    outputs: usize, // The number of output ports.
 }
 
 /// Core data for the structure of an operator, minus scope and logic.
@@ -25,10 +30,10 @@ impl OperatorShape {
     fn new(name: String, peers: usize) -> Self {
         OperatorShape {
             name: name,
-            notify: true,   // can be set later with `set_notify`.
-            peers: peers,   // worker/scope peers; for capability initialization.
-            inputs: 0,      // automatically incremented by `new_input`.
-            outputs: 0,     // automatically incremented by `new_output`.
+            notify: true,
+            peers: peers,
+            inputs: 0,
+            outputs: 0,
         }
     }
 }
