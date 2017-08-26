@@ -207,12 +207,13 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::Scope;
     ///
     /// timely::example(|scope| {
-    ///     let stream2 = (0u64..10).to_stream(scope);
     ///     (0u64..10)
     ///         .to_stream(scope)
     ///         .sink(Pipeline, "example", |input| {
     ///             while let Some((time, data)) = input.next() {
-    ///                 println!("{:?}:\t{:?}", time, data);
+    ///                 for datum in data.iter() {
+    ///                     println!("{:?}:\t{:?}", time, datum);
+    ///                 }
     ///             }
     ///         });
     /// });
