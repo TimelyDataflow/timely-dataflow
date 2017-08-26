@@ -895,22 +895,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         self.operator.as_mut().map(|scope| scope.set_external_summary(summaries, frontier));
     }
 
-
     pub fn push_pointstamps(&mut self, external_progress: &mut [ChangeBatch<T>]) {
-
-        // TODO : Introduce correct assertion
-        // assert the "uprighted-ness" property for updates to each input
-        // doesn't need to be true here; only after titration through self.external
-        // for (index, updates) in external_progress.iter().enumerate() {
-        //     for &(time, val) in updates.elements() {
-        //         if val > 0 {
-        //             if !self.external[index].elements().iter().any(|&t2| t2.le(&time)) {
-        //                 println!("in operator: {:?}", self.name);
-        //                 panic!("non-upright update: {:?}", updates);
-        //             }
-        //         }
-        //     }
-        // }
 
         // we shouldn't be pushing progress updates at finished operators. would be a bug!
         if !self.operator.is_some() && !external_progress.iter_mut().all(|x| x.is_empty()) {
@@ -982,38 +967,31 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         // DEBUG: test validity of updates.
 
-        // if self.name == "Subgraph" {
-        //     println!("{:?}", self.name);
-        //     println!("{:?}", self.consumed_buffer);
-        //     println!("{:?}", self.internal_buffer);
-        //     println!("{:?}", self.produced_buffer);
-        //     // println!("{:?}", self.external);
-        //     println!("{:?}", self.internal);
-        //     println!();
-        // }
-
-        // 1. each increment to self.internal_buffer needs to correspond to a positive self.consumed_buffer
-        for index in 0 .. self.internal_buffer.len() {
-            for change in self.internal_buffer[index].iter() {
-                if change.1 > 0 {
-                    let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
-                    let internal = self.internal[index].less_equal(&change.0);
-                    if !consumed && !internal {
-                        panic!("Progress error; internal {:?}: {:?}", self.name, change);
+        #[cfg(debug_assertions)]
+        {
+            // 1. each increment to self.internal_buffer needs to correspond to a positive self.consumed_buffer
+            for index in 0 .. self.internal_buffer.len() {
+                for change in self.internal_buffer[index].iter() {
+                    if change.1 > 0 {
+                        let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
+                        let internal = self.internal[index].less_equal(&change.0);
+                        if !consumed && !internal {
+                            panic!("Progress error; internal {:?}: {:?}", self.name, change);
+                        }
                     }
                 }
             }
-        }
 
-        // 2. each produced message must correspond to a held capability or consumed message
-        for index in 0 .. self.produced_buffer.len() {
-            for change in self.produced_buffer[index].iter() {
-                if change.1 > 0 {
-                    let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
-                    let internal = self.internal[index].less_equal(&change.0);
-                    if !consumed && !internal {
-                        println!("internal: {:?}", self.internal[index].frontier());
-                        panic!("Progress error; produced {:?}: {:?}", self.name, change);
+            // 2. each produced message must correspond to a held capability or consumed message
+            for index in 0 .. self.produced_buffer.len() {
+                for change in self.produced_buffer[index].iter() {
+                    if change.1 > 0 {
+                        let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
+                        let internal = self.internal[index].less_equal(&change.0);
+                        if !consumed && !internal {
+                            println!("internal: {:?}", self.internal[index].frontier());
+                            panic!("Progress error; produced {:?}: {:?}", self.name, change);
+                        }
                     }
                 }
             }
