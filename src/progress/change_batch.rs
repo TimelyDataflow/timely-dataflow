@@ -216,9 +216,7 @@ impl<T:Ord> ChangeBatch<T> {
             ::std::mem::swap(self, other);
         }
         else {
-            while let Some((ref key, val)) = self.updates.pop() {
-                other.update(key.clone(), val);
-            }
+            other.extend(self.updates.drain(..));
         }
     }
 
