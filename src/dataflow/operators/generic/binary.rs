@@ -122,7 +122,7 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
 
             move |input1, input2, output| {
                 let frontiers = &[input1.frontier(), input2.frontier()];
-                let mut notificator = &mut Notificator::new(frontiers, &mut notificator);
+                let notificator = &mut Notificator::new(frontiers, &mut notificator);
                 logic(&mut input1.handle, &mut input2.handle, output, notificator);
             }
         })
