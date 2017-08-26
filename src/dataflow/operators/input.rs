@@ -27,7 +27,7 @@ use dataflow::scopes::{Child, Root};
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 /// Create a new `Stream` and `Handle` through which to supply input.
-pub trait Input<'a, A: Allocate, T: Timestamp+Ord> {
+pub trait Input<'a, A: Allocate, T: Timestamp> {
     /// Create a new `Stream` and `Handle` through which to supply input.
     ///
     /// The `new_input` method returns a pair `(Handle, Stream)` where the `Stream` can be used
@@ -96,7 +96,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp+Ord> {
     fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Root<A>, T>, D>;
 }
 
-impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T> {
+impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Root<A>, T> {
     fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
@@ -106,7 +106,6 @@ impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T
     fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Root<A>, T>, D> {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
-        // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
@@ -122,17 +121,17 @@ impl<'a, A: Allocate, T: Timestamp+Ord> Input<'a, A, T> for Child<'a, Root<A>, T
             copies:   copies,
         });
 
-        Stream::new(Source { index: index, port: 0 }, registrar, self.clone())
+        Stream::new(Source { index: index, port: 0 }, registrar, self.clone())        
     }
 }
 
-struct Operator<T:Timestamp+Ord> {
+struct Operator<T:Timestamp> {
     progress:   Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>,           // times closed since last asked
     messages:   Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>,           // messages sent since last asked
     copies:     usize,
 }
 
-impl<T:Timestamp+Ord> Operate<Product<RootTimestamp, T>> for Operator<T> {
+impl<T:Timestamp> Operate<Product<RootTimestamp, T>> for Operator<T> {
     fn name(&self) -> String { "Input".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }

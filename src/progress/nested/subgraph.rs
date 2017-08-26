@@ -966,7 +966,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         };
 
         // DEBUG: test validity of updates.
-
+        // TODO: use operator summary to add extra level of correctness check (this is weaker without it).
         #[cfg(debug_assertions)]
         {
             // 1. each increment to self.internal_buffer needs to correspond to a positive self.consumed_buffer
@@ -989,7 +989,6 @@ impl<T: Timestamp> PerOperatorState<T> {
                         let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
                         let internal = self.internal[index].less_equal(&change.0);
                         if !consumed && !internal {
-                            println!("internal: {:?}", self.internal[index].frontier());
                             panic!("Progress error; produced {:?}: {:?}", self.name, change);
                         }
                     }
