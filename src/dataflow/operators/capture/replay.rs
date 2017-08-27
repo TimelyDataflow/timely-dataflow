@@ -38,18 +38,12 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use ::Data;
 use dataflow::{Scope, Stream};
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
-use dataflow::channels::pushers::Tee;
-
-use progress::ChangeBatch;
-use progress::nested::subgraph::Source;
-use progress::{Timestamp, Operate, Antichain};
+use dataflow::operators::generic::builder_raw::OperatorBuilder;
+use progress::Timestamp;
 
 use super::Event;
 use super::event::EventIterator;
@@ -64,73 +58,47 @@ impl<T: Timestamp, D: Data, I> Replay<T, D> for I
 where I : IntoIterator,
       <I as IntoIterator>::Item: EventIterator<T, D>+'static {
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>{
-       let (targets, registrar) = Tee::<S::Timestamp, D>::new();
-       let operator = ReplayOperator {
-           peers: scope.peers(),
-           started: false,
-           output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
-           event_streams: self.into_iter().collect(),
-       };
 
-       let index = scope.add_operator(operator);
-       Stream::new(Source { index: index, port: 0 }, registrar, scope.clone())
-   }
-}
+        let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
+        let (targets, stream) = builder.new_output();
 
+        let mut output = PushBuffer::new(PushCounter::new(targets));
+        let mut event_streams = self.into_iter().collect::<Vec<_>>();
+        let mut started = false;
 
-struct ReplayOperator<T:Timestamp, D: Data, I: EventIterator<T, D>> {
-    peers: usize,
-    started: bool,
-    event_streams: Vec<I>,
-    output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
-}
+        builder.build(
+            move |_frontier| { }, 
+            move |_consumed, internal, produced| {
 
-impl<T:Timestamp, D: Data, I: EventIterator<T, D>> Operate<T> for ReplayOperator<T, D, I> {
-    fn name(&self) -> String { "Replay".to_owned() }
-    fn inputs(&self) -> usize { 0 }
-    fn outputs(&self) -> usize { 1 }
+                if !started {
+                    // The first thing we do is modify our capabilities to match the number of streams we manage.
+                    // This should be a simple change of `self.event_streams.len() - 1`. We only do this once, as
+                    // our very first action.
+                    internal[0].update(Default::default(), (event_streams.len() as i64) - 1);
+                    started = true;
+                }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
-
-        // This initial configuration assumes the worst about the stream, but the first progress indication
-        // will amend initial capabilities. In principle, we could try and read some first few event messages,
-        // but we want to avoid blocking graph construction.
-
-        let mut result = ChangeBatch::new();
-        for _ in 0 .. self.peers {
-            result.update(Default::default(), 1);
-        }
-
-        (vec![], vec![result])
-    }
-
-    fn pull_internal_progress(&mut self, _: &mut [ChangeBatch<T>], internal: &mut [ChangeBatch<T>], produced: &mut [ChangeBatch<T>]) -> bool {
-
-        if !self.started {
-            // The first thing we do is modify our capabilities to match the number of streams we manage.
-            // This should be a simple change of `self.event_streams.len() - 1`. We only do this once, as
-            // our very first action.
-            internal[0].update(Default::default(), (self.event_streams.len() as i64) - 1);
-            self.started = true;
-        }
-
-        for event_stream in self.event_streams.iter_mut() {
-            while let Some(event) = event_stream.next() {
-                match *event {
-                    Event::Start => { },
-                    Event::Progress(ref vec) => {
-                        internal[0].extend(vec.iter().cloned());
-                    },
-                    Event::Messages(ref time, ref data) => {
-                        self.output.session(time).give_iterator(data.iter().cloned());
+                for event_stream in event_streams.iter_mut() {
+                    while let Some(event) = event_stream.next() {
+                        match *event {
+                            Event::Start => { },
+                            Event::Progress(ref vec) => {
+                                internal[0].extend(vec.iter().cloned());
+                            },
+                            Event::Messages(ref time, ref data) => {
+                                output.session(time).give_iterator(data.iter().cloned());
+                            }
+                        }
                     }
                 }
+
+                output.cease();
+                output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
+
+                false
             }
-        }
+        );
 
-        self.output.cease();
-        self.output.inner().pull_progress(&mut produced[0]);
-
-        false
-    }
+        stream
+   }
 }

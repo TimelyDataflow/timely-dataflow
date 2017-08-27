@@ -69,6 +69,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// batch.update(17, 1);
     /// assert!(!batch.is_empty());
     ///```
+    #[inline]
     pub fn update(&mut self, item: T, value: i64) {
         self.updates.push((item, value));
     }
@@ -84,6 +85,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// batch.extend(vec![(17, -1)].into_iter());
     /// assert!(batch.is_empty());
     ///```
+    #[inline]
     pub fn extend<I: Iterator<Item=(T, i64)>>(&mut self, iterator: I) {
         for (key, val) in iterator {
             self.update(key, val);
@@ -214,9 +216,7 @@ impl<T:Ord> ChangeBatch<T> {
             ::std::mem::swap(self, other);
         }
         else {
-            while let Some((ref key, val)) = self.updates.pop() {
-                other.update(key.clone(), val);
-            }
+            other.extend(self.updates.drain(..));
         }
     }
 
@@ -225,8 +225,9 @@ impl<T:Ord> ChangeBatch<T> {
     /// This method sort `self.updates` and consolidates elements with equal item, discarding
     /// any whose accumulation is zero. It is optimized to only do this if the number of dirty
     /// elements is non-zero.
+    #[inline]
     fn compact(&mut self) {
-        if self.clean < self.updates.len() && self.updates.len() > 0 {
+        if self.clean < self.updates.len() && self.updates.len() > 1 {
             self.updates.sort_by(|x,y| x.0.cmp(&y.0));
             for i in 0 .. self.updates.len() - 1 {
                 if self.updates[i].0 == self.updates[i+1].0 {

@@ -48,11 +48,15 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         self.subgraph.borrow_mut().add_child(Box::new(scope), index, identifier);
     }
 
-    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC) -> usize {
-        let index = self.subgraph.borrow_mut().allocate_child_id();
-        self.add_operator_with_index(scope, index);
-        index
+    fn allocate_operator_index(&mut self) -> usize {
+        self.subgraph.borrow_mut().allocate_child_id()
     }
+
+    // fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC) -> usize {
+    //     let index = self.subgraph.borrow_mut().allocate_child_id();
+    //     self.add_operator_with_index(scope, index);
+    //     index
+    // }
 
     #[inline]
     fn scoped<T2: Timestamp, R, F: FnOnce(&mut Child<Self, T2>) -> R>(&mut self, func: F) -> R {

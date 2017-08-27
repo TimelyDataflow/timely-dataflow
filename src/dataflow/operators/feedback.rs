@@ -47,17 +47,18 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
     fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
-        let produced = Rc::new(RefCell::new(ChangeBatch::<Product<G::Timestamp, T>>::new()));
-        let consumed = Rc::new(RefCell::new(ChangeBatch::<Product<G::Timestamp, T>>::new()));
 
-        let feedback_output = Counter::new(targets, produced.clone());
+        let feedback_output = Counter::new(targets);
+        let produced = feedback_output.produced().clone();
+
         let feedback_input =  Counter::new(Observer {
             limit: limit, summary: summary.clone(), targets: feedback_output
-        }, consumed.clone());
+        });
+        let consumed = feedback_input.produced().clone();
 
         let index = self.add_operator(Operator {
-            consumed_messages:  consumed.clone(),
-            produced_messages:  produced.clone(),
+            consumed_messages:  consumed,
+            produced_messages:  produced,
             summary:            Local(summary),
         });
 

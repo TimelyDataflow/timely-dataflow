@@ -1,8 +1,5 @@
 //! Partition a stream of records into multiple streams.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use progress::{Timestamp, Operate};
 use progress::nested::{Source, Target};
 use progress::ChangeBatch;
@@ -67,17 +64,17 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
 }
 
 struct Operator<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
-    input:   PullCounter<T, D>,
+    input:   PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>,
     outputs: Vec<PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>>,
     route:    F,
 }
 
 impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operator<T, D, D2, F> {
-    fn new(input: PullCounter<T, D>, outputs: Vec<Tee<T, D2>>, route: F) -> Operator<T, D, D2, F> {
+    fn new(input: PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>, outputs: Vec<Tee<T, D2>>, route: F) -> Operator<T, D, D2, F> {
         Operator {
-            input:      input,
-            outputs:    outputs.into_iter().map(|x| PushBuffer::new(PushCounter::new(x, Rc::new(RefCell::new(ChangeBatch::new()))))).collect(),
-            route:       route,
+            input: input,
+            outputs: outputs.into_iter().map(|x| PushBuffer::new(PushCounter::new(x))).collect(),
+            route: route,
         }
     }
 }
@@ -102,10 +99,10 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
             }
         }
 
-        self.input.pull_progress(&mut consumed[0]);
+        self.input.consumed().borrow_mut().drain_into(&mut consumed[0]);
         for (index, output) in self.outputs.iter_mut().enumerate() {
             output.cease();
-            output.inner().pull_progress(&mut produced[index]);
+            output.inner().produced().borrow_mut().drain_into(&mut produced[index]);
         }
 
         false   // no reason to keep running on Partition's account

@@ -3,16 +3,13 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::{Timestamp, Operate, Antichain};
+use progress::Timestamp;
 use progress::frontier::MutableAntichain;
-use progress::nested::subgraph::{Source, Target};
-use progress::ChangeBatch;
-
-use dataflow::channels::pushers::Tee;
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
-use dataflow::channels::pact::{ParallelizationContract, Pipeline};
+use dataflow::channels::pact::Pipeline;
 use dataflow::channels::pullers::Counter as PullCounter;
+use dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
 use Data;
@@ -94,20 +91,39 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
     }
     fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> Stream<G, D> {
 
-        let mut scope = self.scope();   // clones the scope
-        let channel_id = scope.new_identifier();
+        let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
+        let mut input = PullCounter::new(builder.new_input(self, Pipeline));
+        let (tee, stream) = builder.new_output();
+        let mut output = PushBuffer::new(PushCounter::new(tee));
 
-        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id);
-        let (targets, registrar) = Tee::<G::Timestamp,D>::new();
-        let operator = Operator {
-            input: PullCounter::new(receiver),
-            output: PushBuffer::new(PushCounter::new(targets, Rc::new(RefCell::new(ChangeBatch::new())))),
-            frontier: handle.frontier.clone(),
-        };
+        let frontier = handle.frontier.clone();
+        let mut started = false;
 
-        let index = scope.add_operator(operator);
-        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
-        Stream::new(Source { index: index, port: 0 }, registrar, scope)
+        builder.build(
+            move |changes| {
+                frontier.borrow_mut().update_iter(changes[0].drain());
+            },
+            move |consumed, internal, produced| {
+
+                if !started {
+                    internal[0].update(Default::default(), -1);
+                    started = true;
+                }
+
+                while let Some((time, data)) = input.next() {
+                    output.session(time).give_content(data);
+                }
+                output.cease();
+
+                // extract what we know about progress from the input and output adapters.
+                input.consumed().borrow_mut().drain_into(&mut consumed[0]);
+                output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
+
+                false
+            },
+        );
+
+        stream
     }
 }
 
@@ -150,44 +166,6 @@ impl<T: Timestamp> Clone for Handle<T> {
         Handle {
             frontier: self.frontier.clone()
         }
-    }
-}
-
-struct Operator<T:Timestamp, D: Data> {
-    input: PullCounter<T, D>,
-    output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
-    frontier: Rc<RefCell<MutableAntichain<T>>>
-}
-
-impl<T:Timestamp, D: Data> Operate<T> for Operator<T, D> {
-    fn name(&self) -> String { "Probe".to_owned() }
-    fn inputs(&self) -> usize { 1 }
-    fn outputs(&self) -> usize { 1 }
-
-    // we need to set the initial value of the frontier
-    fn set_external_summary(&mut self, _: Vec<Vec<Antichain<T::Summary>>>, counts: &mut [ChangeBatch<T>]) {
-        self.frontier.borrow_mut().update_iter(counts[0].drain());
-    }
-
-    // each change to the frontier should be shared
-    fn push_external_progress(&mut self, counts: &mut [ChangeBatch<T>]) {
-        self.frontier.borrow_mut().update_iter(counts[0].drain());
-    }
-
-    // the scope does nothing. this is actually a problem, because "reachability" assumes all messages on each edge.
-    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>], _: &mut [ChangeBatch<T>], produced: &mut [ChangeBatch<T>]) -> bool {
-
-        while let Some((time, data)) = self.input.next() {
-            self.output.session(time).give_content(data);
-        }
-
-        self.output.cease();
-
-        // extract what we know about progress from the input and output adapters.
-        self.input.pull_progress(&mut consumed[0]);
-        self.output.inner().pull_progress(&mut produced[0]);
-
-        false
     }
 }
 

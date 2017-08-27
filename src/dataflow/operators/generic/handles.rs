@@ -12,24 +12,27 @@ use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::{Buffer, Session};
 use dataflow::channels::Content;
-use timely_communication::Push;
+use timely_communication::{Push, Pull};
 
 use dataflow::operators::Capability;
 use dataflow::operators::capability::mint as mint_capability;
 
 /// Handle to an operator's input stream.
-pub struct InputHandle<'a, T: Timestamp, D: 'a> {
-    pull_counter: &'a mut PullCounter<T, D>,
+pub struct InputHandle<T: Timestamp, D, P: Pull<(T, Content<D>)>> {
+    pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<ChangeBatch<T>>>,
 }
 
 /// Handle to an operator's input stream and frontier.
-pub struct FrontieredInputHandle<'a, T: Timestamp, D: 'a> {
-    handle: InputHandle<'a, T, D>,
-    frontier: &'a MutableAntichain<T>,
+pub struct FrontieredInputHandle<'a, T: Timestamp, D: 'a, P: Pull<(T, Content<D>)>+'a> {
+    /// The underlying input handle.
+    pub handle: &'a mut InputHandle<T, D, P>,
+    /// The frontier as reported by timely progress tracking.
+    pub frontier: &'a MutableAntichain<T>,
 }
 
-impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
+impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
+
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
@@ -70,7 +73,7 @@ impl<'a, T: Timestamp, D> InputHandle<'a, T, D> {
 
 }
 
-impl<'a, T: Timestamp, D> FrontieredInputHandle<'a, T, D> {
+impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>+'a> FrontieredInputHandle<'a, T, D, P> {
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
@@ -109,18 +112,22 @@ impl<'a, T: Timestamp, D> FrontieredInputHandle<'a, T, D> {
     }
 }
 
+pub fn _access_pull_counter<T: Timestamp, D, P: Pull<(T, Content<D>)>>(input: &mut InputHandle<T, D, P>) -> &mut PullCounter<T, D, P> {
+    &mut input.pull_counter
+}
+
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<ChangeBatch<T>>>) -> InputHandle<'a, T, D> {
+pub fn new_input_handle<T: Timestamp, D, P: Pull<(T, Content<D>)>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<ChangeBatch<T>>>) -> InputHandle<T, D, P> {
     InputHandle {
         pull_counter: pull_counter,
         internal: internal,
     }
 }
 
-pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a>(pull_counter: &'a mut PullCounter<T, D>, internal: Rc<RefCell<ChangeBatch<T>>>, frontier: &'a MutableAntichain<T>) -> FrontieredInputHandle<'a, T, D> {
+pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a, P: Pull<(T, Content<D>)>+'a>(input_handle: &'a mut InputHandle<T, D, P>, frontier: &'a MutableAntichain<T>) -> FrontieredInputHandle<'a, T, D, P> {
     FrontieredInputHandle {
-        handle: new_input_handle(pull_counter, internal),
+        handle: input_handle,
         frontier: frontier,
     }
 }
@@ -155,6 +162,12 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
     /// ```
     pub fn session<'b>(&'b mut self, cap: &'b Capability<T>) -> Session<'b, T, D, PushCounter<T, D, P>> where 'a: 'b {
         self.push_buffer.session(cap)
+    }
+}
+
+impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> Drop for OutputHandle<'a, T, D, P> {
+    fn drop(&mut self) {
+        self.push_buffer.cease();
     }
 }
 

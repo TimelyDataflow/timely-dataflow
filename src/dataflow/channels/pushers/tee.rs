@@ -60,7 +60,6 @@ impl<T, D> Clone for Tee<T, D> {
     }
 }
 
-
 /// A shared list of `Box<Push>` used to add `Push` implementors.
 pub struct TeeHelper<T, D> {
     shared: Rc<RefCell<Vec<Box<Push<(T, Content<D>)>>>>>
