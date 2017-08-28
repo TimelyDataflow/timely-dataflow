@@ -100,5 +100,5 @@ where I : IntoIterator,
         );
 
         stream
-   }
+    }
 }
