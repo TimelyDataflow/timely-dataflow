@@ -4,7 +4,9 @@ Timely dataflow has two fairly handy operators, `capture_into` and `replay_from`
 
 ## Capturing Streams
 
-At its core, `capture_into` records everything it sees about the stream it is attached to. If some data arrive, it records that. If some progress information arrives, it records that. Actually, the `capture_into` method is sufficiently simple, that we can just look at it:
+At its core, `capture_into` records everything it sees about the stream it is attached to. If some data arrive, it records that. If there is a change in the possibility that timestamps might arrive on its input, it record that.
+
+The `capture_into` method is relative simple, and we can just look at it:
 
 ```rust,ignore
     fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, event_pusher: P) {
@@ -39,7 +41,9 @@ At its core, `capture_into` records everything it sees about the stream it is at
     }
 ```
 
-The method is generic with respect to some implementor of `EventPusher`, which is a trait defining a method `push` that accepts `Event<T, D>` items. We will see a few implementations in just a moment. After a bit of set-up, `capture_into` builds a new operator with one input and zero outputs, and sets the logic for (i) what to do when the input frontier changes, and (ii) what to do when presented with the opportunity to do a bit of computation. In both cases, we just create new events based on what we see (progress changes and data messages, respectively).
+The method is generic with respect to some implementor `P` of the trait `EventPusher` which defines a method `push` that accepts `Event<T, D>` items (we will see a few implementations in just a moment). After a bit of set-up, `capture_into` builds a new operator with one input and zero outputs, and sets the logic for (i) what to do when the input frontier changes, and (ii) what to do when presented with the opportunity to do a bit of computation. In both cases, we just create new events based on what we see (progress changes and data messages, respectively).
+
+There is a mysterious subtraction of `Default::default()`, which has to do with the contract that the replaying operators assume the stream starts with such a capability. This prevents the need for the replayers to block on the stream in their operator construction (any operator must state any initial capabilities as part of its construction; it cannot defer that until later).
 
 One nice aspect of `capture_into` is that it really does reveal everything that an operator sees about a stream. If you got your hands on the resulting sequence of events, you would be able to review the full history of the stream. In principle, this could be a fine place to persist the data, capturing both data and progress information.
 
@@ -91,7 +95,7 @@ At *its* core, `replay_into` takes some sequence of `Event<T, D>` items and repr
    }
 ```
 
-The type of `self` here is actually something that allows us to enumerate a sequence of event streams, so each replayer is actually replaying some variable number of streams. This is why our very first action is 
+The type of `self` here is actually something that allows us to enumerate a sequence of event streams, so each replayer is actually replaying some variable number of streams. As part of this, our very first action is to amend our initial `Default::default()` capability to have multiplicity equal to the number of streams we are replaying:
 
 ```rust,ignore
                 if !started {
@@ -100,9 +104,9 @@ The type of `self` here is actually something that allows us to enumerate a sequ
                 }
 ```
 
-which changes the multiplicity of our starting capability to be the number of streams we replay (recall that each stream believes it starts with such a capability, and will eventually record itself dropping such).
+If we have multiple streams, we'll now have multiple capabilities. If we have no stream, we will just drop the capability. This change is important because each source stream believes it has such a capability, and we will eventually see this many drops of the capability in the event stream (though perhaps not immediately; the initial deletion we inserted in `capture_into` likely cancels with the initial capabilities expressed by the outside world; we will likely need to wait until the captured stream is informed about the completion of messages with the default time).
 
-Having done the initial adjustment, we literally just play out the streams (note the plural) as they are available. It is a bit of a head-scratcher, but any interleaving of these streams is itself a valid stream (messages are sent and capabilities claimed only when we hold appropriate capabilities).
+Having done the initial adjustment, we literally just play out the streams (note the plural) as they are available. The `next` method is expected not to block, but rather to returns `None` when there are no more events currently available. It is a bit of a head-scratcher, but any interleaving of these streams is itself a valid stream (messages are sent and capabilities claimed only when we hold appropriate capabilities).
 
 ## An Example
 
@@ -198,4 +202,4 @@ which just goes on and on, but which should produce 50 lines of text, with five 
 
 There are several sorts of things you could capture into and replay from. In the `capture::events` module you will find two examples, a linked list and a binary serializer / deserializer (wrapper around `Write` and `Read` traits). The binary serializer is fairly general; we used it up above to wrap TCP streams. You could also write to files, or write to shared memory. However, be mindful that the serialization format (abomonation) is essentially the in-memory representation, and Rust makes no guarantees about the stability of such a representation across builds.
 
-There is also [an in-progress Kafka adapter](https://github.com/frankmcsherry/timely-dataflow/tree/master/kafkaesque)available in the repository, which uses Kafka topics to store the binary representation of captured streams, which can then be replayed by any timely computation that can read them. This may be a while before it is sorted out, because Kafka seems to have a few quirks, but if you would like to help get in touch.
+There is also [an in-progress Kafka adapter](https://github.com/frankmcsherry/timely-dataflow/tree/master/kafkaesque) available in the repository, which uses Kafka topics to store the binary representation of captured streams, which can then be replayed by any timely computation that can read them. This may be a while before it is sorted out, because Kafka seems to have a few quirks, but if you would like to help get in touch.
