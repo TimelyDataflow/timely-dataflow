@@ -71,8 +71,3 @@ impl<T, D> TeeHelper<T, D> {
         self.shared.borrow_mut().push(Box::new(pusher));
     }
 }
-
-// TODO : Implemented on behalf of example_static::Stream; check if truly needed.
-impl<T, D> Clone for TeeHelper<T, D> {
-    fn clone(&self) -> TeeHelper<T, D> { TeeHelper { shared: self.shared.clone() } }
-}

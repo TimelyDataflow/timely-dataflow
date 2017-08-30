@@ -17,7 +17,6 @@ use dataflow::channels::Content;
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-#[derive(Clone)]
 pub struct Stream<S: Scope, D> {
     /// The progress identifier of the stream's data source.
     name: Source,
