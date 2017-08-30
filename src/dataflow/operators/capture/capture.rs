@@ -132,7 +132,6 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
                     started = true;
                 }
                 if !frontier[0].is_empty() {
-                    println!("frontier: {:?}", frontier[0]);
                     let to_send = ::std::mem::replace(&mut frontier[0], ChangeBatch::new());
                     event_pusher1.borrow_mut().push(Event::Progress(to_send.into_inner()));
                 }
