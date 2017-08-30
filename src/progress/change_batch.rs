@@ -217,6 +217,7 @@ impl<T:Ord> ChangeBatch<T> {
         }
         else {
             other.extend(self.updates.drain(..));
+            self.clean = 0;
         }
     }
 
