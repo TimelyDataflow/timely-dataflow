@@ -110,7 +110,6 @@ impl<T: Abomonation, D: Abomonation> EventIterator<T, D> for EventConsumer<T, D>
                 result.map(move |message| {
                     buffer.clear();
                     buffer.extend_from_slice(message.payload().unwrap());
-                    println!("Received a thing! ({:?} bytes)", buffer.len());
                     unsafe { ::abomonation::decode::<Event<T,D>>(&mut buffer[..]).unwrap().0 }
                 })
             },

@@ -14,6 +14,7 @@ fn main() {
 
         // target topic name.
         let topic = std::env::args().nth(1).unwrap();
+        let count = std::env::args().nth(2).unwrap().parse::<u64>().unwrap();
         let brokers = "localhost:9092";
 
         // Create Kafka stuff.
@@ -27,10 +28,11 @@ fn main() {
             .set("bootstrap.servers", brokers)
             .set_default_topic_config(topic_config.clone());
 
-        let producer = EventProducer::new(producer_config, format!("{}-{:?}", topic, worker.index()));
+        let topic = format!("{}-{:?}", topic, worker.index());
+        let producer = EventProducer::new(producer_config, topic);
 
         worker.dataflow::<u64,_,_>(|scope|
-            (0..10u64)
+            (0 .. count)
                 .to_stream(scope)
                 .capture_into(producer)
         );
