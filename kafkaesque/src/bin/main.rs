@@ -10,47 +10,61 @@ use rdkafka::config::{ClientConfig, TopicConfig};
 use rdkafka::producer::BaseProducer;
 use rdkafka::consumer::BaseConsumer;
 
-mod kafka_event;
+// mod kafka_event;
 
-fn test_timely() {
+// fn test_timely(brokers: String, source: String, target: String) {
 
-    use std::rc::Rc;
-    use std::net::{TcpListener, TcpStream};
-    use std::sync::{Arc, Mutex};
-    use timely::dataflow::Scope;
-    use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay, Extract};
-    
-    // get send and recv endpoints, wrap send to share
-    let (send0, recv0) = ::std::sync::mpsc::channel();
-    let send0 = Arc::new(Mutex::new(send0));
-    
-    timely::execute(timely::Configuration::Thread, move |worker| {
-    
-        // this is only to validate the output.
-        let send0 = send0.lock().unwrap().clone();
-    
-        // these allow us to capture / replay a timely stream.
-        let list = TcpListener::bind("127.0.0.1:8000").unwrap();
-        let send = TcpStream::connect("127.0.0.1:8000").unwrap();
-        let recv = list.incoming().next().unwrap().unwrap();
-    
-        worker.dataflow::<u64,_,_>(|scope1|
-            (0..10u64)
-                .to_stream(scope1)
-                .capture_into(EventWriter::new(send))
-        );
-    
-        worker.dataflow::<u64,_,_>(|scope2| {
-            Some(EventReader::<_,u64,_>::new(recv))
-                .replay_into(scope2)
-                .capture_into(send0)
-        });
-    }).unwrap();
-    
-    assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
+//     use std::rc::Rc;
+//     use std::net::{TcpListener, TcpStream};
+//     use std::sync::{Arc, Mutex};
+//     use timely::dataflow::Scope;
+//     use timely::dataflow::operators::{Capture, ToStream, Inspect};
+//     use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay, Extract};
 
-}
+//     use kafka_event::{EventProducer, EventConsumer};
+
+//     // get send and recv endpoints, wrap send to share
+//     let (send0, recv0) = ::std::sync::mpsc::channel();
+//     let send0 = Arc::new(Mutex::new(send0));
+    
+//     timely::execute(timely::Configuration::Thread, move |worker| {
+    
+//         // Create Kafka stuff.
+//         let mut topic_config = TopicConfig::new();
+//         topic_config
+//             .set("produce.offset.report", "true")
+//             .finalize();
+
+//         let mut producer_config = ClientConfig::new();
+//         producer_config
+//             .set("bootstrap.servers", &brokers)
+//             .set_default_topic_config(topic_config.clone());
+
+//         let mut consumer_config = ClientConfig::new();
+//         consumer_config
+//             .set("group.id", "example")
+//             .set("enable.partition.eof", "false")
+//             .set("auto.offset.reset", "earliest")
+//             .set("session.timeout.ms", "6000")
+//             .set("bootstrap.servers", &brokers)
+//             .set_default_topic_config(topic_config);
+
+//         let producer: BaseProducer<_> = try!(producer_config.create());
+//         let consumer: BaseConsumer<_> = try!(consumer_config.create());
+//         // Done creating Kafka stuff.
+
+//         // Our "source" is a consumer, from Kafka's point of view.
+//         let source = EventConsumer::new(consumer, format!("{}-{:?}", source, worker.index());
+//         let target = EventProducer::new(producer, format!("{}-{:?}", target, worker.index());
+    
+//         worker.dataflow::<u64,_,_>(|scope| {
+//             Some(source)
+//                 .replay_into(scope)
+//                 .inspect(|x| println!("timely says: {:?}", x))
+//                 .capture_into(target);
+//         });
+//     }).unwrap();
+// }
 
 fn round_trip(brokers: &str, topic_name: &str) -> Result<(), rdkafka::error::KafkaError> {
 
@@ -68,8 +82,8 @@ fn round_trip(brokers: &str, topic_name: &str) -> Result<(), rdkafka::error::Kaf
     consumer_config
         .set("group.id", "example")
         .set("enable.partition.eof", "false")
+        .set("auto.offset.reset", "earliest")
         .set("session.timeout.ms", "6000")
-        .set("enable.auto.commit", "true")
         .set("bootstrap.servers", brokers)
         .set_default_topic_config(topic_config);
 
