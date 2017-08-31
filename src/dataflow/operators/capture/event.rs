@@ -9,8 +9,6 @@ use abomonation::Abomonation;
 /// Data and progress events of the captured stream.
 #[derive(Debug)]
 pub enum Event<T, D> {
-    /// An initial marker, used only to start the linked list implementation.
-    Start,
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
     /// Messages received via the data stream.
@@ -34,7 +32,6 @@ impl<T: Abomonation, D: Abomonation> Abomonation for Event<T,D> {
                 let temp = bytes; bytes = if let Some(bytes) = data.exhume(temp) { bytes } else { return None; };
                 Some(bytes)
             }
-            Event::Start => Some(bytes),
         }
     }
 }
@@ -73,26 +70,26 @@ pub mod link {
 
     /// A linked list of Event<T, D>.
     pub struct EventLink<T, D> {
-        /// An event.
-        pub event: Event<T, D>,
+        /// An event, if one exists.
+        ///
+        /// An event might not exist, if either we want to insert a `None` and have the output iterator pause,
+        /// or in the case of the very first linked list element, which has no event when constructed.
+        pub event: Option<Event<T, D>>,
         /// The next event, if it exists.
         pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
     }
 
     impl<T, D> EventLink<T, D> { 
         /// Allocates a new `EventLink`.
-        /// 
-        /// This could be improved with the knowledge that the first event should always be a frontier(default).
-        /// We could, in principle, remove the `Event::Start` event, and thereby no longer have to explain it.
         pub fn new() -> EventLink<T, D> { 
-            EventLink { event: Event::Start, next: RefCell::new(None) }
+            EventLink { event: None, next: RefCell::new(None) }
         }
     }
 
     // implementation for the linked list behind a `Handle`.
     impl<T, D> EventPusher<T, D> for Rc<EventLink<T, D>> {
         fn push(&mut self, event: Event<T, D>) {
-            *self.next.borrow_mut() = Some(Rc::new(EventLink { event: event, next: RefCell::new(None) }));
+            *self.next.borrow_mut() = Some(Rc::new(EventLink { event: Some(event), next: RefCell::new(None) }));
             let next = self.next.borrow().as_ref().unwrap().clone();
             *self = next;
         }
@@ -104,7 +101,7 @@ pub mod link {
             if is_some {
                 let next = self.next.borrow().as_ref().unwrap().clone();
                 *self = next;
-                Some(&self.event)
+                self.event.as_ref()
             }
             else {
                 None

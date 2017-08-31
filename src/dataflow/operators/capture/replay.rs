@@ -81,7 +81,6 @@ where I : IntoIterator,
                 for event_stream in event_streams.iter_mut() {
                     while let Some(event) = event_stream.next() {
                         match *event {
-                            Event::Start => { },
                             Event::Progress(ref vec) => {
                                 internal[0].extend(vec.iter().cloned());
                             },
