@@ -71,3 +71,11 @@ impl<T, D> TeeHelper<T, D> {
         self.shared.borrow_mut().push(Box::new(pusher));
     }
 }
+
+impl<T, D> Clone for TeeHelper<T, D> {
+    fn clone(&self) -> Self {
+        TeeHelper {
+            shared: self.shared.clone()
+        }
+    }
+}
