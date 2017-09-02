@@ -66,6 +66,7 @@ impl<T, D> EventProducer<T, D> {
 impl<T: Abomonation, D: Abomonation> EventPusher<T, D> for EventProducer<T, D> {
     fn push(&mut self, event: Event<T, D>) {
         unsafe { ::abomonation::encode(&event, &mut self.buffer); }
+        // println!("sending {:?} bytes", self.buffer.len());
         self.producer.send_copy::<[u8],()>(self.topic.as_str(), None, Some(&self.buffer[..]), None,  None, None).unwrap();
         self.counter.fetch_add(1, Ordering::SeqCst);
         self.producer.poll(100);
@@ -110,6 +111,7 @@ impl<T: Abomonation, D: Abomonation> EventIterator<T, D> for EventConsumer<T, D>
                 result.map(move |message| {
                     buffer.clear();
                     buffer.extend_from_slice(message.payload().unwrap());
+                    // println!("received: {:?} bytes", buffer.len());
                     unsafe { ::abomonation::decode::<Event<T,D>>(&mut buffer[..]).unwrap().0 }
                 })
             },

@@ -11,4 +11,5 @@ abomonation="0.4.5"
 version = "^0.12.0"
 
 [dependencies.timely]
-git = "https://github.com/frankmcsherry/timely-dataflow"
+#git = "https://github.com/frankmcsherry/timely-dataflow"
+path = "../"
