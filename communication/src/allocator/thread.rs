@@ -12,41 +12,51 @@ impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
     fn allocate<T: 'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
-        Thread::new()
+        let (pusher, puller) = Thread::new();
+        (vec![Box::new(pusher)], Box::new(puller))
     }
 }
 
 impl Thread {
-  pub fn new<T: 'static>() -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
-        let shared = Rc::new(RefCell::new(VecDeque::<T>::new()));
-        (vec![Box::new(Pusher { target: shared.clone() }) as Box<Push<T>>],
-         Box::new(Puller { source: shared, current: None }) as Box<Pull<T>>)
+    pub fn new<T: 'static>() -> (Pusher<T>, Puller<T>) {
+        let shared = Rc::new(RefCell::new((VecDeque::<T>::new(), VecDeque::<T>::new())));
+        (Pusher { target: shared.clone() }, Puller { source: shared, current: None })
     }  
 }
 
 
 // an observer wrapping a Rust channel
-struct Pusher<T> {
-    target: Rc<RefCell<VecDeque<T>>>,
+pub struct Pusher<T> {
+    target: Rc<RefCell<(VecDeque<T>, VecDeque<T>)>>,
 }
 
 impl<T> Push<T> for Pusher<T> {
-    #[inline] fn push(&mut self, element: &mut Option<T>) {
+    #[inline(always)]
+    fn push(&mut self, element: &mut Option<T>) {
+        let mut borrow = self.target.borrow_mut();
         if let Some(element) = element.take() {
-            self.target.borrow_mut().push_back(element);
+            borrow.0.push_back(element);
         }
+        *element = borrow.1.pop_front();
     }
 }
 
-struct Puller<T> {
+pub struct Puller<T> {
     current: Option<T>,
-    source: Rc<RefCell<VecDeque<T>>>,
+    source: Rc<RefCell<(VecDeque<T>, VecDeque<T>)>>,
 }
 
 impl<T> Pull<T> for Puller<T> {
-    #[inline]
+    #[inline(always)]
     fn pull(&mut self) -> &mut Option<T> {
-        self.current = self.source.borrow_mut().pop_front();
+        let mut borrow = self.source.borrow_mut();
+        if let Some(element) = self.current.take() {
+            // TODO : Arbitrary constant.
+            if borrow.1.len() < 16 {
+                borrow.1.push_back(element);
+            }
+        }
+        self.current = borrow.0.pop_front();
         &mut self.current
     }
 }

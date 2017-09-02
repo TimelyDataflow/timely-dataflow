@@ -120,12 +120,15 @@ pub trait Push<T> {
     /// resources.
     fn push(&mut self, element: &mut Option<T>);
     /// Pushes `element` and drops any resulting resources.
+    #[inline(always)]
     fn send(&mut self, element: T) { self.push(&mut Some(element)); }
     /// Pushes `None`, conventionally signalling a flush.
+    #[inline(always)]
     fn done(&mut self) { self.push(&mut None); }
 }
 
 impl<T, P: ?Sized + Push<T>> Push<T> for Box<P> {
+    #[inline(always)]
     fn push(&mut self, element: &mut Option<T>) { (**self).push(element) }
 }
 
@@ -139,9 +142,11 @@ pub trait Pull<T> {
     /// at the moment.
     fn pull(&mut self) -> &mut Option<T>;
     /// Takes an `Option<T>` and leaves `None` behind.
+    #[inline(always)]
     fn recv(&mut self) -> Option<T> { self.pull().take() }
 }
 
 impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
+    #[inline(always)]
     fn pull(&mut self) -> &mut Option<T> { (**self).pull() }
 }
