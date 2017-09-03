@@ -14,16 +14,35 @@ pub trait PartialOrder : Eq {
     fn less_equal(&self, other: &Self) -> bool;
 }
 
-impl PartialOrder for u8 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
-impl PartialOrder for u16 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
-impl PartialOrder for u32 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
-impl PartialOrder for u64 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
-impl PartialOrder for usize { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
+/// A type that is totally ordered.
+///
+/// This trait is a "carrier trait", in the sense that it adds no additional functionality
+/// over `PartialOrder`, but instead indicates that the `less_than` and `less_equal` methods
+/// are total, meaning that `x.less_than(&y)` is equivalent to `!y.less_equal(&x)`.
+///
+/// This trait is distinct from Rust's `Ord` trait, because several implementors of
+/// `PartialOrd` also implement `Ord` for efficient canonicalization, deduplication, 
+/// and other sanity-maintaining operations.
+pub trait TotalOrder : PartialOrder { }
 
-impl PartialOrder for i8 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
-impl PartialOrder for i16 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
-impl PartialOrder for i32 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
-impl PartialOrder for i64 { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
-impl PartialOrder for isize { #[inline(always)] fn less_equal(&self, other: &Self) -> bool { *self <= *other } }
+macro_rules! implement_partial {
+    ($($index_type:ty,)*) => (
+        $(
+            impl PartialOrder for $index_type {
+                #[inline(always)] fn less_than(&self, other: &Self) -> bool { self < other }
+                #[inline(always)] fn less_equal(&self, other: &Self) -> bool { self <= other }
+            }
+        )*
+    )
+}
 
-impl PartialOrder for () { #[inline(always)] fn less_equal(&self, _other: &Self) -> bool { true } }
+macro_rules! implement_total {
+    ($($index_type:ty,)*) => (
+        $(
+            impl TotalOrder for $index_type { }
+        )*
+    )
+}
+
+implement_partial!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, (),);
+implement_total!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, (),);

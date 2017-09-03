@@ -3,7 +3,7 @@
 // use std::cmp::Ordering;
 use std::fmt::{Formatter, Error, Debug};
 
-use order::PartialOrder;
+use ::order::{PartialOrder, TotalOrder};
 use progress::Timestamp;
 use progress::nested::summary::Summary;
 
@@ -77,3 +77,18 @@ impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, T
         Some(bytes)
     }
 }
+
+/// A type that does not affect total orderedness.
+///
+/// This trait is not useful, but must be made public and documented or else Rust 
+/// complains about its existence in the constraints on the implementation of 
+/// public traits for public types.
+pub trait Empty : PartialOrder { }
+
+use progress::timestamp::RootTimestamp;
+
+impl Empty for RootTimestamp { }
+impl Empty for () { }
+impl<T1: Empty, T2: Empty> Empty for Product<T1, T2> { }
+
+impl<T1, T2> TotalOrder for Product<T1, T2> where T1: Empty, T2: TotalOrder { }
