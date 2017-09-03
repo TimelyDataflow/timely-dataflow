@@ -11,6 +11,8 @@ use std::marker::PhantomData;
 
 use timely_communication::{Allocate, Push, Pull, Data};
 use timely_communication::allocator::Thread;
+use timely_communication::allocator::thread::Pusher as ThreadPusher;
+use timely_communication::allocator::thread::Puller as ThreadPuller;
 
 use dataflow::channels::pushers::Exchange as ExchangePusher;
 use dataflow::channels::{Message, Content};
@@ -31,13 +33,13 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
 pub struct Pipeline;
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     // TODO: These two could mention types in communication::thread, but they are currently private.
-    type Pusher = Pusher<T, D, Box<Push<Message<T, D>>>>;
-    type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
+    type Pusher = Pusher<T, D, ThreadPusher<Message<T, D>>>;
+    type Puller = Puller<T, D, ThreadPuller<Message<T, D>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
         // ignore &mut A and use thread allocator
-        let (mut pushers, puller) = Thread::new::<Message<T, D>>();
+        let (pusher, puller) = Thread::new::<Message<T, D>>();
 
-        (Pusher::new(pushers.pop().unwrap(), allocator.index(), allocator.index(), identifier),
+        (Pusher::new(pusher, allocator.index(), allocator.index(), identifier),
          Puller::new(puller, allocator.index(), identifier))
     }
 }
@@ -115,6 +117,7 @@ impl<T, D, P: Push<Message<T, D>>> Pusher<T, D, P> {
 }
 
 impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
+    #[inline(always)]
     fn push(&mut self, pair: &mut Option<(T, Content<D>)>) {
         if let Some((time, data)) = pair.take() {
 
@@ -140,7 +143,7 @@ impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
 
 /// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
 pub struct Puller<T, D, P: Pull<Message<T, D>>> {
-    puller: P, //Box<Pull<Message<T, D>>>,
+    puller: P,
     current: Option<(T, Content<D>)>,
     channel: usize,
     counter: usize,
@@ -160,6 +163,7 @@ impl<T, D, P: Pull<Message<T, D>>> Puller<T, D, P> {
 }
 
 impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
+    #[inline(always)]
     fn pull(&mut self) -> &mut Option<(T, Content<D>)> {
         let mut previous = self.current.take().map(|(time, data)| Message::new(time, data, self.index, self.counter));
         self.counter += 1;
