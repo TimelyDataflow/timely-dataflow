@@ -22,8 +22,8 @@ logging=[]
 [dependencies]
 abomonation="0.4.5"
 timely_sort="0.1.6"
-#timely_communication="0.1.7"
-timely_communication= { version = "0.1.7", path = "./communication" }
+timely_communication="0.1.7"
+#timely_communication= { version = "0.1.7", path = "./communication" }
 byteorder="0.4.2"
 time="0.1.34"
 
