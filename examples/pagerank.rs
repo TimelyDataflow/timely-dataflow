@@ -42,6 +42,7 @@ fn main() {
                     // lists of edges, ranks, and changes.
                     let mut edges = Vec::new();
                     let mut ranks = Vec::new();
+                    let mut diffs = Vec::new(); // for received but un-acted upon deltas.
                     let mut delta = Vec::new();
 
                     let timer = ::std::time::Instant::now();
@@ -72,6 +73,7 @@ fn main() {
                                     // 0. ensure enough state allocated
                                     while edges.len() <= src { edges.push(Vec::new()); }
                                     while ranks.len() <= src { ranks.push(1_000); }
+                                    while diffs.len() <= src { diffs.push(0); }
 
                                     // 1. subtract previous distribution.
                                     allocate(ranks[src], &edges[src][..], &mut delta);
@@ -115,13 +117,18 @@ fn main() {
                                     // 0. ensure enough state allocated
                                     while edges.len() <= src { edges.push(Vec::new()); }
                                     while ranks.len() <= src { ranks.push(1_000); }
+                                    while diffs.len() <= src { diffs.push(0); }
 
                                     // 1. subtract previous distribution.
                                     allocate(ranks[src], &edges[src][..], &mut delta);
                                     for x in delta.iter_mut() { x.1 *= -1; }
 
                                     // 2. update ranks.
-                                    ranks[src] += diff;
+                                    diffs[src] += diff;
+                                    if diffs[src].abs() >= 6 {
+                                        ranks[src] += diffs[src];
+                                        diffs[src] = 0;
+                                    }
 
                                     // 3. re-distribute allocations.
                                     allocate(ranks[src], &edges[src][..], &mut delta);
@@ -197,10 +204,11 @@ fn allocate(rank: i64, edges: &[(usize, i64)], send: &mut Vec<(usize, i64)>) {
         assert!(rank >= 0);
         assert!(edges.iter().all(|x| x.1 > 0));
 
-        let degree: i64 = edges.iter().map(|x| x.1 as i64).sum();
-        let share = ((rank * 5) / 6) / degree;
+        let distribute = (rank * 5) / 6;
+        let degree = edges.len() as i64;
+        let share = distribute / degree;
         for i in 0 .. edges.len() {
-            if (i as i64) < (share % (edges.len() as i64)) {
+            if (i as i64) < (distribute % (edges.len() as i64)) {
                 send.push((edges[i].0, edges[i].1 * (share + 1)));
             }
             else {
