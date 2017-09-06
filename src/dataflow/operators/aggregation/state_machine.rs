@@ -72,7 +72,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             // stash each input and request a notification when ready
             input.for_each(|time, data| {
                 // stash if not time yet
-                if notificator.frontier(0).iter().any(|x| x.less_than(&time.time())) {
+                if notificator.frontier(0).iter().any(|x| x.less_than(time.time())) {
                     pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
                     notificator.notify_at(time);
                 }

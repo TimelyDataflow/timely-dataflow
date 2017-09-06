@@ -92,7 +92,7 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
             let outputs = self.outputs.iter_mut();
 
             // TODO : This results in small sends for many parts, as sessions does the buffering
-            let mut sessions: Vec<_> = outputs.map(|x| x.session(&time)).collect();
+            let mut sessions: Vec<_> = outputs.map(|x| x.session(time)).collect();
 
             for (part, datum) in data.drain(..).map(&self.route) {
                 sessions[part as usize].give(datum);

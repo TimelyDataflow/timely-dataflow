@@ -6,7 +6,7 @@ use dataflow::operators::Capability;
 
 /// Tracks requests for notification and delivers available notifications.
 ///
-/// Notificator is meant to manage the delivery of requested notifications in the presence of
+/// `Notificator` is meant to manage the delivery of requested notifications in the presence of
 /// inputs that may have outstanding messages to deliver. The notificator tracks the frontiers,
 /// as presented from the outside, for each input. Requested notifications can be served only
 /// once there are no frontier elements less-or-equal to them, and there are no other pending
@@ -240,7 +240,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 
 /// Tracks requests for notification and delivers available notifications.
 ///
-/// FrontierNotificator is meant to manage the delivery of requested notifications in the
+/// `FrontierNotificator` is meant to manage the delivery of requested notifications in the
 /// presence of inputs that may have outstanding messages to deliver.
 /// The notificator inspects the frontiers, as presented from the outside, for each input.
 /// Requested notifications can be served only once there are no frontier elements less-or-equal
@@ -359,7 +359,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
         // It should be safe to append any ordered subset of self.pending to self.available,
         // in that the sequence of capabilities in self.available will remain non-decreasing.
 
-        if self.pending.len() > 0 {
+        if !self.pending.is_empty() {
 
             self.pending.sort_by(|x,y| x.0.time().cmp(y.0.time()));
             for i in 0 .. self.pending.len() - 1 {

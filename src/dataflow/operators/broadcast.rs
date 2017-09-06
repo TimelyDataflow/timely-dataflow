@@ -40,7 +40,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
 
         let channel_id = scope.new_identifier();
 
-        assert!(pushers.len() == scope.peers());
+        assert_eq!(pushers.len(), scope.peers());
 
         let receiver = Puller::new(puller, scope.index(), channel_id);
 

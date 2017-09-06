@@ -70,11 +70,11 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
             notificator.for_each(|cap,_,_| {
                 let mut session = output.session(&cap);
                 for &mut (ref t, ref mut data) in &mut stash {
-                    if t.less_equal(&cap.time()) {
+                    if t.less_equal(cap.time()) {
                         session.give_content(data);
                     }
                 }
-                stash.retain(|x| !x.0.less_equal(&cap.time()));
+                stash.retain(|x| !x.0.less_equal(cap.time()));
             });
         })
     }

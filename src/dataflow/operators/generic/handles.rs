@@ -36,7 +36,7 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
-    #[inline]
+    #[inline(always)]
     pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
         let internal = &mut self.internal;
         self.pull_counter.next().map(|(time, content)| {
@@ -77,7 +77,7 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>+'a> FrontieredInputHandle<'a,
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
-    #[inline]
+    #[inline(always)]
     pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
         self.handle.next()
     }
@@ -106,7 +106,7 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>+'a> FrontieredInputHandle<'a,
     }
 
     /// Inspect the frontier associated with this input.
-    #[inline]
+    #[inline(always)]
     pub fn frontier(&self) -> &'a MutableAntichain<T> {
         self.frontier
     }

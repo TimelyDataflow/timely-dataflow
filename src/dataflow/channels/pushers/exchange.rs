@@ -59,7 +59,7 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                 if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
                     let mask = (self.pushers.len() - 1) as u64;
                     for datum in data.drain(..) {
-                        let index = (((self.hash_func)(&time, &datum)) & mask) as usize;
+                        let index = (((self.hash_func)(time, &datum)) & mask) as usize;
 
                         self.buffers[index].push(datum);
                         if self.buffers[index].len() == self.buffers[index].capacity() {
@@ -78,7 +78,7 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                 // as a last resort, use mod (%)
                 else {
                     for datum in data.drain(..) {
-                        let index = (((self.hash_func)(&time, &datum)) % self.pushers.len() as u64) as usize;
+                        let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
                         self.buffers[index].push(datum);
                         if self.buffers[index].len() == self.buffers[index].capacity() {
                             self.flush(index);

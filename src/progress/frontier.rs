@@ -138,8 +138,8 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// assert!(frontier.frontier().len() == 0);
     ///```
     #[inline]
-    pub fn frontier(&self) -> &[T] { 
-        assert!(self.dirty == 0);
+    pub fn frontier(&self) -> &[T] {
+        debug_assert_eq!(self.dirty, 0);
         &self.frontier 
     }
 
@@ -174,8 +174,8 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// assert!(frontier.is_empty());
     ///```
     #[inline]
-    pub fn is_empty(&self) -> bool { 
-        assert!(self.dirty == 0);        
+    pub fn is_empty(&self) -> bool {
+        debug_assert_eq!(self.dirty, 0);
         self.frontier.is_empty() 
     }
 
@@ -193,7 +193,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     ///```
     #[inline]
     pub fn less_than(&self, time: &T) -> bool {
-        assert!(self.dirty == 0);
+        debug_assert_eq!(self.dirty, 0);
         self.frontier.iter().any(|x| x.less_than(time))
     }
 
@@ -211,7 +211,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// assert!(frontier.less_equal(&2));
     ///```
     pub fn less_equal(&self, time: &T) -> bool {
-        assert!(self.dirty == 0);
+        debug_assert_eq!(self.dirty, 0);
         self.frontier.iter().any(|x| x.less_equal(time))
     }
 
@@ -309,7 +309,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     fn rebuild_and<A: FnMut(&T, i64)>(&mut self, mut action: A) {
 
         // sort and consolidate updates; retain non-zero accumulations.
-        if self.updates.len() > 0 {
+        if !self.updates.is_empty() {
             self.updates.sort_by(|x,y| x.0.cmp(&y.0));
             for i in 0 .. self.updates.len() - 1 {
                 if self.updates[i].0 == self.updates[i+1].0 {

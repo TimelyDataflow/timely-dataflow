@@ -42,8 +42,8 @@ impl<S: PartialOrder, T: PartialOrder> PartialOrder for Summary<S, T> {
     #[inline(always)]
     fn less_equal(&self, other: &Self) -> bool {
         match (self, other) {
-            (&Local(ref t1), &Local(ref t2)) => t1.less_equal(&t2),
-            (&Outer(ref s1, ref t1), &Outer(ref s2, ref t2)) => s1.less_equal(&s2) && t1.less_equal(&t2),
+            (&Local(ref t1), &Local(ref t2)) => t1.less_equal(t2),
+            (&Outer(ref s1, ref t1), &Outer(ref s2, ref t2)) => s1.less_equal(s2) && t1.less_equal(t2),
             _  => false
         }
     }

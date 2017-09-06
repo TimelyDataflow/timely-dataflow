@@ -95,7 +95,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for 
 
 			// pop completed aggregates, send along whatever
 			notificator.for_each(|time,_,_| {
-				if let Some(aggs) = aggregates.remove(&time.time()) {
+				if let Some(aggs) = aggregates.remove(time.time()) {
 					let mut session = output.session(&time);
 					for (key, agg) in aggs {
 						session.give(emit(key, agg));

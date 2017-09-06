@@ -96,7 +96,7 @@ impl<G: Scope> UnorderedInput<G> for G {
             peers:    peers,
         });
 
-        return ((helper, cap), Stream::new(Source { index: index, port: 0 }, registrar, self.clone()));
+        ((helper, cap), Stream::new(Source { index: index, port: 0 }, registrar, self.clone()))
     }
 }
 
@@ -130,7 +130,7 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     {
         self.produced.borrow_mut().drain_into(&mut produced[0]);
         self.internal.borrow_mut().drain_into(&mut internal[0]);
-        return false;
+        false
     }
 
     fn notify_me(&self) -> bool { false }

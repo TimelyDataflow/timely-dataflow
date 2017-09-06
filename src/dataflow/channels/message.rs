@@ -126,7 +126,7 @@ impl<D> Content<D> {
     }
 
     /// Pushes `buffer` into `pusher`, ensuring that `buffer` remains valid once returned.
-    #[inline]
+    #[inline(always)]
     pub fn push_at<T, P: Push<(T, Content<D>)>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
 
         let data = Content::from_typed(buffer);
@@ -139,6 +139,7 @@ impl<D> Content<D> {
             *buffer = typed;
         }
         else {
+            // println!("re-allocating (nothing returned)");
             *buffer = Vec::with_capacity(Content::<D>::default_length());
         }
 
@@ -146,6 +147,7 @@ impl<D> Content<D> {
         // TODO : in clone. Revisit!
         // assert!(buffer.capacity() == Content::<D>::default_length());
         if buffer.capacity() != Content::<D>::default_length() {
+            // println!("re-allocating (wrong size)");
             *buffer = Vec::with_capacity(Content::<D>::default_length());
         }
     }

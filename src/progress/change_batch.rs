@@ -212,7 +212,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// assert!(!batch2.is_empty());
     ///```
     pub fn drain_into(&mut self, other: &mut ChangeBatch<T>) where T: Clone {
-        if other.updates.len() == 0 {
+        if other.updates.is_empty() {
             ::std::mem::swap(self, other);
         }
         else {

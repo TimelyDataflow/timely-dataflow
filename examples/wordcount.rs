@@ -49,7 +49,7 @@ fn main() {
                             }
                         }
 
-                        queues.retain(|_key, val| val.len() > 0);
+                        queues.retain(|_key, val| !val.is_empty());
                     }})
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&mut probe);

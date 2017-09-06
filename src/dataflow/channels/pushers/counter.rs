@@ -15,7 +15,7 @@ pub struct Counter<T: Ord, D, P: Push<(T, Content<D>)>> {
 }
 
 impl<T: Ord, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D, P> where T : Eq+Clone+'static {
-    #[inline] 
+    #[inline(always)]
     fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
         if let Some((ref time, ref data)) = *message {
             self.produced.borrow_mut().update(time.clone(), data.len() as i64);
@@ -38,6 +38,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'stati
         }
     }
     /// A references to shared changes in counts, for cloning or draining.
+    #[inline(always)]
     pub fn produced(&self) -> &Rc<RefCell<ChangeBatch<T>>> {
         &self.produced
     }

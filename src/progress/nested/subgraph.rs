@@ -831,7 +831,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let (summary, mut work) = scope.get_internal_summary();
 
-        assert!(summary.len() == inputs);
+        assert_eq!(summary.len(), inputs);
         assert!(!summary.iter().any(|x| x.len() != outputs));
 
         let mut new_summary = vec![Vec::new(); inputs];

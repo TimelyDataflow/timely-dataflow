@@ -19,7 +19,7 @@ use dataflow::channels::{Message, Content};
 
 use abomonation::Abomonation;
 
-/// A ParallelizationContract allocates paired `Push` and `Pull` implementors.
+/// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T: 'static, D: 'static> {
     /// Type implementing `Push` produced by this pact.
     type Pusher: Push<(T, Content<D>)>+'static;
@@ -36,7 +36,7 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     type Pusher = Pusher<T, D, ThreadPusher<Message<T, D>>>;
     type Puller = Puller<T, D, ThreadPuller<Message<T, D>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
-        // ignore &mut A and use thread allocator
+        // ignore `&mut A` and use thread allocator
         let (pusher, puller) = Thread::new::<Message<T, D>>();
 
         (Pusher::new(pusher, allocator.index(), allocator.index(), identifier),
@@ -56,9 +56,7 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
     }
 }
 
-// Exchange uses a Box<Pushable> because it cannot know what type of pushable will return from the allocator.
-// The PactObserver will do some buffering for Exchange, cutting down on the virtual calls, but we still
-// would like to get the vectors it sends back, so that they can be re-used if possible.
+// Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
     // TODO: The closure in the type prevents us from naming it. 
     //       Could specialize `ExchangePusher` to a time-free version.
@@ -170,7 +168,7 @@ impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
 
         ::std::mem::swap(&mut previous, self.puller.pull());
 
-        if let Some(ref message) = previous.as_ref() {
+        if let Some(message) = previous.as_ref() {
 
             ::logging::log(&::logging::MESSAGES, ::logging::MessagesEvent {
                 is_send: false,
