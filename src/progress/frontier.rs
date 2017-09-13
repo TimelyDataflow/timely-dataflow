@@ -274,17 +274,17 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
         I: IntoIterator<Item = (T, i64)>,
         A: FnMut(&T, i64)
     {
-        // track whether a rebuild is needed.
-        let mut rebuild_required = false;
-
         for (time, delta) in updates {
             self.updates.push((time, delta));
             self.dirty += 1;
         }
 
+        // track whether a rebuild is needed.
+        let mut rebuild_required = false;
+
         // determine if recently pushed data requires rebuilding the frontier.
         // note: this may be required even with an empty iterator, due to dirty data in self.updates.
-        while self.dirty > 0 {
+        while self.dirty > 0 && !rebuild_required {
 
             let time = &self.updates[self.updates.len() - self.dirty].0;
             let delta = self.updates[self.updates.len() - self.dirty].1;
@@ -295,6 +295,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
             
             self.dirty -= 1;
         }
+        self.dirty = 0;
 
         if rebuild_required {
             self.rebuild_and(action);
@@ -323,7 +324,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
         // build new frontier using strictly positive times.
         // as the times are sorted, we don't need to worry that we might displace frontier elements.
         for time in self.updates.iter().filter(|x| x.1 > 0) {
-            if !self.frontier_temp.iter().any(|f| f.less_than(&time.0)) {
+            if !self.frontier_temp.iter().any(|f| f.less_equal(&time.0)) {
                 self.frontier_temp.push(time.0.clone());
             }
         }
