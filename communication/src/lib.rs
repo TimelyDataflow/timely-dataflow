@@ -83,8 +83,8 @@ pub use allocator::Allocate;
 pub use initialize::{initialize, Configuration, WorkerGuards};
 
 /// A composite trait for types that may be used with channels.
-pub trait Data : Send+Any+Serialize+Clone+'static { }
-impl<T: Clone+Send+Any+Serialize+'static> Data for T { }
+pub trait Data : Send+Any+Serialize+'static { }
+impl<T: Send+Any+Serialize+'static> Data for T { }
 
 /// Conversions to and from `Vec<u8>`.
 ///
