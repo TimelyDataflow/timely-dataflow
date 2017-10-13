@@ -63,8 +63,28 @@ impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> Parall
     type Pusher = Box<Push<(T, Content<D>)>>;
     type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {
+        println!("Exchange::connect identifier: {:?} allocate.index: {:?} allocate.peers: {:?}", identifier, allocator.index(), allocator.peers());
         let (senders, receiver) = allocator.allocate::<Message<T, D>>();
-        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
+        let senders = if let Ok(wmap) = ::std::env::var("WMAP") {
+            println!("Got WMAP={:?}", wmap);
+            let mut cfg_map: u64 = ::std::u64::MAX;
+            for cfg in wmap.split(" ") {
+                let id_cfg: Vec<_> = cfg.split(":").collect();
+                assert_eq!(id_cfg.len(), 2, "Wrong configuration parameter: {:?}", id_cfg);
+                let cfg_id: usize = id_cfg[0].parse().unwrap();
+                if cfg_id == identifier {
+                    cfg_map = id_cfg[1].parse().unwrap();
+                    println!("My WMAP {} -> {}", cfg_id, cfg_map);
+                    break;
+                }
+            }
+            assert!(cfg_map.trailing_zeros() < senders.len() as u32, "WMAP would not produce output!");
+            senders.into_iter().enumerate()
+                .filter(|&(ref i,_)| (1u64 << i & cfg_map) != 0)
+                .map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>()
+        } else {
+            senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>()
+        };
         (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Puller::new(receiver, allocator.index(), identifier))
     }
 }
