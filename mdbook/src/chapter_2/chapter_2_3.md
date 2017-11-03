@@ -27,7 +27,7 @@ fn main() {
 }
 ```
 
-The closure `map` takes gets *owned* data as input, which means you are able to mutate it as you like without cloning or copying the data. For example, if you have a stream of `String` data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.
+The closure `map` takes *owned* data as input, which means you are able to mutate it as you like without cloning or copying the data. For example, if you have a stream of `String` data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.
 
 ```rust,no_run
 extern crate timely;
@@ -111,7 +111,7 @@ fn main() {
 }
 ```
 
-Unlike `map`, the predicate passed to the `filter` operator does received *owned* data, but rather a reference to the data. This allows `filter` to observe the data to determine whether to keep it, but not to change it.
+Unlike `map`, the predicate passed to the `filter` operator does not receive *owned* data, but rather a reference to the data. This allows `filter` to observe the data to determine whether to keep it, but not to change it.
 
 ## Logical Partitioning
 
@@ -136,7 +136,7 @@ fn main() {
 }
 ```
 
-This example breaks the input stream apart into three logical streams, which are then subjected to different `inspect` operators. Importantly, `partition` only *logically* partitions the data, it does not move the data between workers. In the example above, each worker partitions its stream into three parts and no data are exchange at all (as `inspect` does not require that of its inputs).
+This example breaks the input stream apart into three logical streams, which are then subjected to different `inspect` operators. Importantly, `partition` only *logically* partitions the data, it does not move the data between workers. In the example above, each worker partitions its stream into three parts and no data are exchanged at all (as `inspect` does not require that of its inputs).
 
 In the other direction, `concat` takes two streams and produces one output stream containing elements sent along either. The following example merges the partitioned streams back together.
 
