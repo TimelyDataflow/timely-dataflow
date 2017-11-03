@@ -14,6 +14,6 @@ It is a logic error to call `advance_to` with a time that is not greater or equa
 
 Finally, you might be interested to call `input.close`. This method consumes the input and thereby prevents you from sending any more data. This information is *very* exciting to the system, which can now tell dataflow operators that they won't be hearing much of anything from you any more.
 
-**TIP**: It is very important to keep moving your inputs along if you want your dataflow graph to make progress. One of the most common classes of errors is forgetting to advance an `InputHandle`, and then waiting and waiting and waiting for the cumulative count of records (or whatever) to come out the other hend. Timely really wants you to participate and be clear about what you will and will not do in the future.
+**TIP**: It is very important to keep moving your inputs along if you want your dataflow graph to make progress. One of the most common classes of errors is forgetting to advance an `InputHandle`, and then waiting and waiting and waiting for the cumulative count of records (or whatever) to come out the other end. Timely really wants you to participate and be clear about what you will and will not do in the future.
 
 At the same time, timely's progress tracking does work proportional to the number of timestamps you introduce. If you use a new timestamp for every record, timely will flush its buffers a lot, get very angry with you, and probably fall over. To the extent that you can batch inputs, sending many with the same timestamp, the better.
