@@ -1,6 +1,6 @@
 # Tracking Progress
 
-Both dataflow and timestamps are valuable in the own right, but when we bring them together we get something even better. We get the ability to reason about the flow of timestamps through our computation, and we recover the ability to inform each dataflow component about how much of its input data it has seen.
+Both dataflow and timestamps are valuable in their own right, but when we bring them together we get something even better. We get the ability to reason about the flow of timestamps through our computation, and we recover the ability to inform each dataflow component about how much of its input data it has seen.
 
 Let's recall that bit of code we commented out from `examples/hello.rs`, which had to do with consulting something named `probe`.
 

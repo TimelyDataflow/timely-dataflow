@@ -131,11 +131,11 @@ This code should now show us the stream of `(word, diff)` pairs that fly by, but
 
 This gets a bit more interesting. We don't have an operator to maintain word counts, so we are going to write one.
 
-We start with a stream of words and differences coming at us. This stream has no particular structure, and in particular if they stream is distributed across multiple workers we have no assurance that all instances of the same word are at the same worker. This means that if each worker just adds up the counts for each word, we will get a bunch of partial results, local to each worker.
+We start with a stream of words and differences coming at us. This stream has no particular structure, and in particular if the stream is distributed across multiple workers we have no assurance that all instances of the same word are at the same worker. This means that if each worker just adds up the counts for each word, we will get a bunch of partial results, local to each worker.
 
 We will need to introduce *data exchange*, where the workers communicate with each other to shuffle the data so that the resulting distribution provides correct results. Specifically, we are going to distribute the data so that each individual word goes to the same worker, but the words themselves may be distributed across workers.
 
-Having exchanged the data, each worker will need a moment of care when it process its inputs. Because the data are coming in from multiple workers, they may no longer be in "time order"; some workers may have moved through their inputs faster than others, and may be producing data for the next time while others lag behind. This operator means to produce the word count changes *as if processed sequentially*, and it will need to delay processing changes that come early.
+Having exchanged the data, each worker will need a moment of care when it processes its inputs. Because the data are coming in from multiple workers, they may no longer be in "time order"; some workers may have moved through their inputs faster than others, and may be producing data for the next time while others lag behind. This operator means to produce the word count changes *as if processed sequentially*, and it will need to delay processing changes that come early.
 
 As before, I'm just going to show you the new code, which now lives just after `flat_map` and just before `inspect`:
 
@@ -208,7 +208,7 @@ Third and finally, we specify a closure. The closure has an argument, which we i
     }
 ```
 
-The closure that we end up returning is the `|input, output|` closure. It describes what we the operator would do when presented with a handle to the input and a handle to the output. We've also named two hash maps we will need, and provided the `move` keyword to Rust so that it knows that the resulting closure *owns* these hash maps, rather than *borrows* them.
+The closure that we end up returning is the `|input, output|` closure. It describes what the operator would do when presented with a handle to the input and a handle to the output. We've also named two hash maps we will need, and provided the `move` keyword to Rust so that it knows that the resulting closure *owns* these hash maps, rather than *borrows* them.
 
 Inside the closure, we do two things: (i) read inputs and (ii) update counts and send outputs. Let's do the input reading first:
 
