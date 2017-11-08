@@ -284,13 +284,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             self.children[0].internal[port].update_iter_and(iterator, |t, v| {
                 pointstamps.update_source(Source { index: 0, port: port }, t.clone(), v);
             });
-            // while let Some((time, val)) = changes.pop() {
-            //     // println!("updating external input[{}] at {:?} with {}", port, time, val);
-            //     self.children[0].internal[port].update_and(&Product::new(time, Default::default()), val, |t, v| {
-            //         // println!("  difference made![{}] at {:?} with {}", port, t, v);
-            //         pointstamps.update_source(Source { index: 0, port: port }, t, v)
-            //     });
-            // }
         }
 
         // we should also take this opportunity to clean out any messages in self.children[0].messages.
@@ -306,38 +299,60 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         }
     }
 
-    // information from the vertex about its progress (updates to the output frontiers, recv'd and sent message counts)
-    // the results of this method are meant to reflect state *internal* to the local instance of this
-    // scope; although the scope may exchange progress information to determine whether something is runnable,
-    // the exchanged information should probably *not* be what is reported back. only the locally
-    // produced/consumed messages, and local internal work should be reported back up.
+    /// Report changes in messages and capabilities for the subgraph and its peers.
+    ///
+    /// This method populates its arguments with accumulated changes across all of its peers, indicating
+    /// input messages consumed, internal capabilities held or dropped, and output messages produced.
+    ///
+    /// Importantly, these changes are aggregated across all peers, reflecting the current information
+    /// received by the operator from its own internal progress tracking. This has the potential to lead
+    /// to confusing conclusions (from experience), and should be treated carefully and with as much rigor
+    /// as possible. This behavior is indicated to others by the `self.local()` method returning `false`.
     fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<TOuter>],
                                          internal: &mut [ChangeBatch<TOuter>],
                                          produced: &mut [ChangeBatch<TOuter>]) -> bool
     {
-        // should be false when there is nothing left to do
+        // We expect the buffers to populate should be empty.
+        debug_assert!(consumed.iter_mut().all(|x| x.is_empty()));
+        debug_assert!(internal.iter_mut().all(|x| x.is_empty()));
+        debug_assert!(produced.iter_mut().all(|x| x.is_empty()));
+
+        // We track whether there is any non-progress reason to keep the subgraph active.
         let mut active = false;
 
         // Step 1: Observe the number of records this instances has accepted as input.
         //
-        // This information should be exchanged with peers, probably as subtractions to the output
-        // "capabilities" of the input ports. This is a bit non-standard, but ... it makes sense.
-        // The "resulting" increments to message counts should also be exchanged at the same time.
+        // These timestamp counts correspond to records this subgraph instance has "consumed". As such,
+        // we must both (i) accept these counts as new records on the internal edges leading from the
+        // corresponding input, and also (ii) we must exchange this information with peer instances so
+        // that they can also report the same changes to timestamp counts upwards.
+        //
+        // The second step will be somewhat non-standard, in that we will use the "input capabilities"
+        // as a proxy for records consumed (in fact, we are simply told what these changes are in the
+        // `push_external_progress` method, and have no reason to exchange this information, leaving a
+        // slot in which we can put our data).
         for input in 0..self.inputs {
             let mut borrowed = self.input_messages[input].borrow_mut();
             for (time, delta) in borrowed.drain() {
+                // The internal count for { child: 0, port: input } corresponds to the consumed records
+                // from `input`. We do not propagate input capability information otherwise.
                 self.local_pointstamp_internal.update((0, input, time.clone()), delta);
+                // For each edge emanating from the input, indicate the existence of more records.
                 for target in &self.children[0].edges[input] {
                     self.local_pointstamp_messages.update((target.index, target.port, time.clone()), delta);
                 }
             }
         }
 
-        // Step 2: pull_internal_progress from subscopes.
+        // Step 2: Extract progress summaries from child subscopes.
         //
-        // Updates that are local to this worker must be shared with other workers, whereas updates
-        // that have already been shared with other workers should *not* be shared.
-
+        // Each managed scope reports changes to pointstamp counts, both for its input and output record
+        // counts, and for any changes to its internal capabilities. This information can either be "local"
+        // in which case the data *must* be exchanged with peer subgraphs, or the information is "global"
+        // in which case the data *must not* be exchanged with peer subgraphs (in this case, other peers
+        // will receive the same data from their corresponding children).
+        //
+        // Updates are placed directly in the pointstamp accumulators.
         for child in &mut self.children {
 
             // if local, update into the local pointstamps, which must be exchanged. otherwise into
@@ -355,71 +370,52 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
                 )
             };
 
-            // if subactive { println!("child {} demands activity!", child.name); }
-
+            // Any active child requires we remain active as well.
             active = active || subactive;
         }
 
-        // Intermission: exchange pointstamp updates, and then move them to the pointstamps structure.
+        // Intermission: exchange pointstamp updates, then move them to the pointstamps structure.
         //
-        // Note : Not all pointstamps should be exchanged. Some should be immediately installed if
-        // they correspond to scopes that are not .local(). These scopes represent operators that
-        // have already exchanged their progress information, and whose messages already reflect
-        // full information.
-
-        // for x in self.local_pointstamp_messages.elements() {
-        //     println!("{:?}\tlocal message: {:?}", self.path, x);
-        // }
-        // for x in self.local_pointstamp_internal.elements() {
-        //     println!("{:?}\tlocal internal: {:?}", self.path, x);
-        // }
-
-        // exchange progress messages that need to be exchanged.
+        // Note: Only "local" pointstamp updates should be exchanged. Any "final" pointstamp updates
+        // should be directly installed without exchanging them.
         self.progcaster.send_and_recv(
             &mut self.local_pointstamp_messages,
             &mut self.local_pointstamp_internal,
         );
 
-        // at this point we may need to do something horrible and filthy. Unfortunately, I think
-        // this very filthy thing is what we need to overcome the prior bug in progress tracking
-        // logic: we need to bundle the communication about messages consumed with statements about
-        // where the messages show up, rather than have a parent scope manage the messages consumed
-        // information, which leads one "progress transaction" split across two paths.
-
-        // we have exchanged "capabilities" from the subgraph inputs, which we used to indicate
-        // messages received by this instance. They are not capabilities, and should not be pushed
-        // as pointstamps. Rather the contents of `self.external_external_buffer` should be pushed
-        // as pointstamps. So, at this point it will be important to carefully remove elements of
-        // `self.local_pointstamp_internal` with index 0, and introduce elements from `external_*`.
-        // at least, the `drain_into` we are about to do should perform different logic as needed.
-
-        // fold exchanged messages into the view of global progress.
+        // All local pointstamp *message* updates can be folded into the final updates.
         self.local_pointstamp_messages.drain_into(&mut self.final_pointstamp_messages);
 
+        // For local pointstamp *internal* udpates, we must special case the `child == 0` case to
+        // extract the changes as consumed messages, rather than altered capabilities.
         for ((index, port, timestamp), delta) in self.local_pointstamp_internal.drain() {
-            if index == 0 { consumed[port].update(timestamp.outer.clone(), delta); }
-            else { self.final_pointstamp_internal.update((index, port, timestamp), delta); }
+            if index == 0 {
+                // Update our report upwards of consumed records.
+                consumed[port].update(timestamp.outer.clone(), delta);
+            }
+            else {
+                // Fold non-index_0 changes into the final updates.
+                self.final_pointstamp_internal.update((index, port, timestamp), delta);
+            }
         }
 
-        // for x in self.final_pointstamp_messages.elements() {
-        //     println!("{:?}\tfinal message: {:?}", self.path, x);
-        // }
-        // for x in self.final_pointstamp_internal.elements() {
-        //     println!("{:?}\tfinal internal: {:?}", self.path, x);
-        // }
+        // Step 3: React to post-exchange poinstamp updates.
+        //
+        // We now have a collection of pointstamp updates that should be applied. Before
+        // alerting anyone, we push the updates through filters that report only changes
+        // in the *discrete frontier* of timestamps at each location. This has the effect
+        // of recording the changes, but only providing information to others when some
+        // fundamental change in the frontier has occurred, suppressing variations in the
+        // positive counts or any members dominated by those with positive counts.
 
-        // Having exchanged progress updates, push message and capability updates through a filter
-        // which indicates changes to the discrete frontier of the the antichain. This suppresses
-        // changes that do not change the discrete frontier, even if they change counts or add new
-        // elements beyond the frontier.
-
-        // de-multiplex changes first, then determine changes in consequences second.
+        // Messages: de-multiplex changes first, then determine changes in consequences second.
         for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
-            // if the message went to the output, tell someone I guess.
+            // Any change that heads to an output should be reported as produced.
             if index == 0 { produced[input].update(time.outer.clone(), delta); }
             self.children[index].messages[input].update_dirty(time, delta);
         }
-        // here is the change determination
+        // Now propagate message updates through each filter, updating `self.pointstamps`
+        // for any changes in the lower bound of elements with non-zero count.
         for index in 0 .. self.children.len() {
             let pointstamps = &mut self.pointstamps;
             for input in 0 .. self.children[index].messages.len() {
@@ -429,11 +425,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             }
         }
 
-        // de-multiplex changes first, then determine changes in consequences second.
+        // Internal: de-multiplex changes first, then determine changes in consequences second.
         for ((index, output, time), delta) in self.final_pointstamp_internal.drain() {
             self.children[index].internal[output].update_dirty(time, delta);
         }
-        // here is the change determination
+        // Now propagate internal updates through each filter, updating `self.pointstamps`
+        // for any changes in the lower bound of elements with non-zero count.
         for index in 0 .. self.children.len() {
             let pointstamps = &mut self.pointstamps;
             for output in 0 .. self.children[index].internal.len() {
@@ -443,31 +440,26 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             }
         }
 
-        // for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
-        //     let pointstamps = &mut self.pointstamps;
-        //     self.children[index].messages[input].update_and(&time, delta, |time, delta|
-        //         pointstamps.update_target(Target { index: index, port: input }, time, delta)
-        //     );
-        //     // if the message went to the output, tell someone I guess.
-        //     if index == 0 { produced[input].update(&time.outer, delta); }
-        // }
-        // for ((index, output, time), delta) in self.final_pointstamp_internal.drain() {
-        //     let pointstamps = &mut self.pointstamps;
-        //     self.children[index].internal[output].update_and(&time, delta, |time, delta| {
-        //         pointstamps.update_source(Source { index: index, port: output }, time, delta);
-        //     });
-        // }
-
-        // push implications of outstanding work at each location to other locations in the graph.
+        // Step 4: Propagate changes in the frontier of timestamp information at each location.
+        //
+        // At this point, `self.pointstamps` is loaded with changes at locations and must be
+        // triggered to produce changes at destinations, which we now do.
         self.push_pointstamps();
 
-        // update input capabilities for actual children.
+        // Step 5: Inform each managed child scope of changes to their input frontiers.
+        //
+        // Propagated pointstamp changes may have altered the input frontier of each child.
+        // We provide this information to each of them, handled by their wrapper.
         for child in self.children.iter_mut().skip(1) {
             let pointstamps = &mut self.pointstamps.pushed[child.index][..];
             child.push_pointstamps(pointstamps);
         }
 
-        // produce output data for `internal`. `consumed` and `produced` have already been filled.
+        // Step 6: Record changes in input frontiers to output ports as changes in capabilities.
+        //
+        // Propagated pointstamp changes arriving at an output correspond to changes in held
+        // capabilities. We push each of these through a filter to report any changes to the
+        // discrete frontier upwards in the `internal` argument.
         for (output, pointstamps) in self.pointstamps.pushed[0].iter_mut().enumerate() {
             let iterator = pointstamps.drain().map(|(time, diff)| (time.outer, diff));
             self.output_capabilities[output].update_iter_and(iterator, |t, v| {
@@ -873,16 +865,15 @@ impl<T: Timestamp> PerOperatorState<T> {
             target_source_summaries:    new_summary,
         };
 
-        // TODO : Gross. Fix.
-        for (index, capability) in result.internal.iter_mut().enumerate() {
-            capability.update_iter(work[index].iter().cloned());
+        for index in 0 .. work.len() {
+            result.internal[index].update_iter(work[index].drain());
         }
 
-        // if result.name == "Subgraph" {
-            // println!("{:?}", result.name);
-            // println!("{:?}", result.internal);
-            // println!();
-        // }
+        if result.name == "Subgraph" {
+            println!("{:?}", result.name);
+            println!("{:?}", result.internal);
+            println!();
+        }
 
         result
     }
@@ -966,36 +957,37 @@ impl<T: Timestamp> PerOperatorState<T> {
         };
 
         // DEBUG: test validity of updates.
-        // TODO: use operator summary to add extra level of correctness check (this is weaker without it).
-        #[cfg(debug_assertions)]
-        {
-            // 1. each increment to self.internal_buffer needs to correspond to a positive self.consumed_buffer
-            for index in 0 .. self.internal_buffer.len() {
-                for change in self.internal_buffer[index].iter() {
-                    if change.1 > 0 {
-                        let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
-                        let internal = self.internal[index].less_equal(&change.0);
-                        if !consumed && !internal {
-                            panic!("Progress error; internal {:?}: {:?}", self.name, change);
-                        }
-                    }
-                }
-            }
-
-            // 2. each produced message must correspond to a held capability or consumed message
-            for index in 0 .. self.produced_buffer.len() {
-                for change in self.produced_buffer[index].iter() {
-                    if change.1 > 0 {
-                        let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
-                        let internal = self.internal[index].less_equal(&change.0);
-                        if !consumed && !internal {
-                            panic!("Progress error; produced {:?}: {:?}", self.name, change);
-                        }
-                    }
-                }
-            }
-        }
-
+        // TODO: This test is overly pessimistic for current implementations, which may report they acquire 
+        // capabilities based on the receipt of messages they cannot express (e.g. messages internal to a 
+        // subgraph). This suggests a weakness in the progress tracking protocol, that it is hard to validate
+        // locally, which we could aim to improve.
+        // #[cfg(debug_assertions)]
+        // {
+        //     // 1. each increment to self.internal_buffer needs to correspond to a positive self.consumed_buffer
+        //     for index in 0 .. self.internal_buffer.len() {
+        //         for change in self.internal_buffer[index].iter() {
+        //             if change.1 > 0 {
+        //                 let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
+        //                 let internal = self.internal_capabilities[index].less_equal(&change.0);
+        //                 if !consumed && !internal {
+        //                     panic!("Progress error; internal {:?}: {:?}", self.name, change);
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     // 2. each produced message must correspond to a held capability or consumed message
+        //     for index in 0 .. self.produced_buffer.len() {
+        //         for change in self.produced_buffer[index].iter() {
+        //             if change.1 > 0 {
+        //                 let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
+        //                 let internal = self.internal_capabilities[index].less_equal(&change.0);
+        //                 if !consumed && !internal {
+        //                     panic!("Progress error; produced {:?}: {:?}", self.name, change);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
         // DEBUG: end validity test.
 
         // shutting down if nothing left to do
@@ -1019,7 +1011,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             for (time, delta) in self.internal_buffer[output].drain() {
                 let index = self.index;
-                pointstamp_internal.update((index, output, time), delta);
+                pointstamp_internal.update((index, output, time.clone()), delta);
             }
         }
 
