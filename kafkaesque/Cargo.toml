@@ -6,10 +6,7 @@ authors = ["Frank McSherry <fmcsherry@me.com>"]
 [dependencies]
 clap="*"
 abomonation="0.4.5"
+timely="0.3.0"
 
 [dependencies.rdkafka]
-version = "^0.12.0"
-
-[dependencies.timely]
-#git = "https://github.com/frankmcsherry/timely-dataflow"
-path = "../"
+version = "0.13.0"

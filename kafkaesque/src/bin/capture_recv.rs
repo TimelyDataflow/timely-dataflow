@@ -3,8 +3,9 @@ extern crate timely;
 extern crate rdkafka;
 extern crate kafkaesque;
 
-// use timely::dataflow::operators::Inspect;
+use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::capture::Replay;
+use timely::dataflow::operators::Accumulate;
 
 use rdkafka::config::{ClientConfig, TopicConfig};
 
@@ -47,7 +48,8 @@ fn main() {
         worker.dataflow::<u64,_,_>(|scope| {
             replayers
                 .replay_into(scope)
-                // .inspect(|x| println!("replayed: {:?}", x))
+                .count()
+                .inspect(|x| println!("replayed: {:?}", x))
                 ;
         })
     }).unwrap(); // asserts error-free execution

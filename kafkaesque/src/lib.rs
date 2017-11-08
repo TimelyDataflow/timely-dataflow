@@ -11,8 +11,8 @@ use timely::dataflow::operators::capture::event::{Event, EventPusher, EventItera
 use rdkafka::Message;
 use rdkafka::client::Context;
 use rdkafka::config::ClientConfig;
-use rdkafka::producer::{BaseProducer, ProducerContext, DeliveryReport};
-use rdkafka::consumer::{BaseConsumer, EmptyConsumerContext};
+use rdkafka::producer::{BaseProducer, ProducerContext, DeliveryResult};
+use rdkafka::consumer::{Consumer, BaseConsumer, EmptyConsumerContext};
 
 use rdkafka::config::FromClientConfigAndContext;
 
@@ -24,7 +24,7 @@ impl Context for OutstandingCounterContext { }
 
 impl ProducerContext for OutstandingCounterContext {
     type DeliveryContext = ();
-    fn delivery(&self, _report: DeliveryReport, _: Self::DeliveryContext) {
+    fn delivery(&self, _report: &DeliveryResult, _: Self::DeliveryContext) {
         self.outstanding.fetch_sub(1, Ordering::SeqCst);
     }
 }
@@ -69,7 +69,7 @@ impl<T: Abomonation, D: Abomonation> EventPusher<T, D> for EventProducer<T, D> {
         // println!("sending {:?} bytes", self.buffer.len());
         self.producer.send_copy::<[u8],()>(self.topic.as_str(), None, Some(&self.buffer[..]), None,  None, None).unwrap();
         self.counter.fetch_add(1, Ordering::SeqCst);
-        self.producer.poll(100);
+        self.producer.poll(0);
         self.buffer.clear();
     }
 }
@@ -77,7 +77,7 @@ impl<T: Abomonation, D: Abomonation> EventPusher<T, D> for EventProducer<T, D> {
 impl<T, D> Drop for EventProducer<T, D> {
     fn drop(&mut self) {
         while self.counter.load(Ordering::SeqCst) > 0 {
-            self.producer.poll(100);
+            self.producer.poll(10);
         }
     }
 }
@@ -106,19 +106,19 @@ impl<T, D> EventConsumer<T, D> {
 impl<T: Abomonation, D: Abomonation> EventIterator<T, D> for EventConsumer<T, D> {
     fn next(&mut self) -> Option<&Event<T, D>> {
         let buffer = &mut self.buffer;
-        match self.consumer.poll(0) {
-            Ok(result) =>  {
-                result.map(move |message| {
+        if let Some(result) = self.consumer.poll(0) {
+            match result {
+                Ok(message) =>  {
                     buffer.clear();
                     buffer.extend_from_slice(message.payload().unwrap());
-                    // println!("received: {:?} bytes", buffer.len());
-                    unsafe { ::abomonation::decode::<Event<T,D>>(&mut buffer[..]).unwrap().0 }
-                })
-            },
-            Err(err) => {
-                println!("KafkaConsumer error: {:?}", err);
-                None
-            },
+                    Some(unsafe { ::abomonation::decode::<Event<T,D>>(&mut buffer[..]).unwrap().0 })
+                },
+                Err(err) => {
+                    println!("KafkaConsumer error: {:?}", err);
+                    None
+                },
+            }
         }
+        else { None }
     }
 }
