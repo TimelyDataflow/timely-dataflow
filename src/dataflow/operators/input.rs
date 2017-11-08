@@ -293,22 +293,24 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.
     pub fn send_batch(&mut self, buffer: &mut Vec<D>) {
 
-        // flush buffered elements to ensure local fifo.
-        if !self.buffer1.is_empty() { self.flush(); }
+        if !buffer.is_empty() {
+            // flush buffered elements to ensure local fifo.
+            if !self.buffer1.is_empty() { self.flush(); }
 
-        // push buffer (or clone of buffer) at each destination.
-        for index in 0 .. self.pushers.len() {
-            if index < self.pushers.len() - 1 {
-                self.buffer2.extend_from_slice(&buffer[..]);
-                Content::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
-                assert!(self.buffer2.is_empty());
+            // push buffer (or clone of buffer) at each destination.
+            for index in 0 .. self.pushers.len() {
+                if index < self.pushers.len() - 1 {
+                    self.buffer2.extend_from_slice(&buffer[..]);
+                    Content::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
+                    assert!(self.buffer2.is_empty());
+                }
+                else {
+                    Content::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
+                    assert!(buffer.is_empty());
+                }
             }
-            else {
-                Content::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
-                assert!(buffer.is_empty());
-            }
+            buffer.clear();
         }
-        buffer.clear();
     }
 
     /// Advances the current epoch to `next`.
