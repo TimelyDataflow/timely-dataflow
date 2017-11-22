@@ -154,14 +154,19 @@ struct Wrapper {
 
 impl Wrapper {
     fn step(&mut self) -> bool {
-        self.operate.as_mut().map(|op| op.pull_internal_progress(&mut [], &mut [], &mut [])).unwrap_or(false)
+        let active = self.operate.as_mut().map(|op| op.pull_internal_progress(&mut [], &mut [], &mut [])).unwrap_or(false);
+        if !active {
+            self.operate = None;
+            self.resources = None;
+        }
+        active
     }
     fn active(&self) -> bool { self.operate.is_some() }
 }
 
 impl Drop for Wrapper {
     fn drop(&mut self) {
-        // println!("dropping dataflow {:?}", self.index);
+        // println!("dropping dataflow {:?}", self._index);
         // ensure drop order
         self.operate = None;
         self.resources = None;
