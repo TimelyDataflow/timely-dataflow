@@ -16,13 +16,16 @@ pub enum Event<T, D> {
 }
 
 impl<T: Abomonation, D: Abomonation> Abomonation for Event<T,D> {
-    #[inline] unsafe fn embalm(&mut self) {
-        if let Event::Progress(ref mut vec) = *self { vec.embalm(); }
-        if let Event::Messages(ref mut time, ref mut data) = *self { time.embalm(); data.embalm(); }
-    }
-    #[inline] unsafe fn entomb(&self, bytes: &mut Vec<u8>) {
-        if let Event::Progress(ref vec) = *self { vec.entomb(bytes); }
-        if let Event::Messages(ref time, ref data) = *self { time.entomb(bytes); data.entomb(bytes); }
+    // #[inline] unsafe fn embalm(&mut self) {
+    //     if let Event::Progress(ref mut vec) = *self { vec.embalm(); }
+    //     if let Event::Messages(ref mut time, ref mut data) = *self { time.embalm(); data.embalm(); }
+    // }
+    #[inline] unsafe fn entomb<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
+        match *self {
+            Event::Progress(ref vec) => { vec.entomb(write)?; },
+            Event::Messages(ref time, ref data) => { time.entomb(write)?; data.entomb(write)?; },
+        }
+        Ok(())
     }
     #[inline] unsafe fn exhume<'a, 'b>(&'a mut self, mut bytes: &'b mut[u8]) -> Option<&'b mut [u8]> {
         match *self {
@@ -119,7 +122,6 @@ pub mod binary {
 
     /// A wrapper for `W: Write` implementing `EventPusher<T, D>`.
     pub struct EventWriter<T, D, W: ::std::io::Write> {
-        buffer: Vec<u8>,
         stream: W,
         phant: ::std::marker::PhantomData<(T,D)>,
     }
@@ -128,7 +130,6 @@ pub mod binary {
         /// Allocates a new `EventWriter` wrapping a supplied writer.
         pub fn new(w: W) -> EventWriter<T, D, W> {
             EventWriter {
-                buffer: vec![],
                 stream: w,
                 phant: ::std::marker::PhantomData,
             }
@@ -137,9 +138,8 @@ pub mod binary {
 
     impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
         fn push(&mut self, event: Event<T, D>) {
-            unsafe { ::abomonation::encode(&event, &mut self.buffer); }
-            self.stream.write_all(&self.buffer[..]).unwrap();
-            self.buffer.clear();
+            // TODO: `push` has no mechanism to report errors, so we `unwrap`.
+            unsafe { ::abomonation::encode(&event, &mut self.stream).unwrap(); }
         }
     }
 

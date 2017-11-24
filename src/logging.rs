@@ -238,7 +238,7 @@ fn start_stop_abomonation_roundtrip() {
     fn check(data: StartStop) -> () {
         let mut bytes = Vec::new();
         unsafe {
-            encode(&data, &mut bytes);
+            encode(&data, &mut bytes).unwrap();
         }
         if let Some((result, remaining)) = unsafe { decode::<StartStop>(&mut bytes) } {
             assert!(result == &data);

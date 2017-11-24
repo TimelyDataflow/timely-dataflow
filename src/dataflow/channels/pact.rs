@@ -57,7 +57,7 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
+impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
     // TODO: The closure in the type prevents us from naming it. 
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<Push<(T, Content<D>)>>;
@@ -81,7 +81,7 @@ impl<D, T, F: Fn(&T, &D)->u64> TimeExchange<D, T, F> {
     }
 }
 
-impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&T, &D)->u64+'static> ParallelizationContract<T, D> for TimeExchange<D, T, F> {
+impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&T, &D)->u64+'static> ParallelizationContract<T, D> for TimeExchange<D, T, F> {
     type Pusher = ExchangePusher<T, D, Pusher<T, D, Box<Push<Message<T, D>>>>, F>;
     type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Self::Pusher, Self::Puller) {

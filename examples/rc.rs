@@ -12,8 +12,7 @@ pub struct Test {
 }
 
 impl Abomonation for Test {
-    unsafe fn entomb(&self, _writer: &mut Vec<u8>) { panic!() }
-    unsafe fn embalm(&mut self) { panic!() }
+    unsafe fn entomb<W: ::std::io::Write>(&self, _write: &mut W) -> ::std::io::Result<()> { panic!() }
     unsafe fn exhume<'a,'b>(&'a mut self, _bytes: &'b mut [u8]) -> Option<&'b mut [u8]> { panic!()  }
 }
 

@@ -69,8 +69,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner>
 }
 
 impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
-    unsafe fn embalm(&mut self) { self.outer.embalm(); self.inner.embalm(); }
-    unsafe fn entomb(&self, bytes: &mut Vec<u8>) { self.outer.entomb(bytes); self.inner.entomb(bytes); }
+    // unsafe fn embalm(&mut self) { self.outer.embalm(); self.inner.embalm(); }
+    unsafe fn entomb<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> { 
+        self.outer.entomb(write)?;
+        self.inner.entomb(write)?;
+        Ok(())
+    }
     unsafe fn exhume<'a,'b>(&'a mut self, mut bytes: &'b mut [u8]) -> Option<&'b mut [u8]> {
         let tmp = bytes; bytes = if let Some(bytes) = self.outer.exhume(tmp) { bytes } else { return None };
         let tmp = bytes; bytes = if let Some(bytes) = self.inner.exhume(tmp) { bytes } else { return None };

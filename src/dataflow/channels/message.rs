@@ -38,11 +38,11 @@ impl<T, D> Message<T, D> {
 impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
     #[inline]
     fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
-        unsafe { encode(&self.time, bytes); }
-        unsafe { encode(&self.from, bytes); }
-        unsafe { encode(&self.seq, bytes); }
+        unsafe { encode(&self.time, bytes).unwrap(); }
+        unsafe { encode(&self.from, bytes).unwrap(); }
+        unsafe { encode(&self.seq, bytes).unwrap(); }
         let vec: &Vec<D> = self.data.deref();
-        unsafe { encode(vec, bytes); }
+        unsafe { encode(vec, bytes).unwrap(); }
     }
     #[inline]
     fn from_bytes(bytes: &mut Vec<u8>) -> Self {
