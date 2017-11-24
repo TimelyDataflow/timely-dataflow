@@ -104,7 +104,8 @@ pub trait Serialize {
 // NOTE : figure this out later. don't use for serious things.
 impl<T: Abomonation+Clone> Serialize for T {
     fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
-        unsafe { encode(self, bytes); }
+        // NOTE: `unwrap` should be ok, as Rust docs say writes to `Vec<u8>` do not fail.
+        unsafe { encode(self, bytes).unwrap(); }
     }
     fn from_bytes(bytes: &mut Vec<u8>) -> Self {
         (* unsafe { decode::<T>(bytes) }.unwrap().0).clone()
