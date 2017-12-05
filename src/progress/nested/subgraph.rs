@@ -869,11 +869,11 @@ impl<T: Timestamp> PerOperatorState<T> {
             result.internal[index].update_iter(work[index].drain());
         }
 
-        if result.name == "Subgraph" {
-            println!("{:?}", result.name);
-            println!("{:?}", result.internal);
-            println!();
-        }
+        // if result.name == "Subgraph" {
+        //     println!("{:?}", result.name);
+        //     println!("{:?}", result.internal);
+        //     println!();
+        // }
 
         result
     }
