@@ -29,7 +29,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// The type `Rc<EventLink<T,D>>` implements a typed linked list,
     /// and can be captured into and replayed from.
     ///
-    /// ```
+    /// ```rust,ignore
     /// use std::rc::Rc;
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;

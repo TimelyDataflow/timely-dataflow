@@ -29,6 +29,11 @@ type CommsMessage = (u64, CommsSetup, CommsEvent);
 pub type Logger = Rc<BufferingLogger<EventsSetup, LogEvent>>;
 
 /// TODO(andreal)
+pub fn new_inactive_logger() -> Logger {
+    BufferingLogger::<(), ()>::new_inactive()
+}
+
+/// TODO(andreal)
 pub struct LogManager {
     timely_logs: HashMap<
         EventsSetup,
@@ -161,7 +166,6 @@ impl FilteredLogManager<CommsSetup, CommsEvent> {
 impl LogManager {
     /// TODO(andreal)
     pub fn new() -> Arc<Mutex<Self>> {
-        ::timely_logging::initialize_precise_time_ns();
         Arc::new(Mutex::new(LogManager {
             timely_logs: HashMap::new(),
             timely_subscriptions: Vec::new(),

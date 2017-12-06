@@ -24,19 +24,26 @@ static mut precise_time_ns_delta: Option<i64> = None;
 /// precision of the wall clock base; clock skew effects should be taken into consideration).
 #[inline(always)]
 pub fn get_precise_time_ns() -> u64 {
-    (time::precise_time_ns() as i64 - unsafe { precise_time_ns_delta.expect("precise_time_ns_delta not initialized") }) as u64
-}
-
-/// TODO(andreal)
-pub fn initialize_precise_time_ns() {
-    unsafe {
-        precise_time_ns_delta = Some({
+    let delta = unsafe {
+        *precise_time_ns_delta.get_or_insert_with(|| {
             let wall_time = time::get_time();
             let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
             time::precise_time_ns() as i64 - wall_time_ns
-        });
-    }
+        })
+    };
+    (time::precise_time_ns() as i64 - delta) as u64
 }
+
+// /// TODO(andreal)
+// fn initialize_precise_time_ns() {
+//     unsafe {
+//         precise_time_ns_delta = Some({
+//             let wall_time = time::get_time();
+//             let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
+//             time::precise_time_ns() as i64 - wall_time_ns
+//         });
+//     }
+// }
 
 /// Logging methods
 pub trait Logger {
@@ -325,38 +332,63 @@ pub enum LoggerBatch<'a, S: Clone+'a, L: Clone+'a> {
     End,
 }
 
+enum BufferingLoggerInternal<S: Clone, L: Clone> {
+    Active {
+        setup: S,
+        buffer: RefCell<Vec<(u64, S, L)>>,
+        pushers: RefCell<Box<Fn(LoggerBatch<S, L>)->()>>,
+    },
+    Inactive
+}
+
 pub struct BufferingLogger<S: Clone, L: Clone> {
-    setup: S,
-    buffer: RefCell<Vec<(u64, S, L)>>,
-    pushers: RefCell<Box<Fn(LoggerBatch<S, L>)->()>>,
+    internal: BufferingLoggerInternal<S, L>,
 }
 
 impl<S: Clone, L: Clone> BufferingLogger<S, L> {
     pub fn new(setup: S, pushers: Box<Fn(LoggerBatch<S, L>)->()>) -> Self {
         BufferingLogger {
-            setup: setup,
-            buffer: RefCell::new(Vec::with_capacity(BUFFERING_LOGGER_CAPACITY)),
-            pushers: RefCell::new(pushers),
+            internal: BufferingLoggerInternal::Active {
+                setup: setup,
+                buffer: RefCell::new(Vec::with_capacity(BUFFERING_LOGGER_CAPACITY)),
+                pushers: RefCell::new(pushers),
+            },
         }
     }
 
+    pub fn new_inactive() -> Rc<BufferingLogger<EventsSetup, Event>> {
+        Rc::new(BufferingLogger {
+            internal: BufferingLoggerInternal::Inactive,
+        })
+    }
+
     pub fn log(&self, l: L) {
-        let ts = get_precise_time_ns();
-        let mut buf = self.buffer.borrow_mut();
-        buf.push((ts, self.setup.clone(), l));
-        if buf.len() >= BUFFERING_LOGGER_CAPACITY {
-            (*self.pushers.borrow_mut())(LoggerBatch::Logs(&buf));
-            buf.clear();
+        match self.internal {
+            BufferingLoggerInternal::Active { ref setup, ref buffer, ref pushers } => {
+                let ts = get_precise_time_ns();
+                let mut buf = buffer.borrow_mut();
+                buf.push((ts, setup.clone(), l));
+                if buf.len() >= BUFFERING_LOGGER_CAPACITY {
+                    (*pushers.borrow_mut())(LoggerBatch::Logs(&buf));
+                    buf.clear();
+                }
+            },
+            BufferingLoggerInternal::Inactive => {},
         }
     }
 }
 
 impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
     fn drop(&mut self) {
-        let mut buf = self.buffer.borrow_mut();
-        if buf.len() > 0 {
-            (*self.pushers.borrow_mut())(LoggerBatch::Logs(&buf));
+        match self.internal {
+            BufferingLoggerInternal::Active { ref setup, ref buffer, ref pushers } => {
+                let mut buf = buffer.borrow_mut();
+                if buf.len() > 0 {
+                    (*pushers.borrow_mut())(LoggerBatch::Logs(&buf));
+                }
+                (*pushers.borrow_mut())(LoggerBatch::End);
+            },
+            BufferingLoggerInternal::Inactive => {},
         }
-        (*self.pushers.borrow_mut())(LoggerBatch::End);
     }
 }

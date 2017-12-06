@@ -118,6 +118,8 @@ fn notificator_delivers_notifications_in_topo_order() {
 
     let root_capability = mint_capability(Product::new(0,0), Rc::new(RefCell::new(ChangeBatch::new())));
 
+    let logging = ::logging::new_inactive_logger();
+
     // notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(ts_from_tuple((0, 0)), 1)]);
     let times = vec![
         Product::new(3, 5),
@@ -135,14 +137,14 @@ fn notificator_delivers_notifications_in_topo_order() {
     let mut frontier_notificator = FrontierNotificator::from(times.iter().map(|t| root_capability.delayed(t)));
 
     // the frontier is initially (0,0), and so we should deliver no notifications.
-    assert!(frontier_notificator.monotonic(&[&frontier]).next().is_none());
+    assert!(frontier_notificator.monotonic(&[&frontier], &logging).next().is_none());
 
     // advance the frontier to [(5,7), (6,0)], opening up some notifications.
     frontier.update_iter(vec![(Product::new(0,0),-1), (Product::new(5,7), 1), (Product::new(6,1), 1)]);
 
     {
         let frontiers = [&frontier];
-        let mut notificator = frontier_notificator.monotonic(&frontiers);
+        let mut notificator = frontier_notificator.monotonic(&frontiers, &logging);
 
         // we should deliver the following available notifications, in this order.
         assert_eq!(notificator.next().unwrap().0.time(), &Product::new(1,1));
@@ -158,7 +160,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 
     {
         let frontiers = [&frontier];
-        let mut notificator = frontier_notificator.monotonic(&frontiers);
+        let mut notificator = frontier_notificator.monotonic(&frontiers, &logging);
 
         // the first available notification should be (5,8). Note: before (6,0) in the total order, but not
         // in the partial order. We don't make the promise that we respect the total order.

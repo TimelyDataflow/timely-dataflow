@@ -10,7 +10,7 @@ use timely_logging::{CommsSetup, EventsSetup, Event as LogEvent, CommsEvent};
 use timely::dataflow::operators::capture::{Event, EventReader};
 use timely::progress::nested::product::Product;
 use timely::progress::timestamp::RootTimestamp;
-use timely::dataflow::operators::capture::EventIterator;
+use timely::dataflow::operators::capture::event::EventIterator;
 
 fn main() {
 
