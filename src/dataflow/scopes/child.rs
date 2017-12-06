@@ -1,7 +1,6 @@
 //! A child dataflow scope, used to build nested dataflow scopes.
 
 use std::cell::RefCell;
-use std::rc::Rc;
 
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::nested::{Source, Target};

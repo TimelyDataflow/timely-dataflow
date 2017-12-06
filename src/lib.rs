@@ -57,7 +57,6 @@
 
 #![forbid(missing_docs)]
 
-#[macro_use]
 extern crate abomonation;
 extern crate timely_communication;
 extern crate time;

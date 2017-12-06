@@ -138,7 +138,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
             },
             move |consumed, _internal, _external| {
                 // turn each received message into an event.
-                let mut borrow = event_pusher2.borrow_mut();
+                let borrow = event_pusher2.borrow_mut();
                 while let Some((time, data)) = input.next() {
                     borrow.push(Event::Messages(time.clone(), data.deref_mut().clone()));
                 }

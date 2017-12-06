@@ -26,7 +26,7 @@ pub struct Root<A: Allocate> {
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
     pub fn new(c: A, logging: Arc<Fn(::timely_logging::EventsSetup)->Logger+Sync+Send>) -> Root<A> {
-        let mut result = Root {
+        let result = Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),

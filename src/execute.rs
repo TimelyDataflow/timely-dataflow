@@ -1,7 +1,5 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use std::rc::Rc;
-use std::sync::Arc;
 use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
 use dataflow::scopes::{Root, Child};
 use logging::LoggerConfig;
@@ -130,7 +128,6 @@ where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     let timely_logging = logging_config.timely_logging.clone();
     initialize(config, move |allocator| {
-        let index = allocator.index();
         let mut root = Root::new(allocator, timely_logging.clone());
         let result = func(&mut root);
         while root.step() { }

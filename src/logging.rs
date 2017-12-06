@@ -1,30 +1,19 @@
 //! Traits, implementations, and macros related to logging timely events.
 
-use std::cell::RefCell;
 use std::io::Write;
-use std::fs::File;
 use std::rc::Rc;
-use std::sync::{Arc, RwLock, Mutex};
-use std::hash::Hash;
+use std::sync::{Arc, Mutex};
 
 use std::collections::HashMap;
 use std::fmt::Debug; 
-use ::Data;
 
-use timely_communication::Allocate;
-use timely_communication;
 use ::progress::timestamp::RootTimestamp;
 use ::progress::nested::product::Product;
-use ::progress::timestamp::Timestamp;
 
-use byteorder::{LittleEndian, WriteBytesExt};
-
-use dataflow::scopes::root::Root;
 use dataflow::operators::capture::{EventWriter, Event, EventPusher};
 
 use abomonation::Abomonation;
 
-use std::io::BufWriter;
 use std::net::TcpStream;
 
 use timely_logging::BufferingLogger;
@@ -71,7 +60,7 @@ impl LogManager {
 
         //eprintln!("new comm subscription");
         pusher.push(Event::Progress(vec![(Default::default(), -1)]));
-        for (ref setup, ref event_manager) in self.communication_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
+        for (_, ref event_manager) in self.communication_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
             //eprintln!("  to comm logger {:?}", setup);
             event_manager.lock().unwrap().subscribe(pusher.clone());
         }
@@ -116,7 +105,7 @@ impl<T, D, W: Write> SharedEventWriter<T, D, W> {
 
 impl<T: Abomonation+Debug, D: Abomonation+Debug, W: Write> EventPusher<T, D> for SharedEventWriter<T, D, W> {
     fn push(&self, event: Event<T, D>) {
-        let mut inner = self.inner.lock().expect("event pusher poisoned");
+        let inner = self.inner.lock().expect("event pusher poisoned");
         inner.push(event)
     }
 }

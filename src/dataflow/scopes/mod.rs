@@ -5,8 +5,6 @@ use progress::nested::{Source, Target};
 use logging::Logger;
 use timely_communication::Allocate;
 
-use std::rc::Rc;
-
 pub mod root;
 pub mod child;
 

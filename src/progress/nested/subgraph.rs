@@ -829,7 +829,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         }
     }
 
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut path: Vec<usize>, identifier: usize, logging: Logger) -> PerOperatorState<T> {
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut _path: Vec<usize>, identifier: usize, logging: Logger) -> PerOperatorState<T> {
 
         let local = scope.local();
         let inputs = scope.inputs();
