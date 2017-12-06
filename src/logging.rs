@@ -25,10 +25,10 @@ use timely_logging::LoggerBatch;
 type LogMessage = (u64, EventsSetup, LogEvent);
 type CommsMessage = (u64, CommsSetup, CommsEvent);
 
-/// TODO(andreal)
+/// A log writer.
 pub type Logger = Rc<BufferingLogger<EventsSetup, LogEvent>>;
 
-/// TODO(andreal)
+/// A log writer that does not log anything.
 pub fn new_inactive_logger() -> Logger {
     BufferingLogger::<(), ()>::new_inactive()
 }
@@ -83,37 +83,22 @@ impl LogManager {
     }
 }
 
-struct SharedVec {
-    inner: Arc<Mutex<Vec<u8>>>,
+struct SharedEventWriter<T, D, W: Write> {
+    inner: Arc<Mutex<EventWriter<T, D, W>>>,
 }
 
-impl SharedVec {
-    pub fn new(inner: Arc<Mutex<Vec<u8>>>) -> Self {
-        SharedVec { 
-            inner: inner,
+impl<T, D, W: Write> Clone for SharedEventWriter<T, D, W> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
         }
     }
-}
-
-impl Write for SharedVec {
-    fn write(&mut self, data: &[u8]) -> Result<usize, ::std::io::Error> {
-        self.inner.lock().unwrap().extend_from_slice(data);
-        Ok(data.len())
-    }
-
-    fn flush(&mut self) -> Result<(), ::std::io::Error> {
-        Ok(())
-    }
-}
-
-struct SharedEventWriter<T, D, W: Write> {
-    inner: Mutex<EventWriter<T, D, W>>,
 }
 
 impl<T, D, W: Write> SharedEventWriter<T, D, W> {
     fn new(w: W) -> Self {
         SharedEventWriter {
-            inner: Mutex::new(EventWriter::new(w)),
+            inner: Arc::new(Mutex::new(EventWriter::new(w))),
         }
     }
 }
@@ -125,7 +110,7 @@ impl<T: Abomonation+Debug, D: Abomonation+Debug, W: Write> EventPusher<T, D> for
     }
 }
 
-/// TODO(andreal)
+/// An handle to the LogManager that constructs a filter for the log records.
 pub struct FilteredLogManager<S, E> {
     log_manager: Arc<Mutex<LogManager>>,
     filter: Arc<Fn(&S)->bool+Send+Sync>,
@@ -133,8 +118,10 @@ pub struct FilteredLogManager<S, E> {
 }
 
 impl FilteredLogManager<EventsSetup, LogEvent> {
-    /// TODO(andreal)
-    pub fn to_tcp_socket(&mut self) {
+    /// Send the selected timely events to one tcp socket per log sender.
+    ///
+    /// Destination can be set with the TIMELY_COMM_LOG_TARGET environment variable.
+    pub fn to_tcp_sockets(&mut self) {
         let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
 
         // let writer = SharedEventWriter::new(writer);
@@ -145,24 +132,20 @@ impl FilteredLogManager<EventsSetup, LogEvent> {
         self.log_manager.lock().unwrap().add_timely_subscription(self.filter.clone(), pusher);
     }
 
-    // /// TODO(andreal)
-    // pub fn to_bufs(&mut self) -> Vec<Arc<Mutex<Vec<u8>>>> {
-    //     let mut vecs = Vec::new();
-
-    //     for i in 0..4 {
-    //         let buf = Arc::new(Mutex::new(Vec::<u8>::with_capacity(4_000_000_000)));
-    //         let writer = SharedEventWriter::new(SharedVec::new(buf.clone()));
-    //         let pusher: Arc<EventPusher<Product<RootTimestamp, u64>, LogMessage>+Send+Sync> = Arc::new(writer);
-    //         self.log_manager.lock().unwrap().add_timely_subscription(Arc::new(move |s| s.index == i), pusher);
-    //         vecs.push(buf);
-    //     }
-
-    //     vecs
-    // }
+    /// Send the selected timely events to a shared tcp socket.
+    ///
+    /// Destination can be set with the TIMELY_COMM_LOG_TARGET environment variable.
+    pub fn to_shared_tcp_socket(&mut self) {
+        let target: String = ::std::env::var("TIMELY_LOG_TARGET").expect("no $TIMELY_LOG_TARGET, e.g. 127.0.0.1:34254");
+        let pusher = Box::new(SharedEventWriter::new(TcpStream::connect(target.clone()).expect("failed to connect to logging destination")));
+        self.log_manager.lock().unwrap().add_timely_subscription(self.filter.clone(), Arc::new(move || pusher.clone()));
+    }
 }
 
 impl FilteredLogManager<CommsSetup, CommsEvent> {
-    /// TODO(andreal)
+    /// Send the selected communication events to a tcp socket.
+    ///
+    /// Destination can be set with the TIMELY_COMM_LOG_TARGET environment variable.
     pub fn to_tcp_socket(&mut self) {
         let comm_target = ::std::env::var("TIMELY_COMM_LOG_TARGET").expect("no $TIMELY_COMM_LOG_TARGET, e.g. 127.0.0.1:34255");
 
@@ -175,7 +158,7 @@ impl FilteredLogManager<CommsSetup, CommsEvent> {
 }
 
 impl LogManager {
-    /// TODO(andreal)
+    /// Constructs a new LogManager.
     pub fn new() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(LogManager {
             timely_logs: HashMap::new(),
@@ -186,17 +169,16 @@ impl LogManager {
     }
 }
 
-/// TODO(andreal)
+/// Functions to construct log filters. 
 pub trait LogFilter {
-    /// TODO(andreal)
+    /// Get a `FilteredLogManager` for all workers.
     fn workers(&mut self) -> FilteredLogManager<EventsSetup, LogEvent>;
 
-    /// TODO(andreal)
+    /// Get a `FilteredLogManager` for all communication threads.
     fn comms(&mut self) -> FilteredLogManager<CommsSetup, CommsEvent>;
 }
 
 impl LogFilter for Arc<Mutex<LogManager>> {
-    /// TODO(andreal)
     #[inline] fn workers(&mut self) -> FilteredLogManager<EventsSetup, LogEvent> {
         FilteredLogManager {
             log_manager: self.clone(),
@@ -205,7 +187,6 @@ impl LogFilter for Arc<Mutex<LogManager>> {
         }
     }
  
-    /// TODO(andreal)
     #[inline] fn comms(&mut self) -> FilteredLogManager<CommsSetup, CommsEvent> {
         FilteredLogManager {
             log_manager: self.clone(),
@@ -215,11 +196,11 @@ impl LogFilter for Arc<Mutex<LogManager>> {
     }
 }
 
-/// TODO(andreal)
+/// Shared wrapper for log writer constructors.
 pub struct LoggerConfig {
-    /// TODO(andreal)
+    /// Log writer constructors.
     pub timely_logging: Arc<Fn(EventsSetup)->Rc<BufferingLogger<EventsSetup, LogEvent>>+Send+Sync>,
-    /// TODO(andreal)
+    /// Log writer constructors for communication.
     pub communication_logging: Arc<Fn(CommsSetup)->Rc<BufferingLogger<CommsSetup, CommsEvent>>+Send+Sync>,
 }
 
@@ -249,7 +230,7 @@ impl LoggerConfig {
         event_manager
     }
 
-    /// TODO(andreal)
+    /// Makes a new `LoggerConfig` wrapper from a `LogManager`.
     pub fn new(log_manager: Arc<Mutex<LogManager>>) -> Self {
         let timely_logging_manager = log_manager.clone();
         let communication_logging_manager = log_manager;
@@ -257,7 +238,6 @@ impl LoggerConfig {
             timely_logging: Arc::new(move |events_setup: EventsSetup| {
                 let subscription_manager = LoggerConfig::register_timely_logger(
                     &mut timely_logging_manager.lock().unwrap(), events_setup);
-                //eprintln!("registered timely logger: {:?}", events_setup);
                 Rc::new(BufferingLogger::new(events_setup, Box::new(move |data| {
                     subscription_manager.lock().expect("cannot lock mutex").publish_batch(data);
                 })))
@@ -265,7 +245,6 @@ impl LoggerConfig {
             communication_logging: Arc::new(move |comms_setup: CommsSetup| {
                 let subscription_manager = LoggerConfig::register_comms_logger(
                     &mut communication_logging_manager.lock().unwrap(), comms_setup);
-                //eprintln!("registered comm logger: {:?}", comms_setup);
                 Rc::new(BufferingLogger::new(comms_setup, Box::new(move |data| {
                     subscription_manager.lock().expect("cannot lock mutex").publish_batch(data);
                 })))

@@ -52,7 +52,7 @@ impl<A: Allocate> Root<A> {
         // discard completed dataflows.
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
 
-        // TODO(andreal) flush logs?
+        // TODO(andreal) do we want to flush logs here?
 
         active
     }

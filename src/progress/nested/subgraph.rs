@@ -946,11 +946,9 @@ impl<T: Timestamp> PerOperatorState<T> {
                 id: self.id, start_stop: ::timely_logging::StartStop::Start
             }));
 
-            // TODO(andreal) formerly behind "logging" feature flag {
-            //     assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
-            //     assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
-            //     assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
-            // }
+            debug_assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
+            debug_assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
+            debug_assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
 
             let result = if let Some(ref mut operator) = self.operator {
                 operator.pull_internal_progress(

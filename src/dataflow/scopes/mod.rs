@@ -76,6 +76,6 @@ pub trait Scope: ScopeParent {
     /// ```
     fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R;
 
-    /// TODO(andreal)
+    /// Obtains the logger associated with this scope.
     fn logging(&self) -> Logger;
 }

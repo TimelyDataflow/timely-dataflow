@@ -29,17 +29,6 @@ pub fn get_precise_time_ns() -> u64 {
     (time::precise_time_ns() as i64 - delta) as u64
 }
 
-// /// TODO(andreal)
-// fn initialize_precise_time_ns() {
-//     unsafe {
-//         precise_time_ns_delta = Some({
-//             let wall_time = time::get_time();
-//             let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
-//             time::precise_time_ns() as i64 - wall_time_ns
-//         });
-//     }
-// }
-
 /// Logging methods
 pub trait Logger {
     /// The type of loggable record.

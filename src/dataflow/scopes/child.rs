@@ -18,7 +18,7 @@ pub struct Child<'a, G: ScopeParent, T: Timestamp> {
     pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
     /// A copy of the child's parent scope.
     pub parent:   G,
-    /// TODO(andreal)
+    /// The log writer for this scope.
     pub logging:  Logger,
 }
 
