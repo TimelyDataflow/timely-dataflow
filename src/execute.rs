@@ -122,7 +122,26 @@ where T:Send+'static,
     execute_logging(config, Default::default(), func)
 }
 
+/// Executes a timely dataflow from a configuration and per-communicator logic.
+///
 /// TODO(andreal)
+///
+/// Supports providing a logging configuration.
+/// 
+/// ```
+/// use timely::dataflow::operators::{ToStream, Inspect};
+/// use timely::logging::{LogManager, LoggerConfig};
+///
+/// let mut log_manager = LogManager::new();
+///
+/// // execute a timely dataflow using command line parameters
+/// timely::execute_logging(timely::Configuration::Process(3), LoggerConfig::new(log_manager), |worker| {
+///     worker.dataflow::<(),_,_>(|scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x));
+///     })
+/// }).unwrap();
+/// ```
 pub fn execute_logging<T, F>(config: Configuration, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String> 
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
@@ -190,7 +209,26 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     execute_from_args_logging(iter, Default::default(), func)
 }
 
+/// Executes a timely dataflow from supplied arguments and per-communicator logic.
+///
 /// TODO(andreal)
+///
+/// Supports providing a logging configuration.
+/// 
+/// ```
+/// use timely::dataflow::operators::{ToStream, Inspect};
+/// use timely::logging::{LogManager, LoggerConfig};
+///
+/// let mut log_manager = LogManager::new();
+///
+/// // execute a timely dataflow using command line parameters
+/// timely::execute_from_args_logging(std::env::args(), LoggerConfig::new(log_manager), |worker| {
+///     worker.dataflow::<(),_,_>(|scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x));
+///     })
+/// }).unwrap();
+/// ```
 pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String> 
     where I: Iterator<Item=String>, 
           T:Send+'static,

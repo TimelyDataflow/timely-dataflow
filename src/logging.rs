@@ -239,9 +239,9 @@ impl LoggerConfig {
     }
 
     /// TODO(andreal)
-    pub fn new(log_manager: &mut Arc<Mutex<LogManager>>) -> Self {
+    pub fn new(log_manager: Arc<Mutex<LogManager>>) -> Self {
         let timely_logging_manager = log_manager.clone();
-        let communication_logging_manager = log_manager.clone();
+        let communication_logging_manager = log_manager;
         LoggerConfig {
             timely_logging: Arc::new(move |events_setup: EventsSetup| {
                 let subscription_manager = LoggerConfig::register_timely_logger(

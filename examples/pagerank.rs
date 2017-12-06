@@ -27,7 +27,6 @@ fn ridiculous_shuffle(from: u64) -> u64 {
 fn main() {
 
     let mut log_manager = LogManager::new();
-    let logger_config = LoggerConfig::new(&mut log_manager);
 
     let start = time::precise_time_ns();
 
@@ -35,7 +34,7 @@ fn main() {
     let buf: Option<Vec<::std::sync::Arc<::std::sync::Mutex<Vec<u8>>>>> = Some(log_manager.workers().to_bufs());
     // log_manager.workers().to_tcp_socket();
 
-    timely::execute_from_args_logging(std::env::args().skip(3), logger_config, move |worker| {
+    timely::execute_from_args_logging(std::env::args().skip(3), LoggerConfig::new(log_manager), move |worker| {
 
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
