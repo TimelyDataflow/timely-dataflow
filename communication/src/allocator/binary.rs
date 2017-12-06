@@ -1,5 +1,4 @@
 use std::sync::mpsc::{Sender, Receiver, channel};
-use std::rc::Rc;
 use std::sync::Arc;
 
 use {Allocate, Data, Push, Pull, Serialize};

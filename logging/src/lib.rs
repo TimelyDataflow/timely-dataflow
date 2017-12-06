@@ -8,15 +8,10 @@ use abomonation::Abomonation;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::io::Write;
-use std::io::Read;
-use std::io::BufWriter;
-use std::fs::{self, File};
-use std::path::Path;
 
 pub struct StructMapWriter;
 
-static mut precise_time_ns_delta: Option<i64> = None;
+static mut PRECISE_TIME_NS_DELTA: Option<i64> = None;
 
 /// Returns the value of an high resolution performance counter, in nanoseconds, rebased to be
 /// roughly comparable to an unix timestamp.
@@ -25,7 +20,7 @@ static mut precise_time_ns_delta: Option<i64> = None;
 #[inline(always)]
 pub fn get_precise_time_ns() -> u64 {
     let delta = unsafe {
-        *precise_time_ns_delta.get_or_insert_with(|| {
+        *PRECISE_TIME_NS_DELTA.get_or_insert_with(|| {
             let wall_time = time::get_time();
             let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
             time::precise_time_ns() as i64 - wall_time_ns
@@ -381,7 +376,7 @@ impl<S: Clone, L: Clone> BufferingLogger<S, L> {
 impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
     fn drop(&mut self) {
         match self.internal {
-            BufferingLoggerInternal::Active { ref setup, ref buffer, ref pushers } => {
+            BufferingLoggerInternal::Active { ref buffer, ref pushers, .. } => {
                 let mut buf = buffer.borrow_mut();
                 if buf.len() > 0 {
                     (*pushers.borrow_mut())(LoggerBatch::Logs(&buf));

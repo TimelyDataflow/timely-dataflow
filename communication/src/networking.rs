@@ -1,6 +1,5 @@
 //! Networking code for sending and receiving fixed size `Vec<u8>` between machines.
 
-use std::rc::Rc;
 use std::io::{Read, Write, Result, BufWriter};
 use std::net::{TcpListener, TcpStream};
 use std::mem::size_of;
@@ -78,9 +77,6 @@ struct BinaryReceiver<R: Read> {
     buffer:     Vec<u8>,    // current working buffer
     length:     usize,
     targets:    Switchboard<Sender<Vec<u8>>>,
-    process:    usize, // process ID this receiver belongs to
-    index:      usize, // receiver index
-    threads:    usize,
     log_sender:     ::logging::CommsLogger,
 }
 
@@ -100,9 +96,6 @@ impl<R: Read> BinaryReceiver<R> {
             buffer:     vec![0u8; 1 << 20],
             length:     0,
             targets:    Switchboard::new(channels),
-            process:    process,
-            index:      index,
-            threads:    threads,
             log_sender:     log_sender,
         }
     }
@@ -158,18 +151,14 @@ impl<R: Read> BinaryReceiver<R> {
 struct BinarySender<W: Write> {
     writer:     W,
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
-    process:    usize, // process ID this sender belongs to
-    index:      usize, // sender index
     log_sender:     ::logging::CommsLogger,
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, process: usize, index: usize, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
+    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, _process: usize, _index: usize, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
-            process:    process,
-            index:      index,
             log_sender:     log_sender,
         }
     }

@@ -4,7 +4,6 @@ use std::thread;
 use std::io::BufRead;
 use getopts;
 use std::sync::Arc;
-use std::rc::Rc;
 
 use allocator::{Thread, Process, Generic};
 use networking::initialize_networking;

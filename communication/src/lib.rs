@@ -68,7 +68,6 @@
 
 extern crate getopts;
 extern crate byteorder;
-#[macro_use]
 extern crate abomonation;
 
 extern crate timely_logging;
