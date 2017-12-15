@@ -1,15 +1,11 @@
-//! Simple timely_communication logging
+//! Simple timely logging
 
 extern crate time;
-#[macro_use] extern crate abomonation;
+extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
-
-use abomonation::Abomonation;
 
 use std::rc::Rc;
 use std::cell::RefCell;
-
-pub struct StructMapWriter;
 
 static mut PRECISE_TIME_NS_DELTA: Option<i64> = None;
 
@@ -37,7 +33,7 @@ pub trait Logger {
     fn log(&self, record: Self::Record);
 }
 
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 pub struct CommunicationEvent {
     /// true for send event, false for receive event
     pub is_send: bool,
@@ -51,18 +47,14 @@ pub struct CommunicationEvent {
     pub seqno: usize,
 }
 
-unsafe_abomonate!(CommunicationEvent : is_send, comm_channel, source, target, seqno);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 /// Serialization
 pub struct SerializationEvent {
     pub seq_no: Option<usize>,
     pub is_start: bool,
 }
 
-unsafe_abomonate!(SerializationEvent : seq_no, is_start);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 /// The creation of an `Operate` implementor.
 pub struct OperatesEvent {
     /// Worker-unique identifier for the operator.
@@ -73,9 +65,7 @@ pub struct OperatesEvent {
     pub name: String,
 }
 
-unsafe_abomonate!(OperatesEvent : id, addr, name);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 /// The creation of a channel between operators.
 pub struct ChannelsEvent {
     /// Worker-unique identifier for the channel
@@ -88,9 +78,7 @@ pub struct ChannelsEvent {
     pub target: (usize, usize),
 }
 
-unsafe_abomonate!(ChannelsEvent : id, scope_addr, source, target);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 /// Send or receive of progress information.
 pub struct ProgressEvent {
     /// `true` if the event is a send, and `false` if it is a receive.
@@ -109,18 +97,14 @@ pub struct ProgressEvent {
     pub internal: Vec<(usize, usize, String, i64)>,
 }
 
-unsafe_abomonate!(ProgressEvent : is_send, source, comm_channel, seq_no, addr, messages, internal);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 /// External progress pushed onto an operator
 pub struct PushProgressEvent {
     /// Worker-unique operator identifier
     pub op_id: usize,
 }
 
-unsafe_abomonate!(PushProgressEvent : op_id);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 /// Message send or receive event
 pub struct MessagesEvent {
     /// `true` if send event, `false` if receive event.
@@ -139,102 +123,80 @@ pub struct MessagesEvent {
     pub length: usize,
 }
 
-unsafe_abomonate!(MessagesEvent : is_send, channel, comm_channel, source, target, seq_no, length);
-
 /// Records the starting and stopping of an operator.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Abomonation, Debug, Clone, PartialEq, Eq)]
 pub enum StartStop {
     /// Operator starts.
     Start,
     /// Operator stops; did it have any activity?
-    Stop { 
+    Stop {
         /// Did the operator perform non-trivial work.
-        activity: bool 
+        activity: bool
     },
 }
 
-unsafe_abomonate!(StartStop);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 /// Operator start or stop.
 pub struct ScheduleEvent {
     /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
     pub id: usize,
     /// `Start` if the operator is starting, `Stop` if it is stopping.
-    /// activiy is true if it looks like some useful work was performed during this call (data was
+    /// activity is true if it looks like some useful work was performed during this call (data was
     /// read or written, notifications were requested / delivered)
     pub start_stop: StartStop,
 }
 
-unsafe_abomonate!(ScheduleEvent : id, start_stop);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 /// Application-defined code startor stop
 pub struct ApplicationEvent {
     /// Unique event type identifier
     pub id: usize,
-    /// True when activity begins, false when it stops 
+    /// True when activity begins, false when it stops
     pub is_start: bool,
 }
 
-unsafe_abomonate!(ApplicationEvent : id, is_start);
-
-#[derive(Debug, Clone)]
-/// Application-defined code startor stop
+#[derive(Abomonation, Debug, Clone)]
+/// Application-defined code start or stop
 pub struct GuardedMessageEvent {
-    /// True when activity begins, false when it stops 
+    /// True when activity begins, false when it stops
     pub is_start: bool,
 }
 
-unsafe_abomonate!(GuardedMessageEvent : is_start);
-
-#[derive(Debug, Clone)]
-/// Application-defined code startor stop
+#[derive(Abomonation, Debug, Clone)]
+/// Application-defined code start or stop
 pub struct GuardedProgressEvent {
-    /// True when activity begins, false when it stops 
+    /// True when activity begins, false when it stops
     pub is_start: bool,
 }
 
-unsafe_abomonate!(GuardedProgressEvent : is_start);
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct EventsSetup {
     pub index: usize,
 }
 
-unsafe_abomonate!(EventsSetup : index);
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct CommsSetup {
     pub sender: bool,
     pub process: usize,
     pub remote: Option<usize>,
 }
 
-unsafe_abomonate!(CommsSetup : sender, process, remote);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 pub enum CommChannelKind {
     Progress,
     Data,
 }
 
-unsafe_abomonate!(CommChannelKind);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 pub struct CommChannelsEvent {
     pub comm_channel: Option<usize>,
     pub comm_channel_kind: CommChannelKind,
 }
 
-unsafe_abomonate!(CommChannelsEvent : comm_channel, comm_channel_kind);
-
-#[derive(Debug, Clone)]
+#[derive(Abomonation, Debug, Clone)]
 pub struct InputEvent {
     pub start_stop: StartStop,
 }
-
-unsafe_abomonate!(InputEvent : start_stop);
 
 #[derive(Debug, Clone, Abomonation)]
 pub enum Event {
