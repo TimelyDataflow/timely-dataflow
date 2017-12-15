@@ -960,7 +960,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             else { false };
 
             // TODO(andreal): for logging, do we want this always enabled?
-            let did_work = 
+            let did_work =
                 self.consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
                 self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
                 self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());

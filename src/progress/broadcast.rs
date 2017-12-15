@@ -8,7 +8,7 @@ use logging::Logger;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;
-/// A progress update message consisting of source worker id, sequence number and lists of 
+/// A progress update message consisting of source worker id, sequence number and lists of
 /// message and internal updates
 pub type ProgressMsg<T> = (usize, usize, ProgressVec<T>, ProgressVec<T>);
 
