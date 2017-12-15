@@ -18,7 +18,7 @@
 //! The type `Rc<EventLink<T,D>>` implements a typed linked list,
 //! and can be captured into and replayed from.
 //!
-//! ```rust,ignore
+//! ```rust
 //! use std::rc::Rc;
 //! use timely::dataflow::Scope;
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
@@ -75,6 +75,7 @@ pub use self::capture::Capture;
 pub use self::replay::Replay;
 pub use self::extract::Extract;
 pub use self::event::{Event, EventPusher};
+pub use self::event::link::EventLink;
 pub use self::event::binary::EventReader;
 pub use self::event::binary::EventWriter;
 

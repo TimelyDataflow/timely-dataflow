@@ -20,7 +20,7 @@ use logging::LoggerConfig;
 ///
 /// The simplest example creates a stream of data and inspects it.
 ///
-/// ```
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// timely::example(|scope| {
@@ -34,7 +34,7 @@ use logging::LoggerConfig;
 /// More precisely, the example captures a stream of events (receiving batches of data,
 /// updates to input capabilities) and displays these events.
 ///
-/// ```
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect, Capture};
 /// use timely::dataflow::operators::capture::Extract;
 ///
@@ -77,7 +77,7 @@ where T: Send+'static,
 /// to recover the result `T` values from the local workers.
 ///
 /// #Examples
-/// ```
+/// ```rust,ignore
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
@@ -93,7 +93,7 @@ where T: Send+'static,
 /// In a multi-process setting, each process will only receive those records present at workers 
 /// in the process.
 ///
-/// ```
+/// ```rust,ignore
 /// use std::sync::{Arc, Mutex};
 /// use timely::dataflow::operators::{ToStream, Inspect, Capture};
 /// use timely::dataflow::operators::capture::Extract;
@@ -127,8 +127,8 @@ where T:Send+'static,
 /// TODO(andreal)
 ///
 /// Supports providing a logging configuration.
-/// 
-/// ```
+///
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 /// use timely::logging::{LogManager, LoggerConfig};
 ///
@@ -177,7 +177,8 @@ where T:Send+'static,
 /// arbitrarily).
 ///
 /// #Examples
-/// ```
+///
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using command line parameters
@@ -214,8 +215,8 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 /// TODO(andreal)
 ///
 /// Supports providing a logging configuration.
-/// 
-/// ```
+///
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 /// use timely::logging::{LogManager, LoggerConfig};
 ///

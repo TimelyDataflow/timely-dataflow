@@ -29,7 +29,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// The type `Rc<EventLink<T,D>>` implements a typed linked list,
     /// and can be captured into and replayed from.
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use std::rc::Rc;
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
@@ -138,7 +138,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
             },
             move |consumed, _internal, _external| {
                 // turn each received message into an event.
-                let borrow = event_pusher2.borrow_mut();
+                let mut borrow = event_pusher2.borrow_mut();
                 while let Some((time, data)) = input.next() {
                     borrow.push(Event::Messages(time.clone(), data.deref_mut().clone()));
                 }

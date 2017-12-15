@@ -11,7 +11,7 @@ pub trait Extract<T: Ord, D: Ord> {
     ///
     /// #Examples
     ///
-    /// ```rust,ignore
+    /// ```rust
     /// use std::rc::Rc;
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;

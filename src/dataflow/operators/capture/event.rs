@@ -52,14 +52,64 @@ pub trait EventIterator<T, D> {
 /// Receives `Event<T, D>` events.
 pub trait EventPusher<T, D> {
     /// Provides a new `Event<T, D>` to the pusher.
-    fn push(&self, event: Event<T, D>);
+    fn push(&mut self, event: Event<T, D>);
 }
 
 
 // implementation for the linked list behind a `Handle`.
 impl<T, D> EventPusher<T, D> for ::std::sync::mpsc::Sender<Event<T, D>> {
-    fn push(&self, event: Event<T, D>) {
+    fn push(&mut self, event: Event<T, D>) {
         self.send(event).unwrap();
+    }
+}
+
+/// A linked-list event pusher and iterator.
+pub mod link {
+
+    use std::rc::Rc;
+    use std::cell::RefCell;
+
+    use super::{Event, EventPusher, EventIterator};
+
+    /// A linked list of Event<T, D>.
+    pub struct EventLink<T, D> {
+        /// An event, if one exists.
+        ///
+        /// An event might not exist, if either we want to insert a `None` and have the output iterator pause,
+        /// or in the case of the very first linked list element, which has no event when constructed.
+        pub event: Option<Event<T, D>>,
+        /// The next event, if it exists.
+        pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
+    }
+
+    impl<T, D> EventLink<T, D> {
+        /// Allocates a new `EventLink`.
+        pub fn new() -> EventLink<T, D> {
+            EventLink { event: None, next: RefCell::new(None) }
+        }
+    }
+
+    // implementation for the linked list behind a `Handle`.
+    impl<T, D> EventPusher<T, D> for Rc<EventLink<T, D>> {
+        fn push(&mut self, event: Event<T, D>) {
+            *self.next.borrow_mut() = Some(Rc::new(EventLink { event: Some(event), next: RefCell::new(None) }));
+            let next = self.next.borrow().as_ref().unwrap().clone();
+            *self = next;
+        }
+    }
+
+    impl<T, D> EventIterator<T, D> for Rc<EventLink<T, D>> {
+        fn next(&mut self) -> Option<&Event<T, D>> {
+            let is_some = self.next.borrow().is_some();
+            if is_some {
+                let next = self.next.borrow().as_ref().unwrap().clone();
+                *self = next;
+                self.event.as_ref()
+            }
+            else {
+                None
+            }
+        }
     }
 }
 
@@ -90,7 +140,7 @@ pub mod binary {
     }
 
     impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
-        fn push(&self, event: Event<T, D>) {
+        fn push(&mut self, event: Event<T, D>) {
             let mut buffer = self.buffer.borrow_mut();
             unsafe { ::abomonation::encode(&event, &mut *buffer).unwrap(); }
             self.stream.borrow_mut().write_all(&buffer[..]).unwrap();

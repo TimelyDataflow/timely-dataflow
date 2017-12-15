@@ -3,9 +3,10 @@
 use std::io::Write;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::ops::DerefMut;
 
 use std::collections::HashMap;
-use std::fmt::Debug; 
+use std::fmt::Debug;
 
 use ::progress::timestamp::RootTimestamp;
 use ::progress::nested::product::Product;
@@ -63,7 +64,7 @@ impl LogManager {
                                pusher: EventPusherFactory<LogMessage>) {
 
         for (_, ref event_manager) in self.timely_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
-            let this_pusher = pusher();
+            let mut this_pusher = pusher();
             this_pusher.push(Event::Progress(vec![(Default::default(), -1)]));
             event_manager.lock().unwrap().subscribe(this_pusher);
         }
@@ -75,7 +76,7 @@ impl LogManager {
                                       pusher: EventPusherFactory<CommsMessage>) {
 
         for (_, ref event_manager) in self.communication_logs.iter().filter(|&(ref setup, _)| filter(setup)) {
-            let this_pusher = pusher();
+            let mut this_pusher = pusher();
             this_pusher.push(Event::Progress(vec![(Default::default(), -1)]));
             event_manager.lock().unwrap().subscribe(this_pusher);
         }
@@ -104,8 +105,8 @@ impl<T, D, W: Write> SharedEventWriter<T, D, W> {
 }
 
 impl<T: Abomonation+Debug, D: Abomonation+Debug, W: Write> EventPusher<T, D> for SharedEventWriter<T, D, W> {
-    fn push(&self, event: Event<T, D>) {
-        let inner = self.inner.lock().expect("event pusher poisoned");
+    fn push(&mut self, event: Event<T, D>) {
+        let mut inner = self.inner.lock().expect("event pusher poisoned");
         inner.push(event)
     }
 }
@@ -186,7 +187,6 @@ impl LogFilter for Arc<Mutex<LogManager>> {
             _e: ::std::marker::PhantomData,
         }
     }
- 
     #[inline] fn comms(&mut self) -> FilteredLogManager<CommsSetup, CommsEvent> {
         FilteredLogManager {
             log_manager: self.clone(),
@@ -278,10 +278,10 @@ impl<S, E> Default for EventStreamSubscriptionManager<S, E> {
 }
 
 impl<S: Clone, E: Clone> EventStreamSubscriptionManager<S, E> {
-    fn subscribe(&mut self, pusher: Box<EventPusher<Product<RootTimestamp, u64>, (u64, S, E)>+Send>) {
+    fn subscribe(&mut self, mut pusher: Box<EventPusher<Product<RootTimestamp, u64>, (u64, S, E)>+Send>) {
         if let Some(frontier) = self.frontier {
             // if this logging stream is open
-            pusher.push(Event::Progress(vec![(frontier, 1)]));
+            pusher.deref_mut().push(Event::Progress(vec![(frontier, 1)]));
         } else {
             eprintln!("logging: subscription to closed stream");
         }
