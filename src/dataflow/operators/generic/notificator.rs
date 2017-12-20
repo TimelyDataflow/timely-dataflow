@@ -81,11 +81,11 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
-            self.logging.log(::timely_logging::Event::GuardedProgress(
-                    ::timely_logging::GuardedProgressEvent { is_start: true }));
+            self.logging.when_enabled(|l| l.log(::timely_logging::Event::GuardedProgress(
+                    ::timely_logging::GuardedProgressEvent { is_start: true })));
             logic(cap, count, self);
-            self.logging.log(::timely_logging::Event::GuardedProgress(
-                    ::timely_logging::GuardedProgressEvent { is_start: false }));
+            self.logging.when_enabled(|l| l.log(::timely_logging::Event::GuardedProgress(
+                    ::timely_logging::GuardedProgressEvent { is_start: false })));
         }
     }
 }

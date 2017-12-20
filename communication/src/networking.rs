@@ -116,14 +116,13 @@ impl<R: Read> BinaryReceiver<R> {
             let remaining = {
                 let mut slice = &self.buffer[..self.length];
                 while let Some(header) = MessageHeader::try_read(&mut slice) {
-                    self.log_sender.log(
-                        ::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
+                    self.log_sender.when_enabled(|l| l.log(::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
                             is_send: false,
                             comm_channel: header.channel,
                             source: header.source,
                             target: header.target,
                             seqno: header.seqno,
-                        }));
+                        })));
                     let h_len = header.length as usize;  // length in bytes
                     let target = &mut self.targets.ensure(header.target, header.channel);
                     target.send(slice[..h_len].to_vec()).unwrap();
@@ -178,14 +177,13 @@ impl<W: Write> BinarySender<W> {
 
             for (header, mut buffer) in stash.drain_temp() {
                 assert!(header.length == buffer.len());
-                self.log_sender.log(
-                    ::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
+                self.log_sender.when_enabled(|l| l.log(::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
                         is_send: true,
                         comm_channel: header.channel,
                         source: header.source,
                         target: header.target,
                         seqno: header.seqno,
-                    }));
+                    })));
                 header.write_to(&mut self.writer).unwrap();
                 self.writer.write_all(&buffer[..]).unwrap();
                 buffer.clear();

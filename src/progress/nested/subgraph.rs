@@ -544,11 +544,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
-            self.logging.log(::timely_logging::Event::Operates(::timely_logging::OperatesEvent {
+            self.logging.when_enabled(|l| l.log(::timely_logging::Event::Operates(::timely_logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
-            }));
+            })));
         }
         self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
     }
@@ -924,11 +924,14 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         {
             let changes = &mut self.external_buffer;
-            if changes.iter_mut().any(|ref mut c| !c.is_empty()) {
-                self.logging.log(::timely_logging::Event::PushProgress(::timely_logging::PushProgressEvent {
-                    op_id: self.id,
-                }));
-            }
+            let id = self.id;
+            self.logging.when_enabled(|l| {
+                if changes.iter_mut().any(|ref mut c| !c.is_empty()) {
+                    l.log(::timely_logging::Event::PushProgress(::timely_logging::PushProgressEvent {
+                        op_id: id,
+                    }));
+                }
+            });
             self.operator.as_mut().map(|x| x.push_external_progress(changes));
             if changes.iter_mut().any(|x| !x.is_empty()) {
                 println!("changes not consumed by {:?}", self.name);
@@ -942,9 +945,9 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            self.logging.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+            self.logging.when_enabled(|l| l.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
                 id: self.id, start_stop: ::timely_logging::StartStop::Start
-            }));
+            })));
 
             debug_assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
             debug_assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
@@ -965,9 +968,9 @@ impl<T: Timestamp> PerOperatorState<T> {
                 self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
                 self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
 
-            self.logging.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+            self.logging.when_enabled(|l| l.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
                 id: self.id, start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
-            }));
+            })));
 
             result
         };

@@ -35,12 +35,12 @@ impl<S: Scope, D> Stream<S, D> {
     pub fn connect_to<P: Push<(S::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         let logging = self.scope().logging();
-        logging.log(::timely_logging::Event::Channels(::timely_logging::ChannelsEvent {
+        logging.when_enabled(|l| l.log(::timely_logging::Event::Channels(::timely_logging::ChannelsEvent {
             id: identifier,
             scope_addr: self.scope.addr(),
             source: (self.name.index, self.name.port),
             target: (target.index, target.port),
-        }));
+        })));
 
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);
