@@ -78,7 +78,7 @@ impl<S, E, P> BatchLogger<S, E, P> where P: EventPusher<Product<RootTimestamp, u
     fn new(event_pusher: P) -> Self {
         BatchLogger {
             frontier: Some(Default::default()),
-            event_pusher: event_pusher,
+            event_pusher,
             _s: ::std::marker::PhantomData,
             _e: ::std::marker::PhantomData,
         }

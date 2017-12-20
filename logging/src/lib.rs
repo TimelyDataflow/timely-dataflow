@@ -278,39 +278,36 @@ pub enum LoggerBatch<'a, S: Clone+'a, L: Clone+'a> {
     End,
 }
 
-enum BufferingLoggerInternal<S: Clone, L: Clone> {
-    Active {
-        setup: S,
-        buffer: RefCell<Vec<(u64, S, L)>>,
-        pushers: RefCell<Box<Fn(LoggerBatch<S, L>)->()>>,
-    },
-    Inactive
+struct ActiveBufferingLogger<S: Clone, L: Clone> {
+    setup: S,
+    buffer: RefCell<Vec<(u64, S, L)>>,
+    pushers: RefCell<Box<Fn(LoggerBatch<S, L>)->()>>,
 }
 
 pub struct BufferingLogger<S: Clone, L: Clone> {
-    internal: BufferingLoggerInternal<S, L>,
+    target: Option<ActiveBufferingLogger<S, L>>,
 }
 
 impl<S: Clone, L: Clone> BufferingLogger<S, L> {
     pub fn new(setup: S, pushers: Box<Fn(LoggerBatch<S, L>)->()>) -> Self {
         BufferingLogger {
-            internal: BufferingLoggerInternal::Active {
-                setup: setup,
+            target: Some(ActiveBufferingLogger {
+                setup,
                 buffer: RefCell::new(Vec::with_capacity(BUFFERING_LOGGER_CAPACITY)),
                 pushers: RefCell::new(pushers),
-            },
+            }),
         }
     }
 
     pub fn new_inactive() -> Rc<BufferingLogger<S, L>> {
         Rc::new(BufferingLogger {
-            internal: BufferingLoggerInternal::Inactive,
+            target: None,
         })
     }
 
     pub fn log(&self, l: L) {
-        match self.internal {
-            BufferingLoggerInternal::Active { ref setup, ref buffer, ref pushers } => {
+        match self.target {
+            Some(ActiveBufferingLogger { ref setup, ref buffer, ref pushers }) => {
                 let ts = get_precise_time_ns();
                 let mut buf = buffer.borrow_mut();
                 buf.push((ts, setup.clone(), l));
@@ -319,22 +316,22 @@ impl<S: Clone, L: Clone> BufferingLogger<S, L> {
                     buf.clear();
                 }
             },
-            BufferingLoggerInternal::Inactive => {},
+            None => {},
         }
     }
 }
 
 impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
     fn drop(&mut self) {
-        match self.internal {
-            BufferingLoggerInternal::Active { ref buffer, ref pushers, .. } => {
+        match self.target {
+            Some(ActiveBufferingLogger { ref buffer, ref pushers, .. }) => {
                 let mut buf = buffer.borrow_mut();
                 if buf.len() > 0 {
                     (*pushers.borrow_mut())(LoggerBatch::Logs(&buf));
                 }
                 (*pushers.borrow_mut())(LoggerBatch::End);
             },
-            BufferingLoggerInternal::Inactive => {},
+            None => {},
         }
     }
 }
