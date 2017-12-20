@@ -273,29 +273,29 @@ impl From<InputEvent> for Event {
 
 const BUFFERING_LOGGER_CAPACITY: usize = 1024;
 
-pub enum LoggerBatch<'a, S: Clone+'a, L: Clone+'a> {
-    Logs(&'a Vec<(u64, S, L)>),
+pub enum LoggerBatch<S: Clone, L: Clone> {
+    Logs(Vec<(u64, S, L)>),
     End,
 }
 
 struct ActiveBufferingLogger<S: Clone, L: Clone> {
     setup: S,
-    buffer: RefCell<Vec<(u64, S, L)>>,
-    pushers: RefCell<Box<Fn(LoggerBatch<S, L>)->()>>,
+    buffer: Vec<(u64, S, L)>,
+    pusher: Box<Fn(LoggerBatch<S, L>)->()>,
 }
 
 pub struct BufferingLogger<S: Clone, L: Clone> {
-    target: Option<ActiveBufferingLogger<S, L>>,
+    target: Option<RefCell<ActiveBufferingLogger<S, L>>>,
 }
 
 impl<S: Clone, L: Clone> BufferingLogger<S, L> {
-    pub fn new(setup: S, pushers: Box<Fn(LoggerBatch<S, L>)->()>) -> Self {
+    pub fn new(setup: S, pusher: Box<Fn(LoggerBatch<S, L>)->()>) -> Self {
         BufferingLogger {
-            target: Some(ActiveBufferingLogger {
+            target: Some(RefCell::new(ActiveBufferingLogger {
                 setup,
-                buffer: RefCell::new(Vec::with_capacity(BUFFERING_LOGGER_CAPACITY)),
-                pushers: RefCell::new(pushers),
-            }),
+                buffer: Vec::with_capacity(BUFFERING_LOGGER_CAPACITY),
+                pusher: pusher,
+            })),
         }
     }
 
@@ -306,32 +306,33 @@ impl<S: Clone, L: Clone> BufferingLogger<S, L> {
     }
 
     pub fn log(&self, l: L) {
-        match self.target {
-            Some(ActiveBufferingLogger { ref setup, ref buffer, ref pushers }) => {
-                let ts = get_precise_time_ns();
-                let mut buf = buffer.borrow_mut();
-                buf.push((ts, setup.clone(), l));
-                if buf.len() >= BUFFERING_LOGGER_CAPACITY {
-                    (*pushers.borrow_mut())(LoggerBatch::Logs(&buf));
-                    buf.clear();
-                }
-            },
-            None => {},
+        if let Some(ref logger) = self.target {
+            let ActiveBufferingLogger { ref setup, ref mut buffer, .. } = *logger.borrow_mut();
+            let ts = get_precise_time_ns();
+            buffer.push((ts, setup.clone(), l));
+            if buffer.len() >= BUFFERING_LOGGER_CAPACITY {
+                self.flush();
+            }
+        }
+    }
+
+    fn flush(&self) {
+        if let Some(ref logger) = self.target {
+            let ActiveBufferingLogger { ref mut buffer, ref pusher, .. } = *logger.borrow_mut();
+            let mut buf = ::std::mem::replace(buffer, Vec::new());
+            (pusher)(LoggerBatch::Logs(buf));
         }
     }
 }
 
 impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
     fn drop(&mut self) {
-        match self.target {
-            Some(ActiveBufferingLogger { ref buffer, ref pushers, .. }) => {
-                let mut buf = buffer.borrow_mut();
-                if buf.len() > 0 {
-                    (*pushers.borrow_mut())(LoggerBatch::Logs(&buf));
-                }
-                (*pushers.borrow_mut())(LoggerBatch::End);
-            },
-            None => {},
+        if let Some(ref logger) = self.target {
+            let ActiveBufferingLogger { ref buffer, ref pusher, .. } = *logger.borrow_mut();
+            if buffer.len() > 0 {
+                self.flush();
+            }
+            (pusher)(LoggerBatch::End);
         }
     }
 }
