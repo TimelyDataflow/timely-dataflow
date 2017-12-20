@@ -41,16 +41,16 @@ impl LoggerConfig {
         timely_subscription: F1, communication_subscription: F2) -> Self where
         P1: EventPusher<Product<RootTimestamp, u64>, LogMessage> + Send,
         P2: EventPusher<Product<RootTimestamp, u64>, CommsMessage> + Send,
-        F1: Fn()->P1+Send+Sync,
-        F2: Fn()->P2+Send+Sync {
+        F1: Fn(EventsSetup)->P1+Send+Sync,
+        F2: Fn(CommsSetup)->P2+Send+Sync {
 
         LoggerConfig {
             timely_logging: Arc::new(move |events_setup: EventsSetup| {
-                let logger = RefCell::new(BatchLogger::new((timely_subscription)()));
+                let logger = RefCell::new(BatchLogger::new((timely_subscription)(events_setup)));
                 Rc::new(BufferingLogger::new(events_setup, Box::new(move |data| logger.borrow_mut().publish_batch(data))))
             }),
             communication_logging: Arc::new(move |comms_setup: CommsSetup| {
-                let logger = RefCell::new(BatchLogger::new((communication_subscription)()));
+                let logger = RefCell::new(BatchLogger::new((communication_subscription)(comms_setup)));
                 Rc::new(BufferingLogger::new(comms_setup, Box::new(move |data| logger.borrow_mut().publish_batch(data))))
             }),
         }

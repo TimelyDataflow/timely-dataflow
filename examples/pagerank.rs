@@ -16,8 +16,8 @@ use timely::logging::{LoggerConfig, EventPusherTee};
 fn main() {
 
     let logger_config = LoggerConfig::new(
-        || EventPusherTee::new(),
-        || EventPusherTee::new());
+        |_setup| EventPusherTee::new(),
+        |_setup| EventPusherTee::new());
 
     timely::execute_from_args_logging(std::env::args().skip(3), logger_config, move |worker| {
 
