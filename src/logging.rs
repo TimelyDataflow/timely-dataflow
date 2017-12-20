@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use ::progress::timestamp::RootTimestamp;
 use ::progress::nested::product::Product;
+use ::progress::frontier::MutableAntichain;
 
 use dataflow::operators::capture::{Event, EventPusher};
 
@@ -26,32 +27,6 @@ pub fn new_inactive_logger() -> Logger {
     BufferingLogger::<EventsSetup, LogEvent>::new_inactive()
 }
 
-/// Manages the logging channel subscriptions and log pushers.
-pub struct LogManager<P1, P2, F1, F2> where
-P1: EventPusher<Product<RootTimestamp, u64>, LogMessage> + Send,
-P2: EventPusher<Product<RootTimestamp, u64>, CommsMessage> + Send,
-F1: Fn()->P1+Send+Sync,
-F2: Fn()->P2+Send+Sync {
-
-    timely_subscription: Arc<F1>,
-    communication_subscription: Arc<F2>,
-}
-
-impl<P1, P2, F1, F2> LogManager<P1, P2, F1, F2> where
-P1: EventPusher<Product<RootTimestamp, u64>, LogMessage> + Send,
-P2: EventPusher<Product<RootTimestamp, u64>, CommsMessage> + Send,
-F1: Fn()->P1+Send+Sync,
-F2: Fn()->P2+Send+Sync {
-
-    /// Constructs a new LogManager.
-    pub fn new(timely_subscription: F1, communication_subscription: F2) -> Self {
-        LogManager {
-            timely_subscription: Arc::new(timely_subscription),
-            communication_subscription: Arc::new(communication_subscription),
-        }
-    }
-}
-
 /// Shared wrapper for log writer constructors.
 pub struct LoggerConfig {
     /// Log writer constructors.
@@ -62,14 +37,13 @@ pub struct LoggerConfig {
 
 impl LoggerConfig {
     /// Makes a new `LoggerConfig` wrapper from a `LogManager`.
-    pub fn new<P1: 'static, P2: 'static, F1: 'static, F2: 'static>(log_manager: &mut LogManager<P1, P2, F1, F2>) -> Self where
+    pub fn new<P1: 'static, P2: 'static, F1: 'static, F2: 'static>(
+        timely_subscription: F1, communication_subscription: F2) -> Self where
         P1: EventPusher<Product<RootTimestamp, u64>, LogMessage> + Send,
         P2: EventPusher<Product<RootTimestamp, u64>, CommsMessage> + Send,
         F1: Fn()->P1+Send+Sync,
         F2: Fn()->P2+Send+Sync {
 
-        let timely_subscription = log_manager.timely_subscription.clone();
-        let communication_subscription = log_manager.communication_subscription.clone();
         LoggerConfig {
             timely_logging: Arc::new(move |events_setup: EventsSetup| {
                 let logger = RefCell::new(BatchLogger::new((timely_subscription)()));
@@ -129,6 +103,46 @@ impl<S: Clone, E: Clone, P> BatchLogger<S, E, P> where P: EventPusher<Product<Ro
                     self.frontier = None;
                 }
             },
+        }
+    }
+}
+
+/// An EventPusher that supports dynamically adding new EventPushers.
+///
+/// The tee maintains the frontier as the stream of events passes by. When a new pusher
+/// arrives it advances the frontier to the current value, and starts to forward events
+/// to it as well.
+pub struct EventPusherTee<T: ::order::PartialOrder+Ord+Default+Clone+'static, D: Clone> {
+    frontier: MutableAntichain<T>,
+    listeners: Vec<Box<EventPusher<T, D>+Send>>,
+}
+
+impl<T: ::order::PartialOrder+Ord+Default+Clone+'static, D: Clone> EventPusherTee<T, D> {
+    /// Construct a new tee with no subscribers.
+    pub fn new() -> Self {
+        Self {
+            frontier: Default::default(),
+            listeners: Vec::new(),
+        }
+    }
+    /// Subscribe to this tee.
+    pub fn subscribe(&mut self, mut listener: Box<EventPusher<T, D>+Send>) {
+        let mut changes = vec![(Default::default(), -1)];
+        changes.extend(self.frontier.frontier().iter().map(|x| (x.clone(), 1)));
+        listener.push(Event::Progress(changes));
+        self.listeners.push(listener);
+    }
+}
+
+impl<T: ::order::PartialOrder+Ord+Default+Clone, D: Clone> EventPusher<T, D> for EventPusherTee<T, D> {
+    fn push(&mut self, event: Event<T, D>) {
+        // update the maintained frontier.
+        if let &Event::Progress(ref updates) = &event {
+            self.frontier.update_iter(updates.iter().cloned());
+        }
+        // present the event to each listener.
+        for listener in self.listeners.iter_mut() {
+            listener.push(event.clone());
         }
     }
 }

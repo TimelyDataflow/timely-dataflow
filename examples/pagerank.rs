@@ -11,13 +11,15 @@ use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{LoopVariable, ConnectLoop, Probe};
 use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::channels::pact::Exchange;
-use timely::logging::{LogManager, LoggerConfig};
+use timely::logging::{LoggerConfig, EventPusherTee};
 
 fn main() {
 
-    let log_manager = LogManager::new();
+    let logger_config = LoggerConfig::new(
+        || EventPusherTee::new(),
+        || EventPusherTee::new());
 
-    timely::execute_from_args_logging(std::env::args().skip(3), LoggerConfig::new(log_manager), move |worker| {
+    timely::execute_from_args_logging(std::env::args().skip(3), logger_config, move |worker| {
 
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
