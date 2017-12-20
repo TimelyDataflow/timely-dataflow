@@ -302,7 +302,7 @@ impl<S: Clone, L: Clone> BufferingLogger<S, L> {
         }
     }
 
-    pub fn new_inactive() -> Rc<BufferingLogger<EventsSetup, Event>> {
+    pub fn new_inactive() -> Rc<BufferingLogger<S, L>> {
         Rc::new(BufferingLogger {
             internal: BufferingLoggerInternal::Inactive,
         })
