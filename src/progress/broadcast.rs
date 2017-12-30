@@ -24,8 +24,6 @@ impl<T:Timestamp+Send> Progcaster<T> {
         Progcaster { pushers: pushers, puller: puller }
     }
 
-    // TODO : puller.pull() forcibly decodes, whereas we would be just as happy to read data from
-    // TODO : binary. Investigate fabric::Wrapper for this purpose.
     /// Sends and receives progress updates, broadcasting the contents of `messages` and `internal`,
     /// and updating each with updates from other workers.
     pub fn send_and_recv(
@@ -36,6 +34,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
             if !messages.is_empty() || !internal.is_empty() {
                 for pusher in self.pushers.iter_mut() {
+                    // TODO: This should probably use a broadcast channel, or somehow serialize only once.
+                    //       It really shouldn't be doing all of this cloning, that's for sure.
                     pusher.push(&mut Some((messages.clone().into_inner(), internal.clone().into_inner())));
                 }
 
@@ -43,15 +43,17 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 internal.clear();
             }
 
-            // TODO : Could take ownership, and recycle / reuse for next broadcast ...
+
             while let Some((ref mut recv_messages, ref mut recv_internal)) = *self.puller.pull() {
 
-                for (update, delta) in recv_messages.drain(..) {
-                    messages.update(update, delta);
+                // We clone rather than drain to avoid deserialization.
+                for &(ref update, delta) in recv_messages.iter() {
+                    messages.update(update.clone(), delta);
                 }
 
-                for (update, delta) in recv_internal.drain(..) {
-                    internal.update(update, delta);
+                // We clone rather than drain to avoid deserialization.
+                for &(ref update, delta) in recv_internal.iter() {
+                    internal.update(update.clone(), delta);
                 }
             }
         }
