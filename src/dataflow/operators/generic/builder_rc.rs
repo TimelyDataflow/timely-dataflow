@@ -6,8 +6,8 @@ use std::default::Default;
 
 use ::Data;
 
-use progress::ChangeBatch;
-use progress::frontier::MutableAntichain;
+use progress::{ChangeBatch, Timestamp};
+use progress::frontier::{Antichain, MutableAntichain};
 
 use dataflow::{Stream, Scope};
 use dataflow::channels::pushers::Tee;
@@ -64,9 +64,34 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
+    pub fn new_input_connection<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandle<G::Timestamp, D, P::Puller>
+        where
+            P: ParallelizationContract<G::Timestamp, D> {
+
+        let puller = self.builder.new_input_connection(stream, pact, connection);
+
+        let input = PullCounter::new(puller);
+        self.frontier.push(MutableAntichain::new());
+        self.consumed.push(input.consumed().clone());
+
+        new_input_handle(input, self.internal.clone())
+    }
+
+    /// Adds a new output to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_output<D: Data>(&mut self) -> (PushBuffer<G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>>, Stream<G, D>) {
 
         let (tee, stream) = self.builder.new_output();
+
+        let mut buffer = PushBuffer::new(PushCounter::new(tee));
+        self.produced.push(buffer.inner().produced().clone());
+
+        (buffer, stream)
+    }
+
+    /// Adds a new output to a generic operator builder, returning the `Pull` implementor to use.
+    pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (PushBuffer<G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>>, Stream<G, D>) {
+
+        let (tee, stream) = self.builder.new_output_connection(connection);
 
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(buffer.inner().produced().clone());
