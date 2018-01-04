@@ -90,8 +90,8 @@ impl<S: Clone, E: Clone, P> BatchLogger<S, E, P> where P: EventPusher<Product<Ro
         match logger_batch {
             LoggerBatch::Logs(evs) => {
                 if let Some(frontier) = self.frontier {
-                    self.event_pusher.push(Event::Messages(frontier, evs.clone()));
                     let &(last_ts, _, _) = evs.last().unwrap();
+                    self.event_pusher.push(Event::Messages(frontier, evs));
                     let new_frontier = RootTimestamp::new(last_ts);
                     self.event_pusher.push(Event::Progress(vec![(new_frontier, 1), (frontier, -1)]));
                     self.frontier = Some(new_frontier);
