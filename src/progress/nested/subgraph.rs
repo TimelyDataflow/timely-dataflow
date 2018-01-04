@@ -962,15 +962,20 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
             else { false };
 
-            // TODO(andreal): for logging, do we want this always enabled?
-            let did_work =
-                self.consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
-                self.internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
-                self.produced_buffer.iter_mut().any(|cm| !cm.is_empty());
-
-            self.logging.when_enabled(|l| l.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
-                id: self.id, start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
-            })));
+            let consumed_buffer = &mut self.consumed_buffer;
+            let internal_buffer = &mut self.internal_buffer;
+            let produced_buffer = &mut self.produced_buffer;
+            let id = self.id;
+            self.logging.when_enabled(|l| {
+                let did_work =
+                    consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
+                        internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
+                        produced_buffer.iter_mut().any(|cm| !cm.is_empty());
+                l.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+                    id,
+                    start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
+                }));
+            });
 
             result
         };

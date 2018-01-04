@@ -336,10 +336,8 @@ impl<S: Clone, L: Clone> BufferingLogger<S, L> {
 impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
     fn drop(&mut self) {
         if let Some(ref logger) = self.target {
-            let ActiveBufferingLogger { ref buffer, ref pusher, .. } = *logger.borrow_mut();
-            if buffer.len() > 0 {
-                self.flush();
-            }
+            self.flush();
+            let ActiveBufferingLogger { ref pusher, .. } = *logger.borrow_mut();
             (pusher)(LoggerBatch::End);
         }
     }
