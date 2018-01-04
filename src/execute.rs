@@ -77,7 +77,7 @@ where T: Send+'static,
 /// to recover the result `T` values from the local workers.
 ///
 /// #Examples
-/// ```rust,ignore
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
@@ -93,7 +93,7 @@ where T: Send+'static,
 /// In a multi-process setting, each process will only receive those records present at workers 
 /// in the process.
 ///
-/// ```rust,ignore
+/// ```rust
 /// use std::sync::{Arc, Mutex};
 /// use timely::dataflow::operators::{ToStream, Inspect, Capture};
 /// use timely::dataflow::operators::capture::Extract;
@@ -130,12 +130,14 @@ where T:Send+'static,
 ///
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
-/// use timely::logging::{LogManager, LoggerConfig};
+/// use timely::logging::{LoggerConfig, EventPusherTee};
 ///
-/// let mut log_manager = LogManager::new();
+/// let logger_config = LoggerConfig::new(
+///     |_setup| EventPusherTee::new() /* setup logging destinations */,
+///     |_setup| EventPusherTee::new() /* setup logging destinations */);
 ///
 /// // execute a timely dataflow using command line parameters
-/// timely::execute_logging(timely::Configuration::Process(3), LoggerConfig::new(log_manager), |worker| {
+/// timely::execute_logging(timely::Configuration::Process(3), logger_config, |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
@@ -206,7 +208,6 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>, 
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-    // let logging_config = ::logging::blackhole();
     execute_from_args_logging(iter, Default::default(), func)
 }
 
@@ -218,12 +219,14 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 ///
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
-/// use timely::logging::{LogManager, LoggerConfig};
+/// use timely::logging::{LoggerConfig, EventPusherTee};
 ///
-/// let mut log_manager = LogManager::new();
+/// let logger_config = LoggerConfig::new(
+///     |_setup| EventPusherTee::new() /* setup logging destinations */,
+///     |_setup| EventPusherTee::new() /* setup logging destinations */);
 ///
 /// // execute a timely dataflow using command line parameters
-/// timely::execute_from_args_logging(std::env::args(), LoggerConfig::new(log_manager), |worker| {
+/// timely::execute_from_args_logging(std::env::args(), logger_config, |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
