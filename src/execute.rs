@@ -124,9 +124,8 @@ where T:Send+'static,
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
 ///
-/// TODO(andreal)
-///
-/// Supports providing a logging configuration.
+/// Refer to [`execute`](fn.execute.html) for more details. This function additionally
+/// supports providing a logging configuration.
 ///
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
@@ -213,9 +212,8 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
 ///
-/// TODO(andreal)
-///
-/// Supports providing a logging configuration.
+/// Refer to [`execute_from_args`](fn.execute_from_args.html) for more details. This function additionally
+/// supports providing a logging configuration.
 ///
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};

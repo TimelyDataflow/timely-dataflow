@@ -80,14 +80,13 @@ impl<T:Timestamp+Send> Progcaster<T> {
             while let Some((ref source, ref counter, ref mut recv_messages, ref mut recv_internal)) = *self.puller.pull() {
 
                 let comm_channel = self.comm_channel;
-                // TODO(andreal) can we do something about this unnecessary clone when logging is disabled?
-                let addr = self.addr.clone();
+                let addr = &mut self.addr;
                 self.logging.when_enabled(|l| l.log(::timely_logging::Event::Progress(::timely_logging::ProgressEvent {
                     is_send: false,
                     source: *source,
                     seq_no: *counter,
                     comm_channel,
-                    addr,
+                    addr: addr.clone(),
                     // TODO: fill with additional data
                     messages: Vec::new(),
                     internal: Vec::new(),
