@@ -116,7 +116,7 @@ impl<R: Read> BinaryReceiver<R> {
             let remaining = {
                 let mut slice = &self.buffer[..self.length];
                 while let Some(header) = MessageHeader::try_read(&mut slice) {
-                    self.log_sender.when_enabled(|l| l.log(::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
+                    self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Communication(::logging::CommunicationEvent {
                             is_send: false,
                             comm_channel: header.channel,
                             source: header.source,
@@ -177,7 +177,7 @@ impl<W: Write> BinarySender<W> {
 
             for (header, mut buffer) in stash.drain_temp() {
                 assert!(header.length == buffer.len());
-                self.log_sender.when_enabled(|l| l.log(::timely_logging::CommsEvent::Communication(::logging::CommunicationEvent {
+                self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Communication(::logging::CommunicationEvent {
                         is_send: true,
                         comm_channel: header.channel,
                         source: header.source,
@@ -228,7 +228,7 @@ impl<T:Send> Switchboard<T> {
 
 /// Initializes network connections
 pub fn initialize_networking(
-    addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, log_sender: Arc<Fn(::timely_logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Binary>> {
+    addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Binary>> {
 
     let processes = addresses.len();
     let hosts1 = Arc::new(addresses);
@@ -265,7 +265,7 @@ pub fn initialize_networking(
                 // start senders and receivers associated with this stream
                 thread::Builder::new().name(format!("send thread {}", index))
                                       .spawn(move || {
-                                          let log_sender = log_sender(::timely_logging::CommsSetup {
+                                          let log_sender = log_sender(::logging::CommsSetup {
                                               process: my_index,
                                               sender: true,
                                               remote: Some(index),
@@ -284,7 +284,7 @@ pub fn initialize_networking(
                 let stream = stream.try_clone().unwrap();
                 thread::Builder::new().name(format!("recv thread {}", index))
                                       .spawn(move || {
-                                          let log_sender = log_sender(::timely_logging::CommsSetup {
+                                          let log_sender = log_sender(::logging::CommsSetup {
                                               process: my_index,
                                               sender: false,
                                               remote: Some(index),

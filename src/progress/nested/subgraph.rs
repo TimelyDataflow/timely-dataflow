@@ -544,7 +544,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
-            self.logging.when_enabled(|l| l.log(::timely_logging::Event::Operates(::timely_logging::OperatesEvent {
+            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Operates(::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
@@ -927,7 +927,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             let id = self.id;
             self.logging.when_enabled(|l| {
                 if changes.iter_mut().any(|ref mut c| !c.is_empty()) {
-                    l.log(::timely_logging::Event::PushProgress(::timely_logging::PushProgressEvent {
+                    l.log(::logging::TimelyEvent::PushProgress(::logging::PushProgressEvent {
                         op_id: id,
                     }));
                 }
@@ -945,8 +945,8 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let active = {
 
-            self.logging.when_enabled(|l| l.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
-                id: self.id, start_stop: ::timely_logging::StartStop::Start
+            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Schedule(::logging::ScheduleEvent {
+                id: self.id, start_stop: ::logging::StartStop::Start
             })));
 
             debug_assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
@@ -971,9 +971,9 @@ impl<T: Timestamp> PerOperatorState<T> {
                     consumed_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
                         internal_buffer.iter_mut().any(|cm| !cm.is_empty()) ||
                         produced_buffer.iter_mut().any(|cm| !cm.is_empty());
-                l.log(::timely_logging::Event::Schedule(::timely_logging::ScheduleEvent {
+                l.log(::logging::TimelyEvent::Schedule(::logging::ScheduleEvent {
                     id,
-                    start_stop: ::timely_logging::StartStop::Stop { activity: did_work }
+                    start_stop: ::logging::StartStop::Stop { activity: did_work }
                 }));
             });
 

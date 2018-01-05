@@ -55,12 +55,12 @@
 //! We then introduce input at increasing rounds, indicate the advance to the system (promising
 //! that we will introduce no more input at prior rounds), and step the computation.
 
-#![forbid(missing_docs)]
+#![deny(missing_docs)]
 
 extern crate abomonation;
+#[macro_use] extern crate abomonation_derive;
 extern crate timely_communication;
 extern crate time;
-extern crate timely_logging;
 extern crate byteorder;
 
 pub use execute::{execute, execute_logging, execute_from_args, execute_from_args_logging, example};

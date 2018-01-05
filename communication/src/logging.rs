@@ -1,10 +1,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use timely_logging::{CommsEvent, CommsSetup};
-pub use timely_logging::CommunicationEvent;
-pub use timely_logging::SerializationEvent;
-
 static mut PRECISE_TIME_NS_DELTA: Option<i64> = None;
 
 /// Returns the value of an high resolution performance counter, in nanoseconds, rebased to be
@@ -97,3 +93,46 @@ impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
 
 /// A log writer for a communication thread.
 pub type CommsLogger = Rc<BufferingLogger<CommsSetup, CommsEvent>>;
+
+#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+pub struct CommsSetup {
+    pub sender: bool,
+    pub process: usize,
+    pub remote: Option<usize>,
+}
+
+#[derive(Abomonation, Debug, Clone)]
+pub struct CommunicationEvent {
+    /// true for send event, false for receive event
+    pub is_send: bool,
+    /// communication channel id
+    pub comm_channel: usize,
+    /// source worker id
+    pub source: usize,
+    /// target worker id
+    pub target: usize,
+    /// sequence number
+    pub seqno: usize,
+}
+
+#[derive(Abomonation, Debug, Clone)]
+/// Serialization
+pub struct SerializationEvent {
+    pub seq_no: Option<usize>,
+    pub is_start: bool,
+}
+
+#[derive(Debug, Clone, Abomonation)]
+pub enum CommsEvent {
+    /*  0 */ Communication(CommunicationEvent),
+    /*  1 */ Serialization(SerializationEvent),
+}
+
+impl From<CommunicationEvent> for CommsEvent {
+    fn from(v: CommunicationEvent) -> CommsEvent { CommsEvent::Communication(v) }
+}
+
+impl From<SerializationEvent> for CommsEvent {
+    fn from(v: SerializationEvent) -> CommsEvent { CommsEvent::Serialization(v) }
+}
+

@@ -20,12 +20,12 @@ pub struct Root<A: Allocate> {
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Arc<Fn(::timely_logging::EventsSetup)->Logger+Sync+Send>,
+    logging: Arc<Fn(::logging::TimelySetup)->Logger+Sync+Send>,
 }
 
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
-    pub fn new(c: A, logging: Arc<Fn(::timely_logging::EventsSetup)->Logger+Sync+Send>) -> Root<A> {
+    pub fn new(c: A, logging: Arc<Fn(::logging::TimelySetup)->Logger+Sync+Send>) -> Root<A> {
         let result = Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
@@ -81,7 +81,7 @@ impl<A: Allocate> Root<A> {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
-        let logging = (self.logging)(::timely_logging::EventsSetup {
+        let logging = (self.logging)(::logging::TimelySetup {
             index: self.index(),
         });
         let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone());

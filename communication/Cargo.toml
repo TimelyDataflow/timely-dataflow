@@ -12,9 +12,6 @@ repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow"]
 license = "MIT"
 
-[dependencies.abomonation]
-git="https://github.com/frankmcsherry/abomonation"
-
 [features]
 default=[] # ["logging"]
 
@@ -22,7 +19,8 @@ default=[] # ["logging"]
 byteorder="0.4.2"
 getopts="0.2.14"
 time="0.1.34"
-timely_logging = { path = "../logging" }
+abomonation = { git = "https://github.com/frankmcsherry/abomonation" }
+abomonation_derive = { git = "https://github.com/mystor/abomonation_derive.git" }
 
 [profile.release]
 opt-level = 3

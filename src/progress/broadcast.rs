@@ -32,9 +32,9 @@ impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied allocator.
     pub fn new<A: Allocate>(allocator: &mut A, path: &Vec<usize>, logging: Logger) -> Progcaster<T> {
         let (pushers, puller, chan) = allocator.allocate();
-        logging.when_enabled(|l| l.log(::timely_logging::Event::CommChannels(::timely_logging::CommChannelsEvent {
+        logging.when_enabled(|l| l.log(::logging::TimelyEvent::CommChannels(::logging::CommChannelsEvent {
             comm_channel: chan,
-            comm_channel_kind: ::timely_logging::CommChannelKind::Progress,
+            comm_channel_kind: ::logging::CommChannelKind::Progress,
         })));
         let worker = allocator.index();
         let addr = path.clone();
@@ -54,7 +54,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     {
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
             if !messages.is_empty() || !internal.is_empty() {
-                self.logging.when_enabled(|l| l.log(::timely_logging::Event::Progress(::timely_logging::ProgressEvent {
+                self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Progress(::logging::ProgressEvent {
                     is_send: true,
                     source: self.source,
                     comm_channel: self.comm_channel,
@@ -81,7 +81,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
                 let comm_channel = self.comm_channel;
                 let addr = &mut self.addr;
-                self.logging.when_enabled(|l| l.log(::timely_logging::Event::Progress(::timely_logging::ProgressEvent {
+                self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Progress(::logging::ProgressEvent {
                     is_send: false,
                     source: *source,
                     seq_no: *counter,
