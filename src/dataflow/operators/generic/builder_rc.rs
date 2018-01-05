@@ -65,7 +65,6 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_output<D: Data>(&mut self) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
-    // (PushBuffer<G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>>, Stream<G, D>) {
 
         let (tee, stream) = self.builder.new_output();
 

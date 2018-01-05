@@ -133,19 +133,30 @@ pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a, P: Pull<(T, Content<D>
 }
 
 
-/// An owned instance of an output buffer.
+/// An owned instance of an output buffer which ensures certain API use.
+///
+/// An `OutputWrapper` exists to prevent anyone from using the wrapped buffer in any way other
+/// than with an `OutputHandle`, whose methods ensure that capabilities are used and that the
+/// pusher is flushed (via the `cease` method) once it is no longer used.
 pub struct OutputWrapper<T: Timestamp, D, P: Push<(T, Content<D>)>> {
     push_buffer: Buffer<T, D, PushCounter<T, D, P>>
 }
 
 impl<T: Timestamp, D, P: Push<(T, Content<D>)>> OutputWrapper<T, D, P> {
+    /// Creates a new output wrapper from a push buffer.
     pub fn new(buffer: Buffer<T, D, PushCounter<T, D, P>>) -> Self {
         OutputWrapper {
             push_buffer: buffer
         }
     }
+    /// Borrows the push buffer into a handle, which can be used to send records.
+    ///
+    /// This method ensures that the only access to the push buffer is through the `OutputHandle`
+    /// type which ensures the use of capabilities, and which calls `cease` when it is dropped.
     pub fn activate(&mut self) -> OutputHandle<T, D, P> {
-        new_output_handle(&mut self.push_buffer)
+        OutputHandle {
+            push_buffer: &mut self.push_buffer
+        }
     }
 }
 
@@ -188,13 +199,3 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> Drop for OutputHandle<'a, T,
         self.push_buffer.cease();
     }
 }
-
-/// Constructs an output handle.
-/// Declared separately so that it can be kept private when `OutputHandle` is re-exported.
-pub fn new_output_handle<'a, T: Timestamp, D, P: Push<(T, Content<D>)>>(push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>) -> OutputHandle<'a, T, D, P> {
-    OutputHandle {
-        push_buffer: push_buffer,
-    }
-}
-
-
