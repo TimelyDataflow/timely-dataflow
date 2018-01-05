@@ -69,6 +69,7 @@
 extern crate getopts;
 extern crate byteorder;
 extern crate abomonation;
+extern crate time;
 
 extern crate timely_logging;
 

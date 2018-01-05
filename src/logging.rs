@@ -10,11 +10,11 @@ use ::progress::frontier::MutableAntichain;
 
 use dataflow::operators::capture::{Event, EventPusher};
 
-use timely_logging::BufferingLogger;
+use timely_communication::logging::BufferingLogger;
 use timely_logging::Event as LogEvent;
 use timely_logging::EventsSetup;
 use timely_logging::{CommsEvent, CommsSetup};
-use timely_logging::LoggerBatch;
+use timely_communication::logging::LoggerBatch;
 
 type LogMessage = (u64, EventsSetup, LogEvent);
 type CommsMessage = (u64, CommsSetup, CommsEvent);
