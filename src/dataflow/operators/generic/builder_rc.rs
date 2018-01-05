@@ -18,7 +18,7 @@ use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::operators::capability::Capability;
 use dataflow::operators::capability::mint as mint_capability;
 
-use dataflow::operators::generic::handles::{InputHandle, new_input_handle};
+use dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
@@ -78,25 +78,25 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_output<D: Data>(&mut self) -> (PushBuffer<G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>>, Stream<G, D>) {
+    pub fn new_output<D: Data>(&mut self) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
 
         let (tee, stream) = self.builder.new_output();
 
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(buffer.inner().produced().clone());
 
-        (buffer, stream)
+        (OutputWrapper::new(buffer), stream)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (PushBuffer<G::Timestamp, D, PushCounter<G::Timestamp, D, Tee<G::Timestamp, D>>>, Stream<G, D>) {
+    pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
 
         let (tee, stream) = self.builder.new_output_connection(connection);
 
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(buffer.inner().produced().clone());
 
-        (buffer, stream)
+        (OutputWrapper::new(buffer), stream)
     }
 
     /// Creates an operator implementation from supplied logic constructor.
