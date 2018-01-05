@@ -132,6 +132,24 @@ pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a, P: Pull<(T, Content<D>
     }
 }
 
+
+/// An owned instance of an output buffer.
+pub struct OutputWrapper<T: Timestamp, D, P: Push<(T, Content<D>)>> {
+    push_buffer: Buffer<T, D, PushCounter<T, D, P>>
+}
+
+impl<T: Timestamp, D, P: Push<(T, Content<D>)>> OutputWrapper<T, D, P> {
+    pub fn new(buffer: Buffer<T, D, PushCounter<T, D, P>>) -> Self {
+        OutputWrapper {
+            push_buffer: buffer
+        }
+    }
+    pub fn activate(&mut self) -> OutputHandle<T, D, P> {
+        new_output_handle(&mut self.push_buffer)
+    }
+}
+
+
 /// Handle to an operator's output stream.
 pub struct OutputHandle<'a, T: Timestamp, D: 'a, P: Push<(T, Content<D>)>+'a> {
     push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>,
