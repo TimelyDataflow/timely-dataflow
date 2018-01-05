@@ -91,10 +91,12 @@ impl<A: Allocate> Root<A> {
             let mut builder = Child {
                 subgraph: &subscope,
                 parent: self.clone(),
-                logging: logging,
+                logging: logging.clone(),
             };
             func(&mut resources, &mut builder)
         };
+
+        logging.flush();
 
         let mut operator = subscope.into_inner().build(&mut *self.allocator.borrow_mut());
 
@@ -161,6 +163,7 @@ impl Wrapper {
             self.operate = None;
             self.resources = None;
         }
+        // TODO consider flushing logs here (possibly after an arbritrary timeout)
         active
     }
     fn active(&self) -> bool { self.operate.is_some() }

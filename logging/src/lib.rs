@@ -326,7 +326,7 @@ impl<S: Clone, L: Clone> BufferingLogger<S, L> {
         }
     }
 
-    fn flush(&self) {
+    pub fn flush(&self) {
         if let Some(ref logger) = self.target {
             logger.borrow_mut().flush();
         }
