@@ -137,7 +137,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             self.pointstamps.allocate_for_operator(child.inputs, child.outputs);
             for (output, capability) in child.internal.iter().enumerate() {
                 for time in capability.frontier() {
-                    self.pointstamps.source[child.index][output].update(time.clone(), 1);
+                    // self.pointstamps.source[child.index][output].update(time.clone(), 1);
+                    self.pointstamps.update_source(Source { index: child.index, port: output }, time.clone(), 1);
                 }
             }
         }
