@@ -17,7 +17,7 @@ use dataflow::channels::pushers::Tee;
 use dataflow::channels::pact::ParallelizationContract;
 
 /// Contains type-free information about the operator properties.
-struct OperatorShape {
+pub struct OperatorShape {
     name: String,   // A meaningful name for the operator.
     notify: bool,   // Does the operator require progress notifications.
     peers: usize,   // The total number of workers in the computation.
@@ -35,6 +35,16 @@ impl OperatorShape {
             inputs: 0,
             outputs: 0,
         }
+    }
+
+    /// The number of inputs of this operator
+    pub fn inputs(&self) -> usize {
+        self.inputs
+    }
+
+    /// The number of outputs of this operator
+    pub fn outputs(&self) -> usize {
+        self.outputs
     }
 }
 
@@ -60,6 +70,16 @@ impl<G: Scope> OperatorBuilder<G> {
             shape: OperatorShape::new(name, peers),
             summary: vec![],
         }
+    }
+
+    /// The operator's index
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// Return a reference to the operator's shape
+    pub fn shape(&self) -> &OperatorShape {
+        &self.shape
     }
 
     /// Indicates whether the operator requires frontier information.

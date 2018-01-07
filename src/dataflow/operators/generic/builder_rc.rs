@@ -54,16 +54,11 @@ impl<G: Scope> OperatorBuilder<G> {
     where
         P: ParallelizationContract<G::Timestamp, D> {
 
-        let puller = self.builder.new_input(stream, pact);
-
-        let input = PullCounter::new(puller);
-        self.frontier.push(MutableAntichain::new());
-        self.consumed.push(input.consumed().clone());
-
-        new_input_handle(input, self.internal.clone())
+        let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().outputs()];
+        self.new_input_connection(stream, pact, connection)
     }
 
-    /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
+    /// Adds a new input with connection information to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input_connection<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandle<G::Timestamp, D, P::Puller>
         where
             P: ParallelizationContract<G::Timestamp, D> {
@@ -79,16 +74,11 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Adds a new output to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_output<D: Data>(&mut self) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
-
-        let (tee, stream) = self.builder.new_output();
-
-        let mut buffer = PushBuffer::new(PushCounter::new(tee));
-        self.produced.push(buffer.inner().produced().clone());
-
-        (OutputWrapper::new(buffer), stream)
+        let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().inputs()];
+        self.new_output_connection(connection)
     }
 
-    /// Adds a new output to a generic operator builder, returning the `Pull` implementor to use.
+    /// Adds a new output with connection information to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
 
         let (tee, stream) = self.builder.new_output_connection(connection);
