@@ -6,8 +6,8 @@ use std::default::Default;
 
 use ::Data;
 
-use progress::ChangeBatch;
-use progress::frontier::MutableAntichain;
+use progress::{ChangeBatch, Timestamp};
+use progress::frontier::{Antichain, MutableAntichain};
 
 use dataflow::{Stream, Scope};
 use dataflow::channels::pushers::Tee;
@@ -54,7 +54,16 @@ impl<G: Scope> OperatorBuilder<G> {
     where
         P: ParallelizationContract<G::Timestamp, D> {
 
-        let puller = self.builder.new_input(stream, pact);
+        let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().outputs()];
+        self.new_input_connection(stream, pact, connection)
+    }
+
+    /// Adds a new input with connection information to a generic operator builder, returning the `Pull` implementor to use.
+    pub fn new_input_connection<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandle<G::Timestamp, D, P::Puller>
+        where
+            P: ParallelizationContract<G::Timestamp, D> {
+
+        let puller = self.builder.new_input_connection(stream, pact, connection);
 
         let input = PullCounter::new(puller);
         self.frontier.push(MutableAntichain::new());
@@ -63,10 +72,16 @@ impl<G: Scope> OperatorBuilder<G> {
         new_input_handle(input, self.internal.clone())
     }
 
-    /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
+    /// Adds a new output to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_output<D: Data>(&mut self) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
+        let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().inputs()];
+        self.new_output_connection(connection)
+    }
 
-        let (tee, stream) = self.builder.new_output();
+    /// Adds a new output with connection information to a generic operator builder, returning the `Pull` implementor to use.
+    pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
+
+        let (tee, stream) = self.builder.new_output_connection(connection);
 
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(buffer.inner().produced().clone());
