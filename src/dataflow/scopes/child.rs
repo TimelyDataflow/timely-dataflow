@@ -7,6 +7,7 @@ use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
+use logging::Logger;
 
 use super::{ScopeParent, Scope};
 
@@ -17,6 +18,8 @@ pub struct Child<'a, G: ScopeParent, T: Timestamp> {
     pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
     /// A copy of the child's parent scope.
     pub parent:   G,
+    /// The log writer for this scope.
+    pub logging:  Logger,
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Child<'a, G, T> {
@@ -63,11 +66,12 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging().clone()));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
                 parent: self.clone(),
+                logging: self.logging.clone(),
             };
             func(&mut builder)
         };
@@ -77,16 +81,20 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
 
         result
     }
+
+    fn logging(&self) -> Logger {
+        self.logging.clone()
+    }
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>) {
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>, Option<usize>) {
         self.parent.allocate()
     }
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Clone for Child<'a, G, T> {
-    fn clone(&self) -> Self { Child { subgraph: self.subgraph, parent: self.parent.clone() }}
+    fn clone(&self) -> Self { Child { subgraph: self.subgraph, parent: self.parent.clone(), logging: self.logging.clone() }}
 }

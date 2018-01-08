@@ -11,9 +11,9 @@ pub struct Thread;
 impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
-    fn allocate<T: 'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
+    fn allocate<T: 'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
         let (pusher, puller) = Thread::new();
-        (vec![Box::new(pusher)], Box::new(puller))
+        (vec![Box::new(pusher)], Box::new(puller), None)
     }
 }
 

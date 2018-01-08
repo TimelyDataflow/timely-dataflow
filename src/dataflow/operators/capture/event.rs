@@ -7,7 +7,7 @@
 use abomonation::Abomonation;
 
 /// Data and progress events of the captured stream.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Event<T, D> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
