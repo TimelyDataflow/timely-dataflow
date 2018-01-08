@@ -82,9 +82,9 @@ pub mod link {
         pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
     }
 
-    impl<T, D> EventLink<T, D> {
+    impl<T, D> EventLink<T, D> { 
         /// Allocates a new `EventLink`.
-        pub fn new() -> EventLink<T, D> {
+        pub fn new() -> EventLink<T, D> { 
             EventLink { event: None, next: RefCell::new(None) }
         }
     }
@@ -119,12 +119,10 @@ pub mod binary {
     use std::io::Write;
     use abomonation::Abomonation;
     use super::{Event, EventPusher, EventIterator};
-    use std::cell::RefCell;
 
     /// A wrapper for `W: Write` implementing `EventPusher<T, D>`.
     pub struct EventWriter<T, D, W: ::std::io::Write> {
-        buffer: RefCell<Vec<u8>>,
-        stream: RefCell<W>,
+        stream: W,
         phant: ::std::marker::PhantomData<(T,D)>,
     }
 
@@ -132,8 +130,7 @@ pub mod binary {
         /// Allocates a new `EventWriter` wrapping a supplied writer.
         pub fn new(w: W) -> EventWriter<T, D, W> {
             EventWriter {
-                buffer: RefCell::new(vec![]),
-                stream: RefCell::new(w),
+                stream: w,
                 phant: ::std::marker::PhantomData,
             }
         }
@@ -141,10 +138,8 @@ pub mod binary {
 
     impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
         fn push(&mut self, event: Event<T, D>) {
-            let mut buffer = self.buffer.borrow_mut();
-            unsafe { ::abomonation::encode(&event, &mut *buffer).unwrap(); }
-            self.stream.borrow_mut().write_all(&buffer[..]).unwrap();
-            buffer.clear();
+            // TODO: `push` has no mechanism to report errors, so we `unwrap`.
+            unsafe { ::abomonation::encode(&event, &mut self.stream).unwrap(); }
         }
     }
 
@@ -182,8 +177,6 @@ pub mod binary {
                 let (item, rest) = unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buff1[self.consumed..]) }.unwrap();
                 self.consumed = self.valid - rest.len();
                 return Some(item);
-            } else {
-                eprintln!("cannot read: {:?}", self.buff1.len());
             }
             // if we exhaust data we should shift back (if any shifting to do)
             if self.consumed > 0 {
