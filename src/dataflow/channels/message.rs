@@ -6,7 +6,7 @@
 //! the possibly serialized representation.
 use timely_communication::{Serialize, Push};
 use std::ops::{Deref, DerefMut};
-use abomonation::{Abomonation, encode, decode};
+use abomonation::{Abomonation, encode, decode, measure};
 
 /// A serializable representation of timestamped data.
 #[derive(Clone)]
@@ -38,6 +38,12 @@ impl<T, D> Message<T, D> {
 impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
     #[inline]
     fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
+
+        // Reserve the minimal number of bytes to prevent the need to resize.
+        let bytes_needed = measure(&self.time) + measure(&self.from) + measure(&self.seq) + measure(self.data.deref());
+        bytes.reserve(bytes_needed);
+
+        // Almost like serializing `self`, except `self.data` is special.
         unsafe { encode(&self.time, bytes).unwrap(); }
         unsafe { encode(&self.from, bytes).unwrap(); }
         unsafe { encode(&self.seq, bytes).unwrap(); }
@@ -46,6 +52,7 @@ impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
     }
     #[inline]
     fn from_bytes(bytes: &mut Vec<u8>) -> Self {
+        // This method *steals* `bytes` and avoids allocation and copying.
         let mut bytes = ::std::mem::replace(bytes, Vec::new());
         let x_len = bytes.len();
         let (time, from, seq, offset) = {
@@ -56,6 +63,7 @@ impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
             ((*t).clone(), f, s, o)
         };
 
+        // The call to `decode` should mean we can freely dereference.
         let length = unsafe { decode::<Vec<D>>(&mut bytes[offset..]) }.unwrap().0.len();
         Message::new(time, Content::Bytes(bytes, offset, length), from, seq)
     }

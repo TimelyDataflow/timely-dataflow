@@ -43,8 +43,6 @@ impl<T:Timestamp+Send> Progcaster<T> {
                      logging: logging }
     }
 
-    // TODO : puller.pull() forcibly decodes, whereas we would be just as happy to read data from
-    // TODO : binary. Investigate fabric::Wrapper for this purpose.
     /// Sends and receives progress updates, broadcasting the contents of `messages` and `internal`,
     /// and updating each with updates from other workers.
     pub fn send_and_recv(
@@ -66,8 +64,9 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 })));
 
                 for pusher in self.pushers.iter_mut() {
+                    // TODO: This should probably use a broadcast channel, or somehow serialize only once.
+                    //       It really shouldn't be doing all of this cloning, that's for sure.
                     pusher.push(&mut Some((self.source, self.counter, messages.clone().into_inner(), internal.clone().into_inner())));
-
                 }
 
                 self.counter += 1;
@@ -92,12 +91,14 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     internal: Vec::new(),
                 })));
 
-                for (update, delta) in recv_messages.drain(..) {
-                    messages.update(update, delta);
+                // We clone rather than drain to avoid deserialization.
+                for &(ref update, delta) in recv_messages.iter() {
+                    messages.update(update.clone(), delta);
                 }
 
-                for (update, delta) in recv_internal.drain(..) {
-                    internal.update(update, delta);
+                // We clone rather than drain to avoid deserialization.
+                for &(ref update, delta) in recv_internal.iter() {
+                    internal.update(update.clone(), delta);
                 }
             }
         }
