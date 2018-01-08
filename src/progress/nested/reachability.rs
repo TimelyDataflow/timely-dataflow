@@ -129,11 +129,15 @@ impl<T: Timestamp> Builder<T> {
         for x in summary.iter() { debug_assert_eq!(outputs, x.len()); }
 
         while self.nodes.len() <= index { 
-            self.nodes.push(Vec::new()); 
+            self.nodes.push(Vec::new());
+            self.edges.push(Vec::new());
             self.shape.push((0, 0));
         }
 
         self.nodes[index] = summary;
+        if self.edges[index].len() != outputs {
+            self.edges[index] = vec![Vec::new(); outputs];
+        }
         self.shape[index] = (inputs, outputs);
     }
 
@@ -147,8 +151,6 @@ impl<T: Timestamp> Builder<T> {
         debug_assert!(source.port < self.shape[source.index].1);
         debug_assert!(target.port < self.shape[target.index].0);
 
-        while self.edges.len() <= source.index { self.edges.push(Vec::new()); }
-        while self.edges[source.index].len() <= source.port { self.edges[source.index].push(Vec::new()); }
         self.edges[source.index][source.port].push(target);
     }
 
@@ -363,6 +365,13 @@ impl<T:Timestamp> Tracker<T> {
         for vec in &mut self.pushed { for map in vec.iter_mut() { map.clear(); } }
     }
 
+    /// 
+    pub fn is_empty(&mut self) -> bool {
+        self.source.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) ||
+        self.target.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) ||
+        self.pushed.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty()))
+    } 
+
     /// Allocate a new `Tracker` using the shape from `summaries`.
     pub fn allocate_from(summary: Summary<T>) -> Self {
 
@@ -373,17 +382,17 @@ impl<T:Timestamp> Tracker<T> {
 
         let mut sources = Vec::with_capacity(source_target.len());
         let mut targets = Vec::with_capacity(target_target.len());
-        let mut pushed = Vec::with_capacity(source_target.len());
+        let mut pushed = Vec::with_capacity(target_target.len());
 
         // Allocate buffer space for each input and input port.
         for source in 0 .. source_target.len() {
             sources.push(vec![ChangeBatch::new(); source_target[source].len()]);
-            pushed.push(vec![ChangeBatch::new(); source_target[source].len()]);
         }
 
         // Allocate buffer space for each output and output port.
         for target in 0 .. target_target.len() {
             targets.push(vec![ChangeBatch::new(); target_target[target].len()]);
+            pushed.push(vec![ChangeBatch::new(); target_target[target].len()]);
         }
 
         Tracker {
