@@ -32,7 +32,7 @@
 //! tracker.update_source(Source { index: 0, port: 0}, 17, 1);
 //!
 //! // Propagate changes; until this call updates are simply buffered.
-//! tracker.propagate();
+//! tracker.propagate_all();
 //!
 //! // Propagated changes should have a single element, incremented for node zero.
 //! assert_eq!(tracker.pushed_mut(0)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
@@ -89,6 +89,7 @@ use order::PartialOrder;
 ///
 /// // Summarize reachability information.
 /// let summary = builder.summarize();
+/// ```
 
 #[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
@@ -257,13 +258,26 @@ impl<T: Timestamp> Builder<T> {
 /// A `Summary` instance records a compiled representation of path summaries along paths
 /// in a timely dataflow graph, mostly commonly constructed by a `reachability::Builder`.
 pub struct Summary<T: Timestamp> {
+
+    // TODO: As all of this information is static, we should be able to flatten it into
+    //       fewer allocations, reducing the size and potentially the cost of traversing
+    //       the summaries. The access patterns appear to be highly sequential, and look
+    //       like straight swings through nodes and ports (iterating on summaries, once
+    //       for each update to process).
+
     /// Compiled source-to-target reachability.
+    ///
+    /// Entry `source_target[node][port]` lists pairs of target and summaries that can be
+    /// reached from the (node, port) output port.
     pub source_target: Vec<Vec<Vec<(Target, Antichain<T::Summary>)>>>,
     /// Compiled target-to-target reachability.
+    ///
+    /// Entry `target_target[node][port]` lists pairs of target and summaries that can be
+    /// reached from the (node, port) input port.
     pub target_target: Vec<Vec<Vec<(Target, Antichain<T::Summary>)>>>,
 }
 
-/// Interactive tracking of propagated reachability information.
+/// An interactive tracker of propagated reachability information.
 ///
 /// A `Tracker` tracks, for a fixed graph topology, the consequences of
 /// pointstamp changes at various node input and output ports. These changes may
@@ -273,7 +287,7 @@ pub struct Summary<T: Timestamp> {
 /// way of its `allocate_from` method. With a fixed topology, users can interactively
 /// call `update_target` and `update_source` to change observed pointstamp counts
 /// at node inputs and outputs, respectively. These changes are buffered until a
-/// user invokes either `propagate` or `propagate_node`, which consume buffered 
+/// user invokes either `propagate_all` or `propagate_node`, which consume buffered 
 /// changes propagate their consequences along the graph to any other port that 
 /// can be reached. These changes can be read for each node using `pushed_mut`.
 ///
@@ -304,7 +318,7 @@ pub struct Summary<T: Timestamp> {
 /// tracker.update_source(Source { index: 0, port: 0}, 17, 1);
 ///
 /// // Propagate changes; until this call updates are simply buffered.
-/// tracker.propagate();
+/// tracker.propagate_all();
 ///
 /// // Propagated changes should have a single element, incremented for node zero.
 /// assert_eq!(tracker.pushed_mut(0)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
@@ -314,6 +328,11 @@ pub struct Summary<T: Timestamp> {
 
 #[derive(Default)]
 pub struct Tracker<T:Timestamp> {
+
+    // TODO: All of the sizes of these allocations are static (except internal to `ChangeBatch`).
+    //       It seems we should be able to flatten most of these so that there are a few allocations
+    //       independent of the numbers of nodes and ports and such.
+
     /// Buffers of observed changes.
     source:  Vec<Vec<ChangeBatch<T>>>,
     target:  Vec<Vec<ChangeBatch<T>>>,
@@ -327,10 +346,12 @@ pub struct Tracker<T:Timestamp> {
 impl<T:Timestamp> Tracker<T> {
 
     /// Updates the count for a time at a target.
+    #[inline]
     pub fn update_target(&mut self, target: Target, time: T, value: i64) {
         self.target[target.index][target.port].update(time, value);
     }
     /// Updates the count for a time at a source.
+    #[inline]
     pub fn update_source(&mut self, source: Source, time: T, value: i64) {
         self.source[source.index][source.port].update(time, value);
     }
@@ -347,6 +368,8 @@ impl<T:Timestamp> Tracker<T> {
 
         let source_target = summary.source_target;
         let target_target = summary.target_target;
+
+        debug_assert_eq!(source_target.len(), target_target.len());
 
         let mut sources = Vec::with_capacity(source_target.len());
         let mut targets = Vec::with_capacity(target_target.len());
@@ -381,10 +404,11 @@ impl<T:Timestamp> Tracker<T> {
         // Propagate changes at each input (target).
         for input in 0..self.target[index].len() {
             for (time, value) in self.target[index][input].drain() {
-                for &(target, ref antichain) in &self.target_target[index][input] {
+                for &(target, ref antichain) in self.target_target[index][input].iter() {
+                    let pushed = &mut self.pushed[target.index][target.port];
                     for summary in antichain.elements().iter() {
                         if let Some(new_time) = summary.results_in(&time) {
-                            self.pushed[target.index][target.port].update(new_time, value);
+                            pushed.update(new_time, value);
                         }
                     }
                 }
@@ -394,10 +418,11 @@ impl<T:Timestamp> Tracker<T> {
         // Propagate changes at each output (source).
         for output in 0..self.source[index].len() {
             for (time, value) in self.source[index][output].drain() {
-                for &(target, ref antichain) in &self.source_target[index][output] {
+                for &(target, ref antichain) in self.source_target[index][output].iter() {
+                    let pushed = &mut self.pushed[target.index][target.port];
                     for summary in antichain.elements().iter() {
                         if let Some(new_time) = summary.results_in(&time) {
-                            self.pushed[target.index][target.port].update(new_time, value);
+                            pushed.update(new_time, value);
                         }
                     }
                 }
@@ -406,8 +431,7 @@ impl<T:Timestamp> Tracker<T> {
     }
 
     /// Propagates all updates made to sources and targets.
-    pub fn propagate(&mut self) {
-        debug_assert_eq!(self.source.len(), self.target.len());
+    pub fn propagate_all(&mut self) {
         for index in 0..self.target.len() {
             self.propagate_node(index);
         }
@@ -418,15 +442,15 @@ impl<T:Timestamp> Tracker<T> {
     /// The caller may read the results or consume the results, as appropriate. The method
     /// itself does not clear the buffer, so pushed values will stay in place until they are
     /// consumed by some caller.
+    #[inline(always)]
     pub fn pushed_mut(&mut self, node: usize) -> &mut [ChangeBatch<T>] {
         &mut self.pushed[node][..]
     }
 }
 
-
+/// Adds the path summary `summary` to `target` and returns true iff a change occurred.
 fn add_summary<S: PartialOrder+Eq>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool {
     for &mut (ref t, ref mut antichain) in vector.iter_mut() {
-        // TODO : Do we need to clone here, or should `insert` be smarter?
         if target.eq(t) { return antichain.insert(summary); }
     }
     vector.push((target, Antichain::from_elem(summary)));
