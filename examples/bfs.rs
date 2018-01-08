@@ -19,6 +19,7 @@ fn main() {
     let nodes: usize = std::env::args().nth(1).unwrap().parse().unwrap();
     let edges: usize = std::env::args().nth(2).unwrap().parse().unwrap();
 
+    // let logging = ::timely::logging::to_tcp_socket();
     timely::execute_from_args(std::env::args().skip(3), move |worker| {
 
         let index = worker.index();

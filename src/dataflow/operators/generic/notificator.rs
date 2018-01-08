@@ -1,6 +1,7 @@
 use progress::frontier::MutableAntichain;
 use progress::Timestamp;
 use dataflow::operators::Capability;
+use logging::Logger;
 
 /// Tracks requests for notification and delivers available notifications.
 ///
@@ -16,17 +17,24 @@ use dataflow::operators::Capability;
 pub struct Notificator<'a, T: Timestamp> {
     frontiers: &'a [&'a MutableAntichain<T>],
     inner: &'a mut FrontierNotificator<T>,
+    logging: &'a Logger,
 }
 
 impl<'a, T: Timestamp> Notificator<'a, T> {
     /// Allocates a new `Notificator`.
     ///
     /// This is more commonly accomplished using `input.monotonic(frontiers)`.
-    pub fn new(frontiers: &'a [&'a MutableAntichain<T>], inner: &'a mut FrontierNotificator<T>) -> Self {
+    pub fn new(
+        frontiers: &'a [&'a MutableAntichain<T>],
+        inner: &'a mut FrontierNotificator<T>,
+        logging: &'a Logger) -> Self {
+
         inner.make_available(frontiers);
+
         Notificator {
             frontiers: frontiers,
             inner: inner,
+            logging: logging,
         }
     }
 
@@ -73,9 +81,11 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
-            ::logging::log(&::logging::GUARDED_PROGRESS, true);
+            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
+                    ::logging::GuardedProgressEvent { is_start: true })));
             logic(cap, count, self);
-            ::logging::log(&::logging::GUARDED_PROGRESS, false);
+            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
+                    ::logging::GuardedProgressEvent { is_start: false })));
         }
     }
 }
@@ -108,6 +118,8 @@ fn notificator_delivers_notifications_in_topo_order() {
 
     let root_capability = mint_capability(Product::new(0,0), Rc::new(RefCell::new(ChangeBatch::new())));
 
+    let logging = ::logging::new_inactive_logger();
+
     // notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(ts_from_tuple((0, 0)), 1)]);
     let times = vec![
         Product::new(3, 5),
@@ -125,14 +137,14 @@ fn notificator_delivers_notifications_in_topo_order() {
     let mut frontier_notificator = FrontierNotificator::from(times.iter().map(|t| root_capability.delayed(t)));
 
     // the frontier is initially (0,0), and so we should deliver no notifications.
-    assert!(frontier_notificator.monotonic(&[&frontier]).next().is_none());
+    assert!(frontier_notificator.monotonic(&[&frontier], &logging).next().is_none());
 
     // advance the frontier to [(5,7), (6,0)], opening up some notifications.
     frontier.update_iter(vec![(Product::new(0,0),-1), (Product::new(5,7), 1), (Product::new(6,1), 1)]);
 
     {
         let frontiers = [&frontier];
-        let mut notificator = frontier_notificator.monotonic(&frontiers);
+        let mut notificator = frontier_notificator.monotonic(&frontiers, &logging);
 
         // we should deliver the following available notifications, in this order.
         assert_eq!(notificator.next().unwrap().0.time(), &Product::new(1,1));
@@ -148,7 +160,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 
     {
         let frontiers = [&frontier];
-        let mut notificator = frontier_notificator.monotonic(&frontiers);
+        let mut notificator = frontier_notificator.monotonic(&frontiers, &logging);
 
         // the first available notification should be (5,8). Note: before (6,0) in the total order, but not
         // in the partial order. We don't make the promise that we respect the total order.
@@ -343,9 +355,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     pub fn for_each<'a, F: FnMut(Capability<T>, &mut FrontierNotificator<T>)>(&mut self, frontiers: &'a [&'a MutableAntichain<T>], mut logic: F) {
         self.make_available(frontiers);
         while let Some(cap) = self.next(frontiers) {
-            ::logging::log(&::logging::GUARDED_PROGRESS, true);
             logic(cap, self);
-            ::logging::log(&::logging::GUARDED_PROGRESS, false);
         }
     }
 
@@ -354,8 +364,8 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// This implementation can be emulated with judicious use of `make_available` and `notify_at_frontiered`,
     /// in the event that `Notificator` provides too restrictive an interface.
     #[inline]
-    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> Notificator<'a, T> {
-        Notificator::new(frontiers, self)
+    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Logger) -> Notificator<'a, T> {
+        Notificator::new(frontiers, self, logging)
     }
 }
 

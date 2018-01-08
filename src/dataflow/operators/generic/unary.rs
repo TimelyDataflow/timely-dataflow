@@ -79,15 +79,16 @@ impl<G: Scope, D1: Data> Unary<G, D1> for Stream<G, D1> {
              P: ParallelizationContract<G::Timestamp, D1>>
              (&self, pact: P, name: &str, init: Vec<G::Timestamp>, mut logic: L) -> Stream<G, D2> {
 
-        self.unary_frontier(pact, name, |capability| {
+        self.unary_frontier(pact, name, move |capability| {
             let mut notificator = FrontierNotificator::new();
             for time in init {
                 notificator.notify_at(capability.delayed(&time));
             }
 
+            let logging = self.scope().logging();
             move |input, output| {
                 let frontier = &[input.frontier()];
-                let notificator = &mut Notificator::new(frontier, &mut notificator);
+                let notificator = &mut Notificator::new(frontier, &mut notificator, &logging);
                 logic(&mut input.handle, output, notificator);
             }
         })

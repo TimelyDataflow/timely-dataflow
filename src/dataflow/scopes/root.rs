@@ -1,11 +1,13 @@
 //! The root scope of all timely dataflow computations.
 
 use std::rc::Rc;
+use std::sync::Arc;
 use std::cell::RefCell;
 use std::any::Any;
 
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
+use logging::Logger;
 use timely_communication::{Allocate, Data};
 use {Push, Pull};
 
@@ -18,22 +20,19 @@ pub struct Root<A: Allocate> {
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
+    logging: Arc<Fn(::logging::TimelySetup)->Logger+Sync+Send>,
 }
 
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
-    pub fn new(c: A) -> Root<A> {
-        let mut result = Root {
+    pub fn new(c: A, logging: Arc<Fn(::logging::TimelySetup)->Logger+Sync+Send>) -> Root<A> {
+        let result = Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
+            logging: logging,
         };
-
-        // LOGGING
-        if cfg!(feature = "logging") {
-            ::logging::initialize(&mut result);
-        }
 
         result
     }
@@ -44,10 +43,6 @@ impl<A: Allocate> Root<A> {
     /// main way to ensure that a computation procedes.
     pub fn step(&mut self) -> bool {
 
-        if cfg!(feature = "logging") {
-            ::logging::flush_logs();
-        }
-
         let mut active = false;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
             let sub_active = dataflow.step();
@@ -56,6 +51,8 @@ impl<A: Allocate> Root<A> {
 
         // discard completed dataflows.
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
+
+        // TODO(andreal) do we want to flush logs here?
 
         active
     }
@@ -84,16 +81,22 @@ impl<A: Allocate> Root<A> {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
-        let subscope = SubgraphBuilder::new_from(dataflow_index, addr);
+        let logging = (self.logging)(::logging::TimelySetup {
+            index: self.index(),
+        });
+        let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone());
         let subscope = RefCell::new(subscope);
 
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
                 parent: self.clone(),
+                logging: logging.clone(),
             };
             func(&mut resources, &mut builder)
         };
+
+        logging.flush();
 
         let mut operator = subscope.into_inner().build(&mut *self.allocator.borrow_mut());
 
@@ -130,7 +133,7 @@ impl<A: Allocate> ScopeParent for Root<A> {
 impl<A: Allocate> Allocate for Root<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>) {
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>, Option<usize>) {
         self.allocator.borrow_mut().allocate()
     }
 }
@@ -142,6 +145,7 @@ impl<A: Allocate> Clone for Root<A> {
             identifiers: self.identifiers.clone(),
             dataflows: self.dataflows.clone(),
             dataflow_counter: self.dataflow_counter.clone(),
+            logging: self.logging.clone(),
         }
     }
 }
@@ -159,6 +163,7 @@ impl Wrapper {
             self.operate = None;
             self.resources = None;
         }
+        // TODO consider flushing logs here (possibly after an arbritrary timeout)
         active
     }
     fn active(&self) -> bool { self.operate.is_some() }

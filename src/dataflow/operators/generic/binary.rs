@@ -120,9 +120,10 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
                 notificator.notify_at(capability.delayed(&time));
             }
 
+            let logging = self.scope().logging();
             move |input1, input2, output| {
                 let frontiers = &[input1.frontier(), input2.frontier()];
-                let notificator = &mut Notificator::new(frontiers, &mut notificator);
+                let notificator = &mut Notificator::new(frontiers, &mut notificator, &logging);
                 logic(&mut input1.handle, &mut input2.handle, output, notificator);
             }
         })

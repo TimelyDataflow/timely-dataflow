@@ -31,7 +31,7 @@ impl Process {
 impl Allocate for Process {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Any+Send+'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
+    fn allocate<T: Any+Send+'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
 
         // ensure exclusive access to shared list of channels
         let mut channels = self.channels.lock().ok().expect("mutex error?");
@@ -60,7 +60,7 @@ impl Allocate for Process {
                 self.allocated += 1;
                 let mut temp = Vec::new();
                 for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<T>>); }
-                return (temp, Box::new(recv) as Box<Pull<T>>)
+                return (temp, Box::new(recv) as Box<Pull<T>>, None)
             }
             else {
                 panic!("channel already consumed");
