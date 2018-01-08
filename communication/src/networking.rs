@@ -26,6 +26,7 @@ pub struct MessageHeader {
     pub source:     usize,   // index of worker sending message
     pub target:     usize,   // index of worker receiving message
     pub length:     usize,   // number of bytes in message
+    pub seqno:      usize,   // sequence number
 }
 
 impl MessageHeader {
@@ -40,6 +41,7 @@ impl MessageHeader {
             let source = bytes.read_u64::<LittleEndian>().unwrap() as usize;
             let target = bytes.read_u64::<LittleEndian>().unwrap() as usize;
             let length = bytes.read_u64::<LittleEndian>().unwrap() as usize;
+            let seqno  = bytes.read_u64::<LittleEndian>().unwrap() as usize;
 
             if bytes.len() >= length {
                 Some(MessageHeader {
@@ -47,6 +49,7 @@ impl MessageHeader {
                     source: source,
                     target: target,
                     length: length,
+                    seqno: seqno,
                 })
             }
             else {
@@ -63,6 +66,7 @@ impl MessageHeader {
         try!(writer.write_u64::<LittleEndian>(self.source as u64));
         try!(writer.write_u64::<LittleEndian>(self.target as u64));
         try!(writer.write_u64::<LittleEndian>(self.length as u64));
+        try!(writer.write_u64::<LittleEndian>(self.seqno as u64));
         Ok(())
     }
 }
@@ -73,15 +77,26 @@ struct BinaryReceiver<R: Read> {
     buffer:     Vec<u8>,    // current working buffer
     length:     usize,
     targets:    Switchboard<Sender<Vec<u8>>>,
+    log_sender:     ::logging::CommsLogger,
 }
 
 impl<R: Read> BinaryReceiver<R> {
-    fn new(reader: R, channels: Receiver<((usize, usize), Sender<Vec<u8>>)>) -> BinaryReceiver<R> {
+    fn new(
+            reader: R,
+            channels: Receiver<((usize,
+            usize),
+            Sender<Vec<u8>>)>,
+            process: usize,
+            index: usize,
+            threads: usize,
+            log_sender: ::logging::CommsLogger) -> BinaryReceiver<R> {
+        eprintln!("process {}, index {}, threads {}", process, index, threads);
         BinaryReceiver {
             reader:     reader,
             buffer:     vec![0u8; 1 << 20],
             length:     0,
             targets:    Switchboard::new(channels),
+            log_sender:     log_sender,
         }
     }
 
@@ -101,6 +116,13 @@ impl<R: Read> BinaryReceiver<R> {
             let remaining = {
                 let mut slice = &self.buffer[..self.length];
                 while let Some(header) = MessageHeader::try_read(&mut slice) {
+                    self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Communication(::logging::CommunicationEvent {
+                            is_send: false,
+                            comm_channel: header.channel,
+                            source: header.source,
+                            target: header.target,
+                            seqno: header.seqno,
+                        })));
                     let h_len = header.length as usize;  // length in bytes
                     let target = &mut self.targets.ensure(header.target, header.channel);
                     target.send(slice[..h_len].to_vec()).unwrap();
@@ -128,13 +150,15 @@ impl<R: Read> BinaryReceiver<R> {
 struct BinarySender<W: Write> {
     writer:     W,
     sources:    Receiver<(MessageHeader, Vec<u8>)>,
+    log_sender:     ::logging::CommsLogger,
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)> ) -> BinarySender<W> {
+    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, _process: usize, _index: usize, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
+            log_sender:     log_sender,
         }
     }
 
@@ -153,6 +177,13 @@ impl<W: Write> BinarySender<W> {
 
             for (header, mut buffer) in stash.drain_temp() {
                 assert!(header.length == buffer.len());
+                self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Communication(::logging::CommunicationEvent {
+                        is_send: true,
+                        comm_channel: header.channel,
+                        source: header.source,
+                        target: header.target,
+                        seqno: header.seqno,
+                    })));
                 header.write_to(&mut self.writer).unwrap();
                 self.writer.write_all(&buffer[..]).unwrap();
                 buffer.clear();
@@ -196,7 +227,8 @@ impl<T:Send> Switchboard<T> {
 }
 
 /// Initializes network connections
-pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool) -> Result<Vec<Binary>> {
+pub fn initialize_networking(
+    addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Binary>> {
 
     let processes = addresses.len();
     let hosts1 = Arc::new(addresses);
@@ -226,17 +258,46 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: u
             readers.push(reader_channels_s);    //
             senders.push(sender_channels_s);    //
 
-            let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream.try_clone().unwrap()),
-                                               sender_channels_r);
-            let mut recver = BinaryReceiver::new(stream.try_clone().unwrap(), reader_channels_r);
 
-            // start senders and receivers associated with this stream
-            thread::Builder::new().name(format!("send thread {}", index))
-                                  .spawn(move || sender.send_loop())
-                                  .unwrap();
-            thread::Builder::new().name(format!("recv thread {}", index))
-                                  .spawn(move || recver.recv_loop())
-                                  .unwrap();
+            {
+                let log_sender = log_sender.clone();
+                let stream = stream.try_clone().unwrap();
+                // start senders and receivers associated with this stream
+                thread::Builder::new().name(format!("send thread {}", index))
+                                      .spawn(move || {
+                                          let log_sender = log_sender(::logging::CommsSetup {
+                                              process: my_index,
+                                              sender: true,
+                                              remote: Some(index),
+                                          });
+                                          let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream),
+                                                                             sender_channels_r,
+                                                                             my_index,
+                                                                             index,
+                                                                             log_sender);
+                                          sender.send_loop()
+                                      }).unwrap();
+            }
+
+            {
+                let log_sender = log_sender.clone();
+                let stream = stream.try_clone().unwrap();
+                thread::Builder::new().name(format!("recv thread {}", index))
+                                      .spawn(move || {
+                                          let log_sender = log_sender(::logging::CommsSetup {
+                                              process: my_index,
+                                              sender: false,
+                                              remote: Some(index),
+                                          });
+                                          let mut recver = BinaryReceiver::new(stream,
+                                                                               reader_channels_r,
+                                                                               my_index,
+                                                                               index,
+                                                                               threads,
+                                                                               log_sender);
+                                          recver.recv_loop()
+                                      }).unwrap();
+            }
 
         }
     }
@@ -252,6 +313,7 @@ pub fn initialize_networking(addresses: Vec<String>, my_index: usize, threads: u
             allocated:      0,
             readers:        readers.clone(),
             senders:        senders.clone(),
+            log_sender:     log_sender.clone(),
         });
     }
 

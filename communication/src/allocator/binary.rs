@@ -1,4 +1,5 @@
 use std::sync::mpsc::{Sender, Receiver, channel};
+use std::sync::Arc;
 
 use {Allocate, Data, Push, Pull, Serialize};
 use allocator::Process;
@@ -13,7 +14,8 @@ pub struct Binary {
 
     // for loading up state in the networking threads.
     pub readers:    Vec<Sender<((usize, usize), Sender<Vec<u8>>)>>,
-    pub senders:    Vec<Sender<(MessageHeader, Vec<u8>)>>
+    pub senders:    Vec<Sender<(MessageHeader, Vec<u8>)>>,
+    pub log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>,
 }
 
 impl Binary {
@@ -24,12 +26,12 @@ impl Binary {
 impl Allocate for Binary {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T:Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>) {
+    fn allocate<T:Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
         let mut pushers: Vec<Box<Push<T>>> = Vec::new();
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
         let inner_peers = self.inner.peers();
-        let (inner_sends, inner_recv) = self.inner.allocate();
+        let (inner_sends, inner_recv, _) = self.inner.allocate();
 
         // prep a pushable for each endpoint, multiplied by inner_peers
         for index in 0..self.readers.len() {
@@ -44,8 +46,14 @@ impl Allocate for Binary {
                     source:     self.index,
                     target:     target_index,
                     length:     0,
+                    seqno:      0,
                 };
-                pushers.push(Box::new(Pusher::new(header, self.senders[index].clone())));
+                let logger = (self.log_sender)(::logging::CommsSetup {
+                    process: self.index,
+                    sender: true,
+                    remote: Some(target_index),
+                });
+                pushers.push(Box::new(Pusher::new(header, self.senders[index].clone(), logger)));
             }
         }
 
@@ -60,11 +68,16 @@ impl Allocate for Binary {
             reader.send(((self.index, self.allocated), send.clone())).unwrap();
         }
 
-        let pullable = Box::new(Puller::new(inner_recv, recv));
+        let logger = (self.log_sender)(::logging::CommsSetup {
+            process: self.index,
+            sender: false,
+            remote: None,
+        });
+        let pullable = Box::new(Puller::new(inner_recv, recv, logger));
 
         self.allocated += 1;
 
-        return (pushers, pullable);
+        return (pushers, pullable, Some(self.allocated - 1));
     }
 }
 
@@ -72,14 +85,16 @@ struct Pusher<T> {
     header:     MessageHeader,
     sender:     Sender<(MessageHeader, Vec<u8>)>,   // targets for each remote destination
     phantom:    ::std::marker::PhantomData<T>,
+    log_sender: ::logging::CommsLogger,
 }
 
 impl<T> Pusher<T> {
-    pub fn new(header: MessageHeader, sender: Sender<(MessageHeader, Vec<u8>)>) -> Pusher<T> {
+    pub fn new(header: MessageHeader, sender: Sender<(MessageHeader, Vec<u8>)>, log_sender: ::logging::CommsLogger) -> Pusher<T> {
         Pusher {
             header:     header,
             sender:     sender,
             phantom:    ::std::marker::PhantomData,
+            log_sender: log_sender,
         }
     }
 }
@@ -87,11 +102,20 @@ impl<T> Pusher<T> {
 impl<T:Data> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(ref mut element) = *element {
+            self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Serialization(::logging::SerializationEvent {
+                    seq_no: Some(self.header.seqno),
+                    is_start: true,
+                })));
             let mut bytes = Vec::new();
             <T as Serialize>::into_bytes(element, &mut bytes);
             let mut header = self.header;
             header.length = bytes.len();
             self.sender.send((header, bytes)).ok();     // TODO : should be unwrap()?
+            self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Serialization(::logging::SerializationEvent {
+                    seq_no: Some(self.header.seqno),
+                    is_start: true,
+                })));
+            self.header.seqno += 1;
         }
     }
 }
@@ -100,10 +124,11 @@ struct Puller<T> {
     inner: Box<Pull<T>>,            // inner pullable (e.g. intra-process typed queue)
     current: Option<T>,
     receiver: Receiver<Vec<u8>>,    // source of serialized buffers
+    log_sender: ::logging::CommsLogger,
 }
 impl<T:Data> Puller<T> {
-    fn new(inner: Box<Pull<T>>, receiver: Receiver<Vec<u8>>) -> Puller<T> {
-        Puller { inner: inner, receiver: receiver, current: None }
+    fn new(inner: Box<Pull<T>>, receiver: Receiver<Vec<u8>>, log_sender: ::logging::CommsLogger) -> Puller<T> {
+        Puller { inner: inner, receiver: receiver, current: None, log_sender: log_sender }
     }
 }
 
@@ -111,10 +136,22 @@ impl<T:Data> Pull<T> for Puller<T> {
     #[inline]
     fn pull(&mut self) -> &mut Option<T> {
         let inner = self.inner.pull();
+        let log_sender = &self.log_sender;
         if inner.is_some() { inner }
         else {
             self.current = self.receiver.try_recv().ok().map(|mut bytes| {
-                <T as Serialize>::from_bytes(&mut bytes)
+                log_sender.when_enabled(|l| l.log(
+                    ::logging::CommsEvent::Serialization(::logging::SerializationEvent {
+                        seq_no: None,
+                        is_start: true,
+                    })));
+                let result = <T as Serialize>::from_bytes(&mut bytes);
+                log_sender.when_enabled(|l| l.log(
+                    ::logging::CommsEvent::Serialization(::logging::SerializationEvent {
+                        seq_no: None,
+                        is_start: false,
+                    })));
+                result
             });
             &mut self.current
         }

@@ -69,11 +69,14 @@
 extern crate getopts;
 extern crate byteorder;
 extern crate abomonation;
+#[macro_use] extern crate abomonation_derive;
+extern crate time;
 
 pub mod allocator;
 mod networking;
 pub mod initialize;
 mod drain;
+pub mod logging;
 
 use std::any::Any;
 use abomonation::{Abomonation, encode, decode};

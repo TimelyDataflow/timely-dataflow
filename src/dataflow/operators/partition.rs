@@ -40,7 +40,7 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
         let mut scope = self.scope();
         let channel_id = scope.new_identifier();
 
-        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id);
+        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id, self.scope().logging());
 
         let mut targets = Vec::new();
         let mut registrars = Vec::new();

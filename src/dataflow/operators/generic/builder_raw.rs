@@ -17,7 +17,7 @@ use dataflow::channels::pushers::Tee;
 use dataflow::channels::pact::ParallelizationContract;
 
 /// Contains type-free information about the operator properties.
-struct OperatorShape {
+pub struct OperatorShape {
     name: String,   // A meaningful name for the operator.
     notify: bool,   // Does the operator require progress notifications.
     peers: usize,   // The total number of workers in the computation.
@@ -36,6 +36,16 @@ impl OperatorShape {
             outputs: 0,
         }
     }
+
+    /// The number of inputs of this operator
+    pub fn inputs(&self) -> usize {
+        self.inputs
+    }
+
+    /// The number of outputs of this operator
+    pub fn outputs(&self) -> usize {
+        self.outputs
+    }
 }
 
 /// Builds operators with generic shape.
@@ -43,6 +53,7 @@ pub struct OperatorBuilder<G: Scope> {
     scope: G,
     index: usize,
     shape: OperatorShape,
+    summary: Vec<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {
@@ -57,7 +68,18 @@ impl<G: Scope> OperatorBuilder<G> {
             scope: scope,
             index: index,
             shape: OperatorShape::new(name, peers),
+            summary: vec![],
         }
+    }
+
+    /// The operator's index
+    pub fn index(&self) -> usize {
+        self.index
+    }
+
+    /// Return a reference to the operator's shape
+    pub fn shape(&self) -> &OperatorShape {
+        &self.shape
     }
 
     /// Indicates whether the operator requires frontier information.
@@ -67,15 +89,26 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P) -> P::Puller
+        where
+            P: ParallelizationContract<G::Timestamp, D> {
+        let connection = vec![Antichain::from_elem(Default::default()); self.shape.outputs];
+        self.new_input_connection(stream, pact, connection)
+    }
+
+    /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
+    pub fn new_input_connection<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller
     where
         P: ParallelizationContract<G::Timestamp, D> {
 
         let channel_id = self.scope.new_identifier();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id);
+        let logging = self.scope.logging();
+        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, logging);
         let target = Target { index: self.index, port: self.shape.inputs };
         stream.connect_to(target, sender, channel_id);
         
         self.shape.inputs += 1;
+        assert_eq!(self.shape.outputs, connection.len());
+        self.summary.push(connection);
 
         receiver
     }
@@ -83,11 +116,22 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Adds a new input to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output<D: Data>(&mut self) -> (Tee<G::Timestamp, D>, Stream<G, D>) {
 
+        let connection = vec![Antichain::from_elem(Default::default()); self.shape.inputs];
+        self.new_output_connection(connection)
+    }
+
+    /// Adds a new input to a generic operator builder, returning the `Push` implementor to use.
+    pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (Tee<G::Timestamp, D>, Stream<G, D>) {
+
         let (targets, registrar) = Tee::<G::Timestamp,D>::new();
         let source = Source { index: self.index, port: self.shape.outputs };
         let stream = Stream::new(source, registrar, self.scope.clone());
 
         self.shape.outputs += 1;
+        assert_eq!(self.shape.inputs, connection.len());
+        for (summary, entry) in self.summary.iter_mut().zip(connection.into_iter()) {
+            summary.push(entry);
+        }
 
         (targets, stream)
     }
@@ -106,6 +150,7 @@ impl<G: Scope> OperatorBuilder<G> {
             shape: self.shape,
             push_external: push_external,
             pull_internal: pull_internal,
+            summary: self.summary,
             phantom: ::std::marker::PhantomData,
         };
 
@@ -122,6 +167,7 @@ struct OperatorCore<T, PEP, PIP>
     shape: OperatorShape,
     push_external: PEP,
     pull_internal: PIP,
+    summary: Vec<Vec<Antichain<T::Summary>>>,
     phantom: ::std::marker::PhantomData<T>,
 }
 
@@ -143,9 +189,7 @@ impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
             internal.push(ChangeBatch::new_from(Default::default(), self.shape.peers as i64));
         }
 
-        let summary = vec![vec![Antichain::from_elem(Default::default()); self.shape.outputs]; self.shape.inputs];
-
-        (summary, internal)
+        (self.summary.clone(), internal)
     }
 
     // initialize self.frontier antichains as indicated by hosting scope.

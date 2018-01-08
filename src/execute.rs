@@ -2,6 +2,7 @@
 
 use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
 use dataflow::scopes::{Root, Child};
+use logging::LoggerConfig;
 
 /// Executes a single-threaded timely dataflow computation.
 ///
@@ -19,7 +20,7 @@ use dataflow::scopes::{Root, Child};
 ///
 /// The simplest example creates a stream of data and inspects it.
 ///
-/// ```
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// timely::example(|scope| {
@@ -33,7 +34,7 @@ use dataflow::scopes::{Root, Child};
 /// More precisely, the example captures a stream of events (receiving batches of data,
 /// updates to input capabilities) and displays these events.
 ///
-/// ```
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect, Capture};
 /// use timely::dataflow::operators::capture::Extract;
 ///
@@ -49,12 +50,14 @@ use dataflow::scopes::{Root, Child};
 pub fn example<T, F>(func: F) -> T
 where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
+    let logging_config: LoggerConfig = Default::default();
+    let timely_logging = logging_config.timely_logging.clone();
     let guards = initialize(Configuration::Thread, move |allocator| {
-        let mut root = Root::new(allocator);
+        let mut root = Root::new(allocator, timely_logging.clone());
         let result = root.dataflow(|x| func(x));
         while root.step() { }
         result
-    });
+    }, logging_config.communication_logging);
 
     guards.unwrap() // assert the computation started correctly
           .join()   // wait for the worker to finish
@@ -74,7 +77,7 @@ where T: Send+'static,
 /// to recover the result `T` values from the local workers.
 ///
 /// #Examples
-/// ```
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
@@ -90,7 +93,7 @@ where T: Send+'static,
 /// In a multi-process setting, each process will only receive those records present at workers 
 /// in the process.
 ///
-/// ```
+/// ```rust
 /// use std::sync::{Arc, Mutex};
 /// use timely::dataflow::operators::{ToStream, Inspect, Capture};
 /// use timely::dataflow::operators::capture::Extract;
@@ -115,14 +118,42 @@ where T: Send+'static,
 pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
+    // let logging_config = ::logging::blackhole();
+    execute_logging(config, Default::default(), func)
+}
+
+/// Executes a timely dataflow from a configuration and per-communicator logic.
+///
+/// Refer to [`execute`](fn.execute.html) for more details. This function additionally
+/// supports providing a logging configuration.
+///
+/// ```rust
+/// use timely::dataflow::operators::{ToStream, Inspect};
+/// use timely::logging::{LoggerConfig, EventPusherTee};
+///
+/// let logger_config = LoggerConfig::new(
+///     |_setup| EventPusherTee::new() /* setup logging destinations */,
+///     |_setup| EventPusherTee::new() /* setup logging destinations */);
+///
+/// // execute a timely dataflow using command line parameters
+/// timely::execute_logging(timely::Configuration::Process(3), logger_config, |worker| {
+///     worker.dataflow::<(),_,_>(|scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x));
+///     })
+/// }).unwrap();
+/// ```
+pub fn execute_logging<T, F>(config: Configuration, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String> 
+where T:Send+'static,
+      F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
+    let timely_logging = logging_config.timely_logging.clone();
     initialize(config, move |allocator| {
-        let mut root = Root::new(allocator);
+        let mut root = Root::new(allocator, timely_logging.clone());
         let result = func(&mut root);
         while root.step() { }
         result
-    })
+    }, logging_config.communication_logging.clone())
 }
-
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
 ///
@@ -147,7 +178,8 @@ where T:Send+'static,
 /// arbitrarily).
 ///
 /// #Examples
-/// ```
+///
+/// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using command line parameters
@@ -175,5 +207,33 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>, 
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-    execute(try!(Configuration::from_args(iter)), func)
- }
+    execute_from_args_logging(iter, Default::default(), func)
+}
+
+/// Executes a timely dataflow from supplied arguments and per-communicator logic.
+///
+/// Refer to [`execute_from_args`](fn.execute_from_args.html) for more details. This function additionally
+/// supports providing a logging configuration.
+///
+/// ```rust
+/// use timely::dataflow::operators::{ToStream, Inspect};
+/// use timely::logging::{LoggerConfig, EventPusherTee};
+///
+/// let logger_config = LoggerConfig::new(
+///     |_setup| EventPusherTee::new() /* setup logging destinations */,
+///     |_setup| EventPusherTee::new() /* setup logging destinations */);
+///
+/// // execute a timely dataflow using command line parameters
+/// timely::execute_from_args_logging(std::env::args(), logger_config, |worker| {
+///     worker.dataflow::<(),_,_>(|scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x));
+///     })
+/// }).unwrap();
+/// ```
+pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String> 
+    where I: Iterator<Item=String>, 
+          T:Send+'static,
+          F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
+    execute_logging(try!(Configuration::from_args(iter)), logging_config, func)
+}
