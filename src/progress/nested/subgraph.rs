@@ -208,7 +208,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
 pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
 
     name: String,           // a helpful name (often "Subgraph").
-    pub path: Vec<usize>,   // path of identifiers from the root.
+    /// Path of identifiers from the root.
+    pub path: Vec<usize>,   
     inputs: usize,          // number of inputs.
     outputs: usize,         // number of outputs.
 
