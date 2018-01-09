@@ -171,17 +171,17 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // appropriate buffer (`self.output_capabilities`) and present them as initial capabilities
         // for the subgraph operator (`initial_capabilities`).
         let mut initial_capabilities = vec![ChangeBatch::new(); self.outputs()];
-        for (o_port, capabilities) in self.pointstamps.pushed[0].iter_mut().enumerate() {
+        for (o_port, capabilities) in self.pointstamp_tracker.pushed_mut(0).iter_mut().enumerate() {
 
             // each element of capabilities will eventually be subtracted, so we must use them
             // all for inititialization.
             let mut caps1 = capabilities.drain().map(|(time, diff)| (time.outer, diff) ).collect::<Vec<_>>();
             caps1.sort();
 
-            let mut caps2 = self.pointstamp_tracker.pushed_mut(0)[o_port].drain().map(|(time, diff)| (time.outer, diff) ).collect::<Vec<_>>();
-            caps2.sort();
+            // let mut caps2 = self.pointstamp_tracker.pushed_mut(0)[o_port].drain().map(|(time, diff)| (time.outer, diff) ).collect::<Vec<_>>();
+            // caps2.sort();
 
-            assert_eq!(caps1, caps2);
+            // assert_eq!(caps1, caps2);
 
             self.output_capabilities[o_port].update_iter(caps1);
 
@@ -194,11 +194,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         self.pointstamps.clear();
         self.pointstamp_tracker.clear();
 
+        let summary = self.pointstamp_builder.summarize();
+
         // Summarize the scope internals by looking for source_target_summaries from child 0
         // sources to child 0 targets. These summaries are only in terms of the outer timestamp.
         let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
         for input in 0..self.inputs() {
-            for &(target, ref antichain) in &self.children[0].source_target_summaries[input] {
+            for &(target, ref antichain) in &summary.source_target[0][input] {
+            // for &(target, ref antichain) in &self.children[0].source_target_summaries[input] {
                 if target.index == 0 {
                     for summary in antichain.elements().iter() {
                         internal_summary[input][target.port].insert(match summary {
@@ -281,7 +284,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             assert_eq!(pointstamp_summaries.target_target[child], self.children[child].target_target_summaries);
         }
 
-        self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries);
+        self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries.clone());
 
         // Initialize pointstamps for capabilities, from `frontier` and from child capabitilies.
 
@@ -327,13 +330,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
                 iterator2.sort();
                 assert_eq!(iterator, iterator2);
 
-                child.external[input].update_iter_and(iterator, |t, v| { buffer.update(t.clone(), v); });
+                child.external[input].update_iter_and(iterator2, |t, v| { buffer.update(t.clone(), v); });
             }
 
             // Summarize the subgraph by the path summaries from the child's output to its inputs.
             let mut summary = vec![vec![Antichain::new(); child.inputs]; child.outputs];
             for output in 0..child.outputs {
-                for &(source, ref antichain) in &child.source_target_summaries[output] {
+                for &(source, ref antichain) in &pointstamp_summaries.source_target[child.index][output] {
+                // for &(source, ref antichain) in &child.source_target_summaries[output] {
                     if source.index == child.index {
                         summary[output][source.port] = (*antichain).clone();
                     }
@@ -540,6 +544,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             for thing in self.pointstamp_tracker.pushed_mut(child.index).iter_mut() { thing.iter(); }
             assert_eq!(pointstamps, self.pointstamp_tracker.pushed_mut(child.index));
             // self.pointstamp_tracker.pushed_mut(child.index).drain();
+            let pointstamps = self.pointstamp_tracker.pushed_mut(child.index);
             child.push_pointstamps(pointstamps);
         }
 
@@ -552,7 +557,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             let mut iterator1 = pointstamps.drain().map(|(time, diff)| (time.outer, diff)).collect::<Vec<_>>(); iterator1.sort();
             let mut iterator2 = self.pointstamp_tracker.pushed_mut(0)[output].drain().map(|(time, diff)| (time.outer, diff)).collect::<Vec<_>>(); iterator2.sort();
             assert_eq!(iterator1, iterator2);
-            self.output_capabilities[output].update_iter_and(iterator1, |t, v| {
+            self.output_capabilities[output].update_iter_and(iterator2, |t, v| {
                 internal[output].update(t.clone(), v);
             });
         }
