@@ -259,6 +259,7 @@ impl<T: Timestamp> Builder<T> {
 ///
 /// A `Summary` instance records a compiled representation of path summaries along paths
 /// in a timely dataflow graph, mostly commonly constructed by a `reachability::Builder`.
+#[derive(Clone)]
 pub struct Summary<T: Timestamp> {
 
     // TODO: As all of this information is static, we should be able to flatten it into

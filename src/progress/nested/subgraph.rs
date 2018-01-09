@@ -245,7 +245,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
 
         // Testing out new stuff.
-        self.pointstamp_builder.add_node(0, self.inputs, self.outputs, new_summary);
+        self.pointstamp_builder.add_node(0, self.outputs, self.inputs, new_summary);
         let mut pointstamp_summaries = self.pointstamp_builder.summarize();
         for summaries in pointstamp_summaries.target_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
         for summaries in pointstamp_summaries.source_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
