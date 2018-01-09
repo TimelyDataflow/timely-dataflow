@@ -3,7 +3,6 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use ::{Data, ExchangeData};
-use order::PartialOrder;
 use dataflow::{Stream, Scope};
 use dataflow::operators::generic::unary::Unary;
 use dataflow::channels::pact::Exchange;
@@ -12,7 +11,7 @@ use dataflow::channels::pact::Exchange;
 /// Events are applied in time-order, but no other promises are made. Each state transition can
 /// produce output, which is sent. 
 ///
-/// `state_machine` will buffer inputs if earlier inputs may still arrive. it will directly apply 
+/// `state_machine` will buffer inputs if earlier inputs may still arrive. It will directly apply
 /// updates for the current time reflected in the notificator, though. In the case of partially 
 /// ordered times, the only guarantee is that updates are not applied out of order, not that there
 /// is some total order on times respecting the total order (updates may be interleaved).
@@ -72,7 +71,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             // stash each input and request a notification when ready
             input.for_each(|time, data| {
                 // stash if not time yet
-                if notificator.frontier(0).iter().any(|x| x.less_than(time.time())) {
+                if notificator.frontier(0).less_than(time.time()) {
                     pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
                     notificator.notify_at(time);
                 }
