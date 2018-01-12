@@ -372,6 +372,12 @@ impl<T:Timestamp> Tracker<T> {
         self.pusheds.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty()))
     } 
 
+    /// Returns true if any source or target is non-empty.
+    pub fn tracking_anything(&mut self) -> bool {
+        self.sources.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty())) ||
+        self.targets.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty()))            
+    }
+
     /// Allocate a new `Tracker` using the shape from `summaries`.
     pub fn allocate_from(summary: Summary<T>) -> Self {
 

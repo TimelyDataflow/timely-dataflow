@@ -448,36 +448,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             }
         }
 
-        // Step 2: Extract progress summaries from child subscopes.
-        //
-        // Each managed scope reports changes to pointstamp counts, both for its input and output record
-        // counts, and for any changes to its internal capabilities. This information can either be "local"
-        // in which case the data *must* be exchanged with peer subgraphs, or the information is "global"
-        // in which case the data *must not* be exchanged with peer subgraphs (in this case, other peers
-        // will receive the same data from their corresponding children).
-        //
-        // Updates are placed directly in the pointstamp accumulators.
-        for child in &mut self.children {
-
-            // if local, update into the local pointstamps, which must be exchanged. otherwise into
-            // the global pointstamps, which need not be exchanged.
-            let subactive = if child.local {
-                child.pull_pointstamps(
-                    &mut self.local_pointstamp_messages,
-                    &mut self.local_pointstamp_internal,
-                )
-            }
-            else {
-                child.pull_pointstamps(
-                    &mut self.final_pointstamp_messages,
-                    &mut self.final_pointstamp_internal,
-                )
-            };
-
-            // Any active child requires we remain active as well.
-            active = active || subactive;
-        }
-
         // Intermission: exchange pointstamp updates, then move them to the pointstamps structure.
         //
         // Note: Only "local" pointstamp updates should be exchanged. Any "final" pointstamp updates
@@ -490,8 +460,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // All local pointstamp *message* updates can be folded into the final updates.
         self.local_pointstamp_messages.drain_into(&mut self.final_pointstamp_messages);
 
-        // For local pointstamp *internal* udpates, we must special case the `child == 0` case to
-        // extract the changes as consumed messages, rather than altered capabilities.
+        // For local pointstamp *internal* updates, we must special case the `child == 0` case to
+        // extract the changes as consumed messages, rather than altered capabilities. We do not
+        // propagate 
         for ((index, port, timestamp), delta) in self.local_pointstamp_internal.drain() {
             if index == 0 {
                 // Update our report upwards of consumed records.
@@ -503,7 +474,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             }
         }
 
-        // Step 3: React to post-exchange poinstamp updates.
+        // Step 3: React to post-exchange pointstamp updates.
         //
         // We now have a collection of pointstamp updates that should be applied. Before
         // alerting anyone, we push the updates through filters that report only changes
@@ -551,14 +522,37 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // self.push_pointstamps();
         self.pointstamp_tracker.propagate_all();
 
-        // Step 5: Inform each managed child scope of changes to their input frontiers.
+        // Step 2: Extract progress summaries from child subscopes.
         //
-        // Propagated pointstamp changes may have altered the input frontier of each child.
-        // We provide this information to each of them, handled by their wrapper.
-        for child in self.children.iter_mut().skip(1) {
-            let pointstamps = self.pointstamp_tracker.pushed_mut(child.index);
-            child.push_pointstamps(pointstamps);
+        // Each managed scope reports changes to pointstamp counts, both for its input and output record
+        // counts, and for any changes to its internal capabilities. This information can either be "local"
+        // in which case the data *must* be exchanged with peer subgraphs, or the information is "global"
+        // in which case the data *must not* be exchanged with peer subgraphs (in this case, other peers
+        // will receive the same data from their corresponding children).
+        //
+        // Updates are placed directly in the pointstamp accumulators.
+        for (index, child) in self.children.iter_mut().enumerate().skip(1) {
+
+            child.push_pointstamps(self.pointstamp_tracker.pushed_mut(index));
+
+            // Local children must have results exchanged, and so fill a different buffer.
+            let (message_buffer, internal_buffer) = if child.local {
+                (&mut self.local_pointstamp_messages, &mut self.local_pointstamp_internal)
+            }
+            else {
+                (&mut self.final_pointstamp_messages, &mut self.final_pointstamp_internal)
+            };
+
+            let child_active = child.pull_pointstamps(message_buffer, internal_buffer);
+            active = active || child_active;
         }
+
+        // // Step 5: Inform each managed child scope of changes to their input frontiers.
+        // //
+        // // Propagated pointstamp changes may have altered the input frontier of each child.
+        // // We provide this information to each of them, handled by their wrapper.
+        // for (index, child) in self.children.iter_mut().enumerate().skip(1) {
+        // }
 
         // Step 6: Record changes in input frontiers to output ports as changes in capabilities.
         //
@@ -572,21 +566,19 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             });
         }
 
-        // self.pointstamps.clear();
         debug_assert!(self.pointstamp_tracker.is_empty());
-        // self.pointstamp_tracker.clear();
+
+        let test_active = active || self.pointstamp_tracker.tracking_anything();
 
         // if there are outstanding messages or capabilities, we must insist on continuing to run
         for child in &self.children {
-            // if child.messages.iter().any(|x| x.frontier().len() > 0) 
-            // { println!("{:?}: child {}[{}] has outstanding messages", self.path, child.name, child.index); }
             active = active || child.messages.iter().any(|x| !x.is_empty());
-            // if child.internal.iter().any(|x| x.frontier().len() > 0) 
-            // { println!("{:?} child {}[{}] has outstanding capabilities", self.path, child.name, child.index); }
             active = active || child.internal.iter().any(|x| !x.is_empty());
         }
 
-        active
+        assert_eq!(active, test_active);
+
+        active 
     }
 }
 

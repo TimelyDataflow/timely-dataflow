@@ -90,6 +90,8 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
     ///     let recv = list.incoming().next().unwrap().unwrap();
     ///
+    ///     recv.set_nonblocking(true).unwrap();
+    ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10u64)
     ///             .to_stream(scope1)
@@ -127,6 +129,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
 
         builder.build(
             move |frontier| {
+
                 if !started {
                     frontier[0].update(Default::default(), -1);
                     started = true;
