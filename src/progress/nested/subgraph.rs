@@ -1,13 +1,10 @@
 //! Implements `Operate` for a scoped collection of child operators.
 
-use std::default::Default;
-// use std::fmt::Debug;
-
 use std::rc::Rc;
 use std::cell::RefCell;
-use timely_communication::Allocate;
+use std::default::Default;
 
-// use order::PartialOrder;
+use timely_communication::Allocate;
 
 use logging::Logger;
 
@@ -15,12 +12,9 @@ use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, Operate};
 
 use progress::ChangeBatch;
-
 use progress::broadcast::Progcaster;
 use progress::nested::summary::Summary::{Local, Outer};
-// use progress::nested::pointstamp_counter::PointstampCounter;
 use progress::nested::product::Product;
-
 use progress::nested::reachability;
 
 // IMPORTANT : by convention, a child identifier of zero is used to indicate inputs and outputs of
@@ -359,9 +353,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
             // Initial capabilities from self.pointstamps.target_pushed[child.index]
             // TODO : Should we push anything at child 0? kind of a (small) waste...
+            let pushed_mut = self.pointstamp_tracker.pushed_mut(child.index);
             for input in 0..child.inputs {
                 let buffer = &mut child.external_buffer[input];
-                let iterator2 = self.pointstamp_tracker.pushed_mut(child.index)[input].drain();
+                let iterator2 = pushed_mut[input].drain();
                 child.external[input].update_iter_and(iterator2, |t, v| { buffer.update(t.clone(), v); });
             }
 
@@ -578,7 +573,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         }
 
         // self.pointstamps.clear();
-        self.pointstamp_tracker.clear();
+        debug_assert!(self.pointstamp_tracker.is_empty());
+        // self.pointstamp_tracker.clear();
 
         // if there are outstanding messages or capabilities, we must insist on continuing to run
         for child in &self.children {
@@ -741,29 +737,35 @@ impl<T: Timestamp> PerOperatorState<T> {
         // TODO : re-introduce use of self.notify
         assert_eq!(external_progress.len(), self.external.len());
         assert_eq!(external_progress.len(), self.external_buffer.len());
+
+        let mut any_changes = false;
+
         for (input, updates) in external_progress.iter_mut().enumerate() {
             let buffer = &mut self.external_buffer[input];
-            self.external[input].update_iter_and(updates.iter().cloned(), |time, val| { 
+            self.external[input].update_iter_and(updates.drain(), |time, val| { 
+                any_changes = true;
                 buffer.update(time.clone(), val); 
             });
         }
 
-        {
-            let changes = &mut self.external_buffer;
+        if any_changes {
             let id = self.id;
             self.logging.when_enabled(|l| {
-                if changes.iter_mut().any(|ref mut c| !c.is_empty()) {
-                    l.log(::logging::TimelyEvent::PushProgress(::logging::PushProgressEvent {
-                        op_id: id,
-                    }));
-                }
+                l.log(::logging::TimelyEvent::PushProgress(::logging::PushProgressEvent {
+                    op_id: id,
+                }));
             });
-            self.operator.as_mut().map(|x| x.push_external_progress(changes));
-            if changes.iter_mut().any(|x| !x.is_empty()) {
-                println!("changes not consumed by {:?}", self.name);
-            }
-            debug_assert!(!changes.iter_mut().any(|x| !x.is_empty()));
         }
+
+        let changes = &mut self.external_buffer;
+        self.operator.as_mut().map(|x| x.push_external_progress(changes));
+
+        // Possibly logic error if operator does not read its changes.
+        if changes.iter_mut().any(|x| !x.is_empty()) {
+            println!("changes not consumed by {:?}", self.name);
+        }
+        debug_assert!(!changes.iter_mut().any(|x| !x.is_empty()));
+        debug_assert!(external_progress.iter_mut().all(|x| x.is_empty()));
     }
 
     pub fn pull_pointstamps(&mut self, pointstamp_messages: &mut ChangeBatch<(usize, usize, T)>,
