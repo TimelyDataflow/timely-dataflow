@@ -8,3 +8,5 @@ pub mod pointstamp_counter;
 pub mod summary;
 pub mod product;
 pub mod subgraph;
+
+pub mod reachability;

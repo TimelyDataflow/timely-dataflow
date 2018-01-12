@@ -9,7 +9,7 @@
 /// until they are required. This means that several seemingly simple operations may be expensive, in
 /// that they may provoke a compaction. I've tried to prevent exposing methods that allow surprisingly
 /// expensive operations; all operations should take an amortized constant or logarithmic time.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ChangeBatch<T> {
     // A list of updates to which we append.
     updates: Vec<(T, i64)>,
@@ -192,6 +192,13 @@ impl<T:Ord> ChangeBatch<T> {
             self.updates.is_empty()
         }
     }
+
+    /// Compact and sort data, so that two instances can be compared without false negatives.
+    pub fn canonicalize(&mut self) {
+        self.compact();
+        self.updates.sort_by(|x,y| x.0.cmp(&y.0));
+    }
+
 
     /// Drains `self` into `other`.
     ///

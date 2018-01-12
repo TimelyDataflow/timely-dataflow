@@ -9,7 +9,7 @@ use order::PartialOrder;
 /// This antichain implementation allows you to repeatedly introduce elements to the antichain, and 
 /// which will evict larger elements to maintain the *minimal* antichain, those incomparable elements 
 /// no greater than any other element.
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Eq, PartialEq, Debug)]
 pub struct Antichain<T> {
     elements: Vec<T>
 }
@@ -37,6 +37,9 @@ impl<T: PartialOrder> Antichain<T> {
 
     /// Clears the contents of the antichain.
     pub fn clear(&mut self) { self.elements.clear() }
+
+    /// Sorts the elements so that comparisons between antichains can be made.
+    pub fn sort(&mut self) where T: Ord { self.elements.sort() }
 
     /// Returns true if any item in the antichain is strictly less than the argument.
     #[inline]
