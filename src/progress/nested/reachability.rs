@@ -336,15 +336,10 @@ pub struct Tracker<T:Timestamp> {
     //       It seems we should be able to flatten most of these so that there are a few allocations
     //       independent of the numbers of nodes and ports and such.
 
-    /// Buffers of observed changes.
-    source:  Vec<Vec<ChangeBatch<T>>>,
-    target:  Vec<Vec<ChangeBatch<T>>>,
-
     sources: Vec<Vec<MutableAntichain<T>>>,
     targets: Vec<Vec<MutableAntichain<T>>>,
 
     /// Buffers of consequent propagated changes.
-    pushed:  Vec<Vec<ChangeBatch<T>>>,
     pusheds:  Vec<Vec<ChangeBatch<T>>>,
 
     /// Compiled reachability along edges and through internal connections.
@@ -357,55 +352,24 @@ impl<T:Timestamp> Tracker<T> {
     /// Updates the count for a time at a target.
     #[inline]
     pub fn update_target(&mut self, target: Target, time: T, value: i64) {
-        // println!("target update: {:?}: ({:?}, {:?})", target, time, value);
-        self.target[target.index][target.port].update(time.clone(), value);
         self.targets[target.index][target.port].update_dirty(time, value);
     }
     /// Updates the count for a time at a source.
     #[inline]
     pub fn update_source(&mut self, source: Source, time: T, value: i64) {
-        // println!("source update: {:?}: ({:?}, {:?})", source, time, value);
-        self.source[source.index][source.port].update(time.clone(), value);
         self.sources[source.index][source.port].update_dirty(time, value);
     }
 
     /// Clears the pointstamp counter.
     pub fn clear(&mut self) {
-        for vec in &mut self.source { for map in vec.iter_mut() { map.clear(); } }
-        for vec in &mut self.target { for map in vec.iter_mut() { map.clear(); } }
         for vec in &mut self.sources { for map in vec.iter_mut() { map.clear(); } }
         for vec in &mut self.targets { for map in vec.iter_mut() { map.clear(); } }
-        for vec in &mut self.pushed { for map in vec.iter_mut() { map.clear(); } }
         for vec in &mut self.pusheds { for map in vec.iter_mut() { map.clear(); } }
     }
 
     /// 
     pub fn is_empty(&mut self) -> bool {
-
-        let empty = self.source.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) &&
-        self.target.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) &&
-        // self.sources.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) &&
-        // self.targets.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) &&
-        self.pushed.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) &&
-        self.pusheds.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty()));
-
-        // if !empty {
-        //     println!("Tracker::is_empty() == false");
-        //     if !self.source.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) {
-        //         println!("self.source: {:?}", self.source);
-        //     }
-        //     if !self.target.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) {
-        //         println!("self.target: {:?}", self.target);
-        //     }
-        //     if !self.pushed.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) {
-        //         println!("self.pushed: {:?}", self.pushed);
-        //     }
-        //     if !self.pusheds.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty())) {
-        //         println!("self.pusheds: {:?}", self.pusheds);
-        //     }
-        // }
-
-        empty
+        self.pusheds.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty()))
     } 
 
     /// Allocate a new `Tracker` using the shape from `summaries`.
@@ -416,35 +380,26 @@ impl<T:Timestamp> Tracker<T> {
 
         debug_assert_eq!(source_target.len(), target_target.len());
 
-        let mut source = Vec::with_capacity(source_target.len());
-        let mut target = Vec::with_capacity(target_target.len());
         let mut sources = Vec::with_capacity(source_target.len());
         let mut targets = Vec::with_capacity(target_target.len());
-        let mut pushed = Vec::with_capacity(target_target.len());
         let mut pusheds = Vec::with_capacity(target_target.len());
 
         // Allocate buffer space for each input and input port.
         for index in 0 .. source_target.len() {
             let source_count = source_target[index].len();
-            source.push(vec![ChangeBatch::new(); source_count]);
             sources.push(vec![MutableAntichain::new(); source_count]);
         }
 
         // Allocate buffer space for each output and output port.
         for index in 0 .. target_target.len() {
             let target_count = target_target[index].len();
-            target.push(vec![ChangeBatch::new(); target_count]);
             targets.push(vec![MutableAntichain::new(); target_count]);
-            pushed.push(vec![ChangeBatch::new(); target_count]);
             pusheds.push(vec![ChangeBatch::new(); target_count]);
         }
 
         Tracker {
-            source,
             sources,
-            target,
             targets,
-            pushed,
             pusheds,
             source_target,
             target_target,
@@ -457,28 +412,11 @@ impl<T:Timestamp> Tracker<T> {
     /// node invocation, to make the results available immediately.
     pub fn propagate_node(&mut self, index: usize) {
 
-        // println!("propagating node: {:?}", index);
-
         // Propagate changes at each input (target).
-        for input in 0..self.target[index].len() {
-            for (time, value) in self.target[index][input].drain() {
-                for &(target, ref antichain) in self.target_target[index][input].iter() {
-                    let pushed = &mut self.pushed[target.index][target.port];
-                    for summary in antichain.elements().iter() {
-                        if let Some(new_time) = summary.results_in(&time) {
-                            pushed.update(new_time, value);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Propagate changes at each input (target).
-        for input in 0..self.target[index].len() {
+        for input in 0..self.targets[index].len() {
             let target_target = &self.target_target[index][input];
             let pusheds = &mut self.pusheds;
             self.targets[index][input].update_iter_and(None, |time, value| {
-            // for (time, value) in self.target[index][input].drain() {
                 for &(target, ref antichain) in target_target.iter() {
                     let pusheds = &mut pusheds[target.index][target.port];
                     for summary in antichain.elements().iter() {
@@ -491,26 +429,10 @@ impl<T:Timestamp> Tracker<T> {
         }
 
         // Propagate changes at each output (source).
-        for output in 0..self.source[index].len() {
-            for (time, value) in self.source[index][output].drain() {
-                for &(target, ref antichain) in self.source_target[index][output].iter() {
-                    let pushed = &mut self.pushed[target.index][target.port];
-                    for summary in antichain.elements().iter() {
-                        if let Some(new_time) = summary.results_in(&time) {
-                            pushed.update(new_time, value);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Propagate changes at each output (source).
-        for output in 0..self.source[index].len() {
+        for output in 0..self.sources[index].len() {
             let source_target = &self.source_target[index][output];
             let pusheds = &mut self.pusheds;
             self.sources[index][output].update_iter_and(None, |time, value| {
-                // println!("update_iter_and: {:?}, ({:?}, {:?})", (index, output), time, value);
-            // for (time, value) in self.source[index][output].drain() {
                 for &(target, ref antichain) in source_target.iter() {
                     let pusheds = &mut pusheds[target.index][target.port];
                     for summary in antichain.elements().iter() {
@@ -521,16 +443,11 @@ impl<T:Timestamp> Tracker<T> {
                 }
             });
         }
-
-        for thing in self.pushed.iter_mut() { for thing in thing.iter_mut() { thing.canonicalize(); } }
-        for thing in self.pusheds.iter_mut() { for thing in thing.iter_mut() { thing.canonicalize(); } }
-
-        assert_eq!(self.pushed, self.pusheds);
     }
 
     /// Propagates all updates made to sources and targets.
     pub fn propagate_all(&mut self) {
-        for index in 0..self.target.len() {
+        for index in 0..self.targets.len() {
             self.propagate_node(index);
         }
     }
@@ -542,10 +459,6 @@ impl<T:Timestamp> Tracker<T> {
     /// consumed by some caller.
     #[inline(always)]
     pub fn pushed_mut(&mut self, node: usize) -> &mut [ChangeBatch<T>] {
-        assert_eq!(self.pushed[node], self.pusheds[node]);
-
-        for thing in self.pushed[node].iter_mut() { thing.clear(); }
-
         &mut self.pusheds[node][..]
     }
 }
