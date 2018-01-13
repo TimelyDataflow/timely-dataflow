@@ -301,11 +301,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     // contained scopes.
     fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [ChangeBatch<TOuter>]) {
 
-        // we must now finish the work of setting up the subgraph, using the external summary and
-        // external capabilities on the subgraph's inputs.
 
+        // Translate `summaries` to summaries of the subgraph's timestamp type.
         let mut new_summary = vec![vec![Antichain::new(); self.inputs]; self.outputs];
-        // First, we install the external summary as if it were child 0's internal summary.
         for output in 0..self.outputs {
             for input in 0..self.inputs {
                 for summary in summaries[output][input].elements() {
@@ -390,17 +388,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             });
         }
 
-        // we should also take this opportunity to clean out any messages in self.children[0].messages.
-        // it isn't exactly correct that we are sure that they have been acknowledged, but ... we don't
-        // have enough information in the api at the moment to be certain. we could add it, but for now
-        // we assume that a call to `push_external_progress` reflects all updates previously produced by
-        // `pull_internal_progress`.
-        for (port, messages) in self.children[0].messages.iter_mut().enumerate() {
-            for time in messages.frontier() {
-                self.pointstamp_tracker.update_target(Target { index: 0, port: port }, time.clone(), -1);
-            }
-            messages.clear();
-        }
+        // This update should reflect messages reported in `produced`, so we remove them now.
+        self.pointstamp_tracker.target(0).iter_mut().for_each(|x| x.clear());
     }
 
     /// Report changes in messages and capabilities for the subgraph and its peers.
@@ -438,13 +427,13 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for input in 0..self.inputs {
             let mut borrowed = self.input_messages[input].borrow_mut();
             for (time, delta) in borrowed.drain() {
-                // The internal count for { child: 0, port: input } corresponds to the consumed records
-                // from `input`. We do not propagate input capability information otherwise.
-                self.local_pointstamp_internal.update((0, input, time.clone()), delta);
                 // For each edge emanating from the input, indicate the existence of more records.
                 for target in &self.children[0].edges[input] {
                     self.local_pointstamp_messages.update((target.index, target.port, time.clone()), delta);
                 }
+                // The internal count for { child: 0, port: input } corresponds to the consumed records
+                // from `input`. We do not propagate input capability information otherwise.
+                self.local_pointstamp_internal.update((0, input, time), delta);
             }
         }
 
@@ -464,12 +453,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // extract the changes as consumed messages, rather than altered capabilities. We do not
         // propagate 
         for ((index, port, timestamp), delta) in self.local_pointstamp_internal.drain() {
-            if index == 0 {
-                // Update our report upwards of consumed records.
-                consumed[port].update(timestamp.outer.clone(), delta);
+            if index == 0 {     // Update our report upwards of consumed records.
+                consumed[port].update(timestamp.outer, delta);
             }
-            else {
-                // Fold non-index_0 changes into the final updates.
+            else {              // Fold non-index_0 changes into the final updates.
                 self.final_pointstamp_internal.update((index, port, timestamp), delta);
             }
         }
@@ -485,19 +472,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // Messages: de-multiplex changes first, then determine changes in consequences second.
         for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
-            // Any change that heads to an output should be reported as produced.
+            // Changes that head to an output should be reported in `produced`.
             if index == 0 { produced[input].update(time.outer.clone(), delta); }
-            self.children[index].messages[input].update_dirty(time, delta);
-        }
-        // Now propagate message updates through each filter, updating `self.pointstamps`
-        // for any changes in the lower bound of elements with non-zero count.
-        for index in 0 .. self.children.len() {
-            let pointstamp_tracker = &mut self.pointstamp_tracker;
-            for input in 0 .. self.children[index].messages.len() {
-                self.children[index].messages[input].update_iter_and(None, |time, delta| {
-                    pointstamp_tracker.update_target(Target { index: index, port: input }, time.clone(), delta);
-                });
-            }
+            self.pointstamp_tracker.update_target(Target { index: index, port: input }, time, delta);
         }
 
         // Internal: de-multiplex changes first, then determine changes in consequences second.
@@ -547,13 +524,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             active = active || child_active;
         }
 
-        // // Step 5: Inform each managed child scope of changes to their input frontiers.
-        // //
-        // // Propagated pointstamp changes may have altered the input frontier of each child.
-        // // We provide this information to each of them, handled by their wrapper.
-        // for (index, child) in self.children.iter_mut().enumerate().skip(1) {
-        // }
-
         // Step 6: Record changes in input frontiers to output ports as changes in capabilities.
         //
         // Propagated pointstamp changes arriving at an output correspond to changes in held
@@ -568,17 +538,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         debug_assert!(self.pointstamp_tracker.is_empty());
 
-        let test_active = active || self.pointstamp_tracker.tracking_anything();
-
-        // if there are outstanding messages or capabilities, we must insist on continuing to run
-        for child in &self.children {
-            active = active || child.messages.iter().any(|x| !x.is_empty());
-            active = active || child.internal.iter().any(|x| !x.is_empty());
-        }
-
-        assert_eq!(active, test_active);
-
-        active 
+        active || self.pointstamp_tracker.tracking_anything()
     }
 }
 
@@ -600,7 +560,7 @@ struct PerOperatorState<T: Timestamp> {
 
     edges: Vec<Vec<Target>>,    // edges from the outputs of the operator
 
-    messages: Vec<MutableAntichain<T>>, // outstanding input messages
+    // messages: Vec<MutableAntichain<T>>, // outstanding input messages
     internal: Vec<MutableAntichain<T>>, // output capabilities expressed by the operator
     external: Vec<MutableAntichain<T>>, // input capabilities expressed by outer scope
 
@@ -619,7 +579,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     fn add_input(&mut self) {
         self.inputs += 1;
-        self.messages.push(Default::default());
+        // self.messages.push(Default::default());
         self.external.push(Default::default());
         self.external_buffer.push(ChangeBatch::new());
         self.consumed_buffer.push(ChangeBatch::new());
@@ -648,7 +608,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             edges: Vec::new(),
             internal: Vec::new(),
-            messages: Vec::new(),
+            // messages: Vec::new(),
             external: Vec::new(),
             external_buffer: Vec::new(),
             consumed_buffer: Vec::new(),
@@ -686,7 +646,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             notify:     notify,
 
             internal: vec![Default::default(); outputs],
-            messages: vec![Default::default(); inputs],
+            // messages: vec![Default::default(); inputs],
 
             external: vec![Default::default(); inputs],
 

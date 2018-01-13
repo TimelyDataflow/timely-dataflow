@@ -360,6 +360,16 @@ impl<T:Timestamp> Tracker<T> {
         self.sources[source.index][source.port].update_dirty(time, value);
     }
 
+    /// Reference to the target mutable antichains.
+    pub fn target(&mut self, index: usize) -> &mut [MutableAntichain<T>] {
+        &mut self.targets[index]
+    }
+
+    /// Reference to the source mutable antichains.
+    pub fn source(&mut self, index: usize) -> &mut [MutableAntichain<T>] {
+        &mut self.sources[index]
+    }
+
     /// Clears the pointstamp counter.
     pub fn clear(&mut self) {
         for vec in &mut self.sources { for map in vec.iter_mut() { map.clear(); } }
