@@ -360,6 +360,16 @@ impl<T:Timestamp> Tracker<T> {
         self.sources[source.index][source.port].update_dirty(time, value);
     }
 
+    /// Reference to the target mutable antichains.
+    pub fn target(&mut self, index: usize) -> &mut [MutableAntichain<T>] {
+        &mut self.targets[index]
+    }
+
+    /// Reference to the source mutable antichains.
+    pub fn source(&mut self, index: usize) -> &mut [MutableAntichain<T>] {
+        &mut self.sources[index]
+    }
+
     /// Clears the pointstamp counter.
     pub fn clear(&mut self) {
         for vec in &mut self.sources { for map in vec.iter_mut() { map.clear(); } }
@@ -371,6 +381,12 @@ impl<T:Timestamp> Tracker<T> {
     pub fn is_empty(&mut self) -> bool {
         self.pusheds.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty()))
     } 
+
+    /// Returns true if any source or target is non-empty.
+    pub fn tracking_anything(&mut self) -> bool {
+        self.sources.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty())) ||
+        self.targets.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty()))            
+    }
 
     /// Allocate a new `Tracker` using the shape from `summaries`.
     pub fn allocate_from(summary: Summary<T>) -> Self {
