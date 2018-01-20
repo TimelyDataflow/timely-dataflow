@@ -517,7 +517,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             //       path local progress updates, making them visible immediately, which has other 
             //       beneficial implications (e.g. we can propagate updates as we move through operators,
             //       rather than only once before all operators).
-            child.push_pointstamps(self.pointstamp_tracker.pushed_mut(index));
+            // child.push_pointstamps(self.pointstamp_tracker.pushed_mut(index));
 
             // The child should either fill a "yet to be exchanged" buffer of progress updates, or an
             // "already exchanged" buffer, depending on whether it indicates that its results have been
@@ -532,8 +532,17 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             // Activate the child and harvest its progress updates. Here we pass along a reference
             // to the source in the progress tracker so that the child can determine if it holds
             // any capabilities; if not, it is a candidate for being shut down.
-            let child_active = child.pull_pointstamps(
-                &self.pointstamp_tracker.source(index), 
+            // let child_active = child.pull_pointstamps(
+            //     &self.pointstamp_tracker.source(index), 
+            //     message_buffer, 
+            //     internal_buffer);
+
+            let (targets, sources, pushed) = self.pointstamp_tracker.node_state(index);
+
+            let child_active = child.exchange_progress(
+                pushed,
+                targets,
+                sources, 
                 message_buffer, 
                 internal_buffer);
 
@@ -571,6 +580,8 @@ struct PerOperatorState<T: Timestamp> {
 
     inputs: usize,      // number of inputs to the operator
     outputs: usize,     // number of outputs from the operator
+
+    recently_active: bool,
 
     operator: Option<Box<Operate<T>>>,
 
@@ -617,6 +628,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             inputs:     0,
             outputs:    0,
 
+            recently_active: true,
             notify:     true,
 
             edges: Vec::new(),
@@ -655,6 +667,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             outputs,
             edges:              vec![vec![]; outputs],
 
+            recently_active:    true,
             notify,
 
             external:           vec![Default::default(); inputs],
@@ -674,7 +687,7 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     pub fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<T::Summary>>>, capabilities: &mut [ChangeBatch<T>]) {
 
-        // Titrate initial capabilities through `MutableAntichain`, producing only the discrete
+        // Filter initial capabilities through `MutableAntichain`, producing only the discrete
         // changes in `self.external_buffer`
         debug_assert_eq!(self.external_buffer.len(), capabilities.len());
         for input in 0 .. self.inputs {
@@ -697,6 +710,191 @@ impl<T: Timestamp> PerOperatorState<T> {
         if let Some(ref mut scope) = self.operator {
             scope.set_external_summary(summaries, &mut self.external_buffer);   
         }
+    }
+
+    pub fn exchange_progress(
+        &mut self,
+        external_progress: &mut [ChangeBatch<T>],       // changes to external capabilities on operator inputs. 
+        _outstanding_messages: &[MutableAntichain<T>],   // the reported outstanding messages to the operator.
+        internal_capabilities: &[MutableAntichain<T>],  // the reported internal capabilities of the operator.
+        pointstamp_messages: &mut ChangeBatch<(usize, usize, T)>,
+        pointstamp_internal: &mut ChangeBatch<(usize, usize, T)>,
+    ) -> bool {
+
+        let active = if let Some(ref mut operator) = self.operator {
+
+            // We must filter the changes through a `MutableAntichain` to determine discrete changes in the
+            // input capabilities, given all pre-existing updates accepted and communicated.
+            for (input, updates) in external_progress.iter_mut().enumerate() {
+                let buffer = &mut self.external_buffer[input];
+                self.external[input].update_iter_and(updates.drain(), |time, val| { 
+                    buffer.update(time.clone(), val); 
+                });
+            }
+
+            // At this point we can assemble several signals to determine if we can possible not schedule
+            // the operator. At the moment we take what I hope is a conservative approach in which any of
+            // the following will require an operator to be rescheduled:
+            // 
+            //   1. There are any post-filter progress changes to communicate, and self.notify is true.
+            //   2. The operator performed progress updates in its last execution, or reported activity.
+            //   3. There exist outstanding input messages on any input.
+            //   4. There exist held internal capabilities on any output.
+            //
+            // The first reason is important because any operator could respond arbitrarily to progress 
+            // updates, with the most obvious example being the `probe` operator. Not invoking this call
+            // on a probe operator can currently spin-block the computation, which is clearly a disaster.
+            //
+            // The second reason is due to the implicit communication that calling `push_external_progress`
+            // indicates a receipt of sent messages. Even with no change in capabilities, if they are empty
+            // and the messages are now receive this can unblock an operator. Furthermore, if an operator
+            // reports that it is active despite the absence of messages and capabilities, then we must
+            // reschedule it due to a lack of insight as to whether it can run or not (consider: subgraphs
+            // with internal messages or capabilities).
+            //
+            // The third reason is that the operator could plausibly receive a input data. If there are no
+            // outstanding input messages, then while the operator *could* receive input data, the progress
+            // information announcing the message's existence hasn't arrived yet, but soon will. It is safe
+            // to await this progress information.
+            //
+            // The fourth reason is that operators holding capabilties can decide to exert or drop them for
+            // any reason, perhaps just based on the number of times they have been called. In the absence
+            // of any restriction on what would unblock them, we need to continually poll them.
+
+            let any_progress_updates = self.external_buffer.iter_mut().any(|buffer| !buffer.is_empty()) && self.notify;
+            let _was_recently_active = self.recently_active;
+            let _outstanding_messages = _outstanding_messages.iter().any(|chain| !chain.is_empty());
+            let _held_capabilities = internal_capabilities.iter().any(|chain| !chain.is_empty());
+
+            if any_progress_updates {
+                let id = self.id;
+                self.logging.when_enabled(|l| {
+                    l.log(::logging::TimelyEvent::PushProgress(::logging::PushProgressEvent {
+                        op_id: id,
+                    }));
+                });
+            }
+
+            operator.push_external_progress(&mut self.external_buffer);
+
+            // Possibly logic error if operator does not read its changes.
+            if self.external_buffer.iter_mut().any(|x| !x.is_empty()) {
+                println!("External progress updates not consumed by {:?}", self.name);
+            }
+            debug_assert!(!self.external_buffer.iter_mut().any(|x| !x.is_empty()));
+            debug_assert!(external_progress.iter_mut().all(|x| x.is_empty()));
+
+            let self_id = self.id;
+            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Schedule(::logging::ScheduleEvent {
+                id: self_id, start_stop: ::logging::StartStop::Start
+            })));
+
+            debug_assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
+            debug_assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
+            debug_assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
+
+            let internal_activity =
+                operator.pull_internal_progress(
+                    &mut self.consumed_buffer[..],
+                    &mut self.internal_buffer[..],
+                    &mut self.produced_buffer[..],
+                );
+
+            // Scan reported changes, propagate as appropriate.
+            let mut did_work = false;
+            for output in 0 .. self.outputs {
+                for (time, delta) in self.produced_buffer[output].drain() {
+                    for target in &self.edges[output] {
+                        did_work = true;
+                        pointstamp_messages.update((target.index, target.port, time.clone()), delta);
+                    }
+                }
+
+                for (time, delta) in self.internal_buffer[output].drain() {
+                    did_work = true;
+                    pointstamp_internal.update((self.index, output, time.clone()), delta);
+                }
+            }
+            for input in 0 .. self.inputs {
+                for (time, delta) in self.consumed_buffer[input].drain() {
+                    did_work = true;
+                    pointstamp_messages.update((self.index, input, time), -delta);
+                }
+            }
+
+            // The operator was recently active if it did anything, or reports activity.
+            self.recently_active = did_work || internal_activity;
+
+            let id = self.id;
+            self.logging.when_enabled(|l|
+                l.log(::logging::TimelyEvent::Schedule(::logging::ScheduleEvent {
+                    id,
+                    start_stop: ::logging::StartStop::Stop { activity: did_work }
+                })));
+
+            internal_activity
+        }
+        else {
+
+            // If the operator is closed and we are reporting progress at it, something has surely gone wrong.
+            if !external_progress.iter_mut().all(|x| x.is_empty()) {
+                println!("Operator prematurely shut down: {}", self.name);
+                println!("  {:?}", self.notify);
+                println!("  {:?}", external_progress);
+            }
+            assert!(external_progress.iter_mut().all(|x| x.is_empty()));
+
+            // A closed operator shouldn't keep anything open.
+            false
+        };
+
+        // DEBUG: test validity of updates.
+        // TODO: This test is overly pessimistic for current implementations, which may report they acquire 
+        // capabilities based on the receipt of messages they cannot express (e.g. messages internal to a 
+        // subgraph). This suggests a weakness in the progress tracking protocol, that it is hard to validate
+        // locally, which we could aim to improve.
+        // #[cfg(debug_assertions)]
+        // {
+        //     // 1. each increment to self.internal_buffer needs to correspond to a positive self.consumed_buffer
+        //     for index in 0 .. self.internal_buffer.len() {
+        //         for change in self.internal_buffer[index].iter() {
+        //             if change.1 > 0 {
+        //                 let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
+        //                 let internal = self.internal_capabilities[index].less_equal(&change.0);
+        //                 if !consumed && !internal {
+        //                     panic!("Progress error; internal {:?}: {:?}", self.name, change);
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     // 2. each produced message must correspond to a held capability or consumed message
+        //     for index in 0 .. self.produced_buffer.len() {
+        //         for change in self.produced_buffer[index].iter() {
+        //             if change.1 > 0 {
+        //                 let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
+        //                 let internal = self.internal_capabilities[index].less_equal(&change.0);
+        //                 if !consumed && !internal {
+        //                     panic!("Progress error; produced {:?}: {:?}", self.name, change);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+        // DEBUG: end validity test.
+
+        // We can shut down the operator if several conditions are met.
+        // 
+        // We look for operators that (i) still exist, (ii) report no activity, (iii) will no longer
+        // receive incoming messages, and (iv) hold no capabilities.
+        if self.operator.is_some() &&
+           !active &&
+           self.notify && self.external.iter().all(|x| x.is_empty()) &&
+           internal_capabilities.iter().all(|x| x.is_empty()) {
+               self.operator = None;
+               self.name = format!("{}(tombstone)", self.name);
+           }
+
+        active
     }
 
     pub fn push_pointstamps(&mut self, external_progress: &mut [ChangeBatch<T>]) {

@@ -360,6 +360,12 @@ impl<T:Timestamp> Tracker<T> {
         self.sources[source.index][source.port].update_dirty(time, value);
     }
 
+    /// Returns references to per-node state describing input and output frontiers,
+    /// and any pending updates to propagated consequences.
+    pub fn node_state(&mut self, index: usize) -> (&[MutableAntichain<T>], &[MutableAntichain<T>], &mut [ChangeBatch<T>]) {
+        (&self.targets[index], &self.sources[index], &mut self.pusheds[index][..])
+    }
+
     /// Reference to the target mutable antichains.
     pub fn target(&mut self, index: usize) -> &mut [MutableAntichain<T>] {
         &mut self.targets[index]
