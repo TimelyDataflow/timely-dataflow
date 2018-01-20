@@ -330,12 +330,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries.clone());
 
-        // // Install the supplied external capabilities as child 0's internal capabilities.
-        // for input in 0..self.inputs {
-        //     let iterator = frontier[input].drain().map(|(time, diff)| (Product::new(time, Default::default()), diff));
-        //     self.children[0].internal[input].update_iter(iterator);
-        // }
-
         // Initialize all expressed capablities as pointstamps, for propagation.
         for child in self.children.iter_mut() {
             for output in 0 .. child.outputs {
@@ -346,13 +340,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
                         value,                        
                     )
                 }
-                // for time in child.internal[output].frontier().iter() {
-                //     self.pointstamp_tracker.update_source(
-                //         Source { index: child.index, port: output },
-                //         time.clone(),
-                //         1
-                //     );
-                // }
             }
         }
 
