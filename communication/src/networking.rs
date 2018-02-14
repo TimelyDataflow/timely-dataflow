@@ -86,11 +86,7 @@ impl<R: Read> BinaryReceiver<R> {
             channels: Receiver<((usize,
             usize),
             Sender<Vec<u8>>)>,
-            process: usize,
-            index: usize,
-            threads: usize,
             log_sender: ::logging::CommsLogger) -> BinaryReceiver<R> {
-        eprintln!("process {}, index {}, threads {}", process, index, threads);
         BinaryReceiver {
             reader:     reader,
             buffer:     vec![0u8; 1 << 20],
@@ -154,7 +150,7 @@ struct BinarySender<W: Write> {
 }
 
 impl<W: Write> BinarySender<W> {
-    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, _process: usize, _index: usize, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
+    fn new(writer: W, sources: Receiver<(MessageHeader, Vec<u8>)>, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
         BinarySender {
             writer:     writer,
             sources:    sources,
@@ -272,8 +268,6 @@ pub fn initialize_networking(
                                           });
                                           let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream),
                                                                              sender_channels_r,
-                                                                             my_index,
-                                                                             index,
                                                                              log_sender);
                                           sender.send_loop()
                                       }).unwrap();
@@ -291,9 +285,6 @@ pub fn initialize_networking(
                                           });
                                           let mut recver = BinaryReceiver::new(stream,
                                                                                reader_channels_r,
-                                                                               my_index,
-                                                                               index,
-                                                                               threads,
                                                                                log_sender);
                                           recver.recv_loop()
                                       }).unwrap();

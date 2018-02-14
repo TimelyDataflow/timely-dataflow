@@ -19,12 +19,15 @@
 //! // configure for two threads, just one process.
 //! let config = timely_communication::Configuration::Process(2);
 //!
+//! // create a source of inactive loggers.
+//! let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
+//!
 //! // initializes communication, spawns workers
-//! let guards = timely_communication::initialize(config, |mut allocator| {
+//! let guards = timely_communication::initialize(config, logger, |mut allocator| {
 //!     println!("worker {} started", allocator.index());
 //!
 //!     // allocates pair of senders list and one receiver.
-//!     let (mut senders, mut receiver) = allocator.allocate();
+//!     let (mut senders, mut receiver, _) = allocator.allocate();
 //!
 //!     // send typed data along each channel
 //!     senders[0].send(format!("hello, {}", 0));
