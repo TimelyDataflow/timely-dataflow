@@ -18,7 +18,7 @@ license = "MIT"
 [dependencies]
 abomonation = "0.5"
 abomonation_derive = "0.3"
-timely_communication = { version = "0.5", path = "./communication" }
+timely_communication = "0.5"
 byteorder="0.4.2"
 time="0.1.34"
 
