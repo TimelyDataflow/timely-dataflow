@@ -8,7 +8,7 @@ use logging::LoggerConfig;
 ///
 /// The `example` method takes a closure on a `Scope` which it executes to initialize and run a
 /// timely dataflow computation on a single thread. This method is intended for use in examples,
-/// rather than programs that may need to run across multiple workers. 
+/// rather than programs that may need to run across multiple workers.
 ///
 /// The `example` method returns whatever the single worker returns from its closure.
 /// This is often nothing, but the worker can return something about the data it saw in order to
@@ -52,18 +52,18 @@ where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
     let logging_config: LoggerConfig = Default::default();
     let timely_logging = logging_config.timely_logging.clone();
-    let guards = initialize(Configuration::Thread, move |allocator| {
+    let guards = initialize(Configuration::Thread, logging_config.communication_logging, move |allocator| {
         let mut root = Root::new(allocator, timely_logging.clone());
         let result = root.dataflow(|x| func(x));
         while root.step() { }
         result
-    }, logging_config.communication_logging);
+    });
 
-    guards.unwrap() // assert the computation started correctly
+    guards.expect("Example computation did not start correctly!")
           .join()   // wait for the worker to finish
           .pop()    // grab the known-to-exist result
-          .unwrap() // assert that the result exists
-          .unwrap() // crack open the result to get a T
+          .expect("Result does not exist!")
+          .expect("Unable to retrieve result!")
 }
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
@@ -90,7 +90,7 @@ where T: Send+'static,
 /// ```
 ///
 /// The following example demonstrates how one can extract data from a multi-worker execution.
-/// In a multi-process setting, each process will only receive those records present at workers 
+/// In a multi-process setting, each process will only receive those records present at workers
 /// in the process.
 ///
 /// ```rust
@@ -115,7 +115,7 @@ where T: Send+'static,
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
-pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String> 
+pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String>
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     // let logging_config = ::logging::blackhole();
@@ -143,16 +143,16 @@ where T:Send+'static,
 ///     })
 /// }).unwrap();
 /// ```
-pub fn execute_logging<T, F>(config: Configuration, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String> 
+pub fn execute_logging<T, F>(config: Configuration, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String>
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     let timely_logging = logging_config.timely_logging.clone();
-    initialize(config, move |allocator| {
+    initialize(config, logging_config.communication_logging.clone(), move |allocator| {
         let mut root = Root::new(allocator, timely_logging.clone());
         let result = func(&mut root);
         while root.step() { }
         result
-    }, logging_config.communication_logging.clone())
+    })
 }
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
@@ -203,8 +203,8 @@ where T:Send+'static,
 /// host2:port
 /// host3:port
 /// ```
-pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String> 
-    where I: Iterator<Item=String>, 
+pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String>
+    where I: Iterator<Item=String>,
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
     execute_from_args_logging(iter, Default::default(), func)
@@ -231,8 +231,8 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 ///     })
 /// }).unwrap();
 /// ```
-pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String> 
-    where I: Iterator<Item=String>, 
+pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String>
+    where I: Iterator<Item=String>,
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
     execute_logging(try!(Configuration::from_args(iter)), logging_config, func)

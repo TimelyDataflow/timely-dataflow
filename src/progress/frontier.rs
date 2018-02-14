@@ -130,6 +130,12 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
         self.frontier_temp.clear();
     }
 
+    /// This method deletes the contents. Unlike `clear` it records doing so.
+    pub fn empty(&mut self) {
+        for index in 0 .. self.updates.len() { self.updates[index].1 = 0; }
+        self.dirty = self.updates.len();
+    }
+
     /// Reveals the minimal elements with positive count.
     ///
     /// #Examples

@@ -122,6 +122,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// }
     /// assert!(!batch.is_empty());
     ///```
+    #[inline]
     pub fn iter(&mut self) -> ::std::slice::Iter<(T, i64)> { 
         self.compact();
         self.updates.iter() 
@@ -145,6 +146,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// }
     /// assert!(batch.is_empty());
     ///```
+    #[inline]
     pub fn drain(&mut self) -> ::std::vec::Drain<(T, i64)> {
         self.compact();
         self.clean = 0;
@@ -162,6 +164,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// batch.clear();
     /// assert!(batch.is_empty());
     ///```
+    #[inline]
     pub fn clear(&mut self) { 
         self.updates.clear(); 
         self.clean = 0; 
@@ -183,6 +186,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// batch.update(17, -1);
     /// assert!(batch.is_empty());
     ///```
+    #[inline]
     pub fn is_empty(&mut self) -> bool {
         if self.clean > self.updates.len() / 2 {
             false
@@ -218,6 +222,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// assert!(batch1.is_empty());
     /// assert!(!batch2.is_empty());
     ///```
+    #[inline]
     pub fn drain_into(&mut self, other: &mut ChangeBatch<T>) where T: Clone {
         if other.updates.is_empty() {
             ::std::mem::swap(self, other);

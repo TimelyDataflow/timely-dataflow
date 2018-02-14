@@ -1,7 +1,7 @@
 [package]
 
 name = "timely"
-version = "0.3.0"
+version = "0.5.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 description = "A low-latency data-parallel dataflow system in Rust"
@@ -15,18 +15,15 @@ license = "MIT"
 
 #build = "booktests.rs"
 
-[features]
-default=[]
-
 [dependencies]
-abomonation = { git = "https://github.com/frankmcsherry/abomonation" }
-abomonation_derive = { git = "https://github.com/mystor/abomonation_derive.git" }
-timely_sort="0.1.6"
-timely_communication = { version = "0.1.8", path = "./communication" }
+abomonation = "0.5"
+abomonation_derive = "0.3"
+timely_communication = "0.5"
 byteorder="0.4.2"
 time="0.1.34"
 
 [dev-dependencies]
+timely_sort="0.1.6"
 getopts="0.2.14"
 rand="0.3.13"
 #skeptic = "0.12"

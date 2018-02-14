@@ -89,8 +89,8 @@ fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup
 
 /// Initializes communication and executes a distributed computation.
 ///
-/// This method allocates an `allocator::Generic` for each thread, spawns local worker threads, 
-/// and invokes the supplied function with the allocator. 
+/// This method allocates an `allocator::Generic` for each thread, spawns local worker threads,
+/// and invokes the supplied function with the allocator.
 /// The method returns a `WorkerGuards<T>` which can be `join`ed to retrieve the return values
 /// (or errors) of the workers.
 ///
@@ -100,12 +100,15 @@ fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup
 /// // configure for two threads, just one process.
 /// let config = timely_communication::Configuration::Process(2);
 ///
+/// // create a source of inactive loggers.
+/// let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
+///
 /// // initializes communication, spawns workers
-/// let guards = timely_communication::initialize(config, |mut allocator| {
+/// let guards = timely_communication::initialize(config, logger, |mut allocator| {
 ///     println!("worker {} started", allocator.index());
 ///
 ///     // allocates pair of senders list and one receiver.
-///     let (mut senders, mut receiver) = allocator.allocate();
+///     let (mut senders, mut receiver, _) = allocator.allocate();
 ///
 ///     // send typed data along each channel
 ///     senders[0].send(format!("hello, {}", 0));
@@ -146,7 +149,11 @@ fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup
 /// result: Ok(0)
 /// result: Ok(1)
 /// ```
-pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(config: Configuration, func: F, log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<WorkerGuards<T>,String> {
+pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
+    config: Configuration,
+    log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>,
+    func: F,
+) -> Result<WorkerGuards<T>,String> {
 
     let allocators = try!(create_allocators(config, log_sender));
     let logic = Arc::new(func);
