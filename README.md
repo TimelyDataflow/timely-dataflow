@@ -47,7 +47,7 @@ seen: 8
 seen: 9
 ```
 
-This is a very simple example (it's in the name), which only just suggests at how you might write dataflow programs. 
+This is a very simple example (it's in the name), which only just suggests at how you might write dataflow programs.
 
 ## Doing more things
 
@@ -64,7 +64,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         // create a new input, output probe.
-        let index = worker.index();        
+        let index = worker.index();
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
 
@@ -90,7 +90,7 @@ fn main() {
 }
 ```
 
-This example does a fair bit more, to show off more of what timely can do for you. 
+This example does a fair bit more, to show off more of what timely can do for you.
 
 We first build a dataflow graph creating an input stream (with `new_input`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that each worker can see when the all of a given round of data has been processed.
 
@@ -150,10 +150,27 @@ There are currently a few options for writing timely dataflow programs. Ideally 
 
 There are also a few applications built on timely dataflow, including [a streaming worst-case optimal join implementation](https://github.com/frankmcsherry/dataflow_join) and a [PageRank](https://github.com/frankmcsherry/pagerank) implementation, both of which should provide helpful examples of writing timely dataflow programs.
 
+# Contributing
 
-# To-do list
+If you are interested in working with or helping out with timely dataflow, great!
 
-There are several outstanding bits of work, each with the potential to sort out various performance issues.
+There are a few classes of work that are helpful for us, and may be interesting for you. There are a few broad categories, and then an ever-shifting pile of issues of various complexity.
+
+* If you would like to write programs using timely dataflow, this is very interesting for us. Ideally timely dataflow is meant to be an ergonomic approach to a non-trivial class of dataflow computations. As people use it and report back on their experiences, we learn about the classes of bugs they find, the ergonomic pain points, and other things we didn't even imagine ahead of time. Learning about timely dataflow, trying to use it, and reporting back is helpful!
+
+* If you like writing little example programs or documentation tests, there are many places throughout timely dataflow where the examples are relatively sparse, or do not actually test the demonstrated functionality. These can often be easy to pick up, flesh out, and push without a large up-front obligation. It is probably also a great way to get one of us to explain something in detail to you, if that is what you are looking for.
+
+* If you like the idea of getting your hands dirty in timely dataflow, the [issue tracker](https://github.com/frankmcsherry/timely-dataflow/issues) has a variety of issues that touch on different levels of the stack. For example:
+
+    * Timely currently [does more copies of data than it must](https://github.com/frankmcsherry/timely-dataflow/issues/111), in the interest of appeasing Rust's ownership discipline most directly. Several of these copies could be elided with some more care in the resource management (for example, using shared regions of one `Vec<u8>` in the way that the [bytes crate](https://crates.io/crates/bytes) does). Not everything is obvious here, so there is the chance for a bit of design work too.
+
+    * We recently landed a bunch of logging changes, but there is still [a list of nice to have features](https://github.com/frankmcsherry/timely-dataflow/issues/114) that haven't made it yet. If you are interested in teasing out how timely works in part by poking around at the infrastructure that records what it does, this could be a good fit! It has the added benefit that the logs are timely streams themselves, so you can even do some log processing on timely. Whoa...
+
+    * There is an open issue on [integrating Rust ownership idioms into timely dataflow](https://github.com/frankmcsherry/timely-dataflow/issues/77). Right now, timely streams are of cloneable objects, and when a stream is re-used, items will be cloned. We could make that more explicit, and require calling a `.cloned()` method to get owned objects in the same way that iterators require it. At the same time, using a reference to a stream without taking ownership should get you the chance to look at the records that go past without taking ownership (and without requiring a clone, as is currently done). This is often plenty for exchange channels which may need to serialize the data and can't take much advantage of ownership anyhow.
+
+    * There is a bunch of interesting work in scheduling timely dataflow operators, where when given the chance to schedule many operators, we might think for a moment and realize that several of them have to work to do and can be skipped. Better, we might maintain the list of operators with anything to do, and do nothing for those without work to do.
+
+There are also some larger themes of work, whose solutions are not immediately obvious and each with the potential to sort out various performance issues:
 
 ## Rate-controlling output
 
@@ -169,17 +186,12 @@ The timely communication layer currently discards most buffers it moves through 
 
 The communication layer is based on a type `Content<T>` which can be backed by typed or binary data. Consequently, it requires that the type it supports be serializable, because it needs to have logic for the case that the data is binary, even if this case is not used. It seems like the `Stream` type should be extendable to be parametric in the type of storage used for the data, so that we can express the fact that some types are not serializable and that this is ok.
 
-**NOTE**: Differential dataflow demonstrates how to do this at the user level in its `operators/arrange.rs`, if somewhat sketchily. 
+**NOTE**: Differential dataflow demonstrates how to do this at the user level in its `operators/arrange.rs`, if somewhat sketchily (with a wrapper that lies about the properties of the type it transports).
 
 This would allow us to safely pass Rc<T> types around, as long as we use the `Pipeline` parallelization contract.
 
 ## Coarse- vs fine-grained timestamps
 
-The progress tracking machinery involves some non-trivial overhead per timestamp. This means that using very fine-grained timestamps, for example the nanosecond at which a record is processed, swamps the progress tracking logic. By contrast, the logging infrastructure demotes nanoseconds to data, part of the logged payload, and approximates batches of events with the largest (should probably be the smallest) timestamp in the batch. This is less accurate from a progress tracking point of view, but more performant. It may be possible to generalize this so that users can write programs without thinking about granularity of timestamp, and the system automatically coarsens when possible (essentially boxcar-ing times).
+The progress tracking machinery involves some non-trivial overhead per timestamp. This means that using very fine-grained timestamps, for example the nanosecond at which a record is processed, can swamp the progress tracking logic. By contrast, the logging infrastructure demotes nanoseconds to data, part of the logged payload, and approximates batches of events with the smallest timestamp in the batch. This is less accurate from a progress tracking point of view, but more performant. It may be possible to generalize this so that users can write programs without thinking about granularity of timestamp, and the system automatically coarsens when possible (essentially boxcar-ing times).
 
 **NOTE**: Differential dataflow demonstrates how to do this at the user level in its `collection.rs`. The lack of system support means that the user ends up indicating the granularity, which isn't horrible but could plausibly be improved. It may also be that leaving the user with control of the granularity leaves them with more control over the latency/throughput trade-off, which could be a good thing for the system to do.
-
-<!--  ## Capability-based operators
-
-At the moment there are somewhat delicate contracts with how operators should work: they should not hold on to timestamps not consumed in their inputs, and they should not produce messages for timestamps they have not held on to. This could be enforced by having the system hand out timestamps as capabilities, and attempting to make them unforgeable (in safe code, at least) to prevent accidental anti-patterns where timestamps just get stashed as keys it a `HashMap` and then used when the map is drained. As long as a timestamp is unaccounted for, literally there is an instance of it the systems hasn't had returned to it, the time is still considered open. -->
-
