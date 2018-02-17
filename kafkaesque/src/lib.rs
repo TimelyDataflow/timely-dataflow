@@ -105,13 +105,12 @@ impl<T, D> EventConsumer<T, D> {
 
 impl<T: Abomonation, D: Abomonation> EventIterator<T, D> for EventConsumer<T, D> {
     fn next(&mut self) -> Option<&Event<T, D>> {
-        let buffer = &mut self.buffer;
         if let Some(result) = self.consumer.poll(0) {
             match result {
                 Ok(message) =>  {
-                    buffer.clear();
-                    buffer.extend_from_slice(message.payload().unwrap());
-                    Some(unsafe { ::abomonation::decode::<Event<T,D>>(&mut buffer[..]).unwrap().0 })
+                    self.buffer.clear();
+                    self.buffer.extend_from_slice(message.payload().unwrap());
+                    Some(unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buffer[..]).unwrap().0 })
                 },
                 Err(err) => {
                     println!("KafkaConsumer error: {:?}", err);
