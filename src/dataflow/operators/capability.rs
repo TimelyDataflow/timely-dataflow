@@ -2,22 +2,22 @@
 //!
 //! Timely dataflow operators are only able to send data if they possess a "capability",
 //! a system-created object which warns the runtime that the operator may still produce
-//! output records. 
-//! 
+//! output records.
+//!
 //! The timely dataflow runtime creates a capability and provides it to an operator whenever
 //! the operator receives input data. The capabilities allow the operator to respond to the
 //! received data, immediately or in the future, for as long as the capability is held.
 //!
 //! Timely dataflow's progress tracking infrastructure communicates the number of outstanding
-//! capabilities across all workers. 
-//! Each operator may hold on to its capabilities, and may clone, advance, and drop them. 
+//! capabilities across all workers.
+//! Each operator may hold on to its capabilities, and may clone, advance, and drop them.
 //! Each of these actions informs the timely dataflow runtime of changes to the number of outstanding
-//! capabilities, so that the runtime can notice when the count for some capability reaches zero. 
+//! capabilities, so that the runtime can notice when the count for some capability reaches zero.
 //! While an operator can hold capabilities indefinitely, and create as many new copies of them
-//! as it would like, the progress tracking infrastructure will not move forward until the 
+//! as it would like, the progress tracking infrastructure will not move forward until the
 //! operators eventually release their capabilities.
 //!
-//! Note that these capabilities currently lack the property of "transferability": 
+//! Note that these capabilities currently lack the property of "transferability":
 //! An operator should not hand its capabilities to some other operator. In the future, we should
 //! probably bind capabilities more strongly to a specific operator and output.
 
@@ -30,15 +30,25 @@ use order::PartialOrder;
 use progress::Timestamp;
 use progress::ChangeBatch;
 
+/// An internal trait expressing the capability to send messages with a given timestamp.
+pub trait CapabilityTrait<T: Timestamp> {
+    /// The timestamp associated with the capability.
+    fn time(&self) -> &T;
+}
+
 /// The capability to send data with a certain timestamp on a dataflow edge.
 ///
 /// Capabilities are used by timely dataflow's progress tracking machinery to restrict and track
 /// when user code retains the ability to send messages on dataflow edges. All capabilities are
-/// constructed by the system, and should eventually be dropped by the user. Failure to drop 
+/// constructed by the system, and should eventually be dropped by the user. Failure to drop
 /// a capability (for whatever reason) will cause timely dataflow's progress tracking to stall.
 pub struct Capability<T: Timestamp> {
     time: T,
     internal: Rc<RefCell<ChangeBatch<T>>>,
+}
+
+impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
+    fn time(&self) -> &T { &self.time }
 }
 
 impl<T: Timestamp> Capability<T> {
@@ -134,6 +144,24 @@ impl<T: Timestamp> ::std::hash::Hash for Capability<T> {
         self.time.hash(state);
     }
 }
+
+
+pub struct CapabilityRef<'capability, T: Timestamp+'capability> {
+    time: &'capability T,
+    internal: Rc<RefCell<ChangeBatch<T>>>,
+}
+
+impl<'capability, T: Timestamp+'capability> CapabilityTrait<T> for CapabilityRef<'capability, T> {
+    fn time(&self) -> &T { self.time }
+}
+
+impl<'capability, T: Timestamp+'capability> CapabilityRef<'capability, T> {
+    /// Transform to an owned capability.
+    pub fn retain(self) -> Capability<T> {
+        mint(self.time.clone(), self.internal)
+    }
+}
+
 
 /// A set of capabilities, for possibly incomparable times.
 pub struct CapabilitySet<T: Timestamp> {

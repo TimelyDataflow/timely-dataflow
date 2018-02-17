@@ -1,6 +1,6 @@
 //! Handles to an operator's input and output streams.
 //!
-//! These handles are used by the generic operator interfaces to allow user closures to interact as 
+//! These handles are used by the generic operator interfaces to allow user closures to interact as
 //! the operator would with its input and output streams.
 
 use std::rc::Rc;
@@ -15,7 +15,7 @@ use dataflow::channels::Content;
 use timely_communication::{Push, Pull};
 use logging::Logger;
 
-use dataflow::operators::Capability;
+use dataflow::operators::{Capability, CapabilityTrait};
 use dataflow::operators::capability::mint as mint_capability;
 
 /// Handle to an operator's input stream.
@@ -195,8 +195,8 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>> OutputHandle<'a, T, D, P> {
     ///            });
     /// });
     /// ```
-    pub fn session<'b>(&'b mut self, cap: &'b Capability<T>) -> Session<'b, T, D, PushCounter<T, D, P>> where 'a: 'b {
-        self.push_buffer.session(cap)
+    pub fn session<'b, C: CapabilityTrait<T>>(&'b mut self, cap: &'b C) -> Session<'b, T, D, PushCounter<T, D, P>> where 'a: 'b {
+        self.push_buffer.session(cap.time())
     }
 }
 
