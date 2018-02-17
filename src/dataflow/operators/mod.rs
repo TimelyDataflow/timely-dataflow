@@ -55,5 +55,4 @@ pub mod count;
 
 // keep "mint" module-private
 mod capability;
-pub use self::capability::{Capability, CapabilitySet};
-use self::capability::CapabilityTrait;
+pub use self::capability::{Capability, CapabilityRef, CapabilitySet};

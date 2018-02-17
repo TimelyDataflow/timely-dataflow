@@ -63,7 +63,7 @@ fn main() {
 
                     // receive edges, start to sort them
                     input1.for_each(|time, data| {
-                        notify.notify_at(time);
+                        notify.notify_at(time.retain());
                         edge_list.push(data.replace_with(Vec::new()));
                     });
 
@@ -71,7 +71,7 @@ fn main() {
                     input2.for_each(|time, data| {
                         node_lists.entry(time.time().clone())
                                   .or_insert_with(|| {
-                                      notify.notify_at(time.clone());
+                                      notify.notify_at(time.retain());
                                       Vec::new()
                                   })
                                   .push(data.replace_with(Vec::new()));

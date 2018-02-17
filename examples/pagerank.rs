@@ -34,7 +34,7 @@ fn main() {
 
             // bring edges and ranks together!
             let changes = edge_stream.binary_frontier(
-                &rank_stream, 
+                &rank_stream,
                 Exchange::new(|x: &((usize, usize), i64)| (x.0).0 as u64),
                 Exchange::new(|x: &(usize, i64)| x.0 as u64),
                 "PageRank",
@@ -51,26 +51,26 @@ fn main() {
                     let mut delta = Vec::new();
 
                     let timer = ::std::time::Instant::now();
-                    
+
                     move |input1, input2, output| {
 
                         // hold on to edge changes until it is time.
                         input1.for_each(|time, data| {
-                            edge_stash.entry(time).or_insert(Vec::new()).extend(data.drain(..));
+                            edge_stash.entry(time.retain()).or_insert(Vec::new()).extend(data.drain(..));
                         });
 
                         // hold on to rank changes until it is time.
                         input2.for_each(|time, data| {
-                            rank_stash.entry(time).or_insert(Vec::new()).extend(data.drain(..));
+                            rank_stash.entry(time.retain()).or_insert(Vec::new()).extend(data.drain(..));
                         });
 
                         let frontiers = &[input1.frontier(), input2.frontier()];
 
                         for (time, edge_changes) in edge_stash.iter_mut() {
                             if frontiers.iter().all(|f| !f.less_equal(time)) {
-                                
+
                                 let mut session = output.session(time);
-            
+
                                 compact(edge_changes);
 
                                 for ((src, dst), diff) in edge_changes.drain(..) {
@@ -104,7 +104,7 @@ fn main() {
 
                         for (time, rank_changes) in rank_stash.iter_mut() {
                             if frontiers.iter().all(|f| !f.less_equal(time)) {
-                                
+
                                 let mut session = output.session(time);
 
                                 compact(rank_changes);
@@ -150,7 +150,7 @@ fn main() {
                         }
 
                         rank_stash.retain(|_key, val| !val.is_empty());
-                        
+
                     }
                 }
             );
@@ -200,7 +200,7 @@ fn compact<T: Ord>(list: &mut Vec<(T, i64)>) {
             }
         }
         list.retain(|x| x.1 != 0);
-    } 
+    }
 }
 
 // this method allocates some rank between elements of `edges`.

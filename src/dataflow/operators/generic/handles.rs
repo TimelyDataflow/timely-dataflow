@@ -15,8 +15,9 @@ use dataflow::channels::Content;
 use timely_communication::{Push, Pull};
 use logging::Logger;
 
-use dataflow::operators::{Capability, CapabilityTrait};
-use dataflow::operators::capability::mint as mint_capability;
+use dataflow::operators::CapabilityRef;
+use dataflow::operators::capability::mint_ref as mint_capability_ref;
+use dataflow::operators::capability::CapabilityTrait;
 
 /// Handle to an operator's input stream.
 pub struct InputHandle<T: Timestamp, D, P: Pull<(T, Content<D>)>> {
@@ -39,10 +40,10 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline(always)]
-    pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
+    pub fn next(&mut self) -> Option<(CapabilityRef<T>, &mut Content<D>)> {
         let internal = &mut self.internal;
         self.pull_counter.next().map(|(time, content)| {
-            (mint_capability(time.clone(), internal.clone()), content)
+            (mint_capability_ref(time, internal.clone()), content)
         })
     }
 
@@ -65,7 +66,7 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
     /// });
     /// ```
     #[inline]
-    pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, mut logic: F) {
+    pub fn for_each<F: FnMut(CapabilityRef<T>, &mut Content<D>)>(&mut self, mut logic: F) {
         let logging = self.logging.clone();
         while let Some((cap, data)) = self.next() {
             logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedMessage(
@@ -83,7 +84,7 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>+'a> FrontieredInputHandle<'a,
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline(always)]
-    pub fn next(&mut self) -> Option<(Capability<T>, &mut Content<D>)> {
+    pub fn next(&mut self) -> Option<(CapabilityRef<T>, &mut Content<D>)> {
         self.handle.next()
     }
 
@@ -106,7 +107,7 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>+'a> FrontieredInputHandle<'a,
     /// });
     /// ```
     #[inline]
-    pub fn for_each<F: FnMut(Capability<T>, &mut Content<D>)>(&mut self, logic: F) {
+    pub fn for_each<F: FnMut(CapabilityRef<T>, &mut Content<D>)>(&mut self, logic: F) {
         self.handle.for_each(logic)
     }
 

@@ -202,11 +202,11 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///             move |input1, input2, output| {
 ///                 while let Some((time, data)) = input1.next() {
 ///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
-///                     notificator.notify_at(time);
+///                     notificator.notify_at(time.retain());
 ///                 }
 ///                 while let Some((time, data)) = input2.next() {
 ///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
-///                     notificator.notify_at(time);
+///                     notificator.notify_at(time.retain());
 ///                 }
 ///                 notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _| {
 ///                     if let Some(mut vec) = stash.remove(time.time()) {
@@ -335,7 +335,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///
     /// In the interest of efficiency, this method may yield capabilities in decreasing order, in certain
     /// circumstances. If you want to iterate through capabilities with an in-order guarantee, either (i)
-    /// use `for_each` 
+    /// use `for_each`
     #[inline]
     pub fn next<'a>(&mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> Option<Capability<T>> {
         if self.available.is_empty() {

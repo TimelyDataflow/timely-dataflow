@@ -54,7 +54,7 @@ pub trait Unary<G: Scope, D1: Data> {
     ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
     ///                input.for_each(|time, data| {
     ///                    output.session(&time).give_content(data);
-    ///                    notificator.notify_at(time);
+    ///                    notificator.notify_at(time.retain());
     ///                });
     ///                notificator.for_each(|time,_,_| {
     ///                    println!("done with time: {:?}", time.time());

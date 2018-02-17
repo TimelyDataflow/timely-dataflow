@@ -36,6 +36,13 @@ pub trait CapabilityTrait<T: Timestamp> {
     fn time(&self) -> &T;
 }
 
+impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a C {
+    fn time(&self) -> &T { (**self).time() }
+}
+impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a mut C {
+    fn time(&self) -> &T { (**self).time() }
+}
+
 /// The capability to send data with a certain timestamp on a dataflow edge.
 ///
 /// Capabilities are used by timely dataflow's progress tracking machinery to restrict and track
@@ -145,23 +152,74 @@ impl<T: Timestamp> ::std::hash::Hash for Capability<T> {
     }
 }
 
-
-pub struct CapabilityRef<'capability, T: Timestamp+'capability> {
-    time: &'capability T,
+/// An unowned capability, which can be used but not retained.
+///
+/// The capability reference supplies a `retain(self)` method which consumes the reference
+/// and turns it into an owned capability
+pub struct CapabilityRef<'cap, T: Timestamp+'cap> {
+    time: &'cap T,
     internal: Rc<RefCell<ChangeBatch<T>>>,
 }
 
-impl<'capability, T: Timestamp+'capability> CapabilityTrait<T> for CapabilityRef<'capability, T> {
+impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
     fn time(&self) -> &T { self.time }
 }
 
-impl<'capability, T: Timestamp+'capability> CapabilityRef<'capability, T> {
+impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
+    /// The timestamp associated with this capability.
+    #[inline(always)]
+    pub fn time(&self) -> &T {
+        self.time
+    }
+
+    /// Makes a new capability for a timestamp `new_time` greater or equal to the timestamp of
+    /// the source capability (`self`).
+    ///
+    /// This method panics if `self.time` is not less or equal to `new_time`.
+    #[inline(always)]
+    pub fn delayed(&self, new_time: &T) -> Capability<T> {
+        if !self.time.less_equal(new_time) {
+            panic!("Attempted to delay {:?} to {:?}, which is not `less_equal` the capability's time.", self, new_time);
+        }
+        mint(new_time.clone(), self.internal.clone())
+    }
+
     /// Transform to an owned capability.
+    ///
+    /// This method produces an owned capability which must be dropped to release the
+    /// capability. Users should take care that these capabilities are only stored for
+    /// as long as they are required, as failing to drop them may result in livelock.
+    #[inline(always)]
     pub fn retain(self) -> Capability<T> {
         mint(self.time.clone(), self.internal)
     }
 }
 
+impl<'cap, T: Timestamp> Deref for CapabilityRef<'cap, T> {
+    type Target = T;
+    #[inline]
+    fn deref(&self) -> &T {
+        self.time
+    }
+}
+
+impl<'cap, T: Timestamp> Debug for CapabilityRef<'cap, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "CapabilityRef {{ time: {:?}, internal: ... }}", self.time)
+    }
+}
+
+
+/// Creates a new capability at `t` while incrementing (and keeping a reference to) the provided
+/// `ChangeBatch`.
+/// Declared separately so that it can be kept private when `Capability` is re-exported.
+#[inline(always)]
+pub fn mint_ref<'cap, T: Timestamp>(time: &'cap T, internal: Rc<RefCell<ChangeBatch<T>>>) -> CapabilityRef<'cap, T> {
+    CapabilityRef {
+        time: time,
+        internal: internal
+    }
+}
 
 /// A set of capabilities, for possibly incomparable times.
 pub struct CapabilitySet<T: Timestamp> {

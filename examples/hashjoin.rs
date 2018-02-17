@@ -83,10 +83,10 @@ fn main() {
         while sent < (vals / peers) {
 
             // Send some amount of data, no more than `batch`.
-            let to_send = std::cmp::min(batch, (vals/peers - sent));
+            let to_send = std::cmp::min(batch, vals/peers - sent);
             for _ in 0 .. to_send {
                 input1.send((rng.gen_range(0, keys), rng.gen_range(0, keys)));
-                input2.send((rng.gen_range(0, keys), rng.gen_range(0, keys)));                
+                input2.send((rng.gen_range(0, keys), rng.gen_range(0, keys)));
             }
             sent += to_send;
 
