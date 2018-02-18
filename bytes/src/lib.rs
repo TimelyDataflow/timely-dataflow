@@ -109,14 +109,14 @@ pub mod rc {
         }
     }
 
-    impl<B: DerefMut<Target=[u8]>+Clone> Deref for Bytes<B> {
+    impl<B: DerefMut<Target=[u8]>> Deref for Bytes<B> {
         type Target = [u8];
         fn deref(&self) -> &[u8] {
             unsafe { ::std::slice::from_raw_parts(self.ptr, self.len) }
         }
     }
 
-    impl<B: DerefMut<Target=[u8]>+Clone> DerefMut for Bytes<B> {
+    impl<B: DerefMut<Target=[u8]>> DerefMut for Bytes<B> {
         fn deref_mut(&mut self) -> &mut [u8] {
             unsafe { ::std::slice::from_raw_parts_mut(self.ptr, self.len) }
         }
@@ -195,14 +195,14 @@ pub mod arc {
         }
     }
 
-    impl<B: DerefMut<Target=[u8]>+Clone> Deref for Bytes<B> {
+    impl<B: DerefMut<Target=[u8]>> Deref for Bytes<B> {
         type Target = [u8];
         fn deref(&self) -> &[u8] {
             unsafe { ::std::slice::from_raw_parts(self.ptr, self.len) }
         }
     }
 
-    impl<B: DerefMut<Target=[u8]>+Clone> DerefMut for Bytes<B> {
+    impl<B: DerefMut<Target=[u8]>> DerefMut for Bytes<B> {
         fn deref_mut(&mut self) -> &mut [u8] {
             unsafe { ::std::slice::from_raw_parts_mut(self.ptr, self.len) }
         }
