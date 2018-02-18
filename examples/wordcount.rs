@@ -24,7 +24,7 @@ fn main() {
                         .map(move |word| (word.to_owned(), diff))
                         .collect::<Vec<_>>()
                  )
-                 .unary_frontier(exchange, "WordCount", |_capability| {
+                 .unary_frontier(exchange, "WordCount", |_capability, _info| {
 
                     let mut queues = HashMap::new();
                     let mut counts = HashMap::new();

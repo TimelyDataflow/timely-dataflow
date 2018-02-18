@@ -149,4 +149,9 @@ impl<G: Scope> OperatorBuilder<G> {
 
         self.builder.build(pep, pip);
     }
+
+    /// Get the identifier assigned to the operator being constructed
+    pub fn index(&self) -> usize {
+        self.builder.index()
+    }
 }
