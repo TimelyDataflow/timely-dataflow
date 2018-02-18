@@ -60,11 +60,14 @@ pub mod rc {
     impl<B: DerefMut<Target=[u8]>> Bytes<B> {
 
         /// Create a new instance from a byte allocation.
-        pub fn from(mut bytes: B) -> Bytes<B> {
+        pub fn from(bytes: B) -> Bytes<B> {
+
+            let mut rc = Rc::new(bytes);
+
             Bytes {
-                ptr: bytes.as_mut_ptr(),
-                len: bytes.len(),
-                sequestered: Rc::new(bytes),
+                ptr: Rc::get_mut(&mut rc).unwrap().as_mut_ptr(),
+                len: rc.len(),
+                sequestered: rc,
             }
         }
 
@@ -126,7 +129,7 @@ pub mod arc {
     use std::ops::{Deref, DerefMut};
     use std::sync::Arc;
 
-    /// A thread-local byte buffer backed by a shared allocation.
+    /// A thread-safe byte buffer backed by a shared allocation.
     pub struct Bytes<B: DerefMut<Target=[u8]>> {
         /// Pointer to the start of this slice (not the allocation).
         ptr: *mut u8,
@@ -143,11 +146,14 @@ pub mod arc {
     impl<B: DerefMut<Target=[u8]>> Bytes<B> {
 
         /// Create a new instance from a byte allocation.
-        pub fn from(mut bytes: B) -> Bytes<B> {
+        pub fn from(bytes: B) -> Bytes<B> {
+
+            let mut arc = Arc::new(bytes);
+
             Bytes {
-                ptr: bytes.as_mut_ptr(),
-                len: bytes.len(),
-                sequestered: Arc::new(bytes),
+                ptr: Arc::get_mut(&mut arc).unwrap().as_mut_ptr(),
+                len: arc.len(),
+                sequestered: arc,
             }
         }
 
