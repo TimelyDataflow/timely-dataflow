@@ -99,7 +99,7 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
              P2: ParallelizationContract<G::Timestamp, D2>>
              (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, logic: L) -> Stream<G, D3> {
 
-        self.binary(other, pact1, pact2, name, |_| logic)
+        self.binary(other, pact1, pact2, name, |_, _| logic)
     }
 
     #[inline]
@@ -114,7 +114,7 @@ impl<G: Scope, D1: Data> Binary<G, D1> for Stream<G, D1> {
              P2: ParallelizationContract<G::Timestamp, D2>>
              (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, init: Vec<G::Timestamp>, mut logic: L) -> Stream<G, D3> {
 
-        self.binary_frontier(other, pact1, pact2, name, |capability| {
+        self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
             let mut notificator = FrontierNotificator::new();
             for time in init {
                 notificator.notify_at(capability.delayed(&time));
