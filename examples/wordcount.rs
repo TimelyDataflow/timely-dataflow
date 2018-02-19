@@ -19,7 +19,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
             input.to_stream(scope)
-                 .flat_map(|(text, diff): (String, i64)| 
+                 .flat_map(|(text, diff): (String, i64)|
                     text.split_whitespace()
                         .map(move |word| (word.to_owned(), diff))
                         .collect::<Vec<_>>()
@@ -31,7 +31,7 @@ fn main() {
 
                     move |input, output| {
                         while let Some((time, data)) = input.next() {
-                            queues.entry(time)
+                            queues.entry(time.retain())
                                   .or_insert(Vec::new())
                                   .push(data.take());
                         }

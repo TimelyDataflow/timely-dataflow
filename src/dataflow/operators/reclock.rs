@@ -11,9 +11,9 @@ pub trait Reclock<S: Scope, D: Data> {
     /// Delays records until an input is observed on the `clock` input.
     ///
     /// The source stream is buffered until a record is seen on the clock input,
-    /// at which point a notification is requested and all data with time less 
-    /// or equal to the clock time are sent. This method does not ensure that all 
-    /// workers receive the same clock records, which can be accomplished with 
+    /// at which point a notification is requested and all data with time less
+    /// or equal to the clock time are sent. This method does not ensure that all
+    /// workers receive the same clock records, which can be accomplished with
     /// `broadcast`.
     ///
     /// #Examples
@@ -24,11 +24,11 @@ pub trait Reclock<S: Scope, D: Data> {
     /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// let captured = timely::example(|scope| {
-    /// 
+    ///
     ///     // produce data 0..10 at times 0..10.
     ///     let data = (0..10).to_stream(scope)
     ///                       .delay(|x,t| RootTimestamp::new(*x));
-    /// 
+    ///
     ///     // product clock ticks at three times.
     ///     let clock = vec![3, 5, 8].into_iter()
     ///                              .to_stream(scope)
@@ -45,7 +45,7 @@ pub trait Reclock<S: Scope, D: Data> {
     /// assert_eq!(extracted[0], (RootTimestamp::new(3), vec![0,1,2,3]));
     /// assert_eq!(extracted[1], (RootTimestamp::new(5), vec![4,5]));
     /// assert_eq!(extracted[2], (RootTimestamp::new(8), vec![6,7,8]));
-    /// ```        
+    /// ```
     fn reclock(&self, clock: &Stream<S, ()>) -> Stream<S, D>;
 }
 
@@ -63,7 +63,7 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
 
             // request notification at time, to flush stash.
             input2.for_each(|time, _data| {
-                notificator.notify_at(time);
+                notificator.notify_at(time.retain());
             });
 
             // each time with complete stash can be flushed.
