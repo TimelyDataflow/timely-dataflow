@@ -1,4 +1,4 @@
-//! General purpose state transition operator. 
+//! General purpose state transition operator.
 use std::hash::Hash;
 use std::collections::HashMap;
 
@@ -8,12 +8,12 @@ use dataflow::{Stream, Scope};
 use dataflow::operators::generic::unary::Unary;
 use dataflow::channels::pact::Exchange;
 
-/// Generic state-transition machinery: each key has a state, and receives a sequence of events. 
+/// Generic state-transition machinery: each key has a state, and receives a sequence of events.
 /// Events are applied in time-order, but no other promises are made. Each state transition can
-/// produce output, which is sent. 
+/// produce output, which is sent.
 ///
-/// `state_machine` will buffer inputs if earlier inputs may still arrive. it will directly apply 
-/// updates for the current time reflected in the notificator, though. In the case of partially 
+/// `state_machine` will buffer inputs if earlier inputs may still arrive. it will directly apply
+/// updates for the current time reflected in the notificator, though. In the case of partially
 /// ordered times, the only guarantee is that updates are not applied out of order, not that there
 /// is some total order on times respecting the total order (updates may be interleaved).
 
@@ -21,7 +21,7 @@ use dataflow::channels::pact::Exchange;
 pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     /// Tracks a state for each presented key, using user-supplied state transition logic.
     ///
-    /// The transition logic `fold` may mutate the state, and produce both output records and 
+    /// The transition logic `fold` may mutate the state, and produce both output records and
     /// a `bool` indicating that it is appropriate to deregister the state, cleaning up once
     /// the state is no longer helpful.
     ///
@@ -34,13 +34,13 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     ///
     ///     // these results happen to be right, but aren't guaranteed.
     ///     // the system is at liberty to re-order within a timestamp.
-    ///     let result = vec![(0,0), (0,2), (0,6), (0,12), (0,20), 
+    ///     let result = vec![(0,0), (0,2), (0,6), (0,12), (0,20),
     ///                       (1,1), (1,4), (1,9), (1,16), (1,25)];
     ///
     ///         (0..10).to_stream(scope)
     ///                .map(|x| (x % 2, x))
     ///                .state_machine(
-    ///                    |_key, val, agg| { *agg += val; (false, Some((*_key, *agg))) }, 
+    ///                    |_key, val, agg| { *agg += val; (false, Some((*_key, *agg))) },
     ///                    |key| *key as u64
     ///                )
     ///                .inspect(move |x| assert!(result.contains(x)));
@@ -53,7 +53,7 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
         F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
         H: Fn(&K)->u64+'static,                     // "hash" function for keys
     >(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq ;
-} 
+}
 
 impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> for Stream<S, (K, V)> {
     fn state_machine<
@@ -74,13 +74,13 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
                 // stash if not time yet
                 if notificator.frontier(0).iter().any(|x| x.less_than(time.time())) {
                     pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
-                    notificator.notify_at(time);
+                    notificator.notify_at(time.retain());
                 }
                 else {
                     // else we can process immediately
                     let mut session = output.session(&time);
                     for (key, val) in data.drain(..) {
-                        let (remove, output) = { 
+                        let (remove, output) = {
                             let state = states.entry(key.clone()).or_insert_with(Default::default);
                             fold(&key, val, state)
                         };

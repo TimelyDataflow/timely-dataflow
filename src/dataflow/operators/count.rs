@@ -27,7 +27,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     ///
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![45])]);
-    /// ```            
+    /// ```
     fn accumulate<A: Data, F: Fn(&mut A, &mut Content<D>)+'static>(&self, default: A, logic: F) -> Stream<G, A>;
     /// Counts the number of records observed at each time.
     ///
@@ -46,7 +46,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     ///
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![10])]);
-    /// ```        
+    /// ```
     fn count(&self) -> Stream<G, usize> {
         self.accumulate(0, |sum, data| *sum += data.len())
     }
@@ -59,7 +59,7 @@ impl<G: Scope, D: Data> Accumulate<G, D> for Stream<G, D> {
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
                 logic(&mut accums.entry(time.time().clone()).or_insert_with(|| default.clone()), data);
-                notificator.notify_at(time);
+                notificator.notify_at(time.retain());
             });
 
             notificator.for_each(|time,_,_| {

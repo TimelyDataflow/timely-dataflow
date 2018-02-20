@@ -64,11 +64,11 @@ pub trait Binary<G: Scope, D1: Data> {
     ///     stream1.binary_notify(&stream2, Pipeline, Pipeline, "example", Vec::new(), |input1, input2, output, notificator| {
     ///         input1.for_each(|time, data| {
     ///             output.session(&time).give_content(data);
-    ///             notificator.notify_at(time);
+    ///             notificator.notify_at(time.retain());
     ///         });
     ///         input2.for_each(|time, data| {
     ///             output.session(&time).give_content(data);
-    ///             notificator.notify_at(time);
+    ///             notificator.notify_at(time.retain());
     ///         });
     ///         notificator.for_each(|time,_count,_notificator| {
     ///             println!("done with time: {:?}", time.time());
