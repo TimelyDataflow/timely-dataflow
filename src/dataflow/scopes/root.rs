@@ -39,9 +39,11 @@ impl<A: Allocate> Root<A> {
 
     /// Performs one step of the computation.
     ///
-    /// A step gives each dataflow operator a chance to run, and is the 
+    /// A step gives each dataflow operator a chance to run, and is the
     /// main way to ensure that a computation procedes.
     pub fn step(&mut self) -> bool {
+
+        self.allocator.borrow_mut().pre_work();
 
         let mut active = false;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
@@ -53,6 +55,8 @@ impl<A: Allocate> Root<A> {
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
 
         // TODO(andreal) do we want to flush logs here?
+
+        self.allocator.borrow_mut().post_work();
 
         active
     }

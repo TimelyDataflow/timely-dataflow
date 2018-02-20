@@ -3,12 +3,13 @@
 pub use self::thread::Thread;
 pub use self::process::Process;
 pub use self::binary::Binary;
-pub use self::generic::Generic;
+pub use self::generic::{Generic, GenericBuilder};
 
 pub mod thread;
 pub mod process;
 pub mod binary;
 pub mod generic;
+pub mod process_binary;
 
 use {Data, Push, Pull};
 
@@ -22,4 +23,7 @@ pub trait Allocate {
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
     fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>);
+
+    fn pre_work(&mut self) { }
+    fn post_work(&mut self) { }
 }

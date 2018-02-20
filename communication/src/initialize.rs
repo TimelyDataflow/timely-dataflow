@@ -5,7 +5,8 @@ use std::io::BufRead;
 use getopts;
 use std::sync::Arc;
 
-use allocator::{Thread, Process, Generic};
+use allocator::{Thread, Process, Generic, GenericBuilder};
+use allocator::process_binary::ProcessBinaryBuilder;
 use networking::initialize_networking;
 
 /// Possible configurations for the communication infrastructure.
@@ -72,13 +73,21 @@ impl Configuration {
     }
 }
 
-fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Generic>,String> {
+type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>;
+
+fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<Vec<GenericBuilder>,String> {
     match config {
-        Configuration::Thread => Ok(vec![Generic::Thread(Thread)]),
-        Configuration::Process(threads) => Ok(Process::new_vector(threads).into_iter().map(|x| Generic::Process(x)).collect()),
+        Configuration::Thread => {
+            // Ok(vec![GenericBuilder::Thread(Thread)])
+            Ok(ProcessBinaryBuilder::new_vector(1).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
+        },
+        Configuration::Process(threads) => {
+            // Ok(Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect())
+            Ok(ProcessBinaryBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
+        },
         Configuration::Cluster(threads, process, addresses, report) => {
             if let Ok(stuff) = initialize_networking(addresses, process, threads, report, logger) {
-                Ok(stuff.into_iter().map(|x| Generic::Binary(x)).collect())
+                Ok(stuff.into_iter().map(|x| GenericBuilder::Binary(x)).collect())
             }
             else {
                 Err("failed to initialize networking".to_owned())
@@ -151,7 +160,7 @@ fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup
 /// ```
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Configuration,
-    log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>,
+    log_sender: LogBuilder,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
 
@@ -159,12 +168,13 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     let logic = Arc::new(func);
 
     let mut guards = Vec::new();
-    for allocator in allocators.into_iter() {
+    for (index, builder) in allocators.into_iter().enumerate() {
         let clone = logic.clone();
         guards.push(try!(thread::Builder::new()
-                            .name(format!("worker thread {}", allocator.index()))
+                            .name(format!("worker thread {}", index))
                             .spawn(move || {
-                                (*clone)(allocator)
+                                let communicator = builder.build();
+                                (*clone)(communicator)
                             })
                             .map_err(|e| format!("{:?}", e))));
     }

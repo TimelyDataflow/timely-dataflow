@@ -4,6 +4,7 @@
 //! for example closures whose type arguments must be specified.
 
 use allocator::{Allocate, Thread, Process, Binary};
+use allocator::process_binary::{ProcessBinary, ProcessBinaryBuilder};
 use {Push, Pull, Data};
 
 /// Enumerates known implementors of `Allocate`.
@@ -12,6 +13,7 @@ pub enum Generic {
     Thread(Thread),
     Process(Process),
     Binary(Binary),
+    ProcessBinary(ProcessBinary),
 }
 
 impl Generic {
@@ -21,6 +23,7 @@ impl Generic {
             &Generic::Thread(ref t) => t.index(),
             &Generic::Process(ref p) => p.index(),
             &Generic::Binary(ref b) => b.index(),
+            &Generic::ProcessBinary(ref pb) => pb.index(),
         }
     }
     /// The number of workers.
@@ -29,6 +32,7 @@ impl Generic {
             &Generic::Thread(ref t) => t.peers(),
             &Generic::Process(ref p) => p.peers(),
             &Generic::Binary(ref b) => b.peers(),
+            &Generic::ProcessBinary(ref pb) => pb.peers(),
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
@@ -37,6 +41,18 @@ impl Generic {
             &mut Generic::Thread(ref mut t) => t.allocate(),
             &mut Generic::Process(ref mut p) => p.allocate(),
             &mut Generic::Binary(ref mut b) => b.allocate(),
+            &mut Generic::ProcessBinary(ref mut pb) => pb.allocate(),
+        }
+    }
+
+    pub fn pre_work(&mut self) {
+        if let &mut Generic::ProcessBinary(ref mut pb) = self {
+            pb.pre_work();
+        }
+    }
+    pub fn post_work(&mut self) {
+        if let &mut Generic::ProcessBinary(ref mut pb) = self {
+            pb.post_work();
         }
     }
 }
@@ -46,5 +62,29 @@ impl Allocate for Generic {
     fn peers(&self) -> usize { self.peers() }
     fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
         self.allocate()
+    }
+
+    fn pre_work(&mut self) { self.pre_work(); }
+    fn post_work(&mut self) { self.post_work(); }
+}
+
+
+/// Enumerates known implementors of `Allocate`.
+/// Passes trait method calls on to members.
+pub enum GenericBuilder {
+    Thread(Thread),
+    Process(Process),
+    Binary(Binary),
+    ProcessBinary(ProcessBinaryBuilder),
+}
+
+impl GenericBuilder {
+    pub fn build(self) -> Generic {
+        match self {
+            GenericBuilder::Thread(t) => Generic::Thread(t),
+            GenericBuilder::Process(p) => Generic::Process(p),
+            GenericBuilder::Binary(b) => Generic::Binary(b),
+            GenericBuilder::ProcessBinary(pb) => Generic::ProcessBinary(pb.build()),
+        }
     }
 }

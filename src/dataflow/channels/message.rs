@@ -36,12 +36,17 @@ impl<T, D> Message<T, D> {
 
 // Implementation required to get different behavior out of communication fabric.
 impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
-    #[inline]
-    fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
 
-        // Reserve the minimal number of bytes to prevent the need to resize.
-        let bytes_needed = measure(&self.time) + measure(&self.from) + measure(&self.seq) + measure(self.data.deref());
-        bytes.reserve(bytes_needed);
+    #[inline]
+    fn length_in_bytes(&self) -> usize {
+        measure(&self.time) + measure(&self.from) + measure(&self.seq) + measure(self.data.deref())
+    }
+
+    #[inline]
+    fn into_bytes<W: ::std::io::Write>(&mut self, bytes: &mut W) {
+
+        // // Reserve the minimal number of bytes to prevent the need to resize.
+        // let bytes_needed = measure(&self.time) + measure(&self.from) + measure(&self.seq) + measure(self.data.deref());
 
         // Almost like serializing `self`, except `self.data` is special.
         unsafe { encode(&self.time, bytes).unwrap(); }
@@ -74,7 +79,7 @@ impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
 pub enum Content<D> {
     /// A serialized representation of data.
     ///
-    /// This representation may be efficiently observed as shared references, 
+    /// This representation may be efficiently observed as shared references,
     /// but may only more expensively be converted into typed data.
     Bytes(Vec<u8>, usize, usize),
     /// Typed data, which may be efficiently mutated or claimed for ownership.
