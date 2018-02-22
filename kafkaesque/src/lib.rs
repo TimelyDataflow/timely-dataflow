@@ -23,8 +23,8 @@ struct OutstandingCounterContext {
 impl Context for OutstandingCounterContext { }
 
 impl ProducerContext for OutstandingCounterContext {
-    type DeliveryContext = ();
-    fn delivery(&self, _report: &DeliveryResult, _: Self::DeliveryContext) {
+    type DeliveryOpaque = ();
+    fn delivery(&self, _report: &DeliveryResult, _: Self::DeliveryOpaque) {
         self.outstanding.fetch_sub(1, Ordering::SeqCst);
     }
 }
@@ -65,9 +65,9 @@ impl<T, D> EventProducer<T, D> {
 
 impl<T: Abomonation, D: Abomonation> EventPusher<T, D> for EventProducer<T, D> {
     fn push(&mut self, event: Event<T, D>) {
-        unsafe { ::abomonation::encode(&event, &mut self.buffer); }
+        unsafe { ::abomonation::encode(&event, &mut self.buffer).expect("Encode failure"); }
         // println!("sending {:?} bytes", self.buffer.len());
-        self.producer.send_copy::<[u8],()>(self.topic.as_str(), None, Some(&self.buffer[..]), None,  None, None).unwrap();
+        self.producer.send_copy::<[u8],()>(self.topic.as_str(), None, Some(&self.buffer[..]), None, (), None).unwrap();
         self.counter.fetch_add(1, Ordering::SeqCst);
         self.producer.poll(0);
         self.buffer.clear();

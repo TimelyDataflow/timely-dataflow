@@ -7,7 +7,7 @@ use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::capture::Replay;
 use timely::dataflow::operators::Accumulate;
 
-use rdkafka::config::{ClientConfig, TopicConfig};
+use rdkafka::config::ClientConfig;
 
 use kafkaesque::EventConsumer;
 
@@ -19,24 +19,19 @@ fn main() {
         let brokers = "localhost:9092";
 
         // Create Kafka stuff.
-        let mut topic_config = TopicConfig::new();
-        topic_config
-            .set("produce.offset.report", "true")
-            .set("auto.offset.reset", "smallest")
-            .finalize();
-
         let mut consumer_config = ClientConfig::new();
         consumer_config
+            .set("produce.offset.report", "true")
+            .set("auto.offset.reset", "smallest")
             .set("group.id", "example")
             .set("enable.auto.commit", "false")
             .set("enable.partition.eof", "false")
             .set("auto.offset.reset", "earliest")
             .set("session.timeout.ms", "6000")
-            .set("bootstrap.servers", &brokers)
-            .set_default_topic_config(topic_config);
+            .set("bootstrap.servers", &brokers);
 
         // create replayers from disjoint partition of source worker identifiers.
-        let replayers = 
+        let replayers =
         (0 .. source_peers)
             .filter(|i| i % worker.peers() == worker.index())
             .map(|i| {
