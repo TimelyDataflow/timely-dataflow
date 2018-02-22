@@ -66,7 +66,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     /// Create a new stream from a supplied interactive handle.
     ///
     /// This method creates a new timely stream whose data are supplied interactively through the `handle`
-    /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate 
+    /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate
     /// if it as attached to more than one stream.
     ///
     /// #Examples
@@ -121,7 +121,7 @@ impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Root<A>, T> {
             copies:   copies,
         });
 
-        Stream::new(Source { index: index, port: 0 }, registrar, self.clone())        
+        Stream::new(Source { index: index, port: 0 }, registrar, self.clone())
     }
 }
 
@@ -229,7 +229,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Root<A>, T>) -> Stream<Child<'a, Root<A>, T>, D> 
+    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Root<A>, T>) -> Stream<Child<'a, Root<A>, T>, D>
     where T: Ord {
         scope.input_from(self)
     }
@@ -252,16 +252,17 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     }
 
     // flushes our buffer at each of the destinations. there can be more than one; clone if needed.
+    #[inline(never)]
     fn flush(&mut self) {
         for index in 0 .. self.pushers.len() {
             if index < self.pushers.len() - 1 {
                 self.buffer2.extend_from_slice(&self.buffer1[..]);
                 Content::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
-                assert!(self.buffer2.is_empty());
+                debug_assert!(self.buffer2.is_empty());
             }
             else {
                 Content::push_at(&mut self.buffer1, self.now_at.clone(), &mut self.pushers[index]);
-                assert!(self.buffer1.is_empty());
+                debug_assert!(self.buffer1.is_empty());
             }
         }
         self.buffer1.clear();
@@ -281,7 +282,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     #[inline(always)]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     pub fn send(&mut self, data: D) {
-        // assert!(self.buffer.capacity() == Content::<D>::default_length());
+        // assert!(self.buffer1.capacity() == Content::<D>::default_length());
         self.buffer1.push(data);
         if self.buffer1.len() == self.buffer1.capacity() {
             self.flush();

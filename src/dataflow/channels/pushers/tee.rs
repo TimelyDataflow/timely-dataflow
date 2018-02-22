@@ -17,23 +17,21 @@ pub struct Tee<T: 'static, D: 'static> {
 impl<T: Clone+'static, D: Abomonation+Clone+'static> Push<(T, Content<D>)> for Tee<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
+        let mut pushers = self.shared.borrow_mut();
         if let Some((ref time, ref mut data)) = *message {
-            let mut pushers = self.shared.borrow_mut();
-            for index in 0..pushers.len() {
-                if index < pushers.len() - 1 {
-                    // TODO : was `push_all`, but is now `extend`, slow.
-                    self.buffer.extend_from_slice(data);
-                    Content::push_at(&mut self.buffer, (*time).clone(), &mut pushers[index]);
-                }
-                else {
-                    Content::push_at(data, (*time).clone(), &mut pushers[index]);
-                }
+            for index in 1..pushers.len() {
+                self.buffer.extend_from_slice(data);
+                Content::push_at(&mut self.buffer, (*time).clone(), &mut pushers[index-1]);
             }
         }
         else {
-            for pusher in self.shared.borrow_mut().iter_mut() {
-                pusher.push(&mut None);
+            for index in 1..pushers.len() {
+                pushers[index-1].push(&mut None);
             }
+        }
+        if pushers.len() > 0 {
+            let last = pushers.len() - 1;
+            pushers[last].push(message);
         }
     }
 }

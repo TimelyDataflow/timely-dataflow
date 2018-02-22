@@ -204,7 +204,6 @@ impl<D: Clone+Abomonation> DerefMut for Content<D> {
     fn deref_mut(&mut self) -> &mut Vec<D> {
         let value = if let Content::Bytes(ref mut bytes, offset, _length) = *self {
             let data: &Vec<D> = unsafe { ::std::mem::transmute(bytes.get_unchecked(offset)) };
-            // let (data, _) = verify::<Vec<D>>(&bytes[offset..]).unwrap();
             // ALLOC : clone() will allocate a Vec<D> and maybe more.
             Some(Content::Typed((*data).clone()))
         }

@@ -1,4 +1,4 @@
-//! The exchange pattern distributes pushed data between many target pushees. 
+//! The exchange pattern distributes pushed data between many target pushees.
 
 use {Push, Data};
 use dataflow::channels::Content;
@@ -38,7 +38,7 @@ impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&T, &D)->u64>  Exchange<T, D, 
 }
 
 impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&T, &D)->u64> Push<(T, Content<D>)> for Exchange<T, D, P, H> {
-    #[inline]
+    #[inline(never)]
     fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
@@ -72,7 +72,7 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                         //         self.flush(index);
                         //     }
                         // }
-                        
+
                     }
                 }
                 // as a last resort, use mod (%)

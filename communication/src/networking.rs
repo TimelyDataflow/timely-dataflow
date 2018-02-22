@@ -31,6 +31,7 @@ pub struct MessageHeader {
 
 impl MessageHeader {
     // returns a header when there is enough supporting data
+    #[inline(always)]
     pub fn try_read(bytes: &mut &[u8]) -> Option<MessageHeader> {
         if bytes.len() > size_of::<MessageHeader>() {
             // capture original in case we need to rewind
@@ -61,6 +62,7 @@ impl MessageHeader {
         else { None }
     }
 
+    #[inline(always)]
     pub fn write_to<W: Write>(&self, writer: &mut W) -> Result<()> {
         try!(writer.write_u64::<LittleEndian>(self.channel as u64));
         try!(writer.write_u64::<LittleEndian>(self.source as u64));
@@ -70,6 +72,7 @@ impl MessageHeader {
         Ok(())
     }
 
+    #[inline(always)]
     pub fn required_bytes(&self) -> usize {
         40 + self.length
     }
