@@ -5,8 +5,8 @@ authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 [dependencies]
 clap="*"
-abomonation="0.4.5"
-timely="0.3.0"
+abomonation="0.5"
+timely="0.5"
 
 [dependencies.rdkafka]
-version = "0.13.0"
+version = "0.14.0"
