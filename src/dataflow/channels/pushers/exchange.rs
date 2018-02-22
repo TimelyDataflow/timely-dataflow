@@ -60,18 +60,17 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                     let mask = (self.pushers.len() - 1) as u64;
                     for datum in data.drain(..) {
                         let index = (((self.hash_func)(time, &datum)) & mask) as usize;
-
-                        self.buffers[index].push(datum);
-                        if self.buffers[index].len() == self.buffers[index].capacity() {
-                            self.flush(index);
-                        }
-
-                        // unsafe {
-                        //     self.buffers.get_unchecked_mut(index).push(datum);
-                        //     if self.buffers.get_unchecked(index).len() == self.buffers.get_unchecked(index).capacity() {
-                        //         self.flush(index);
-                        //     }
+                        // self.buffers[index].push(datum);
+                        // if self.buffers[index].len() == self.buffers[index].capacity() {
+                        //     self.flush(index);
                         // }
+
+                        unsafe {
+                            self.buffers.get_unchecked_mut(index).push(datum);
+                            if self.buffers.get_unchecked(index).len() == self.buffers.get_unchecked(index).capacity() {
+                                self.flush(index);
+                            }
+                        }
 
                     }
                 }

@@ -333,7 +333,12 @@ impl<T:Data> Pull<T> for Puller<T> {
     #[inline]
     fn pull(&mut self) -> &mut Option<T> {
 
-        self.current = self.receiver.borrow_mut().pop_front().map(|mut bytes| <T as Serialize>::from_bytes(&mut bytes));
+        self.current =
+        self.receiver
+            .borrow_mut()
+            .pop_front()
+            .map(|mut bytes| <T as Serialize>::from_bytes(&mut bytes));
+
         &mut self.current
     }
 }
