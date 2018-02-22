@@ -38,23 +38,24 @@ impl ByteExchange {
         self.balance
     }
     pub fn send(&mut self, bytes: Vec<u8>) {
-        // println!("sending: {:?}", bytes.len());
         // non-empty bytes are expected to return.
         if bytes.len() > 0 {
-            // println!("incrementing balance: {:?}", self.balance);
             self.balance += 1;
+            self.send
+                .send(bytes)
+                .expect("failed to send byte buffer!");
         }
-        self.send
-            .send(bytes)
-            .expect("failed to send!");
+        else {
+            // failing to return a byte buffer because the other side has hung up
+            // should not be a fatal event.
+            let _ = self.send.send(bytes);
+        }
     }
     pub fn recv(&mut self) -> Option<Vec<u8>> {
         if let Ok(bytes) = self.recv.try_recv() {
-            // println!("recving: {:?}", bytes.len());
             // empty bytes are returend buffers.
             if bytes.len() == 0 {
                 assert!(self.balance > 0);
-                // println!("decrementing balance: {:?}", self.balance);
                 self.balance -= 1;
             }
             Some(bytes)
