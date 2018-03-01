@@ -80,6 +80,14 @@ impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>> InputHandle<T, D, P> {
 }
 
 impl<'a, T: Timestamp, D, P: Pull<(T, Content<D>)>+'a> FrontieredInputHandle<'a, T, D, P> {
+    /// Allocate a new frontiered input handle.
+    pub fn new(handle: &'a mut InputHandle<T, D, P>, frontier: &'a MutableAntichain<T>) -> Self {
+        FrontieredInputHandle {
+            handle,
+            frontier,
+        }
+    }
+
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
@@ -131,14 +139,6 @@ pub fn new_input_handle<T: Timestamp, D, P: Pull<(T, Content<D>)>>(pull_counter:
         logging: logging,
     }
 }
-
-pub fn new_frontier_input_handle<'a, T: Timestamp, D: 'a, P: Pull<(T, Content<D>)>+'a>(input_handle: &'a mut InputHandle<T, D, P>, frontier: &'a MutableAntichain<T>) -> FrontieredInputHandle<'a, T, D, P> {
-    FrontieredInputHandle {
-        handle: input_handle,
-        frontier: frontier,
-    }
-}
-
 
 /// An owned instance of an output buffer which ensures certain API use.
 ///

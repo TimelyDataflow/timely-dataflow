@@ -5,7 +5,6 @@ use dataflow::channels::pushers::Tee;
 use dataflow::channels::pact::ParallelizationContract;
 
 use dataflow::operators::generic::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
-use dataflow::operators::generic::handles::{new_frontier_input_handle};
 use dataflow::operators::capability::Capability;
 
 use ::Data;
@@ -245,7 +244,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |capability| {
             let mut logic = constructor(capability, new_operator_info(index));
             move |frontiers| {
-                let mut input_handle = new_frontier_input_handle(&mut input, &frontiers[0]);
+                let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
                 let mut output_handle = output.activate();
                 logic(&mut input_handle, &mut output_handle);
             }
@@ -301,8 +300,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |capability| {
             let mut logic = constructor(capability, new_operator_info(index));
             move |frontiers| {
-                let mut input1_handle = new_frontier_input_handle(&mut input1, &frontiers[0]);
-                let mut input2_handle = new_frontier_input_handle(&mut input2, &frontiers[1]);
+                let mut input1_handle = FrontieredInputHandle::new(&mut input1, &frontiers[0]);
+                let mut input2_handle = FrontieredInputHandle::new(&mut input2, &frontiers[1]);
                 let mut output_handle = output.activate();
                 logic(&mut input1_handle, &mut input2_handle, &mut output_handle);
             }
@@ -351,7 +350,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         builder.build(|_capability| {
             move |frontiers| {
-                let mut input_handle = new_frontier_input_handle(&mut input, &frontiers[0]);
+                let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
                 logic(&mut input_handle);
             }
         });
