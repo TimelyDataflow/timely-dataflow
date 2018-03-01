@@ -34,7 +34,7 @@ impl<T:Ord+Clone+'static, D, P: Pull<(T, Content<D>)>> Counter<T, D, P> {
     pub fn new(pullable: P) -> Self {
         Counter {
             phantom: ::std::marker::PhantomData,
-            pullable: pullable,
+            pullable,
             consumed: Rc::new(RefCell::new(ChangeBatch::new())),
         }
     }

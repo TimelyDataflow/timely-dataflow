@@ -32,9 +32,9 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
         inner.make_available(frontiers);
 
         Notificator {
-            frontiers: frontiers,
-            inner: inner,
-            logging: logging,
+            frontiers,
+            inner,
+            logging,
         }
     }
 
@@ -229,6 +229,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///     in2.close();
 /// }).unwrap();
 /// ```
+#[derive(Default)]
 pub struct FrontierNotificator<T: Timestamp> {
     pending: Vec<(Capability<T>, u64)>,
     available: ::std::collections::BinaryHeap<OrderReversed<T>>,
@@ -282,7 +283,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// });
     /// ```
     #[inline]
-    pub fn notify_at<'a>(&mut self, cap: Capability<T>) {
+    pub fn notify_at(&mut self, cap: Capability<T>) {
         self.pending.push((cap,1));
     }
 
@@ -375,7 +376,7 @@ struct OrderReversed<T: Timestamp> {
 }
 
 impl<T: Timestamp> OrderReversed<T> {
-    fn new(element: Capability<T>) -> Self { OrderReversed { element: element } }
+    fn new(element: Capability<T>) -> Self { OrderReversed { element } }
 }
 
 impl<T: Timestamp> PartialOrd for OrderReversed<T> {
@@ -385,6 +386,6 @@ impl<T: Timestamp> PartialOrd for OrderReversed<T> {
 }
 impl<T: Timestamp> Ord for OrderReversed<T> {
     fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
-        other.element.time().cmp(&self.element.time())
+        other.element.time().cmp(self.element.time())
     }
 }

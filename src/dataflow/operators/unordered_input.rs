@@ -91,12 +91,12 @@ impl<G: Scope> UnorderedInput<G> for G {
         let peers = self.peers();
 
         let index = self.add_operator(UnorderedOperator {
-            internal: internal,
-            produced: produced,
-            peers:    peers,
+            internal,
+            produced,
+            peers,
         });
 
-        ((helper, cap), Stream::new(Source { index: index, port: 0 }, registrar, self.clone()))
+        ((helper, cap), Stream::new(Source { index, port: 0 }, registrar, self.clone()))
     }
 }
 
@@ -149,7 +149,7 @@ impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: Capability<T>) -> AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>> {
+    pub fn session(&mut self, cap: Capability<T>) -> AutoflushSession<T, D, PushCounter<T, D, Tee<T, D>>> {
         self.buffer.autoflush_session(cap)
     }
 }

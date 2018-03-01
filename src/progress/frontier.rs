@@ -9,7 +9,7 @@ use order::PartialOrder;
 /// This antichain implementation allows you to repeatedly introduce elements to the antichain, and 
 /// which will evict larger elements to maintain the *minimal* antichain, those incomparable elements 
 /// no greater than any other element.
-#[derive(Default, Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Antichain<T> {
     elements: Vec<T>
 }
@@ -82,7 +82,7 @@ impl<T: PartialOrder> Antichain<T> {
 /// There is an `update_dirty` method for single updates that leave the `MutableAntichain` in a dirty state,
 /// but I strongly recommend against using them unless you must (on part of timely progress tracking seems 
 /// to be greatly simplified by access to this)
-#[derive(Default, Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct MutableAntichain<T: PartialOrder+Ord> {
     dirty: usize,
     updates: Vec<(T, i64)>,
@@ -339,13 +339,13 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
         }
 
         // TODO: This is quadratic in the frontier size, but could be linear (with a merge).
-        for time in self.frontier.iter() {
+        for time in &self.frontier {
             if !self.frontier_temp.contains(time) {
                 action(time, -1);
             }
         }
         ::std::mem::swap(&mut self.frontier, &mut self.frontier_temp);
-        for time in self.frontier.iter() {
+        for time in &self.frontier {
             if !self.frontier_temp.contains(time) {
                 action(time, 1);
             }

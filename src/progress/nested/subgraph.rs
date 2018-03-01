@@ -106,18 +106,18 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
         let children = vec![PerOperatorState::empty(path.clone(), logging.clone())];
 
         SubgraphBuilder {
-            name:                   "Subgraph".into(),
-            path:                   path,
-            index:                  index,
+            name:                "Subgraph".into(),
+            path,
+            index,
 
-            children:               children,
-            child_count:            1,
-            edge_stash: vec![],
+            children,
+            child_count:         1,
+            edge_stash:          vec![],
 
-            input_messages:         Default::default(),
-            output_capabilities:    Default::default(),
+            input_messages:      Default::default(),
+            output_capabilities: Default::default(),
 
-            logging:                logging,
+            logging,
         }
     }
 
@@ -186,7 +186,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
             local_pointstamp_internal: ChangeBatch::new(),
             final_pointstamp_messages: ChangeBatch::new(),
             final_pointstamp_internal: ChangeBatch::new(),
-            progcaster:                progcaster,
+            progcaster,
 
             pointstamp_builder: builder,
             pointstamp_tracker: tracker,
@@ -248,7 +248,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // collect the initial capabilities of each child, to determine the initial capabilities
         // of the subgraph.
-        for child in self.children.iter_mut() {
+        for child in &mut self.children {
             for (output, capability) in child.gis_capabilities.iter_mut().enumerate() {
                 for &(ref time, value) in capability.iter() {
                     self.pointstamp_tracker.update_source(Source { index: child.index, port: output }, time.clone(), value);
@@ -284,9 +284,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             for &(target, ref antichain) in &summary.source_target[0][input] {
                 if target.index == 0 {
                     for summary in antichain.elements().iter() {
-                        internal_summary[input][target.port].insert(match summary {
-                            &Local(_)    => Default::default(),
-                            &Outer(ref y, _) => y.clone(),
+                        internal_summary[input][target.port].insert(match *summary {
+                            Local(_) => Default::default(),
+                            Outer(ref y, _) => y.clone(),
                         });
                     };
                 }
@@ -328,18 +328,18 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // held by the subgraph. We also remove summaries to nodes that do not require progress information.
         self.pointstamp_builder.add_node(0, self.outputs, self.inputs, new_summary);
         let mut pointstamp_summaries = self.pointstamp_builder.summarize();
-        for summaries in pointstamp_summaries.target_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
-        for summaries in pointstamp_summaries.source_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
+        for summaries in &mut pointstamp_summaries.target_target[0] { summaries.retain(|&(t, _)| t.index > 0); }
+        for summaries in &mut pointstamp_summaries.source_target[0] { summaries.retain(|&(t, _)| t.index > 0); }
         for child in 0 .. self.children.len() {
-            for summaries in pointstamp_summaries.target_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
-            for summaries in pointstamp_summaries.source_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
+            for summaries in &mut pointstamp_summaries.target_target[child] { summaries.retain(|&(t,_)| self.children[t.index].notify); }
+            for summaries in &mut pointstamp_summaries.source_target[child] { summaries.retain(|&(t,_)| self.children[t.index].notify); }
         }
 
         // Allocate the pointstamp tracker using the finalized topology.
         self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries.clone());
 
         // Initialize all expressed capablities as pointstamps, for propagation.
-        for child in self.children.iter_mut() {
+        for child in &mut self.children {
             for output in 0 .. child.outputs {
                 for &(ref time, value) in child.gis_capabilities[output].iter() {
                     self.pointstamp_tracker.update_source(
@@ -355,7 +355,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         self.pointstamp_tracker.propagate_all();
 
         // We now have enough information to call `set_external_summary` for each child.
-        for child in self.children.iter_mut() {
+        for child in &mut self.children {
 
             // // Titrate propagated capability changes through a MutableAntichain, and leave them in
             // // the child's buffer for pending `external` updates to apply in its next `push_external`
@@ -400,7 +400,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for (port, changes) in external.iter_mut().enumerate() {
             for (time, value) in changes.drain() {
                 self.pointstamp_tracker.update_source(
-                    Source { index: 0, port: port },
+                    Source { index: 0, port },
                     Product::new(time, Default::default()),
                     value
                 );
@@ -494,10 +494,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // inputs to child zero are also deposited in `produced`.
         for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
             if index == 0 { produced[input].update(time.outer.clone(), delta); }
-            self.pointstamp_tracker.update_target(Target { index: index, port: input }, time, delta);
+            self.pointstamp_tracker.update_target(Target { index, port: input }, time, delta);
         }
         for ((index, output, time), delta) in self.final_pointstamp_internal.drain() {
-            self.pointstamp_tracker.update_source(Source { index: index, port: output }, time, delta);
+            self.pointstamp_tracker.update_source(Source { index, port: output }, time, delta);
         }
 
         // Step 4. Propagate pointstamp updates to inform each source about changes in their frontiers.
@@ -638,7 +638,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             internal_buffer: Vec::new(),
             produced_buffer: Vec::new(),
 
-            logging: logging,
+            logging,
 
             gis_capabilities: Vec::new(),
             gis_summary: Vec::new(),

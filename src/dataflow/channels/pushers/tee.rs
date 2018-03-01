@@ -47,7 +47,7 @@ impl<T, D> Tee<T, D> {
             shared: shared.clone(),
         };
 
-        (port, TeeHelper { shared: shared })
+        (port, TeeHelper { shared })
     }
 }
 

@@ -109,14 +109,14 @@ impl<T, D, P: Push<Message<T, D>>> Pusher<T, D, P> {
     /// Allocates a new pusher.
     pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
         Pusher {
-            pusher: pusher,
-            channel: channel,
-            comm_channel: comm_channel,
+            pusher,
+            channel,
+            comm_channel,
             counter: 0,
-            source: source,
-            target: target,
+            source,
+            target,
             phantom: ::std::marker::PhantomData,
-            logging: logging,
+            logging,
         }
     }
 }
@@ -142,7 +142,7 @@ impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
                 source: self.source,
                 target: self.target,
                 seq_no: counter,
-                length: length,
+                length,
             })));
 
             // Log something about (index, counter, time?, length?);
@@ -165,13 +165,13 @@ impl<T, D, P: Pull<Message<T, D>>> Puller<T, D, P> {
     /// Allocates a new `Puller`.
     pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
         Puller {
-            puller: puller,
-            channel: channel,
-            comm_channel: comm_channel,
+            puller,
+            channel,
+            comm_channel,
             current: None,
             counter: 0,
-            index: index,
-            logging: logging,
+            index,
+            logging,
         }
     }
 }

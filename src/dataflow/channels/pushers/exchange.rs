@@ -1,4 +1,4 @@
-//! The exchange pattern distributes pushed data between many target pushees. 
+//! The exchange pattern distributes pushed data between many target pushees.
 
 use {Push, Data};
 use dataflow::channels::Content;
@@ -21,9 +21,9 @@ impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&T, &D)->u64>  Exchange<T, D, 
             buffers.push(Vec::with_capacity(Content::<D>::default_length()));
         }
         Exchange {
-            pushers: pushers,
+            pushers,
             hash_func: key,
-            buffers: buffers,
+            buffers,
             current: None,
         }
     }
@@ -44,55 +44,53 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);
         }
-        else {
-            if let Some((ref time, ref mut data)) = *message {
+        else if let Some((ref time, ref mut data)) = *message {
 
-                // if the time isn't right, flush everything.
-                if self.current.as_ref().map_or(false, |x| x != time) {
-                    for index in 0..self.pushers.len() {
+            // if the time isn't right, flush everything.
+            if self.current.as_ref().map_or(false, |x| x != time) {
+                for index in 0..self.pushers.len() {
+                    self.flush(index);
+                }
+            }
+            self.current = Some(time.clone());
+
+            // if the number of pushers is a power of two, use a mask
+            if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
+                let mask = (self.pushers.len() - 1) as u64;
+                for datum in data.drain(..) {
+                    let index = (((self.hash_func)(time, &datum)) & mask) as usize;
+
+                    self.buffers[index].push(datum);
+                    if self.buffers[index].len() == self.buffers[index].capacity() {
+                        self.flush(index);
+                    }
+
+                    // unsafe {
+                    //     self.buffers.get_unchecked_mut(index).push(datum);
+                    //     if self.buffers.get_unchecked(index).len() == self.buffers.get_unchecked(index).capacity() {
+                    //         self.flush(index);
+                    //     }
+                    // }
+
+                }
+            }
+            // as a last resort, use mod (%)
+            else {
+                for datum in data.drain(..) {
+                    let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
+                    self.buffers[index].push(datum);
+                    if self.buffers[index].len() == self.buffers[index].capacity() {
                         self.flush(index);
                     }
                 }
-                self.current = Some(time.clone());
-
-                // if the number of pushers is a power of two, use a mask
-                if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
-                    let mask = (self.pushers.len() - 1) as u64;
-                    for datum in data.drain(..) {
-                        let index = (((self.hash_func)(time, &datum)) & mask) as usize;
-
-                        self.buffers[index].push(datum);
-                        if self.buffers[index].len() == self.buffers[index].capacity() {
-                            self.flush(index);
-                        }
-
-                        // unsafe {
-                        //     self.buffers.get_unchecked_mut(index).push(datum);
-                        //     if self.buffers.get_unchecked(index).len() == self.buffers.get_unchecked(index).capacity() {
-                        //         self.flush(index);
-                        //     }
-                        // }
-                        
-                    }
-                }
-                // as a last resort, use mod (%)
-                else {
-                    for datum in data.drain(..) {
-                        let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
-                        self.buffers[index].push(datum);
-                        if self.buffers[index].len() == self.buffers[index].capacity() {
-                            self.flush(index);
-                        }
-                    }
-                }
-
             }
-            else {
-                // flush
-                for index in 0..self.pushers.len() {
-                    self.flush(index);
-                    self.pushers[index].push(&mut None);
-                }
+
+        }
+        else {
+            // flush
+            for index in 0..self.pushers.len() {
+                self.flush(index);
+                self.pushers[index].push(&mut None);
             }
         }
     }

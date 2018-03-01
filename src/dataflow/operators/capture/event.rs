@@ -72,6 +72,7 @@ pub mod link {
     use super::{Event, EventPusher, EventIterator};
 
     /// A linked list of Event<T, D>.
+    #[derive(Default)]
     pub struct EventLink<T, D> {
         /// An event, if one exists.
         ///

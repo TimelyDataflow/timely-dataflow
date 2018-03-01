@@ -32,11 +32,11 @@ fn main() {
                     move |input, output| {
                         while let Some((time, data)) = input.next() {
                             queues.entry(time.retain())
-                                  .or_insert(Vec::new())
+                                  .or_insert_with(Vec::new)
                                   .push(data.take());
                         }
 
-                        for (key, val) in queues.iter_mut() {
+                        for (key, val) in &mut queues {
                             if !input.frontier().less_equal(key.time()) {
                                 let mut session = output.session(key);
                                 for mut batch in val.drain(..) {

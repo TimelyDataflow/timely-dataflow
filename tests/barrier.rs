@@ -26,7 +26,7 @@ fn barrier_sync_helper(config: ::timely_communication::Configuration) {
                     let mut count = 0;
                     while let Some((cap, _count)) = notificator.next() {
                         count += 1;
-                        let mut time = cap.time().clone();
+                        let mut time = *cap.time();
                         time.inner += 1;
                         if time.inner < 100 {
                             notificator.notify_at(cap.delayed(&time));

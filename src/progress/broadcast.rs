@@ -30,17 +30,17 @@ pub struct Progcaster<T:Timestamp> {
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied allocator.
-    pub fn new<A: Allocate>(allocator: &mut A, path: &Vec<usize>, logging: Logger) -> Progcaster<T> {
+    pub fn new<A: Allocate>(allocator: &mut A, path: &[usize], logging: Logger) -> Progcaster<T> {
         let (pushers, puller, chan) = allocator.allocate();
         logging.when_enabled(|l| l.log(::logging::TimelyEvent::CommChannels(::logging::CommChannelsEvent {
             comm_channel: chan,
             comm_channel_kind: ::logging::CommChannelKind::Progress,
         })));
         let worker = allocator.index();
-        let addr = path.clone();
-        Progcaster { pushers: pushers, puller: puller, source: worker,
-                     counter: 0, addr: addr, comm_channel: chan,
-                     logging: logging }
+        let addr = path.to_owned();
+        Progcaster { pushers, puller, source: worker,
+                     counter: 0, addr, comm_channel: chan,
+                     logging }
     }
 
     /// Sends and receives progress updates, broadcasting the contents of `messages` and `internal`,
@@ -63,7 +63,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     internal: Vec::new(),
                 })));
 
-                for pusher in self.pushers.iter_mut() {
+                for pusher in &mut self.pushers {
                     // TODO: This should probably use a broadcast channel, or somehow serialize only once.
                     //       It really shouldn't be doing all of this cloning, that's for sure.
                     pusher.push(&mut Some((self.source, self.counter, messages.clone().into_inner(), internal.clone().into_inner())));

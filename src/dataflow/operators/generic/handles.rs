@@ -134,9 +134,9 @@ pub fn _access_pull_counter<T: Timestamp, D, P: Pull<(T, Content<D>)>>(input: &m
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
 pub fn new_input_handle<T: Timestamp, D, P: Pull<(T, Content<D>)>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<ChangeBatch<T>>>, logging: Logger) -> InputHandle<T, D, P> {
     InputHandle {
-        pull_counter: pull_counter,
-        internal: internal,
-        logging: logging,
+        pull_counter,
+        internal,
+        logging,
     }
 }
 

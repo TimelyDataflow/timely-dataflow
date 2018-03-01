@@ -94,8 +94,8 @@ impl<T: Timestamp> Capability<T> {
 pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T> {
     internal.borrow_mut().update(time.clone(), 1);
     Capability {
-        time: time,
-        internal: internal
+        time,
+        internal,
     }
 }
 
@@ -214,14 +214,15 @@ impl<'cap, T: Timestamp> Debug for CapabilityRef<'cap, T> {
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
 #[inline(always)]
-pub fn mint_ref<'cap, T: Timestamp>(time: &'cap T, internal: Rc<RefCell<ChangeBatch<T>>>) -> CapabilityRef<'cap, T> {
+pub fn mint_ref<T: Timestamp>(time: &T, internal: Rc<RefCell<ChangeBatch<T>>>) -> CapabilityRef<T> {
     CapabilityRef {
-        time: time,
-        internal: internal
+        time,
+        internal,
     }
 }
 
 /// A set of capabilities, for possibly incomparable times.
+#[derive(Default)]
 pub struct CapabilitySet<T: Timestamp> {
     elements: Vec<Capability<T>>,
 }

@@ -78,7 +78,7 @@ where I : IntoIterator,
                     started = true;
                 }
 
-                for event_stream in event_streams.iter_mut() {
+                for event_stream in &mut event_streams {
                     while let Some(event) = event_stream.next() {
                         match *event {
                             Event::Progress(ref vec) => {

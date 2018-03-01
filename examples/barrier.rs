@@ -20,7 +20,7 @@ fn main() {
                 vec![RootTimestamp::new(0)],
                 move |_, _, notificator| {
                     while let Some((cap, _count)) = notificator.next() {
-                        let mut time = cap.time().clone();
+                        let mut time = *cap.time();
                         time.inner += 1;
                         if time.inner < iterations {
                             notificator.notify_at(cap.delayed(&time));

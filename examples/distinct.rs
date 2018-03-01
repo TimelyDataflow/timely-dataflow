@@ -15,7 +15,7 @@ fn main() {
             .unary_stream(Pipeline, "Distinct", move |input, output| {
                 input.for_each(|time, data| {
                     let counts = counts_by_time.entry(time.time().clone())
-                                               .or_insert(HashMap::new());
+                                               .or_insert_with(HashMap::new);
                     let mut session = output.session(&time);
                     for &datum in data.iter() {
                         let count = counts.entry(datum)

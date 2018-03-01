@@ -29,9 +29,9 @@ pub struct OperatorShape {
 impl OperatorShape {
     fn new(name: String, peers: usize) -> Self {
         OperatorShape {
-            name: name,
+            name,
             notify: true,
-            peers: peers,
+            peers,
             inputs: 0,
             outputs: 0,
         }
@@ -65,8 +65,8 @@ impl<G: Scope> OperatorBuilder<G> {
         let peers = scope.peers();
 
         OperatorBuilder {
-            scope: scope,
-            index: index,
+            scope,
+            index,
             shape: OperatorShape::new(name, peers),
             summary: vec![],
         }
@@ -148,8 +148,8 @@ impl<G: Scope> OperatorBuilder<G> {
     {
         let operator = OperatorCore {
             shape: self.shape,
-            push_external: push_external,
-            pull_internal: pull_internal,
+            push_external,
+            pull_internal,
             summary: self.summary,
             phantom: ::std::marker::PhantomData,
         };
