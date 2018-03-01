@@ -57,9 +57,9 @@ pub trait RadixSorter<T, U: Unsigned> : RadixSorterBase<T> {
     fn push_batch<F: Fn(&T)->U>(&mut self, batch: Vec<T>, key: &F);
     /// Pushes a sequence of elements using the supplied radix key function.
     fn extend<F: Fn(&T)->U, I: Iterator<Item=T>>(&mut self, iterator: I, key: &F) {
-    	for element in iterator {
-    		self.push(element, key)
-    	}
+        for element in iterator {
+            self.push(element, key)
+        }
     }
     /// Completes the sorting session and returns the sorted results.
     fn finish<F: Fn(&T)->U>(&mut self, key: &F) -> Vec<Vec<T>> {
@@ -80,12 +80,12 @@ pub trait RadixSorter<T, U: Unsigned> : RadixSorterBase<T> {
 
 /// Functionality independent of the type `U` used to sort.
 pub trait RadixSorterBase<T> {
-	/// Allocates a new instance of the radix sorter.
+    /// Allocates a new instance of the radix sorter.
     fn new() -> Self;
     /// Provides empty buffers for the radix sorter to use.
     fn recycle(&mut self, buffers: &mut Vec<Vec<T>>) {
         self.rebalance(buffers, usize::max_value());
-	}
-	/// Provides empty buffers for the radix sorter to use, with the intent that it should own at most `intended`.
+    }
+    /// Provides empty buffers for the radix sorter to use, with the intent that it should own at most `intended`.
     fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize);
 }
