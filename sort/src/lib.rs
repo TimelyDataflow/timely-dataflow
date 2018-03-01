@@ -5,7 +5,7 @@
 //! * LSBRadixSorter: A least-significant byte radix sorter.
 //! * MSBRadixSorter: A most-significant byte radix sorter.
 //! * LSBSWCRadixSorter: A least-significant byte radix sorter with software write combining.
-//! 
+//!
 //! There should probably be a `MSBSWCRadixSorter` in the future, because I like both of those things.
 
 mod lsb;
@@ -36,19 +36,19 @@ impl Unsigned for usize { #[inline]fn bytes() -> usize { ::std::mem::size_of::<u
 
 /// Functionality provided by a radix sorter.
 ///
-/// These radix sorters allow you to specify a radix key function with each method call, so that 
+/// These radix sorters allow you to specify a radix key function with each method call, so that
 /// the sorter does not need to reflect this (hard to name) type in its own type. This means you
 /// need to take some care and not abuse this.
 ///
-/// Internally the sorters manage data using blocks `Vec<T>`, and are delighted to consume data 
+/// Internally the sorters manage data using blocks `Vec<T>`, and are delighted to consume data
 /// in block form (they will re-use the blocks), and will return results as a sequence of blocks
 /// such that if they are traversed in-order they are appropriately sorted.
 ///
-/// Most of the sorters manage a stash of buffers (ideally: 256) that they use when sorting the 
+/// Most of the sorters manage a stash of buffers (ideally: 256) that they use when sorting the
 /// data. If this stash goes dry the sorters will allocate, but they much prefer to re-use buffers
 /// whenever possible, and if having consulted your sorted results you would like to return the
 /// buffers (using either `recycle` or `rebalance`) you should! The `rebalance` method allows you
-/// to control just how many buffers the sorter is sitting on. 
+/// to control just how many buffers the sorter is sitting on.
 pub trait RadixSorter<T, U: Unsigned> : RadixSorterBase<T> {
 
     /// Pushes a single element using the supplied radix key function.
@@ -65,16 +65,16 @@ pub trait RadixSorter<T, U: Unsigned> : RadixSorterBase<T> {
     fn finish<F: Fn(&T)->U>(&mut self, key: &F) -> Vec<Vec<T>> {
         let mut result = Vec::new();
         self.finish_into(&mut result, key);
-        result    	
+        result
     }
     /// Completes the sorting session and puts the sorted results into `target`.
     fn finish_into<F: Fn(&T)->U>(&mut self, target: &mut Vec<Vec<T>>, key: &F);
     /// Sorts batched data using the supplied radix key function.
     fn sort<F: Fn(&T)->U>(&mut self, batches: &mut Vec<Vec<T>>, key: &F) {
-        for batch in batches.drain(..) { 
-            self.push_batch(batch, key); 
+        for batch in batches.drain(..) {
+            self.push_batch(batch, key);
         }
-        self.finish_into(batches, key);    	
+        self.finish_into(batches, key);
     }
 }
 
@@ -87,5 +87,5 @@ pub trait RadixSorterBase<T> {
         self.rebalance(buffers, usize::max_value());
 	}
 	/// Provides empty buffers for the radix sorter to use, with the intent that it should own at most `intended`.
-    fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize);	
+    fn rebalance(&mut self, buffers: &mut Vec<Vec<T>>, intended: usize);
 }

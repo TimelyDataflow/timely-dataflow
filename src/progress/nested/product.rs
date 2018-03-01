@@ -70,7 +70,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner>
 
 impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
     // unsafe fn embalm(&mut self) { self.outer.embalm(); self.inner.embalm(); }
-    unsafe fn entomb<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> { 
+    unsafe fn entomb<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
         self.outer.entomb(write)?;
         self.inner.entomb(write)?;
         Ok(())
@@ -84,8 +84,8 @@ impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, T
 
 /// A type that does not affect total orderedness.
 ///
-/// This trait is not useful, but must be made public and documented or else Rust 
-/// complains about its existence in the constraints on the implementation of 
+/// This trait is not useful, but must be made public and documented or else Rust
+/// complains about its existence in the constraints on the implementation of
 /// public traits for public types.
 pub trait Empty : PartialOrder { }
 

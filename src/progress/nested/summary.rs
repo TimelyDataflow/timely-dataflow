@@ -26,13 +26,13 @@ impl<S, T: Default> Default for Summary<S, T> {
     fn default() -> Summary<S, T> { Local(Default::default()) }
 }
 
-// Two summaries are comparable if they are the same type (Local or Outer). If they have different types, 
+// Two summaries are comparable if they are the same type (Local or Outer). If they have different types,
 // then there is no way to order them, as Local leaves the outer coordinate unincremented, and Outer has
 // a new inner coordinate that it installs, rather than advancing the existing inner coordinate.
 //
 // Two local summaries are ordered if their inner summaries are ordered.
-// 
-// Two outer summaries are ordered if their outer and inner summaries are ordered. 
+//
+// Two outer summaries are ordered if their outer and inner summaries are ordered.
 //
 // Note: I think the previous implementation, which compared (s1,t1) to (s2,t2), was incorrect. The order
 // on tuples is lexicographic, so this would put a small outer summary and large inner installment ahead
@@ -53,7 +53,7 @@ impl<S: PartialOrder, T: PartialOrder> PartialOrder for Summary<S, T> {
 //     #[inline]
 //     fn partial_cmp(&self, other: &Summary<S, T>) -> Option<Ordering> {
 //         // Two summaries are comparable if they are of the same type (Local, Outer).
-//         // Otherwise, as Local *updates* and Outer *sets* the inner coordinate, we 
+//         // Otherwise, as Local *updates* and Outer *sets* the inner coordinate, we
 //         // cannot be sure that either strictly improves on the other.
 //         match (*self, *other) {
 //             (Local(t1),    Local(t2))    => t1.partial_cmp(&t2),

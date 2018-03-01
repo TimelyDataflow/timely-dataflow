@@ -81,10 +81,10 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// let send0 = Arc::new(Mutex::new(send0));
     ///
     /// timely::execute(timely::Configuration::Thread, move |worker| {
-    /// 
+    ///
     ///     // this is only to validate the output.
     ///     let send0 = send0.lock().unwrap().clone();
-    /// 
+    ///
     ///     // these allow us to capture / replay a timely stream.
     ///     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
     ///     let send = TcpStream::connect("127.0.0.1:8000").unwrap();

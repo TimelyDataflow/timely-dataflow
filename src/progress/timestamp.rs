@@ -28,7 +28,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// Advances a timestamp according to the timestamp actions on the path.
     ///
     /// The path may advance the timestamp sufficiently that it is no longer valid, for example if
-    /// incrementing fields would result in integer overflow. In this case, `results_in` should 
+    /// incrementing fields would result in integer overflow. In this case, `results_in` should
     /// return `None`.
     ///
     /// The `feedback` operator, apparently the only point where timestamps are actually incremented
@@ -43,18 +43,18 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     ///
     /// let summary1 = 5;
     /// let summary2 = usize::max_value() - 2;
-    /// 
+    ///
     /// assert_eq!(summary1.results_in(&timestamp), Some(8));
     /// assert_eq!(summary2.results_in(&timestamp), None);
     /// ```
     fn results_in(&self, src: &T) -> Option<T>;
     /// Composes this path summary with another path summary.
     ///
-    /// It is possible that the two composed paths result in an invalid summary, for example when 
-    /// integer additions overflow. If it is correct that all timestamps moved along these paths 
+    /// It is possible that the two composed paths result in an invalid summary, for example when
+    /// integer additions overflow. If it is correct that all timestamps moved along these paths
     /// would also result in overflow and be discarded, `followed_by` can return `None. It is very
-    /// important that this not be used casually, as this does not prevent the actual movement of 
-    /// data. 
+    /// important that this not be used casually, as this does not prevent the actual movement of
+    /// data.
     ///
     /// #Examples
     /// ```
@@ -62,9 +62,9 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     ///
     /// let summary1 = 5;
     /// let summary2 = usize::max_value() - 3;
-    /// 
+    ///
     /// assert_eq!(summary1.followed_by(&summary2), None);
-    /// ```    
+    /// ```
     fn followed_by(&self, other: &Self) -> Option<Self>;
 }
 

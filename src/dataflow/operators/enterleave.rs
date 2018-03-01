@@ -122,7 +122,7 @@ impl<'a, G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<'a, G, T>
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         let channel_id = scope.clone().new_identifier();
         self.connect_to(Target { index: 0, port: output.port }, EgressNub { targets: targets, phantom: PhantomData }, channel_id);
-        
+
         Stream::new(
             output,
             registrar,

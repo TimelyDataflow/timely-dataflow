@@ -49,9 +49,9 @@ fn main() {
 
 ### Map variants
 
-There are a few variants of `map` with different functionality. 
+There are a few variants of `map` with different functionality.
 
-For example, the `map_in_place` method takes a closure which receives a mutable reference and produces no output; instead, this method allows you to change the data *in-place*, which can be a valuable way to avoid duplication of resources. 
+For example, the `map_in_place` method takes a closure which receives a mutable reference and produces no output; instead, this method allows you to change the data *in-place*, which can be a valuable way to avoid duplication of resources.
 
 ```rust,no_run
 extern crate timely;
@@ -92,7 +92,7 @@ fn main() {
 
 ## Filtering
 
-Another fundamental operation is *filtering*, in which a predicate dictates a subset of the stream to retain. 
+Another fundamental operation is *filtering*, in which a predicate dictates a subset of the stream to retain.
 
 ```rust,no_run
 extern crate timely;
@@ -115,7 +115,7 @@ Unlike `map`, the predicate passed to the `filter` operator does not receive *ow
 
 ## Logical Partitioning
 
-There are two operators for spliting and combining streams, `partition` and `concat` respectively. 
+There are two operators for spliting and combining streams, `partition` and `concat` respectively.
 
 The `partition` operator takes two arguments, a number of resulting streams to produce, and a closure which takes each record to a pair of the target partition identifier and the output record. The output of `partition` is a list of streams, where each stream contains those elements mapped to the stream under the closure.
 
@@ -181,7 +181,7 @@ Both `concat` and `concatenate` are efficient operations that exchange no data b
 
 To complement the logical partitioning of `partition`, timely also provides the physical partitioning operator `exchange` which routes records to a worker based on a supplied closure. The `exchange` operator does not change the contents of the stream, but rather the distribution of elements to the workers. This operation can be important if you would like to collect records before printing statistics to the screen, or otherwise do some work that requires a specific data distribution.
 
-Operators that require a specific data distribution will ensure that this occurs as part of their definition. As the programmer, you should not need to invoke `exchange`. 
+Operators that require a specific data distribution will ensure that this occurs as part of their definition. As the programmer, you should not need to invoke `exchange`.
 
 There are times where `exchange` can be useful. For example, if a stream is used by two operators requiring the same distribution, simply using the stream twice will cause duplicate data exchange as each operator satisfies its requirements. Instead, it may make sense to invoke `exchange` to move the data once, at which point the two operators will no longer require serialization and communication to shuffle their inputs appropriately.
 

@@ -22,7 +22,7 @@ pub trait ToStream<T: Timestamp, D: Data> {
     ///     let data2 = vec![0,1,2].to_stream(scope).capture();
     ///     (data1, data2)
     /// });
-    /// 
+    ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
     fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>;

@@ -5,7 +5,7 @@ use super::Event;
 /// Supports extracting a sequence of timestamp and data.
 pub trait Extract<T: Ord, D: Ord> {
     /// Converts `self` into a sequence of timestamped data.
-    /// 
+    ///
     /// Currently this is only implemented for `Receiver<Event<T, D>>`, and is used only
     /// to easily pull data out of a timely dataflow computation once it has completed.
     ///

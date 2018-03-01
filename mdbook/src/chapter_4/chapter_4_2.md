@@ -63,7 +63,7 @@ fn main() {
         let results1 = stream1.map(|x| 3 * x + 1);
 
         // partition the input and feedback streams by even-ness.
-        let parts = 
+        let parts =
         (1 .. 10)
             .to_stream(scope)
             .concat(&results0)
@@ -96,7 +96,7 @@ fn main() {
         scope.scoped(|subscope| {
 
             let (handle, stream) = scope.loop_variable(100, 1);
-        
+
             input
                 .enter(subscope)
                 .concat(stream)

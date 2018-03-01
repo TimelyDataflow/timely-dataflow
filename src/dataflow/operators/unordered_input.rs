@@ -68,7 +68,7 @@ pub trait UnorderedInput<G: Scope> {
     ///         worker.step();
     ///     }
     /// }).unwrap();
-    /// 
+    ///
     /// let extract = recv.extract();
     /// for i in 0..10 {
     ///     assert_eq!(extract[i], (RootTimestamp::new(i), vec![i]));

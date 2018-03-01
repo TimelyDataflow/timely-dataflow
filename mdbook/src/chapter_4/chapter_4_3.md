@@ -50,7 +50,7 @@ fn main() {
 }
 ```
 
-but without actually producing the 4,999,950,000 intermediate records all at once. 
+but without actually producing the 4,999,950,000 intermediate records all at once.
 
 One way to do this is to build a self-regulating dataflow, into which we can immediately dump all the records, but which will buffer records until it is certain that the work for prior records has drained. We will write this out in all the gorey detail, but these operators are certainly things that could be packaged up and re-used.
 
@@ -81,7 +81,7 @@ fn main() {
                 time
             })
             // Buffer records until all prior timestamps have completed.
-            .unary(Pipeline, "Buffer", move |_capability| 
+            .unary(Pipeline, "Buffer", move |_capability|
                 move |input, output| {
 
                     // Stash received data.

@@ -2,7 +2,7 @@
 
 Progress tracking is a fundamental component of timely dataflow, and it is important to understand how it works to have a complete understanding of what timely dataflow does for you.
 
-Let's start with a statement about what progress tracking means to accomplish. 
+Let's start with a statement about what progress tracking means to accomplish.
 
 The setting is that there are multiple workers, each of whom move data through a common dataflow graph. The data may move between workers, and as the data are processed by operators we have relatively few guarantees about their consequences: a worker may receive a record and do nothing, or it could send one thousand output records some of which are now destined for us. Nonetheless, we need to be able to make meaningful statements about the possibility of receiving more data.
 
@@ -10,7 +10,7 @@ Timely dataflow's approach is that data bear a logical *timestamp*, indicating s
 
 Timely dataflow imposes a few constraints, we think they are natural, on the structure of the dataflow graph, from which it is able to make restrictive statements at each location in the dataflow graph of the form "you will only ever see timestamps greater or equal to these times". This provides each dataflow operator with an understanding of *progress* in the computation. Eventually, we may even learn that the set of future timestamps is empty, indicating completion of the stream of data.
 
-Timely dataflow computations are structured so that to send a timestamped message, an operator must hold a capability for that timestamp. Timely dataflow's progress tracking can be viewed as (i) workers collectively maintaining a view of outstanding timestamp capabilities at each location in the dataflow graph, and (ii) each worker independently determines and communicates the implications of changes in its view of capabilities to other locations in its instance of the dataflow graph. 
+Timely dataflow computations are structured so that to send a timestamped message, an operator must hold a capability for that timestamp. Timely dataflow's progress tracking can be viewed as (i) workers collectively maintaining a view of outstanding timestamp capabilities at each location in the dataflow graph, and (ii) each worker independently determines and communicates the implications of changes in its view of capabilities to other locations in its instance of the dataflow graph.
 
 Before we get in to these two aspects, we will first need to be able to name parts of our dataflow graph.
 
@@ -21,18 +21,18 @@ A dataflow graph hosts some number of operators. For progress tracking, these op
 In timely dataflow progress tracking, we identify output ports by the type `Source` and input ports by the type `Target`, as from the progress coordinator's point of view, an operator's output port is a *source* of timestamped data, and an operator's input port is a *target* of timestamped data. Each source and target can be described by their operator index and then an operator-local index of the corresponding port. The use of distinct types helps us avoid mistaking input and output ports.
 
 ```rust,ignore
-pub struct Source { 
+pub struct Source {
     /// Index of the source operator.
-    pub index: usize, 
+    pub index: usize,
     /// Number of the output port from the operator.
-    pub port: usize, 
+    pub port: usize,
 }
 
-pub struct Target { 
+pub struct Target {
     /// Index of the target operator.
-    pub index: usize, 
+    pub index: usize,
     /// Nmuber of the input port to the operator.
-    pub port: usize, 
+    pub port: usize,
 }
 ```
 
@@ -42,7 +42,7 @@ At this point we have the structure of a dataflow graph. We can draw a circle fo
 
 ## Maintaining Capabilities
 
-Our first goal is for the workers to collectively track the number of outstanding timestamp capabilities in the system, for each timestamp and at each location, as dataflow operators run and messages are sent and received. Capabilities can exist in two places in timely dataflow: an operator can explicitly hold capabilities to send timestamped messages on each of its outputs, and each timestamped message bears a capability for its timestamp. 
+Our first goal is for the workers to collectively track the number of outstanding timestamp capabilities in the system, for each timestamp and at each location, as dataflow operators run and messages are sent and received. Capabilities can exist in two places in timely dataflow: an operator can explicitly hold capabilities to send timestamped messages on each of its outputs, and each timestamped message bears a capability for its timestamp.
 
 When tracking capabilities, we will track their *multiplicity*: how *many* capabilities for time `t` are there at location `l`? For most locations and times this number will be zero. Unless the computation has completed, for some locations and times this number must be positive. Numbers can also be transiently negative, as reports of changes may arrive out of order.
 
@@ -85,7 +85,7 @@ pub trait PathSummary<T> : PartialOrder {
 }
 ```
 
-The types implementing `PathSummary` must be partially ordered, and implement two methods: 
+The types implementing `PathSummary` must be partially ordered, and implement two methods:
 
 1. The `results_in` method explains what must happen to a timestamp moving along a path. Note the possibility of `None`; a timestamp could *not* move along a path. For example, a path summary `path` could increment a timestamp by one, for which
 ```rust,ignore
@@ -96,7 +96,7 @@ It is important that `results_in` only advance timestamps: for all path summarie
 
 2. The `followed_by` method explains how two path summaries combine. When we build the summaries we will start with paths corresponding to single edges, and build out more complex paths by combining the effects of multiple paths (and their summaries). As with `results_in`, it may be that two paths combined result in something that will never pass a timestamp, and the summary may be `None` (for example, two paths that each increment a loop counter by half of its maximum value).
 
-Two path summaries are ordered if for all timestamps the two results of the path summaries applied to the timestamp are also ordered. 
+Two path summaries are ordered if for all timestamps the two results of the path summaries applied to the timestamp are also ordered.
 
 Path summaries are only partially ordered, and when summarizing what must happen to a timestamp when going from one location to another, along one of many paths, we will quickly find ourselves speaking about *collections* of path summaries. There may be several summaries corresponding to different paths we might take. We can discard summaries from this collection that are strictly greater than other elements of the collection, but we may still have multiple incomparable path summaries.
 
@@ -118,7 +118,7 @@ For example, an operator could plausibly have two inputs, a data input and a dia
 
 ### A Compiled Representation
 
-From the operator summaries we build path summaries, and from the path summaries we determine, for every pair of either `Source` or `Target` a collection of path summaries between the two. How could a timestamped message at one location lead to timestamped messages at the other? 
+From the operator summaries we build path summaries, and from the path summaries we determine, for every pair of either `Source` or `Target` a collection of path summaries between the two. How could a timestamped message at one location lead to timestamped messages at the other?
 
 The only constraint we require is that there should be no cycles that do not strictly advance a timestamp.
 
@@ -136,7 +136,7 @@ There is almost no coordination between the data plane, on which messages get se
 
 So where do we find intuition for the correctness of the protocol?
 
-Although we may have only seen prefixes of the progress update batches from other workers, we can nonetheless reason about what future progress update batches from each worker will need to look like. In the main, we will use the property that if updates correspond to things that actually happen: 
+Although we may have only seen prefixes of the progress update batches from other workers, we can nonetheless reason about what future progress update batches from each worker will need to look like. In the main, we will use the property that if updates correspond to things that actually happen:
 
 1. Any message consumed must have a corresponding message produced, even if we haven't heard about it yet.
 2. Any message produced must involve a capability held, even if we haven't heard about it yet.

@@ -59,7 +59,7 @@ Importantly, we haven't imposed any constraints on how these operators need to r
     worker 0:	hello 4
     worker 0:	hello 6
     worker 0:	hello 8
-    Echidnatron% 
+    Echidnatron%
 
 What a mess. Nothing in our dataflow program requires that workers zero and one alternate printing to the screen, and you can even see that worker one is *done* before worker zero even gets to printing `hello 4`.
 
@@ -69,7 +69,7 @@ However, this is only a mess if we are concerned about the order, and in many ca
 
 ```rust,ignore
 .inspect(|x| {
-    // we only need to test factors up to sqrt(x) 
+    // we only need to test factors up to sqrt(x)
     let limit = (*x as f64).sqrt() as u64;
     if *x > 1 && (2 .. limit + 1).all(|i| x % i > 0) {
         println!("{} is prime", x);
@@ -85,7 +85,7 @@ However, this is only a mess if we are concerned about the order, and in many ca
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w1`
     cargo run --example hello -- -w1 > output1.txt  59.84s user 0.10s system 99% cpu 1:00.01 total
-    Echidnatron% 
+    Echidnatron%
 
 And now again with two workers:
 
@@ -97,10 +97,10 @@ And now again with two workers:
 
 The time is basically halved, from one minute to thirty seconds, which is a great result for those of us who like factoring small numbers. Furthermore, although the 1,262 lines of results of `output1.txt` and `output2.txt` are not in the same order, it takes a fraction of a second to make them so, and verify that they are identical:
 
-    Echidnatron% sort output1.txt > sorted1.txt                   
-    Echidnatron% sort output2.txt > sorted2.txt                   
-    Echidnatron% diff sorted1.txt sorted2.txt                     
-    Echidnatron% 
+    Echidnatron% sort output1.txt > sorted1.txt
+    Echidnatron% sort output2.txt > sorted2.txt
+    Echidnatron% diff sorted1.txt sorted2.txt
+    Echidnatron%
 
 ---
 

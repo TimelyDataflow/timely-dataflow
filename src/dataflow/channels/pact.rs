@@ -1,6 +1,6 @@
 //! Parallelization contracts, describing requirements for data movement along dataflow edges.
 //!
-//! Pacts describe how data should be exchanged between workers, and implement a method which 
+//! Pacts describe how data should be exchanged between workers, and implement a method which
 //! creates a pair of `Push` and `Pull` implementors from an `A: Allocate`. These two endpoints
 //! respectively distribute and collect data among workers according to the pact.
 //!
@@ -60,7 +60,7 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
-    // TODO: The closure in the type prevents us from naming it. 
+    // TODO: The closure in the type prevents us from naming it.
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<Push<(T, Content<D>)>>;
     type Puller = Puller<T, D, Box<Pull<Message<T, D>>>>;

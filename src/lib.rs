@@ -82,8 +82,8 @@ impl<T: ::abomonation::Abomonation+Clone+'static> Data for T { }
 
 /// A composite trait for types usable on exchange channels in timely dataflow.
 ///
-/// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication` 
-/// `Data` trait, which describes requirements for communication along channels. 
+/// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`
+/// `Data` trait, which describes requirements for communication along channels.
 pub trait ExchangeData: Data + timely_communication::Data { }
 impl<T: Data + timely_communication::Data> ExchangeData for T { }
 
