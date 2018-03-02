@@ -1,6 +1,6 @@
 # When to use Timely Dataflow
 
-Timely dataflow may be a different programming model than you are used to, but if you can adapt your program to it there are several benefits. 
+Timely dataflow may be a different programming model than you are used to, but if you can adapt your program to it there are several benefits.
 
 * **Data Parallelism**: The operators in timely dataflow are largely "data-parallel", meaning they can operate on independent parts of the data concurrently. This allows the underlying system to distribute timely dataflow computations across multiple parallel workers. These can be threads on your computer, or even threads across computers in a cluster you have access to. This distribution typically improves the throughput of the system, and lets you scale to larger problems with access to more resources (computation, communication, and memory).
 
@@ -14,7 +14,7 @@ At the same time, dataflow computation is also another way of thinking about you
 
 ## Generality
 
-Is timely dataflow always applicable? The intent of this research project is to remove layers of abstraction fat that prevent you from expressing anything your computer can do efficiently in parallel. 
+Is timely dataflow always applicable? The intent of this research project is to remove layers of abstraction fat that prevent you from expressing anything your computer can do efficiently in parallel.
 
 Under the covers, your computer (the one on which you are reading this text) is a dataflow processor. When your computer *reads memory* it doesn't actually wander off to find the memory, it introduces a read request into your memory controller, an independent component that will eventually return with the associated cache line. Your computer then gets back to work on whatever it was doing, hoping the responses from the controller return in a timely fashion.
 

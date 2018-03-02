@@ -9,7 +9,7 @@
 
 - [Core Concepts](./chapter_1/chapter_1.md)
     - [Dataflow](./chapter_1/chapter_1_1.md)
-    - [Timestamps](./chapter_1/chapter_1_2.md)    
+    - [Timestamps](./chapter_1/chapter_1_2.md)
     - [Progress](./chapter_1/chapter_1_3.md)
 
 - [Building Timely Dataflows](./chapter_2/chapter_2.md)

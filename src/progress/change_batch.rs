@@ -29,11 +29,11 @@ impl<T:Ord> ChangeBatch<T> {
     /// let mut batch = ChangeBatch::<usize>::new();
     /// assert!(batch.is_empty());
     ///```
-    pub fn new() -> ChangeBatch<T> { 
-        ChangeBatch { 
-            updates: Vec::new(), 
-            clean: 0 
-        } 
+    pub fn new() -> ChangeBatch<T> {
+        ChangeBatch {
+            updates: Vec::new(),
+            clean: 0
+        }
     }
 
     /// Allocates a new `ChangeBatch` with a single entry.
@@ -57,7 +57,7 @@ impl<T:Ord> ChangeBatch<T> {
     ///
     /// This could be optimized to perform compaction when the number of "dirty" elements exceeds
     /// half the length of the list, which would keep the total footprint within reasonable bounds
-    /// even under an arbitrary number of updates. This has a cost, and it isn't clear whether it 
+    /// even under an arbitrary number of updates. This has a cost, and it isn't clear whether it
     /// is worth paying without some experimentation.
     ///
     /// #Examples
@@ -102,11 +102,11 @@ impl<T:Ord> ChangeBatch<T> {
     /// let batch = ChangeBatch::<usize>::new_from(17, 1);
     /// assert_eq!(batch.into_inner(), vec![(17, 1)]);
     ///```
-    pub fn into_inner(mut self) -> Vec<(T, i64)> { 
+    pub fn into_inner(mut self) -> Vec<(T, i64)> {
         self.compact();
-        self.updates 
+        self.updates
     }
-    
+
     /// Iterates over the contents of the map.
     ///
     /// #Examples
@@ -123,9 +123,9 @@ impl<T:Ord> ChangeBatch<T> {
     /// assert!(!batch.is_empty());
     ///```
     #[inline]
-    pub fn iter(&mut self) -> ::std::slice::Iter<(T, i64)> { 
+    pub fn iter(&mut self) -> ::std::slice::Iter<(T, i64)> {
         self.compact();
-        self.updates.iter() 
+        self.updates.iter()
     }
 
     /// Drains the set of updates.
@@ -165,15 +165,15 @@ impl<T:Ord> ChangeBatch<T> {
     /// assert!(batch.is_empty());
     ///```
     #[inline]
-    pub fn clear(&mut self) { 
-        self.updates.clear(); 
-        self.clean = 0; 
+    pub fn clear(&mut self) {
+        self.updates.clear();
+        self.clean = 0;
     }
 
     /// True iff all keys have value zero.
     ///
     /// This method requires mutable access to `self` because it may need to compact the representation
-    /// to determine if the batch of updates is indeed empty. We could also implement a weaker form of 
+    /// to determine if the batch of updates is indeed empty. We could also implement a weaker form of
     /// `is_empty` which just checks the length of `self.updates`, and which could confirm the absence of
     /// any updates, but could report false negatives if there are updates which would cancel.
     ///
@@ -206,9 +206,9 @@ impl<T:Ord> ChangeBatch<T> {
 
     /// Drains `self` into `other`.
     ///
-    /// This method has similar a effect to calling `other.extend(self.drain())`, but has the 
+    /// This method has similar a effect to calling `other.extend(self.drain())`, but has the
     /// opportunity to optimize this to a `::std::mem::swap(self, other)` when `other` is empty.
-    /// As many uses of this method are to propagate updates, this optimization can be quite 
+    /// As many uses of this method are to propagate updates, this optimization can be quite
     /// handy.
     ///
     /// #Examples

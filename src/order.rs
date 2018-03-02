@@ -3,7 +3,7 @@
 /// A type that is partially ordered.
 ///
 /// This trait is distinct from Rust's `PartialOrd` trait, because the implementation
-/// of that trait precludes a distinct `Ord` implementation. We need an independent 
+/// of that trait precludes a distinct `Ord` implementation. We need an independent
 /// trait if we want to have a partially ordered type that can also be sorted.
 pub trait PartialOrder : Eq {
     /// Returns true iff one element is strictly less than the other.
@@ -21,7 +21,7 @@ pub trait PartialOrder : Eq {
 /// are total, meaning that `x.less_than(&y)` is equivalent to `!y.less_equal(&x)`.
 ///
 /// This trait is distinct from Rust's `Ord` trait, because several implementors of
-/// `PartialOrd` also implement `Ord` for efficient canonicalization, deduplication, 
+/// `PartialOrd` also implement `Ord` for efficient canonicalization, deduplication,
 /// and other sanity-maintaining operations.
 pub trait TotalOrder : PartialOrder { }
 

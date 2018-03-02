@@ -66,7 +66,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     /// Create a new stream from a supplied interactive handle.
     ///
     /// This method creates a new timely stream whose data are supplied interactively through the `handle`
-    /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate 
+    /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate
     /// if it as attached to more than one stream.
     ///
     /// #Examples
@@ -121,7 +121,7 @@ impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Root<A>, T> {
             copies:   copies,
         });
 
-        Stream::new(Source { index: index, port: 0 }, registrar, self.clone())        
+        Stream::new(Source { index: index, port: 0 }, registrar, self.clone())
     }
 }
 
@@ -229,7 +229,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Root<A>, T>) -> Stream<Child<'a, Root<A>, T>, D> 
+    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Root<A>, T>) -> Stream<Child<'a, Root<A>, T>, D>
     where T: Ord {
         scope.input_from(self)
     }

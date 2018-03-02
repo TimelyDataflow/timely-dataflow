@@ -24,17 +24,17 @@ fn main() {
 }
 
 fn test_threads<L: Fn()+Send+Sync+'static>(threads: usize, logic: L) -> f64 {
-    
+
     let timer = ::std::time::Instant::now();
-    
+
     let logic = ::std::sync::Arc::new(logic);
     let mut handles = Vec::new();
     for _thread in 0 .. threads {
         let logic = logic.clone();
         handles.push(::std::thread::spawn(move || (*logic)()));
     }
-    for handle in handles { 
-        handle.join().unwrap(); 
+    for handle in handles {
+        handle.join().unwrap();
     }
 
     let elapsed = timer.elapsed();

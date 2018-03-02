@@ -1,6 +1,6 @@
 # Observing Outputs
 
-Having constructed a minimal streaming computation, we might like to take a peek at the output. There are a few ways to do this, but the simplest by far is the `inspect` operator. 
+Having constructed a minimal streaming computation, we might like to take a peek at the output. There are a few ways to do this, but the simplest by far is the `inspect` operator.
 
 The `inspect` operator is called with a closure, and it ensures that the closure is run on each record that passes through the operator. This closure can do just about anything, from printing to the screen or writing to a file.
 

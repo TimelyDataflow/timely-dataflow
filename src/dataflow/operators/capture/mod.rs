@@ -4,15 +4,15 @@
 //! sees as input (both data and progress information), and play this information back as a new
 //! input.
 //!
-//! The `capture_into` method requires a `P: EventPusher<T, D>`, which is some type accepting 
-//! `Event<T, D>` inputs. This module provides several examples, including the linked list 
+//! The `capture_into` method requires a `P: EventPusher<T, D>`, which is some type accepting
+//! `Event<T, D>` inputs. This module provides several examples, including the linked list
 //! `EventLink<T, D>`, and the binary `EventWriter<T, D, W>` wrapping any `W: Write`.
 //!
-//! Streams are captured at the worker granularity, and one can replay an arbitrary subset of 
+//! Streams are captured at the worker granularity, and one can replay an arbitrary subset of
 //! the captured streams on any number of workers (fewer, more, or as many as were captured).
 //! There is a protocol the captured stream uses, and implementors of new event streams should
 //! make sure to understand this (and complain if it is not clear).
-//! 
+//!
 //! #Examples
 //!
 //! The type `Rc<EventLink<T,D>>` implements a typed linked list,

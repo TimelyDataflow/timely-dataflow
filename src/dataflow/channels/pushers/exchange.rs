@@ -1,4 +1,4 @@
-//! The exchange pattern distributes pushed data between many target pushees. 
+//! The exchange pattern distributes pushed data between many target pushees.
 
 use {Push, Data};
 use dataflow::channels::Content;
@@ -72,7 +72,7 @@ impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&
                         //         self.flush(index);
                         //     }
                         // }
-                        
+
                     }
                 }
                 // as a last resort, use mod (%)

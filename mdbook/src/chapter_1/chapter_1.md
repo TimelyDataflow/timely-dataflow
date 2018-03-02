@@ -4,7 +4,7 @@ Timely dataflow relies on two fundamental concepts: **timestamps** and **dataflo
 
 ## Dataflow
 
-Dataflow programming is fundamentally about describing your program as independent components, each of which operate in response to the availability of input data, as well as describing the connections between these components. 
+Dataflow programming is fundamentally about describing your program as independent components, each of which operate in response to the availability of input data, as well as describing the connections between these components.
 
 The most important part of dataflow programming is the *independence* of the components. When you write a dataflow program, you provide the computer with flexibility in how it executes your program. Rather than insisting on a specific sequence of instructions the computer should follow, the computer can work on each of the components as it sees fit, perhaps even sharing the work with other computers.
 

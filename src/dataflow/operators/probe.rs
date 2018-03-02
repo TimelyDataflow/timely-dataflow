@@ -141,10 +141,10 @@ impl<T: Timestamp> Handle<T> {
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().is_empty() }
     /// Allocates a new handle.
     #[inline] pub fn new() -> Self { Handle { frontier: Rc::new(RefCell::new(MutableAntichain::new())) } }
-    
+
     /// Invokes a method on the frontier, returning its result.
     ///
-    /// This method allows inspection of the frontier, which cannot be returned by reference as 
+    /// This method allows inspection of the frontier, which cannot be returned by reference as
     /// it is on the other side of a `RefCell`.
     ///
     /// #Examples

@@ -1,16 +1,16 @@
 //! Most-significant bit (MSB) radix sorting.
 //!
 //! MSB radix sorting works by partitioning elements first by their highest byte, and then recursively
-//! processing each part. Our plan is to do this in a depth-first manner, to minimize the outlay of 
+//! processing each part. Our plan is to do this in a depth-first manner, to minimize the outlay of
 //! partially empty buffers and such.
-//! 
+//!
 //! One advantage of MSB radix sorting is that we can stop at any point and fall into a traditional sort
-//! implementation. I expect this to be useful, in that many instances of radix sorting are based on a 
+//! implementation. I expect this to be useful, in that many instances of radix sorting are based on a
 //! hash of keys, and still require a final sort in any case.
 //!
-//! This advantage is likely also an important performance detail: we should eventually fall into a more 
+//! This advantage is likely also an important performance detail: we should eventually fall into a more
 //! traditional sort if the number of elements becomes small, as our implementation will have non-trivial
-//! (i.e. 256) overhead for each invocation. Once we have less than some fixed amount of work (e.g. one 
+//! (i.e. 256) overhead for each invocation. Once we have less than some fixed amount of work (e.g. one
 //! buffer's full of elements) we should fall into the final sort.
 
 use ::std::mem::replace;
@@ -27,15 +27,15 @@ macro_rules! lines_per_page {
     () => {{ 2 * 4096 / 64 }}
 }
 
-/// A "most-significant byte" (MSB) radix sorter. 
+/// A "most-significant byte" (MSB) radix sorter.
 ///
-/// This type manages buffers and provides logic for sorting batches of records using binary keys, in a 
+/// This type manages buffers and provides logic for sorting batches of records using binary keys, in a
 /// "top down" or "most-significant byte" manner. One advantage of this approach is that it can exit early
-/// if batch sizes become small, avoiding radix scans over the data. 
+/// if batch sizes become small, avoiding radix scans over the data.
 ///
-/// The type also allows the user to hook this the early exit functionality, as the finalizing action before 
+/// The type also allows the user to hook this the early exit functionality, as the finalizing action before
 /// the early exit can be a great time to consolidate or deduplicate records if this is desired, and can be
-/// much more efficient than trying to do the same after the fact (often the radix key is not the true key, 
+/// much more efficient than trying to do the same after the fact (often the radix key is not the true key,
 /// and one must re-sort by the actual key). See the `finish_into_and` and `sort_and` methods.
 pub struct Sorter<T> {
 
@@ -95,7 +95,7 @@ impl<T> Sorter<T> {
     pub fn finish_into_and<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, target: &mut Vec<Vec<T>>, bytes: F, action: L) {
         let depth = U::bytes() - 1;
         for byte in (0 .. 256).rev() {
-            let mut bucket = self.buckets.get_mut(byte); 
+            let mut bucket = self.buckets.get_mut(byte);
             if !bucket.is_empty() {
                 self.work.push((depth, bucket.finish()));
             }

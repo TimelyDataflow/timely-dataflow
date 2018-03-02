@@ -51,7 +51,7 @@ pub trait Map<S: Scope, D: Data> {
 impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn map<D2: Data, L: Fn(D)->D2+'static>(&self, logic: L) -> Stream<S, D2> {
         self.unary_stream(Pipeline, "Map", move |input, output| {
-            input.for_each(|time, data| { 
+            input.for_each(|time, data| {
                 output.session(&time).give_iterator(data.drain(..).map(|x| logic(x)));
             });
         })

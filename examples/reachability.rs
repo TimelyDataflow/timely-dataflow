@@ -20,7 +20,7 @@ fn test_alt(nodes: usize, rounds: usize) {
 
     // allocate a new empty topology builder.
     let mut builder = Builder::<usize>::new();
-     
+
     // Each node with one input connected to one output.
     for index in 1 .. nodes {
         builder.add_node(index - 1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -84,7 +84,7 @@ fn test_neu(nodes: usize, rounds: usize) {
 
     // allocate a new empty topology builder.
     let mut builder = Builder::<usize>::new();
-     
+
     // Each node with one input connected to one output.
     for index in 1 .. nodes {
         builder.add_node(index - 1, 1, 1, vec![vec![Antichain::from_elem(0)]]);

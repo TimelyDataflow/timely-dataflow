@@ -109,9 +109,9 @@ The system is smart enough to notice when you downgrade and discard capabilities
 
 ### Stateful operators
 
-It may seem that we have only considered stateless operators, those that are only able to read from their inputs and immediately write to their outputs. But, you can have whatever state that you like, using the magic of Rust's closures. When we write a closure, it can capture ("close over") any state that is currently in scope, taking ownership of it. This is actually what we did up above with the capability. If that sounds too abstract, let's look at an example. 
+It may seem that we have only considered stateless operators, those that are only able to read from their inputs and immediately write to their outputs. But, you can have whatever state that you like, using the magic of Rust's closures. When we write a closure, it can capture ("close over") any state that is currently in scope, taking ownership of it. This is actually what we did up above with the capability. If that sounds too abstract, let's look at an example.
 
-Our `unary` example from way back just incremented the value and passed it along. What if we wanted to only pass values larger than any value we have seen so far? We just define a variable `max` which we check and update as we would normally. Importantly, we should define it *outside* the closure we return, so that it persists across calls, and we need to use the `move` keyword so that the closure knows it is supposed to take ownership of the variable. 
+Our `unary` example from way back just incremented the value and passed it along. What if we wanted to only pass values larger than any value we have seen so far? We just define a variable `max` which we check and update as we would normally. Importantly, we should define it *outside* the closure we return, so that it persists across calls, and we need to use the `move` keyword so that the closure knows it is supposed to take ownership of the variable.
 
 ```rust,no_run
 extern crate timely;
@@ -170,7 +170,7 @@ use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
     timely::example(|scope| {
-        
+
         let in1 = (0 .. 10).to_stream(scope);
         let in2 = (0 .. 10).to_stream(scope);
 
@@ -216,7 +216,7 @@ use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
     timely::example(|scope| {
-        
+
         let in1 = (0 .. 10).to_stream(scope);
         let in2 = (0 .. 10).to_stream(scope);
 
