@@ -62,7 +62,7 @@ At *its* core, `replay_into` takes some sequence of `Event<T, D>` items and repr
         let mut started = false;
 
         builder.build(
-            move |_frontier| { }, 
+            move |_frontier| { },
             move |_consumed, internal, produced| {
 
                 if !started {
@@ -110,7 +110,7 @@ Having done the initial adjustment, we literally just play out the streams (note
 
 ## An Example
 
-We can check out the examples `examples/capture_send.rs` and `examples/capture_recv.rs` to see a paired use of capture and receive demonstrating the generality. 
+We can check out the examples `examples/capture_send.rs` and `examples/capture_recv.rs` to see a paired use of capture and receive demonstrating the generality.
 
 The `capture_send` example creates a new TCP connection for each worker, which it wraps and uses as an `EventPusher`. Timely dataflow takes care of all the serialiazation and stuff like that (warning: it uses abomonation, so this is not great for long-term storage).
 
@@ -151,7 +151,7 @@ fn main() {
         let source_peers = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
 
         // create replayers from disjoint partition of source worker identifiers.
-        let replayers = 
+        let replayers =
         (0 .. source_peers)
             .filter(|i| i % worker.peers() == worker.index())
             .map(|i| TcpListener::bind(format!("127.0.0.1:{}", 8000 + i)).unwrap())

@@ -36,7 +36,7 @@ impl<T, U: Unsigned> RadixSorter<T, U> for Sorter<T> {
 
     fn finish_into<F: Fn(&T)->U>(&mut self, target: &mut Vec<Vec<T>>, key: &F) {
         self.shuffler.finish_into(target);
-        for byte in 1..(<U as Unsigned>::bytes()) { 
+        for byte in 1..(<U as Unsigned>::bytes()) {
             self.reshuffle(target, &|x| ((key(x).as_u64() >> (8 * byte)) % 256) as u8);
         }
     }

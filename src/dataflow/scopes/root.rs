@@ -37,7 +37,7 @@ impl<A: Allocate> Root<A> {
 
     /// Performs one step of the computation.
     ///
-    /// A step gives each dataflow operator a chance to run, and is the 
+    /// A step gives each dataflow operator a chance to run, and is the
     /// main way to ensure that a computation procedes.
     pub fn step(&mut self) -> bool {
 

@@ -1,5 +1,5 @@
 //! Traits and types describing timely dataflow events.
-//! 
+//!
 //! The `Event` type describes the information an operator can observe about a timely dataflow
 //! stream. There are two types of events, (i) the receipt of data and (ii) reports of progress
 //! of timestamps.
@@ -82,9 +82,9 @@ pub mod link {
         pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
     }
 
-    impl<T, D> EventLink<T, D> { 
+    impl<T, D> EventLink<T, D> {
         /// Allocates a new `EventLink`.
-        pub fn new() -> EventLink<T, D> { 
+        pub fn new() -> EventLink<T, D> {
             EventLink { event: None, next: RefCell::new(None) }
         }
     }

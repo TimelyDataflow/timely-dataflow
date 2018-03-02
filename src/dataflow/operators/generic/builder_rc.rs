@@ -44,7 +44,7 @@ impl<G: Scope> OperatorBuilder<G> {
             frontier: Vec::new(),
             consumed: Vec::new(),
             internal: Rc::new(RefCell::new(ChangeBatch::new())),
-            produced: Vec::new(),            
+            produced: Vec::new(),
             logging,
         }
     }
@@ -95,8 +95,8 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Creates an operator implementation from supplied logic constructor.
-    pub fn build<B, L>(self, constructor: B) 
-    where 
+    pub fn build<B, L>(self, constructor: B)
+    where
         B: FnOnce(Capability<G::Timestamp>) -> L,
         L: FnMut(&[MutableAntichain<G::Timestamp>])+'static
     {
@@ -119,11 +119,11 @@ impl<G: Scope> OperatorBuilder<G> {
             }
         };
 
-        let pip = move |consumed: &mut [ChangeBatch<G::Timestamp>], 
-                        internal: &mut [ChangeBatch<G::Timestamp>], 
+        let pip = move |consumed: &mut [ChangeBatch<G::Timestamp>],
+                        internal: &mut [ChangeBatch<G::Timestamp>],
                         produced: &mut [ChangeBatch<G::Timestamp>]| {
 
-            // invoke supplied logic 
+            // invoke supplied logic
             let borrow = self_frontier2.borrow();
             logic(&*borrow);
 

@@ -31,7 +31,7 @@ For example, the first use of scopes we will see is for *iterative* dataflow. Ou
 
 In addition to *creating* scopes, we will also need to get streams of data into and out of scopes.
 
-There are two simple methods, `enter` and `leave`, that allow streams of data into and out of scopes. It is important that you use them! If you try to use a stream in a nested scope, Rust will be confused because it can't get the timestamps of your streams to typecheck. 
+There are two simple methods, `enter` and `leave`, that allow streams of data into and out of scopes. It is important that you use them! If you try to use a stream in a nested scope, Rust will be confused because it can't get the timestamps of your streams to typecheck.
 
 
 ```rust,ignore
@@ -54,6 +54,6 @@ fn main() {
 }
 ```
 
-Notice how we can both `enter` a stream and `leave` in a single sequence of operations. 
+Notice how we can both `enter` a stream and `leave` in a single sequence of operations.
 
 The `enter` operator introduces each batch of records as a batch with the same timestamp, extended with a new copy of the default value for the new timestamp. The `leave` just strips off the new timestamp from each batch, resulting in a stream fit for consumption in the containing scope.

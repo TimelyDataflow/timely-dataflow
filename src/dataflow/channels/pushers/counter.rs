@@ -23,7 +23,7 @@ impl<T: Ord, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D
 
         // only propagate `None` if dirty (indicates flush)
         if message.is_some() || !self.produced.borrow_mut().is_empty() {
-            self.pushee.push(message);            
+            self.pushee.push(message);
         }
     }
 }

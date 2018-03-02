@@ -1,4 +1,4 @@
-//! The exchange pattern distributes pushed data between many target pushees. 
+//! The exchange pattern distributes pushed data between many target pushees.
 
 use {Push, Data};
 use dataflow::channels::Content;
