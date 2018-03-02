@@ -38,9 +38,9 @@ impl<T:Timestamp+Send> Progcaster<T> {
         })));
         let worker = allocator.index();
         let addr = path.clone();
-        Progcaster { pushers: pushers, puller: puller, source: worker,
-                     counter: 0, addr: addr, comm_channel: chan,
-                     logging: logging }
+        Progcaster { pushers, puller, source: worker,
+                     counter: 0, addr, comm_channel: chan,
+                     logging }
     }
 
     /// Sends and receives progress updates, broadcasting the contents of `messages` and `internal`,

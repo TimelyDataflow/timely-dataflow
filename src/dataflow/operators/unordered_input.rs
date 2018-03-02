@@ -91,12 +91,12 @@ impl<G: Scope> UnorderedInput<G> for G {
         let peers = self.peers();
 
         let index = self.add_operator(UnorderedOperator {
-            internal: internal,
-            produced: produced,
-            peers:    peers,
+            internal,
+            produced,
+            peers,
         });
 
-        ((helper, cap), Stream::new(Source { index: index, port: 0 }, registrar, self.clone()))
+        ((helper, cap), Stream::new(Source { index, port: 0 }, registrar, self.clone()))
     }
 }
 

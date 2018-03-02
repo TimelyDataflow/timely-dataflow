@@ -23,7 +23,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
         Buffer {
             time: None,
             buffer: Vec::with_capacity(Content::<D>::default_length()),
-            pusher: pusher,
+            pusher,
         }
     }
 

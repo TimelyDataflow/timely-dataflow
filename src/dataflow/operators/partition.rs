@@ -52,11 +52,11 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
 
         let operator = Operator::new(PullCounter::new(receiver), targets, route);
         let index = scope.add_operator(operator);
-        self.connect_to(Target { index: index, port: 0 }, sender, channel_id);
+        self.connect_to(Target { index, port: 0 }, sender, channel_id);
 
         let mut results = Vec::new();
         for (output, registrar) in registrars.into_iter().enumerate() {
-            results.push(Stream::new(Source { index: index, port: output }, registrar, scope.clone()));
+            results.push(Stream::new(Source { index, port: output }, registrar, scope.clone()));
         }
 
         results
@@ -72,9 +72,9 @@ struct Operator<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
 impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operator<T, D, D2, F> {
     fn new(input: PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>, outputs: Vec<Tee<T, D2>>, route: F) -> Operator<T, D, D2, F> {
         Operator {
-            input: input,
+            input,
             outputs: outputs.into_iter().map(|x| PushBuffer::new(PushCounter::new(x))).collect(),
-            route: route,
+            route,
         }
     }
 }

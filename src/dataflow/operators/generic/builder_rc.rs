@@ -45,7 +45,7 @@ impl<G: Scope> OperatorBuilder<G> {
             consumed: Vec::new(),
             internal: Rc::new(RefCell::new(ChangeBatch::new())),
             produced: Vec::new(),
-            logging: logging,
+            logging,
         }
     }
 

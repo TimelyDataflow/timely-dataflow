@@ -106,18 +106,18 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
         let children = vec![PerOperatorState::empty(path.clone(), logging.clone())];
 
         SubgraphBuilder {
-            name:                   "Subgraph".into(),
-            path:                   path,
-            index:                  index,
+            name:                "Subgraph".into(),
+            path,
+            index,
 
-            children:               children,
-            child_count:            1,
-            edge_stash: vec![],
+            children,
+            child_count:         1,
+            edge_stash:          vec![],
 
-            input_messages:         Default::default(),
-            output_capabilities:    Default::default(),
+            input_messages:      Default::default(),
+            output_capabilities: Default::default(),
 
-            logging:                logging,
+            logging,
         }
     }
 
@@ -186,7 +186,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
             local_pointstamp_internal: ChangeBatch::new(),
             final_pointstamp_messages: ChangeBatch::new(),
             final_pointstamp_internal: ChangeBatch::new(),
-            progcaster:                progcaster,
+            progcaster,
 
             pointstamp_builder: builder,
             pointstamp_tracker: tracker,
@@ -284,9 +284,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             for &(target, ref antichain) in &summary.source_target[0][input] {
                 if target.index == 0 {
                     for summary in antichain.elements().iter() {
-                        internal_summary[input][target.port].insert(match summary {
-                            &Local(_)    => Default::default(),
-                            &Outer(ref y, _) => y.clone(),
+                        internal_summary[input][target.port].insert(match *summary {
+                            Local(_) => Default::default(),
+                            Outer(ref y, _) => y.clone(),
                         });
                     };
                 }
@@ -400,7 +400,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         for (port, changes) in external.iter_mut().enumerate() {
             for (time, value) in changes.drain() {
                 self.pointstamp_tracker.update_source(
-                    Source { index: 0, port: port },
+                    Source { index: 0, port },
                     Product::new(time, Default::default()),
                     value
                 );
@@ -494,10 +494,10 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // inputs to child zero are also deposited in `produced`.
         for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
             if index == 0 { produced[input].update(time.outer.clone(), delta); }
-            self.pointstamp_tracker.update_target(Target { index: index, port: input }, time, delta);
+            self.pointstamp_tracker.update_target(Target { index, port: input }, time, delta);
         }
         for ((index, output, time), delta) in self.final_pointstamp_internal.drain() {
-            self.pointstamp_tracker.update_source(Source { index: index, port: output }, time, delta);
+            self.pointstamp_tracker.update_source(Source { index, port: output }, time, delta);
         }
 
         // Step 4. Propagate pointstamp updates to inform each source about changes in their frontiers.
@@ -638,7 +638,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             internal_buffer: Vec::new(),
             produced_buffer: Vec::new(),
 
-            logging: logging,
+            logging,
 
             gis_capabilities: Vec::new(),
             gis_summary: Vec::new(),

@@ -29,7 +29,7 @@ fn test_alt(nodes: usize, rounds: usize) {
 
     // Connect nodes in sequence, looping around to the first from the last.
     for index in 1 .. nodes {
-        builder.add_edge(Source { index: index - 1, port: 0 }, Target { index: index, port: 0 } );
+        builder.add_edge(Source { index: index - 1, port: 0 }, Target { index, port: 0 } );
     }
     builder.add_edge(Source { index: nodes - 1, port: 0 }, Target { index: 0, port: 0 } );
 
@@ -46,7 +46,7 @@ fn test_alt(nodes: usize, rounds: usize) {
 
         for index in 1 .. nodes {
             tracker.update_target(Target { index: index - 1, port: 0 }, round, -1);
-            tracker.update_target(Target { index: index, port: 0 }, round, 1);
+            tracker.update_target(Target { index, port: 0 }, round, 1);
             tracker.propagate_all();
             for index in 0 .. nodes { tracker.pushed_mut(index).iter_mut().for_each(|x| { x.drain(); }); }
         }
@@ -93,7 +93,7 @@ fn test_neu(nodes: usize, rounds: usize) {
 
     // Connect nodes in sequence, looping around to the first from the last.
     for index in 1 .. nodes {
-        builder.add_edge(Source { index: index - 1, port: 0 }, Target { index: index, port: 0 } );
+        builder.add_edge(Source { index: index - 1, port: 0 }, Target { index, port: 0 } );
     }
     builder.add_edge(Source { index: nodes - 1, port: 0 }, Target { index: 0, port: 0 } );
 
@@ -110,7 +110,7 @@ fn test_neu(nodes: usize, rounds: usize) {
 
         for index in 1 .. nodes {
             tracker.update_target(Target { index: index - 1, port: 0 }, round, -1);
-            tracker.update_target(Target { index: index, port: 0 }, round, 1);
+            tracker.update_target(Target { index, port: 0 }, round, 1);
             tracker.propagate_all();
             tracker.pushed().drain();
         }

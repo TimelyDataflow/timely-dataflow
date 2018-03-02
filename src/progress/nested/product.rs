@@ -25,8 +25,8 @@ impl<TOuter, TInner> Product<TOuter, TInner> {
     /// Creates a new product from outer and inner coordinates.
     pub fn new(outer: TOuter, inner: TInner) -> Product<TOuter, TInner> {
         Product {
-            outer: outer,
-            inner: inner,
+            outer,
+            inner,
         }
     }
 }

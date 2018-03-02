@@ -172,7 +172,7 @@ impl<T: Timestamp> Builder<T> {
         for index in 0 .. self.edges.len() {
             for port in 0 .. self.edges[index].len() {
                 for &target in &self.edges[index][port] {
-                    work.push_back(((Source { index: index, port: port}, target), Default::default()));
+                    work.push_back(((Source { index, port }, target), Default::default()));
                 }
             }
         }
@@ -227,7 +227,7 @@ impl<T: Timestamp> Builder<T> {
         {
             for node in 0 .. target_target.len() {
                 for port in 0 .. target_target[node].len() {
-                    let this_target = Target { index: node, port: port };
+                    let this_target = Target { index: node, port };
                     for &(ref target, ref summary) in target_target[node][port].iter() {
                         if target == &this_target && summary.less_equal(&Default::default()) {
                             panic!("Default summary found along self-loop: {:?}", target);
@@ -242,7 +242,7 @@ impl<T: Timestamp> Builder<T> {
             for input_port in 0 .. self.nodes[index].len() {
                 add_summary(
                     &mut target_target[index][input_port],
-                    Target { index: index, port: input_port },
+                    Target { index, port: input_port },
                     Default::default(),
                 );
             }
@@ -442,7 +442,7 @@ impl<T:Timestamp> Tracker<T> {
                 for &(target, ref antichain) in target_target.iter() {
                     let pusheds = &mut pusheds[target.index][target.port];
                     for summary in antichain.elements().iter() {
-                        if let Some(new_time) = summary.results_in(&time) {
+                        if let Some(new_time) = summary.results_in(time) {
                             pusheds.update(new_time, value);
                         }
                     }
@@ -458,7 +458,7 @@ impl<T:Timestamp> Tracker<T> {
                 for &(target, ref antichain) in source_target.iter() {
                     let pusheds = &mut pusheds[target.index][target.port];
                     for summary in antichain.elements().iter() {
-                        if let Some(new_time) = summary.results_in(&time) {
+                        if let Some(new_time) = summary.results_in(time) {
                             pusheds.update(new_time, value);
                         }
                     }

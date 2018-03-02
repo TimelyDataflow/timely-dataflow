@@ -32,7 +32,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'stati
     /// Allocates a new `Counter` from a pushee and shared counts.
     pub fn new(pushee: P) -> Counter<T, D, P> {
         Counter {
-            pushee: pushee,
+            pushee,
             produced: Rc::new(RefCell::new(ChangeBatch::new())),
             phantom: ::std::marker::PhantomData,
         }

@@ -6,7 +6,7 @@ pub struct OperatorInfo {
 
 /// For use in generic/, not re-exported.
 ///
-/// Constructs OperatorInfo.
+/// Constructs `OperatorInfo`.
 pub fn new_operator_info(index: usize) -> OperatorInfo {
     OperatorInfo {
         index

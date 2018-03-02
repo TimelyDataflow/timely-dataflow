@@ -103,7 +103,7 @@ impl<S: Clone, E: Clone, P> BatchLogger<S, E, P> where P: EventPusher<Product<Ro
     }
 }
 
-/// An EventPusher that supports dynamically adding new EventPushers.
+/// An `EventPusher` that supports dynamically adding new `EventPushers`.
 ///
 /// The tee maintains the frontier as the stream of events passes by. When a new pusher
 /// arrives it advances the frontier to the current value, and starts to forward events
@@ -133,7 +133,7 @@ impl<T: ::order::PartialOrder+Ord+Default+Clone+'static, D: Clone> EventPusherTe
 impl<T: ::order::PartialOrder+Ord+Default+Clone, D: Clone> EventPusher<T, D> for EventPusherTee<T, D> {
     fn push(&mut self, event: Event<T, D>) {
         // update the maintained frontier.
-        if let &Event::Progress(ref updates) = &event {
+        if let Event::Progress(ref updates) = event {
             self.frontier.update_iter(updates.iter().cloned());
         }
         // present the event to each listener.
