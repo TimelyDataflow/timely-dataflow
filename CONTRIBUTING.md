@@ -1,4 +1,4 @@
-Thank you for your interest in contributing! 
+Thank you for your interest in contributing!
 
 Here is some legal stuff that will make you regret clicking on this link.
 

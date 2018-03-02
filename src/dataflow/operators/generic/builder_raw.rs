@@ -1,7 +1,7 @@
 //! Types to build operators with general shapes.
 //!
 //! These types expose some raw timely interfaces, and while public so that others can build on them,
-//! they require some sophistication to use correctly. I recommend checking out `builder_rc.rs` for 
+//! they require some sophistication to use correctly. I recommend checking out `builder_rc.rs` for
 //! an interface that is intentionally harder to mis-use.
 
 use std::default::Default;
@@ -29,9 +29,9 @@ pub struct OperatorShape {
 impl OperatorShape {
     fn new(name: String, peers: usize) -> Self {
         OperatorShape {
-            name: name,
+            name,
             notify: true,
-            peers: peers,
+            peers,
             inputs: 0,
             outputs: 0,
         }
@@ -65,8 +65,8 @@ impl<G: Scope> OperatorBuilder<G> {
         let peers = scope.peers();
 
         OperatorBuilder {
-            scope: scope,
-            index: index,
+            scope,
+            index,
             shape: OperatorShape::new(name, peers),
             summary: vec![],
         }
@@ -105,7 +105,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let (sender, receiver) = pact.connect(&mut self.scope, channel_id, logging);
         let target = Target { index: self.index, port: self.shape.inputs };
         stream.connect_to(target, sender, channel_id);
-        
+
         self.shape.inputs += 1;
         assert_eq!(self.shape.outputs, connection.len());
         self.summary.push(connection);
@@ -137,8 +137,8 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Creates an operator implementation from supplied logic constructor.
-    pub fn build<PEP, PIP>(mut self, push_external: PEP, pull_internal: PIP) 
-    where 
+    pub fn build<PEP, PIP>(mut self, push_external: PEP, pull_internal: PIP)
+    where
         PEP: FnMut(&mut [ChangeBatch<G::Timestamp>])+'static,
         PIP: FnMut(
             &mut [ChangeBatch<G::Timestamp>],
@@ -148,8 +148,8 @@ impl<G: Scope> OperatorBuilder<G> {
     {
         let operator = OperatorCore {
             shape: self.shape,
-            push_external: push_external,
-            pull_internal: pull_internal,
+            push_external,
+            pull_internal,
             summary: self.summary,
             phantom: ::std::marker::PhantomData,
         };
@@ -158,8 +158,8 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 }
 
-struct OperatorCore<T, PEP, PIP> 
-    where 
+struct OperatorCore<T, PEP, PIP>
+    where
         T: Timestamp,
         PEP: FnMut(&mut [ChangeBatch<T>])+'static,
         PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
@@ -171,8 +171,8 @@ struct OperatorCore<T, PEP, PIP>
     phantom: ::std::marker::PhantomData<T>,
 }
 
-impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP> 
-    where 
+impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
+    where
         T: Timestamp,
         PEP: FnMut(&mut [ChangeBatch<T>])+'static,
         PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static

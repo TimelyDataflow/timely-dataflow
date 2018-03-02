@@ -6,10 +6,10 @@ use order::PartialOrder;
 /// A set of mutually incomparable elements.
 ///
 /// An antichain is a set of partially ordered elements, each of which is incomparable to the others.
-/// This antichain implementation allows you to repeatedly introduce elements to the antichain, and 
-/// which will evict larger elements to maintain the *minimal* antichain, those incomparable elements 
+/// This antichain implementation allows you to repeatedly introduce elements to the antichain, and
+/// which will evict larger elements to maintain the *minimal* antichain, those incomparable elements
 /// no greater than any other element.
-#[derive(Default, Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Antichain<T> {
     elements: Vec<T>
 }
@@ -58,15 +58,15 @@ impl<T: PartialOrder> Antichain<T> {
     pub fn dominates(&self, other: &Antichain<T>) -> bool {
         other.elements().iter().all(|t2| self.elements().iter().any(|t1| t1.less_equal(t2)))
     }
-    
+
     /// Reveals the elements in the antichain.
     #[inline] pub fn elements(&self) -> &[T] { &self.elements[..] }
 }
 
 /// An antichain based on a multiset whose elements frequencies can be updated.
 ///
-/// The `MutableAntichain` maintains frequencies for many elements of type `T`, and exposes the set 
-/// of elements with positive count not greater than any other elements with positive count. The 
+/// The `MutableAntichain` maintains frequencies for many elements of type `T`, and exposes the set
+/// of elements with positive count not greater than any other elements with positive count. The
 /// antichain may both advance and retreat; the changes do not all need to be to elements greater or
 /// equal to some elements of the frontier.
 ///
@@ -80,9 +80,9 @@ impl<T: PartialOrder> Antichain<T> {
 /// that it can be expensive to maintain a large number of counts and change few elements near the frontier.
 ///
 /// There is an `update_dirty` method for single updates that leave the `MutableAntichain` in a dirty state,
-/// but I strongly recommend against using them unless you must (on part of timely progress tracking seems 
+/// but I strongly recommend against using them unless you must (on part of timely progress tracking seems
 /// to be greatly simplified by access to this)
-#[derive(Default, Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct MutableAntichain<T: PartialOrder+Ord> {
     dirty: usize,
     updates: Vec<(T, i64)>,
@@ -149,7 +149,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     #[inline]
     pub fn frontier(&self) -> &[T] {
         debug_assert_eq!(self.dirty, 0);
-        &self.frontier 
+        &self.frontier
     }
 
     /// Creates a new singleton `MutableAntichain`.
@@ -185,7 +185,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         debug_assert_eq!(self.dirty, 0);
-        self.frontier.is_empty() 
+        self.frontier.is_empty()
     }
 
     /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
@@ -225,7 +225,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     }
 
     /// Allows a single-element push, but dirties the antichain and prevents inspection until cleaned.
-    /// 
+    ///
     /// At the moment inspection is prevented via panic, so best be careful (this should probably be fixed).
     /// It is *very* important if you want to use this method that very soon afterwards you call something
     /// akin to `update_iter`, perhaps with a `None` argument if you have no more data, as this method will
@@ -251,7 +251,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     ///```
     #[inline]
     pub fn update_iter<I>(&mut self, updates: I)
-    where 
+    where
         I: IntoIterator<Item = (T, i64)>
     {
         self.update_iter_and(updates, |_,_| { });
@@ -260,7 +260,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// Applies updates to the antichain and applies `action` to each frontier change.
     ///
     /// This method applies a batch of updates and if any affects the frontier it is rebuilt.
-    /// Once rebuilt, `action` is called with the corresponding changes to the frontier, which 
+    /// Once rebuilt, `action` is called with the corresponding changes to the frontier, which
     /// should be various times and `{ +1, -1 }` differences.
     ///
     /// #Examples
@@ -279,7 +279,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     ///```
     #[inline]
     pub fn update_iter_and<I, A>(&mut self, updates: I, action: A)
-    where 
+    where
         I: IntoIterator<Item = (T, i64)>,
         A: FnMut(&T, i64)
     {
@@ -301,7 +301,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
             let beyond_frontier = self.frontier.iter().any(|f| f.less_than(time));
             let before_frontier = !self.frontier.iter().any(|f| f.less_equal(time));
             rebuild_required = rebuild_required || !(beyond_frontier || (delta < 0 && before_frontier));
-            
+
             self.dirty -= 1;
         }
         self.dirty = 0;
@@ -314,7 +314,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// Sorts and consolidates `self.updates` and applies `action` to any frontier changes.
     ///
     /// This method is meant to be used for bulk updates to the frontier, and does more work than one might do
-    /// for single updates, but is meant to be an efficient way to process multiple updates together. This is 
+    /// for single updates, but is meant to be an efficient way to process multiple updates together. This is
     /// especially true when we want to apply very large numbers of updates.
     fn rebuild_and<A: FnMut(&T, i64)>(&mut self, mut action: A) {
 

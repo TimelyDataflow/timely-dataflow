@@ -52,7 +52,7 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
         let produced = feedback_output.produced().clone();
 
         let feedback_input =  Counter::new(Observer {
-            limit: limit, summary: summary.clone(), targets: feedback_output
+            limit, summary: summary.clone(), targets: feedback_output
         });
         let consumed = feedback_input.produced().clone();
 
@@ -63,11 +63,11 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
         });
 
         let helper = Handle {
-            index:  index,
+            index,
             target: feedback_input,
         };
 
-        (helper, Stream::new(Source { index: index, port: 0 }, registrar, self.clone()))
+        (helper, Stream::new(Source { index, port: 0 }, registrar, self.clone()))
     }
 }
 

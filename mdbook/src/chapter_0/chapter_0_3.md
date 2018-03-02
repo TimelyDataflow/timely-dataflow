@@ -1,6 +1,6 @@
 # When not to use Timely Dataflow
 
-There are several reasons not to use timely dataflow, though many of them are *friction* about how your problem is probably expressed, rather than fundamental technical limitations. There are fundamental technical limitations too, of course. 
+There are several reasons not to use timely dataflow, though many of them are *friction* about how your problem is probably expressed, rather than fundamental technical limitations. There are fundamental technical limitations too, of course.
 
 I've collected a few examples here, but the list may grow with input and feedback.
 

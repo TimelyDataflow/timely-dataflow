@@ -37,7 +37,7 @@ fn main() {
 
         let volume = (rounds * batch) as f64;
         let elapsed = timer.elapsed();
-        let seconds = elapsed.as_secs() as f64 + ((elapsed.subsec_nanos() as f64)/1000000000.0);
+        let seconds = elapsed.as_secs() as f64 + (f64::from(elapsed.subsec_nanos())/1000000000.0);
 
         println!("{:?}\tworker {} complete; rate: {:?}", timer.elapsed(), worker.index(), volume / seconds);
 

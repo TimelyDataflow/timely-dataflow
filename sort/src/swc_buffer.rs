@@ -36,15 +36,15 @@ impl<T> SWCBuffer<T> {
             )
         }
     }
-    
+
     #[inline(always)]
     pub fn full(&self, byte: usize) -> bool {
-        unsafe { (*self.counts.get_unchecked(byte) as usize) == per_cache_line!(T) } 
+        unsafe { (*self.counts.get_unchecked(byte) as usize) == per_cache_line!(T) }
     }
 
     #[inline(always)]
     pub fn count(&self, byte: usize) -> usize {
-        unsafe { *self.counts.get_unchecked(byte) as usize } 
+        unsafe { *self.counts.get_unchecked(byte) as usize }
     }
 
     #[inline(always)]
@@ -74,5 +74,5 @@ impl<T> SWCBuffer<T> {
             }
             *self.counts.get_unchecked_mut(byte) = 0;
         }
-    }    
+    }
 }

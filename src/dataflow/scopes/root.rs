@@ -26,15 +26,13 @@ pub struct Root<A: Allocate> {
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
     pub fn new(c: A, logging: Arc<Fn(::logging::TimelySetup)->Logger+Sync+Send>) -> Root<A> {
-        let result = Root {
+        Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
-            logging: logging,
-        };
-
-        result
+            logging,
+        }
     }
 
     /// Performs one step of the computation.

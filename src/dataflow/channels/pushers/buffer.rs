@@ -1,4 +1,4 @@
-//! Buffering and session mechanisms to provide the appearance of record-at-a-time sending, 
+//! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
 use dataflow::channels::Content;
@@ -9,7 +9,7 @@ use timely_communication::Push;
 /// Buffers data sent at the same time, for efficient communication.
 ///
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
-/// data must be flushed and creates a `Session` object which allows sending at the given time. 
+/// data must be flushed and creates a `Session` object which allows sending at the given time.
 pub struct Buffer<T, D, P: Push<(T, Content<D>)>> {
     time: Option<T>,  // the currently open time, if it is open
     buffer: Vec<D>,   // a buffer for records, to send at self.time
@@ -23,7 +23,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
         Buffer {
             time: None,
             buffer: Vec::with_capacity(Content::<D>::default_length()),
-            pusher: pusher,
+            pusher,
         }
     }
 
@@ -93,7 +93,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
 /// An output session for sending records at a specified time.
 ///
 /// The `Session` struct provides the user-facing interface to an operator output, namely
-/// the `Buffer` type. A `Session` wraps a session of output at a specified time, and 
+/// the `Buffer` type. A `Session` wraps a session of output at a specified time, and
 /// avoids what would otherwise be a constant cost of checking timestamp equality.
 pub struct Session<'a, T, D, P: Push<(T, Content<D>)>+'a> where T: Eq+Clone+'a, D: 'a {
     buffer: &'a mut Buffer<T, D, P>,
@@ -115,7 +115,7 @@ impl<'a, T, D, P: Push<(T, Content<D>)>+'a> Session<'a, T, D, P>  where T: Eq+Cl
     /// Provides a fully formed `Content<D>` message for senders which can use this type.
     ///
     /// The `Content` type is the backing memory for communication in timely, and it can
-    /// often be more efficient to re-use this memory rather than have timely allocate 
+    /// often be more efficient to re-use this memory rather than have timely allocate
     /// new backing memory.
     #[inline(always)]
     pub fn give_content(&mut self, message: &mut Content<D>) {

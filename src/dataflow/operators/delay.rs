@@ -14,8 +14,8 @@ use dataflow::operators::generic::unary::Unary;
 pub trait Delay<G: Scope, D: Data> {
     /// Advances the timestamp of records using a supplied function.
     ///
-    /// The function *must* advance the timestamp; the operator will test that the 
-    /// new timestamp is greater or equal to the old timestamp, and will assert if 
+    /// The function *must* advance the timestamp; the operator will test that the
+    /// new timestamp is greater or equal to the old timestamp, and will assert if
     /// it is not.
     ///
     /// #Examples
@@ -39,12 +39,12 @@ pub trait Delay<G: Scope, D: Data> {
     ///                });
     ///            });
     /// });
-    /// ```    
+    /// ```
     fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
     /// Advances the timestamp of batches of records using a supplied function.
     ///
-    /// The function *must* advance the timestamp; the operator will test that the 
-    /// new timestamp is greater or equal to the old timestamp, and will assert if 
+    /// The function *must* advance the timestamp; the operator will test that the
+    /// new timestamp is greater or equal to the old timestamp, and will assert if
     /// it is not. The batch version does not consult the data, and may only view
     /// the timestamp itself.
     ///
@@ -69,7 +69,7 @@ pub trait Delay<G: Scope, D: Data> {
     ///                });
     ///            });
     /// });
-    /// ```        
+    /// ```
     fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
 }
 

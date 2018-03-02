@@ -26,10 +26,10 @@ impl<T, D> Message<T, D> {
     #[inline]
     pub fn new(time: T, data: Content<D>, from: usize, seq: usize) -> Message<T, D> {
         Message {
-            time: time,
-            data: data,
-            from: from,
-            seq: seq,
+            time,
+            data,
+            from,
+            seq,
         }
     }
 }

@@ -2,7 +2,7 @@
 
 Communication in timely dataflow starts from the `timely_communication` crate. This crate includes not only communication, but is actually where we start up the various worker threads and establish their identities. As in timely dataflow, everything starts by providing a per-worker closure, but this time we are given only a channel allocator as an argument.
 
-Before continuing, I want to remind you that this is the *internals* section; you could write your code against this crate if you really want, but one of the nice features of timely dataflow is that you don't have to. You can use a nice higher level layer, as discussed previously in the document. 
+Before continuing, I want to remind you that this is the *internals* section; you could write your code against this crate if you really want, but one of the nice features of timely dataflow is that you don't have to. You can use a nice higher level layer, as discussed previously in the document.
 
 That being said, let's take a look at the example from the `timely_communication` documentation, which is not brief but shouldn't be wildly surprising either.
 
@@ -49,7 +49,7 @@ fn main() {
 }
 ```
 
-There are a few steps here, and we'll talk through the important parts in each of them. 
+There are a few steps here, and we'll talk through the important parts in each of them.
 
 ## Configuration
 
@@ -71,7 +71,7 @@ The configuration is important because it determines how we build the channel al
 
 The `allocator` reference bound by the worker closure is the only handle a worker has to the outside world (other than any values you move into the closure). It wraps up all the information we have about this workers place in the world, and provides the ability to assemble channels to the other workers.
 
-There are a few implementations of the `Allocate` trait, which is defined as 
+There are a few implementations of the `Allocate` trait, which is defined as
 
 ```rust,ignore
 pub trait Allocate {
@@ -125,7 +125,7 @@ That's all of it.
 
 The `push` method takes a mutable reference to an option wrapped around a thing. This is your way of telling the communication layer that, (i) if the reference points to a thing, you'd really like to push it into the channel, and (ii) if the reference doesn't point to a thing this is the cue that you might walk away for a while. It is important to send a `None` if you would like to ensure that whatever you've `push`ed in the past should be guaranteed to get through without further work on your part.
 
-Now, we didn't need a mutable reference to do that; we could have just had the argument type be `Option<T>`, or had two methods `send` and `done` (those are the elided helper methods). 
+Now, we didn't need a mutable reference to do that; we could have just had the argument type be `Option<T>`, or had two methods `send` and `done` (those are the elided helper methods).
 
 This framing allows for fairly natural and *stable* zero-copy communication. When you want to send a buffer of records, you wrap it up as `Some(buffer)` and call `push`. Once `push` returns, the channel has probably taken your buffer, but it has the opportunity to leave something behind for you. This is a very easy way for the communication infrastructure to *return* resources to you. In fact, even if you have finished sending messages, it may make sense to repeatedly send mutable references to `None` for as long as the channel has memory to hand you.
 

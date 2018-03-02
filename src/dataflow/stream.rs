@@ -47,7 +47,7 @@ impl<S: Scope, D> Stream<S, D> {
     }
     /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
     pub fn new(source: Source, output: TeeHelper<S::Timestamp, D>, scope: S) -> Self {
-        Stream { name: source, ports: output, scope: scope }
+        Stream { name: source, ports: output, scope }
     }
     /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }

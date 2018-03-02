@@ -21,7 +21,7 @@ impl Thread {
     pub fn new<T: 'static>() -> (Pusher<T>, Puller<T>) {
         let shared = Rc::new(RefCell::new((VecDeque::<T>::new(), VecDeque::<T>::new())));
         (Pusher { target: shared.clone() }, Puller { source: shared, current: None })
-    }  
+    }
 }
 
 

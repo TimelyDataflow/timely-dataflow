@@ -10,7 +10,7 @@ fn main() {
         let source_peers = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
 
         // create replayers from disjoint partition of source worker identifiers.
-        let replayers = 
+        let replayers =
         (0 .. source_peers)
             .filter(|i| i % worker.peers() == worker.index())
             .map(|i| TcpListener::bind(format!("127.0.0.1:{}", 8000 + i)).unwrap())

@@ -32,9 +32,9 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
         inner.make_available(frontiers);
 
         Notificator {
-            frontiers: frontiers,
-            inner: inner,
-            logging: logging,
+            frontiers,
+            inner,
+            logging,
         }
     }
 
@@ -375,7 +375,7 @@ struct OrderReversed<T: Timestamp> {
 }
 
 impl<T: Timestamp> OrderReversed<T> {
-    fn new(element: Capability<T>) -> Self { OrderReversed { element: element } }
+    fn new(element: Capability<T>) -> Self { OrderReversed { element } }
 }
 
 impl<T: Timestamp> PartialOrd for OrderReversed<T> {
@@ -385,6 +385,6 @@ impl<T: Timestamp> PartialOrd for OrderReversed<T> {
 }
 impl<T: Timestamp> Ord for OrderReversed<T> {
     fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
-        other.element.time().cmp(&self.element.time())
+        other.element.time().cmp(self.element.time())
     }
 }

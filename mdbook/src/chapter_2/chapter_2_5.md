@@ -9,7 +9,7 @@ Let's model a changing corpus of text as a list of pairs of *times* which will b
 We are going to write a program that is the moral equivalent of the following sequential Rust program:
 
 ```rust,ignore
-/// From a sequence of changes to the occurrences of text, 
+/// From a sequence of changes to the occurrences of text,
 /// produce the changing counts of words in that text.
 fn word_count(history: Vec<(u64, Vec<(String, i64)>)>) {
     let mut counts = HashMap::new();
@@ -116,7 +116,7 @@ More specifically, we will take `(String, i64)` pairs and break them into many `
 Rather than repeat all the code up above, I'm just going to show you the fragment you insert between `to_stream` and `inspect`:
 
 ```rust,ignore
-.flat_map(|(text, diff): (String, i64)| 
+.flat_map(|(text, diff): (String, i64)|
     text.split_whitespace()
         .map(move |word| (word.to_owned(), diff))
         .collect::<Vec<_>>()
@@ -141,8 +141,8 @@ As before, I'm just going to show you the new code, which now lives just after `
 
 ```rust,ignore
 .unary_frontier(
-    Exchange::new(|x: &(String, i64)| (x.0).len() as u64), 
-    "WordCount", 
+    Exchange::new(|x: &(String, i64)| (x.0).len() as u64),
+    "WordCount",
     |_capability| {
 
     // allocate operator-local storage.
@@ -182,19 +182,19 @@ That was probably a lot to see all at once. So let's break down each of the thin
 
 ```rust,ignore
 .unary_frontier(
-    Exchange::new(|x: &(String, i64)| (x.0).len() as u64), 
-    "WordCount", 
+    Exchange::new(|x: &(String, i64)| (x.0).len() as u64),
+    "WordCount",
     |_capability| {
         // coming soon!
     }
 )
 ```
 
-The very first thing we did was state that we are going to build a new unary dataflow operator. Timely lets you build your own operators just by specifying the logic for them as a closure. So easy! But, we have to explain a few things to the operator. 
+The very first thing we did was state that we are going to build a new unary dataflow operator. Timely lets you build your own operators just by specifying the logic for them as a closure. So easy! But, we have to explain a few things to the operator.
 
-First, we tell it how it should distribute the data (pairs of strings and differences) between workers. Here we are saying "by the length of the text" which is a deranged way to do it, but we'd need about five more lines to properly write hashing code for the string. 
+First, we tell it how it should distribute the data (pairs of strings and differences) between workers. Here we are saying "by the length of the text" which is a deranged way to do it, but we'd need about five more lines to properly write hashing code for the string.
 
-Second, we give a descriptive name so that the operator is recognizable in logging and diagnostic code; you probably don't care at the moment, but you might later on if you wonder what is going on. 
+Second, we give a descriptive name so that the operator is recognizable in logging and diagnostic code; you probably don't care at the moment, but you might later on if you wonder what is going on.
 
 Third and finally, we specify a closure. The closure has an argument, which we ignore in the code (it has to do with writing operators that can send output data before they receive any input data) and we will ignore it now. This closure is actually a "closure builder": it is a closure that just returns another closure:
 
@@ -262,7 +262,7 @@ Remember that `time` we capture as the key, and how it acts as our ability to se
 
 You can check out the result in [`examples/wordcount.rs`](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/wordcount.rs). If you run it as written, you'll see output that looks like:
 
-    Echidnatron% cargo run --example wordcount       
+    Echidnatron% cargo run --example wordcount
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/wordcount`
     seen: ("round", 1)
@@ -275,7 +275,7 @@ You can check out the result in [`examples/wordcount.rs`](https://github.com/fra
     seen: ("round", 8)
     seen: ("round", 9)
     seen: ("round", 10)
-    Echidnatron% 
+    Echidnatron%
 
 We kept sending the same word over and over, so its count goes up. Neat. If you'd like to run it with two workers, you just need to put `-- -w2` at the end of the command, like so:
 
@@ -287,6 +287,6 @@ We kept sending the same word over and over, so its count goes up. Neat. If you'
     ...
     seen: ("round", 19)
     seen: ("round", 20)
-    Echidnatron% 
+    Echidnatron%
 
 Because there are two workers, each inputting `"round"` repeatedly, we count up to twenty. By the end of this text you should be able to produce more interesting examples, for example reading the contents of directories and divvying up responsibility for the files between the workers.

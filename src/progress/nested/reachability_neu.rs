@@ -14,7 +14,7 @@
 //!
 //! // allocate a new empty topology builder.
 //! let mut builder = Builder::<usize>::new();
-//! 
+//!
 //! // Each node with one input connected to one output.
 //! builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 //! builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -75,12 +75,12 @@ use progress::timestamp::PathSummary;
 ///
 /// A graph is provides as (i) several indexed nodes, each with some number of input
 /// and output ports, and each with a summary of the internal paths connecting each
-/// input to each output, and (ii) a set of edges connecting output ports to input 
+/// input to each output, and (ii) a set of edges connecting output ports to input
 /// ports. Edges do not adjust timestamps; only nodes do this.
 ///
 /// The resulting summary describes, for each origin port in the graph and destination
 /// input port, a set of incomparable path summaries, each describing what happens to
-/// a timestamp as it moves along the path. There may be multiple summaries for each 
+/// a timestamp as it moves along the path. There may be multiple summaries for each
 /// part of origin and destination due to the fact that the actions on timestamps may
 /// not be totally ordered (e.g., "increment the timestamp" and "take the maximum of
 /// the timestamp and seven").
@@ -94,7 +94,7 @@ use progress::timestamp::PathSummary;
 ///
 /// // allocate a new empty topology builder.
 /// let mut builder = Builder::<usize>::new();
-/// 
+///
 /// // Each node with one input connected to one output.
 /// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 /// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -117,7 +117,7 @@ pub struct Builder<T: Timestamp> {
     /// same format returned by `get_internal_summary`, as if we simply appended
     /// all of the summaries for the hosted nodes.
     pub nodes: Vec<Vec<Vec<Antichain<T::Summary>>>>,
-    /// Direct connections from sources to targets. 
+    /// Direct connections from sources to targets.
     ///
     /// Edges do not affect timestamps, so we only need to know the connectivity.
     /// Indexed by operator index then output port.
@@ -141,12 +141,12 @@ impl<T: Timestamp> Builder<T> {
     ///
     /// This method overwrites any existing summary, instead of anything more sophisticated.
     pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, summary: Vec<Vec<Antichain<T::Summary>>>) {
-        
+
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
         for x in summary.iter() { debug_assert_eq!(outputs, x.len()); }
 
-        while self.nodes.len() <= index { 
+        while self.nodes.len() <= index {
             self.nodes.push(Vec::new());
             self.edges.push(Vec::new());
             self.shape.push((0, 0));
@@ -223,7 +223,7 @@ pub struct Tracker<T:Timestamp> {
     /// same format returned by `get_internal_summary`, as if we simply appended
     /// all of the summaries for the hosted nodes.
     nodes: Vec<Vec<Vec<Antichain<T::Summary>>>>,
-    /// Direct connections from sources to targets. 
+    /// Direct connections from sources to targets.
     ///
     /// Edges do not affect timestamps, so we only need to know the connectivity.
     /// Indexed by operator index then output port.

@@ -1,24 +1,24 @@
 //! Traits and types for replaying captured timely dataflow streams.
 //!
 //! A type can be replayed into any timely dataflow scope if it presents as an
-//! iterator whose `Item` type implements `EventIterator` with the same timestamp. 
+//! iterator whose `Item` type implements `EventIterator` with the same timestamp.
 //! Other types can implement the `ReplayInto` trait, but this should be done with
 //! care, as there is a protocol the replayer follows that must be respected if the
 //! computation is to make sense.
 //!
 //! #Protocol
-//! 
-//! The stream of events produced by each `EventIterator` implementation must satisfy, 
+//!
+//! The stream of events produced by each `EventIterator` implementation must satisfy,
 //! starting from a default timestamp of `Default::default()` with count 1,
 //!
 //! 1. The progress messages may only increment the count for a timestamp if
 //!    the cumulative count for some prior or equal timestamp is positive.
-//! 2. The data messages map only use a timestamp if the cumulative count for 
+//! 2. The data messages map only use a timestamp if the cumulative count for
 //!    some prior or equal timestamp is positive.
 //!
-//! Alternately, the sequence of events should, starting from an initial count of 1 
+//! Alternately, the sequence of events should, starting from an initial count of 1
 //! for the timestamp `Default::default()`, describe decrements to held capabilities
-//! or the production of capabilities in their future, or messages sent at times in 
+//! or the production of capabilities in their future, or messages sent at times in
 //! the future of held capabilities.
 //!
 //! The order is very important here. One can move `Event::Message` events arbitrarily
@@ -31,8 +31,8 @@
 //! messages and data received.
 //!
 //! #Notes
-//! 
-//! Provided no stream of events reports the consumption of capabilities it does not hold, 
+//!
+//! Provided no stream of events reports the consumption of capabilities it does not hold,
 //! any interleaving of the streams of events will still maintain the invariants above.
 //! This means that each timely dataflow replay operator can replay any number of streams,
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
@@ -67,7 +67,7 @@ where I : IntoIterator,
         let mut started = false;
 
         builder.build(
-            move |_frontier| { }, 
+            move |_frontier| { },
             move |_consumed, internal, produced| {
 
                 if !started {
