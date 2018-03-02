@@ -52,7 +52,7 @@ fn main() {
                                     }
                                 }
 
-                                map1.entry(key).or_insert_with(Vec::new).push(val1);
+                                map1.entry(key).or_insert(Vec::new()).push(val1);
                             }
                         });
 
@@ -66,7 +66,7 @@ fn main() {
                                     }
                                 }
 
-                                map2.entry(key).or_insert_with(Vec::new).push(val2);
+                                map2.entry(key).or_insert(Vec::new()).push(val2);
                             }
                         });
                     }

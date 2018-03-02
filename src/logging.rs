@@ -108,7 +108,6 @@ impl<S: Clone, E: Clone, P> BatchLogger<S, E, P> where P: EventPusher<Product<Ro
 /// The tee maintains the frontier as the stream of events passes by. When a new pusher
 /// arrives it advances the frontier to the current value, and starts to forward events
 /// to it as well.
-#[derive(Default)]
 pub struct EventPusherTee<T: ::order::PartialOrder+Ord+Default+Clone+'static, D: Clone> {
     frontier: MutableAntichain<T>,
     listeners: Vec<Box<EventPusher<T, D>+Send>>,
@@ -138,7 +137,7 @@ impl<T: ::order::PartialOrder+Ord+Default+Clone, D: Clone> EventPusher<T, D> for
             self.frontier.update_iter(updates.iter().cloned());
         }
         // present the event to each listener.
-        for listener in &mut self.listeners {
+        for listener in self.listeners.iter_mut() {
             listener.push(event.clone());
         }
     }

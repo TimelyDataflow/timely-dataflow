@@ -14,7 +14,7 @@
 //!
 //! // allocate a new empty topology builder.
 //! let mut builder = Builder::<usize>::new();
-//!
+//! 
 //! // Each node with one input connected to one output.
 //! builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 //! builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -57,12 +57,12 @@ use order::PartialOrder;
 ///
 /// A graph is provides as (i) several indexed nodes, each with some number of input
 /// and output ports, and each with a summary of the internal paths connecting each
-/// input to each output, and (ii) a set of edges connecting output ports to input
+/// input to each output, and (ii) a set of edges connecting output ports to input 
 /// ports. Edges do not adjust timestamps; only nodes do this.
 ///
 /// The resulting summary describes, for each origin port in the graph and destination
 /// input port, a set of incomparable path summaries, each describing what happens to
-/// a timestamp as it moves along the path. There may be multiple summaries for each
+/// a timestamp as it moves along the path. There may be multiple summaries for each 
 /// part of origin and destination due to the fact that the actions on timestamps may
 /// not be totally ordered (e.g., "increment the timestamp" and "take the maximum of
 /// the timestamp and seven").
@@ -76,7 +76,7 @@ use order::PartialOrder;
 ///
 /// // allocate a new empty topology builder.
 /// let mut builder = Builder::<usize>::new();
-///
+/// 
 /// // Each node with one input connected to one output.
 /// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 /// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -91,7 +91,7 @@ use order::PartialOrder;
 /// let summary = builder.summarize();
 /// ```
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
     /// Internal connections within hosted operators.
     ///
@@ -99,7 +99,7 @@ pub struct Builder<T: Timestamp> {
     /// same format returned by `get_internal_summary`, as if we simply appended
     /// all of the summaries for the hosted nodes.
     nodes: Vec<Vec<Vec<Antichain<T::Summary>>>>,
-    /// Direct connections from sources to targets.
+    /// Direct connections from sources to targets. 
     ///
     /// Edges do not affect timestamps, so we only need to know the connectivity.
     /// Indexed by operator index then output port.
@@ -123,12 +123,12 @@ impl<T: Timestamp> Builder<T> {
     ///
     /// This method overwrites any existing summary, instead of anything more sophisticated.
     pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, summary: Vec<Vec<Antichain<T::Summary>>>) {
-
+        
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
-        for x in &summary { debug_assert_eq!(outputs, x.len()); }
+        for x in summary.iter() { debug_assert_eq!(outputs, x.len()); }
 
-        while self.nodes.len() <= index {
+        while self.nodes.len() <= index { 
             self.nodes.push(Vec::new());
             self.edges.push(Vec::new());
             self.shape.push((0, 0));
@@ -161,8 +161,8 @@ impl<T: Timestamp> Builder<T> {
     /// default summaries (a serious liveness issue).
     pub fn summarize(&mut self) -> Summary<T> {
 
-        // We maintain a list of new ((source, target), path_summary) entries whose implications
-        // have not yet been fully explored. While such entries exist, we consider the next and
+        // We maintain a list of new ((source, target), path_summary) entries whose implications 
+        // have not yet been fully explored. While such entries exist, we consider the next and 
         // explore its implications by considering all incident target-source' connections (from
         // `self.nodes`) followed by all source'-target' connections (from `self.edges`). This may
         // yield ((source, target'), path_summary) entries, and we enqueue any new ones in our list.
@@ -181,7 +181,7 @@ impl<T: Timestamp> Builder<T> {
         let mut source_target: Vec<Vec<Vec<(Target, Antichain<T::Summary>)>>> = Vec::new();
         let mut target_target: Vec<Vec<Vec<(Target, Antichain<T::Summary>)>>> = Vec::new();
 
-        for &(inputs, outputs) in &self.shape {
+        for &(inputs, outputs) in self.shape.iter() {
             source_target.push(vec![Vec::new(); outputs]);
             target_target.push(vec![Vec::new(); inputs]);
         }
@@ -193,7 +193,7 @@ impl<T: Timestamp> Builder<T> {
                 for (new_source_port, internal_summaries) in self.nodes[target.index][target.port].iter().enumerate() {
                     for internal_summary in internal_summaries.elements() {
                         if let Some(new_summary) = summary.followed_by(internal_summary) {
-                            for &new_target in &self.edges[target.index][new_source_port] {
+                            for &new_target in self.edges[target.index][new_source_port].iter() {
                                 work.push_back(((source, new_target), new_summary.clone()));
                             }
                         }
@@ -202,7 +202,7 @@ impl<T: Timestamp> Builder<T> {
             }
         }
 
-        // Extend source-target path summaries by one target'-source connection, to yield all
+        // Extend source-target path summaries by one target'-source connection, to yield all 
         // target'-target path summaries. This computes summaries along non-empty paths, so that
         // we can test for trivial summaries along non-trivial paths.
         for index in 0 .. self.nodes.len() {
@@ -210,7 +210,7 @@ impl<T: Timestamp> Builder<T> {
                 // for each output port, consider source-target summaries.
                 for (output_port, internal_summaries) in self.nodes[index][input_port].iter().enumerate() {
                     for internal_summary in internal_summaries.elements() {
-                        for &(target, ref new_summaries) in &source_target[index][output_port] {
+                        for &(target, ref new_summaries) in source_target[index][output_port].iter() {
                             for new_summary in new_summaries.elements() {
                                 if let Some(summary) = internal_summary.followed_by(new_summary) {
                                     add_summary(&mut target_target[index][input_port], target, summary);
@@ -225,10 +225,10 @@ impl<T: Timestamp> Builder<T> {
         // Test for trivial summaries along self-loops.
         #[cfg(debug_assertions)]
         {
-            for (node, _) in target_target.iter().enumerate() {
+            for node in 0 .. target_target.len() {
                 for port in 0 .. target_target[node].len() {
                     let this_target = Target { index: node, port };
-                    for &(ref target, ref summary) in &target_target[node][port] {
+                    for &(ref target, ref summary) in target_target[node][port].iter() {
                         if target == &this_target && summary.less_equal(&Default::default()) {
                             panic!("Default summary found along self-loop: {:?}", target);
                         }
@@ -241,8 +241,8 @@ impl<T: Timestamp> Builder<T> {
         for index in 0 .. self.nodes.len() {
             for input_port in 0 .. self.nodes[index].len() {
                 add_summary(
-                    &mut target_target[index][input_port],
-                    Target { index, port: input_port },
+                    &mut target_target[index][input_port], 
+                    Target { index, port: input_port }, 
                     Default::default(),
                 );
             }
@@ -290,8 +290,8 @@ pub struct Summary<T: Timestamp> {
 /// way of its `allocate_from` method. With a fixed topology, users can interactively
 /// call `update_target` and `update_source` to change observed pointstamp counts
 /// at node inputs and outputs, respectively. These changes are buffered until a
-/// user invokes either `propagate_all` or `propagate_node`, which consume buffered
-/// changes propagate their consequences along the graph to any other port that
+/// user invokes either `propagate_all` or `propagate_node`, which consume buffered 
+/// changes propagate their consequences along the graph to any other port that 
 /// can be reached. These changes can be read for each node using `pushed_mut`.
 ///
 /// #Examples
@@ -303,7 +303,7 @@ pub struct Summary<T: Timestamp> {
 ///
 /// // allocate a new empty topology builder.
 /// let mut builder = Builder::<usize>::new();
-///
+/// 
 /// // Each node with one input connected to one output.
 /// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 /// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -383,15 +383,15 @@ impl<T:Timestamp> Tracker<T> {
         for vec in &mut self.pusheds { for map in vec.iter_mut() { map.clear(); } }
     }
 
-    ///
+    /// 
     pub fn is_empty(&mut self) -> bool {
         self.pusheds.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty()))
-    }
+    } 
 
     /// Returns true if any source or target is non-empty.
     pub fn tracking_anything(&mut self) -> bool {
         self.sources.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty())) ||
-        self.targets.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty()))
+        self.targets.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty()))            
     }
 
     /// Allocate a new `Tracker` using the shape from `summaries`.
@@ -407,14 +407,14 @@ impl<T:Timestamp> Tracker<T> {
         let mut pusheds = Vec::with_capacity(target_target.len());
 
         // Allocate buffer space for each input and input port.
-        for source in &source_target {
-            let source_count = source.len();
+        for index in 0 .. source_target.len() {
+            let source_count = source_target[index].len();
             sources.push(vec![MutableAntichain::new(); source_count]);
         }
 
         // Allocate buffer space for each output and output port.
-        for target in &target_target {
-            let target_count = target.len();
+        for index in 0 .. target_target.len() {
+            let target_count = target_target[index].len();
             targets.push(vec![MutableAntichain::new(); target_count]);
             pusheds.push(vec![ChangeBatch::new(); target_count]);
         }

@@ -109,7 +109,7 @@ use progress::timestamp::PathSummary;
 /// let tracker = builder.build();
 /// ```
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
     /// Internal connections within hosted operators.
     ///
@@ -144,7 +144,7 @@ impl<T: Timestamp> Builder<T> {
         
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
-        for x in &summary { debug_assert_eq!(outputs, x.len()); }
+        for x in summary.iter() { debug_assert_eq!(outputs, x.len()); }
 
         while self.nodes.len() <= index { 
             self.nodes.push(Vec::new());
@@ -265,7 +265,7 @@ impl<T:Timestamp> Tracker<T> {
             for input in 0 .. inputs {
                 for output in 0 .. outputs {
                     for summary in builder.nodes[node][input][output].elements().iter() {
-                        for &target in &builder.edges[node][output] {
+                        for &target in builder.edges[node][output].iter() {
                             compiled_node[input].push((target, summary.clone()));
                         }
                     }

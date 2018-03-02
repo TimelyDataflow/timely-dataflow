@@ -128,7 +128,6 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
 }
 
 /// Reports information about progress at the probe.
-#[derive(Default)]
 pub struct Handle<T:Timestamp> {
     frontier: Rc<RefCell<MutableAntichain<T>>>
 }

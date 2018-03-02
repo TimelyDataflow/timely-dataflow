@@ -214,7 +214,7 @@ impl<'cap, T: Timestamp> Debug for CapabilityRef<'cap, T> {
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
 #[inline(always)]
-pub fn mint_ref<T: Timestamp>(time: &T, internal: Rc<RefCell<ChangeBatch<T>>>) -> CapabilityRef<T> {
+pub fn mint_ref<'cap, T: Timestamp>(time: &'cap T, internal: Rc<RefCell<ChangeBatch<T>>>) -> CapabilityRef<'cap, T> {
     CapabilityRef {
         time,
         internal,
@@ -222,7 +222,6 @@ pub fn mint_ref<T: Timestamp>(time: &T, internal: Rc<RefCell<ChangeBatch<T>>>) -
 }
 
 /// A set of capabilities, for possibly incomparable times.
-#[derive(Default)]
 pub struct CapabilitySet<T: Timestamp> {
     elements: Vec<Capability<T>>,
 }

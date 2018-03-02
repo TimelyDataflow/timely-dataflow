@@ -339,13 +339,13 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
         }
 
         // TODO: This is quadratic in the frontier size, but could be linear (with a merge).
-        for time in &self.frontier {
+        for time in self.frontier.iter() {
             if !self.frontier_temp.contains(time) {
                 action(time, -1);
             }
         }
         ::std::mem::swap(&mut self.frontier, &mut self.frontier_temp);
-        for time in &self.frontier {
+        for time in self.frontier.iter() {
             if !self.frontier_temp.contains(time) {
                 action(time, 1);
             }

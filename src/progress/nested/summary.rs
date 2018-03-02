@@ -81,7 +81,7 @@ where TOuter: Timestamp,
     #[inline]
     fn followed_by(&self, other: &Summary<SOuter, SInner>) -> Option<Summary<SOuter, SInner>> {
         match (self, other) {
-            (&Local(ref inner1), &Local(ref inner2))                => inner1.followed_by(inner2).map(Local),
+            (&Local(ref inner1), &Local(ref inner2))                => inner1.followed_by(inner2).map(|x| Local(x)),
             (&Local(_), &Outer(_, _))                               => Some(other.clone()),
             (&Outer(ref outer1, ref inner1), &Local(ref inner2))    => inner1.followed_by(inner2).map(|x| Outer(outer1.clone(), x)),
             (&Outer(ref outer1, _), &Outer(ref outer2, ref inner2)) => outer1.followed_by(outer2).map(|x| Outer(x, inner2.clone())),

@@ -248,7 +248,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // collect the initial capabilities of each child, to determine the initial capabilities
         // of the subgraph.
-        for child in &mut self.children {
+        for child in self.children.iter_mut() {
             for (output, capability) in child.gis_capabilities.iter_mut().enumerate() {
                 for &(ref time, value) in capability.iter() {
                     self.pointstamp_tracker.update_source(Source { index: child.index, port: output }, time.clone(), value);
@@ -328,18 +328,18 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // held by the subgraph. We also remove summaries to nodes that do not require progress information.
         self.pointstamp_builder.add_node(0, self.outputs, self.inputs, new_summary);
         let mut pointstamp_summaries = self.pointstamp_builder.summarize();
-        for summaries in &mut pointstamp_summaries.target_target[0] { summaries.retain(|&(t, _)| t.index > 0); }
-        for summaries in &mut pointstamp_summaries.source_target[0] { summaries.retain(|&(t, _)| t.index > 0); }
+        for summaries in pointstamp_summaries.target_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
+        for summaries in pointstamp_summaries.source_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
         for child in 0 .. self.children.len() {
-            for summaries in &mut pointstamp_summaries.target_target[child] { summaries.retain(|&(t,_)| self.children[t.index].notify); }
-            for summaries in &mut pointstamp_summaries.source_target[child] { summaries.retain(|&(t,_)| self.children[t.index].notify); }
+            for summaries in pointstamp_summaries.target_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
+            for summaries in pointstamp_summaries.source_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
         }
 
         // Allocate the pointstamp tracker using the finalized topology.
         self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries.clone());
 
         // Initialize all expressed capablities as pointstamps, for propagation.
-        for child in &mut self.children {
+        for child in self.children.iter_mut() {
             for output in 0 .. child.outputs {
                 for &(ref time, value) in child.gis_capabilities[output].iter() {
                     self.pointstamp_tracker.update_source(
@@ -355,7 +355,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         self.pointstamp_tracker.propagate_all();
 
         // We now have enough information to call `set_external_summary` for each child.
-        for child in &mut self.children {
+        for child in self.children.iter_mut() {
 
             // // Titrate propagated capability changes through a MutableAntichain, and leave them in
             // // the child's buffer for pending `external` updates to apply in its next `push_external`

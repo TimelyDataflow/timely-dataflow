@@ -229,7 +229,6 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///     in2.close();
 /// }).unwrap();
 /// ```
-#[derive(Default)]
 pub struct FrontierNotificator<T: Timestamp> {
     pending: Vec<(Capability<T>, u64)>,
     available: ::std::collections::BinaryHeap<OrderReversed<T>>,
@@ -283,7 +282,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// });
     /// ```
     #[inline]
-    pub fn notify_at(&mut self, cap: Capability<T>) {
+    pub fn notify_at<'a>(&mut self, cap: Capability<T>) {
         self.pending.push((cap,1));
     }
 

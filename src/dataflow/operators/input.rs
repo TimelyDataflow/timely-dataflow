@@ -66,7 +66,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     /// Create a new stream from a supplied interactive handle.
     ///
     /// This method creates a new timely stream whose data are supplied interactively through the `handle`
-    /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate
+    /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate 
     /// if it as attached to more than one stream.
     ///
     /// #Examples
@@ -121,7 +121,7 @@ impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Root<A>, T> {
             copies,
         });
 
-        Stream::new(Source { index, port: 0 }, registrar, self.clone())
+        Stream::new(Source { index, port: 0 }, registrar, self.clone())        
     }
 }
 
@@ -157,7 +157,6 @@ impl<T:Timestamp> Operate<Product<RootTimestamp, T>> for Operator<T> {
 
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-#[derive(Default)]
 pub struct Handle<T: Timestamp, D: Data> {
     progress: Vec<Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>>,
     pushers: Vec<Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>>,
@@ -230,7 +229,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Root<A>, T>) -> Stream<Child<'a, Root<A>, T>, D>
+    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Root<A>, T>) -> Stream<Child<'a, Root<A>, T>, D> 
     where T: Ord {
         scope.input_from(self)
     }
@@ -271,10 +270,10 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
     fn close_epoch(&mut self) {
         if !self.buffer1.is_empty() { self.flush(); }
-        for pusher in &mut self.pushers {
+        for pusher in self.pushers.iter_mut() {
             pusher.done();
         }
-        for progress in &self.progress {
+        for progress in self.progress.iter() {
             progress.borrow_mut().update(self.now_at.clone(), -1);
         }
     }
@@ -322,7 +321,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         assert!(self.now_at.inner.less_equal(&next));
         self.close_epoch();
         self.now_at = RootTimestamp::new(next);
-        for progress in &self.progress {
+        for progress in self.progress.iter() {
             progress.borrow_mut().update(self.now_at.clone(), 1);
         }
     }

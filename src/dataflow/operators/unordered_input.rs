@@ -149,7 +149,7 @@ impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session(&mut self, cap: Capability<T>) -> AutoflushSession<T, D, PushCounter<T, D, Tee<T, D>>> {
+    pub fn session<'b>(&'b mut self, cap: Capability<T>) -> AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>> {
         self.buffer.autoflush_session(cap)
     }
 }

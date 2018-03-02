@@ -56,17 +56,17 @@ fn main() {
 
                         // hold on to edge changes until it is time.
                         input1.for_each(|time, data| {
-                            edge_stash.entry(time.retain()).or_insert_with(Vec::new).extend(data.drain(..));
+                            edge_stash.entry(time.retain()).or_insert(Vec::new()).extend(data.drain(..));
                         });
 
                         // hold on to rank changes until it is time.
                         input2.for_each(|time, data| {
-                            rank_stash.entry(time.retain()).or_insert_with(Vec::new).extend(data.drain(..));
+                            rank_stash.entry(time.retain()).or_insert(Vec::new()).extend(data.drain(..));
                         });
 
                         let frontiers = &[input1.frontier(), input2.frontier()];
 
-                        for (time, edge_changes) in &mut edge_stash {
+                        for (time, edge_changes) in edge_stash.iter_mut() {
                             if frontiers.iter().all(|f| !f.less_equal(time)) {
 
                                 let mut session = output.session(time);
@@ -82,7 +82,7 @@ fn main() {
 
                                     // 1. subtract previous distribution.
                                     allocate(ranks[src], &edges[src][..], &mut delta);
-                                    for x in &mut delta { x.1 *= -1; }
+                                    for x in delta.iter_mut() { x.1 *= -1; }
 
                                     // 2. update edges.
                                     edges[src].push((dst, diff));
@@ -102,7 +102,7 @@ fn main() {
 
                         edge_stash.retain(|_key, val| !val.is_empty());
 
-                        for (time, rank_changes) in &mut rank_stash {
+                        for (time, rank_changes) in rank_stash.iter_mut() {
                             if frontiers.iter().all(|f| !f.less_equal(time)) {
 
                                 let mut session = output.session(time);
@@ -126,7 +126,7 @@ fn main() {
 
                                     // 1. subtract previous distribution.
                                     allocate(ranks[src], &edges[src][..], &mut delta);
-                                    for x in &mut delta { x.1 *= -1; }
+                                    for x in delta.iter_mut() { x.1 *= -1; }
 
                                     // 2. update ranks.
                                     diffs[src] += diff;
