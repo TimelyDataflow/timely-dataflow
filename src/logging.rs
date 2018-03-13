@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::Arc;
 
+use ::progress::change_batch::ChangeBatch;
 use ::progress::timestamp::RootTimestamp;
 use ::progress::nested::product::Product;
 use ::progress::frontier::MutableAntichain;
@@ -117,15 +118,17 @@ impl<T: ::order::PartialOrder+Ord+Default+Clone+'static, D: Clone> EventPusherTe
     /// Construct a new tee with no subscribers.
     pub fn new() -> Self {
         Self {
-            frontier: Default::default(),
+            frontier: MutableAntichain::new_bottom(Default::default()),
             listeners: Vec::new(),
         }
     }
     /// Subscribe to this tee.
     pub fn subscribe(&mut self, mut listener: Box<EventPusher<T, D>+Send>) {
-        let mut changes = vec![(Default::default(), -1)];
+        let mut changes = ChangeBatch::new_from(Default::default(), -1);
         changes.extend(self.frontier.frontier().iter().map(|x| (x.clone(), 1)));
-        listener.push(Event::Progress(changes));
+        if !changes.is_empty() {
+            listener.push(Event::Progress(changes.into_inner()));
+        }
         self.listeners.push(listener);
     }
 }
