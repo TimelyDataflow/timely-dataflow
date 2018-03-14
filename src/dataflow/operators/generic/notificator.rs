@@ -1,4 +1,4 @@
-use progress::frontier::MutableAntichain;
+use progress::frontier::{AntichainRef, MutableAntichain};
 use progress::Timestamp;
 use dataflow::operators::Capability;
 use logging::Logger;
@@ -39,7 +39,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     }
 
     /// Reveals the elements in the frontier of the indicated input.
-    pub fn frontier(&self, input: usize) -> &[T] {
+    pub fn frontier(&self, input: usize) -> AntichainRef<T> {
         self.frontiers[input].frontier()
     }
 
