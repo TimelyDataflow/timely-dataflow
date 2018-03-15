@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::Timestamp;
-use progress::frontier::MutableAntichain;
+use progress::frontier::{AntichainRef, MutableAntichain};
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use dataflow::channels::pact::Pipeline;
@@ -156,7 +156,7 @@ impl<T: Timestamp> Handle<T> {
     /// let frontier = handle.with_frontier(|frontier| frontier.to_vec());
     /// ```
     #[inline]
-    pub fn with_frontier<R, F: FnMut(&[T])->R>(&self, mut function: F) -> R {
+    pub fn with_frontier<R, F: FnMut(AntichainRef<T>)->R>(&self, mut function: F) -> R {
         function(self.frontier.borrow().frontier())
     }
 }

@@ -90,7 +90,7 @@ pub struct MutableAntichain<T: PartialOrder+Ord> {
     frontier_temp: Vec<T>,
 }
 
-impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
+impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// Creates a new empty `MutableAntichain`.
     ///
     /// #Examples
@@ -147,9 +147,9 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// assert!(frontier.frontier().len() == 0);
     ///```
     #[inline]
-    pub fn frontier(&self) -> &[T] {
+    pub fn frontier(&self) -> AntichainRef<T> {
         debug_assert_eq!(self.dirty, 0);
-        &self.frontier
+        AntichainRef::new(&self.frontier)
     }
 
     /// Creates a new singleton `MutableAntichain`.
@@ -157,10 +157,10 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// #Examples
     ///
     ///```
-    /// use timely::progress::frontier::MutableAntichain;
+    /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
     ///
     /// let mut frontier = MutableAntichain::new_bottom(0u64);
-    /// assert_eq!(frontier.frontier(), &[0u64]);
+    /// assert!(frontier.frontier() == AntichainRef::new(&[0u64]));
     ///```
     #[inline]
     pub fn new_bottom(bottom: T) -> MutableAntichain<T> {
@@ -203,7 +203,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     #[inline]
     pub fn less_than(&self, time: &T) -> bool {
         debug_assert_eq!(self.dirty, 0);
-        self.frontier.iter().any(|x| x.less_than(time))
+        self.frontier().less_than(time)
     }
 
     /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
@@ -221,7 +221,7 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     ///```
     pub fn less_equal(&self, time: &T) -> bool {
         debug_assert_eq!(self.dirty, 0);
-        self.frontier.iter().any(|x| x.less_equal(time))
+        self.frontier().less_equal(time)
     }
 
     /// Allows a single-element push, but dirties the antichain and prevents inspection until cleaned.
@@ -243,11 +243,11 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// #Examples
     ///
     ///```
-    /// use timely::progress::frontier::MutableAntichain;
+    /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
     ///
     /// let mut frontier = MutableAntichain::new_bottom(1u64);
     /// frontier.update_iter(vec![(1, -1), (2, 1)].into_iter());
-    /// assert_eq!(frontier.frontier(), &[2]);
+    /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
     ///```
     #[inline]
     pub fn update_iter<I>(&mut self, updates: I)
@@ -266,14 +266,14 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
     /// #Examples
     ///
     ///```
-    /// use timely::progress::frontier::MutableAntichain;
+    /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
     ///
     /// let mut frontier = MutableAntichain::new_bottom(1u64);
     /// let mut changes = Vec::new();
     /// frontier.update_iter_and(vec![(1, -1), (2, 1)].into_iter(), |time, diff| {
     ///     changes.push((time.clone(), diff));
     /// });
-    /// assert_eq!(frontier.frontier(), &[2]);
+    /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
     /// changes.sort();
     /// assert_eq!(&changes[..], &[(1, -1), (2, 1)]);
     ///```
@@ -351,5 +351,111 @@ impl<T: PartialOrder+Ord+Clone+'static> MutableAntichain<T> {
             }
         }
         self.frontier_temp.clear();
+    }
+}
+
+/// A wrapper for elements of an antichain.
+#[derive(PartialEq, Eq)]
+pub struct AntichainRef<'a, T: 'a+PartialOrder> {
+    /// Elements contained in the antichain.
+    frontier: &'a [T],
+}
+
+impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
+    /// Create a new `AntichainRef` from a reference to a slice of elements forming the frontier.
+    pub fn new(frontier: &'a [T]) -> Self {
+        Self {
+            frontier,
+        }
+    }
+
+    /// Returns true if there are no elements in the `AntichainRef`.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::AntichainRef;
+    ///
+    /// let frontier = AntichainRef::<usize>::new(&[]);
+    /// assert!(frontier.is_empty());
+    ///```
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.frontier.is_empty()
+    }
+
+    /// Create an iterator over the elements in this `AntichainRef`.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::AntichainRef;
+    ///
+    /// let frontier = AntichainRef::new(&[1u64]);
+    /// let mut iter = frontier.iter();
+    /// assert_eq!(iter.next(), Some(&1u64));
+    /// assert_eq!(iter.next(), None);
+    ///```
+    pub fn iter(&self) -> ::std::slice::Iter<T> {
+        self.frontier.iter()
+    }
+
+    /// Returns true if any item in the `AntichainRef` is strictly less than the argument.
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::AntichainRef;
+    ///
+    /// let frontier = AntichainRef::new(&[1u64]);
+    /// assert!(!frontier.less_than(&0));
+    /// assert!(!frontier.less_than(&1));
+    /// assert!(frontier.less_than(&2));
+    ///```
+    #[inline]
+    pub fn less_than(&self, time: &T) -> bool {
+        self.iter().any(|x| x.less_than(time))
+    }
+
+    /// Returns true if any item in the `AntichainRef` is less than or equal to the argument.
+    #[inline]
+    ///
+    /// #Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::AntichainRef;
+    ///
+    /// let frontier = AntichainRef::new(&[1u64]);
+    /// assert!(!frontier.less_equal(&0));
+    /// assert!(frontier.less_equal(&1));
+    /// assert!(frontier.less_equal(&2));
+    ///```
+    pub fn less_equal(&self, time: &T) -> bool {
+        self.iter().any(|x| x.less_equal(time))
+    }
+
+    /// Returns the number of elements in this `AntichainRef`.
+    pub fn len(&self) -> usize {
+        self.frontier.len()
+    }
+
+    /// Copies `self` into a new `Vec`.
+    pub fn to_vec(&self) -> Vec<T> where T: Clone {
+        self.frontier.to_vec()
+    }
+}
+
+impl<'a, T: PartialOrder> ::std::ops::Deref for AntichainRef<'a, T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        self.frontier
+    }
+}
+
+impl<'a, T: 'a+PartialOrder> ::std::iter::IntoIterator for &'a AntichainRef<'a, T> {
+    type Item = &'a T;
+    type IntoIter = ::std::slice::Iter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
