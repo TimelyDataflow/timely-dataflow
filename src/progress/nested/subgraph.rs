@@ -305,14 +305,14 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // We must first translate `summaries` to summaries in the subgraph's timestamp type.
         // Each of these summaries correspond to dropping the inner timestamp coordinate and replacing
         // it with the default value, and applying the summary to the outer coordinate.
-        let mut new_summary = vec![vec![Antichain::new(); self.inputs]; self.outputs];
-        for output in 0..self.outputs {
-            for input in 0..self.inputs {
-                for summary in summaries[output][input].elements() {
-                    new_summary[output][input].insert(Outer(summary.clone(), Default::default()));
-                }
-            }
-        }
+        // let mut new_summary = vec![vec![Antichain::new(); self.inputs]; self.outputs];
+        // for output in 0..self.outputs {
+        //     for input in 0..self.inputs {
+        //         for summary in summaries[output][input].elements() {
+        //             new_summary[output][input].insert(Outer(summary.clone(), Default::default()));
+        //         }
+        //     }
+        // }
 
         // The element of `frontier` form the initial capabilities of child zero, our proxy for the outside world.
         let mut new_capabilities = vec![ChangeBatch::new(); self.inputs];
@@ -326,7 +326,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // Specifically, and crucially, we remove summaries from the outputs of child zero to the inputs of child
         // zero. This prevents the subgraph from reporting the external world's capabilities back as capabilities
         // held by the subgraph. We also remove summaries to nodes that do not require progress information.
-        self.pointstamp_builder.add_node(0, self.outputs, self.inputs, new_summary);
+        // self.pointstamp_builder.add_node(0, self.outputs, self.inputs, new_summary);
         let mut pointstamp_summaries = self.pointstamp_builder.summarize();
         for summaries in pointstamp_summaries.target_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
         for summaries in pointstamp_summaries.source_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
