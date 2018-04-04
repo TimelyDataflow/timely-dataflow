@@ -19,7 +19,7 @@ license = "MIT"
 abomonation = "0.5"
 abomonation_derive = "0.3"
 timely_communication = "0.5"
-byteorder="0.4.2"
+byteorder="1"
 time="0.1.34"
 
 [dev-dependencies]
