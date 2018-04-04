@@ -112,7 +112,7 @@ Having done the initial adjustment, we literally just play out the streams (note
 
 We can check out the examples `examples/capture_send.rs` and `examples/capture_recv.rs` to see a paired use of capture and receive demonstrating the generality.
 
-The `capture_send` example creates a new TCP connection for each worker, which it wraps and uses as an `EventPusher`. Timely dataflow takes care of all the serialiazation and stuff like that (warning: it uses abomonation, so this is not great for long-term storage).
+The `capture_send` example creates a new TCP connection for each worker, which it wraps and uses as an `EventPusher`. Timely dataflow takes care of all the serialization and stuff like that (warning: it uses abomonation, so this is not great for long-term storage).
 
 ```rust,ignore
 extern crate timely;

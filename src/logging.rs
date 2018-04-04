@@ -239,7 +239,7 @@ pub struct ScheduleEvent {
 }
 
 #[derive(Abomonation, Debug, Clone)]
-/// Application-defined code startor stop
+/// Application-defined code start or stop
 pub struct ApplicationEvent {
     /// Unique event type identifier
     pub id: usize,

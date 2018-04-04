@@ -96,7 +96,7 @@ impl<'a, T: Timestamp> Iterator for Notificator<'a, T> {
     /// Retrieve the next available notification.
     ///
     /// Returns `None` if no notification is available. Returns `Some(cap, count)` otherwise:
-    /// `cap` is a a capability for `t`, the timestamp being notified and, `count` represents
+    /// `cap` is a capability for `t`, the timestamp being notified and, `count` represents
     /// how many notifications (out of those requested) are being delivered for that specific
     /// timestamp.
     #[inline]

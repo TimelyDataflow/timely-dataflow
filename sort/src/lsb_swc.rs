@@ -60,7 +60,7 @@ impl<T> Sorter<T> {
 }
 
 // The following is a software write-combining implementation. This technique is meant to cut
-// down on the the amount of memory traffic due to non-full cache lines moving around. at the
+// down on the amount of memory traffic due to non-full cache lines moving around. At the
 // moment, on my laptop, it doesn't seem to improve things. But! I hope that in the fullness of
 // time this changes, either because the implementation improves, or I get a laptop with seventy
 // bazillion cores.

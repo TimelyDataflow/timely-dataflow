@@ -9,7 +9,7 @@ pub struct BatchedVecRef<'a, T: 'a> {
 impl<'a, T> BatchedVecRef<'a, T> {
     #[inline(always)]
     pub fn is_empty(&self) -> bool {
-        // It is sufficent to only check the tail for emptiness, since any time we flush
+        // It is sufficient to only check the tail for emptiness, since any time we flush
         // the tail (in .reserve), we also push some elements.
         self.tail.is_empty()
     }
