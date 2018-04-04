@@ -18,7 +18,7 @@
 //! of an actual data-parallel timely dataflow computation. It depends on `timely_communication` to
 //! move data, and `timely::progress` to provide correct operator notifications.
 //!
-//! #Examples
+//! # Examples
 //!
 //! The following is a hello-world dataflow program.
 //!

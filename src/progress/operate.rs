@@ -67,7 +67,7 @@ pub trait Operate<T: Timestamp> {
     /// This report summarizes *all* of the external world, including updates issued by the operator
     /// itself. This is important, and means that there is an ordering constraint that needs to be
     /// enforced by the operator: before reporting any summarized progress to its parent, a child
-    /// must install the non-summarized parts (interal messages, capabilities) locally. Otherwise,
+    /// must install the non-summarized parts (internal messages, capabilities) locally. Otherwise,
     /// the child may learn about external "progress" corresponding to its own actions, and without
     /// noting the consequences of those actions, will be in a bit of a pickle.
     ///
@@ -93,7 +93,7 @@ pub trait Operate<T: Timestamp> {
                                          internal: &mut [ChangeBatch<T>],          // to populate
                                          produced: &mut [ChangeBatch<T>]) -> bool; // to populate
 
-    /// A descripitive name for the operator
+    /// A descriptive name for the operator
     fn name(&self) -> String;
 
     /// Indicates of whether the operator requires `push_external_progress` information or not.

@@ -41,7 +41,7 @@ pub struct Source {
 pub struct Target {
     /// Index of the target operator.
     pub index: usize,
-    /// Nmuber of the input port to the operator.
+    /// Number of the input port to the operator.
     pub port: usize,
 }
 
@@ -338,7 +338,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // Allocate the pointstamp tracker using the finalized topology.
         self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries.clone());
 
-        // Initialize all expressed capablities as pointstamps, for propagation.
+        // Initialize all expressed capabilities as pointstamps, for propagation.
         for child in self.children.iter_mut() {
             for output in 0 .. child.outputs {
                 for &(ref time, value) in child.gis_capabilities[output].iter() {
@@ -757,7 +757,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             // information announcing the message's existence hasn't arrived yet, but soon will. It is safe
             // to await this progress information.
             //
-            // The fourth reason is that operators holding capabilties can decide to exert or drop them for
+            // The fourth reason is that operators holding capabilities can decide to exert or drop them for
             // any reason, perhaps just based on the number of times they have been called. In the absence
             // of any restriction on what would unblock them, we need to continually poll them.
             // NOTE: We could consider changing this to: operators that may unblock arbitrarily must express

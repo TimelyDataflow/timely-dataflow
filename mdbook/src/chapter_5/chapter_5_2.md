@@ -54,7 +54,7 @@ As a computation proceeds, operators may perform three classes of action:
 2. They may clone, downgrade, or drop any capability they hold.
 3. They may send output messages at any timestamp for which they hold the capability.
 
-The results of these actions are a stream of changes to the occurrences of capabilities at each location in the dataflow graph. As input messages are consumed, capabilies located at the corresponding `Target` input port are decremented, and capabilities at the operators `Source` output ports are incremented. Cloning, downgrading, and dropping capabilities changes the counts at each of the operators corresponding `Source` output ports. Sending messages results in increments to the counts at the `Target` ports of each `Target` connected to the `Source` from which the message is sent.
+The results of these actions are a stream of changes to the occurrences of capabilities at each location in the dataflow graph. As input messages are consumed, capabilities located at the corresponding `Target` input port are decremented, and capabilities at the operators `Source` output ports are incremented. Cloning, downgrading, and dropping capabilities changes the counts at each of the operators corresponding `Source` output ports. Sending messages results in increments to the counts at the `Target` ports of each `Target` connected to the `Source` from which the message is sent.
 
 Concretely, a batch of changes has the form `(Vec<(Source, Time, i64)>, Vec<(Target, Time, i64)>)`, indicating the increments and decrements for each time, at each dataflow location. Importantly we must keep these batches intact; the safety of the progress tracking protocol relies on not communicating half-formed progress messages (for example, consuming an input message but forgetting to indicate the acquisition of its capability).
 
@@ -64,7 +64,7 @@ At any point in time, each worker's view of the capabilities in the system is de
 
 ## Communicating Implications
 
-Each worker maintains an accumulation of progress update batches, which explains where capabilities may exist in the dataflow graph. This information is useful, but it is not yet sufficient to make strong statements about the possibility of timestamped messages arriving at *other* locations in the dataflow graph. Even though a capabilitity for timestamp `t` may exist, this does not mean that the time may arrive at any location in the dataflow graph. To be precise, we must discuss the paths through the dataflow graph which the timestamp capability could follow.
+Each worker maintains an accumulation of progress update batches, which explains where capabilities may exist in the dataflow graph. This information is useful, but it is not yet sufficient to make strong statements about the possibility of timestamped messages arriving at *other* locations in the dataflow graph. Even though a capability for timestamp `t` may exist, this does not mean that the time may arrive at any location in the dataflow graph. To be precise, we must discuss the paths through the dataflow graph which the timestamp capability could follow.
 
 ### Path Summaries
 

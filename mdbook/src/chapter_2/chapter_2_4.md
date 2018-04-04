@@ -105,7 +105,7 @@ Our next step is to define and return a closure that takes `output` as a paramet
 
 The closure does a bit of a dance to capture the current time (not a capability, in this case), create a session with this time and send whatever the time happens to be as data, then downgrade the capability to be one timestep in the future. If it turns out that this is greater than twenty we discard the capability.
 
-The system is smart enough to notice when you downgrade and discard capabilities, and it understand that these actions reperesent irreversible actions on your part that can now be communicated to others in the dataflow. As this closure is repeatedly executed, the timestamp of the capability will advance and the system will be able to indicate this to downstream operators.
+The system is smart enough to notice when you downgrade and discard capabilities, and it understand that these actions represent irreversible actions on your part that can now be communicated to others in the dataflow. As this closure is repeatedly executed, the timestamp of the capability will advance and the system will be able to indicate this to downstream operators.
 
 ### Stateful operators
 

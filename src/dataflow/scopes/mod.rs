@@ -48,7 +48,7 @@ pub trait Scope: ScopeParent {
 
     /// Adds a child `Operate` to the builder's scope using a supplied index.
     ///
-    /// This is used interally when there is a gap between allocate a child identifier and adding the
+    /// This is used internally when there is a gap between allocate a child identifier and adding the
     /// child, as happens in subgraph creation.
     fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC, index: usize);
 

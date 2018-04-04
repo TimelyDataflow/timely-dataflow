@@ -2,7 +2,7 @@
 //!
 //! Two traits, `Aggregate` and `StateMachine`, which support the accumulation of streamed information.
 //!
-//! `Aggregate` accumulates records within times, and releases the accumulations once the a time is complete.
+//! `Aggregate` accumulates records within times, and releases the accumulations once the time is complete.
 //!
 //! `StateMachine` responds to a sequence of keyed events, maintaining and updating a state for each key.
 //! The user logic may produce output records for each transition, and optionally de-register the state to

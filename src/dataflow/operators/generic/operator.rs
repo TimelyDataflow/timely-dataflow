@@ -18,7 +18,7 @@ use dataflow::operators::generic::operator_info::new_operator_info;
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
-    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
     ///
     /// #Examples
@@ -62,7 +62,7 @@ pub trait Operator<G: Scope, D1: Data> {
         P: ParallelizationContract<G::Timestamp, D1>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
-    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, and write to the output stream.
     ///
     /// #Examples
@@ -97,7 +97,7 @@ pub trait Operator<G: Scope, D1: Data> {
         P: ParallelizationContract<G::Timestamp, D1>;
 
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
-    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
     /// #Examples
@@ -154,7 +154,7 @@ pub trait Operator<G: Scope, D1: Data> {
         P2: ParallelizationContract<G::Timestamp, D2>;
 
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
-    /// strategy `pact`, and repeteadly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
     /// #Examples
@@ -196,7 +196,7 @@ pub trait Operator<G: Scope, D1: Data> {
         P2: ParallelizationContract<G::Timestamp, D2>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
-    /// strategy `pact`, and repeteadly invokes the function `logic` which can read from the input stream
+    /// strategy `pact`, and repeatedly invokes the function `logic` which can read from the input stream
     /// and inspect the frontier at the input.
     ///
     /// #Examples

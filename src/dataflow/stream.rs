@@ -2,7 +2,7 @@
 //!
 //! Most high-level timely dataflow programming is done with streams, which are each a handle to an
 //! operator output. Extension methods on the `Stream` type provide the appearance of higher-level
-//! declarative progamming, while constructing a dataflow graph underneath.
+//! declarative programming, while constructing a dataflow graph underneath.
 
 use progress::nested::subgraph::{Source, Target};
 
