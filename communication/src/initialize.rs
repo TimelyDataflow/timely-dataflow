@@ -64,10 +64,8 @@ impl Configuration {
                 assert!(processes == addresses.len());
                 Configuration::Cluster(threads, process, addresses, report)
             }
-            else {
-                if threads > 1 { Configuration::Process(threads) }
-                else { Configuration::Thread }
-            }
+            else if threads > 1 { Configuration::Process(threads) }
+            else { Configuration::Thread }
         })
     }
 }
@@ -75,10 +73,10 @@ impl Configuration {
 fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Generic>,String> {
     match config {
         Configuration::Thread => Ok(vec![Generic::Thread(Thread)]),
-        Configuration::Process(threads) => Ok(Process::new_vector(threads).into_iter().map(|x| Generic::Process(x)).collect()),
+        Configuration::Process(threads) => Ok(Process::new_vector(threads).into_iter().map(Generic::Process).collect()),
         Configuration::Cluster(threads, process, addresses, report) => {
             if let Ok(stuff) = initialize_networking(addresses, process, threads, report, logger) {
-                Ok(stuff.into_iter().map(|x| Generic::Binary(x)).collect())
+                Ok(stuff.into_iter().map(Generic::Binary).collect())
             }
             else {
                 Err("failed to initialize networking".to_owned())

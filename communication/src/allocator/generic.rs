@@ -17,26 +17,26 @@ pub enum Generic {
 impl Generic {
     /// The index of the worker out of `(0..self.peers())`.
     pub fn index(&self) -> usize {
-        match self {
-            &Generic::Thread(ref t) => t.index(),
-            &Generic::Process(ref p) => p.index(),
-            &Generic::Binary(ref b) => b.index(),
+        match *self {
+            Generic::Thread(ref t) => t.index(),
+            Generic::Process(ref p) => p.index(),
+            Generic::Binary(ref b) => b.index(),
         }
     }
     /// The number of workers.
     pub fn peers(&self) -> usize {
-        match self {
-            &Generic::Thread(ref t) => t.peers(),
-            &Generic::Process(ref p) => p.peers(),
-            &Generic::Binary(ref b) => b.peers(),
+        match *self {
+            Generic::Thread(ref t) => t.peers(),
+            Generic::Process(ref p) => p.peers(),
+            Generic::Binary(ref b) => b.peers(),
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
     pub fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
-        match self {
-            &mut Generic::Thread(ref mut t) => t.allocate(),
-            &mut Generic::Process(ref mut p) => p.allocate(),
-            &mut Generic::Binary(ref mut b) => b.allocate(),
+        match *self {
+            Generic::Thread(ref mut t) => t.allocate(),
+            Generic::Process(ref mut p) => p.allocate(),
+            Generic::Binary(ref mut b) => b.allocate(),
         }
     }
 }

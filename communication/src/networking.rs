@@ -308,7 +308,7 @@ pub fn initialize_networking(
         });
     }
 
-    return Ok(results);
+    Ok(results)
 }
 
 // result contains connections [0, my_index - 1].
@@ -333,7 +333,7 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
         }
     }
 
-    return Ok(results);
+    Ok(results)
 }
 
 // result contains connections [my_index + 1, addresses.len() - 1].
@@ -349,5 +349,5 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
         if noisy { println!("worker {}:\tconnection from worker {}", my_index, identifier); }
     }
 
-    return Ok(results);
+    Ok(results)
 }
