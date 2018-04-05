@@ -77,7 +77,7 @@ impl Allocate for Binary {
 
         self.allocated += 1;
 
-        return (pushers, pullable, Some(self.allocated - 1));
+        (pushers, pullable, Some(self.allocated - 1))
     }
 }
 
