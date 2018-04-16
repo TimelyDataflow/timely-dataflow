@@ -13,7 +13,7 @@ keywords = ["timely", "dataflow"]
 license = "MIT"
 
 [features]
-default=[] # ["logging"]
+default=["arg_parse"] # ["logging"]
 arg_parse=["getopts"]
 
 [dependencies]
