@@ -14,13 +14,17 @@ license = "MIT"
 
 [features]
 default=[] # ["logging"]
+arg_parse=["getopts"]
 
 [dependencies]
 byteorder="1"
-getopts="0.2.14"
+getopts={version="0.2.14", optional=true}
 time="0.1.34"
 abomonation = "0.5"
 abomonation_derive = "0.3"
+
+[[examples]]
+features = "arg_parse"
 
 [profile.release]
 opt-level = 3
