@@ -402,13 +402,6 @@ impl<T: Timestamp> FrontierNotificator<T> {
     pub fn pending<'a>(&'a self) -> ::std::slice::Iter<'a, (Capability<T>, u64)> {
         self.pending.iter()
     }
-
-    /// Test if there are any capabilities available for notification.
-    #[inline]
-    pub fn has_available<'a>(&mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> bool {
-        self.make_available(frontiers);
-        !self.available.is_empty()
-    }
 }
 
 #[derive(PartialEq, Eq)]
