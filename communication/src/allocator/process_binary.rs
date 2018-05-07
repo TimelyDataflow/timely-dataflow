@@ -43,7 +43,7 @@ impl ByteExchange {
             self.balance += 1;
             self.send
                 .send(bytes)
-                .expect("failed to send byte buffer!");
+                .expect("ByteExchange::send(): failed to send byte buffer!");
         }
         else {
             // failing to return a byte buffer because the other side has hung up
@@ -53,7 +53,7 @@ impl ByteExchange {
     }
     pub fn recv(&mut self) -> Option<Vec<u8>> {
         if let Ok(bytes) = self.recv.try_recv() {
-            // empty bytes are returend buffers.
+            // empty bytes are returned buffers.
             if bytes.len() == 0 {
                 assert!(self.balance > 0);
                 self.balance -= 1;
@@ -206,54 +206,76 @@ impl Allocate for ProcessBinary {
 }
 
 struct SharedByteBuffer {
-    sender: ByteExchange,    // channels for each destination worker.
-    buffer: Vec<u8>,            // working space for each destination worker.
-    stash:  Vec<Vec<u8>>,
+    sender: ByteExchange,   // channels for each destination worker.
+    buffer: Vec<u8>,        // working space for each destination worker.
+    stash:  Vec<Vec<u8>>,   // spare buffers
+    default_size: usize,
 }
 
 impl SharedByteBuffer {
 
     // Allocates a new SharedByteBuffer with an indicated default capacity.
     fn new(sender: ByteExchange) -> Self {
+        let default_size = 1 << 20;
         SharedByteBuffer {
             sender,
-            buffer: Vec::with_capacity(1 << 20),
+            buffer: Vec::with_capacity(default_size),
             stash: Vec::new(),
+            default_size,
         }
     }
 
-    // Retrieve a writeable buffer with at least `size` bytes available capacity.
-    //
-    // This may result in the current working buffer being sent and a new buffer
-    // being acquired or allocated.
+    /// Acquires a fresh buffer.
+    ///
+    /// The fresh buffer is acquired first from the local stash, then from the
+    /// return channel, and lastly allocated if no other buffers are available.
+    fn get_buffer(&mut self) -> Vec<u8> {
+        if self.stash.len() > 0 {
+            self.stash.pop().unwrap()
+        }
+        else {
+            self.sender.recv().unwrap_or_else(|| { println!("allocating"); Vec::with_capacity(self.default_size) })
+        }
+    }
+
+    /// Retrieve a writeable buffer with at least `size` bytes available capacity.
+    ///
+    /// This may result in the current working buffer being sent and a new buffer
+    /// being acquired or allocated.
     fn reserve(&mut self, size: usize) -> &mut Vec<u8> {
 
         if self.buffer.len() + size > self.buffer.capacity() {
 
             // if we need more space than we expect from our byte exchange, ...
-            let new_buffer = if size > (1 << 20) {
+            let new_buffer = if size > self.default_size {
                 Vec::with_capacity(size)
             }
             else {
-                if self.stash.len() > 0 { self.stash.pop().unwrap() }
-                else {
-                    self.sender.recv().unwrap_or_else(|| { println!("allocating"); Vec::with_capacity(1 << 20) })
-                }
+                self.get_buffer()
             };
 
-            assert!(new_buffer.is_empty());
-            assert!(new_buffer.capacity() >= size);
+            debug_assert!(new_buffer.is_empty());
+            debug_assert!(new_buffer.capacity() >= size);
 
             let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
             if old_buffer.len() > 0 {
                 self.sender.send(old_buffer);
+            }
+            else {
+                // We should stash `old_buffer`, if the right size.
+                if old_buffer.capacity() == self.default_size {
+                    self.stash.push(old_buffer);
+                }
             }
         }
 
         &mut self.buffer
     }
 
-    // Push out all pending byte buffer sends.
+    /// Push out all pending byte buffer sends.
+    ///
+    /// This has the effect of emptying `self.buffer`, most likely by sending
+    /// it through `self.sender`.
     fn flush(&mut self) {
         if self.buffer.len() > 0 {
 
@@ -264,12 +286,7 @@ impl SharedByteBuffer {
             // only ship the buffer if the recipient has consumed everything we've sent them.
             // otherwise, wait for the first flush call when they have (they should eventually).
             if self.sender.queue_length() == 0 {
-                let new_buffer = if self.stash.len() > 0 {
-                    self.stash.pop().unwrap()
-                }
-                else {
-                    self.sender.recv().unwrap_or_else(|| { println!("allocating"); Vec::with_capacity(1 << 20) })
-                };
+                let new_buffer = self.get_buffer();
                 let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
                 if old_buffer.len() > 0 {
                     self.sender.send(old_buffer);
