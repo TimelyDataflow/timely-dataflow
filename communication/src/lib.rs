@@ -69,6 +69,7 @@
 //! result: Ok(1)
 //! ```
 
+#[cfg(feature = "arg_parse")]
 extern crate getopts;
 extern crate byteorder;
 extern crate abomonation;

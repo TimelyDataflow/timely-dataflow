@@ -24,10 +24,10 @@ fn main() {
         // circulate numbers, Collatz stepping each time.
         (1 .. 10)
             .to_stream(scope)
-            .concat(stream)
+            .concat(&stream)
             .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
             .inspect(|x| println!("{:?}", x))
-            .filter(|x| x != 1)
+            .filter(|x| *x != 1)
             .connect_loop(handle);
 
     });
@@ -59,16 +59,17 @@ fn main() {
         let (handle1, stream1) = scope.loop_variable(100, 1);
 
         // do the right steps for even and odd numbers, respectively.
-        let results0 = stream0.map(|x| x / 2).filter(|x| x != 1);
+        let results0 = stream0.map(|x| x / 2).filter(|x| *x != 1);
         let results1 = stream1.map(|x| 3 * x + 1);
 
         // partition the input and feedback streams by even-ness.
         let parts =
-        (1 .. 10)
-            .to_stream(scope)
-            .concat(&results0)
-            .concat(&results1)
-            .partition(2, |x| x % 2);
+            (1 .. 10)
+                .to_stream(scope)
+                .concat(&results0)
+                .concat(&results1)
+                .inspect(|x| println!("{:?}", x))
+                .partition(2, |x| (x % 2, x));
 
         // connect each part appropriately.
         parts[0].connect_loop(handle0);
@@ -87,6 +88,7 @@ Of course, you can do all of this in a nested scope, if that is appropriate. In 
 extern crate timely;
 
 use timely::dataflow::operators::*;
+use timely::dataflow::Scope;
 
 fn main() {
     timely::example(|scope| {
@@ -95,14 +97,14 @@ fn main() {
 
         scope.scoped(|subscope| {
 
-            let (handle, stream) = scope.loop_variable(100, 1);
+            let (handle, stream) = subscope.loop_variable(100, 1);
 
             input
                 .enter(subscope)
-                .concat(stream)
+                .concat(&stream)
                 .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
                 .inspect(|x| println!("{:?}", x))
-                .filter(|x| x != 1)
+                .filter(|x| *x != 1)
                 .connect_loop(handle);
         })
 
