@@ -65,10 +65,8 @@ impl Configuration {
                 assert!(processes == addresses.len());
                 Configuration::Cluster(threads, process, addresses, report)
             }
-            else {
-                if threads > 1 { Configuration::Process(threads) }
-                else { Configuration::Thread }
-            }
+            else if threads > 1 { Configuration::Process(threads) }
+            else { Configuration::Thread }
         })
     }
 }

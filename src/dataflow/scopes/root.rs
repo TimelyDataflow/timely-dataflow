@@ -38,7 +38,7 @@ impl<A: Allocate> Root<A> {
     /// Performs one step of the computation.
     ///
     /// A step gives each dataflow operator a chance to run, and is the
-    /// main way to ensure that a computation procedes.
+    /// main way to ensure that a computation proceeds.
     pub fn step(&mut self) -> bool {
 
         self.allocator.borrow_mut().pre_work();
@@ -165,7 +165,7 @@ impl Wrapper {
             self.operate = None;
             self.resources = None;
         }
-        // TODO consider flushing logs here (possibly after an arbritrary timeout)
+        // TODO consider flushing logs here (possibly after an arbitrary timeout)
         active
     }
     fn active(&self) -> bool { self.operate.is_some() }

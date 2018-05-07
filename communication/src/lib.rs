@@ -1,7 +1,7 @@
 //! A simple communication infrastructure providing typed exchange channels.
 //!
 //! This crate is part of the timely dataflow system, used primarily for its inter-worker communication.
-//! It may be indepedently useful, but it is separated out mostly to make clear boundaries in the project.
+//! It may be independently useful, but it is separated out mostly to make clear boundaries in the project.
 //!
 //! Threads are spawned with an [`allocator::Generic`](./allocator/generic/enum.Generic.html), whose `allocate` method returns a pair of several send endpoints and one
 //! receive endpoint. Messages sent into a send endpoint will eventually be received by the corresponding worker,
@@ -150,7 +150,7 @@ pub trait Pull<T> {
     ///
     /// The receiver may mutate the result, in particular take ownership of the data by replacing
     /// it with other data or even `None`.
-    /// If `pull` returns `None` this conventially signals that no more data is available
+    /// If `pull` returns `None` this conventionally signals that no more data is available
     /// at the moment.
     fn pull(&mut self) -> &mut Option<T>;
     /// Takes an `Option<T>` and leaves `None` behind.

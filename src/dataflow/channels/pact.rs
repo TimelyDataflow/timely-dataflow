@@ -27,7 +27,7 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
     type Pusher: Push<(T, Content<D>)>+'static;
     /// Type implementing `Pull` produced by this pact.
     type Puller: Pull<(T, Content<D>)>+'static;
-    /// Alloctes a matched pair of push and pull endpoints implementing the pact.
+    /// Allocates a matched pair of push and pull endpoints implementing the pact.
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller);
 }
 

@@ -1,7 +1,7 @@
 //! Manages pointstamp reachability within a graph.
 //!
 //! Timely dataflow is concerned with understanding and communicating the potential
-//! for capabilites to reach nodes in a directed graph, by following paths through
+//! for capabilities to reach nodes in a directed graph, by following paths through
 //! the graph (along edges and through nodes). This module contains one abstraction
 //! for managing this information.
 //!

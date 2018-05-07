@@ -1,4 +1,4 @@
-use progress::frontier::MutableAntichain;
+use progress::frontier::{AntichainRef, MutableAntichain};
 use progress::Timestamp;
 use dataflow::operators::Capability;
 use logging::Logger;
@@ -39,7 +39,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     }
 
     /// Reveals the elements in the frontier of the indicated input.
-    pub fn frontier(&self, input: usize) -> &[T] {
+    pub fn frontier(&self, input: usize) -> AntichainRef<T> {
         self.frontiers[input].frontier()
     }
 
@@ -96,7 +96,7 @@ impl<'a, T: Timestamp> Iterator for Notificator<'a, T> {
     /// Retrieve the next available notification.
     ///
     /// Returns `None` if no notification is available. Returns `Some(cap, count)` otherwise:
-    /// `cap` is a a capability for `t`, the timestamp being notified and, `count` represents
+    /// `cap` is a capability for `t`, the timestamp being notified and, `count` represents
     /// how many notifications (out of those requested) are being delivered for that specific
     /// timestamp.
     #[inline]
