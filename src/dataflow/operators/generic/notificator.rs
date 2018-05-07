@@ -367,6 +367,41 @@ impl<T: Timestamp> FrontierNotificator<T> {
     pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Logger) -> Notificator<'a, T> {
         Notificator::new(frontiers, self, logging)
     }
+
+    /// Iterates over pending capabilities and their count. The count represents how often a
+    /// capability has been requested.
+    ///
+    /// To make sure all pending capabilities are above the frontier, use `for_each` or exhaust
+    /// `next` to consume all available capabilities.
+    ///
+    /// #Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::operator::Operator;
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary_frontier(Pipeline, "example", |_, _| {
+    ///                let mut notificator = FrontierNotificator::new();
+    ///                move |input, output| {
+    ///                    input.for_each(|cap, data| {
+    ///                        output.session(&cap).give_content(data);
+    ///                        let mut time = cap.time().clone();
+    ///                        time.inner += 1;
+    ///                        notificator.notify_at(cap.delayed(&time));
+    ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
+    ///                    });
+    ///                    notificator.for_each(&[input.frontier()], |cap, _| {
+    ///                        println!("done with time: {:?}", cap.time());
+    ///                    });
+    ///                }
+    ///            });
+    /// });
+    /// ```
+    pub fn pending<'a>(&'a self) -> ::std::slice::Iter<'a, (Capability<T>, u64)> {
+        self.pending.iter()
+    }
 }
 
 #[derive(PartialEq, Eq)]
