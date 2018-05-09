@@ -63,24 +63,37 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             H: Fn(&K)->u64+'static,                     // "hash" function for keys
         >(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq {
 
-        let mut pending = HashMap::new();   // times -> (keys -> state)
+        let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state
 
         self.unary_notify(Exchange::new(move |&(ref k, _)| hash(k)), "StateMachine", vec![], move |input, output, notificator| {
-
-            // stash each input and request a notification when ready
-            input.for_each(|time, data| {
-                // Unconditionally stash data as `state_machine` requires data to be folded in-order.
-                // Processing here can violate this invariant.
-                pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
-                notificator.notify_at(time.retain());
-            });
 
             // go through each time with data, process each (key, val) pair.
             notificator.for_each(|time,_,_| {
                 if let Some(pend) = pending.remove(time.time()) {
                     let mut session = output.session(&time);
                     for (key, val) in pend {
+                        let (remove, output) = {
+                            let state = states.entry(key.clone()).or_insert_with(Default::default);
+                            fold(&key, val, state)
+                        };
+                        if remove { states.remove(&key); }
+                        session.give_iterator(output.into_iter());
+                    }
+                }
+            });
+
+            // stash each input and request a notification when ready
+            input.for_each(|time, data| {
+                // stash if not time yet
+                if notificator.frontier(0).less_than(time.time()) {
+                    pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
+                    notificator.notify_at(time.retain());
+                }
+                else {
+                    // else we can process immediately
+                    let mut session = output.session(&time);
+                    for (key, val) in data.drain(..) {
                         let (remove, output) = {
                             let state = states.entry(key.clone()).or_insert_with(Default::default);
                             fold(&key, val, state)
