@@ -63,10 +63,25 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             H: Fn(&K)->u64+'static,                     // "hash" function for keys
         >(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq {
 
-        let mut pending = HashMap::new();   // times -> (keys -> state)
+        let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state
 
         self.unary_notify(Exchange::new(move |&(ref k, _)| hash(k)), "StateMachine", vec![], move |input, output, notificator| {
+
+            // go through each time with data, process each (key, val) pair.
+            notificator.for_each(|time,_,_| {
+                if let Some(pend) = pending.remove(time.time()) {
+                    let mut session = output.session(&time);
+                    for (key, val) in pend {
+                        let (remove, output) = {
+                            let state = states.entry(key.clone()).or_insert_with(Default::default);
+                            fold(&key, val, state)
+                        };
+                        if remove { states.remove(&key); }
+                        session.give_iterator(output.into_iter());
+                    }
+                }
+            });
 
             // stash each input and request a notification when ready
             input.for_each(|time, data| {
@@ -79,21 +94,6 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
                     // else we can process immediately
                     let mut session = output.session(&time);
                     for (key, val) in data.drain(..) {
-                        let (remove, output) = {
-                            let state = states.entry(key.clone()).or_insert_with(Default::default);
-                            fold(&key, val, state)
-                        };
-                        if remove { states.remove(&key); }
-                        session.give_iterator(output.into_iter());
-                    }
-                }
-            });
-
-            // go through each time with data, process each (key, val) pair.
-            notificator.for_each(|time,_,_| {
-                if let Some(pend) = pending.remove(time.time()) {
-                    let mut session = output.session(&time);
-                    for (key, val) in pend {
                         let (remove, output) = {
                             let state = states.entry(key.clone()).or_insert_with(Default::default);
                             fold(&key, val, state)
