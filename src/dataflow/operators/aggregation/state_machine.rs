@@ -70,23 +70,10 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
 
             // stash each input and request a notification when ready
             input.for_each(|time, data| {
-                // stash if not time yet
-                if notificator.frontier(0).less_than(time.time()) {
-                    pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
-                    notificator.notify_at(time.retain());
-                }
-                else {
-                    // else we can process immediately
-                    let mut session = output.session(&time);
-                    for (key, val) in data.drain(..) {
-                        let (remove, output) = {
-                            let state = states.entry(key.clone()).or_insert_with(Default::default);
-                            fold(&key, val, state)
-                        };
-                        if remove { states.remove(&key); }
-                        session.give_iterator(output.into_iter());
-                    }
-                }
+                // Unconditionally stash data as `state_machine` requires data to be folded in-order.
+                // Processing here can violate this invariant.
+                pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
+                notificator.notify_at(time.retain());
             });
 
             // go through each time with data, process each (key, val) pair.
