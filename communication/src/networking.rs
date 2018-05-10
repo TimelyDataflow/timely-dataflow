@@ -13,7 +13,6 @@ use std::time::Duration;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use allocator::{Process, Binary};
-use drain::DrainExt;
 
 // TODO : Much of this only relates to BinaryWriter/BinaryReader based communication, not networking.
 // TODO : Could be moved somewhere less networking-specific.
@@ -178,7 +177,7 @@ impl<W: Write> BinarySender<W> {
                 stash.push((header, buffer));
             }
 
-            for (header, mut buffer) in stash.drain_temp() {
+            for (header, mut buffer) in stash.drain(..) {
                 assert!(header.length == buffer.len());
                 self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Communication(::logging::CommunicationEvent {
                         is_send: true,
