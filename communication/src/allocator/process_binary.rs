@@ -1,81 +1,172 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::sync::mpsc::{Sender, Receiver, channel};
 use std::collections::VecDeque;
+use std::ops::DerefMut;
 
 use networking::MessageHeader;
 
 use {Allocate, Data, Push, Pull, Serialize};
 
-/// A unidirectional bulk byte channel
-///
-/// This channel means to accept large owned `Vec<u8>` buffers and hand them off to another
-/// thread, who consumes them and returns emptied allocations. The intent here is that the
-/// sender can notice when the channel is not empty and can consolidate writes to a large
-/// buffer until that changes.
-pub struct ByteExchange {
-    send: Sender<Vec<u8>>,
-    recv: Receiver<Vec<u8>>,
-    balance: usize,             // number sent minus number received back.
+/// Reports the remaining capacity.
+pub trait Available: ::std::io::Write {
+    /// Reports the remaining capacity.
+    ///
+    /// The instance should be able to accept `self.available()` bytes written at it
+    /// without complaint, and can have any (correct) behavior it likes on additional
+    /// bytes written.
+    fn available(&self) -> usize;
 }
 
-impl ByteExchange {
+impl Available for Vec<u8> {
+    fn available(&self) -> usize { self.capacity() - self.len() }
+}
 
-    pub fn new_pair() -> (Self, Self) {
+pub trait BytesExchange {
+    type Send: BytesSendEndpoint+'static;
+    type Recv: BytesRecvEndpoint+'static;
+    fn new() -> (Self::Send, Self::Recv);
+}
 
-        let (send1, recv1) = channel();
-        let (send2, recv2) = channel();
+pub trait BytesSendEndpoint {
+    type SendBuffer: Available;
+    fn reserve(&mut self, capacity: usize) -> &mut Self::SendBuffer;
+    fn publish(&mut self);
+}
 
-        let result1 = ByteExchange { send: send1, recv: recv2, balance: 0, };
-        let result2 = ByteExchange { send: send2, recv: recv1, balance: 0, };
+pub trait BytesRecvEndpoint {
+    type RecvBuffer: DerefMut<Target=[u8]>;
+    fn receive(&mut self) -> Option<Self::RecvBuffer>;
+    fn recycle(&mut self, buffer: Self::RecvBuffer);
+}
 
-        (result1, result2)
+pub mod vec {
+
+    use std::sync::mpsc::{Sender, Receiver, channel};
+
+    use super::{BytesExchange, BytesSendEndpoint, BytesRecvEndpoint};
+
+    pub struct VecSendEndpoint {
+        send: Sender<Vec<u8>>,      // send full vectors
+        recv: Receiver<Vec<u8>>,    // recv empty vectors
+        balance: usize,             // #sent - #recv.
+
+        buffer: Vec<u8>,
+        stash:  Vec<Vec<u8>>,       // spare buffers
+        default_size: usize,
     }
 
-    #[inline(always)]
-    pub fn queue_length(&self) -> usize {
-        self.balance
-    }
-    pub fn send(&mut self, bytes: Vec<u8>) {
-        // non-empty bytes are expected to return.
-        if bytes.len() > 0 {
-            self.balance += 1;
-            self.send
-                .send(bytes)
-                .expect("ByteExchange::send(): failed to send byte buffer!");
-        }
-        else {
-            // failing to return a byte buffer because the other side has hung up
-            // should not be a fatal event.
-            let _ = self.send.send(bytes);
-        }
-    }
-    pub fn recv(&mut self) -> Option<Vec<u8>> {
-        if let Ok(bytes) = self.recv.try_recv() {
-            // empty bytes are returned buffers.
-            if bytes.len() == 0 {
-                assert!(self.balance > 0);
+    impl VecSendEndpoint {
+        /// Drains `self.recv` of empty buffers, stashes them.
+        fn drain_recv(&mut self) {
+            while let Ok(bytes) = self.recv.try_recv() {
                 self.balance -= 1;
+                if bytes.capacity() == self.default_size {
+                    self.stash.push(bytes);
+                }
             }
-            Some(bytes)
         }
-        else {
-            None
+        /// Moves `self.buffer` into `self.send`, replaces with empty buffer.
+        fn send_buffer(&mut self) {
+            let buffer = ::std::mem::replace(&mut self.buffer, Vec::new());
+            if buffer.len() > 0 {
+                self.send.send(buffer).expect("VecSendEndpoint::send_buffer(): failed to send buffer");
+                self.balance += 1;
+            }
+            else {
+                if buffer.capacity() == self.default_size {
+                    self.stash.push(buffer);
+                }
+            }
+        }
+    }
+
+    impl BytesSendEndpoint for VecSendEndpoint {
+
+        type SendBuffer = Vec<u8>;
+
+        fn reserve(&mut self, capacity: usize) -> &mut Self::SendBuffer {
+            if self.buffer.capacity() < capacity + self.buffer.len() {
+                self.send_buffer();
+                if capacity > self.default_size {
+                    self.buffer = Vec::with_capacity(capacity);
+                }
+                else {
+                    self.drain_recv();
+                    self.buffer = self.stash.pop().unwrap_or_else(|| Vec::with_capacity(self.default_size))
+                }
+            }
+
+            &mut self.buffer
+        }
+
+        fn publish(&mut self) {
+            self.drain_recv();
+            if self.balance == 0 {
+                self.send_buffer();
+            }
+        }
+    }
+
+    pub struct VecRecvEndpoint {
+        recv: Receiver<Vec<u8>>,    // recv full vectors
+        send: Sender<Vec<u8>>,      // send empty vectors
+    }
+
+    impl BytesRecvEndpoint for VecRecvEndpoint {
+        type RecvBuffer = Vec<u8>;
+        fn receive(&mut self) -> Option<Self::RecvBuffer> {
+            if let Ok(bytes) = self.recv.try_recv() {
+                Some(bytes)
+            }
+            else { None }
+        }
+        fn recycle(&mut self, mut buffer: Self::RecvBuffer) {
+            buffer.clear();
+            // other side hanging up shouldn't cause panic.
+            let _ = self.send.send(buffer);
+        }
+    }
+
+    pub struct VecBytesExchange;
+
+    impl BytesExchange for VecBytesExchange {
+        type Send = VecSendEndpoint;
+        type Recv = VecRecvEndpoint;
+        fn new() -> (Self::Send, Self::Recv) {
+
+            let (send1, recv1) = channel();
+            let (send2, recv2) = channel();
+
+            let result1 = VecSendEndpoint {
+                send: send1,
+                recv: recv2,
+                balance: 0,
+                buffer: Vec::new(),
+                stash: Vec::new(),
+                default_size: 1 << 20,
+            };
+            let result2 = VecRecvEndpoint {
+                send: send2,
+                recv: recv1,
+            };
+
+            (result1, result2)
         }
     }
 }
 
-pub struct ProcessBinaryBuilder {
-    index:      usize,                              // number out of peers
-    peers:      usize,                              // number of peer allocators (for typed channel allocation).
-    sends:      Vec<ByteExchange>,                  // with each other worker (for pushing bytes)
-    recvs:      Vec<ByteExchange>,                  // with each other worker (for pulling bytes)
+
+pub struct ProcessBinaryBuilder<BE: BytesExchange> {
+    index:      usize,  // number out of peers
+    peers:      usize,  // number of peer allocators (for typed channel allocation).
+    sends:      Vec<BE::Send>, // with each other worker (for pushing bytes)
+    recvs:      Vec<BE::Recv>, // with each other worker (for pulling bytes)
 }
 
-impl ProcessBinaryBuilder {
+impl<BE: BytesExchange> ProcessBinaryBuilder<BE> {
 
-    pub fn new_vector(count: usize) -> Vec<ProcessBinaryBuilder> {
+    pub fn new_vector(count: usize) -> Vec<ProcessBinaryBuilder<BE>> {
 
         let mut sends = Vec::new();
         let mut recvs = Vec::new();
@@ -84,7 +175,7 @@ impl ProcessBinaryBuilder {
 
         for source in 0 .. count {
             for target in 0 .. count {
-                let (send, recv) = ByteExchange::new_pair();
+                let (send, recv) = BE::new();
                 sends[source].push(send);
                 recvs[target].push(recv);
             }
@@ -103,10 +194,10 @@ impl ProcessBinaryBuilder {
         result
     }
 
-    pub fn build(self) -> ProcessBinary {
+    pub fn build(self) -> ProcessBinary<BE> {
         let mut shared = Vec::new();
         for send in self.sends.into_iter() {
-            shared.push(Rc::new(RefCell::new(SharedByteBuffer::new(send))));
+            shared.push(Rc::new(RefCell::new(send)));
         }
 
         ProcessBinary {
@@ -121,16 +212,16 @@ impl ProcessBinaryBuilder {
 }
 
 // A specific Communicator for inter-thread intra-process communication
-pub struct ProcessBinary {
+pub struct ProcessBinary<BE: BytesExchange> {
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
     allocated:  usize,                              // indicates how many have been allocated (locally).
-    sends:      Vec<Rc<RefCell<SharedByteBuffer>>>, // channels[x] -> goes to worker x.
-    recvs:      Vec<ByteExchange>,                  // from all other workers.
+    sends:      Vec<Rc<RefCell<BE::Send>>>,         // channels[x] -> goes to worker x.
+    recvs:      Vec<BE::Recv>,                      // from all other workers.
     to_local:   Vec<Rc<RefCell<VecDeque<Vec<u8>>>>>,// to worker-local typed pullers.
 }
 
-impl Allocate for ProcessBinary {
+impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
     fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
@@ -170,7 +261,7 @@ impl Allocate for ProcessBinary {
 
         for recv in self.recvs.iter_mut() {
 
-            while let Some(mut bytes) = recv.recv() {
+            while let Some(mut bytes) = recv.receive() {
 
                 // we are guaranteed that `bytes` contains exactly an integral number of messages.
                 // no splitting occurs across allocations.
@@ -191,8 +282,7 @@ impl Allocate for ProcessBinary {
                     assert_eq!(slice.len(), 0);
                 }
 
-                bytes.clear();
-                recv.send(bytes);
+                recv.recycle(bytes);
             }
         }
     }
@@ -200,114 +290,24 @@ impl Allocate for ProcessBinary {
     // Perform postparatory work, most likely sending incomplete binary buffers.
     fn post_work(&mut self) {
         for send in self.sends.iter_mut() {
-            send.borrow_mut().flush();
+            send.borrow_mut().publish();
         }
     }
 }
 
-struct SharedByteBuffer {
-    sender: ByteExchange,   // channels for each destination worker.
-    buffer: Vec<u8>,        // working space for each destination worker.
-    stash:  Vec<Vec<u8>>,   // spare buffers
-    default_size: usize,
-}
-
-impl SharedByteBuffer {
-
-    // Allocates a new SharedByteBuffer with an indicated default capacity.
-    fn new(sender: ByteExchange) -> Self {
-        let default_size = 1 << 20;
-        SharedByteBuffer {
-            sender,
-            buffer: Vec::with_capacity(default_size),
-            stash: Vec::new(),
-            default_size,
-        }
-    }
-
-    /// Acquires a fresh buffer.
-    ///
-    /// The fresh buffer is acquired first from the local stash, then from the
-    /// return channel, and lastly allocated if no other buffers are available.
-    fn get_buffer(&mut self) -> Vec<u8> {
-        if self.stash.len() > 0 {
-            self.stash.pop().unwrap()
-        }
-        else {
-            self.sender.recv().unwrap_or_else(|| { println!("allocating"); Vec::with_capacity(self.default_size) })
-        }
-    }
-
-    /// Retrieve a writeable buffer with at least `size` bytes available capacity.
-    ///
-    /// This may result in the current working buffer being sent and a new buffer
-    /// being acquired or allocated.
-    fn reserve(&mut self, size: usize) -> &mut Vec<u8> {
-
-        if self.buffer.len() + size > self.buffer.capacity() {
-
-            // if we need more space than we expect from our byte exchange, ...
-            let new_buffer = if size > self.default_size {
-                Vec::with_capacity(size)
-            }
-            else {
-                self.get_buffer()
-            };
-
-            debug_assert!(new_buffer.is_empty());
-            debug_assert!(new_buffer.capacity() >= size);
-
-            let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
-            if old_buffer.len() > 0 {
-                self.sender.send(old_buffer);
-            }
-            else {
-                // We should stash `old_buffer`, if the right size.
-                if old_buffer.capacity() == self.default_size {
-                    self.stash.push(old_buffer);
-                }
-            }
-        }
-
-        &mut self.buffer
-    }
-
-    /// Push out all pending byte buffer sends.
-    ///
-    /// This has the effect of emptying `self.buffer`, most likely by sending
-    /// it through `self.sender`.
-    fn flush(&mut self) {
-        if self.buffer.len() > 0 {
-
-            while let Some(bytes) = self.sender.recv() {
-                self.stash.push(bytes);
-            }
-
-            // only ship the buffer if the recipient has consumed everything we've sent them.
-            // otherwise, wait for the first flush call when they have (they should eventually).
-            if self.sender.queue_length() == 0 {
-                let new_buffer = self.get_buffer();
-                let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
-                if old_buffer.len() > 0 {
-                    self.sender.send(old_buffer);
-                }
-            }
-            else {
-                // println!("work to send, but queue length: {:?}", self.sender.queue_length());
-            }
-        }
-    }
-}
-
-
-struct Pusher<T> {
+/// An adapter into which one may push elements of type `T`.
+///
+/// This pusher has a fixed MessageHeader, and access to a SharedByteBuffer which it uses to
+/// acquire buffers for serialization.
+struct Pusher<T,S:BytesSendEndpoint> {
     header:     MessageHeader,
-    sender:     Rc<RefCell<SharedByteBuffer>>,
+    sender:     Rc<RefCell<S>>,
     phantom:    ::std::marker::PhantomData<T>,
 }
 
-impl<T> Pusher<T> {
-    pub fn new(header: MessageHeader, sender: Rc<RefCell<SharedByteBuffer>>) -> Pusher<T> {
+impl<T,S:BytesSendEndpoint> Pusher<T,S> {
+    /// Creates a new `Pusher` from a header and shared byte buffer.
+    pub fn new(header: MessageHeader, sender: Rc<RefCell<S>>) -> Pusher<T,S> {
         Pusher {
             header:     header,
             sender:     sender,
@@ -316,7 +316,7 @@ impl<T> Pusher<T> {
     }
 }
 
-impl<T:Data> Push<T> for Pusher<T> {
+impl<T:Data,S:BytesSendEndpoint> Push<T> for Pusher<T,S> {
     #[inline]
     fn push(&mut self, element: &mut Option<T>) {
         if let Some(ref mut element) = *element {
@@ -336,6 +336,12 @@ impl<T:Data> Push<T> for Pusher<T> {
     }
 }
 
+/// An adapter from which one can pull elements of type `T`.
+///
+/// This type is very simple, and just consumes owned `Vec<u8>` allocations. It is
+/// not the most efficient thing possible, which would probably instead be something
+/// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
+/// allocation.
 struct Puller<T> {
     current: Option<T>,
     receiver: Rc<RefCell<VecDeque<Vec<u8>>>>,    // source of serialized buffers

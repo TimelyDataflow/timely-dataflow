@@ -13,7 +13,7 @@ pub enum Generic {
     Thread(Thread),
     Process(Process),
     Binary(Binary),
-    ProcessBinary(ProcessBinary),
+    ProcessBinary(ProcessBinary<::allocator::process_binary::vec::VecBytesExchange>),
 }
 
 impl Generic {
@@ -46,13 +46,19 @@ impl Generic {
     }
 
     pub fn pre_work(&mut self) {
-        if let &mut Generic::ProcessBinary(ref mut pb) = self {
-            pb.pre_work();
+        match self {
+            &mut Generic::Thread(ref mut t) => t.pre_work(),
+            &mut Generic::Process(ref mut p) => p.pre_work(),
+            &mut Generic::Binary(ref mut b) => b.pre_work(),
+            &mut Generic::ProcessBinary(ref mut pb) => pb.pre_work(),
         }
     }
     pub fn post_work(&mut self) {
-        if let &mut Generic::ProcessBinary(ref mut pb) = self {
-            pb.post_work();
+        match self {
+            &mut Generic::Thread(ref mut t) => t.post_work(),
+            &mut Generic::Process(ref mut p) => p.post_work(),
+            &mut Generic::Binary(ref mut b) => b.post_work(),
+            &mut Generic::ProcessBinary(ref mut pb) => pb.post_work(),
         }
     }
 }
@@ -69,13 +75,16 @@ impl Allocate for Generic {
 }
 
 
-/// Enumerates known implementors of `Allocate`.
-/// Passes trait method calls on to members.
+/// Enumerations of constructable implementors of `Allocate`.
+///
+/// The builder variants are meant to be `Send`, so that they can be moved across threads,
+/// whereas the allocator they construct may not. As an example, the `ProcessBinary` type
+/// contains `Rc` wrapped state, and so cannot itself be moved across threads.
 pub enum GenericBuilder {
     Thread(Thread),
     Process(Process),
     Binary(Binary),
-    ProcessBinary(ProcessBinaryBuilder),
+    ProcessBinary(ProcessBinaryBuilder<::allocator::process_binary::vec::VecBytesExchange>),
 }
 
 impl GenericBuilder {

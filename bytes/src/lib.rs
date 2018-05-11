@@ -44,7 +44,7 @@ pub mod rc {
     use std::rc::Rc;
 
     /// A thread-local byte buffer backed by a shared allocation.
-    pub struct Bytes<B: DerefMut<Target=[u8]>> {
+    pub struct Bytes<B> {
         /// Pointer to the start of this slice (not the allocation).
         ptr: *mut u8,
         /// Length of this slice.
@@ -57,10 +57,10 @@ pub mod rc {
         sequestered: Rc<B>,
     }
 
-    impl<B: DerefMut<Target=[u8]>> Bytes<B> {
+    impl<B> Bytes<B> {
 
         /// Create a new instance from a byte allocation.
-        pub fn from(bytes: B) -> Bytes<B> {
+        pub fn from(bytes: B) -> Bytes<B> where B: DerefMut<Target=[u8]> {
 
             let mut rc = Rc::new(bytes);
 
@@ -109,14 +109,14 @@ pub mod rc {
         }
     }
 
-    impl<B: DerefMut<Target=[u8]>> Deref for Bytes<B> {
+    impl<B> Deref for Bytes<B> {
         type Target = [u8];
         fn deref(&self) -> &[u8] {
             unsafe { ::std::slice::from_raw_parts(self.ptr, self.len) }
         }
     }
 
-    impl<B: DerefMut<Target=[u8]>> DerefMut for Bytes<B> {
+    impl<B> DerefMut for Bytes<B> {
         fn deref_mut(&mut self) -> &mut [u8] {
             unsafe { ::std::slice::from_raw_parts_mut(self.ptr, self.len) }
         }
@@ -130,7 +130,7 @@ pub mod arc {
     use std::sync::Arc;
 
     /// A thread-safe byte buffer backed by a shared allocation.
-    pub struct Bytes<B: DerefMut<Target=[u8]>> {
+    pub struct Bytes<B> {
         /// Pointer to the start of this slice (not the allocation).
         ptr: *mut u8,
         /// Length of this slice.
@@ -143,10 +143,10 @@ pub mod arc {
         sequestered: Arc<B>,
     }
 
-    impl<B: DerefMut<Target=[u8]>> Bytes<B> {
+    impl<B> Bytes<B> {
 
         /// Create a new instance from a byte allocation.
-        pub fn from(bytes: B) -> Bytes<B> {
+        pub fn from(bytes: B) -> Bytes<B> where B : DerefMut<Target=[u8]> {
 
             let mut arc = Arc::new(bytes);
 
@@ -195,14 +195,14 @@ pub mod arc {
         }
     }
 
-    impl<B: DerefMut<Target=[u8]>> Deref for Bytes<B> {
+    impl<B> Deref for Bytes<B> {
         type Target = [u8];
         fn deref(&self) -> &[u8] {
             unsafe { ::std::slice::from_raw_parts(self.ptr, self.len) }
         }
     }
 
-    impl<B: DerefMut<Target=[u8]>> DerefMut for Bytes<B> {
+    impl<B> DerefMut for Bytes<B> {
         fn deref_mut(&mut self) -> &mut [u8] {
             unsafe { ::std::slice::from_raw_parts_mut(self.ptr, self.len) }
         }
