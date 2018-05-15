@@ -769,7 +769,12 @@ impl<T: Timestamp> PerOperatorState<T> {
             let _outstanding_messages = _outstanding_messages.iter().any(|chain| !chain.is_empty());
             let _held_capabilities = internal_capabilities.iter().any(|chain| !chain.is_empty());
 
-            if any_progress_updates || _was_recently_active || _outstanding_messages || _held_capabilities {
+            // TODO: This is reasonable, in principle, but `_outstanding_messages` determined from pointstamps
+            //       alone leaves us in a weird state should progress messages get blocked by non-execution of
+            //       e.g. the exchange operator in the exchange.rs example.
+
+            // if any_progress_updates || _was_recently_active || _outstanding_messages || _held_capabilities
+            {
 
                 let self_id = self.id;  // avoid capturing `self` in logging closures.
 
@@ -838,12 +843,12 @@ impl<T: Timestamp> PerOperatorState<T> {
 
                 internal_activity
             }
-            else {
-                // Active operators should always be scheduled, and should re-assert their activity if
-                // they want to be scheduled again. If we are here, it is because the operator declined
-                // to express activity explicitly.
-                false
-            }
+            // else {
+            //     // Active operators should always be scheduled, and should re-assert their activity if
+            //     // they want to be scheduled again. If we are here, it is because the operator declined
+            //     // to express activity explicitly.
+            //     false
+            // }
         }
         else {
 

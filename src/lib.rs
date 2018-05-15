@@ -62,6 +62,7 @@ extern crate abomonation;
 extern crate timely_communication;
 extern crate time;
 extern crate byteorder;
+extern crate bytes;
 
 pub use execute::{execute, execute_logging, execute_from_args, execute_from_args_logging, example};
 pub use timely_communication::{Allocate, Push, Pull, Configuration};

@@ -56,36 +56,41 @@ impl<T: Abomonation+Clone, D: Abomonation> Serialize for Message<T, D> {
         unsafe { encode(vec, bytes).unwrap(); }
     }
     #[inline]
-    fn from_bytes(bytes: &mut Vec<u8>) -> Self {
-        // This method *steals* `bytes` and avoids allocation and copying.
-        let mut bytes = ::std::mem::replace(bytes, Vec::new());
+    fn from_bytes(mut bytes: ::bytes::arc::Bytes) -> Self {
         let x_len = bytes.len();
         let (time, from, seq, offset) = {
-            let (t,r) = unsafe { decode::<T>(&mut bytes) }.unwrap();
-            let (&f,r) = unsafe { decode::<usize>(r) }.unwrap();
-            let (&s,r) = unsafe { decode::<usize>(r) }.unwrap();
+            let (t,r) = unsafe { decode::<T>(&mut bytes) }.expect("failed to get time");
+            let (&f,r) = unsafe { decode::<usize>(r) }.expect("failed to get from");
+            let (&s,r) = unsafe { decode::<usize>(r) }.expect("failed to get seq");
             let o = x_len - r.len();
             ((*t).clone(), f, s, o)
         };
 
         // The call to `decode` should mean we can freely dereference.
-        let length = unsafe { decode::<Vec<D>>(&mut bytes[offset..]) }.unwrap().0.len();
+        let length = unsafe { decode::<Vec<D>>(&mut bytes[offset..]) }.expect("failed to deser Vec<D>").0.len();
         Message::new(time, Content::Bytes(bytes, offset, length), from, seq)
     }
 }
 
 /// A batch of data, represented either as serialized bytes or typed Rust objects.
-#[derive(Clone)]
 pub enum Content<D> {
     /// A serialized representation of data.
     ///
     /// This representation may be efficiently observed as shared references,
     /// but may only more expensively be converted into typed data.
-    Bytes(Vec<u8>, usize, usize),
+    ///
+    /// TODO: We use an `arc::Bytes` here because `Content` needs to be `Send`.
+    ///       This requirement seems artificial, and should probably be fixed.
+    Bytes(::bytes::arc::Bytes, usize, usize),
     /// Typed data, which may be efficiently mutated or claimed for ownership.
     Typed(Vec<D>),
 }
 
+impl<D> Clone for Content<D> {
+    fn clone(&self) -> Self {
+        unimplemented!()
+    }
+}
 // ALLOC : This Drop implementation gets *very* angry if we drop allocated data.
 // ALLOC : It probably shouldn't be used in practice, but should help track down who is being
 // ALLOC : bad about respecting allocated memory.
