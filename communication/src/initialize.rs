@@ -128,10 +128,12 @@ fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<Vec<Ge
 ///     // we have to count down ourselves.
 ///     let mut expecting = 2;
 ///     while expecting > 0 {
+///         allocator.pre_work();
 ///         if let Some(message) = receiver.recv() {
 ///             println!("worker {}: received: <{}>", allocator.index(), message);
 ///             expecting -= 1;
 ///         }
+///         allocator.post_work();
 ///     }
 ///
 ///     // optionally, return something

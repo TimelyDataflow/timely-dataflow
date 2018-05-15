@@ -37,10 +37,13 @@
 //!     // we have to count down ourselves.
 //!     let mut expecting = 2;
 //!     while expecting > 0 {
+//!
+//!         allocator.pre_work();
 //!         if let Some(message) = receiver.recv() {
 //!             println!("worker {}: received: <{}>", allocator.index(), message);
 //!             expecting -= 1;
 //!         }
+//!         allocator.post_work();
 //!     }
 //!
 //!     // optionally, return something
@@ -76,6 +79,8 @@ extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
 extern crate time;
 
+extern crate bytes;
+
 pub mod allocator;
 mod networking;
 pub mod initialize;
@@ -105,7 +110,7 @@ pub trait Serialize {
     fn into_bytes<W: ::std::io::Write>(&mut self, &mut W);
     /// Recover an instance of Self from its binary representation. The `&mut Vec<u8>` argument may
     /// be taken with `mem::replace` if it is needed.
-    fn from_bytes(&mut Vec<u8>) -> Self;
+    fn from_bytes(bytes::arc::Bytes) -> Self;
 }
 
 // NOTE : this should be unsafe, because these methods are.
@@ -114,12 +119,11 @@ impl<T: Abomonation+Clone> Serialize for T {
     fn length_in_bytes(&self) -> usize {
         measure(self)
     }
-    fn into_bytes<W: ::std::io::Write>(&mut self, bytes: &mut W) {
-        // NOTE: `unwrap` should be ok, as Rust docs say writes to `Vec<u8>` do not fail.
-        unsafe { encode(self, bytes).unwrap(); }
+    fn into_bytes<W: ::std::io::Write>(&mut self, writer: &mut W) {
+        unsafe { encode(self, writer).expect("abomonation failed"); }
     }
-    fn from_bytes(bytes: &mut Vec<u8>) -> Self {
-        (* unsafe { decode::<T>(bytes) }.unwrap().0).clone()
+    fn from_bytes(mut bytes: bytes::arc::Bytes) -> Self {
+        (* unsafe { decode::<T>(&mut bytes) }.expect("de-abomonation failed").0).clone()
     }
 }
 

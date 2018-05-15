@@ -22,10 +22,15 @@ fn main() {
         // we have to count down ourselves.
         let mut received = 0;
         while received < allocator.peers() {
+
+            allocator.pre_work();
+
             if let Some(message) = receiver.recv() {
                 println!("worker {}: received: <{}>", allocator.index(), message);
                 received += 1;
             }
+
+            allocator.post_work();
         }
 
         allocator.index()

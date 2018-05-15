@@ -139,13 +139,15 @@ impl<T:Data> Pull<T> for Puller<T> {
         let log_sender = &self.log_sender;
         if inner.is_some() { inner }
         else {
-            self.current = self.receiver.try_recv().ok().map(|mut bytes| {
+            self.current = self.receiver.try_recv().ok().map(|bytes| {
                 log_sender.when_enabled(|l| l.log(
                     ::logging::CommsEvent::Serialization(::logging::SerializationEvent {
                         seq_no: None,
                         is_start: true,
                     })));
-                let result = <T as Serialize>::from_bytes(&mut bytes);
+
+                let bytes = ::bytes::arc::Bytes::from(bytes);
+                let result = <T as Serialize>::from_bytes(bytes);
                 log_sender.when_enabled(|l| l.log(
                     ::logging::CommsEvent::Serialization(::logging::SerializationEvent {
                         seq_no: None,

@@ -50,12 +50,12 @@ impl<T> Pull<T> for Puller<T> {
     #[inline(always)]
     fn pull(&mut self) -> &mut Option<T> {
         let mut borrow = self.source.borrow_mut();
-        if let Some(element) = self.current.take() {
-            // TODO : Arbitrary constant.
-            if borrow.1.len() < 16 {
-                borrow.1.push_back(element);
-            }
-        }
+        // if let Some(element) = self.current.take() {
+        //     // TODO : Arbitrary constant.
+        //     if borrow.1.len() < 16 {
+        //         borrow.1.push_back(element);
+        //     }
+        // }
         self.current = borrow.0.pop_front();
         &mut self.current
     }
