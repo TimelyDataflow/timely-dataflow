@@ -16,7 +16,7 @@ license = "MIT"
 rand="*"
 
 [dev-dependencies]
-rand="0.4"
+rand="0.5"
 
 [profile.release]
 opt-level = 3
