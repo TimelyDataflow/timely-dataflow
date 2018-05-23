@@ -1,10 +1,10 @@
 #![feature(test)]
 #![feature(sort_unstable)]
-extern crate test;
 extern crate rand;
+extern crate test;
 extern crate timely_sort as haeoua;
 
-use rand::{SeedableRng, StdRng, Rand};
+use rand::{SeedableRng, distributions::Distribution, distributions::Standard, prng::Hc128Rng};
 use test::Bencher;
 use haeoua::*;
 
@@ -119,15 +119,18 @@ use haeoua::{RadixSorter, RadixSorterBase};
 // #[bench] fn msort_u32_24(bencher: &mut Bencher) { merge_sort::<u32>(bencher, 1<<24); }
 // #[bench] fn msort_u32_25(bencher: &mut Bencher) { merge_sort::<u32>(bencher, 1<<25); }
 
-fn radix_sort<T: Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Bencher, size: usize, function: &F) {
+fn radix_sort<T, U, F>(bencher: &mut Bencher, size: usize, function: &F)
+  where
+    T: Copy,
+    U: Unsigned,
+    F: Fn(&T)->U,
+    Standard: Distribution<T>,
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let seed = [3u8; 32];
+    let mut rng: Hc128Rng = SeedableRng::from_seed(seed);
+    let vector: Vec<T> = Standard.sample_iter(&mut rng).take(size).collect();
 
-    let mut vector = Vec::<T>::with_capacity(size);
-    for _ in 0..size {
-        vector.push(<T as Rand>::rand(&mut rng));
-    }
     let mut output = Vec::new();
     let mut sorter = LSBRadixSorter::new();
     bencher.bytes = (size * ::std::mem::size_of::<T>()) as u64;
@@ -141,15 +144,18 @@ fn radix_sort<T: Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Bencher, si
 }
 
 
-fn radix_sort_swc<T: Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Bencher, size: usize, function: &F) {
+fn radix_sort_swc<T,U, F>(bencher: &mut Bencher, size: usize, function: &F)
+  where
+    T: Copy,
+    U: Unsigned,
+    F: Fn(&T)->U,
+    Standard: Distribution<T>,
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let seed = [3u8; 32];
+    let mut rng: Hc128Rng = SeedableRng::from_seed(seed);
+    let vector: Vec<T> = Standard.sample_iter(&mut rng).take(size).collect();
 
-    let mut vector = Vec::<T>::with_capacity(size);
-    for _ in 0..size {
-        vector.push(<T as Rand>::rand(&mut rng));
-    }
     let mut output = Vec::new();
     let mut sorter = LSBSWCRadixSorter::new();
     bencher.bytes = (size * ::std::mem::size_of::<T>()) as u64;
@@ -163,15 +169,17 @@ fn radix_sort_swc<T: Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Bencher
 }
 
 
-fn radix_sort_msb<T: Ord+Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Bencher, size: usize, function: &F) {
+fn radix_sort_msb<T, U, F>(bencher: &mut Bencher, size: usize, function: &F)
+  where
+    T: Copy,
+    U: Unsigned,
+    F: Fn(&T)->U,
+    Standard: Distribution<T>,
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
-
-    let mut vector = Vec::<T>::with_capacity(size);
-    for _ in 0..size {
-        vector.push(<T as Rand>::rand(&mut rng));
-    }
+    let seed = [3u8; 32];
+    let mut rng: Hc128Rng = SeedableRng::from_seed(seed);
+    let vector: Vec<T> = Standard.sample_iter(&mut rng).take(size).collect();
 
     let mut output = Vec::new();
     let mut sorter = MSBRadixSorter::new();
@@ -185,15 +193,17 @@ fn radix_sort_msb<T: Ord+Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Ben
     });
 }
 
-fn radix_sort_msb_swc<T: Ord+Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut Bencher, size: usize, function: &F) {
+fn radix_sort_msb_swc<T, U, F>(bencher: &mut Bencher, size: usize, function: &F)
+  where
+    T: Copy,
+    U: Unsigned,
+    F: Fn(&T)->U,
+    Standard: Distribution<T>,
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
-
-    let mut vector = Vec::<T>::with_capacity(size);
-    for _ in 0..size {
-        vector.push(<T as Rand>::rand(&mut rng));
-    }
+    let seed = [3u8; 32];
+    let mut rng: Hc128Rng = SeedableRng::from_seed(seed);
+    let vector: Vec<T> = Standard.sample_iter(&mut rng).take(size).collect();
 
     let mut output = Vec::new();
     let mut sorter = MSBSWCRadixSorter::new();
@@ -207,15 +217,15 @@ fn radix_sort_msb_swc<T: Ord+Copy+Rand, U: Unsigned, F: Fn(&T)->U>(bencher: &mut
     });
 }
 
-fn merge_sort<T: Ord+Copy+Rand>(bencher: &mut Bencher, size: usize) {
+fn merge_sort<T>(bencher: &mut Bencher, size: usize)
+  where
+    T: Ord+Copy,
+    Standard: Distribution<T>,
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
-
-    let mut vector = Vec::<T>::with_capacity(size);
-    for _ in 0..size {
-        vector.push(<T as Rand>::rand(&mut rng));
-    }
+    let seed = [3u8; 32];
+    let mut rng: Hc128Rng = SeedableRng::from_seed(seed);
+    let vector: Vec<T> = Standard.sample_iter(&mut rng).take(size).collect();
 
     bencher.bytes = (vector.len() * ::std::mem::size_of::<T>()) as u64;
     bencher.iter(|| {
@@ -224,15 +234,15 @@ fn merge_sort<T: Ord+Copy+Rand>(bencher: &mut Bencher, size: usize) {
     });
 }
 
-fn pdq_sort<T: Ord+Copy+Rand>(bencher: &mut Bencher, size: usize) {
+fn pdq_sort<T>(bencher: &mut Bencher, size: usize)
+  where
+    T: Ord+Copy,
+    Standard: Distribution<T>,
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
-
-    let mut vector = Vec::<T>::with_capacity(size);
-    for _ in 0..size {
-        vector.push(<T as Rand>::rand(&mut rng));
-    }
+    let seed = [3u8; 32];
+    let mut rng: Hc128Rng = SeedableRng::from_seed(seed);
+    let vector: Vec<T> = Standard.sample_iter(&mut rng).take(size).collect();
 
     bencher.bytes = (vector.len() * ::std::mem::size_of::<T>()) as u64;
     bencher.iter(|| {
