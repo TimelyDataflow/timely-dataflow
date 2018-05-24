@@ -21,7 +21,7 @@ fn main() {
                 move |_, _, notificator| {
                     while let Some((cap, _count)) = notificator.next() {
                         let mut time = cap.time().clone();
-                        time.inner += 1;
+                        time += 1;
                         if time.inner < iterations {
                             notificator.notify_at(cap.delayed(&time));
                         }

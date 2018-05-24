@@ -96,3 +96,17 @@ impl Empty for () { }
 impl<T1: Empty, T2: Empty> Empty for Product<T1, T2> { }
 
 impl<T1, T2> TotalOrder for Product<T1, T2> where T1: Empty, T2: TotalOrder { }
+
+impl<TO, I: ::std::ops::Add<Output=I>> ::std::ops::Add<I> for Product<TO, I> {
+    type Output = Product<TO, I>;
+
+    fn add(self, other: I) -> Self::Output {
+        Product::new(self.outer, self.inner + other)
+    }
+}
+
+impl<TO, I: ::std::ops::AddAssign> ::std::ops::AddAssign<I> for Product<TO, I> {
+    fn add_assign(&mut self, other: I) {
+        self.inner += other
+    }
+}
