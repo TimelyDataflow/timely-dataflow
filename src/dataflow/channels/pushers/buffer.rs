@@ -79,16 +79,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
         }
 
         let time = self.time.as_ref().expect("Buffer::give_vec(): time is None.").clone();
-        let data = ::std::mem::replace(vector, Vec::new());
-
-        let mut bundle = Some(Bundle::from_typed(Message::new(time, data, 0, 0)));
-
-        self.pusher.push(&mut bundle);
-        if let Some(message) = bundle {
-            if let Some(message) = message.if_typed() {
-                *vector = message.data;
-            }
-        }
+        Message::push_at(vector, time, &mut self.pusher);
     }
 }
 
