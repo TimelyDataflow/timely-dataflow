@@ -50,17 +50,21 @@ pub trait Map<S: Scope, D: Data> {
 
 impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn map<D2: Data, L: Fn(D)->D2+'static>(&self, logic: L) -> Stream<S, D2> {
+        let mut vector = Vec::new();
         self.unary_stream(Pipeline, "Map", move |input, output| {
             input.for_each(|time, data| {
-                output.session(&time).give_iterator(data.drain(..).map(|x| logic(x)));
+                data.swap(&mut vector);
+                output.session(&time).give_iterator(vector.drain(..).map(|x| logic(x)));
             });
         })
     }
     fn map_in_place<L: Fn(&mut D)+'static>(&self, logic: L) -> Stream<S, D> {
+        let mut vector = Vec::new();
         self.unary_stream(Pipeline, "MapInPlace", move |input, output| {
             input.for_each(|time, data| {
-                for datum in data.iter_mut() { logic(datum); }
-                output.session(&time).give_content(data);
+                data.swap(&mut vector);
+                for datum in vector.iter_mut() { logic(datum); }
+                output.session(&time).give_vec(&mut vector);
             })
         })
     }
@@ -68,9 +72,11 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
     fn flat_map<I: IntoIterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data {
+        let mut vector = Vec::new();
         self.unary_stream(Pipeline, "FlatMap", move |input, output| {
             input.for_each(|time, data| {
-                output.session(&time).give_iterator(data.drain(..).flat_map(|x| logic(x).into_iter()));
+                data.swap(&mut vector);
+                output.session(&time).give_iterator(vector.drain(..).flat_map(|x| logic(x).into_iter()));
             });
         })
     }

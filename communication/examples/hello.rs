@@ -1,5 +1,8 @@
 extern crate timely_communication;
 
+use std::ops::Deref;
+use timely_communication::allocator::Message;
+
 fn main() {
 
     // extract the configuration from user-supplied arguments, initialize the computation.
@@ -14,7 +17,7 @@ fn main() {
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
-            senders[i].send(format!("hello, {}", i));
+            senders[i].send(Message::from_typed(format!("hello, {}", i)));
             senders[i].done();
         }
 
@@ -26,7 +29,7 @@ fn main() {
             allocator.pre_work();
 
             if let Some(message) = receiver.recv() {
-                println!("worker {}: received: <{}>", allocator.index(), message);
+                println!("worker {}: received: <{}>", allocator.index(), message.deref());
                 received += 1;
             }
 

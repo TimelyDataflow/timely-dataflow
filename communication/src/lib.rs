@@ -30,8 +30,9 @@
 //!     let (mut senders, mut receiver, _) = allocator.allocate();
 //!
 //!     // send typed data along each channel
-//!     senders[0].send(format!("hello, {}", 0));
-//!     senders[1].send(format!("hello, {}", 1));
+//!     use timely_communication::allocator::Message;
+//!     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
+//!     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
 //!
 //!     // no support for termination notification,
 //!     // we have to count down ourselves.
@@ -40,7 +41,8 @@
 //!
 //!         allocator.pre_work();
 //!         if let Some(message) = receiver.recv() {
-//!             println!("worker {}: received: <{}>", allocator.index(), message);
+//!             use std::ops::Deref;
+//!             println!("worker {}: received: <{}>", allocator.index(), message.deref());
 //!             expecting -= 1;
 //!         }
 //!         allocator.post_work();
@@ -72,6 +74,8 @@
 //! result: Ok(1)
 //! ```
 
+// #![forbid(missing_docs)]
+
 #[cfg(feature = "arg_parse")]
 extern crate getopts;
 extern crate byteorder;
@@ -87,45 +91,16 @@ pub mod initialize;
 pub mod logging;
 
 use std::any::Any;
-use abomonation::{Abomonation, encode, decode, measure};
+use abomonation::Abomonation;
 
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
 pub use initialize::{initialize, Configuration, WorkerGuards};
+pub use allocator::Message as CommMessage;
 
 /// A composite trait for types that may be used with channels.
-pub trait Data : Send+Any+Serialize+'static { }
-impl<T: Send+Any+Serialize+'static> Data for T { }
-
-/// Conversions to and from `Vec<u8>`.
-///
-/// A type must implement this trait to move along the channels produced by an `A: Allocate`.
-///
-/// A default implementation is provided for any `T: Abomonation+Clone`.
-pub trait Serialize {
-    /// Number of bytes required for the binary representation of the object.
-    fn length_in_bytes(&self) -> usize;
-    /// Append the binary representation of `self` to a vector of bytes. The `&mut self` argument
-    /// may be mutated, but the second argument should only be appended to.
-    fn into_bytes<W: ::std::io::Write>(&mut self, &mut W);
-    /// Recover an instance of Self from its binary representation. The `&mut Vec<u8>` argument may
-    /// be taken with `mem::replace` if it is needed.
-    fn from_bytes(bytes::arc::Bytes) -> Self;
-}
-
-// NOTE : this should be unsafe, because these methods are.
-// NOTE : figure this out later. don't use for serious things.
-impl<T: Abomonation+Clone> Serialize for T {
-    fn length_in_bytes(&self) -> usize {
-        measure(self)
-    }
-    fn into_bytes<W: ::std::io::Write>(&mut self, writer: &mut W) {
-        unsafe { encode(self, writer).expect("abomonation failed"); }
-    }
-    fn from_bytes(mut bytes: bytes::arc::Bytes) -> Self {
-        (* unsafe { decode::<T>(&mut bytes) }.expect("de-abomonation failed").0).clone()
-    }
-}
+pub trait Data : Send+Any+Abomonation+'static { }
+impl<T: Send+Any+Abomonation+'static> Data for T { }
 
 /// Pushing elements of type `T`.
 pub trait Push<T> {

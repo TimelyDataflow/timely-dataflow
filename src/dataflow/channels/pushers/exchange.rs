@@ -1,24 +1,23 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
 use {Push, Data};
-use dataflow::channels::Content;
-use abomonation::Abomonation;
+use dataflow::channels::{Bundle, Message};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, D, P: Push<(T, Content<D>)>, H: Fn(&T, &D) -> u64> {
+pub struct Exchange<T, D, P: Push<Bundle<T, D>>, H: Fn(&T, &D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<Vec<D>>,
     current: Option<T>,
     hash_func: H,
 }
 
-impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&T, &D)->u64>  Exchange<T, D, P, H> {
+impl<T: Clone, D, P: Push<Bundle<T, D>>, H: Fn(&T, &D)->u64>  Exchange<T, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
-            buffers.push(Vec::with_capacity(Content::<D>::default_length()));
+            buffers.push(Vec::with_capacity(Message::<T, D>::default_length()));
         }
         Exchange {
             pushers,
@@ -31,20 +30,24 @@ impl<T: Clone, D, P: Push<(T, Content<D>)>, H: Fn(&T, &D)->u64>  Exchange<T, D, 
     fn flush(&mut self, index: usize) {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
-                Content::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
+                Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
             }
         }
     }
 }
 
-impl<T: Eq+Clone+'static, D: Data+Abomonation, P: Push<(T, Content<D>)>, H: Fn(&T, &D)->u64> Push<(T, Content<D>)> for Exchange<T, D, P, H> {
+impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: Fn(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
+    fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);
         }
-        else if let Some((ref time, ref mut data)) = *message {
+        else if let Some(message) = message {
+
+            let message = message.as_mut();
+            let time = &message.time;
+            let data = &mut message.data;
 
             // if the time isn't right, flush everything.
             if self.current.as_ref().map_or(false, |x| x != time) {

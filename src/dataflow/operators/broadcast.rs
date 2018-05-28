@@ -12,7 +12,7 @@ use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use dataflow::channels::pushers::Tee;
 use dataflow::channels::pullers::Counter as PullCounter;
-use dataflow::channels::pact::{Pusher, Puller};
+// use dataflow::channels::pact::{Pusher, Puller};
 
 /// Broadcast records to all workers.
 pub trait Broadcast<D: ExchangeData> {

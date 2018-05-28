@@ -28,7 +28,7 @@ use progress::nested::subgraph::{Source, Target};
 use progress::nested::product::Product;
 use {Data, Push};
 use dataflow::channels::pushers::{Counter, Tee};
-use dataflow::channels::Content;
+use dataflow::channels::{Bundle, Message};
 
 use dataflow::{Stream, Scope, ScopeParent};
 use dataflow::scopes::Child;
@@ -136,14 +136,17 @@ struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
     targets: Counter<Product<TOuter, TInner>, TData, Tee<Product<TOuter, TInner>, TData>>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Push<(TOuter, Content<TData>)> for IngressNub<TOuter, TInner, TData> {
-    fn push(&mut self, message: &mut Option<(TOuter, Content<TData>)>) {
-        if let Some((ref time, ref mut data)) = *message {
-            let content = ::std::mem::replace(data, Content::Typed(Vec::new()));
-            let mut message = Some((Product::new(time.clone(), Default::default()), content));
-            self.targets.push(&mut message);
-            if let Some((_, content)) = message {
-                *data = content;
+impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Push<Bundle<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
+    fn push(&mut self, message: &mut Option<Bundle<TOuter, TData>>) {
+        if let Some(message) = message {
+            let outer_message = message.as_mut();
+            let data = ::std::mem::replace(&mut outer_message.data, Vec::new());
+            let mut inner_message = Some(Bundle::from_typed(Message::new(Product::new(outer_message.time.clone(), Default::default()), data, 0, 0)));
+            self.targets.push(&mut inner_message);
+            if let Some(inner_message) = inner_message {
+                if let Some(inner_message) = inner_message.if_typed() {
+                    outer_message.data = inner_message.data;
+                }
             }
         }
         else { self.targets.done(); }
@@ -156,15 +159,18 @@ struct EgressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData> Push<(Product<TOuter, TInner>, Content<TData>)> for EgressNub<TOuter, TInner, TData>
+impl<TOuter, TInner, TData> Push<Bundle<Product<TOuter, TInner>, TData>> for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp, TData: Data {
-    fn push(&mut self, message: &mut Option<(Product<TOuter, TInner>, Content<TData>)>) {
-        if let Some((ref time, ref mut data)) = *message {
-            let content = ::std::mem::replace(data, Content::Typed(Vec::new()));
-            let mut message = Some((time.outer.clone(), content));
-            self.targets.push(&mut message);
-            if let Some((_, content)) = message {
-                *data = content;
+    fn push(&mut self, message: &mut Option<Bundle<Product<TOuter, TInner>, TData>>) {
+        if let Some(message) = message {
+            let inner_message = message.as_mut();
+            let data = ::std::mem::replace(&mut inner_message.data, Vec::new());
+            let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.outer.clone(), data, 0, 0)));
+            self.targets.push(&mut outer_message);
+            if let Some(outer_message) = outer_message {
+                if let Some(outer_message) = outer_message.if_typed() {
+                    inner_message.data = outer_message.data;
+                }
             }
         }
         else { self.targets.done(); }

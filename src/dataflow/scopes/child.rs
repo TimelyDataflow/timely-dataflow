@@ -87,10 +87,12 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
     }
 }
 
+use timely_communication::allocator::Message;
+
 impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>, Option<usize>) {
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>, Option<usize>) {
         self.parent.allocate()
     }
 }

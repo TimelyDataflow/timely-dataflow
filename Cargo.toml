@@ -16,7 +16,7 @@ license = "MIT"
 #build = "booktests.rs"
 
 [dependencies]
-abomonation = "0.5"
+abomonation = { git = "https://github.com/frankmcsherry/abomonation" }
 abomonation_derive = "0.3"
 #timely_communication = "0.5"
 timely_communication = { path = "./communication"}

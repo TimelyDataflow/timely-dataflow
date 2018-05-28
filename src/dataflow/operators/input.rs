@@ -13,7 +13,7 @@ use progress::nested::product::Product;
 
 use timely_communication::Allocate;
 use {Data, Push};
-use dataflow::channels::Content;
+use dataflow::channels::{Bundle, Message};
 use dataflow::channels::pushers::{Tee, Counter};
 
 use dataflow::{Stream, Scope};
@@ -197,8 +197,8 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         Handle {
             progress: Vec::new(),
             pushers: Vec::new(),
-            buffer1: Vec::with_capacity(Content::<D>::default_length()),
-            buffer2: Vec::with_capacity(Content::<D>::default_length()),
+            buffer1: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer2: Vec::with_capacity(Message::<T, D>::default_length()),
             now_at: Default::default(),
         }
     }
@@ -257,11 +257,11 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         for index in 0 .. self.pushers.len() {
             if index < self.pushers.len() - 1 {
                 self.buffer2.extend_from_slice(&self.buffer1[..]);
-                Content::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
+                Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
                 debug_assert!(self.buffer2.is_empty());
             }
             else {
-                Content::push_at(&mut self.buffer1, self.now_at.clone(), &mut self.pushers[index]);
+                Message::push_at(&mut self.buffer1, self.now_at.clone(), &mut self.pushers[index]);
                 debug_assert!(self.buffer1.is_empty());
             }
         }
@@ -282,7 +282,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     #[inline(always)]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     pub fn send(&mut self, data: D) {
-        // assert!(self.buffer1.capacity() == Content::<D>::default_length());
+        // assert!(self.buffer1.capacity() == Message::<T, D>::default_length());
         self.buffer1.push(data);
         if self.buffer1.len() == self.buffer1.capacity() {
             self.flush();
@@ -302,11 +302,11 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
             for index in 0 .. self.pushers.len() {
                 if index < self.pushers.len() - 1 {
                     self.buffer2.extend_from_slice(&buffer[..]);
-                    Content::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
+                    Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
                     assert!(self.buffer2.is_empty());
                 }
                 else {
-                    Content::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
+                    Message::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
                     assert!(buffer.is_empty());
                 }
             }

@@ -36,19 +36,23 @@ pub trait Inspect<G: Scope, D: Data> {
 impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
 
     fn inspect<F: FnMut(&D)+'static>(&self, mut func: F) -> Stream<G, D> {
+        let mut vector = Vec::new();
         self.unary_stream(Pipeline, "Inspect", move |input, output| {
             input.for_each(|time, data| {
-                for datum in data.iter() { func(datum); }
-                output.session(&time).give_content(data);
+                data.swap(&mut vector);
+                for datum in vector.iter() { func(datum); }
+                output.session(&time).give_vec(&mut vector);
             });
         })
     }
 
     fn inspect_batch<F: FnMut(&G::Timestamp, &[D])+'static>(&self, mut func: F) -> Stream<G, D> {
+        let mut vector = Vec::new();
         self.unary_stream(Pipeline, "InspectBatch", move |input, output| {
             input.for_each(|time, data| {
-                func(&time, &data[..]);
-                output.session(&time).give_content(data);
+                data.swap(&mut vector);
+                func(&time, &vector[..]);
+                output.session(&time).give_vec(&mut vector);
             });
         })
     }

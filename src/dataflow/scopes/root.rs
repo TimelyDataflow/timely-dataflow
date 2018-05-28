@@ -132,10 +132,12 @@ impl<A: Allocate> ScopeParent for Root<A> {
     }
 }
 
+use timely_communication::allocator::Message;
+
 impl<A: Allocate> Allocate for Root<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>, Option<usize>) {
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>, Option<usize>) {
         self.allocator.borrow_mut().allocate()
     }
 }

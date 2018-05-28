@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-use allocator::{Allocate, Thread};
+use allocator::{Allocate, Message, Thread};
 use {Push, Pull};
 
 // A specific Communicator for inter-thread intra-process communication
@@ -31,7 +31,7 @@ impl Process {
 impl Allocate for Process {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Any+Send+'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
+    fn allocate<T: Any+Send+'static>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
 
         // ensure exclusive access to shared list of channels
         let mut channels = self.channels.lock().ok().expect("mutex error?");
@@ -55,12 +55,12 @@ impl Allocate for Process {
         }
 
 
-        if let Some(ref mut vector) = channels[self.allocated].downcast_mut::<(Vec<Option<(Vec<Pusher<T>>, Puller<T>)>>)>() {
+        if let Some(ref mut vector) = channels[self.allocated].downcast_mut::<(Vec<Option<(Vec<Pusher<Message<T>>>, Puller<Message<T>>)>>)>() {
             if let Some((send, recv)) = vector[self.index].take() {
                 self.allocated += 1;
                 let mut temp = Vec::new();
-                for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<T>>); }
-                return (temp, Box::new(recv) as Box<Pull<T>>, None)
+                for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<Message<T>>>); }
+                return (temp, Box::new(recv) as Box<Pull<super::Message<T>>>, None)
             }
             else {
                 panic!("channel already consumed");

@@ -20,7 +20,7 @@ arg_parse=["getopts"]
 byteorder="1"
 getopts={version="0.2.14", optional=true}
 time="0.1.34"
-abomonation = "0.5"
+abomonation = { git = "https://github.com/frankmcsherry/abomonation" }
 abomonation_derive = "0.3"
 bytes = { path = "../bytes" }
 

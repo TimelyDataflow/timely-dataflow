@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use allocator::Allocate;
+use allocator::{Allocate, Message};
 use {Push, Pull};
 
 
@@ -11,7 +11,7 @@ pub struct Thread;
 impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
-    fn allocate<T: 'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
+    fn allocate<T: 'static>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
         let (pusher, puller) = Thread::new();
         (vec![Box::new(pusher)], Box::new(puller), None)
     }

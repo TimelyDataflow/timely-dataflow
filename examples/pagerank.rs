@@ -50,18 +50,23 @@ fn main() {
                     let mut diffs = Vec::new(); // for received but un-acted upon deltas.
                     let mut delta = Vec::new();
 
+                    let mut edge_vec = Vec::new();
+                    let mut rank_vec = Vec::new();
+
                     let timer = ::std::time::Instant::now();
 
                     move |input1, input2, output| {
 
                         // hold on to edge changes until it is time.
                         input1.for_each(|time, data| {
-                            edge_stash.entry(time.retain()).or_insert(Vec::new()).extend(data.drain(..));
+                            data.swap(&mut edge_vec);
+                            edge_stash.entry(time.retain()).or_insert(Vec::new()).extend(edge_vec.drain(..));
                         });
 
                         // hold on to rank changes until it is time.
                         input2.for_each(|time, data| {
-                            rank_stash.entry(time.retain()).or_insert(Vec::new()).extend(data.drain(..));
+                            data.swap(&mut rank_vec);
+                            rank_stash.entry(time.retain()).or_insert(Vec::new()).extend(rank_vec.drain(..));
                         });
 
                         let frontiers = &[input1.frontier(), input2.frontier()];

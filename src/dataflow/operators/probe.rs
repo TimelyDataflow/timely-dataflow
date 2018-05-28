@@ -99,6 +99,8 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         let frontier = handle.frontier.clone();
         let mut started = false;
 
+        let mut vector = Vec::new();
+
         builder.build(
             move |changes| {
                 frontier.borrow_mut().update_iter(changes[0].drain());
@@ -110,8 +112,15 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
                     started = true;
                 }
 
-                while let Some((time, data)) = input.next() {
-                    output.session(time).give_content(data);
+                use timely_communication::allocator::RefOrMut;
+
+                while let Some(message) = input.next() {
+                    let (time, data) = match message.as_ref_or_mut() {
+                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
+                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
+                    };
+                    data.swap(&mut vector);
+                    output.session(time).give_vec(&mut vector);
                 }
                 output.cease();
 

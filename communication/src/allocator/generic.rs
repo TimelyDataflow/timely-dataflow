@@ -3,7 +3,7 @@
 //! This type is useful in settings where it is difficult to write code generic in `A: Allocate`,
 //! for example closures whose type arguments must be specified.
 
-use allocator::{Allocate, Thread, Process, Binary};
+use allocator::{Allocate, Message, Thread, Process, Binary};
 use allocator::process_binary::{ProcessBinary, ProcessBinaryBuilder};
 use {Push, Pull, Data};
 
@@ -36,7 +36,7 @@ impl Generic {
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
-    pub fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
+    pub fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
         match self {
             &mut Generic::Thread(ref mut t) => t.allocate(),
             &mut Generic::Process(ref mut p) => p.allocate(),
@@ -66,7 +66,7 @@ impl Generic {
 impl Allocate for Generic {
     fn index(&self) -> usize { self.index() }
     fn peers(&self) -> usize { self.peers() }
-    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
+    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
         self.allocate()
     }
 

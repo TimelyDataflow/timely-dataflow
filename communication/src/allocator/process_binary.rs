@@ -8,7 +8,8 @@ use bytes::arc::Bytes;
 
 use networking::MessageHeader;
 
-use {Allocate, Data, Push, Pull, Serialize};
+use allocator::Message;
+use {Allocate, Data, Push, Pull};
 
 pub trait BytesExchange {
     type Send: SendEndpoint+'static;
@@ -221,12 +222,12 @@ pub struct ProcessBinary<BE: BytesExchange> {
 impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
+    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
 
         let channel_id = self.allocated;
         self.allocated += 1;
 
-        let mut pushes = Vec::<Box<Push<T>>>::new();
+        let mut pushes = Vec::<Box<Push<Message<T>>>>::new();
 
         for target_index in 0 .. self.peers() {
 
@@ -326,13 +327,13 @@ impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
 ///
 /// This pusher has a fixed MessageHeader, and access to a SharedByteBuffer which it uses to
 /// acquire buffers for serialization.
-struct Pusher<T,S:SendEndpoint> {
+struct Pusher<T, S: SendEndpoint> {
     header:     MessageHeader,
     sender:     Rc<RefCell<S>>,
     phantom:    ::std::marker::PhantomData<T>,
 }
 
-impl<T,S:SendEndpoint> Pusher<T,S> {
+impl<T, S:SendEndpoint> Pusher<T, S> {
     /// Creates a new `Pusher` from a header and shared byte buffer.
     pub fn new(header: MessageHeader, sender: Rc<RefCell<S>>) -> Pusher<T,S> {
         Pusher {
@@ -343,22 +344,23 @@ impl<T,S:SendEndpoint> Pusher<T,S> {
     }
 }
 
-impl<T:Data,S:SendEndpoint> Push<T> for Pusher<T,S> {
+impl<T:Data, S:SendEndpoint> Push<Message<T>> for Pusher<T, S> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) {
+    fn push(&mut self, element: &mut Option<Message<T>>) {
         if let Some(ref mut element) = *element {
 
             // determine byte lengths and build header.
-            let element_length = element.length_in_bytes();
             let mut header = self.header;
             self.header.seqno += 1;
-            header.length = element_length;
+            header.length = element.length_in_bytes();
 
             // acquire byte buffer and write header, element.
             let mut borrow = self.sender.borrow_mut();
             let mut bytes = borrow.reserve(header.required_bytes());
             header.write_to(&mut bytes).expect("failed to write header!");
+
             element.into_bytes(&mut bytes);
+
         }
     }
 }
@@ -371,7 +373,7 @@ impl<T:Data,S:SendEndpoint> Push<T> for Pusher<T,S> {
 /// allocation.
 struct Puller<T> {
     channel: usize,
-    current: Option<T>,
+    current: Option<Message<T>>,
     receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
 }
 impl<T:Data> Puller<T> {
@@ -380,15 +382,15 @@ impl<T:Data> Puller<T> {
     }
 }
 
-impl<T:Data> Pull<T> for Puller<T> {
+impl<T:Data> Pull<Message<T>> for Puller<T> {
     #[inline]
-    fn pull(&mut self) -> &mut Option<T> {
+    fn pull(&mut self) -> &mut Option<Message<T>> {
 
         self.current =
         self.receiver
             .borrow_mut()
             .pop_front()
-            .map(|bytes| <T as Serialize>::from_bytes(bytes));
+            .map(|bytes| Message::from_bytes(bytes));
 
         &mut self.current
     }

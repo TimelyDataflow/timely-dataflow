@@ -121,8 +121,9 @@ fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<Vec<Ge
 ///     let (mut senders, mut receiver, _) = allocator.allocate();
 ///
 ///     // send typed data along each channel
-///     senders[0].send(format!("hello, {}", 0));
-///     senders[1].send(format!("hello, {}", 1));
+///     use timely_communication::allocator::Message;
+///     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
+///     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
 ///
 ///     // no support for termination notification,
 ///     // we have to count down ourselves.
@@ -130,7 +131,8 @@ fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<Vec<Ge
 ///     while expecting > 0 {
 ///         allocator.pre_work();
 ///         if let Some(message) = receiver.recv() {
-///             println!("worker {}: received: <{}>", allocator.index(), message);
+///             use std::ops::Deref;
+///             println!("worker {}: received: <{}>", allocator.index(), message.deref());
 ///             expecting -= 1;
 ///         }
 ///         allocator.post_work();
