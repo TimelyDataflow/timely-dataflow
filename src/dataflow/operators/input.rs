@@ -13,7 +13,7 @@ use progress::nested::product::Product;
 
 use timely_communication::Allocate;
 use {Data, Push};
-use dataflow::channels::{Bundle, Message};
+use dataflow::channels::Message;
 use dataflow::channels::pushers::{Tee, Counter};
 
 use dataflow::{Stream, Scope};

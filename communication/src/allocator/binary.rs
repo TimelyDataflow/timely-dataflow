@@ -154,15 +154,14 @@ impl<T:Data> Pull<Message<T>> for Puller<T> {
                     })));
 
                 let bytes = ::bytes::arc::Bytes::from(bytes);
-                // let result = <T as Serialize>::from_bytes(bytes);
+
                 log_sender.when_enabled(|l| l.log(
                     ::logging::CommsEvent::Serialization(::logging::SerializationEvent {
                         seq_no: None,
                         is_start: false,
                     })));
 
-                // Message::Typed(result)
-                Message::from_bytes(bytes)
+                unsafe { Message::from_bytes(bytes) }
             });
             &mut self.current
         }

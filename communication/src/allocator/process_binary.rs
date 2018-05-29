@@ -390,7 +390,7 @@ impl<T:Data> Pull<Message<T>> for Puller<T> {
         self.receiver
             .borrow_mut()
             .pop_front()
-            .map(|bytes| Message::from_bytes(bytes));
+            .map(|bytes| unsafe { Message::from_bytes(bytes) });
 
         &mut self.current
     }
