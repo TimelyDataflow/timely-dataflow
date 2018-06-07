@@ -60,20 +60,20 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     ///         .inspect(|x| assert!(*x == (0, 5) || *x == (1, 5)));
     /// });
     /// ```
-    fn aggregate<R: Data, D: Default+'static>(
+    fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         &self,
-        fold: impl Fn(&K, V, &mut D)+'static,
-        emit: impl Fn(K, D)->R+'static,
-        hash: impl Fn(&K)->u64+'static) -> Stream<S, R> where S::Timestamp: Eq;
+        fold: F,
+        emit: E,
+        hash: H) -> Stream<S, R> where S::Timestamp: Eq;
 }
 
 impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
 
-    fn aggregate<R: Data, D: Default+'static>(
+    fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         &self,
-        fold: impl Fn(&K, V, &mut D)+'static,
-        emit: impl Fn(K, D)->R+'static,
-        hash: impl Fn(&K)->u64+'static) -> Stream<S, R> where S::Timestamp: Eq {
+        fold: F,
+        emit: E,
+        hash: H) -> Stream<S, R> where S::Timestamp: Eq {
 
         let mut aggregates = HashMap::new();
         let mut vector = Vec::new();
