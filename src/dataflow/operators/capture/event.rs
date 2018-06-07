@@ -111,6 +111,26 @@ pub mod link {
             }
         }
     }
+
+    // Drop implementation to prevent stack overflow through naive drop impl.
+    impl<T, D> Drop for EventLink<T, D> {
+        fn drop(&mut self) {
+            while let Some(link) = self.next.replace(None) {
+                if let Ok(head) = Rc::try_unwrap(link) {
+                    *self = head;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn avoid_stack_overflow_in_drop() {
+        let mut event1 = Rc::new(EventLink::<(),()>::new());
+        let event2 = event1.clone();
+        for _ in 0 .. 1_000_000 {
+            event1.push(Event::Progress(vec![]));
+        }
+    }
 }
 
 /// A binary event pusher and iterator.
