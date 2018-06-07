@@ -4,39 +4,13 @@
 //! stream. There are two types of events, (i) the receipt of data and (ii) reports of progress
 //! of timestamps.
 
-use abomonation::Abomonation;
-
 /// Data and progress events of the captured stream.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Abomonation)]
 pub enum Event<T, D> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
     /// Messages received via the data stream.
     Messages(T, Vec<D>),
-}
-
-impl<T: Abomonation, D: Abomonation> Abomonation for Event<T,D> {
-    // #[inline] unsafe fn embalm(&mut self) {
-    //     if let Event::Progress(ref mut vec) = *self { vec.embalm(); }
-    //     if let Event::Messages(ref mut time, ref mut data) = *self { time.embalm(); data.embalm(); }
-    // }
-    #[inline] unsafe fn entomb<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
-        match *self {
-            Event::Progress(ref vec) => { vec.entomb(write)?; },
-            Event::Messages(ref time, ref data) => { time.entomb(write)?; data.entomb(write)?; },
-        }
-        Ok(())
-    }
-    #[inline] unsafe fn exhume<'a, 'b>(&'a mut self, mut bytes: &'b mut[u8]) -> Option<&'b mut [u8]> {
-        match *self {
-            Event::Progress(ref mut vec) => { vec.exhume(bytes) },
-            Event::Messages(ref mut time, ref mut data) => {
-                let temp = bytes; bytes = if let Some(bytes) = time.exhume(temp) { bytes } else { return None; };
-                let temp = bytes; bytes = if let Some(bytes) = data.exhume(temp) { bytes } else { return None; };
-                Some(bytes)
-            }
-        }
-    }
 }
 
 /// Iterates over contained `Event<T, D>`.
