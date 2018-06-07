@@ -32,6 +32,7 @@ pub trait Unary<G: Scope, D1: Data> {
     ///            });
     /// });
     /// ```
+    #[deprecated(since="0.5", note="please use `Operator`'s `unary` method directly")]
     fn unary_stream<D2, L, P> (&self, pact: P, name: &str, logic: L) -> Stream<G, D2>
     where
         D2: Data,
@@ -62,6 +63,7 @@ pub trait Unary<G: Scope, D1: Data> {
     ///            });
     /// });
     /// ```
+    #[deprecated(since="0.5", note="please use `Operator`'s `unary_notify` method directly")]
     fn unary_notify<D2, L, P>(&self, pact: P, name: &str, init: Vec<G::Timestamp>, logic: L) -> Stream<G, D2>
     where
         D2: Data,

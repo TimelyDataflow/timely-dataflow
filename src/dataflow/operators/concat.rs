@@ -4,7 +4,6 @@
 use Data;
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
-use dataflow::operators::generic::binary::Binary;
 
 /// Merge the contents of two streams.
 pub trait Concat<G: Scope, D: Data> {
@@ -26,10 +25,7 @@ pub trait Concat<G: Scope, D: Data> {
 
 impl<G: Scope, D: Data> Concat<G, D> for Stream<G, D> {
     fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
-        self.binary_stream(other, Pipeline, Pipeline, "Concat", |input1, input2, output| {
-            input1.for_each(|time, data| { output.session(&time).give_content(data); });
-            input2.for_each(|time, data| { output.session(&time).give_content(data); });
-        })
+        self.scope().concatenate(vec![self.clone(), other.clone()])
     }
 }
 
@@ -51,19 +47,34 @@ pub trait Concatenate<G: Scope, D: Data> {
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate(&self, Vec<Stream<G, D>>) -> Stream<G, D>;
+    fn concatenate(&self, impl IntoIterator<Item=Stream<G, D>>) -> Stream<G, D>;
 }
 
 impl<G: Scope, D: Data> Concatenate<G, D> for G {
-    fn concatenate(&self, mut sources: Vec<Stream<G, D>>) -> Stream<G, D> {
-        if let Some(mut result) = sources.pop() {
-            while let Some(next) = sources.pop() {
-                result = result.concat(&next);
+    fn concatenate(&self, sources: impl IntoIterator<Item=Stream<G, D>>) -> Stream<G, D> {
+
+        // create an operator builder.
+        use dataflow::operators::generic::builder_rc::OperatorBuilder;
+        let mut builder = OperatorBuilder::new("Concatenate".to_string(), self.clone());
+
+        // create new input handles for each input stream.
+        let mut handles = sources.into_iter().map(|s| builder.new_input(&s, Pipeline)).collect::<Vec<_>>();
+
+        // create one output handle for the concatenated results.
+        let (mut output, result) = builder.new_output();
+
+        // build an operator that plays out all input data.
+        builder.build(move |_capability| {
+            move |_frontier| {
+                let mut output = output.activate();
+                for handle in handles.iter_mut() {
+                    handle.for_each(|time, data| {
+                        output.session(&time).give_content(data);
+                    })
+                }
             }
-            result
-        }
-        else {
-            panic!("must pass at least one stream to concatenate");
-        }
+        });
+
+        result
     }
 }

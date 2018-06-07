@@ -3,7 +3,7 @@
 use Data;
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
-use dataflow::operators::generic::unary::Unary;
+use dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
 pub trait Inspect<G: Scope, D: Data> {
@@ -59,7 +59,7 @@ pub trait Inspect<G: Scope, D: Data> {
 
 impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
     fn inspect_batch(&self, mut func: impl FnMut(&G::Timestamp, &[D])+'static) -> Stream<G, D> {
-        self.unary_stream(Pipeline, "InspectBatch", move |input, output| {
+        self.unary(Pipeline, "InspectBatch", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 func(&time, &data[..]);
                 output.session(&time).give_content(data);

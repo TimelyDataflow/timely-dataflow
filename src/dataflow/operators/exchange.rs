@@ -4,7 +4,7 @@ use ::ExchangeData;
 use dataflow::channels::pact::Exchange as ExchangePact;
 use dataflow::channels::pact::TimeExchange as TimeExchangePact;
 use dataflow::{Stream, Scope};
-use dataflow::operators::generic::unary::Unary;
+use dataflow::operators::generic::operator::Operator;
 use progress::timestamp::Timestamp;
 
 /// Exchange records between workers.
@@ -21,7 +21,7 @@ pub trait Exchange<T, D: ExchangeData> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn exchange<F: Fn(&D)->u64+'static>(&self, route: F) -> Self;
+    fn exchange(&self, route: impl Fn(&D)->u64+'static) -> Self;
 
     /// Exchange records by time so that all records whose time and data
     /// evaluate to the same `route` are at the same worker.
@@ -36,20 +36,20 @@ pub trait Exchange<T, D: ExchangeData> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn exchange_ts<F: Fn(&T, &D)->u64+'static>(&self, route: F) -> Self;
+    fn exchange_ts(&self, route: impl Fn(&T, &D)->u64+'static) -> Self;
 }
 
 impl<T: Timestamp, G: Scope<Timestamp=T>, D: ExchangeData> Exchange<T, D> for Stream<G, D> {
-    fn exchange<F: Fn(&D)->u64+'static>(&self, route: F) -> Stream<G, D> {
-        self.unary_stream(ExchangePact::new(route), "Exchange", |input, output| {
+    fn exchange(&self, route: impl Fn(&D)->u64+'static) -> Stream<G, D> {
+        self.unary(ExchangePact::new(route), "Exchange", |_,_| |input, output| {
             input.for_each(|time, data| {
                 output.session(&time).give_content(data);
             });
         })
     }
 
-    fn exchange_ts<F: Fn(&T, &D)->u64+'static>(&self, route: F) -> Stream<G, D> {
-        self.unary_stream(TimeExchangePact::new(route), "Exchange", |input, output| {
+    fn exchange_ts(&self, route: impl Fn(&T, &D)->u64+'static) -> Stream<G, D> {
+        self.unary(TimeExchangePact::new(route), "Exchange", |_,_| |input, output| {
             input.for_each(|time, data| {
                 output.session(&time).give_content(data);
             });

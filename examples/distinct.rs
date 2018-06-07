@@ -3,7 +3,7 @@ extern crate timely;
 use std::collections::HashMap;
 
 use timely::dataflow::operators::{ToStream, Inspect};
-use timely::dataflow::operators::generic::unary::Unary;
+use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
@@ -12,7 +12,7 @@ fn main() {
         vec![0, 1, 2, 2, 2, 3, 3, 4]
             .into_iter()
             .to_stream(scope)
-            .unary_stream(Pipeline, "Distinct", move |input, output| {
+            .unary(Pipeline, "Distinct", move |_,_| move |input, output| {
                 input.for_each(|time, data| {
                     let counts = counts_by_time.entry(time.time().clone())
                                                .or_insert(HashMap::new());

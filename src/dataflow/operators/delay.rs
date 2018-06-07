@@ -8,7 +8,7 @@ use order::PartialOrder;
 use dataflow::channels::pact::Pipeline;
 use dataflow::channels::Content;
 use dataflow::{Stream, Scope};
-use dataflow::operators::generic::unary::Unary;
+use dataflow::operators::generic::operator::Operator;
 
 /// Methods to advance the timestamps of records or batches of records.
 pub trait Delay<G: Scope, D: Data> {
@@ -40,7 +40,7 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
+    fn delay(&self, impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Self;
     /// Advances the timestamp of batches of records using a supplied function.
     ///
     /// The function *must* advance the timestamp; the operator will test that the
@@ -70,11 +70,11 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, F) -> Self;
+    fn delay_batch(&self, impl Fn(&G::Timestamp)->G::Timestamp+'static) -> Self;
 }
 
 impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
-    fn delay<F: Fn(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
+    fn delay(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Stream<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
@@ -96,7 +96,7 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
         })
     }
 
-    fn delay_batch<F: Fn(&G::Timestamp)->G::Timestamp+'static>(&self, func: F) -> Stream<G, D> {
+    fn delay_batch(&self, func: impl Fn(&G::Timestamp)->G::Timestamp+'static) -> Stream<G, D> {
         let mut stash = Vec::new();
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {

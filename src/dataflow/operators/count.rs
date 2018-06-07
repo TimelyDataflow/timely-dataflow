@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use Data;
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
-use dataflow::operators::generic::unary::Unary;
+use dataflow::operators::generic::operator::Operator;
 
 use dataflow::channels::message::Content;
 
@@ -28,7 +28,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![45])]);
     /// ```
-    fn accumulate<A: Data, F: Fn(&mut A, &mut Content<D>)+'static>(&self, default: A, logic: F) -> Stream<G, A>;
+    fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, &mut Content<D>)+'static) -> Stream<G, A>;
     /// Counts the number of records observed at each time.
     ///
     /// #Examples
@@ -53,7 +53,7 @@ pub trait Accumulate<G: Scope, D: Data> {
 }
 
 impl<G: Scope, D: Data> Accumulate<G, D> for Stream<G, D> {
-    fn accumulate<A: Data, F: Fn(&mut A, &mut Content<D>)+'static>(&self, default: A, logic: F) -> Stream<G, A> {
+    fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, &mut Content<D>)+'static) -> Stream<G, A> {
 
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {

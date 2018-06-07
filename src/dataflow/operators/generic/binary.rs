@@ -37,6 +37,7 @@ pub trait Binary<G: Scope, D1: Data> {
     ///     });
     /// });
     /// ```
+    #[deprecated(since="0.5", note="please use `Operator`'s `binary` method directly")]
     fn binary_stream<D2: Data,
               D3: Data,
               L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
@@ -76,6 +77,7 @@ pub trait Binary<G: Scope, D1: Data> {
     ///     });
     /// });
     /// ```
+    #[deprecated(since="0.5", note="please use `Operator`'s `binary_notify` method directly")]
     fn binary_notify<D2: Data,
               D3: Data,
               L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,

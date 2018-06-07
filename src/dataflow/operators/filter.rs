@@ -3,7 +3,7 @@
 use Data;
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
-use dataflow::operators::generic::unary::Unary;
+use dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
 pub trait Filter<D: Data> {
@@ -19,12 +19,12 @@ pub trait Filter<D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn filter<L: Fn(&D)->bool+'static>(&self, predicate: L) -> Self;
+    fn filter(&self, predicate: impl Fn(&D)->bool+'static) -> Self;
 }
 
 impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
-    fn filter<L: Fn(&D)->bool+'static>(&self, predicate: L) -> Stream<G, D> {
-        self.unary_stream(Pipeline, "Filter", move |input, output| {
+    fn filter(&self, predicate: impl Fn(&D)->bool+'static) -> Stream<G, D> {
+        self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.retain(|x| predicate(x));
                 if data.len() > 0 {
