@@ -6,7 +6,7 @@ use dataflow::{Stream, Scope};
 use dataflow::operators::generic::unary::Unary;
 
 /// Methods to inspect records and batches of records on a stream.
-pub trait Inspect<G: Scope, D: Data>: Sized {
+pub trait Inspect<G: Scope, D: Data> {
     /// Runs a supplied closure on each observed data element.
     ///
     /// #Examples
@@ -18,7 +18,7 @@ pub trait Inspect<G: Scope, D: Data>: Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn inspect(&self, mut func: impl FnMut(&D)+'static) -> Self {
+    fn inspect(&self, mut func: impl FnMut(&D)+'static) -> Stream<G, D> {
         self.inspect_batch(move |_, data| {
             for datum in data.iter() { func(datum); }
         })
@@ -35,7 +35,7 @@ pub trait Inspect<G: Scope, D: Data>: Sized {
     ///            .inspect_time(|t, x| println!("seen at: {:?}\t{:?}", t, x));
     /// });
     /// ```
-    fn inspect_time(&self, mut func: impl FnMut(&G::Timestamp, &D)+'static) -> Self {
+    fn inspect_time(&self, mut func: impl FnMut(&G::Timestamp, &D)+'static) -> Stream<G, D> {
         self.inspect_batch(move |time, data| {
             for datum in data.iter() {
                 func(&time, &datum);
@@ -54,7 +54,7 @@ pub trait Inspect<G: Scope, D: Data>: Sized {
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch(&self, func: impl FnMut(&G::Timestamp, &[D])+'static) -> Self;
+    fn inspect_batch(&self, func: impl FnMut(&G::Timestamp, &[D])+'static) -> Stream<G, D>;
 }
 
 impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
