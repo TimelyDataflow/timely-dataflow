@@ -15,6 +15,8 @@ use super::builder_rc::OperatorBuilder;
 use dataflow::operators::generic::OperatorInfo;
 use dataflow::operators::generic::operator_info::new_operator_info;
 
+use dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
+
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Data> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
@@ -64,6 +66,40 @@ pub trait Operator<G: Scope, D1: Data> {
         L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P::Puller>,
                  &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
+
+    /// Creates a new dataflow operator that partitions its input stream by a parallelization
+    /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
+    ///
+    /// #Examples
+    /// ```
+    /// use std::collections::HashMap;
+    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::Operator;
+    /// use timely::dataflow::channels::pact::Pipeline;
+    /// use timely::progress::timestamp::RootTimestamp;
+    ///
+    /// fn main() {
+    ///     timely::example(|scope| {
+    ///         (0u64..10).to_stream(scope)
+    ///             .unary_notify(Pipeline, "example", None, |input, output, notificator| {
+    ///                 input.for_each(|time, data| {
+    ///                     output.session(&time).give_content(data);
+    ///                     notificator.notify_at(time.retain());
+    ///                 });
+    ///                 notificator.for_each(|time, _cnt, _not| {
+    ///                     println!("notified at {:?}", time);
+    ///                 });
+    ///             });
+    ///     });
+    /// }
+    /// ```
+    fn unary_notify<D2: Data,
+            L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>,
+                     &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>,
+                     &mut Notificator<G::Timestamp>)+'static,
+             P: ParallelizationContract<G::Timestamp, D1>>
+             (&self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, logic: L) -> Stream<G, D2>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
@@ -169,6 +205,58 @@ pub trait Operator<G: Scope, D1: Data> {
     ///
     /// #Examples
     /// ```
+    /// use std::collections::HashMap;
+    /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::operator::Operator;
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::execute(timely::Configuration::Thread, |worker| {
+    ///    let (mut in1, mut in2) = worker.dataflow(|scope| {
+    ///        let (in1_handle, in1) = scope.new_input();
+    ///        let (in2_handle, in2) = scope.new_input();
+    ///
+    ///
+    ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, |input1, input2, output, notificator| {
+    ///            input1.for_each(|time, data| {
+    ///                output.session(&time).give_content(data);
+    ///                notificator.notify_at(time.retain());
+    ///            });
+    ///            input2.for_each(|time, data| {
+    ///                output.session(&time).give_content(data);
+    ///                notificator.notify_at(time.retain());
+    ///            });
+    ///            notificator.for_each(|time, _cnt, _not| {
+    ///                println!("notified at {:?}", time);
+    ///            });
+    ///        });
+    ///
+    ///        (in1_handle, in2_handle)
+    ///    });
+    ///
+    ///    for i in 1..10 {
+    ///        in1.send(i - 1);
+    ///        in1.advance_to(i);
+    ///        in2.send(i - 1);
+    ///        in2.advance_to(i);
+    ///    }
+    /// }).unwrap();
+    /// ```
+    fn binary_notify<D2: Data,
+              D3: Data,
+              L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
+                       &mut InputHandle<G::Timestamp, D2, P2::Puller>,
+                       &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>,
+                       &mut Notificator<G::Timestamp>)+'static,
+              P1: ParallelizationContract<G::Timestamp, D1>,
+              P2: ParallelizationContract<G::Timestamp, D2>>
+            (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, logic: L) -> Stream<G, D3>;
+
+    /// Creates a new dataflow operator that partitions its input streams by a parallelization
+    /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
+    /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
+    ///
+    /// #Examples
+    /// ```
     /// use timely::dataflow::operators::{ToStream, Inspect, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
@@ -267,6 +355,28 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         stream
     }
 
+    fn unary_notify<D2: Data,
+            L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>,
+                     &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>,
+                     &mut Notificator<G::Timestamp>)+'static,
+             P: ParallelizationContract<G::Timestamp, D1>>
+             (&self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> Stream<G, D2> {
+
+        self.unary_frontier(pact, name, move |capability, _info| {
+            let mut notificator = FrontierNotificator::new();
+            for time in init {
+                notificator.notify_at(capability.delayed(&time));
+            }
+
+            let logging = self.scope().logging();
+            move |input, output| {
+                let frontier = &[input.frontier()];
+                let notificator = &mut Notificator::new(frontier, &mut notificator, &logging);
+                logic(&mut input.handle, output, notificator);
+            }
+        })
+    }
+
     fn unary<D2, B, L, P>(&self, pact: P, name: &str, constructor: B) -> Stream<G, D2>
     where
         D2: Data,
@@ -323,6 +433,33 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         stream
     }
+
+    fn binary_notify<D2: Data,
+              D3: Data,
+              L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
+                       &mut InputHandle<G::Timestamp, D2, P2::Puller>,
+                       &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>,
+                       &mut Notificator<G::Timestamp>)+'static,
+              P1: ParallelizationContract<G::Timestamp, D1>,
+              P2: ParallelizationContract<G::Timestamp, D2>>
+            (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> Stream<G, D3> {
+
+        self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
+            let mut notificator = FrontierNotificator::new();
+            for time in init {
+                notificator.notify_at(capability.delayed(&time));
+            }
+
+            let logging = self.scope().logging();
+            move |input1, input2, output| {
+                let frontiers = &[input1.frontier(), input2.frontier()];
+                let notificator = &mut Notificator::new(frontiers, &mut notificator, &logging);
+                logic(&mut input1.handle, &mut input2.handle, output, notificator);
+            }
+        })
+
+    }
+
 
     fn binary<D2, D3, B, L, P1, P2>(&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> Stream<G, D3>
     where

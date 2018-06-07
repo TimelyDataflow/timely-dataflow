@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use ::{Data, ExchangeData};
 use dataflow::{Stream, Scope};
-use dataflow::operators::generic::unary::Unary;
+use dataflow::operators::generic::operator::Operator;
 use dataflow::channels::pact::Exchange;
 
 /// Generic state-transition machinery: each key has a state, and receives a sequence of events.

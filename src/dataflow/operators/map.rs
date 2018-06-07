@@ -3,13 +3,13 @@
 use Data;
 use dataflow::{Stream, Scope};
 use dataflow::channels::pact::Pipeline;
-use dataflow::operators::generic::unary::Unary;
+use dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for `Stream`.
 pub trait Map<S: Scope, D: Data> {
     /// Consumes each element of the stream and yields a new element.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Map, Inspect};
     ///
@@ -19,10 +19,10 @@ pub trait Map<S: Scope, D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map<D2: Data, L: Fn(D)->D2+'static>(&self, logic: L) -> Stream<S, D2>;
+    fn map<D2: Data>(&self, logic: impl Fn(D)->D2+'static) -> Stream<S, D2>;
     /// Updates each element of the stream and yields the element, re-using memory where possible.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Map, Inspect};
     ///
@@ -32,10 +32,10 @@ pub trait Map<S: Scope, D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_in_place<L: Fn(&mut D)+'static>(&self, logic: L) -> Stream<S, D>;
+    fn map_in_place(&self, logic: impl Fn(&mut D)+'static) -> Stream<S, D>;
     /// Consumes each element of the stream and yields some number of new elements.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Map, Inspect};
     ///
@@ -45,22 +45,22 @@ pub trait Map<S: Scope, D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<I: IntoIterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data;
+    fn flat_map<I: IntoIterator>(&self, logic: impl Fn(D)->I+'static) -> Stream<S, I::Item> where I::Item: Data;
 }
 
 impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
-    fn map<D2: Data, L: Fn(D)->D2+'static>(&self, logic: L) -> Stream<S, D2> {
+    fn map<D2: Data>(&self, logic: impl Fn(D)->D2+'static) -> Stream<S, D2> {
         let mut vector = Vec::new();
-        self.unary_stream(Pipeline, "Map", move |input, output| {
+        self.unary(Pipeline, "Map", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
                 output.session(&time).give_iterator(vector.drain(..).map(|x| logic(x)));
             });
         })
     }
-    fn map_in_place<L: Fn(&mut D)+'static>(&self, logic: L) -> Stream<S, D> {
+    fn map_in_place(&self, logic: impl Fn(&mut D)+'static) -> Stream<S, D> {
         let mut vector = Vec::new();
-        self.unary_stream(Pipeline, "MapInPlace", move |input, output| {
+        self.unary(Pipeline, "MapInPlace", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
                 for datum in vector.iter_mut() { logic(datum); }
@@ -71,20 +71,13 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<I: IntoIterator, L: Fn(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data {
+    fn flat_map<I: IntoIterator>(&self, logic: impl Fn(D)->I+'static) -> Stream<S, I::Item> where I::Item: Data {
         let mut vector = Vec::new();
-        self.unary_stream(Pipeline, "FlatMap", move |input, output| {
+        self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
                 output.session(&time).give_iterator(vector.drain(..).flat_map(|x| logic(x).into_iter()));
             });
         })
     }
-    // fn filter_map<D2: Data, L: Fn(D)->Option<D2>+'static>(&self, logic: L) -> Stream<S, D2> {
-    //     self.unary_stream(Pipeline, "FilterMap", move |input, output| {
-    //         while let Some((time, data)) = input.next() {
-    //             output.session(time).give_iterator(data.drain(..).filter_map(|x| logic(x)));
-    //         }
-    //     })
-    // }
 }

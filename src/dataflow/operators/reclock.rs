@@ -4,7 +4,7 @@ use Data;
 use order::PartialOrder;
 use dataflow::{Stream, Scope};
 use dataflow::channels::pact::Pipeline;
-use dataflow::operators::generic::binary::Binary;
+use dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for reclocking a stream.
 pub trait Reclock<S: Scope, D: Data> {
