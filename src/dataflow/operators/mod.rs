@@ -33,6 +33,7 @@ pub use self::count::Accumulate;
 
 pub mod enterleave;
 pub mod input;
+pub mod flow_controlled;
 pub mod unordered_input;
 pub mod feedback;
 pub mod concat;
