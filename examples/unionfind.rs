@@ -9,7 +9,7 @@ use rand::{Rng, SeedableRng, StdRng};
 
 use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Exchange, Probe};
-use timely::dataflow::operators::generic::unary::Unary;
+use timely::dataflow::operators::generic::operators::Operator;
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
@@ -60,33 +60,36 @@ trait UnionFind {
 impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
     fn union_find(&self) -> Stream<G, (usize, usize)> {
 
-        let mut roots = vec![];  // u32 works, and is smaller than uint/u64
-        let mut ranks = vec![];  // u8 should be large enough (n < 2^256)
+        self.unary(Pipeline, "UnionFind", |_,_| {
 
-        self.unary_stream(Pipeline, "UnionFind", move |input, output| {
+            let mut roots = vec![];  // u32 works, and is smaller than uint/u64
+            let mut ranks = vec![];  // u8 should be large enough (n < 2^256)
 
-            while let Some((time, data)) = input.next() {
+            move |input, output| {
 
-                let mut session = output.session(&time);
-                for &(mut x, mut y) in data.iter() {
+                while let Some((time, data)) = input.next() {
 
-                    // grow arrays if required.
-                    let m = ::std::cmp::max(x, y);
-                    for i in roots.len() .. (m + 1) {
-                        roots.push(i);
-                        ranks.push(0);
-                    }
+                    let mut session = output.session(&time);
+                    for &(mut x, mut y) in data.iter() {
 
-                    // look up roots for `x` and `y`.
-                    while x != roots[x] { x = roots[x]; }
-                    while y != roots[y] { y = roots[y]; }
+                        // grow arrays if required.
+                        let m = ::std::cmp::max(x, y);
+                        for i in roots.len() .. (m + 1) {
+                            roots.push(i);
+                            ranks.push(0);
+                        }
 
-                    if x != y {
-                        session.give((x, y));
-                        match ranks[x].cmp(&ranks[y]) {
-                            Ordering::Less    => { roots[x] = y },
-                            Ordering::Greater => { roots[y] = x },
-                            Ordering::Equal   => { roots[y] = x; ranks[x] += 1 },
+                        // look up roots for `x` and `y`.
+                        while x != roots[x] { x = roots[x]; }
+                        while y != roots[y] { y = roots[y]; }
+
+                        if x != y {
+                            session.give((x, y));
+                            match ranks[x].cmp(&ranks[y]) {
+                                Ordering::Less    => { roots[x] = y },
+                                Ordering::Greater => { roots[y] = x },
+                                Ordering::Equal   => { roots[y] = x; ranks[x] += 1 },
+                            }
                         }
                     }
                 }

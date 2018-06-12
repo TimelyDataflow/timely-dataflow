@@ -81,10 +81,12 @@ pub trait Operator<G: Scope, D1: Data> {
     ///
     /// fn main() {
     ///     timely::example(|scope| {
+    ///         let mut vector = Vec::new();
     ///         (0u64..10).to_stream(scope)
-    ///             .unary_notify(Pipeline, "example", None, |input, output, notificator| {
+    ///             .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
     ///                 input.for_each(|time, data| {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector);
+    ///                     output.session(&time).give_vec(&mut vector);
     ///                     notificator.notify_at(time.retain());
     ///                 });
     ///                 notificator.for_each(|time, _cnt, _not| {
@@ -215,14 +217,17 @@ pub trait Operator<G: Scope, D1: Data> {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///
-    ///
-    ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, |input1, input2, output, notificator| {
+    ///        let mut vector1 = Vec::new();
+    ///        let mut vector2 = Vec::new();
+    ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
     ///            input1.for_each(|time, data| {
-    ///                output.session(&time).give_content(data);
+    ///                data.swap(&mut vector1);
+    ///                output.session(&time).give_vec(&mut vector1);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            input2.for_each(|time, data| {
-    ///                output.session(&time).give_content(data);
+    ///                data.swap(&mut vector2);
+    ///                output.session(&time).give_vec(&mut vector2);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            notificator.for_each(|time, _cnt, _not| {
