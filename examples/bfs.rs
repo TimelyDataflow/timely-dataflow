@@ -10,7 +10,7 @@ use timely_sort::{RadixSorter, RadixSorterBase};
 use timely_sort::LSBRadixSorter as Sorter;
 
 use timely::dataflow::operators::{ToStream, Concat, LoopVariable, ConnectLoop};
-use timely::dataflow::operators::generic::operator::Binary;
+use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Exchange;
 
 fn main() {

@@ -9,7 +9,7 @@ use rand::{Rng, SeedableRng, StdRng};
 
 use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Exchange, Probe};
-use timely::dataflow::operators::generic::operators::Operator;
+use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
