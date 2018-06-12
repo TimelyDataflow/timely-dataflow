@@ -90,8 +90,8 @@ pub fn iterator_source<
         let mut cap = Some(cap);
         move |output| {
             cap = cap.take().and_then(|mut cap| {
-                if !probe.less_than(&target) {
-                    loop {
+                loop {
+                    if !probe.less_than(&target) {
                         if let Some(IteratorSourceInput {
                              lower_bound,
                              data,
@@ -113,9 +113,9 @@ pub fn iterator_source<
                         } else {
                             break None;
                         }
+                    } else {
+                        break Some(cap);
                     }
-                } else {
-                    Some(cap)
                 }
             });
         }
