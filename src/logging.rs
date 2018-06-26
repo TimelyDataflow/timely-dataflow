@@ -52,6 +52,50 @@ impl LoggerConfig {
             }),
         }
     }
+
+    /// Sets up the default loggers: disabled, unless either
+    /// TIMELY_WORKER_LOG_ADDR or TIMELY_COMM_LOG_ADDR are environment
+    /// variables set to the log destinations.
+    pub fn default_with_env() -> LoggerConfig {
+        use std::sync::Arc;
+        use std::rc::Rc;
+        use std::cell::RefCell;
+
+        ::logging::LoggerConfig {
+            timely_logging: match ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
+                Ok(addr) => {
+                    eprintln!("enabled WORKER logging to {}", addr);
+                    Arc::new(move |events_setup: ::logging::TimelySetup| {
+                        let addr = addr.clone();
+                        let logger = RefCell::new(::logging::BatchLogger::new((move |_setup| {
+                            use std::net::TcpStream;
+                            let send = TcpStream::connect(addr).unwrap();
+                            ::dataflow::operators::capture::EventWriter::new(send)
+                        })(events_setup)));
+                        Rc::new(::timely_communication::logging::BufferingLogger::new(
+                                events_setup, Box::new(move |data| logger.borrow_mut().publish_batch(data))))
+                    })
+                },
+                Err(_) => Arc::new(|_| ::timely_communication::logging::BufferingLogger::new_inactive()),
+            },
+            communication_logging: match ::std::env::var("TIMELY_COMM_LOG_ADDR") {
+                Ok(addr) => {
+                    eprintln!("enabled COMM logging to {}", addr);
+                    Arc::new(move |events_setup: ::timely_communication::logging::CommsSetup| {
+                        let addr = addr.clone();
+                        let logger = RefCell::new(::logging::BatchLogger::new((move |_setup| {
+                            use std::net::TcpStream;
+                            let send = TcpStream::connect(addr).unwrap();
+                            ::dataflow::operators::capture::EventWriter::new(send)
+                        })(events_setup)));
+                        Rc::new(::timely_communication::logging::BufferingLogger::new(
+                                events_setup, Box::new(move |data| logger.borrow_mut().publish_batch(data))))
+                    })
+                },
+                _ => Arc::new(|_| ::timely_communication::logging::BufferingLogger::new_inactive()),
+            }
+        }
+    }
 }
 
 impl Default for LoggerConfig {

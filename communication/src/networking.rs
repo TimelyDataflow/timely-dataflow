@@ -167,7 +167,8 @@ impl<W: Write> BinarySender<W> {
     fn send_loop(&mut self) {
         let mut stash = Vec::new();
 
-        // block until data to recv
+        // This blocks until there is data to receive, and should return an `Err(_)` once all matching `Sender` instances
+        // have been dropped. This should allow the method to return, and the send thread to cleanly exit on shutdown.
         while let Ok((header, buffer)) = self.sources.recv() {
 
             stash.push((header, buffer));
@@ -239,10 +240,10 @@ pub fn initialize_networking(
     let start_task = thread::spawn(move || start_connections(hosts1, my_index, noisy));
     let await_task = thread::spawn(move || await_connections(hosts2, my_index, noisy));
 
-    let mut results = try!(start_task.join().unwrap());
+    let mut results = start_task.join().unwrap()?;
 
     results.push(None);
-    let to_extend = try!(await_task.join().unwrap());
+    let to_extend = await_task.join().unwrap()?;
     results.extend(to_extend.into_iter());
 
     if noisy { println!("worker {}:\tinitialization complete", my_index) }
@@ -257,14 +258,14 @@ pub fn initialize_networking(
             let (reader_channels_s, reader_channels_r) = channel();
             let (sender_channels_s, sender_channels_r) = channel();
 
-            readers.push(reader_channels_s);    //
-            senders.push(sender_channels_s);    //
-
+            readers.push(reader_channels_s);
+            senders.push(sender_channels_s);
 
             {
                 let log_sender = log_sender.clone();
-                let stream = stream.try_clone().unwrap();
+                let stream = stream.try_clone()?;
                 // start senders and receivers associated with this stream
+                let join_guard =
                 thread::Builder::new().name(format!("send thread {}", index))
                                       .spawn(move || {
                                           let log_sender = log_sender(::logging::CommsSetup {
@@ -276,12 +277,18 @@ pub fn initialize_networking(
                                                                              sender_channels_r,
                                                                              log_sender);
                                           sender.send_loop()
-                                      }).unwrap();
+                                      })?;
+
+                // Forget the guard, so that the send thread is not detached from the main thread.
+                // This ensures that main thread awaits the completion of the send thread, and all
+                // of its transmissions, before exiting and potentially stranding other workers.
+                ::std::mem::forget(join_guard);
             }
 
             {
                 let log_sender = log_sender.clone();
-                let stream = stream.try_clone().unwrap();
+                let stream = stream.try_clone()?;
+                let _join_guard =
                 thread::Builder::new().name(format!("recv thread {}", index))
                                       .spawn(move || {
                                           let log_sender = log_sender(::logging::CommsSetup {
@@ -293,7 +300,13 @@ pub fn initialize_networking(
                                                                                reader_channels_r,
                                                                                log_sender);
                                           recver.recv_loop()
-                                      }).unwrap();
+                                      })?;
+
+                // We do not mem::forget the join_guard here, because we deem there to be no harm
+                // in closing the process and abandoning the receiver thread. All worker threads
+                // will have exited, and we don't expect that continuing to read has a benefit.
+                // We could introduce a "shutdown" message into the "protocol" which would confirm
+                // a clear conclusion to the interaction.
             }
 
         }
