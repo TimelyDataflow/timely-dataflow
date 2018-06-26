@@ -13,7 +13,6 @@ use timely_communication::{Allocate, Push, Pull, Data};
 use timely_communication::allocator::Thread;
 use timely_communication::allocator::thread::Pusher as ThreadPusher;
 use timely_communication::allocator::thread::Puller as ThreadPuller;
-use timely_communication::CommMessage;
 
 use dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{Bundle, Message};
@@ -35,14 +34,13 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
 /// A direct connection
 pub struct Pipeline;
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
-    type Pusher = ThreadPusher<CommMessage<Message<T, D>>>;
-    type Puller = ThreadPuller<CommMessage<Message<T, D>>>;
+    type Pusher = LogPusher<T, D, ThreadPusher<Bundle<T, D>>>;
+    type Puller = LogPuller<T, D, ThreadPuller<Bundle<T, D>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
         // ignore `&mut A` and use thread allocator
         let (pusher, puller) = Thread::new::<Bundle<T, D>>();
-        // (Pusher::new(pusher, allocator.index(), allocator.index(), identifier, None, logging.clone()),
-        //  Puller::new(puller, allocator.index(), identifier, None, logging.clone()))
-        (pusher, puller)
+        (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, None, logging.clone()),
+         LogPuller::new(puller, allocator.index(), identifier, None, logging.clone()))
     }
 }
 
@@ -62,13 +60,12 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
 impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
     // TODO: The closure in the type prevents us from naming it.
     //       Could specialize `ExchangePusher` to a time-free version.
-    type Pusher = Box<Push<CommMessage<Message<T, D>>>>;
-    type Puller = Box<Pull<CommMessage<Message<T, D>>>>;
+    type Pusher = Box<Push<Bundle<T, D>>>;
+    type Puller = Box<Pull<Bundle<T, D>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
-        // let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id, logging.clone())).collect::<Vec<_>>();
-        // (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Puller::new(receiver, allocator.index(), identifier, channel_id, logging.clone()))
-        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), receiver)
+        let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, channel_id, logging.clone())).collect::<Vec<_>>();
+        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, channel_id, logging.clone())))
     }
 }
 
@@ -95,110 +92,103 @@ impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&D)->u64+'st
 // }
 
 
-// /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
-// pub struct Pusher<T, D, P: Push<Message<T, D>>> {
-//     pusher: P,
-//     channel: usize,
-//     comm_channel: Option<usize>,
-//     counter: usize,
-//     source: usize,
-//     target: usize,
-//     phantom: ::std::marker::PhantomData<(T, D)>,
-//     logging: Logger,
-// }
-// impl<T, D, P: Push<Message<T, D>>> Pusher<T, D, P> {
-//     /// Allocates a new pusher.
-//     pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
-//         Pusher {
-//             pusher,
-//             channel,
-//             comm_channel,
-//             counter: 0,
-//             source,
-//             target,
-//             phantom: ::std::marker::PhantomData,
-//             logging,
-//         }
-//     }
-// }
+/// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
+pub struct LogPusher<T, D, P: Push<Bundle<T, D>>> {
+    pusher: P,
+    channel: usize,
+    comm_channel: Option<usize>,
+    counter: usize,
+    source: usize,
+    target: usize,
+    phantom: ::std::marker::PhantomData<(T, D)>,
+    logging: Logger,
+}
+impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
+    /// Allocates a new pusher.
+    pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
+        LogPusher {
+            pusher,
+            channel,
+            comm_channel,
+            counter: 0,
+            source,
+            target,
+            phantom: ::std::marker::PhantomData,
+            logging,
+        }
+    }
+}
 
-// impl<T, D, P: Push<Message<T, D>>> Push<(T, Content<D>)> for Pusher<T, D, P> {
-//     #[inline(always)]
-//     fn push(&mut self, pair: &mut Option<(T, Content<D>)>) {
-//         if let Some((time, data)) = pair.take() {
+impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
+    #[inline(always)]
+    fn push(&mut self, pair: &mut Option<Bundle<T, D>>) {
 
-//             let length = data.len();
+        if let Some(bundle) = pair {
+            let length = bundle.data.len();
+            let counter = self.counter;
+            self.counter += 1;
 
-//             let counter = self.counter;
+            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
+                is_send: true,
+                channel: self.channel,
+                comm_channel: self.comm_channel,
+                source: self.source,
+                target: self.target,
+                seq_no: counter,
+                length,
+            })));
+        }
 
-//             let mut message = Some(Message::new(time, data, self.source, self.counter));
-//             self.counter += 1;
-//             self.pusher.push(&mut message);
-//             *pair = message.map(|x| (x.time, x.data));
+        self.pusher.push(pair);
+    }
+}
 
-//             self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
-//                 is_send: true,
-//                 channel: self.channel,
-//                 comm_channel: self.comm_channel,
-//                 source: self.source,
-//                 target: self.target,
-//                 seq_no: counter,
-//                 length,
-//             })));
+/// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
+pub struct LogPuller<T, D, P: Pull<Bundle<T, D>>> {
+    puller: P,
+    channel: usize,
+    comm_channel: Option<usize>,
+    index: usize,
+    phantom: ::std::marker::PhantomData<(T, D)>,
+    logging: Logger,
+}
+impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
+    /// Allocates a new `Puller`.
+    pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
+        LogPuller {
+            puller,
+            channel,
+            comm_channel,
+            index,
+            phantom: ::std::marker::PhantomData,
+            logging,
+        }
+    }
+}
 
-//             // Log something about (index, counter, time?, length?);
-//         }
-//         else { self.pusher.done(); }
-//     }
-// }
+impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
+    #[inline(always)]
+    fn pull(&mut self) -> &mut Option<Bundle<T,D>> {
 
-// /// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
-// pub struct Puller<T, D, P: Pull<Message<T, D>>> {
-//     puller: P,
-//     current: Option<Message<T, D>>,
-//     channel: usize,
-//     comm_channel: Option<usize>,
-//     counter: usize,
-//     index: usize,
-//     logging: Logger,
-// }
-// impl<T, D, P: Pull<Message<T, D>>> Puller<T, D, P> {
-//     /// Allocates a new `Puller`.
-//     pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
-//         Puller {
-//             puller,
-//             channel,
-//             comm_channel,
-//             current: None,
-//             counter: 0,
-//             index,
-//             logging,
-//         }
-//     }
-// }
+        let result = self.puller.pull();
 
-// impl<T, D, P: Pull<Message<T, D>>> Pull<(T, Content<D>)> for Puller<T, D, P> {
-//     #[inline(always)]
-//     fn pull(&mut self) -> &mut Option<(T, Content<D>)> {
-//         let mut previous = self.current.take().map(|(time, data)| Message::new(time, data, self.index, self.counter));
-//         self.counter += 1;
+        if let Some(bundle) = result {
 
-//         ::std::mem::swap(&mut previous, self.puller.pull());
+            let channel = self.channel;
+            let comm_channel = self.comm_channel;
+            let target = self.index;
 
-//         if let Some(message) = previous.as_ref() {
+            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
+                is_send: false,
+                channel,
+                comm_channel,
+                source: bundle.from,
+                target,
+                seq_no: bundle.seq,
+                length: bundle.data.len(),
+            })));
+        }
 
-//             self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
-//                 is_send: false,
-//                 channel: self.channel,
-//                 comm_channel: self.comm_channel,
-//                 source: message.from,
-//                 target: self.index,
-//                 seq_no: message.seq,
-//                 length: message.data.len(),
-//             })));
-//         }
-
-//         self.current = previous.map(|message| (message.time, message.data));
-//         &mut self.current
-//     }
-// }
+        result
+    }
+}
