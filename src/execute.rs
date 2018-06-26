@@ -119,7 +119,7 @@ pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,S
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     // let logging_config = ::logging::blackhole();
-    execute_logging(config, Default::default(), func)
+    execute_logging(config, LoggerConfig::default_with_env(), func)
 }
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
@@ -207,7 +207,8 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>,
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-    execute_from_args_logging(iter, Default::default(), func)
+
+    execute_from_args_logging(iter, LoggerConfig::default_with_env(), func)
 }
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
@@ -237,3 +238,4 @@ pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
     execute_logging(try!(Configuration::from_args(iter)), logging_config, func)
 }
+
