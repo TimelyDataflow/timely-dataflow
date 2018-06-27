@@ -31,12 +31,16 @@ pub trait RecvEndpoint {
 
 pub mod vec {
 
+    use std::sync::{Arc, Mutex};
     use std::sync::mpsc::{Sender, Receiver, channel};
+    use std::collections::VecDeque;
 
     use super::{BytesExchange, SendEndpoint, RecvEndpoint};
 
     pub struct VecSendEndpoint {
-        send: Sender<Vec<u8>>,      // send full vectors
+        // in_flight: Arc<std::sync::atomic::AtomicUsize>,
+        // send: Sender<Vec<u8>>,      // send full vectors
+        send: Arc<Mutex<VecDeque<Vec<u8>>>>,
         recv: Receiver<Vec<u8>>,    // recv empty vectors
         balance: usize,             // #sent - #recv.
 
@@ -62,8 +66,14 @@ pub mod vec {
 
             let buffer = ::std::mem::replace(&mut self.buffer, Vec::new());
             if buffer.len() > 0 {
-                self.send.send(buffer).expect("VecSendEndpoint::send_buffer(): failed to send buffer");
-                self.balance += 1;
+                if let Ok(mut lock) = self.send.lock() {
+                    lock.push_back(buffer);
+                    self.balance += 1;
+                }
+                else {
+                    panic!("unable to acquire lock");
+                }
+                // self.send.send(buffer).expect("VecSendEndpoint::send_buffer(): failed to send buffer");
             }
             else {
                 if buffer.capacity() == self.default_size {
@@ -97,24 +107,32 @@ pub mod vec {
 
         fn publish(&mut self) {
             self.drain_recv();
-            if self.balance == 0 {
+            if self.send.lock().map(|queue| queue.is_empty()).expect("Failed to lock mutex") {
+            // if self.balance == 0 {
                 self.send_buffer();
             }
         }
     }
 
     pub struct VecRecvEndpoint {
-        recv: Receiver<Vec<u8>>,    // recv full vectors
+        recv: Arc<Mutex<VecDeque<Vec<u8>>>>,
+        // recv: Receiver<Vec<u8>>,    // recv full vectors
         send: Sender<Vec<u8>>,      // send empty vectors
     }
 
     impl RecvEndpoint for VecRecvEndpoint {
         type RecvBuffer = Vec<u8>;
         fn receive(&mut self) -> Option<Self::RecvBuffer> {
-            if let Ok(bytes) = self.recv.try_recv() {
-                Some(bytes)
+            if let Ok(mut lock) = self.recv.lock() {
+                lock.pop_front()
             }
-            else { None }
+            else {
+                panic!("Failed to lock mutex");
+            }
+            // if let Ok(bytes) = self.recv.try_recv() {
+            //     Some(bytes)
+            // }
+            // else { None }
         }
         fn recycle(&mut self, mut buffer: Self::RecvBuffer) {
             buffer.clear();
@@ -130,7 +148,10 @@ pub mod vec {
         type Recv = VecRecvEndpoint;
         fn new() -> (Self::Send, Self::Recv) {
 
-            let (send1, recv1) = channel();
+            let send1 = Arc::new(Mutex::new(VecDeque::new()));
+            let recv1 = send1.clone();
+
+            // let (send1, recv1) = channel();
             let (send2, recv2) = channel();
 
             let result1 = VecSendEndpoint {
