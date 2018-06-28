@@ -300,7 +300,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     ///
     /// This method finalizes the internal reachability of this `Subgraph`, and provides the corresponding
     /// information on to each of its children.
-    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [ChangeBatch<TOuter>]) {
+    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [ChangeBatch<TOuter>]) {
 
         // We must first translate `summaries` to summaries in the subgraph's timestamp type.
         // Each of these summaries correspond to dropping the inner timestamp coordinate and replacing
@@ -773,7 +773,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             //       alone leaves us in a weird state should progress messages get blocked by non-execution of
             //       e.g. the exchange operator in the exchange.rs example.
 
-            // if any_progress_updates || _was_recently_active || _outstanding_messages || _held_capabilities
+            if any_progress_updates || _was_recently_active || _outstanding_messages || _held_capabilities
             {
 
                 let self_id = self.id;  // avoid capturing `self` in logging closures.
@@ -843,12 +843,12 @@ impl<T: Timestamp> PerOperatorState<T> {
 
                 internal_activity
             }
-            // else {
-            //     // Active operators should always be scheduled, and should re-assert their activity if
-            //     // they want to be scheduled again. If we are here, it is because the operator declined
-            //     // to express activity explicitly.
-            //     false
-            // }
+            else {
+                // Active operators should always be scheduled, and should re-assert their activity if
+                // they want to be scheduled again. If we are here, it is because the operator declined
+                // to express activity explicitly.
+                false
+            }
         }
         else {
 
