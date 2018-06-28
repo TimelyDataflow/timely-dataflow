@@ -79,12 +79,12 @@ type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Syn
 fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<Vec<GenericBuilder>,String> {
     match config {
         Configuration::Thread => {
-            // Ok(vec![GenericBuilder::Thread(Thread)])
-            Ok(ProcessBinaryBuilder::new_vector(1).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
+            Ok(vec![GenericBuilder::Thread(Thread)])
+            // Ok(ProcessBinaryBuilder::new_vector(1).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
         },
         Configuration::Process(threads) => {
-            // Ok(Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect())
-            Ok(ProcessBinaryBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
+            Ok(Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect())
+            // Ok(ProcessBinaryBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
         },
         Configuration::Cluster(threads, process, addresses, report) => {
             if let Ok(stuff) = initialize_networking(addresses, process, threads, report, logger) {

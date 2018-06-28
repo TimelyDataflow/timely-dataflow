@@ -269,7 +269,7 @@ impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
             self.to_local.push(Rc::new(RefCell::new(VecDeque::new())));
         }
 
-        let puller = Box::new(Puller::new(self.to_local[channel_id].clone(), channel_id));
+        let puller = Box::new(Puller::new(self.to_local[channel_id].clone()));
 
         (pushes, puller, None)
     }
@@ -393,13 +393,12 @@ impl<T:Data, S:SendEndpoint> Push<Message<T>> for Pusher<T, S> {
 /// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
 /// allocation.
 struct Puller<T> {
-    channel: usize,
     current: Option<Message<T>>,
     receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
 }
 impl<T:Data> Puller<T> {
-    fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>, channel: usize) -> Puller<T> {
-        Puller { channel, current: None, receiver }
+    fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>) -> Puller<T> {
+        Puller { current: None, receiver }
     }
 }
 

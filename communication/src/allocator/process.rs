@@ -41,7 +41,7 @@ impl Allocate for Process {
             let mut pushers = Vec::new();
             let mut pullers = Vec::new();
             for _ in 0..self.peers {
-                let (s, r): (Sender<T>, Receiver<T>) = channel();
+                let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = channel();
                 pushers.push(Pusher { target: s });
                 pullers.push(Puller { source: r, current: None });
             }
@@ -54,21 +54,20 @@ impl Allocate for Process {
             channels.push(Box::new(to_box));
         }
 
+        let vector =
+        channels[self.allocated]
+            .downcast_mut::<(Vec<Option<(Vec<Pusher<Message<T>>>, Puller<Message<T>>)>>)>()
+            .expect("failed to correctly cast channel");
 
-        if let Some(ref mut vector) = channels[self.allocated].downcast_mut::<(Vec<Option<(Vec<Pusher<Message<T>>>, Puller<Message<T>>)>>)>() {
-            if let Some((send, recv)) = vector[self.index].take() {
-                self.allocated += 1;
-                let mut temp = Vec::new();
-                for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<Message<T>>>); }
-                return (temp, Box::new(recv) as Box<Pull<super::Message<T>>>, None)
-            }
-            else {
-                panic!("channel already consumed");
-            }
-        }
-        else {
-            panic!("failed to correctly cast channel");
-        }
+        let (send, recv) =
+        vector[self.index]
+            .take()
+            .expect("channel already consumed");
+
+        self.allocated += 1;
+        let mut temp = Vec::new();
+        for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<Message<T>>>); }
+        (temp, Box::new(recv) as Box<Pull<super::Message<T>>>, None)
     }
 }
 
