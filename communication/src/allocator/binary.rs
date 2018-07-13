@@ -113,7 +113,7 @@ impl<T:Data> Push<T> for Pusher<T> {
             self.sender.send((header, bytes)).ok();     // TODO : should be unwrap()?
             self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Serialization(::logging::SerializationEvent {
                     seq_no: Some(self.header.seqno),
-                    is_start: true,
+                    is_start: false,
                 })));
             self.header.seqno += 1;
         }
