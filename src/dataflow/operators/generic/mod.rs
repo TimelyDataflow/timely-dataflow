@@ -11,7 +11,7 @@ mod notificator;
 mod operator_info;
 
 pub use self::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
-pub use self::notificator::{Notificator, FrontierNotificator};
+pub use self::notificator::{Notificator, FrontierNotificator, TotalOrderFrontierNotificator};
 
 pub use self::unary::Unary;
 pub use self::binary::Binary;

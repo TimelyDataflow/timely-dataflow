@@ -27,7 +27,7 @@ pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
 
 pub use self::generic::{Unary, Binary, Operator};
-pub use self::generic::{Notificator, FrontierNotificator};
+pub use self::generic::{Notificator, FrontierNotificator, TotalOrderFrontierNotificator};
 
 pub use self::reclock::Reclock;
 pub use self::count::Accumulate;
