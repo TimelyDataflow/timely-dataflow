@@ -526,20 +526,15 @@ impl<T: Timestamp, D> Notify<T, D> for FrontierNotificator<T, D> {
 ///         let (in2_handle, in2) = scope.new_input();
 ///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
 ///             let mut notificator = TotalOrderFrontierNotificator::new();
-///             let mut stash = HashMap::new();
 ///             move |input1, input2, output| {
 ///                 while let Some((time, data)) = input1.next() {
-///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
-///                     notificator.notify_at(time.retain());
+///                     notificator.notify_at_data(time.retain(), data.drain(..));
 ///                 }
 ///                 while let Some((time, data)) = input2.next() {
-///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
-///                     notificator.notify_at(time.retain());
+///                     notificator.notify_at_data(time.retain(), data.drain(..));
 ///                 }
-///                 notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _| {
-///                     if let Some(mut vec) = stash.remove(time.time()) {
-///                         output.session(&time).give_iterator(vec.drain(..));
-///                     }
+///                 notificator.for_each_data(&[input1.frontier(), input2.frontier()], |time, mut vec, _| {
+///                     output.session(&time).give_iterator(vec.drain(..));
 ///                 });
 ///             }
 ///         }).inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
