@@ -12,17 +12,12 @@ use progress::nested::product::Product;
 
 use abomonation::Abomonation;
 
-// TODO : Change Copy requirement to Clone;
 /// A composite trait for types that serve as timestamps in timely dataflow.
 pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation+Hash+Ord {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
 }
 
-// TODO : Change Copy requirement to Clone
-// TODO : Change `results_in` and perhaps `followed_by` to return an `Option`, indicating no path.
-// TODO : This can be important when a summary would "overflow", as we want neither to overflow,
-// TODO : nor wrap around, nor saturate.
 /// A summary of how a timestamp advances along a timely dataflow path.
 pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// Advances a timestamp according to the timestamp actions on the path.
