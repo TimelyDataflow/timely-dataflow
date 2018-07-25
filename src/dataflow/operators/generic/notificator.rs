@@ -102,10 +102,10 @@ impl<'a, T: Timestamp, D, I: Notify<T, D>> Notificator<'a, T, D, I> {
     /// representing how many capabilities were requested for that specific timestamp.
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, Vec<D>, &mut Self)>(&mut self, mut logic: F) {
-        while let Some((cap, count)) = self.next() {
+        while let Some((cap, data)) = self.next() {
             self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
                     ::logging::GuardedProgressEvent { is_start: true })));
-            logic(cap, count, self);
+            logic(cap, data, self);
             self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
                     ::logging::GuardedProgressEvent { is_start: false })));
         }
@@ -141,7 +141,7 @@ impl<'a, T: Timestamp, I: Notify<T, ()>> Notificator<'a, T, (), I> {
 /// ```
     #[inline]
     pub fn notify_at(&mut self, cap: Capability<T>) {
-        self.inner.notify_at_frontiered(cap, Some(()), self.frontiers);
+        self.notify_at_data(cap, Some(()));
     }
 
 }
