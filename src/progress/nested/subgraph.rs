@@ -300,7 +300,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
     ///
     /// This method finalizes the internal reachability of this `Subgraph`, and provides the corresponding
     /// information on to each of its children.
-    fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [ChangeBatch<TOuter>]) {
+    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [ChangeBatch<TOuter>]) {
 
         // We must first translate `summaries` to summaries in the subgraph's timestamp type.
         // Each of these summaries correspond to dropping the inner timestamp coordinate and replacing

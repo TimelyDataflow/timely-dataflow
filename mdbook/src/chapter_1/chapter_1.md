@@ -24,4 +24,4 @@ This simple task is much harder in a dataflow setting, where numbers arrive as i
 
 If we combine dataflow program structure with timestamped data in such a way that as data move along the dataflow their timestamps only increase, we are able to reason about the *progress* of our computation. More specifically, at any component in the dataflow, we can reason about which timestamps we may yet see in the future. Timestamps that are no longer possible are considered "passed", and components can react to this information as they see fit.
 
-Continual information about the progress of a computation is only basis of coordination in timely dataflow, and is the lightest touch we could think of.
+Continual information about the progress of a computation is the only basis of coordination in timely dataflow, and is the lightest touch we could think of.
