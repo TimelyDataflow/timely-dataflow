@@ -13,6 +13,7 @@ pub mod process;
 pub mod binary;
 pub mod generic;
 pub mod process_binary;
+pub mod process_binary_neu;
 
 use {Data, Push, Pull};
 
