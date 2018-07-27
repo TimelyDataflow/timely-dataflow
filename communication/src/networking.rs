@@ -234,19 +234,7 @@ pub fn initialize_networking(
     addresses: Vec<String>, my_index: usize, threads: usize, noisy: bool, log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Binary>> {
 
     let processes = addresses.len();
-    let hosts1 = Arc::new(addresses);
-    let hosts2 = hosts1.clone();
-
-    let start_task = thread::spawn(move || start_connections(hosts1, my_index, noisy));
-    let await_task = thread::spawn(move || await_connections(hosts2, my_index, noisy));
-
-    let mut results = start_task.join().unwrap()?;
-
-    results.push(None);
-    let to_extend = await_task.join().unwrap()?;
-    results.extend(to_extend.into_iter());
-
-    if noisy { println!("worker {}:\tinitialization complete", my_index) }
+    let mut results = create_sockets(addresses, my_index, noisy)?;
 
     let mut readers = Vec::new();   // handles to the BinaryReceivers (to present new channels)
     let mut senders = Vec::new();   // destinations for serialized data (to send serialized data)
@@ -266,18 +254,17 @@ pub fn initialize_networking(
                 let stream = stream.try_clone()?;
                 // start senders and receivers associated with this stream
                 let join_guard =
-                thread::Builder::new().name(format!("send thread {}", index))
-                                      .spawn(move || {
-                                          let log_sender = log_sender(::logging::CommsSetup {
-                                              process: my_index,
-                                              sender: true,
-                                              remote: Some(index),
-                                          });
-                                          let mut sender = BinarySender::new(BufWriter::with_capacity(1 << 20, stream),
-                                                                             sender_channels_r,
-                                                                             log_sender);
-                                          sender.send_loop()
-                                      })?;
+                thread::Builder::new()
+                    .name(format!("send thread {}", index))
+                    .spawn(move || {
+                        let log_sender = log_sender(::logging::CommsSetup {
+                            process: my_index,
+                            sender: true,
+                            remote: Some(index),
+                        });
+                        BinarySender::new(BufWriter::with_capacity(1 << 20, stream), sender_channels_r,log_sender)
+                            .send_loop()
+                    })?;
 
                 // Forget the guard, so that the send thread is not detached from the main thread.
                 // This ensures that main thread awaits the completion of the send thread, and all
@@ -289,18 +276,17 @@ pub fn initialize_networking(
                 let log_sender = log_sender.clone();
                 let stream = stream.try_clone()?;
                 let _join_guard =
-                thread::Builder::new().name(format!("recv thread {}", index))
-                                      .spawn(move || {
-                                          let log_sender = log_sender(::logging::CommsSetup {
-                                              process: my_index,
-                                              sender: false,
-                                              remote: Some(index),
-                                          });
-                                          let mut recver = BinaryReceiver::new(stream,
-                                                                               reader_channels_r,
-                                                                               log_sender);
-                                          recver.recv_loop()
-                                      })?;
+                thread::Builder::new()
+                    .name(format!("recv thread {}", index))
+                    .spawn(move || {
+                        let log_sender = log_sender(::logging::CommsSetup {
+                            process: my_index,
+                            sender: false,
+                            remote: Some(index),
+                        });
+                        BinaryReceiver::new(stream, reader_channels_r, log_sender)
+                            .recv_loop()
+                    })?;
 
                 // We do not mem::forget the join_guard here, because we deem there to be no harm
                 // in closing the process and abandoning the receiver thread. All worker threads
@@ -330,6 +316,26 @@ pub fn initialize_networking(
     Ok(results)
 }
 
+
+pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
+
+    let hosts1 = Arc::new(addresses);
+    let hosts2 = hosts1.clone();
+
+    let start_task = thread::spawn(move || start_connections(hosts1, my_index, noisy));
+    let await_task = thread::spawn(move || await_connections(hosts2, my_index, noisy));
+
+    let mut results = start_task.join().unwrap()?;
+    results.push(None);
+    let to_extend = await_task.join().unwrap()?;
+    results.extend(to_extend.into_iter());
+
+    if noisy { println!("worker {}:\tinitialization complete", my_index) }
+
+    Ok(results)
+}
+
+
 // result contains connections [0, my_index - 1].
 fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..my_index).map(|_| None).collect();
@@ -339,7 +345,7 @@ fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
             match TcpStream::connect(&addresses[index][..]) {
                 Ok(mut stream) => {
                     stream.set_nodelay(true).expect("set_nodelay call failed");
-                    try!(stream.write_u64::<LittleEndian>(my_index as u64));
+                    stream.write_u64::<LittleEndian>(my_index as u64)?;
                     results[index as usize] = Some(stream);
                     if noisy { println!("worker {}:\tconnection to worker {}", my_index, index); }
                     connected = true;
@@ -361,9 +367,9 @@ fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) 
     let listener = try!(TcpListener::bind(&addresses[my_index][..]));
 
     for _ in (my_index + 1) .. addresses.len() {
-        let mut stream = try!(listener.accept()).0;
+        let mut stream = listener.accept()?.0;
         stream.set_nodelay(true).expect("set_nodelay call failed");
-        let identifier = try!(stream.read_u64::<LittleEndian>()) as usize;
+        let identifier = stream.read_u64::<LittleEndian>()? as usize;
         results[identifier - my_index - 1] = Some(stream);
         if noisy { println!("worker {}:\tconnection from worker {}", my_index, identifier); }
     }

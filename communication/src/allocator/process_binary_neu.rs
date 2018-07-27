@@ -19,6 +19,7 @@ pub struct SharedQueue<T> {
 impl<T> SharedQueue<T> {
     pub fn push(&mut self, bytes: T) { self.queue.lock().expect("unable to lock shared queue").push_back(bytes) }
     pub fn pop(&mut self) -> Option<T> { self.queue.lock().expect("unable to lock shared queue").pop_front() }
+    pub fn drain_into(&mut self, dest: &mut Vec<T>) { let mut lock = self.queue.lock().expect("unable to lock shared queue"); dest.extend(lock.drain(..)); }
     pub fn is_empty(&self) -> bool { self.queue.lock().expect("unable to lock shared queue").is_empty() }
     pub fn is_done(&self) -> bool { Arc::strong_count(&self.queue) == 1 }
     pub fn new() -> Self { SharedQueue { queue: Arc::new(Mutex::new(VecDeque::new())) } }
@@ -45,7 +46,7 @@ pub trait BytesExchange {
     ///
     /// Importantly, the Send side may share state to coalesce the buffering and
     /// transmission of records. That is why there are `Rc<RefCell<_>>` things there.
-    fn new(&mut self, worker: usize) -> (Vec<Self::Send>, Vec<Self::Recv>);
+    fn next(&mut self) -> Option<(Vec<Self::Send>, Vec<Self::Recv>)>;
 }
 
 /// A type that can provide and publish writeable binary buffers.
@@ -211,23 +212,27 @@ pub mod local {
     impl BytesExchange for LocalBytesExchange {
         type Send = VecSendEndpoint;
         type Recv = VecRecvEndpoint;
-        fn new(&mut self, worker: usize) -> (Vec<Self::Send>, Vec<Self::Recv>) {
+        fn next(&mut self) -> Option<(Vec<Self::Send>, Vec<Self::Recv>)> {
 
-            let mut sends = Vec::with_capacity(self.forward.len());
+            if self.counter < self.forward.len() {
 
-            for forward in self.forward[self.counter].iter() {
-                sends.push(VecSendEndpoint::new(forward.clone()));
+                let mut sends = Vec::with_capacity(self.forward.len());
+
+                for forward in self.forward[self.counter].iter() {
+                    sends.push(VecSendEndpoint::new(forward.clone()));
+                }
+
+                let mut recvs = Vec::with_capacity(self.forward.len());
+
+                for forward in self.forward.iter() {
+                    recvs.push(VecRecvEndpoint::new(forward[self.counter].clone()));
+                }
+
+                self.counter += 1;
+
+                Some((sends, recvs))
             }
-
-            let mut recvs = Vec::with_capacity(self.forward.len());
-
-            for forward in self.forward.iter() {
-                recvs.push(VecRecvEndpoint::new(forward[self.counter].clone()));
-            }
-
-            self.counter += 1;
-
-            (sends, recvs)
+            else { None }
         }
     }
 }
@@ -249,7 +254,6 @@ pub mod tcp {
         forward: Vec<Vec<SharedQueue<Bytes>>>,
         /// Reverse[i,j]: to process i from worker j.
         reverse: Vec<Vec<SharedQueue<Bytes>>>,
-        counter: usize,
     }
 
     impl BytesExchange for TcpBytesExchange {
@@ -260,32 +264,31 @@ pub mod tcp {
         // Returns two vectors of length #processes - 1.
         // The first contains destinations to send to remote processes,
         // The second contains sources to receive from remote processes.
-        fn new(&mut self, worker: usize) -> (Vec<Self::Send>, Vec<Self::Recv>) {
+        fn next(&mut self) -> Option<(Vec<Self::Send>, Vec<Self::Recv>)> {
 
-            let mut sends = Vec::with_capacity(self.forward.len());
-            for queue in self.forward[self.counter].iter() {
-                sends.push(VecSendEndpoint::new(queue.clone()));
+            if !self.forward.is_empty() && !self.reverse.is_empty() {
+                Some((
+                    self.forward.remove(0).into_iter().map(|x| VecSendEndpoint::new(x)).collect(),
+                    self.reverse.remove(0).into_iter().map(|x| VecRecvEndpoint::new(x)).collect(),
+                ))
             }
-
-            let mut recvs = Vec::with_capacity(self.forward.len());
-            for queue in self.reverse[self.counter].iter() {
-                recvs.push(VecRecvEndpoint::new(queue.clone()));
+            else {
+                None
             }
-
-            self.counter += 1;
-
-            (sends, recvs)
         }
     }
 
     impl TcpBytesExchange {
-        fn new() -> Self {
-            unimplemented!()
+        pub fn new(forward: Vec<Vec<SharedQueue<Bytes>>>, reverse: Vec<Vec<SharedQueue<Bytes>>>) -> Self {
+            TcpBytesExchange {
+                forward,
+                reverse,
+            }
         }
     }
 
     // Allocates local and remote queue pairs, respectively.
-    fn allocate_queue_pairs(local: usize, remote: usize) -> (Vec<Vec<SharedQueue<Bytes>>>, Vec<Vec<SharedQueue<Bytes>>>) {
+    pub fn allocate_queue_pairs(local: usize, remote: usize) -> (Vec<Vec<SharedQueue<Bytes>>>, Vec<Vec<SharedQueue<Bytes>>>) {
 
         // type annotations necessary despite return signature because ... Rust.
         let local_to_remote: Vec<Vec<_>> = (0 .. local).map(|_| (0 .. remote).map(|_| SharedQueue::new()).collect()).collect();
@@ -299,7 +302,7 @@ pub mod tcp {
     /// The `BinaryReceiver` repeatedly reads binary data from its reader into
     /// a binary Bytes slice which can be broken off and handed to recipients as
     /// messages become complete.
-    struct BinaryReceiver<R: Read> {
+    pub struct BinaryReceiver<R: Read> {
 
         worker_offset:  usize,
 
@@ -316,7 +319,7 @@ pub mod tcp {
 
     impl<R: Read> BinaryReceiver<R> {
 
-        fn new(
+        pub fn new(
             reader: R,
             targets: Vec<SharedQueue<Bytes>>,
             worker_offset: usize,
@@ -362,7 +365,7 @@ pub mod tcp {
             self.in_progress.push(Some(old_buffer));
         }
 
-        fn recv_loop(&mut self) {
+        pub fn recv_loop(&mut self) {
 
             // Each loop iteration adds to `self.Bytes` and consumes all complete messages.
             // At the start of each iteration, `self.buffer[..self.length]` represents valid
@@ -374,6 +377,18 @@ pub mod tcp {
 
             loop {
 
+                // Attempt to read some more bytes into self.buffer.
+                self.length += self.reader.read(&mut self.buffer[self.length ..]).unwrap_or(0);
+
+                // Consume complete messages from the front of self.buffer.
+                while let Some(header) = MessageHeader::try_read(&mut &self.buffer[.. self.length]) {
+                    // TODO: Consolidate message sequences sent to the same worker.
+                    let peeled_bytes = header.required_bytes();
+                    let bytes = self.buffer.extract_to(peeled_bytes);
+                    self.length -= peeled_bytes;
+                    self.targets[header.target - self.worker_offset].push(bytes);
+                }
+
                 // If our buffer is full we should copy it to a new buffer.
                 if self.length == self.buffer.len() {
                     // If full and not complete, we must increase the size.
@@ -382,72 +397,41 @@ pub mod tcp {
                     }
                     self.refresh_buffer();
                 }
-
-                // Attempt to read some more bytes into self.buffer.
-                self.length = self.reader.read(&mut self.buffer[self.length ..]).unwrap_or(0);
-
-                // Consume complete messages from the front of self.buffer.
-                while let Some(header) = MessageHeader::try_read(&mut &self.buffer[.. self.length]) {
-
-                    self.log_sender
-                        .when_enabled(|l|
-                            l.log(::logging::CommsEvent::Communication(
-                                ::logging::CommunicationEvent {
-                                    is_send: false,
-                                    comm_channel: header.channel,
-                                    source: header.source,
-                                    target: header.target,
-                                    seqno: header.seqno,
-                                })
-                            )
-                        );
-
-                    // TODO: Consolidate message sequences sent to the same worker.
-                    let bytes = self.buffer.extract_to(header.required_bytes());
-                    self.targets[header.target - self.worker_offset].push(bytes);
-                }
             }
         }
     }
 
-    // structure in charge of sending data to a Writer, for example the network
-    struct BinarySender<W: Write> {
+    // structure in charge of sending data to a Writer, for example the network.
+    pub struct BinarySender<W: Write> {
         writer:     W,
         sources:    Vec<SharedQueue<Bytes>>,
         log_sender: ::logging::CommsLogger,
     }
 
     impl<W: Write> BinarySender<W> {
-        fn new(writer: W, sources: Vec<SharedQueue<Bytes>>, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
+        pub fn new(writer: W, sources: Vec<SharedQueue<Bytes>>, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
             BinarySender { writer, sources, log_sender }
         }
 
-        fn send_loop(&mut self) {
+        pub fn send_loop(&mut self) {
 
             let mut stash = Vec::new();
-
-            // TODO: The previous TCP code exited cleanly when all inputs were dropped.
-            //       Here we don't have inputs that drop, but perhaps we can instead
-            //       notice when the other side has hung up (the `Arc` in `SharedQueue`).
-
             while !self.sources.is_empty() {
 
                 for source in self.sources.iter_mut() {
-                    while let Some(bytes) = source.pop() {
-                        stash.push(bytes);
-                    }
+                    source.drain_into(&mut stash);
                 }
 
                 // If we got zero data, check that everyone is still alive.
                 if stash.is_empty() {
                     self.sources.retain(|x| !x.is_done());
+                    self.writer.flush().expect("Failed to flush writer.");
                 }
 
                 for bytes in stash.drain(..) {
-                    self.writer.write_all(&bytes[..]);
+                    self.writer.write_all(&bytes[..]).expect("Write failure in send_loop.");
                 }
 
-                self.writer.flush().unwrap();    // <-- because writer is buffered
             }
         }
     }
@@ -481,7 +465,7 @@ impl<BE: BytesExchange> ProcessBinaryBuilder<BE> {
             .into_iter()
             .enumerate()
             .map(|(index, inner)| {
-                let (sends, recvs) = byte_exchanger.new(my_process * threads + index);
+                let (sends, recvs) = byte_exchanger.next().unwrap();
                 ProcessBinaryBuilder {
                     inner,
                     index: my_process * threads + index,
@@ -631,6 +615,94 @@ impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
         // }
     }
 }
+
+/// Initializes network connections
+pub fn initialize_networking(
+    addresses: Vec<String>,
+    my_index: usize,
+    threads: usize,
+    noisy: bool,
+    log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>)
+-> ::std::io::Result<Vec<ProcessBinaryBuilder<tcp::TcpBytesExchange>>> {
+
+    let processes = addresses.len();
+
+    use networking::create_sockets;
+    let mut results = create_sockets(addresses, my_index, noisy)?;
+
+    // Send and recv connections between local workers and remote processes.
+    let (local_send, remote_recv) = tcp::allocate_queue_pairs(threads, results.len() - 1);
+    let (local_recv, remote_send) = tcp::allocate_queue_pairs(threads, results.len() - 1);
+
+    let mut remote_recv_iter = remote_recv.into_iter();
+    let mut remote_send_iter = remote_send.into_iter();
+
+    // for each process, if a stream exists (i.e. not local) ...
+    for index in 0..results.len() {
+
+        if let Some(stream) = results[index].take() {
+
+            let remote_recv = remote_recv_iter.next().unwrap();
+            let remote_send = remote_send_iter.next().unwrap();
+
+            {
+                let log_sender = log_sender.clone();
+                let stream = stream.try_clone()?;
+                // start senders and receivers associated with this stream
+                let join_guard =
+                ::std::thread::Builder::new()
+                    .name(format!("send thread {}", index))
+                    .spawn(move || {
+
+                        let log_sender = log_sender(::logging::CommsSetup {
+                            process: my_index,
+                            sender: true,
+                            remote: Some(index),
+                        });
+
+                        let stream = ::std::io::BufWriter::with_capacity(1 << 20, stream);
+                        tcp::BinarySender::new(stream, remote_recv, log_sender)
+                            .send_loop()
+                    })?;
+
+                // Forget the guard, so that the send thread is not detached from the main thread.
+                // This ensures that main thread awaits the completion of the send thread, and all
+                // of its transmissions, before exiting and potentially stranding other workers.
+                ::std::mem::forget(join_guard);
+            }
+
+            {
+                let log_sender = log_sender.clone();
+                let stream = stream.try_clone()?;
+                let _join_guard =
+                ::std::thread::Builder::new()
+                    .name(format!("recv thread {}", index))
+                    .spawn(move || {
+                        let log_sender = log_sender(::logging::CommsSetup {
+                            process: my_index,
+                            sender: false,
+                            remote: Some(index),
+                        });
+                        tcp::BinaryReceiver::new(stream, remote_send, threads * my_index, log_sender)
+                            .recv_loop()
+                    })?;
+
+                // We do not mem::forget the join_guard here, because we deem there to be no harm
+                // in closing the process and abandoning the receiver thread. All worker threads
+                // will have exited, and we don't expect that continuing to read has a benefit.
+                // We could introduce a "shutdown" message into the "protocol" which would confirm
+                // a clear conclusion to the interaction.
+            }
+
+        }
+    }
+
+    let byte_exchange = tcp::TcpBytesExchange::new(local_send, local_recv);
+    let builders = ProcessBinaryBuilder::new_vector(byte_exchange, my_index, threads, processes);
+
+    Ok(builders)
+}
+
 
 /// An adapter into which one may push elements of type `T`.
 ///

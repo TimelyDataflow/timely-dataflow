@@ -8,7 +8,7 @@ use getopts;
 use std::sync::Arc;
 
 use allocator::{Thread, Process, Generic, GenericBuilder};
-use allocator::process_binary::ProcessBinaryBuilder;
+// use allocator::process_binary::ProcessBinaryBuilder;
 use networking::initialize_networking;
 
 /// Possible configurations for the communication infrastructure.
