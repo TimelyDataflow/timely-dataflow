@@ -104,7 +104,7 @@ impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
         for target_index in 0 .. self.peers() {
 
             // TODO: crappy place to hardcode this rule.
-            let process_id = target_index / inner_peers;
+            let mut process_id = target_index / inner_peers;
 
             if process_id == self.index / inner_peers {
                 pushes.push(inner_sends.remove(0));
@@ -120,6 +120,7 @@ impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
                 };
 
                 // create, box, and stash new process_binary pusher.
+                if process_id > self.index / inner_peers { process_id -= 1; }
                 pushes.push(Box::new(Pusher::new(header, self.sends[process_id].clone())));
             }
         }

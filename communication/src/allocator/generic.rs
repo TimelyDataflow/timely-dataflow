@@ -5,6 +5,11 @@
 
 use allocator::{Allocate, Message, Thread, Process, Binary};
 use allocator::process_binary::{ProcessBinary, ProcessBinaryBuilder};
+
+use allocator::zero_copy::allocator::ProcessBinary as ZeroCopyAllocator;
+use allocator::zero_copy::allocator::ProcessBinaryBuilder as ZeroCopyBuilder;
+use allocator::zero_copy::binary::TcpBytesExchange;
+
 use {Push, Pull, Data};
 
 /// Enumerates known implementors of `Allocate`.
@@ -14,6 +19,7 @@ pub enum Generic {
     Process(Process),
     Binary(Binary),
     ProcessBinary(ProcessBinary<::allocator::process_binary::vec::VecBytesExchange>),
+    ZeroCopy(ZeroCopyAllocator<TcpBytesExchange>),
 }
 
 impl Generic {
@@ -24,6 +30,7 @@ impl Generic {
             &Generic::Process(ref p) => p.index(),
             &Generic::Binary(ref b) => b.index(),
             &Generic::ProcessBinary(ref pb) => pb.index(),
+            &Generic::ZeroCopy(ref z) => z.index(),
         }
     }
     /// The number of workers.
@@ -33,6 +40,7 @@ impl Generic {
             &Generic::Process(ref p) => p.peers(),
             &Generic::Binary(ref b) => b.peers(),
             &Generic::ProcessBinary(ref pb) => pb.peers(),
+            &Generic::ZeroCopy(ref z) => z.peers(),
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
@@ -42,6 +50,7 @@ impl Generic {
             &mut Generic::Process(ref mut p) => p.allocate(),
             &mut Generic::Binary(ref mut b) => b.allocate(),
             &mut Generic::ProcessBinary(ref mut pb) => pb.allocate(),
+            &mut Generic::ZeroCopy(ref mut z) => z.allocate(),
         }
     }
 
@@ -51,6 +60,7 @@ impl Generic {
             &mut Generic::Process(ref mut p) => p.pre_work(),
             &mut Generic::Binary(ref mut b) => b.pre_work(),
             &mut Generic::ProcessBinary(ref mut pb) => pb.pre_work(),
+            &mut Generic::ZeroCopy(ref mut z) => z.pre_work(),
         }
     }
     pub fn post_work(&mut self) {
@@ -59,6 +69,7 @@ impl Generic {
             &mut Generic::Process(ref mut p) => p.post_work(),
             &mut Generic::Binary(ref mut b) => b.post_work(),
             &mut Generic::ProcessBinary(ref mut pb) => pb.post_work(),
+            &mut Generic::ZeroCopy(ref mut z) => z.post_work(),
         }
     }
 }
@@ -85,6 +96,7 @@ pub enum GenericBuilder {
     Process(Process),
     Binary(Binary),
     ProcessBinary(ProcessBinaryBuilder<::allocator::process_binary::vec::VecBytesExchange>),
+    ZeroCopy(ZeroCopyBuilder<TcpBytesExchange>),
 }
 
 impl GenericBuilder {
@@ -94,6 +106,7 @@ impl GenericBuilder {
             GenericBuilder::Process(p) => Generic::Process(p),
             GenericBuilder::Binary(b) => Generic::Binary(b),
             GenericBuilder::ProcessBinary(pb) => Generic::ProcessBinary(pb.build()),
+            GenericBuilder::ZeroCopy(z) => Generic::ZeroCopy(z.build()),
         }
     }
 }

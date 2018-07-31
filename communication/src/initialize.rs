@@ -9,7 +9,8 @@ use std::sync::Arc;
 
 use allocator::{Thread, Process, Generic, GenericBuilder};
 // use allocator::process_binary::ProcessBinaryBuilder;
-use networking::initialize_networking;
+// use networking::initialize_networking;
+use allocator::zero_copy::initialize::initialize_networking;
 
 /// Possible configurations for the communication infrastructure.
 pub enum Configuration {
@@ -88,7 +89,7 @@ fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<Vec<Ge
         },
         Configuration::Cluster(threads, process, addresses, report) => {
             if let Ok(stuff) = initialize_networking(addresses, process, threads, report, logger) {
-                Ok(stuff.into_iter().map(|x| GenericBuilder::Binary(x)).collect())
+                Ok(stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect())
             }
             else {
                 Err("failed to initialize networking".to_owned())
