@@ -52,7 +52,7 @@ impl BytesSendEndpoint {
         for shared in self.in_progress.iter_mut() {
             if let Some(bytes) = shared.take() {
                 match bytes.try_recover::<Vec<u8>>() {
-                    Ok(vec)    => { self.stash.push(vec); },
+                    Ok(mut vec)    => { vec.clear(); self.stash.push(vec); },
                     Err(bytes) => { *shared = Some(bytes); },
                 }
             }
@@ -98,6 +98,8 @@ impl SendEndpoint for BytesSendEndpoint {
 
     fn reserve(&mut self, capacity: usize) -> &mut Self::SendBuffer {
 
+        // println!("reserving {:?} bytes", capacity);
+
         // If we don't have enough capacity in `self.buffer`...
         if self.buffer.capacity() < capacity + self.buffer.len() {
             self.send_buffer();
@@ -120,6 +122,9 @@ impl SendEndpoint for BytesSendEndpoint {
         self.harvest_shared();
         if self.send.is_empty() {
             self.send_buffer();
+        }
+        else {
+            // println!("delaying publication!");
         }
     }
 }

@@ -271,6 +271,11 @@ impl<T:Data> Pull<Message<T>> for Puller<T> {
                 .pop_front()
                 .map(|bytes| unsafe { Message::from_bytes(bytes) });
 
+            // use std::ops::Deref;
+            // if let Some(ref mut x) = self.current {
+            //     println!("decoded: {:?}", x.as_ref_or_mut().deref());
+            // }
+
             &mut self.current
         }
     }

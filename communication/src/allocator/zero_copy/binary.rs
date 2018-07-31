@@ -102,7 +102,7 @@ impl<R: Read> BinaryReceiver<R> {
             for shared in self.in_progress.iter_mut() {
                 if let Some(bytes) = shared.take() {
                     match bytes.try_recover::<Vec<u8>>() {
-                        Ok(vec)    => { self.stash.push(vec); },
+                        Ok(mut vec)    => { self.stash.push(vec); },
                         Err(bytes) => { *shared = Some(bytes); },
                     }
                 }
@@ -113,10 +113,12 @@ impl<R: Read> BinaryReceiver<R> {
         let self_size = self.size;
         self.stash.retain(|x| x.capacity() == self_size);
 
-
-        let new_buffer = self.stash.pop().unwrap_or_else(|| vec![0; 1 << self.size]);
+        let new_buffer = self.stash.pop().unwrap_or_else(|| vec![0; self.size]);
         let new_buffer = Bytes::from(new_buffer);
         let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
+
+        debug_assert!(self.length <= old_buffer.len());
+        debug_assert!(self.length <= self.buffer.len());
 
         self.buffer[.. self.length].copy_from_slice(&old_buffer[.. self.length]);
 
@@ -136,7 +138,9 @@ impl<R: Read> BinaryReceiver<R> {
         loop {
 
             // Attempt to read some more bytes into self.buffer.
-            self.length += self.reader.read(&mut self.buffer[self.length ..]).unwrap_or(0);
+            let read = self.reader.read(&mut self.buffer[self.length ..]).unwrap_or(0);
+            // if read > 0 { println!("read from reader: {:?} bytes", read); }
+            self.length += read;
 
             // Consume complete messages from the front of self.buffer.
             while let Some(header) = MessageHeader::try_read(&mut &self.buffer[.. self.length]) {
@@ -144,6 +148,7 @@ impl<R: Read> BinaryReceiver<R> {
                 let peeled_bytes = header.required_bytes();
                 let bytes = self.buffer.extract_to(peeled_bytes);
                 self.length -= peeled_bytes;
+                // println!("decoded message with {:?} bytes", bytes.len());
                 self.targets[header.target - self.worker_offset].push(bytes);
             }
 
@@ -152,6 +157,7 @@ impl<R: Read> BinaryReceiver<R> {
                 // If full and not complete, we must increase the size.
                 if self.length == self.size {
                     self.size *= 2;
+                    println!("new size: {:?}", self.size);
                 }
                 self.refresh_buffer();
             }
@@ -187,6 +193,7 @@ impl<W: Write> BinarySender<W> {
             }
 
             for bytes in stash.drain(..) {
+                // println!("sending {} bytes", bytes.len());
                 self.writer.write_all(&bytes[..]).expect("Write failure in send_loop.");
             }
 
