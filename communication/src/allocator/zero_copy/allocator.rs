@@ -1,6 +1,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use std::sync::{Arc, mpsc::{channel, Sender, Receiver}};
 
 use bytes::arc::Bytes;
 
@@ -9,57 +10,82 @@ use networking::MessageHeader;
 use {Allocate, Data, Push, Pull};
 use allocator::{Message, Process};
 
-use super::{BytesExchange};
-use super::bytes_exchange::{SendEndpoint, RecvEndpoint};
+use super::bytes_exchange::SendEndpoint;
+use super::bytes_exchange::BytesSendEndpoint;
+use super::shared_queue::SharedQueueSend;
 
-/// Builds an instance of a ProcessBinary.
+/// Builds an instance of a TcpAllocator.
 ///
-/// Builders are required because some of the state in a `ProcessBinary` cannot be sent between
+/// Builders are required because some of the state in a `TcpAllocator` cannot be sent between
 /// threads (specifically, the `Rc<RefCell<_>>` local channels). So, we must package up the state
 /// shared between threads here, and then provide a method that will instantiate the non-movable
 /// members once in the destination thread.
-pub struct ProcessBinaryBuilder<BE: BytesExchange> {
+pub struct TcpBuilder {
     inner:      Process,
-    index:      usize,          // number out of peers
-    peers:      usize,          // number of peer allocators (for typed channel allocation).
-    sends:      Vec<BE::Send>,  // for pushing bytes at each other process.
-    recvs:      Vec<BE::Recv>,  // for pulling bytes from each other process.
+    index:      usize,                          // number out of peers
+    peers:      usize,                          // number of peer allocators.
+    sends:      Vec<Sender<(Bytes, Arc<()>)>>,  // for pushing bytes at remote processes.
+    recvs:      Receiver<Bytes>,                // for pulling bytes from remote processes.
 }
 
-impl<BE: BytesExchange> ProcessBinaryBuilder<BE> {
+impl TcpBuilder {
     /// Creates a vector of builders, sharing appropriate state.
     ///
     /// This method requires access to a byte exchanger, from which it mints channels.
     pub fn new_vector(
-        mut byte_exchanger: BE,
         my_process: usize,
         threads: usize,
-        processes: usize) -> Vec<ProcessBinaryBuilder<BE>> {
+        processes: usize) -> (Vec<TcpBuilder>, Vec<Receiver<(Bytes, Arc<()>)>>, Vec<Sender<Bytes>>) {
 
+        let mut l2r_send = Vec::new();
+        let mut l2r_recv = Vec::new();
+        let mut r2l_send = Vec::new();
+        let mut r2l_recv = Vec::new();
+
+        for _ in 0 .. threads {
+            let (send, recv) = channel();
+            r2l_send.push(send);
+            r2l_recv.push(recv);
+        }
+
+        for _ in 0 .. processes - 1 {
+            let (send, recv) = channel();
+            l2r_send.push(send);
+            l2r_recv.push(recv);
+        }
+
+        // let mut to_comms = (0 .. processes).map(|_| channel()).collect::<Vec<_>>();
+        // let mut from_comms = (0 .. threads).map(|_| channel()).collect::<Vec<_>>();
+
+        let builders =
         Process::new_vector(threads)
             .into_iter()
+            .zip(r2l_recv.into_iter())
             .enumerate()
-            .map(|(index, inner)| {
-                let (sends, recvs) = byte_exchanger.next().unwrap();
-                ProcessBinaryBuilder {
+            .map(|(index, (inner, recvs))| {
+                TcpBuilder {
                     inner,
                     index: my_process * threads + index,
                     peers: threads * processes,
-                    sends,
+                    sends: l2r_send.clone(),
                     recvs,
                 }})
-            .collect()
+            .collect();
+
+        (builders, l2r_recv, r2l_send)
     }
 
-    /// Builds a `ProcessBinary`, instantiating `Rc<RefCell<_>>` elements.
-    pub fn build(self) -> ProcessBinary<BE> {
+    /// Builds a `TcpAllocator`, instantiating `Rc<RefCell<_>>` elements.
+    pub fn build(self) -> TcpAllocator {
 
         let mut sends = Vec::new();
         for send in self.sends.into_iter() {
-            sends.push(Rc::new(RefCell::new(send)));
+            let shared = SharedQueueSend::from(send);
+            let sendpoint = BytesSendEndpoint::new(shared);
+            sends.push(Rc::new(RefCell::new(sendpoint)));
         }
 
-        ProcessBinary {
+        TcpAllocator {
             inner: self.inner,
             index: self.index,
             peers: self.peers,
@@ -72,7 +98,7 @@ impl<BE: BytesExchange> ProcessBinaryBuilder<BE> {
 }
 
 // A specific Communicator for inter-thread intra-process communication
-pub struct ProcessBinary<BE: BytesExchange> {
+pub struct TcpAllocator {
 
     inner:      Process,                            // A non-serialized inner allocator for process-local peers.
 
@@ -81,12 +107,12 @@ pub struct ProcessBinary<BE: BytesExchange> {
     allocated:  usize,                              // indicates how many channels have been allocated (locally).
 
     // sending, receiving, and responding to binary buffers.
-    sends:      Vec<Rc<RefCell<BE::Send>>>,         // sends[x] -> goes to process x.
-    recvs:      Vec<BE::Recv>,                      // recvs[x] <- from process x?.
+    sends:      Vec<Rc<RefCell<BytesSendEndpoint>>>,         // sends[x] -> goes to process x.
+    recvs:      Receiver<Bytes>,                    // recvs[x] <- from process x?.
     to_local:   Vec<Rc<RefCell<VecDeque<Bytes>>>>,  // to worker-local typed pullers.
 }
 
-impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
+impl Allocate for TcpAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
     fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
@@ -138,37 +164,34 @@ impl<BE: BytesExchange> Allocate for ProcessBinary<BE> {
     #[inline(never)]
     fn pre_work(&mut self) {
 
-        for recv in self.recvs.iter_mut() {
+        while let Ok(bytes) = self.recvs.try_recv() {
 
-            while let Some(mut bytes) = recv.receive() {
+            // TODO: We could wrap `bytes` in a bytes::rc::Bytes,
+            //       which could reduce `Arc` overhead, if it hurts.
+            //       This new `Arc` should be local/uncontended, though.
+            let mut bytes = Bytes::from(bytes);
 
-                // TODO: We could wrap `bytes` in a bytes::rc::Bytes,
-                //       which could reduce `Arc` overhead, if it hurts.
-                //       This new `Arc` should be local/uncontended, though.
-                let mut bytes = Bytes::from(bytes);
+            // We expect that `bytes` contains an integral number of messages.
+            // No splitting occurs across allocations.
+            while bytes.len() > 0 {
 
-                // We expect that `bytes` contains an integral number of messages.
-                // No splitting occurs across allocations.
-                while bytes.len() > 0 {
+                if let Some(header) = MessageHeader::try_read(&mut &bytes[..]) {
 
-                    if let Some(header) = MessageHeader::try_read(&mut &bytes[..]) {
+                    // Get the header and payload, ditch the header.
+                    let mut peel = bytes.extract_to(header.required_bytes());
+                    let _ = peel.extract_to(40);
 
-                        // Get the header and payload, ditch the header.
-                        let mut peel = bytes.extract_to(header.required_bytes());
-                        let _ = peel.extract_to(40);
-
-                        // Ensure that a queue exists.
-                        // We may receive data before allocating, and shouldn't block.
-                        while self.to_local.len() <= header.channel {
-                            self.to_local.push(Rc::new(RefCell::new(VecDeque::new())));
-                        }
-
-                        // Introduce the binary slice into the operator input queue.
-                        self.to_local[header.channel].borrow_mut().push_back(peel);
+                    // Ensure that a queue exists.
+                    // We may receive data before allocating, and shouldn't block.
+                    while self.to_local.len() <= header.channel {
+                        self.to_local.push(Rc::new(RefCell::new(VecDeque::new())));
                     }
-                    else {
-                        println!("failed to read full header!");
-                    }
+
+                    // Introduce the binary slice into the operator input queue.
+                    self.to_local[header.channel].borrow_mut().push_back(peel);
+                }
+                else {
+                    println!("failed to read full header!");
                 }
             }
         }
@@ -270,11 +293,6 @@ impl<T:Data> Pull<Message<T>> for Puller<T> {
                 .borrow_mut()
                 .pop_front()
                 .map(|bytes| unsafe { Message::from_bytes(bytes) });
-
-            // use std::ops::Deref;
-            // if let Some(ref mut x) = self.current {
-            //     println!("decoded: {:?}", x.as_ref_or_mut().deref());
-            // }
 
             &mut self.current
         }

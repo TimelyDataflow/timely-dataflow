@@ -1,73 +1,25 @@
 use std::io::{Read, Write};
+use std::sync::{Arc, mpsc::{Sender, Receiver}};
+use std::net::TcpStream;
+
 
 use bytes::arc::Bytes;
 
 use networking::MessageHeader;
-use super::{BytesExchange, SharedQueue};
-use super::{BytesSendEndpoint, BytesRecvEndpoint};
-
-/// Allocates pairs of byte exchanges for remote workers.
-pub struct TcpBytesExchange {
-    /// Forward[i,j]: from worker i to process j.
-    forward: Vec<Vec<SharedQueue<Bytes>>>,
-    /// Reverse[i,j]: to process i from worker j.
-    reverse: Vec<Vec<SharedQueue<Bytes>>>,
-}
-
-impl BytesExchange for TcpBytesExchange {
-
-    type Send = BytesSendEndpoint;
-    type Recv = BytesRecvEndpoint;
-
-    // Returns two vectors of length #processes - 1.
-    // The first contains destinations to send to remote processes,
-    // The second contains sources to receive from remote processes.
-    fn next(&mut self) -> Option<(Vec<Self::Send>, Vec<Self::Recv>)> {
-
-        if !self.forward.is_empty() && !self.reverse.is_empty() {
-            Some((
-                self.forward.remove(0).into_iter().map(|x| BytesSendEndpoint::new(x)).collect(),
-                self.reverse.remove(0).into_iter().map(|x| BytesRecvEndpoint::new(x)).collect(),
-            ))
-        }
-        else {
-            None
-        }
-    }
-}
-
-impl TcpBytesExchange {
-    pub fn new(forward: Vec<Vec<SharedQueue<Bytes>>>, reverse: Vec<Vec<SharedQueue<Bytes>>>) -> Self {
-        TcpBytesExchange {
-            forward,
-            reverse,
-        }
-    }
-}
-
-// Allocates local and remote queue pairs, respectively.
-pub fn allocate_queue_pairs(local: usize, remote: usize) -> (Vec<Vec<SharedQueue<Bytes>>>, Vec<Vec<SharedQueue<Bytes>>>) {
-
-    // type annotations necessary despite return signature because ... Rust.
-    let local_to_remote: Vec<Vec<_>> = (0 .. local).map(|_| (0 .. remote).map(|_| SharedQueue::new()).collect()).collect();
-    let remote_to_local: Vec<Vec<_>> = (0 .. remote).map(|r| (0 .. local).map(|l| local_to_remote[l][r].clone()).collect()).collect();
-
-    (local_to_remote, remote_to_local)
-}
 
 /// Receives serialized data from a `Read`, for example the network.
 ///
 /// The `BinaryReceiver` repeatedly reads binary data from its reader into
 /// a binary Bytes slice which can be broken off and handed to recipients as
 /// messages become complete.
-pub struct BinaryReceiver<R: Read> {
+pub struct BinaryReceiver {
 
     worker_offset:  usize,
 
-    reader:         R,                          // the generic reader.
+    reader:         TcpStream,                  // the generic reader.
     buffer:         Bytes,                      // current working buffer.
     length:         usize,                      // consumed buffer elements.
-    targets:        Vec<SharedQueue<Bytes>>,    // to process-local workers.
+    targets:        Vec<Sender<Bytes>>,         // to process-local workers.
     log_sender:     ::logging::CommsLogger,     // logging stuffs.
 
     in_progress:    Vec<Option<Bytes>>,         // buffers shared with workers.
@@ -75,13 +27,13 @@ pub struct BinaryReceiver<R: Read> {
     size:           usize,                      // current buffer allocation size.
 }
 
-impl<R: Read> BinaryReceiver<R> {
+impl BinaryReceiver {
 
     pub fn new(
-        reader: R,
-        targets: Vec<SharedQueue<Bytes>>,
+        reader: TcpStream,
+        targets: Vec<Sender<Bytes>>,
         worker_offset: usize,
-        log_sender: ::logging::CommsLogger) -> BinaryReceiver<R> {
+        log_sender: ::logging::CommsLogger) -> BinaryReceiver {
         BinaryReceiver {
             reader,
             targets,
@@ -135,21 +87,36 @@ impl<R: Read> BinaryReceiver<R> {
         // allocation and place the existing Bytes into `self.in_progress`, so that it
         // can be recovered once all readers have read what they need to.
 
-        loop {
+        let mut active = true;
+        let mut count = 0;
+
+        while active {
 
             // Attempt to read some more bytes into self.buffer.
-            let read = self.reader.read(&mut self.buffer[self.length ..]).unwrap_or(0);
-            // if read > 0 { println!("read from reader: {:?} bytes", read); }
+            let read = match self.reader.read(&mut self.buffer[self.length ..]) {
+                Ok(n) => n,
+                Err(x) => {
+                    // We don't expect this, as socket closure results in Ok(0) reads.
+                    println!("Error: {:?}", x);
+                    0
+                },
+            };
+
+            active = read > 0;
+
             self.length += read;
 
             // Consume complete messages from the front of self.buffer.
             while let Some(header) = MessageHeader::try_read(&mut &self.buffer[.. self.length]) {
+
                 // TODO: Consolidate message sequences sent to the same worker.
                 let peeled_bytes = header.required_bytes();
                 let bytes = self.buffer.extract_to(peeled_bytes);
                 self.length -= peeled_bytes;
-                // println!("decoded message with {:?} bytes", bytes.len());
-                self.targets[header.target - self.worker_offset].push(bytes);
+
+                self.targets[header.target - self.worker_offset]
+                    .send(bytes)
+                    .expect("Worker queue unavailable in recv_loop");
             }
 
             // If our buffer is full we should copy it to a new buffer.
@@ -157,46 +124,62 @@ impl<R: Read> BinaryReceiver<R> {
                 // If full and not complete, we must increase the size.
                 if self.length == self.size {
                     self.size *= 2;
-                    println!("new size: {:?}", self.size);
                 }
                 self.refresh_buffer();
             }
         }
+
+        // println!("RECVER EXITING");
     }
 }
 
+// impl Drop for BinaryReceiver {
+//     fn drop(&mut self) {
+//         self.reader.shutdown(::std::net::Shutdown::Read).expect("Read shutdown failed");
+//     }
+// }
+
 // structure in charge of sending data to a Writer, for example the network.
-pub struct BinarySender<W: Write> {
-    writer:     W,
-    sources:    Vec<SharedQueue<Bytes>>,
+pub struct BinarySender {
+    writer:     ::std::io::BufWriter<TcpStream>,
+    source:     Receiver<(Bytes, Arc<()>)>,
     log_sender: ::logging::CommsLogger,
 }
 
-impl<W: Write> BinarySender<W> {
-    pub fn new(writer: W, sources: Vec<SharedQueue<Bytes>>, log_sender: ::logging::CommsLogger) -> BinarySender<W> {
-        BinarySender { writer, sources, log_sender }
+impl BinarySender {
+    pub fn new(writer: ::std::io::BufWriter<TcpStream>, source: Receiver<(Bytes, Arc<()>)>, log_sender: ::logging::CommsLogger) -> BinarySender {
+        BinarySender { writer, source, log_sender }
     }
 
     pub fn send_loop(&mut self) {
 
+        let mut count = 0;
         let mut stash = Vec::new();
-        while !self.sources.is_empty() {
 
-            for source in self.sources.iter_mut() {
-                source.drain_into(&mut stash);
+        while let Ok((bytes, _count)) = self.source.recv() {
+            stash.push(bytes);
+            while let Ok((bytes, _count)) = self.source.try_recv() {
+                stash.push(bytes);
             }
 
-            // If we got zero data, check that everyone is still alive.
-            if stash.is_empty() {
-                self.sources.retain(|x| !x.is_done());
-                self.writer.flush().expect("Failed to flush writer.");
-            }
-
+            // TODO: Could do scatter/gather write here.
             for bytes in stash.drain(..) {
-                // println!("sending {} bytes", bytes.len());
+                count += bytes.len();
+                // println!("Sending bytes: {:?}", bytes.len());
                 self.writer.write_all(&bytes[..]).expect("Write failure in send_loop.");
+                // println!("Sent bytes: {:?}", count);
             }
-
+            // TODO: Could delay this until a self.source.recv() would block.
+            self.writer.flush().expect("Failed to flush writer.");
         }
+
+        // println!("SENDER EXITING");
+    }
+}
+
+impl Drop for BinarySender {
+    fn drop(&mut self) {
+        self.writer.flush().expect("Failed to flush writer.");
+        self.writer.get_mut().shutdown(::std::net::Shutdown::Write).expect("Write shutdown failed");
     }
 }

@@ -7,6 +7,8 @@ use std::io::BufRead;
 use getopts;
 use std::sync::Arc;
 
+use std::any::Any;
+
 use allocator::{Thread, Process, Generic, GenericBuilder};
 // use allocator::process_binary::ProcessBinaryBuilder;
 // use networking::initialize_networking;
@@ -77,19 +79,19 @@ impl Configuration {
 
 type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>;
 
-fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<Vec<GenericBuilder>,String> {
+fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<(Vec<GenericBuilder>, Box<Any>),String> {
     match config {
         Configuration::Thread => {
-            Ok(vec![GenericBuilder::Thread(Thread)])
+            Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
             // Ok(ProcessBinaryBuilder::new_vector(1).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
         },
         Configuration::Process(threads) => {
-            Ok(Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect())
+            Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             // Ok(ProcessBinaryBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
         },
         Configuration::Cluster(threads, process, addresses, report) => {
-            if let Ok(stuff) = initialize_networking(addresses, process, threads, report, logger) {
-                Ok(stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect())
+            if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, logger) {
+                Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
             }
             else {
                 Err("failed to initialize networking".to_owned())
@@ -170,7 +172,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
 
-    let allocators = try!(create_allocators(config, log_sender));
+    let (allocators, others) = try!(create_allocators(config, log_sender));
     let logic = Arc::new(func);
 
     let mut guards = Vec::new();
@@ -185,12 +187,13 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
                             .map_err(|e| format!("{:?}", e))));
     }
 
-    Ok(WorkerGuards { guards: guards })
+    Ok(WorkerGuards { guards, others })
 }
 
 /// Maintains `JoinHandle`s for worker threads.
 pub struct WorkerGuards<T:Send+'static> {
-    guards: Vec<::std::thread::JoinHandle<T>>
+    guards: Vec<::std::thread::JoinHandle<T>>,
+    others: Box<Any>,
 }
 
 impl<T:Send+'static> WorkerGuards<T> {
@@ -205,7 +208,8 @@ impl<T:Send+'static> WorkerGuards<T> {
 impl<T:Send+'static> Drop for WorkerGuards<T> {
     fn drop(&mut self) {
         for guard in self.guards.drain(..) {
-            guard.join().unwrap();
+            guard.join().expect("Worker panic");
         }
+        // println!("WORKER THREADS JOINED");
     }
 }

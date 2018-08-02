@@ -1,7 +1,7 @@
 use std::ops::DerefMut;
 use bytes::arc::Bytes;
 
-use super::SharedQueue;
+use super::shared_queue::{SharedQueueSend, SharedQueueRecv};
 
 /// A type that can allocate send and receive endpoints for byte exchanges.
 ///
@@ -39,7 +39,7 @@ pub trait RecvEndpoint {
 }
 
 pub struct BytesSendEndpoint {
-    send: SharedQueue<Bytes>,
+    send: SharedQueueSend<Bytes>,
     in_progress: Vec<Option<Bytes>>,
     buffer: Vec<u8>,
     stash: Vec<Vec<u8>>,
@@ -63,25 +63,20 @@ impl BytesSendEndpoint {
     /// Moves `self.buffer` into `self.send`, replaces with empty buffer.
     fn send_buffer(&mut self) {
 
-        let buffer = ::std::mem::replace(&mut self.buffer, Vec::new());
-        let buffer_len = buffer.len();
-        if buffer_len > 0 {
+        if self.buffer.len() > 0 {
 
+            let buffer = ::std::mem::replace(&mut self.buffer, Vec::new());
+            let buffer_len = buffer.len();
             let mut bytes = Bytes::from(buffer);
             let to_send = bytes.extract_to(buffer_len);
 
             self.send.push(to_send);
             self.in_progress.push(Some(bytes));
         }
-        else {
-            if buffer.capacity() == self.default_size {
-                self.stash.push(buffer);
-            }
-        }
     }
 
     /// Allocates a new `BytesSendEndpoint` from a shared queue.
-    pub fn new(queue: SharedQueue<Bytes>) -> Self {
+    pub fn new(queue: SharedQueueSend<Bytes>) -> Self {
         BytesSendEndpoint {
             send: queue,
             in_progress: Vec::new(),
@@ -99,6 +94,9 @@ impl SendEndpoint for BytesSendEndpoint {
     fn reserve(&mut self, capacity: usize) -> &mut Self::SendBuffer {
 
         // println!("reserving {:?} bytes", capacity);
+        if self.send.is_empty() {
+            self.send_buffer();
+        }
 
         // If we don't have enough capacity in `self.buffer`...
         if self.buffer.capacity() < capacity + self.buffer.len() {
@@ -129,13 +127,20 @@ impl SendEndpoint for BytesSendEndpoint {
     }
 }
 
+impl Drop for BytesSendEndpoint {
+    fn drop(&mut self) {
+        self.send_buffer();
+        assert!(self.buffer.is_empty());
+    }
+}
+
 pub struct BytesRecvEndpoint {
-    recv: SharedQueue<Bytes>,
+    recv: SharedQueueRecv<Bytes>,
 }
 
 
 impl BytesRecvEndpoint {
-    pub fn new(queue: SharedQueue<Bytes>) -> Self {
+    pub fn new(queue: SharedQueueRecv<Bytes>) -> Self {
         BytesRecvEndpoint { recv: queue }
     }
 }

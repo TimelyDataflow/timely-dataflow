@@ -4,5 +4,5 @@ pub mod binary;
 pub mod allocator;
 pub mod initialize;
 
-pub use self::shared_queue::SharedQueue;
+// pub use self::shared_queue::SharedQueue;
 pub use self::bytes_exchange::{BytesExchange, BytesSendEndpoint, BytesRecvEndpoint};

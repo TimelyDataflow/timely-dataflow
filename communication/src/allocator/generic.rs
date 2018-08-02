@@ -6,9 +6,9 @@
 use allocator::{Allocate, Message, Thread, Process, Binary};
 use allocator::process_binary::{ProcessBinary, ProcessBinaryBuilder};
 
-use allocator::zero_copy::allocator::ProcessBinary as ZeroCopyAllocator;
-use allocator::zero_copy::allocator::ProcessBinaryBuilder as ZeroCopyBuilder;
-use allocator::zero_copy::binary::TcpBytesExchange;
+use allocator::zero_copy::allocator::TcpAllocator as ZeroCopyAllocator;
+use allocator::zero_copy::allocator::TcpBuilder as ZeroCopyBuilder;
+// use allocator::zero_copy::binary::TcpBytesExchange;
 
 use {Push, Pull, Data};
 
@@ -19,7 +19,7 @@ pub enum Generic {
     Process(Process),
     Binary(Binary),
     ProcessBinary(ProcessBinary<::allocator::process_binary::vec::VecBytesExchange>),
-    ZeroCopy(ZeroCopyAllocator<TcpBytesExchange>),
+    ZeroCopy(ZeroCopyAllocator),
 }
 
 impl Generic {
@@ -96,7 +96,7 @@ pub enum GenericBuilder {
     Process(Process),
     Binary(Binary),
     ProcessBinary(ProcessBinaryBuilder<::allocator::process_binary::vec::VecBytesExchange>),
-    ZeroCopy(ZeroCopyBuilder<TcpBytesExchange>),
+    ZeroCopy(ZeroCopyBuilder),
 }
 
 impl GenericBuilder {
