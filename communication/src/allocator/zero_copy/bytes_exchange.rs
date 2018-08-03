@@ -2,6 +2,7 @@ use std::ops::DerefMut;
 use bytes::arc::Bytes;
 
 use super::shared_queue::{SharedQueueSend, SharedQueueRecv};
+use super::bytes_slab::BytesSlab;
 
 /// A type that can allocate send and receive endpoints for byte exchanges.
 ///
@@ -40,38 +41,42 @@ pub trait RecvEndpoint {
 
 pub struct BytesSendEndpoint {
     send: SharedQueueSend<Bytes>,
-    in_progress: Vec<Option<Bytes>>,
-    buffer: Vec<u8>,
-    stash: Vec<Vec<u8>>,
-    default_size: usize,
+    buffer: BytesSlab,
+    // in_progress: Vec<Option<Bytes>>,
+    // buffer: Vec<u8>,
+    // stash: Vec<Vec<u8>>,
+    // default_size: usize,
 }
 
 impl BytesSendEndpoint {
-    /// Attempts to recover in-use buffers once uniquely owned.
-    fn harvest_shared(&mut self) {
-        for shared in self.in_progress.iter_mut() {
-            if let Some(bytes) = shared.take() {
-                match bytes.try_recover::<Vec<u8>>() {
-                    Ok(mut vec)    => { vec.clear(); self.stash.push(vec); },
-                    Err(bytes) => { *shared = Some(bytes); },
-                }
-            }
-        }
-        self.in_progress.retain(|x| x.is_some());
-    }
+    // /// Attempts to recover in-use buffers once uniquely owned.
+    // fn harvest_shared(&mut self) {
+    //     for shared in self.in_progress.iter_mut() {
+    //         if let Some(bytes) = shared.take() {
+    //             match bytes.try_recover::<Vec<u8>>() {
+    //                 Ok(mut vec)    => { vec.clear(); self.stash.push(vec); },
+    //                 Err(bytes) => { *shared = Some(bytes); },
+    //             }
+    //         }
+    //     }
+    //     self.in_progress.retain(|x| x.is_some());
+    // }
 
     /// Moves `self.buffer` into `self.send`, replaces with empty buffer.
     fn send_buffer(&mut self) {
 
-        if self.buffer.len() > 0 {
+        let valid_len = self.buffer.valid().len();
+        if valid_len > 0 {
 
-            let buffer = ::std::mem::replace(&mut self.buffer, Vec::new());
-            let buffer_len = buffer.len();
-            let mut bytes = Bytes::from(buffer);
-            let to_send = bytes.extract_to(buffer_len);
+            let to_send = self.buffer.extract(valid_len);
+
+            // let buffer = ::std::mem::replace(&mut self.buffer, Vec::new());
+            // let buffer_len = buffer.len();
+            // let mut bytes = Bytes::from(buffer);
+            // let to_send = bytes.extract_to(buffer_len);
 
             self.send.push(to_send);
-            self.in_progress.push(Some(bytes));
+            // self.in_progress.push(Some(bytes));
         }
     }
 
@@ -79,58 +84,69 @@ impl BytesSendEndpoint {
     pub fn new(queue: SharedQueueSend<Bytes>) -> Self {
         BytesSendEndpoint {
             send: queue,
-            in_progress: Vec::new(),
-            buffer: Vec::new(),
-            stash: Vec::new(),
-            default_size: 1 << 20,
+            buffer: BytesSlab::new(20),
+            // in_progress: Vec::new(),
+            // buffer: Vec::new(),
+            // stash: Vec::new(),
+            // default_size: 1 << 20,
         }
     }
 }
 
-impl SendEndpoint for BytesSendEndpoint {
+impl BytesSendEndpoint {
 
-    type SendBuffer = Vec<u8>;
+    pub fn make_valid(&mut self, bytes: usize) {
+        self.buffer.make_valid(bytes);
+        self.send_buffer();
+    }
+    pub fn reserve(&mut self, capacity: usize) -> &mut [u8] {
 
-    fn reserve(&mut self, capacity: usize) -> &mut Self::SendBuffer {
-
-        // println!("reserving {:?} bytes", capacity);
-        if self.send.is_empty() {
+        if self.buffer.empty().len() < capacity {
             self.send_buffer();
+            self.buffer.ensure_capacity(capacity);
         }
 
-        // If we don't have enough capacity in `self.buffer`...
-        if self.buffer.capacity() < capacity + self.buffer.len() {
-            self.send_buffer();
-            if capacity > self.default_size {
-                self.buffer = Vec::with_capacity(capacity);
-            }
-            else {
-                if self.stash.is_empty() {
-                    // Attempt to recover shared buffers.
-                    self.harvest_shared();
-                }
-                self.buffer = self.stash.pop().unwrap_or_else(|| Vec::with_capacity(self.default_size))
-            }
-        }
+        assert!(self.buffer.empty().len() >= capacity);
 
-        &mut self.buffer
+        // // println!("reserving {:?} bytes", capacity);
+        // // if self.send.is_empty() {
+        // //     self.send_buffer();
+        // // }
+
+        // // If we don't have enough capacity in `self.buffer`...
+        // if self.buffer.capacity() < capacity + self.buffer.len() {
+        //     self.send_buffer();
+        //     if capacity > self.default_size {
+        //         self.buffer = Vec::with_capacity(capacity);
+        //     }
+        //     else {
+        //         if self.stash.is_empty() {
+        //             // Attempt to recover shared buffers.
+        //             self.harvest_shared();
+        //         }
+        //         self.buffer = self.stash.pop().unwrap_or_else(|| Vec::with_capacity(self.default_size))
+        //     }
+        // }
+
+        // self.buffer.make_valid(capacity);
+        self.buffer.empty()
     }
 
-    fn publish(&mut self) {
-        self.harvest_shared();
-        if self.send.is_empty() {
+    pub fn publish(&mut self) {
+        // self.harvest_shared();
+        // if self.send.is_empty() {
             self.send_buffer();
-        }
-        else {
-            // println!("delaying publication!");
-        }
+        // }
+        // else {
+        //     // println!("delaying publication!");
+        // }
     }
 }
 
 impl Drop for BytesSendEndpoint {
     fn drop(&mut self) {
         self.send_buffer();
-        assert!(self.buffer.is_empty());
+        // assert!(self.buffer.is_empty());
     }
 }
 

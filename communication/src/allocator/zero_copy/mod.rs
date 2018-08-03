@@ -1,3 +1,4 @@
+pub mod bytes_slab;
 pub mod shared_queue;
 pub mod bytes_exchange;
 pub mod binary;

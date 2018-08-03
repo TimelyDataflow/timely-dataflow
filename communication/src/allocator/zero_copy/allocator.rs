@@ -219,15 +219,15 @@ impl Allocate for TcpAllocator {
 ///
 /// This pusher has a fixed MessageHeader, and access to a SharedByteBuffer which it uses to
 /// acquire buffers for serialization.
-struct Pusher<T, S: SendEndpoint> {
+struct Pusher<T> {
     header:     MessageHeader,
-    sender:     Rc<RefCell<S>>,
+    sender:     Rc<RefCell<BytesSendEndpoint>>,
     phantom:    ::std::marker::PhantomData<T>,
 }
 
-impl<T, S:SendEndpoint> Pusher<T, S> {
+impl<T> Pusher<T> {
     /// Creates a new `Pusher` from a header and shared byte buffer.
-    pub fn new(header: MessageHeader, sender: Rc<RefCell<S>>) -> Pusher<T,S> {
+    pub fn new(header: MessageHeader, sender: Rc<RefCell<BytesSendEndpoint>>) -> Pusher<T> {
         Pusher {
             header:     header,
             sender:     sender,
@@ -236,7 +236,7 @@ impl<T, S:SendEndpoint> Pusher<T, S> {
     }
 }
 
-impl<T:Data, S:SendEndpoint> Push<Message<T>> for Pusher<T, S> {
+impl<T:Data> Push<Message<T>> for Pusher<T> {
     #[inline]
     fn push(&mut self, element: &mut Option<Message<T>>) {
         if let Some(ref mut element) = *element {
@@ -248,11 +248,14 @@ impl<T:Data, S:SendEndpoint> Push<Message<T>> for Pusher<T, S> {
 
             // acquire byte buffer and write header, element.
             let mut borrow = self.sender.borrow_mut();
-            let mut bytes = borrow.reserve(header.required_bytes());
-            header.write_to(&mut bytes).expect("failed to write header!");
-
-            element.into_bytes(&mut bytes);
-
+            {
+                let mut bytes = borrow.reserve(header.required_bytes());
+                assert!(bytes.len() >= header.required_bytes());
+                let mut writer = &mut bytes;
+                header.write_to(writer).expect("failed to write header!");
+                element.into_bytes(writer);
+            }
+            borrow.make_valid(header.required_bytes());
         }
     }
 }

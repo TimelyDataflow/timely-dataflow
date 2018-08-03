@@ -7,6 +7,8 @@ use bytes::arc::Bytes;
 
 use networking::MessageHeader;
 
+use super::bytes_slab::BytesSlab;
+
 /// Receives serialized data from a `Read`, for example the network.
 ///
 /// The `BinaryReceiver` repeatedly reads binary data from its reader into
@@ -17,14 +19,16 @@ pub struct BinaryReceiver {
     worker_offset:  usize,
 
     reader:         TcpStream,                  // the generic reader.
-    buffer:         Bytes,                      // current working buffer.
-    length:         usize,                      // consumed buffer elements.
     targets:        Vec<Sender<Bytes>>,         // to process-local workers.
     log_sender:     ::logging::CommsLogger,     // logging stuffs.
 
-    in_progress:    Vec<Option<Bytes>>,         // buffers shared with workers.
-    stash:          Vec<Vec<u8>>,               // reclaimed and resuable buffers.
-    size:           usize,                      // current buffer allocation size.
+    buffer:         BytesSlab,
+
+    // buffer:         Bytes,                      // current working buffer.
+    // length:         usize,                      // consumed buffer elements.
+    // in_progress:    Vec<Option<Bytes>>,         // buffers shared with workers.
+    // stash:          Vec<Vec<u8>>,               // reclaimed and resuable buffers.
+    // size:           usize,                      // current buffer allocation size.
 }
 
 impl BinaryReceiver {
@@ -38,44 +42,45 @@ impl BinaryReceiver {
             reader,
             targets,
             log_sender,
-            buffer: Bytes::from(vec![0u8; 1 << 20]),
-            length: 0,
-            in_progress: Vec::new(),
-            stash: Vec::new(),
-            size: 1 << 20,
             worker_offset,
+            buffer: BytesSlab::new(20),
+            // buffer: Bytes::from(vec![0u8; 1 << 20]),
+            // length: 0,
+            // in_progress: Vec::new(),
+            // stash: Vec::new(),
+            // size: 1 << 20,
         }
     }
 
-    // Retire `self.buffer` and acquire a new buffer of at least `self.size` bytes.
-    fn refresh_buffer(&mut self) {
+    // // Retire `self.buffer` and acquire a new buffer of at least `self.size` bytes.
+    // fn refresh_buffer(&mut self) {
 
-        if self.stash.is_empty() {
-            for shared in self.in_progress.iter_mut() {
-                if let Some(bytes) = shared.take() {
-                    match bytes.try_recover::<Vec<u8>>() {
-                        Ok(mut vec)    => { self.stash.push(vec); },
-                        Err(bytes) => { *shared = Some(bytes); },
-                    }
-                }
-            }
-            self.in_progress.retain(|x| x.is_some());
-        }
+    //     if self.stash.is_empty() {
+    //         for shared in self.in_progress.iter_mut() {
+    //             if let Some(bytes) = shared.take() {
+    //                 match bytes.try_recover::<Vec<u8>>() {
+    //                     Ok(mut vec)    => { self.stash.push(vec); },
+    //                     Err(bytes) => { *shared = Some(bytes); },
+    //                 }
+    //             }
+    //         }
+    //         self.in_progress.retain(|x| x.is_some());
+    //     }
 
-        let self_size = self.size;
-        self.stash.retain(|x| x.capacity() == self_size);
+    //     let self_size = self.size;
+    //     self.stash.retain(|x| x.capacity() == self_size);
 
-        let new_buffer = self.stash.pop().unwrap_or_else(|| vec![0; self.size]);
-        let new_buffer = Bytes::from(new_buffer);
-        let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
+    //     let new_buffer = self.stash.pop().unwrap_or_else(|| vec![0; self.size]);
+    //     let new_buffer = Bytes::from(new_buffer);
+    //     let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
 
-        debug_assert!(self.length <= old_buffer.len());
-        debug_assert!(self.length <= self.buffer.len());
+    //     debug_assert!(self.length <= old_buffer.len());
+    //     debug_assert!(self.length <= self.buffer.len());
 
-        self.buffer[.. self.length].copy_from_slice(&old_buffer[.. self.length]);
+    //     self.buffer[.. self.length].copy_from_slice(&old_buffer[.. self.length]);
 
-        self.in_progress.push(Some(old_buffer));
-    }
+    //     self.in_progress.push(Some(old_buffer));
+    // }
 
     pub fn recv_loop(&mut self) {
 
@@ -92,8 +97,12 @@ impl BinaryReceiver {
 
         while active {
 
+            self.buffer.ensure_capacity(1);
+
+            assert!(!self.buffer.empty().is_empty());
+
             // Attempt to read some more bytes into self.buffer.
-            let read = match self.reader.read(&mut self.buffer[self.length ..]) {
+            let read = match self.reader.read(&mut self.buffer.empty()) {
                 Ok(n) => n,
                 Err(x) => {
                     // We don't expect this, as socket closure results in Ok(0) reads.
@@ -102,31 +111,33 @@ impl BinaryReceiver {
                 },
             };
 
-            active = read > 0;
+            // println!("read bytes: {:?}", read);
 
-            self.length += read;
+            active = read > 0;
+            self.buffer.make_valid(read);
+            // self.length += read;
 
             // Consume complete messages from the front of self.buffer.
-            while let Some(header) = MessageHeader::try_read(&mut &self.buffer[.. self.length]) {
+            while let Some(header) = MessageHeader::try_read(&mut self.buffer.valid()) {
 
                 // TODO: Consolidate message sequences sent to the same worker.
                 let peeled_bytes = header.required_bytes();
-                let bytes = self.buffer.extract_to(peeled_bytes);
-                self.length -= peeled_bytes;
+                let bytes = self.buffer.extract(peeled_bytes);
+                // self.length -= peeled_bytes;
 
                 self.targets[header.target - self.worker_offset]
                     .send(bytes)
                     .expect("Worker queue unavailable in recv_loop");
             }
 
-            // If our buffer is full we should copy it to a new buffer.
-            if self.length == self.buffer.len() {
-                // If full and not complete, we must increase the size.
-                if self.length == self.size {
-                    self.size *= 2;
-                }
-                self.refresh_buffer();
-            }
+            // // If our buffer is full we should copy it to a new buffer.
+            // if self.length == self.buffer.len() {
+            //     // If full and not complete, we must increase the size.
+            //     if self.length == self.size {
+            //         self.size *= 2;
+            //     }
+            //     self.refresh_buffer();
+            // }
         }
 
         // println!("RECVER EXITING");
