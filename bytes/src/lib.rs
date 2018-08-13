@@ -206,6 +206,23 @@ pub mod arc {
                 }),
             }
         }
+
+        /// Regenerates the Bytes if it is uniquely held.
+        ///
+        /// If uniquely held, this method recovers the initial pointer and length
+        /// of the sequestered allocation and re-initialized the Bytes. The return
+        /// value indicates whether this occurred.
+        pub fn try_regenerate<B>(&mut self) -> bool where B: DerefMut<Target=[u8]>+'static {
+            if let Some(boxed) = Arc::get_mut(&mut self.sequestered) {
+                let downcast = boxed.downcast_mut::<B>().expect("Downcast failed");
+                self.ptr = downcast.as_mut_ptr();
+                self.len = downcast.len();
+                true
+            }
+            else {
+                false
+            }
+        }
     }
 
     impl Deref for Bytes {

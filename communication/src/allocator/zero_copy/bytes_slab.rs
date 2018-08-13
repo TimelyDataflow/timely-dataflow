@@ -3,7 +3,7 @@ use bytes::arc::Bytes;
 pub struct BytesSlab {
     buffer:         Bytes,                      // current working buffer.
     in_progress:    Vec<Option<Bytes>>,         // buffers shared with workers.
-    stash:          Vec<Box<[u8]>>,             // reclaimed and resuable buffers.
+    stash:          Vec<Bytes>,                 // reclaimed and resuable buffers.
     shift:          usize,                      // current buffer allocation size.
     valid:          usize,                      // buffer[..valid] are valid bytes.
 }
@@ -54,22 +54,19 @@ impl BytesSlab {
         // Attempt to reclaim shared slices.
         if self.stash.is_empty() {
             for shared in self.in_progress.iter_mut() {
-                if let Some(bytes) = shared.take() {
-                    match bytes.try_recover::<Box<[u8]>>() {
-                        Ok(mut vec) => {
-                            if vec.len() == (1 << self.shift) {
-                                self.stash.push(vec);
-                            }
-                        },
-                        Err(bytes)  => { *shared = Some(bytes); },
+                if let Some(mut bytes) = shared.take() {
+                    if bytes.try_regenerate::<Box<[u8]>>() {
+                        self.stash.push(bytes);
+                    }
+                    else {
+                        *shared = Some(bytes);
                     }
                 }
             }
             self.in_progress.retain(|x| x.is_some());
         }
 
-        let new_buffer = self.stash.pop().unwrap_or_else(|| vec![0; 1 << self.shift].into_boxed_slice());
-        let new_buffer = Bytes::from(new_buffer);
+        let new_buffer = self.stash.pop().unwrap_or_else(|| Bytes::from(vec![0; 1 << self.shift].into_boxed_slice()));
         let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
 
         if !(self.buffer.len() == (1 << self.shift)) {

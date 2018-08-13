@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::sync::{Arc, mpsc::{channel, Sender, Receiver}};
+use std::sync::mpsc::{channel, Sender, Receiver};
 
 use bytes::arc::Bytes;
 
@@ -10,7 +10,6 @@ use networking::MessageHeader;
 use {Allocate, Data, Push, Pull};
 use allocator::{Message, Process};
 
-use super::bytes_exchange::SendEndpoint;
 use super::bytes_exchange::BytesSendEndpoint;
 use super::shared_queue::SharedQueueSend;
 
@@ -24,7 +23,7 @@ pub struct TcpBuilder {
     inner:      Process,
     index:      usize,                          // number out of peers
     peers:      usize,                          // number of peer allocators.
-    sends:      Vec<Sender<(Bytes, Arc<()>)>>,  // for pushing bytes at remote processes.
+    sends:      Vec<Sender<Bytes>>,  // for pushing bytes at remote processes.
     recvs:      Receiver<Bytes>,                // for pulling bytes from remote processes.
 }
 
@@ -35,7 +34,7 @@ impl TcpBuilder {
     pub fn new_vector(
         my_process: usize,
         threads: usize,
-        processes: usize) -> (Vec<TcpBuilder>, Vec<Receiver<(Bytes, Arc<()>)>>, Vec<Sender<Bytes>>) {
+        processes: usize) -> (Vec<TcpBuilder>, Vec<Receiver<Bytes>>, Vec<Sender<Bytes>>) {
 
         let mut l2r_send = Vec::new();
         let mut l2r_recv = Vec::new();
@@ -53,9 +52,6 @@ impl TcpBuilder {
             l2r_send.push(send);
             l2r_recv.push(recv);
         }
-
-        // let mut to_comms = (0 .. processes).map(|_| channel()).collect::<Vec<_>>();
-        // let mut from_comms = (0 .. threads).map(|_| channel()).collect::<Vec<_>>();
 
         let builders =
         Process::new_vector(threads)
