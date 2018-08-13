@@ -241,6 +241,7 @@ impl<T:Data> Push<Message<T>> for Pusher<T> {
             let mut header = self.header;
             self.header.seqno += 1;
             header.length = element.length_in_bytes();
+            assert!(header.length > 0);
 
             // acquire byte buffer and write header, element.
             let mut borrow = self.sender.borrow_mut();

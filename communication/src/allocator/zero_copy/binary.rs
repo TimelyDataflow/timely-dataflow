@@ -8,127 +8,112 @@ use networking::MessageHeader;
 
 use super::bytes_slab::BytesSlab;
 
-/// Receives serialized data from a `Read`, for example the network.
+/// Repeatedly reads from a TcpStream and carves out messages.
 ///
-/// The `BinaryReceiver` repeatedly reads binary data from its reader into
-/// a binary Bytes slice which can be broken off and handed to recipients as
-/// messages become complete.
-pub struct BinaryReceiver {
+/// The intended communication pattern is a sequence of (header, message)^* for valid
+/// messages, followed by a header for a zero length message indicating the end of stream.
+/// If the stream ends without being shut down, the receive thread panics in an attempt to
+/// take down the computation and cause the failures to cascade.
+pub fn recv_loop(
+    mut reader: TcpStream,
+    targets: Vec<Sender<Bytes>>,
+    worker_offset: usize,
+    log_sender: ::logging::CommsLogger)
+{
+    let mut buffer = BytesSlab::new(20);
 
-    worker_offset:  usize,
+    // Each loop iteration adds to `self.Bytes` and consumes all complete messages.
+    // At the start of each iteration, `self.buffer[..self.length]` represents valid
+    // data, and the remaining capacity is available for reading from the reader.
+    //
+    // Once the buffer fills, we need to copy uncomplete messages to a new shared
+    // allocation and place the existing Bytes into `self.in_progress`, so that it
+    // can be recovered once all readers have read what they need to.
+    let mut active = true;
+    while active {
 
-    reader:         TcpStream,                  // the generic reader.
-    targets:        Vec<Sender<Bytes>>,         // to process-local workers.
-    log_sender:     ::logging::CommsLogger,     // logging stuffs.
+        buffer.ensure_capacity(1);
 
-    buffer:         BytesSlab,
-}
+        assert!(!buffer.empty().is_empty());
 
-impl BinaryReceiver {
+        // Attempt to read some more bytes into self.buffer.
+        let read = match reader.read(&mut buffer.empty()) {
+            Ok(n) => n,
+            Err(x) => {
+                // We don't expect this, as socket closure results in Ok(0) reads.
+                println!("Error: {:?}", x);
+                0
+            },
+        };
 
-    pub fn new(
-        reader: TcpStream,
-        targets: Vec<Sender<Bytes>>,
-        worker_offset: usize,
-        log_sender: ::logging::CommsLogger) -> BinaryReceiver {
-        BinaryReceiver {
-            reader,
-            targets,
-            log_sender,
-            worker_offset,
-            buffer: BytesSlab::new(20),
-        }
-    }
+        assert!(read > 0);
+        buffer.make_valid(read);
 
-    pub fn recv_loop(&mut self) {
+        // Consume complete messages from the front of self.buffer.
+        while let Some(header) = MessageHeader::try_read(&mut buffer.valid()) {
 
-        // Each loop iteration adds to `self.Bytes` and consumes all complete messages.
-        // At the start of each iteration, `self.buffer[..self.length]` represents valid
-        // data, and the remaining capacity is available for reading from the reader.
-        //
-        // Once the buffer fills, we need to copy uncomplete messages to a new shared
-        // allocation and place the existing Bytes into `self.in_progress`, so that it
-        // can be recovered once all readers have read what they need to.
+            // TODO: Consolidate message sequences sent to the same worker?
+            let peeled_bytes = header.required_bytes();
+            let bytes = buffer.extract(peeled_bytes);
 
-        let mut active = true;
-        while active {
-
-            self.buffer.ensure_capacity(1);
-
-            assert!(!self.buffer.empty().is_empty());
-
-            // Attempt to read some more bytes into self.buffer.
-            let read = match self.reader.read(&mut self.buffer.empty()) {
-                Ok(n) => n,
-                Err(x) => {
-                    // We don't expect this, as socket closure results in Ok(0) reads.
-                    println!("Error: {:?}", x);
-                    0
-                },
-            };
-
-            active = read > 0;
-            self.buffer.make_valid(read);
-
-            // Consume complete messages from the front of self.buffer.
-            while let Some(header) = MessageHeader::try_read(&mut self.buffer.valid()) {
-
-                // TODO: Consolidate message sequences sent to the same worker.
-                let peeled_bytes = header.required_bytes();
-                let bytes = self.buffer.extract(peeled_bytes);
-
-                self.targets[header.target - self.worker_offset]
+            if header.length > 0 {
+                targets[header.target - worker_offset]
                     .send(bytes)
                     .expect("Worker queue unavailable in recv_loop");
             }
+            else {
+                // Shutting down; confirm absence of subsequent data.
+                active = false;
+                if !buffer.valid().is_empty() {
+                    panic!("Clean shutdown followed by data.");
+                }
+                buffer.ensure_capacity(1);
+                if reader.read(&mut buffer.empty()).expect("read failure") > 0 {
+                    panic!("Clean shutdown followed by data.");
+                }
+            }
         }
-        // println!("RECVER EXITING");
     }
+    // println!("RECVER EXITING");
 }
 
-// impl Drop for BinaryReceiver {
-//     fn drop(&mut self) {
-//         self.reader.shutdown(::std::net::Shutdown::Read).expect("Read shutdown failed");
-//     }
-// }
+/// Repeatedly sends messages into a TcpStream.
+///
+/// The intended communication pattern is a sequence of (header, message)^* for valid
+/// messages, followed by a header for a zero length message indicating the end of stream.
+pub fn send_loop(
+    mut writer: ::std::io::BufWriter<TcpStream>,
+    source: Receiver<Bytes>,
+    log_sender: ::logging::CommsLogger)
+{
 
-// structure in charge of sending data to a Writer, for example the network.
-pub struct BinarySender {
-    writer:     ::std::io::BufWriter<TcpStream>,
-    source:     Receiver<Bytes>,
-    log_sender: ::logging::CommsLogger,
-}
+    let mut stash = Vec::new();
 
-impl BinarySender {
-    pub fn new(writer: ::std::io::BufWriter<TcpStream>, source: Receiver<Bytes>, log_sender: ::logging::CommsLogger) -> BinarySender {
-        BinarySender { writer, source, log_sender }
-    }
-
-    pub fn send_loop(&mut self) {
-
-        let mut stash = Vec::new();
-
-        while let Ok(bytes) = self.source.recv() {
+    while let Ok(bytes) = source.recv() {
+        stash.push(bytes);
+        while let Ok(bytes) = source.try_recv() {
             stash.push(bytes);
-            while let Ok(bytes) = self.source.try_recv() {
-                stash.push(bytes);
-            }
-
-            // TODO: Could do scatter/gather write here.
-            for bytes in stash.drain(..) {
-                self.writer.write_all(&bytes[..]).expect("Write failure in send_loop.");
-            }
-            // TODO: Could delay this until a self.source.recv() would block.
-            self.writer.flush().expect("Failed to flush writer.");
         }
 
-        // println!("SENDER EXITING");
+        // TODO: Could do scatter/gather write here.
+        for bytes in stash.drain(..) {
+            writer.write_all(&bytes[..]).expect("Write failure in send_loop.");
+        }
+        // TODO: Could delay this until a self.source.recv() would block.
+        writer.flush().expect("Failed to flush writer.");
     }
-}
 
-impl Drop for BinarySender {
-    fn drop(&mut self) {
-        self.writer.flush().expect("Failed to flush writer.");
-        self.writer.get_mut().shutdown(::std::net::Shutdown::Write).expect("Write shutdown failed");
-    }
+    // Write final zero-length header.
+    // Would be better with meaningful metadata, but as this stream merges many
+    // workers it isn't clear that there is anything specific to write here.
+    let header = MessageHeader {
+        channel:    0,
+        source:     0,
+        target:     0,
+        length:     0,
+        seqno:      0,
+    };
+    header.write_to(&mut writer).expect("Failed to write header!");
+    writer.flush().expect("Failed to flush writer.");
+    writer.get_mut().shutdown(::std::net::Shutdown::Write).expect("Write shutdown failed");
 }

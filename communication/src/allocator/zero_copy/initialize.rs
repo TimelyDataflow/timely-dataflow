@@ -1,7 +1,7 @@
 
 use std::sync::Arc;
 
-use super::binary::{BinarySender, BinaryReceiver};
+use super::binary::{send_loop, recv_loop};
 use super::allocator::TcpBuilder;
 
 pub struct CommsGuard {
@@ -64,8 +64,7 @@ pub fn initialize_networking(
                         });
 
                         let stream = ::std::io::BufWriter::with_capacity(1 << 20, stream);
-                        BinarySender::new(stream, remote_recv, log_sender)
-                            .send_loop()
+                        send_loop(stream, remote_recv, log_sender);
                     })?;
 
                 send_guards.push(join_guard);
@@ -84,8 +83,7 @@ pub fn initialize_networking(
                             sender: false,
                             remote: Some(index),
                         });
-                        BinaryReceiver::new(stream, remote_sends, threads * my_index, log_sender)
-                            .recv_loop()
+                        recv_loop(stream, remote_sends, threads * my_index, log_sender);
                     })?;
 
                 recv_guards.push(join_guard);

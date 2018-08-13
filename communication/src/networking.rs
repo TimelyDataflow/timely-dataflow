@@ -32,7 +32,7 @@ impl MessageHeader {
     // returns a header when there is enough supporting data
     #[inline(always)]
     pub fn try_read(bytes: &mut &[u8]) -> Option<MessageHeader> {
-        if bytes.len() > size_of::<MessageHeader>() {
+        if bytes.len() >= size_of::<MessageHeader>() {
             // capture original in case we need to rewind
             let original = *bytes;
 
