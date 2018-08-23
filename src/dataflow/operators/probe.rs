@@ -181,7 +181,7 @@ impl<T: Timestamp> Clone for Handle<T> {
 #[cfg(test)]
 mod tests {
 
-    use ::Configuration;
+    use ::communication::Configuration;
     use ::progress::timestamp::RootTimestamp;
     use dataflow::operators::{Input, Probe};
 
