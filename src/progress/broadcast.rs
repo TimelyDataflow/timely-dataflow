@@ -5,7 +5,7 @@ use timely_communication::allocator::Message;
 use progress::Timestamp;
 use progress::ChangeBatch;
 use timely_communication::Allocate;
-use {Push, Pull};
+use communication::{Push, Pull};
 use logging::Logger;
 
 

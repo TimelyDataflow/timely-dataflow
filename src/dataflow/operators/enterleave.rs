@@ -26,7 +26,8 @@ use std::marker::PhantomData;
 use progress::Timestamp;
 use progress::nested::subgraph::{Source, Target};
 use progress::nested::product::Product;
-use {Data, Push};
+use Data;
+use communication::Push;
 use dataflow::channels::pushers::{Counter, Tee};
 use dataflow::channels::{Bundle, Message};
 

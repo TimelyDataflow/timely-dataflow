@@ -12,7 +12,8 @@ use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
 
 use timely_communication::Allocate;
-use {Data, Push};
+use Data;
+use communication::Push;
 use dataflow::channels::Message;
 use dataflow::channels::pushers::{Tee, Counter};
 

@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
-use timely_communication::{Allocate, Data};
-use {Push, Pull};
+// use timely_communication::{Allocate, Data};
+use communication::{Allocate, Data, Push, Pull};
 use logging::Logger;
 
 use super::{ScopeParent, Scope};

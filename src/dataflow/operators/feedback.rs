@@ -3,7 +3,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use {Data, Push};
+use Data;
+use communication::Push;
 
 use progress::{Timestamp, Operate, PathSummary};
 use progress::frontier::Antichain;

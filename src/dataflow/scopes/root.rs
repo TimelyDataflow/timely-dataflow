@@ -8,8 +8,8 @@ use std::any::Any;
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use logging::Logger;
-use timely_communication::{Allocate, Data};
-use {Push, Pull};
+// use timely_communication::{Allocate, Data};
+use communication::{Allocate, Data, Push, Pull};
 
 use super::{ScopeParent, Child};
 

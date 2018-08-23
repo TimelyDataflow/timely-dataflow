@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 use dataflow::channels::Bundle;
 use progress::ChangeBatch;
-use Pull;
+use communication::Pull;
 
 /// A wrapper which accounts records pulled past in a shared count map.
 pub struct Counter<T: Ord+Clone+'static, D, P: Pull<Bundle<T, D>>> {

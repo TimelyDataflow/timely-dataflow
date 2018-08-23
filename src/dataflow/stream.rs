@@ -6,7 +6,7 @@
 
 use progress::nested::subgraph::{Source, Target};
 
-use Push;
+use communication::Push;
 use dataflow::Scope;
 use dataflow::channels::pushers::tee::TeeHelper;
 use dataflow::channels::Bundle;
