@@ -10,8 +10,8 @@ use networking::MessageHeader;
 use {Allocate, Data, Push, Pull};
 use allocator::{Message, Process};
 
-use super::bytes_exchange::BytesSendEndpoint;
-use super::shared_queue::SharedQueueSend;
+use super::bytes_exchange::{BytesPull, SendEndpoint};
+use super::push_pull::{Pusher, PullerInner};
 
 /// Builds an instance of a TcpAllocator.
 ///
@@ -76,8 +76,7 @@ impl TcpBuilder {
 
         let mut sends = Vec::new();
         for send in self.sends.into_iter() {
-            let shared = SharedQueueSend::from(send);
-            let sendpoint = BytesSendEndpoint::new(shared);
+            let sendpoint = SendEndpoint::new(send);
             sends.push(Rc::new(RefCell::new(sendpoint)));
         }
 
@@ -103,7 +102,7 @@ pub struct TcpAllocator {
     allocated:  usize,                              // indicates how many channels have been allocated (locally).
 
     // sending, receiving, and responding to binary buffers.
-    sends:      Vec<Rc<RefCell<BytesSendEndpoint>>>,         // sends[x] -> goes to process x.
+    sends:      Vec<Rc<RefCell<SendEndpoint<Sender<Bytes>>>>>,         // sends[x] -> goes to process x.
     recvs:      Receiver<Bytes>,                    // recvs[x] <- from process x?.
     to_local:   Vec<Rc<RefCell<VecDeque<Bytes>>>>,  // to worker-local typed pullers.
 }
@@ -151,7 +150,7 @@ impl Allocate for TcpAllocator {
             self.to_local.push(Rc::new(RefCell::new(VecDeque::new())));
         }
 
-        let puller = Box::new(Puller::new(inner_recv, self.to_local[channel_id].clone()));
+        let puller = Box::new(PullerInner::new(inner_recv, self.to_local[channel_id].clone()));
 
         (pushes, puller, None)
     }
@@ -160,12 +159,7 @@ impl Allocate for TcpAllocator {
     #[inline(never)]
     fn pre_work(&mut self) {
 
-        while let Ok(bytes) = self.recvs.try_recv() {
-
-            // TODO: We could wrap `bytes` in a bytes::rc::Bytes,
-            //       which could reduce `Arc` overhead, if it hurts.
-            //       This new `Arc` should be local/uncontended, though.
-            let mut bytes = Bytes::from(bytes);
+        while let Some(mut bytes) = self.recvs.pull() {
 
             // We expect that `bytes` contains an integral number of messages.
             // No splitting occurs across allocations.
@@ -208,93 +202,5 @@ impl Allocate for TcpAllocator {
         //         eprintln!("Warning: worker {}, undrained channel[{}].len() = {}", self.index, index, len);
         //     }
         // }
-    }
-}
-
-/// An adapter into which one may push elements of type `T`.
-///
-/// This pusher has a fixed MessageHeader, and access to a SharedByteBuffer which it uses to
-/// acquire buffers for serialization.
-struct Pusher<T> {
-    header:     MessageHeader,
-    sender:     Rc<RefCell<BytesSendEndpoint>>,
-    phantom:    ::std::marker::PhantomData<T>,
-}
-
-impl<T> Pusher<T> {
-    /// Creates a new `Pusher` from a header and shared byte buffer.
-    pub fn new(header: MessageHeader, sender: Rc<RefCell<BytesSendEndpoint>>) -> Pusher<T> {
-        Pusher {
-            header:     header,
-            sender:     sender,
-            phantom:    ::std::marker::PhantomData,
-        }
-    }
-}
-
-impl<T:Data> Push<Message<T>> for Pusher<T> {
-    #[inline]
-    fn push(&mut self, element: &mut Option<Message<T>>) {
-        if let Some(ref mut element) = *element {
-
-            // determine byte lengths and build header.
-            let mut header = self.header;
-            self.header.seqno += 1;
-            header.length = element.length_in_bytes();
-            assert!(header.length > 0);
-
-            // acquire byte buffer and write header, element.
-            let mut borrow = self.sender.borrow_mut();
-            {
-                let mut bytes = borrow.reserve(header.required_bytes());
-                assert!(bytes.len() >= header.required_bytes());
-                let mut writer = &mut bytes;
-                header.write_to(writer).expect("failed to write header!");
-                element.into_bytes(writer);
-            }
-            borrow.make_valid(header.required_bytes());
-        }
-    }
-}
-
-/// An adapter from which one can pull elements of type `T`.
-///
-/// This type is very simple, and just consumes owned `Vec<u8>` allocations. It is
-/// not the most efficient thing possible, which would probably instead be something
-/// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
-/// allocation.
-struct Puller<T> {
-    inner: Box<Pull<Message<T>>>,            // inner pullable (e.g. intra-process typed queue)
-    current: Option<Message<T>>,
-    receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
-}
-
-impl<T:Data> Puller<T> {
-    fn new(inner: Box<Pull<Message<T>>>, receiver: Rc<RefCell<VecDeque<Bytes>>>) -> Puller<T> {
-        Puller {
-            inner,
-            current: None,
-            receiver,
-        }
-    }
-}
-
-impl<T:Data> Pull<Message<T>> for Puller<T> {
-    #[inline]
-    fn pull(&mut self) -> &mut Option<Message<T>> {
-
-        let inner = self.inner.pull();
-        if inner.is_some() {
-            inner
-        }
-        else {
-            self.current =
-            self.receiver
-                .borrow_mut()
-                .pop_front()
-                .map(|bytes| unsafe { Message::from_bytes(bytes) });
-
-            &mut self.current
-        }
     }
 }

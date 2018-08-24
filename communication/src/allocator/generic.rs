@@ -4,7 +4,10 @@
 //! for example closures whose type arguments must be specified.
 
 use allocator::{Allocate, Message, Thread, Process, Binary};
-use allocator::process_binary::{ProcessBinary, ProcessBinaryBuilder};
+// use allocator::process_binary::{ProcessBinary, ProcessBinaryBuilder};
+
+use allocator::zero_copy::allocator_process::ProcessAllocator;
+use allocator::zero_copy::allocator_process::ProcessBuilder;
 
 use allocator::zero_copy::allocator::TcpAllocator as ZeroCopyAllocator;
 use allocator::zero_copy::allocator::TcpBuilder as ZeroCopyBuilder;
@@ -18,7 +21,7 @@ pub enum Generic {
     Thread(Thread),
     Process(Process),
     Binary(Binary),
-    ProcessBinary(ProcessBinary<::allocator::process_binary::vec::VecBytesExchange>),
+    ProcessBinary(ProcessAllocator),
     ZeroCopy(ZeroCopyAllocator),
 }
 
@@ -95,7 +98,7 @@ pub enum GenericBuilder {
     Thread(Thread),
     Process(Process),
     Binary(Binary),
-    ProcessBinary(ProcessBinaryBuilder<::allocator::process_binary::vec::VecBytesExchange>),
+    ProcessBinary(ProcessBuilder),
     ZeroCopy(ZeroCopyBuilder),
 }
 

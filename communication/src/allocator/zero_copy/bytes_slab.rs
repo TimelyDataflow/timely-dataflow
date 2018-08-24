@@ -20,10 +20,6 @@ impl BytesSlab {
         }
     }
 
-    // pub fn is_full(&self) -> bool { self.valid == self.buffer.len() }
-
-    // pub fn bytes(&mut self) -> &mut Bytes { &mut self.buffer }
-
     pub fn empty(&mut self) -> &mut [u8] {
         &mut self.buffer[self.valid..]
     }
@@ -68,10 +64,6 @@ impl BytesSlab {
 
         let new_buffer = self.stash.pop().unwrap_or_else(|| Bytes::from(vec![0; 1 << self.shift].into_boxed_slice()));
         let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
-
-        if !(self.buffer.len() == (1 << self.shift)) {
-            println!("len: {:?}, expected: {:?}", self.buffer.len(), (1 << self.shift));
-        }
 
         self.buffer[.. self.valid].copy_from_slice(&old_buffer[.. self.valid]);
         self.in_progress.push(Some(old_buffer));

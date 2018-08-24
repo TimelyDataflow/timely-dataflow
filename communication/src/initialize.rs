@@ -12,6 +12,7 @@ use std::any::Any;
 use allocator::{Thread, Process, Generic, GenericBuilder};
 // use allocator::process_binary::ProcessBinaryBuilder;
 // use networking::initialize_networking;
+use allocator::zero_copy::allocator_process::ProcessBuilder;
 use allocator::zero_copy::initialize::initialize_networking;
 
 /// Possible configurations for the communication infrastructure.
@@ -86,8 +87,8 @@ fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<(Vec<G
             // Ok(ProcessBinaryBuilder::new_vector(1).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
         },
         Configuration::Process(threads) => {
-            Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
-            // Ok(ProcessBinaryBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
+            // Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
+            Ok((ProcessBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect(), Box::new(())))
         },
         Configuration::Cluster(threads, process, addresses, report) => {
             if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, logger) {
