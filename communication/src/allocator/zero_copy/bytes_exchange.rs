@@ -1,53 +1,21 @@
 use bytes::arc::Bytes;
 use super::bytes_slab::BytesSlab;
 
-// /// A type that can allocate send and receive endpoints for byte exchanges.
-// ///
-// /// The `BytesExchange` intent is that one can abstractly define mechanisms for exchanging
-// /// bytes between various entities. In some cases this may be between worker threads within
-// /// a process, in other cases it may be between worker threads and remote processes. At the
-// /// moment the cardinalities of remote endpoints requires some context and interpretation.
-// pub trait BytesExchange {
-//     /// The type of the send endpoint.
-//     type Send: SendEndpoint+'static;
-//     /// The type of the receive endpoint.
-//     type Recv: RecvEndpoint+'static;
-//     /// Allocates endpoint pairs for a specified worker.
-//     ///
-//     /// Importantly, the Send side may share state to coalesce the buffering and
-//     /// transmission of records. That is why there are `Rc<RefCell<_>>` things there.
-//     fn next(&mut self) -> Option<(Vec<Self::Send>, Vec<Self::Recv>)>;
-// }
-
-// /// A type that can provide and publish writeable binary buffers.
-// pub trait SendEndpoint {
-//     /// The type of the writeable binary buffer.
-//     type SendBuffer: ::std::io::Write;
-//     /// Provides a writeable buffer of the requested capacity.
-//     fn reserve(&mut self, capacity: usize) -> &mut Self::SendBuffer;
-//     /// Indicates that it is now appropriate to publish the buffer.
-//     fn publish(&mut self);
-// }
-
-// /// A type that can provide readable binary buffers.
-// pub trait RecvEndpoint {
-//     type RecvBuffer: DerefMut<Target=[u8]>;
-//     /// Provides a readable buffer.
-//     fn receive(&mut self) -> Option<Self::RecvBuffer>;
-// }
-
+/// A target for `Bytes`.
 pub trait BytesPush { fn push(&mut self, bytes: Bytes); }
+/// A source for `Bytes`.
 pub trait BytesPull { fn pull(&mut self) -> Option<Bytes>; }
 
 // std::sync::mpsc implementations.
-impl BytesPush for ::std::sync::mpsc::Sender<Bytes> {
+use ::std::sync::mpsc::{Sender, Receiver};
+impl BytesPush for Sender<Bytes> {
     fn push(&mut self, bytes: Bytes) {
         self.send(bytes)
             .expect("unable to send Bytes");
     }
 }
 
-impl BytesPull for ::std::sync::mpsc::Receiver<Bytes> {
+impl BytesPull for Receiver<Bytes> {
     fn pull(&mut self) -> Option<Bytes> {
         self.try_recv()
             .ok()
@@ -73,6 +41,7 @@ impl BytesPull for Arc<Mutex<VecDeque<Bytes>>> {
     }
 }
 
+/// A `BytesPush` wrapper which stages writes.
 pub struct SendEndpoint<P: BytesPush> {
     send: P,
     buffer: BytesSlab,
@@ -122,21 +91,3 @@ impl<P: BytesPush> Drop for SendEndpoint<P> {
         self.send_buffer();
     }
 }
-
-// pub struct RecvEndpoint<P: BytesPull> {
-//     recv: PSharedQueueRecv<Bytes>,
-// }
-
-
-// impl BytesRecvEndpoint {
-//     pub fn new(queue: SharedQueueRecv<Bytes>) -> Self {
-//         BytesRecvEndpoint { recv: queue }
-//     }
-// }
-
-// impl RecvEndpoint for BytesRecvEndpoint {
-//     type RecvBuffer = Bytes;
-//     fn receive(&mut self) -> Option<Bytes> {
-//         self.recv.pop()
-//     }
-// }
