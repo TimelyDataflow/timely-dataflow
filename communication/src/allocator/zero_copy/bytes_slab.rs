@@ -60,6 +60,7 @@ impl BytesSlab {
                 }
             }
             self.in_progress.retain(|x| x.is_some());
+            self.stash.retain(|x| x.len() == 1 << self.shift);
         }
 
         let new_buffer = self.stash.pop().unwrap_or_else(|| Bytes::from(vec![0; 1 << self.shift].into_boxed_slice()));
