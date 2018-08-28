@@ -32,7 +32,7 @@ impl MessageHeader {
     pub fn try_read(bytes: &mut [u8]) -> Option<MessageHeader> {
         unsafe { decode::<MessageHeader>(bytes) }
             .and_then(|(header, remaining)| {
-                if remaining.len() > header.length {
+                if remaining.len() >= header.length {
                     Some(header.clone())
                 }
                 else {
