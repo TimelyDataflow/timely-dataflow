@@ -9,10 +9,8 @@ use std::sync::Arc;
 
 use std::any::Any;
 
-use allocator::{Thread, Process, Generic, GenericBuilder};
-// use allocator::process_binary::ProcessBinaryBuilder;
-// use networking::initialize_networking;
-use allocator::zero_copy::allocator_process::ProcessBuilder;
+use allocator::{AllocateBuilder, Thread, Process, Generic, GenericBuilder};
+// use allocator::zero_copy::allocator_process::ProcessBuilder;
 use allocator::zero_copy::initialize::initialize_networking;
 
 /// Possible configurations for the communication infrastructure.

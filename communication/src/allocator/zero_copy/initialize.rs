@@ -1,9 +1,15 @@
+//! Network initialization.
 
 use std::sync::Arc;
+use allocator::Process;
+use networking::create_sockets;
+use super::tcp::{send_loop, recv_loop};
+use super::allocator::{TcpBuilder, new_vector};
 
-use super::binary::{send_loop, recv_loop};
-use super::allocator::TcpBuilder;
-
+/// Join handles for send and receive threads.
+///
+/// On drop, the guard joins with each of the threads to ensure that they complete
+/// cleanly and send all necessary data.
 pub struct CommsGuard {
     send_guards: Vec<::std::thread::JoinHandle<()>>,
     recv_guards: Vec<::std::thread::JoinHandle<()>>,
@@ -29,14 +35,13 @@ pub fn initialize_networking(
     threads: usize,
     noisy: bool,
     log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>)
--> ::std::io::Result<(Vec<TcpBuilder>, CommsGuard)> {
+-> ::std::io::Result<(Vec<TcpBuilder<Process>>, CommsGuard)> {
 
     let processes = addresses.len();
 
-    use networking::create_sockets;
     let mut results = create_sockets(addresses, my_index, noisy)?;
 
-    let (builders, remote_recvs, remote_sends) = TcpBuilder::new_vector(my_index, threads, processes);
+    let (builders, remote_recvs, remote_sends) = new_vector(my_index, threads, processes);
     let mut remote_recv_iter = remote_recvs.into_iter();
 
     let mut send_guards = Vec::new();

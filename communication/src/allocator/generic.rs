@@ -3,26 +3,23 @@
 //! This type is useful in settings where it is difficult to write code generic in `A: Allocate`,
 //! for example closures whose type arguments must be specified.
 
-use allocator::{Allocate, Message, Thread, Process, Binary};
-// use allocator::process_binary::{ProcessBinary, ProcessBinaryBuilder};
-
-use allocator::zero_copy::allocator_process::ProcessAllocator;
-use allocator::zero_copy::allocator_process::ProcessBuilder;
-
-use allocator::zero_copy::allocator::TcpAllocator as ZeroCopyAllocator;
-use allocator::zero_copy::allocator::TcpBuilder as ZeroCopyBuilder;
-// use allocator::zero_copy::binary::TcpBytesExchange;
+use allocator::{Allocate, AllocateBuilder, Message, Thread, Process};
+use allocator::zero_copy::allocator_process::{ProcessBuilder, ProcessAllocator};
+use allocator::zero_copy::allocator::{TcpBuilder, TcpAllocator};
 
 use {Push, Pull, Data};
 
 /// Enumerates known implementors of `Allocate`.
 /// Passes trait method calls on to members.
 pub enum Generic {
+    /// Intra-thread allocator.
     Thread(Thread),
+    /// Inter-thread, intra-process allocator.
     Process(Process),
-    Binary(Binary),
+    /// Inter-thread, intra-process serializing allocator.
     ProcessBinary(ProcessAllocator),
-    ZeroCopy(ZeroCopyAllocator),
+    /// Inter-process allocator.
+    ZeroCopy(TcpAllocator<Process>),
 }
 
 impl Generic {
@@ -31,7 +28,6 @@ impl Generic {
         match self {
             &Generic::Thread(ref t) => t.index(),
             &Generic::Process(ref p) => p.index(),
-            &Generic::Binary(ref b) => b.index(),
             &Generic::ProcessBinary(ref pb) => pb.index(),
             &Generic::ZeroCopy(ref z) => z.index(),
         }
@@ -41,7 +37,6 @@ impl Generic {
         match self {
             &Generic::Thread(ref t) => t.peers(),
             &Generic::Process(ref p) => p.peers(),
-            &Generic::Binary(ref b) => b.peers(),
             &Generic::ProcessBinary(ref pb) => pb.peers(),
             &Generic::ZeroCopy(ref z) => z.peers(),
         }
@@ -51,26 +46,24 @@ impl Generic {
         match self {
             &mut Generic::Thread(ref mut t) => t.allocate(),
             &mut Generic::Process(ref mut p) => p.allocate(),
-            &mut Generic::Binary(ref mut b) => b.allocate(),
             &mut Generic::ProcessBinary(ref mut pb) => pb.allocate(),
             &mut Generic::ZeroCopy(ref mut z) => z.allocate(),
         }
     }
-
+    /// Perform work before scheduling operators.
     pub fn pre_work(&mut self) {
         match self {
             &mut Generic::Thread(ref mut t) => t.pre_work(),
             &mut Generic::Process(ref mut p) => p.pre_work(),
-            &mut Generic::Binary(ref mut b) => b.pre_work(),
             &mut Generic::ProcessBinary(ref mut pb) => pb.pre_work(),
             &mut Generic::ZeroCopy(ref mut z) => z.pre_work(),
         }
     }
+    /// Perform work after scheduling operators.
     pub fn post_work(&mut self) {
         match self {
             &mut Generic::Thread(ref mut t) => t.post_work(),
             &mut Generic::Process(ref mut p) => p.post_work(),
-            &mut Generic::Binary(ref mut b) => b.post_work(),
             &mut Generic::ProcessBinary(ref mut pb) => pb.post_work(),
             &mut Generic::ZeroCopy(ref mut z) => z.post_work(),
         }
@@ -95,19 +88,22 @@ impl Allocate for Generic {
 /// whereas the allocator they construct may not. As an example, the `ProcessBinary` type
 /// contains `Rc` wrapped state, and so cannot itself be moved across threads.
 pub enum GenericBuilder {
+    /// Builder for `Thread` allocator.
     Thread(Thread),
+    /// Builder for `Process` allocator.
     Process(Process),
-    Binary(Binary),
+    /// Builder for `ProcessBinary` allocator.
     ProcessBinary(ProcessBuilder),
-    ZeroCopy(ZeroCopyBuilder),
+    /// Builder for `ZeroCopy` allocator.
+    ZeroCopy(TcpBuilder<Process>),
 }
 
-impl GenericBuilder {
-    pub fn build(self) -> Generic {
+impl AllocateBuilder for GenericBuilder {
+    type Allocator = Generic;
+    fn build(self) -> Generic {
         match self {
             GenericBuilder::Thread(t) => Generic::Thread(t),
             GenericBuilder::Process(p) => Generic::Process(p),
-            GenericBuilder::Binary(b) => Generic::Binary(b),
             GenericBuilder::ProcessBinary(pb) => Generic::ProcessBinary(pb.build()),
             GenericBuilder::ZeroCopy(z) => Generic::ZeroCopy(z.build()),
         }

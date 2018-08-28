@@ -112,7 +112,7 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
                     started = true;
                 }
 
-                use timely_communication::allocator::RefOrMut;
+                use communication::message::RefOrMut;
 
                 while let Some(message) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {

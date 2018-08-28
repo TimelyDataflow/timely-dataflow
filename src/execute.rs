@@ -1,6 +1,6 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use timely_communication::{initialize, Configuration, Allocator, WorkerGuards};
+use communication::{initialize, Configuration, Allocator, WorkerGuards};
 use dataflow::scopes::{Root, Child};
 use logging::LoggerConfig;
 

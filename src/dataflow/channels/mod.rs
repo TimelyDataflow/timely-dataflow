@@ -1,18 +1,16 @@
 //! Structured communication between timely dataflow operators.
 
-use timely_communication::Push;
+use communication::Push;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
 /// A collection of types that may be pulled from.
 pub mod pullers;
-// /// Types relating to batching of timestamped records.
-// pub mod message;
 /// Parallelization contracts, describing how data must be exchanged between operators.
 pub mod pact;
 
 /// The input to and output from timely dataflow communication channels.
-pub type Bundle<T, D> = ::timely_communication::allocator::Message<Message<T, D>>;
+pub type Bundle<T, D> = ::communication::Message<Message<T, D>>;
 
 /// A serializable representation of timestamped data.
 #[derive(Clone, Abomonation)]

@@ -74,11 +74,10 @@
 //! result: Ok(1)
 //! ```
 
-// #![forbid(missing_docs)]
+#![forbid(missing_docs)]
 
 #[cfg(feature = "arg_parse")]
 extern crate getopts;
-extern crate byteorder;
 extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
 extern crate time;
@@ -86,9 +85,10 @@ extern crate time;
 extern crate bytes;
 
 pub mod allocator;
-mod networking;
+pub mod networking;
 pub mod initialize;
 pub mod logging;
+pub mod message;
 
 use std::any::Any;
 
@@ -97,7 +97,7 @@ use abomonation::Abomonation;
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
 pub use initialize::{initialize, Configuration, WorkerGuards};
-pub use allocator::Message as CommMessage;
+pub use message::Message;
 
 /// A composite trait for types that may be used with channels.
 pub trait Data : Send+Any+Abomonation+'static { }

@@ -8,7 +8,6 @@ use std::any::Any;
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use logging::Logger;
-// use timely_communication::{Allocate, Data};
 use communication::{Allocate, Data, Push, Pull};
 
 use super::{ScopeParent, Child};
@@ -132,7 +131,7 @@ impl<A: Allocate> ScopeParent for Root<A> {
     }
 }
 
-use timely_communication::allocator::Message;
+use communication::Message;
 
 impl<A: Allocate> Allocate for Root<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }

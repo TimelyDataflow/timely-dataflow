@@ -1,3 +1,5 @@
+//! Intra-thread communication.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -6,7 +8,7 @@ use allocator::{Allocate, Message};
 use {Push, Pull};
 
 
-// The simplest communicator remains worker-local and just queues sent messages.
+/// An allocator for intra-thread communication.
 pub struct Thread;
 impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
@@ -18,6 +20,7 @@ impl Allocate for Thread {
 }
 
 impl Thread {
+    /// Allocates a new pusher and puller pair.
     pub fn new<T: 'static>() -> (Pusher<T>, Puller<T>) {
         let shared = Rc::new(RefCell::new((VecDeque::<T>::new(), VecDeque::<T>::new())));
         (Pusher { target: shared.clone() }, Puller { source: shared, current: None })
@@ -25,7 +28,7 @@ impl Thread {
 }
 
 
-// an observer wrapping a Rust channel
+/// The push half of an intra-thread channel.
 pub struct Pusher<T> {
     target: Rc<RefCell<(VecDeque<T>, VecDeque<T>)>>,
 }
@@ -41,6 +44,7 @@ impl<T> Push<T> for Pusher<T> {
     }
 }
 
+/// The pull half of an intra-thread channel.
 pub struct Puller<T> {
     current: Option<T>,
     source: Rc<RefCell<(VecDeque<T>, VecDeque<T>)>>,

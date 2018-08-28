@@ -1,10 +1,18 @@
+//! Types and traits for sharing `Bytes`.
+
 use bytes::arc::Bytes;
 use super::bytes_slab::BytesSlab;
 
 /// A target for `Bytes`.
-pub trait BytesPush { fn push(&mut self, bytes: Bytes); }
+pub trait BytesPush {
+    /// Pushes bytes at the instance.
+    fn push(&mut self, bytes: Bytes);
+}
 /// A source for `Bytes`.
-pub trait BytesPull { fn pull(&mut self) -> Option<Bytes>; }
+pub trait BytesPull {
+    /// Pulls bytes from the instance.
+    fn pull(&mut self) -> Option<Bytes>;
+}
 
 // std::sync::mpsc implementations.
 use ::std::sync::mpsc::{Sender, Receiver};
@@ -65,11 +73,14 @@ impl<P: BytesPush> SendEndpoint<P> {
             buffer: BytesSlab::new(20),
         }
     }
-
+    /// Makes the next `bytes` bytes valid.
+    ///
+    /// The current implementation also sends the bytes, to ensure early visibility.
     pub fn make_valid(&mut self, bytes: usize) {
         self.buffer.make_valid(bytes);
         self.send_buffer();
     }
+    /// Acquires a prefix of `self.empty()` of length at least `capacity`.
     pub fn reserve(&mut self, capacity: usize) -> &mut [u8] {
 
         if self.buffer.empty().len() < capacity {
@@ -80,7 +91,7 @@ impl<P: BytesPush> SendEndpoint<P> {
         assert!(self.buffer.empty().len() >= capacity);
         self.buffer.empty()
     }
-
+    /// Marks all written data as valid, makes visible.
     pub fn publish(&mut self) {
         self.send_buffer();
     }

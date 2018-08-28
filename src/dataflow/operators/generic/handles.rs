@@ -5,7 +5,6 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-// use std::borrow::Cow;
 
 use ::Data;
 use progress::Timestamp;
@@ -15,7 +14,7 @@ use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::{Buffer, Session};
 use dataflow::channels::Bundle;
-use timely_communication::{Push, Pull, allocator::RefOrMut};
+use communication::{Push, Pull, message::RefOrMut};
 use logging::Logger;
 
 use dataflow::operators::CapabilityRef;

@@ -1,6 +1,6 @@
 //! Broadcast records to all workers.
 
-use timely_communication::Pull;
+use communication::Pull;
 
 use ::ExchangeData;
 use progress::nested::subgraph::{Source, Target};
@@ -87,7 +87,7 @@ impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
         let mut vec = Vec::new();
         while let Some(bundle) = self.input.next() {
 
-            use timely_communication::allocator::RefOrMut;
+            use communication::message::RefOrMut;
 
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {

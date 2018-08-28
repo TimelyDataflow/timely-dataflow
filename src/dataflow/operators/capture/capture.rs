@@ -140,7 +140,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
             },
             move |consumed, _internal, _external| {
 
-                use timely_communication::allocator::RefOrMut;
+                use communication::message::RefOrMut;
 
                 // turn each received message into an event.
                 let mut borrow = event_pusher2.borrow_mut();

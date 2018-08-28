@@ -1,3 +1,5 @@
+//! Zero-copy allocator for intra-process serialized communication.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -81,7 +83,7 @@ impl ProcessBuilder {
     }
 }
 
-// A specific Communicator for inter-thread intra-process communication
+/// A serializing allocator for inter-thread intra-process communication.
 pub struct ProcessAllocator {
 
     index:      usize,                              // number out of peers
@@ -139,7 +141,7 @@ impl Allocate for ProcessAllocator {
                 // No splitting occurs across allocations.
                 while bytes.len() > 0 {
 
-                    if let Some(header) = MessageHeader::try_read(&mut &bytes[..]) {
+                    if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
 
                         // Get the header and payload, ditch the header.
                         let mut peel = bytes.extract_to(header.required_bytes());

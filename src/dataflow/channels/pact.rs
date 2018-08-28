@@ -9,10 +9,10 @@
 
 use std::marker::PhantomData;
 
-use timely_communication::{Allocate, Push, Pull, Data};
-use timely_communication::allocator::Thread;
-use timely_communication::allocator::thread::Pusher as ThreadPusher;
-use timely_communication::allocator::thread::Puller as ThreadPuller;
+use communication::{Allocate, Push, Pull, Data};
+use communication::allocator::Thread;
+use communication::allocator::thread::Pusher as ThreadPusher;
+use communication::allocator::thread::Puller as ThreadPuller;
 
 use dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{Bundle, Message};

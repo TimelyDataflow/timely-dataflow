@@ -352,6 +352,15 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         }
         self.frontier_temp.clear();
     }
+
+    /// Reports the count for a queried time.
+    pub fn count_for(&self, query_time: &T) -> i64 {
+        self.updates
+            .iter()
+            .filter(|td| td.0.eq(query_time))
+            .map(|td| td.1)
+            .sum()
+    }
 }
 
 /// A wrapper for elements of an antichain.

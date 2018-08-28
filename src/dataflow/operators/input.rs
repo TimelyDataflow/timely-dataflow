@@ -11,7 +11,7 @@ use progress::ChangeBatch;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
 
-use timely_communication::Allocate;
+use communication::Allocate;
 use Data;
 use communication::Push;
 use dataflow::channels::Message;

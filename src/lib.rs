@@ -55,13 +55,12 @@
 //! We then introduce input at increasing rounds, indicate the advance to the system (promising
 //! that we will introduce no more input at prior rounds), and step the computation.
 
-#![deny(missing_docs)]
+#![forbid(missing_docs)]
 
 extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
 extern crate timely_communication;
 extern crate time;
-extern crate byteorder;
 extern crate bytes;
 
 pub use execute::{execute, execute_logging, execute_from_args, execute_from_args_logging, example};
@@ -91,5 +90,5 @@ impl<T: ::abomonation::Abomonation+Clone+'static> Data for T { }
 ///
 /// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`
 /// `Data` trait, which describes requirements for communication along channels.
-pub trait ExchangeData: Data + timely_communication::Data { }
-impl<T: Data + timely_communication::Data> ExchangeData for T { }
+pub trait ExchangeData: Data + communication::Data { }
+impl<T: Data + communication::Data> ExchangeData for T { }

@@ -5,7 +5,6 @@ use std::cell::RefCell;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
-// use timely_communication::{Allocate, Data};
 use communication::{Allocate, Data, Push, Pull};
 use logging::Logger;
 
@@ -87,7 +86,7 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
     }
 }
 
-use timely_communication::allocator::Message;
+use communication::Message;
 
 impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
     fn index(&self) -> usize { self.parent.index() }

@@ -1,7 +1,7 @@
 //! Counts the number of records at each time.
 use std::collections::HashMap;
 
-use timely_communication::allocator::RefOrMut;
+use communication::message::RefOrMut;
 
 use Data;
 use dataflow::channels::pact::Pipeline;

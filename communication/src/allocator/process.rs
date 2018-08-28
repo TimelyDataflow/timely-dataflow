@@ -1,3 +1,5 @@
+//! Typed inter-thread, intra-process channels.
+
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
@@ -5,7 +7,7 @@ use std::sync::mpsc::{Sender, Receiver, channel};
 use allocator::{Allocate, Message, Thread};
 use {Push, Pull};
 
-// A specific Communicator for inter-thread intra-process communication
+/// An allocater for inter-thread, intra-process communication
 pub struct Process {
     inner:      Thread,                         // inner Thread
     index:      usize,                          // number out of peers
@@ -15,7 +17,9 @@ pub struct Process {
 }
 
 impl Process {
+    /// Access the wrapped inner allocator.
     pub fn inner<'a>(&'a mut self) -> &'a mut Thread { &mut self.inner }
+    /// Allocate a list of connected intra-process allocators.
     pub fn new_vector(count: usize) -> Vec<Process> {
         let channels = Arc::new(Mutex::new(Vec::new()));
         (0 .. count).map(|index| Process {
@@ -71,7 +75,7 @@ impl Allocate for Process {
     }
 }
 
-// an observer wrapping a Rust channel
+/// The push half of an intra-process channel.
 struct Pusher<T> {
     target: Sender<T>,
 }
@@ -90,6 +94,7 @@ impl<T> Push<T> for Pusher<T> {
     }
 }
 
+/// The pull half of an intra-process channel.
 struct Puller<T> {
     current: Option<T>,
     source: Receiver<T>,

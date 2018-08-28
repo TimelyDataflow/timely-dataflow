@@ -1,3 +1,5 @@
+//! Push and Pull implementations wrapping serialized data.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -69,6 +71,7 @@ pub struct Puller<T> {
 }
 
 impl<T:Data> Puller<T> {
+    /// Creates a new `Puller` instance from a shared queue.
     pub fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>) -> Puller<T> {
         Puller {
             current: None,
@@ -103,6 +106,7 @@ pub struct PullerInner<T> {
 }
 
 impl<T:Data> PullerInner<T> {
+    /// Creates a new `PullerInner` instance from a shared queue.
     pub fn new(inner: Box<Pull<Message<T>>>, receiver: Rc<RefCell<VecDeque<Bytes>>>) -> Self {
         PullerInner {
             inner,

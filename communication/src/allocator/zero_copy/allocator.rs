@@ -1,3 +1,4 @@
+//! Zero-copy allocator based on TCP.
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -19,60 +20,61 @@ use super::push_pull::{Pusher, PullerInner};
 /// threads (specifically, the `Rc<RefCell<_>>` local channels). So, we must package up the state
 /// shared between threads here, and then provide a method that will instantiate the non-movable
 /// members once in the destination thread.
-pub struct TcpBuilder {
-    inner:      Process,
+pub struct TcpBuilder<A: Allocate> {
+    inner:      A,
     index:      usize,                          // number out of peers
     peers:      usize,                          // number of peer allocators.
     sends:      Vec<Sender<Bytes>>,  // for pushing bytes at remote processes.
     recvs:      Receiver<Bytes>,                // for pulling bytes from remote processes.
 }
 
-impl TcpBuilder {
-    /// Creates a vector of builders, sharing appropriate state.
-    ///
-    /// This method requires access to a byte exchanger, from which it mints channels.
-    pub fn new_vector(
-        my_process: usize,
-        threads: usize,
-        processes: usize) -> (Vec<TcpBuilder>, Vec<Receiver<Bytes>>, Vec<Sender<Bytes>>) {
+/// Creates a vector of builders, sharing appropriate state.
+///
+/// This method requires access to a byte exchanger, from which it mints channels.
+pub fn new_vector(
+    my_process: usize,
+    threads: usize,
+    processes: usize) -> (Vec<TcpBuilder<Process>>, Vec<Receiver<Bytes>>, Vec<Sender<Bytes>>) {
 
-        let mut l2r_send = Vec::new();
-        let mut l2r_recv = Vec::new();
-        let mut r2l_send = Vec::new();
-        let mut r2l_recv = Vec::new();
+    let mut l2r_send = Vec::new();
+    let mut l2r_recv = Vec::new();
+    let mut r2l_send = Vec::new();
+    let mut r2l_recv = Vec::new();
 
-        for _ in 0 .. threads {
-            let (send, recv) = channel();
-            r2l_send.push(send);
-            r2l_recv.push(recv);
-        }
-
-        for _ in 0 .. processes - 1 {
-            let (send, recv) = channel();
-            l2r_send.push(send);
-            l2r_recv.push(recv);
-        }
-
-        let builders =
-        Process::new_vector(threads)
-            .into_iter()
-            .zip(r2l_recv.into_iter())
-            .enumerate()
-            .map(|(index, (inner, recvs))| {
-                TcpBuilder {
-                    inner,
-                    index: my_process * threads + index,
-                    peers: threads * processes,
-                    sends: l2r_send.clone(),
-                    recvs,
-                }})
-            .collect();
-
-        (builders, l2r_recv, r2l_send)
+    for _ in 0 .. threads {
+        let (send, recv) = channel();
+        r2l_send.push(send);
+        r2l_recv.push(recv);
     }
 
+    for _ in 0 .. processes - 1 {
+        let (send, recv) = channel();
+        l2r_send.push(send);
+        l2r_recv.push(recv);
+    }
+
+    let builders =
+    Process::new_vector(threads)
+        .into_iter()
+        .zip(r2l_recv.into_iter())
+        .enumerate()
+        .map(|(index, (inner, recvs))| {
+            TcpBuilder {
+                inner,
+                index: my_process * threads + index,
+                peers: threads * processes,
+                sends: l2r_send.clone(),
+                recvs,
+            }})
+        .collect();
+
+    (builders, l2r_recv, r2l_send)
+}
+
+impl<A: Allocate> TcpBuilder<A> {
+
     /// Builds a `TcpAllocator`, instantiating `Rc<RefCell<_>>` elements.
-    pub fn build(self) -> TcpAllocator {
+    pub fn build(self) -> TcpAllocator<A> {
 
         let mut sends = Vec::new();
         for send in self.sends.into_iter() {
@@ -92,10 +94,10 @@ impl TcpBuilder {
     }
 }
 
-// A specific Communicator for inter-thread intra-process communication
-pub struct TcpAllocator {
+/// A TCP-based allocator for inter-process communication.
+pub struct TcpAllocator<A: Allocate> {
 
-    inner:      Process,                            // A non-serialized inner allocator for process-local peers.
+    inner:      A,                                  // A non-serialized inner allocator for process-local peers.
 
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
@@ -107,7 +109,7 @@ pub struct TcpAllocator {
     to_local:   Vec<Rc<RefCell<VecDeque<Bytes>>>>,  // to worker-local typed pullers.
 }
 
-impl Allocate for TcpAllocator {
+impl<A: Allocate> Allocate for TcpAllocator<A> {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
     fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
@@ -165,7 +167,7 @@ impl Allocate for TcpAllocator {
             // No splitting occurs across allocations.
             while bytes.len() > 0 {
 
-                if let Some(header) = MessageHeader::try_read(&mut &bytes[..]) {
+                if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
 
                     // Get the header and payload, ditch the header.
                     let mut peel = bytes.extract_to(header.required_bytes());

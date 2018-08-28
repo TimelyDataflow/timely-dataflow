@@ -1,3 +1,5 @@
+//!
+
 use std::io::{Read, Write};
 use std::sync::mpsc::{Sender, Receiver};
 use std::net::TcpStream;
@@ -50,7 +52,7 @@ pub fn recv_loop(
         buffer.make_valid(read);
 
         // Consume complete messages from the front of self.buffer.
-        while let Some(header) = MessageHeader::try_read(&mut buffer.valid()) {
+        while let Some(header) = MessageHeader::try_read(buffer.valid()) {
 
             // TODO: Consolidate message sequences sent to the same worker?
             let peeled_bytes = header.required_bytes();

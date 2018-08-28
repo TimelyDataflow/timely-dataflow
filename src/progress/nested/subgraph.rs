@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use timely_communication::Allocate;
+use communication::Allocate;
 
 use logging::Logger;
 

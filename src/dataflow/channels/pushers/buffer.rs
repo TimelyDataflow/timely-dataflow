@@ -4,7 +4,7 @@
 use dataflow::channels::{Bundle, Message};
 use progress::Timestamp;
 use dataflow::operators::Capability;
-use timely_communication::Push;
+use communication::Push;
 
 /// Buffers data sent at the same time, for efficient communication.
 ///

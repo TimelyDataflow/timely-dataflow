@@ -1,14 +1,8 @@
 //! Broadcasts progress information among workers.
 
-use timely_communication::allocator::Message;
-
-use progress::Timestamp;
-use progress::ChangeBatch;
-use timely_communication::Allocate;
-use communication::{Push, Pull};
+use progress::{ChangeBatch, Timestamp};
+use communication::{Allocate, Message, Push, Pull};
 use logging::Logger;
-
-
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;

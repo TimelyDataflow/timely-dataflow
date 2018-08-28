@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use Data;
 use dataflow::channels::{Bundle, Message};
 
-use timely_communication::Push;
+use communication::Push;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct Tee<T: 'static, D: 'static> {
