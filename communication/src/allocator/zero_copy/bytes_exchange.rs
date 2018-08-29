@@ -78,7 +78,7 @@ impl<P: BytesPush> SendEndpoint<P> {
     /// The current implementation also sends the bytes, to ensure early visibility.
     pub fn make_valid(&mut self, bytes: usize) {
         self.buffer.make_valid(bytes);
-        self.send_buffer();
+        // self.send_buffer();
     }
     /// Acquires a prefix of `self.empty()` of length at least `capacity`.
     pub fn reserve(&mut self, capacity: usize) -> &mut [u8] {
