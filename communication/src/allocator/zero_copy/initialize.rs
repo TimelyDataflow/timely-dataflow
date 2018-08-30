@@ -43,6 +43,7 @@ pub fn initialize_networking(
 
     let (builders, remote_recvs, remote_sends) = new_vector(my_index, threads, processes);
     let mut remote_recv_iter = remote_recvs.into_iter();
+    let mut remote_send_iter = remote_sends.into_iter();
 
     let mut send_guards = Vec::new();
     let mut recv_guards = Vec::new();
@@ -52,7 +53,7 @@ pub fn initialize_networking(
 
         if let Some(stream) = results[index].take() {
 
-            let remote_recv = remote_recv_iter.next().unwrap();
+            let (remote_recv, signal) = remote_recv_iter.next().unwrap();
 
             {
                 let log_sender = log_sender.clone();
@@ -68,15 +69,16 @@ pub fn initialize_networking(
                             remote: Some(index),
                         });
 
-                        let stream = ::std::io::BufWriter::with_capacity(1 << 20, stream);
-                        send_loop(stream, remote_recv, log_sender);
+                        send_loop(stream, remote_recv, signal, log_sender);
                     })?;
 
                 send_guards.push(join_guard);
             }
 
+            let remote_send = remote_send_iter.next().unwrap();
+
             {
-                let remote_sends = remote_sends.clone();
+                // let remote_sends = remote_sends.clone();
                 let log_sender = log_sender.clone();
                 let stream = stream.try_clone()?;
                 let join_guard =
@@ -88,7 +90,7 @@ pub fn initialize_networking(
                             sender: false,
                             remote: Some(index),
                         });
-                        recv_loop(stream, remote_sends, threads * my_index, log_sender);
+                        recv_loop(stream, remote_send, threads * my_index, log_sender);
                     })?;
 
                 recv_guards.push(join_guard);

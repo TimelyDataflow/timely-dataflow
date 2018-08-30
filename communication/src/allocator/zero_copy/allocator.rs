@@ -2,7 +2,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::sync::mpsc::{channel, Sender, Receiver};
+// use std::sync::mpsc::{channel, Sender, Receiver};
 
 use bytes::arc::Bytes;
 
@@ -11,7 +11,7 @@ use networking::MessageHeader;
 use {Allocate, Data, Push, Pull};
 use allocator::{Message, Process};
 
-use super::bytes_exchange::{BytesPull, SendEndpoint};
+use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
 use super::push_pull::{Pusher, PullerInner};
 
 /// Builds an instance of a TcpAllocator.
@@ -22,53 +22,54 @@ use super::push_pull::{Pusher, PullerInner};
 /// members once in the destination thread.
 pub struct TcpBuilder<A: Allocate> {
     inner:      A,
-    index:      usize,                          // number out of peers
-    peers:      usize,                          // number of peer allocators.
-    sends:      Vec<Sender<Bytes>>,  // for pushing bytes at remote processes.
-    recvs:      Receiver<Bytes>,                // for pulling bytes from remote processes.
+    index:      usize,              // number out of peers
+    peers:      usize,              // number of peer allocators.
+    sends:      Vec<MergeQueue>,    // for pushing bytes at remote processes.
+    recvs:      Vec<MergeQueue>,    // for pulling bytes from remote processes.
+    signal:     Signal,
 }
 
 /// Creates a vector of builders, sharing appropriate state.
-///
-/// This method requires access to a byte exchanger, from which it mints channels.
 pub fn new_vector(
     my_process: usize,
     threads: usize,
-    processes: usize) -> (Vec<TcpBuilder<Process>>, Vec<Receiver<Bytes>>, Vec<Sender<Bytes>>) {
+    processes: usize)
+// -> (Vec<TcpBuilder<Process>>, Vec<Receiver<Bytes>>, Vec<Sender<Bytes>>) {
+-> (Vec<TcpBuilder<Process>>, Vec<(Vec<MergeQueue>, Signal)>, Vec<Vec<MergeQueue>>) {
 
-    let mut l2r_send = Vec::new();
-    let mut l2r_recv = Vec::new();
-    let mut r2l_send = Vec::new();
-    let mut r2l_recv = Vec::new();
+    // The results are a vector of builders, as well as the necessary shared state to build each
+    // of the send and receive communication threads, respectively.
 
-    for _ in 0 .. threads {
-        let (send, recv) = channel();
-        r2l_send.push(send);
-        r2l_recv.push(recv);
-    }
+    let worker_signals: Vec<Signal> = (0 .. threads).map(|_| Signal::new()).collect();
+    let network_signals: Vec<Signal> = (0 .. processes-1).map(|_| Signal::new()).collect();
 
-    for _ in 0 .. processes - 1 {
-        let (send, recv) = channel();
-        l2r_send.push(send);
-        l2r_recv.push(recv);
-    }
+    let worker_to_network: Vec<Vec<_>> = (0 .. threads).map(|_| (0 .. processes-1).map(|p| MergeQueue::new(network_signals[p].clone())).collect()).collect();
+    let network_to_worker: Vec<Vec<_>> = (0 .. processes-1).map(|_| (0 .. threads).map(|t| MergeQueue::new(worker_signals[t].clone())).collect()).collect();
+
+    let worker_from_network: Vec<Vec<_>> = (0 .. threads).map(|t| (0 .. processes-1).map(|p| network_to_worker[p][t].clone()).collect()).collect();
+    let network_from_worker: Vec<Vec<_>> = (0 .. processes-1).map(|p| (0 .. threads).map(|t| worker_to_network[t][p].clone()).collect()).collect();
 
     let builders =
     Process::new_vector(threads)
         .into_iter()
-        .zip(r2l_recv.into_iter())
+        .zip(worker_signals)
+        .zip(worker_to_network)
+        .zip(worker_from_network)
         .enumerate()
-        .map(|(index, (inner, recvs))| {
+        .map(|(index, (((inner, signal), sends), recvs))| {
             TcpBuilder {
                 inner,
                 index: my_process * threads + index,
                 peers: threads * processes,
-                sends: l2r_send.clone(),
+                sends,
                 recvs,
+                signal,
             }})
         .collect();
 
-    (builders, l2r_recv, r2l_send)
+    let sends = network_from_worker.into_iter().zip(network_signals).collect();
+
+    (builders, sends, network_to_worker)
 }
 
 impl<A: Allocate> TcpBuilder<A> {
@@ -87,6 +88,8 @@ impl<A: Allocate> TcpBuilder<A> {
             index: self.index,
             peers: self.peers,
             allocated: 0,
+            signal: self.signal,
+            staged: Vec::new(),
             sends,
             recvs: self.recvs,
             to_local: Vec::new(),
@@ -103,9 +106,13 @@ pub struct TcpAllocator<A: Allocate> {
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
     allocated:  usize,                              // indicates how many channels have been allocated (locally).
 
+    signal:     Signal,
+
+    staged:     Vec<Bytes>,
+
     // sending, receiving, and responding to binary buffers.
-    sends:      Vec<Rc<RefCell<SendEndpoint<Sender<Bytes>>>>>,         // sends[x] -> goes to process x.
-    recvs:      Receiver<Bytes>,                    // recvs[x] <- from process x?.
+    sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>,         // sends[x] -> goes to process x.
+    recvs:      Vec<MergeQueue>,                    // recvs[x] <- from process x?.
     to_local:   Vec<Rc<RefCell<VecDeque<Bytes>>>>,  // to worker-local typed pullers.
 }
 
@@ -161,7 +168,11 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
     #[inline(never)]
     fn pre_work(&mut self) {
 
-        while let Some(mut bytes) = self.recvs.pull() {
+        for recv in self.recvs.iter_mut() {
+            recv.drain_into(&mut self.staged);
+        }
+
+        for mut bytes in self.staged.drain(..) {
 
             // We expect that `bytes` contains an integral number of messages.
             // No splitting occurs across allocations.

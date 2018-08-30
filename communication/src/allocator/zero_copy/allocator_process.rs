@@ -76,6 +76,7 @@ impl ProcessBuilder {
             index: self.index,
             peers: self.peers,
             allocated: 0,
+            staged: Vec::new(),
             sends,
             recvs: self.recvs,
             to_local: Vec::new(),
@@ -91,6 +92,7 @@ pub struct ProcessAllocator {
     allocated:  usize,                              // indicates how many channels have been allocated (locally).
 
     // sending, receiving, and responding to binary buffers.
+    staged:     Vec<Bytes>,
     sends:      Vec<Rc<RefCell<SendEndpoint<Arc<Mutex<VecDeque<Bytes>>>>>>>, // sends[x] -> goes to process x.
     recvs:      Vec<Arc<Mutex<VecDeque<Bytes>>>>,                            // recvs[x] <- from process x?.
     to_local:   Vec<Rc<RefCell<VecDeque<Bytes>>>>,  // to worker-local typed pullers.
@@ -135,30 +137,32 @@ impl Allocate for ProcessAllocator {
     fn pre_work(&mut self) {
 
         for recv in self.recvs.iter_mut() {
-            while let Some(mut bytes) = recv.pull() {
+            recv.drain_into(&mut self.staged);
+        }
 
-                // We expect that `bytes` contains an integral number of messages.
-                // No splitting occurs across allocations.
-                while bytes.len() > 0 {
+        for mut bytes in self.staged.drain(..) {
 
-                    if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
+            // We expect that `bytes` contains an integral number of messages.
+            // No splitting occurs across allocations.
+            while bytes.len() > 0 {
 
-                        // Get the header and payload, ditch the header.
-                        let mut peel = bytes.extract_to(header.required_bytes());
-                        let _ = peel.extract_to(40);
+                if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
 
-                        // Ensure that a queue exists.
-                        // We may receive data before allocating, and shouldn't block.
-                        while self.to_local.len() <= header.channel {
-                            self.to_local.push(Rc::new(RefCell::new(VecDeque::new())));
-                        }
+                    // Get the header and payload, ditch the header.
+                    let mut peel = bytes.extract_to(header.required_bytes());
+                    let _ = peel.extract_to(40);
 
-                        // Introduce the binary slice into the operator input queue.
-                        self.to_local[header.channel].borrow_mut().push_back(peel);
+                    // Ensure that a queue exists.
+                    // We may receive data before allocating, and shouldn't block.
+                    while self.to_local.len() <= header.channel {
+                        self.to_local.push(Rc::new(RefCell::new(VecDeque::new())));
                     }
-                    else {
-                        println!("failed to read full header!");
-                    }
+
+                    // Introduce the binary slice into the operator input queue.
+                    self.to_local[header.channel].borrow_mut().push_back(peel);
+                }
+                else {
+                    println!("failed to read full header!");
                 }
             }
         }

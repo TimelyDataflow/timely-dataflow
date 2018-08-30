@@ -1,14 +1,12 @@
 //!
 
 use std::io::{Read, Write};
-use std::sync::mpsc::{Sender, Receiver};
 use std::net::TcpStream;
-
-use bytes::arc::Bytes;
 
 use networking::MessageHeader;
 
 use super::bytes_slab::BytesSlab;
+use super::bytes_exchange::{MergeQueue, Signal};
 
 /// Repeatedly reads from a TcpStream and carves out messages.
 ///
@@ -18,11 +16,17 @@ use super::bytes_slab::BytesSlab;
 /// take down the computation and cause the failures to cascade.
 pub fn recv_loop(
     mut reader: TcpStream,
-    targets: Vec<Sender<Bytes>>,
+    mut targets: Vec<MergeQueue>,
     worker_offset: usize,
     log_sender: ::logging::CommsLogger)
 {
     let mut buffer = BytesSlab::new(20);
+
+    // Where we stash Bytes before handing them off.
+    let mut stageds = Vec::with_capacity(targets.len());
+    for _ in 0 .. targets.len() {
+        stageds.push(Vec::new());
+    }
 
     // Each loop iteration adds to `self.Bytes` and consumes all complete messages.
     // At the start of each iteration, `self.buffer[..self.length]` represents valid
@@ -59,9 +63,7 @@ pub fn recv_loop(
             let bytes = buffer.extract(peeled_bytes);
 
             if header.length > 0 {
-                targets[header.target - worker_offset]
-                    .send(bytes)
-                    .expect("Worker queue unavailable in recv_loop");
+                stageds[header.target - worker_offset].push(bytes);
             }
             else {
                 // Shutting down; confirm absence of subsequent data.
@@ -75,6 +77,12 @@ pub fn recv_loop(
                 }
             }
         }
+
+        // Pass bytes along to targets.
+        for (index, staged) in stageds.iter_mut().enumerate() {
+            use allocator::zero_copy::bytes_exchange::BytesPush;
+            targets[index].extend(staged.drain(..));
+        }
     }
     // println!("RECVER EXITING");
 }
@@ -84,25 +92,37 @@ pub fn recv_loop(
 /// The intended communication pattern is a sequence of (header, message)^* for valid
 /// messages, followed by a header for a zero length message indicating the end of stream.
 pub fn send_loop(
-    mut writer: ::std::io::BufWriter<TcpStream>,
-    source: Receiver<Bytes>,
+    // TODO: Maybe we don't need BufWriter with consolidation in writes.
+    writer: TcpStream,
+    mut sources: Vec<MergeQueue>,
+    signal: Signal,
     log_sender: ::logging::CommsLogger)
 {
 
+    let mut writer = ::std::io::BufWriter::with_capacity(1 << 16, writer);
     let mut stash = Vec::new();
 
-    while let Ok(bytes) = source.recv() {
-        stash.push(bytes);
-        while let Ok(bytes) = source.try_recv() {
-            stash.push(bytes);
+    while !sources.is_empty() {
+
+        for source in sources.iter_mut() {
+            use allocator::zero_copy::bytes_exchange::BytesPull;
+            source.drain_into(&mut stash);
         }
 
-        // TODO: Could do scatter/gather write here.
-        for bytes in stash.drain(..) {
-            writer.write_all(&bytes[..]).expect("Write failure in send_loop.");
+        if stash.is_empty() {
+            // No evidence of records to read, but sources not yet empty (at start of loop).
+            // We are going to flush our writer (to move buffered data) and wait on a signal.
+            // We could get awoken by more data, a channel closing, or spuriously perhaps.
+            writer.flush().expect("Failed to flush writer.");
+            signal.wait();
+            sources.retain(|source| !source.is_complete());
         }
-        // TODO: Could delay this until a self.source.recv() would block.
-        writer.flush().expect("Failed to flush writer.");
+        else {
+            // TODO: Could do scatter/gather write here.
+            for bytes in stash.drain(..) {
+                writer.write_all(&bytes[..]).expect("Write failure in send_loop.");
+            }
+        }
     }
 
     // Write final zero-length header.
