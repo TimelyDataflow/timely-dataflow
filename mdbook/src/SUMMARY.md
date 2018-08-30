@@ -3,6 +3,7 @@
 [Timely Dataflow](./introduction.md)
 
 - [Motivation](./chapter_0/chapter_0.md)
+    - [A Simplest Example](./chapter_0/chapter_0_0.md)
     - [A Simple Example](./chapter_0/chapter_0_1.md)
     - [When to use Timely Dataflow](./chapter_0/chapter_0_2.md)
     - [When not to use Timely Dataflow](./chapter_0/chapter_0_3.md)
