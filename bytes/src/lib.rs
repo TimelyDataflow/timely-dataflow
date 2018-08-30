@@ -195,6 +195,24 @@ pub mod arc {
         ///
         /// This method either results in the underlying storage if it is uniquely held, or the
         /// input `Bytes` if it is not uniquely held.
+        ///
+        /// #Examples
+        ///
+        /// ```
+        /// use bytes::arc::Bytes;
+        ///
+        /// let bytes = vec![0u8; 1024];
+        /// let mut shared1 = Bytes::from(bytes);
+        /// let mut shared2 = shared1.extract_to(100);
+        /// let mut shared3 = shared1.extract_to(100);
+        /// let mut shared4 = shared2.extract_to(60);
+        ///
+        /// drop(shared1);
+        /// drop(shared2);
+        /// drop(shared4);
+        /// let recovered = shared3.try_recover::<Vec<u8>>().ok().expect("recovery failed");
+        /// assert!(recovered.len() == 1024);
+        /// ```
         pub fn try_recover<B>(self) -> Result<B, Bytes> where B: DerefMut<Target=[u8]>+'static {
             // println!("Trying recovery; strong count: {:?}", Arc::strong_count(&self.sequestered));
             match Arc::try_unwrap(self.sequestered) {
@@ -212,6 +230,24 @@ pub mod arc {
         /// If uniquely held, this method recovers the initial pointer and length
         /// of the sequestered allocation and re-initialized the Bytes. The return
         /// value indicates whether this occurred.
+        ///
+        /// #Examples
+        ///
+        /// ```
+        /// use bytes::arc::Bytes;
+        ///
+        /// let bytes = vec![0u8; 1024];
+        /// let mut shared1 = Bytes::from(bytes);
+        /// let mut shared2 = shared1.extract_to(100);
+        /// let mut shared3 = shared1.extract_to(100);
+        /// let mut shared4 = shared2.extract_to(60);
+        ///
+        /// drop(shared1);
+        /// drop(shared2);
+        /// drop(shared4);
+        /// assert!(shared3.try_regenerate::<Vec<u8>>());
+        /// assert!(shared3.len() == 1024);
+        /// ```
         pub fn try_regenerate<B>(&mut self) -> bool where B: DerefMut<Target=[u8]>+'static {
             if let Some(boxed) = Arc::get_mut(&mut self.sequestered) {
                 let downcast = boxed.downcast_mut::<B>().expect("Downcast failed");
@@ -221,6 +257,39 @@ pub mod arc {
             }
             else {
                 false
+            }
+        }
+
+        /// Attempts to merge adjacent slices from the same allocation.
+        ///
+        /// If the merge succeeds then `other.len` is added to `self` and the result is `Ok(())`.
+        /// If the merge fails self is unmodified and the result is `Err(other)`, returning the
+        /// bytes supplied as input.
+        ///
+        /// #Examples
+        ///
+        /// ```
+        /// use bytes::arc::Bytes;
+        ///
+        /// let bytes = vec![0u8; 1024];
+        /// let mut shared1 = Bytes::from(bytes);
+        /// let mut shared2 = shared1.extract_to(100);
+        /// let mut shared3 = shared1.extract_to(100);
+        /// let mut shared4 = shared2.extract_to(60);
+        ///
+        /// // memory in slabs [4, 2, 3, 1]: merge back in arbitrary order.
+        /// shared2.try_merge(shared3).ok().expect("Failed to merge 2 and 3");
+        /// shared2.try_merge(shared1).ok().expect("Failed to merge 23 and 1");
+        /// shared4.try_merge(shared2).ok().expect("Failed to merge 4 and 231");
+        /// ```
+        pub fn try_merge(&mut self, other: Bytes) -> Result<(), Bytes> {
+            use ::std::sync::Arc;
+            if Arc::ptr_eq(&self.sequestered, &other.sequestered) && ::std::ptr::eq(unsafe { self.ptr.offset(self.len as isize) }, other.ptr) {
+                self.len += other.len;
+                Ok(())
+            }
+            else {
+                Err(other)
             }
         }
     }
