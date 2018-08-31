@@ -104,6 +104,7 @@ pub fn send_loop(
 
     while !sources.is_empty() {
 
+        // TODO: Round-robin better, to release resources fairly when overloaded.
         for source in sources.iter_mut() {
             use allocator::zero_copy::bytes_exchange::BytesPull;
             source.drain_into(&mut stash);

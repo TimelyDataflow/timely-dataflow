@@ -57,7 +57,8 @@ impl BytesSlab {
             // Increase allocation if copy would be insufficient.
             while self.valid + capacity > (1 << self.shift) {
                 self.shift += 1;
-                self.stash.clear();
+                self.stash.clear();         // clear wrongly sized buffers.
+                self.in_progress.clear();   // clear wrongly sized buffers.
             }
 
             // Attempt to reclaim shared slices.
@@ -73,8 +74,6 @@ impl BytesSlab {
                     }
                 }
                 self.in_progress.retain(|x| x.is_some());
-                let self_shift = self.shift;
-                self.stash.retain(|x| x.len() == 1 << self_shift);
             }
 
             let new_buffer = self.stash.pop().unwrap_or_else(|| Bytes::from(vec![0; 1 << self.shift].into_boxed_slice()));
@@ -82,7 +81,6 @@ impl BytesSlab {
 
             self.buffer[.. self.valid].copy_from_slice(&old_buffer[.. self.valid]);
             self.in_progress.push(Some(old_buffer));
-
         }
     }
 }
