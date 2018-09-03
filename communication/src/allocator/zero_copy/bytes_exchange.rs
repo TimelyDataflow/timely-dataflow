@@ -118,11 +118,13 @@ impl Signal {
 //     }
 // }
 
+use std::sync::atomic::{AtomicBool, Ordering};
 /// Who knows.
 #[derive(Clone)]
 pub struct MergeQueue {
     queue: Arc<Mutex<VecDeque<Bytes>>>, // queue of bytes.
     dirty: Signal,                      // indicates whether there may be data present.
+    panic: Arc<AtomicBool>,
 }
 
 impl MergeQueue {
@@ -131,16 +133,21 @@ impl MergeQueue {
         MergeQueue {
             queue: Arc::new(Mutex::new(VecDeque::new())),
             dirty: signal,
+            panic: Arc::new(AtomicBool::new(false)),
         }
     }
     /// Indicates that all input handles to the queue have dropped.
     pub fn is_complete(&self) -> bool {
+        if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
         Arc::strong_count(&self.queue) == 1
     }
 }
 
 impl BytesPush for MergeQueue {
     fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iterator: I) {
+
+        if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
+
         // should lock once, extend; shouldn't re-lock.
         let mut queue = self.queue.lock().expect("Failed to lock queue");
         let mut iterator = iterator.into_iter();
@@ -168,6 +175,7 @@ impl BytesPush for MergeQueue {
 
 impl BytesPull for MergeQueue {
     fn drain_into(&mut self, vec: &mut Vec<Bytes>) {
+        if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
         let mut queue = self.queue.lock().expect("unable to lock mutex");
         vec.extend(queue.drain(..));
     }
@@ -177,6 +185,14 @@ impl BytesPull for MergeQueue {
 // the next bit of data to show up.
 impl Drop for MergeQueue {
     fn drop(&mut self) {
+        // Propagate panic information, to distinguish between clean and unclean shutdown.
+        if ::std::thread::panicking() {
+            self.panic.store(true, Ordering::SeqCst);
+        }
+        else {
+            // TODO: Perhaps this aggressive ordering can relax orderings elsewhere.
+            if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
+        }
         // Drop the queue before pinging.
         self.queue = Arc::new(Mutex::new(VecDeque::new()));
         self.dirty.ping();
