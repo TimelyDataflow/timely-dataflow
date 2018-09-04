@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-use allocator::{Allocate, Message, Thread};
+use allocator::{Allocate, AllocateBuilder, Message, Thread};
 use {Push, Pull};
 
 /// An allocater for inter-thread, intra-process communication
@@ -73,6 +73,11 @@ impl Allocate for Process {
         for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<Message<T>>>); }
         (temp, Box::new(recv) as Box<Pull<super::Message<T>>>, None)
     }
+}
+
+impl AllocateBuilder for Process {
+    type Allocator = Self;
+    fn build(self) -> Self { self }
 }
 
 /// The push half of an intra-process channel.

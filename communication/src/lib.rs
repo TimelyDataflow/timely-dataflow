@@ -30,7 +30,7 @@
 //!     let (mut senders, mut receiver, _) = allocator.allocate();
 //!
 //!     // send typed data along each channel
-//!     use timely_communication::allocator::Message;
+//!     use timely_communication::Message;
 //!     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
 //!     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
 //!
@@ -96,7 +96,7 @@ use abomonation::Abomonation;
 
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
-pub use initialize::{initialize, Configuration, WorkerGuards};
+pub use initialize::{initialize, initialize_from, Configuration, WorkerGuards};
 pub use message::Message;
 
 /// A composite trait for types that may be used with channels.

@@ -1,5 +1,9 @@
 //! Types and traits for sharing `Bytes`.
 
+use std::thread::Thread;
+use std::sync::{Arc, Mutex, RwLock};
+use std::collections::VecDeque;
+
 use bytes::arc::Bytes;
 use super::bytes_slab::BytesSlab;
 
@@ -18,45 +22,6 @@ pub trait BytesPull {
     fn drain_into(&mut self, vec: &mut Vec<Bytes>);
 }
 
-// std::sync::mpsc implementations.
-use ::std::sync::mpsc::{Sender, Receiver};
-impl BytesPush for Sender<Bytes> {
-    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iterator: I) {
-        for bytes in iterator {
-            self.send(bytes)
-                .expect("unable to send Bytes");
-        }
-    }
-}
-
-impl BytesPull for Receiver<Bytes> {
-    fn drain_into(&mut self, vec: &mut Vec<Bytes>) {
-        while let Some(item) = self.try_recv().ok() {
-            vec.push(item);
-        }
-    }
-}
-
-// Arc<Mutex<VecDeque<Bytes>>> implementations.
-use ::std::sync::{Arc, Mutex, Condvar};
-use ::std::collections::VecDeque;
-impl BytesPush for Arc<Mutex<VecDeque<Bytes>>> {
-    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iter: I) {
-        self.lock()
-            .expect("unable to lock mutex")
-            .extend(iter);
-    }
-}
-
-impl BytesPull for Arc<Mutex<VecDeque<Bytes>>> {
-    fn drain_into(&mut self, vec: &mut Vec<Bytes>) {
-        let mut queue = self.lock().expect("unable to lock mutex");
-        vec.extend(queue.drain(..));
-    }
-}
-
-use std::sync::RwLock;
-use std::thread::Thread;
 /// A signal appropriate to wake a single thread.
 ///
 /// Internally this type uses thread parking and unparking, where the first thread to call
@@ -91,32 +56,6 @@ impl Signal {
         }
     }
 }
-
-// /// A signal which
-// #[derive(Clone)]
-// pub struct Signal {
-//     thing: Arc<(Mutex<bool>, Condvar)>,
-// }
-
-// impl Signal {
-//     /// Allocates a new signal.
-//     pub fn new() -> Self {
-//         Signal { thing: Arc::new((Mutex::new(false), Condvar::new())) }
-//     }
-//     /// Blocks until the signal is set, and then unsets the signal.
-//     pub fn wait(&self) {
-//         let mut signaled = self.thing.0.lock().expect("Failed to lock mutex.");
-//         while !*signaled {
-//             signaled = self.thing.1.wait(signaled).expect("Failed to wait.");
-//         }
-//         *signaled = false;
-//     }
-//     /// Sets the signal, unblocking a waiting thread.
-//     pub fn ping(&self) {
-//         *self.thing.0.lock().expect("Failed to lock mutex.") = true;
-//         self.thing.1.notify_one();
-//     }
-// }
 
 use std::sync::atomic::{AtomicBool, Ordering};
 /// Who knows.

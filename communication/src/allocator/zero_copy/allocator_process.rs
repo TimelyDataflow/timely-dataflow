@@ -3,7 +3,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
 
 use bytes::arc::Bytes;
 
@@ -12,7 +11,7 @@ use networking::MessageHeader;
 use {Allocate, Data, Push, Pull};
 use allocator::Message;
 
-use super::bytes_exchange::{BytesPull, SendEndpoint};
+use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
 
 use super::push_pull::{Pusher, Puller};
 
@@ -23,10 +22,11 @@ use super::push_pull::{Pusher, Puller};
 /// shared between threads here, and then provide a method that will instantiate the non-movable
 /// members once in the destination thread.
 pub struct ProcessBuilder {
-    index:      usize,                              // number out of peers
-    peers:      usize,                              // number of peer allocators.
-    sends:      Vec<Arc<Mutex<VecDeque<Bytes>>>>,   // for pushing bytes at remote processes.
-    recvs:      Vec<Arc<Mutex<VecDeque<Bytes>>>>,   // for pulling bytes from remote processes.
+    index:      usize,              // number out of peers
+    peers:      usize,              // number of peer allocators.
+    sends:      Vec<MergeQueue>,    // for pushing bytes at remote processes.
+    recvs:      Vec<MergeQueue>,    // for pulling bytes from remote processes.
+    signal:     Signal,
 }
 
 impl ProcessBuilder {
@@ -35,6 +35,8 @@ impl ProcessBuilder {
     /// This method requires access to a byte exchanger, from which it mints channels.
     pub fn new_vector(count: usize) -> Vec<ProcessBuilder> {
 
+        let signals: Vec<Signal> = (0 .. count).map(|_| Signal::new()).collect();
+
         let mut sends = Vec::new();
         let mut recvs = Vec::new();
         for _ in 0 .. count { sends.push(Vec::new()); }
@@ -42,24 +44,27 @@ impl ProcessBuilder {
 
         for source in 0 .. count {
             for target in 0 .. count {
-                let send = Arc::new(Mutex::new(VecDeque::new()));
+                let send = MergeQueue::new(signals[target].clone());
                 let recv = send.clone();
                 sends[source].push(send);
                 recvs[target].push(recv);
             }
         }
 
-        let mut result = Vec::new();
-        for (index, (sends, recvs)) in sends.drain(..).zip(recvs.drain(..)).enumerate() {
-            result.push(ProcessBuilder {
-                index,
-                peers: count,
-                sends,
-                recvs,
-            })
-        }
-
-        result
+        sends.into_iter()
+             .zip(recvs)
+             .zip(signals)
+             .enumerate()
+             .map(|(index, ((sends, recvs), signal))|
+                ProcessBuilder {
+                    index,
+                    peers: count,
+                    sends,
+                    recvs,
+                    signal,
+                }
+             )
+             .collect()
     }
 
     /// Builds a `ProcessAllocator`, instantiating `Rc<RefCell<_>>` elements.
@@ -80,6 +85,7 @@ impl ProcessBuilder {
             sends,
             recvs: self.recvs,
             to_local: Vec::new(),
+            _signal: self.signal,
         }
     }
 }
@@ -91,11 +97,12 @@ pub struct ProcessAllocator {
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
     allocated:  usize,                              // indicates how many channels have been allocated (locally).
 
+    _signal:     Signal,
     // sending, receiving, and responding to binary buffers.
     staged:     Vec<Bytes>,
-    sends:      Vec<Rc<RefCell<SendEndpoint<Arc<Mutex<VecDeque<Bytes>>>>>>>, // sends[x] -> goes to process x.
-    recvs:      Vec<Arc<Mutex<VecDeque<Bytes>>>>,                            // recvs[x] <- from process x?.
-    to_local:   Vec<Rc<RefCell<VecDeque<Bytes>>>>,  // to worker-local typed pullers.
+    sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to process x.
+    recvs:      Vec<MergeQueue>,                            // recvs[x] <- from process x?.
+    to_local:   Vec<Rc<RefCell<VecDeque<Bytes>>>>,          // to worker-local typed pullers.
 }
 
 impl Allocate for ProcessAllocator {

@@ -123,7 +123,7 @@ fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<(Vec<G
 ///     let (mut senders, mut receiver, _) = allocator.allocate();
 ///
 ///     // send typed data along each channel
-///     use timely_communication::allocator::Message;
+///     use timely_communication::Message;
 ///     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
 ///     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
 ///
@@ -170,12 +170,71 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     log_sender: LogBuilder,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
-
     let (allocators, others) = try!(create_allocators(config, log_sender));
-    let logic = Arc::new(func);
+    initialize_from(allocators, others, func)
+}
 
+/// Initializes computation and runs a distributed computation.
+///
+/// This version of `initialize` allows you to explicitly specify the allocators that
+/// you want to use, by providing an explicit list of allocator builders.
+///
+/// #Examples
+/// ```
+/// use timely_communication::Allocate;
+/// // configure for two threads, just one process.
+/// let builders = timely_communication::allocator::process::Process::new_vector(2);
+///
+/// // initializes communication, spawns workers
+/// let guards = timely_communication::initialize_from(builders, Box::new(()), |mut allocator| {
+///     println!("worker {} started", allocator.index());
+///
+///     // allocates pair of senders list and one receiver.
+///     let (mut senders, mut receiver, _) = allocator.allocate();
+///
+///     // send typed data along each channel
+///     use timely_communication::Message;
+///     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
+///     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
+///
+///     // no support for termination notification,
+///     // we have to count down ourselves.
+///     let mut expecting = 2;
+///     while expecting > 0 {
+///         allocator.pre_work();
+///         if let Some(message) = receiver.recv() {
+///             use std::ops::Deref;
+///             println!("worker {}: received: <{}>", allocator.index(), message.deref());
+///             expecting -= 1;
+///         }
+///         allocator.post_work();
+///     }
+///
+///     // optionally, return something
+///     allocator.index()
+/// });
+///
+/// // computation runs until guards are joined or dropped.
+/// if let Ok(guards) = guards {
+///     for guard in guards.join() {
+///         println!("result: {:?}", guard);
+///     }
+/// }
+/// else { println!("error in computation"); }
+/// ```
+pub fn initialize_from<A, T, F>(
+    builders: Vec<A>,
+    others: Box<Any>,
+    func: F,
+) -> Result<WorkerGuards<T>,String>
+where
+    A: AllocateBuilder+'static,
+    T: Send+'static,
+    F: Fn(<A as AllocateBuilder>::Allocator)->T+Send+Sync+'static
+{
+    let logic = Arc::new(func);
     let mut guards = Vec::new();
-    for (index, builder) in allocators.into_iter().enumerate() {
+    for (index, builder) in builders.into_iter().enumerate() {
         let clone = logic.clone();
         guards.push(try!(thread::Builder::new()
                             .name(format!("worker thread {}", index))

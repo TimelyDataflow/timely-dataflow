@@ -18,7 +18,7 @@ pub fn recv_loop(
     mut reader: TcpStream,
     mut targets: Vec<MergeQueue>,
     worker_offset: usize,
-    log_sender: ::logging::CommsLogger)
+    _log_sender: ::logging::CommsLogger)
 {
     let mut buffer = BytesSlab::new(20);
 
@@ -96,7 +96,7 @@ pub fn send_loop(
     writer: TcpStream,
     mut sources: Vec<MergeQueue>,
     signal: Signal,
-    log_sender: ::logging::CommsLogger)
+    _log_sender: ::logging::CommsLogger)
 {
 
     let mut writer = ::std::io::BufWriter::with_capacity(1 << 16, writer);

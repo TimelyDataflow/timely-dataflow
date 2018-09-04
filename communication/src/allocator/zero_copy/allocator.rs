@@ -88,7 +88,7 @@ impl<A: Allocate> TcpBuilder<A> {
             index: self.index,
             peers: self.peers,
             allocated: 0,
-            signal: self.signal,
+            _signal: self.signal,
             staged: Vec::new(),
             sends,
             recvs: self.recvs,
@@ -106,7 +106,7 @@ pub struct TcpAllocator<A: Allocate> {
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
     allocated:  usize,                              // indicates how many channels have been allocated (locally).
 
-    signal:     Signal,
+    _signal:     Signal,
 
     staged:     Vec<Bytes>,
 

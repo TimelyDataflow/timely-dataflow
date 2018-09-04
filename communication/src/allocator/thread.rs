@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use allocator::{Allocate, Message};
+use allocator::{Allocate, AllocateBuilder, Message};
 use {Push, Pull};
 
 
@@ -17,6 +17,11 @@ impl Allocate for Thread {
         let (pusher, puller) = Thread::new();
         (vec![Box::new(pusher)], Box::new(puller), None)
     }
+}
+
+impl AllocateBuilder for Thread {
+    type Allocator = Self;
+    fn build(self) -> Self { self }
 }
 
 impl Thread {
