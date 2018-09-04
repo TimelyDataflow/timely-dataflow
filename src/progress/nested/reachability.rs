@@ -485,7 +485,6 @@ impl<T:Timestamp> Tracker<T> {
     }
 }
 
-
 /// Adds the path summary `summary` to `target` and returns true iff a change occurred.
 fn add_summary<S: PartialOrder+Eq>(vector: &mut Vec<(Target, Antichain<S>)>, target: Target, summary: S) -> bool {
     for &mut (ref t, ref mut antichain) in vector.iter_mut() {

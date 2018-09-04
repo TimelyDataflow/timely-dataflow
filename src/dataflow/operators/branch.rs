@@ -46,14 +46,16 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
         let (mut output2, stream2) = builder.new_output();
 
         builder.build(move |_| {
+            let mut vector = Vec::new();
             move |_frontiers| {
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
                 input.for_each(|time, data| {
+                    data.swap(&mut vector);
                     let mut out1 = output1_handle.session(&time);
                     let mut out2 = output2_handle.session(&time);
-                    for datum in data.drain(..) {
+                    for datum in vector.drain(..) {
                         if condition(&time.time(), &datum) {
                             out2.give(datum);
                         } else {
@@ -74,7 +76,7 @@ pub trait BranchWhen<S: Scope, D: Data> {
     /// For each time, the supplied closure is called. If it returns true,
     /// the records for that will be sent to the second returned stream, otherwise
     /// they will be sent to the first.
-    /// 
+    ///
     /// #Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, BranchWhen, Inspect, Delay};
@@ -108,17 +110,20 @@ impl<S: Scope, D: Data> BranchWhen<S, D> for Stream<S, D> {
         let (mut output2, stream2) = builder.new_output();
 
         builder.build(move |_| {
+
+            let mut vector = Vec::new();
             move |_frontiers| {
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
                 input.for_each(|time, data| {
+                    data.swap(&mut vector);
                     let mut out = if condition(&time.time()) {
                         output2_handle.session(&time)
                     } else {
                         output1_handle.session(&time)
                     };
-                    out.give_content(data);
+                    out.give_vec(&mut vector);
                 });
             }
         });

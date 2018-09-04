@@ -3,25 +3,25 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use dataflow::channels::Content;
+use dataflow::channels::Bundle;
 use progress::ChangeBatch;
-use Pull;
+use communication::Pull;
 
 /// A wrapper which accounts records pulled past in a shared count map.
-pub struct Counter<T: Ord+Clone+'static, D, P: Pull<(T, Content<D>)>> {
+pub struct Counter<T: Ord+Clone+'static, D, P: Pull<Bundle<T, D>>> {
     pullable: P,
     consumed: Rc<RefCell<ChangeBatch<T>>>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
-impl<T:Ord+Clone+'static, D, P: Pull<(T, Content<D>)>> Counter<T, D, P> {
+impl<T:Ord+Clone+'static, D, P: Pull<Bundle<T, D>>> Counter<T, D, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
-    pub fn next(&mut self) -> Option<(&T, &mut Content<D>)> {
-        if let Some((ref time, ref mut data)) = *self.pullable.pull() {
-            if data.len() > 0 {
-                self.consumed.borrow_mut().update(time.clone(), data.len() as i64);
-                Some((time, data))
+    pub fn next(&mut self) -> Option<&mut Bundle<T, D>> {
+        if let Some(message) = self.pullable.pull() {
+            if message.data.len() > 0 {
+                self.consumed.borrow_mut().update(message.time.clone(), message.data.len() as i64);
+                Some(message)
             }
             else { None }
         }
@@ -29,7 +29,7 @@ impl<T:Ord+Clone+'static, D, P: Pull<(T, Content<D>)>> Counter<T, D, P> {
     }
 }
 
-impl<T:Ord+Clone+'static, D, P: Pull<(T, Content<D>)>> Counter<T, D, P> {
+impl<T:Ord+Clone+'static, D, P: Pull<Bundle<T, D>>> Counter<T, D, P> {
     /// Allocates a new `Counter` from a boxed puller.
     pub fn new(pullable: P) -> Self {
         Counter {

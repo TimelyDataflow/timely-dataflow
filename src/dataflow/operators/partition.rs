@@ -88,8 +88,12 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
                                         _internal: &mut [ChangeBatch<T>],
                                          produced: &mut [ChangeBatch<T>]) -> bool {
 
-        while let Some((time, data)) = self.input.next() {
+        while let Some(message) = self.input.next() {
+
             let outputs = self.outputs.iter_mut();
+            let mut message = message.as_mut();
+            let time = &message.time;
+            let data = &mut message.data;
 
             // TODO : This results in small sends for many parts, as sessions does the buffering
             let mut sessions: Vec<_> = outputs.map(|x| x.session(time)).collect();

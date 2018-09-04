@@ -65,11 +65,14 @@ impl<G: Scope, D: Data> Concatenate<G, D> for G {
 
         // build an operator that plays out all input data.
         builder.build(move |_capability| {
+
+            let mut vector = Vec::new();
             move |_frontier| {
                 let mut output = output.activate();
                 for handle in handles.iter_mut() {
                     handle.for_each(|time, data| {
-                        output.session(&time).give_content(data);
+                        data.swap(&mut vector);
+                        output.session(&time).give_vec(&mut vector);
                     })
                 }
             }

@@ -76,13 +76,14 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for 
         hash: H) -> Stream<S, R> where S::Timestamp: Eq {
 
         let mut aggregates = HashMap::new();
-
+        let mut vector = Vec::new();
         self.unary_notify(Exchange::new(move |&(ref k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {
 
             // read each input, fold into aggregates
             input.for_each(|time, data| {
+                data.swap(&mut vector);
                 let agg_time = aggregates.entry(time.time().clone()).or_insert_with(HashMap::new);
-                for (key, val) in data.drain(..) {
+                for (key, val) in vector.drain(..) {
                     let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
                     fold(&key, val, agg);
                 }

@@ -8,8 +8,7 @@ use std::any::Any;
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use logging::Logger;
-use timely_communication::{Allocate, Data};
-use {Push, Pull};
+use communication::{Allocate, Data, Push, Pull};
 
 use super::{ScopeParent, Child};
 
@@ -41,6 +40,8 @@ impl<A: Allocate> Root<A> {
     /// main way to ensure that a computation proceeds.
     pub fn step(&mut self) -> bool {
 
+        self.allocator.borrow_mut().pre_work();
+
         let mut active = false;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
             let sub_active = dataflow.step();
@@ -51,6 +52,8 @@ impl<A: Allocate> Root<A> {
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
 
         // TODO(andreal) do we want to flush logs here?
+
+        self.allocator.borrow_mut().post_work();
 
         active
     }
@@ -128,10 +131,12 @@ impl<A: Allocate> ScopeParent for Root<A> {
     }
 }
 
+use communication::Message;
+
 impl<A: Allocate> Allocate for Root<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>, Option<usize>) {
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>, Option<usize>) {
         self.allocator.borrow_mut().allocate()
     }
 }

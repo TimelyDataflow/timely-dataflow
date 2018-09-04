@@ -4,21 +4,21 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::ChangeBatch;
-use dataflow::channels::Content;
-use Push;
+use dataflow::channels::Bundle;
+use communication::Push;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
-pub struct Counter<T: Ord, D, P: Push<(T, Content<D>)>> {
+pub struct Counter<T: Ord, D, P: Push<Bundle<T, D>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
-impl<T: Ord, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D, P> where T : Eq+Clone+'static {
+impl<T, D, P> Push<Bundle<T, D>> for Counter<T, D, P> where T : Ord+Clone+'static, P: Push<Bundle<T, D>> {
     #[inline(always)]
-    fn push(&mut self, message: &mut Option<(T, Content<D>)>) {
-        if let Some((ref time, ref data)) = *message {
-            self.produced.borrow_mut().update(time.clone(), data.len() as i64);
+    fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
+        if let Some(message) = message {
+            self.produced.borrow_mut().update(message.time.clone(), message.data.len() as i64);
         }
 
         // only propagate `None` if dirty (indicates flush)
@@ -28,7 +28,7 @@ impl<T: Ord, D, P: Push<(T, Content<D>)>> Push<(T, Content<D>)> for Counter<T, D
     }
 }
 
-impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'static {
+impl<T, D, P: Push<Bundle<T, D>>> Counter<T, D, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
     pub fn new(pushee: P) -> Counter<T, D, P> {
         Counter {
@@ -42,11 +42,4 @@ impl<T, D, P: Push<(T, Content<D>)>> Counter<T, D, P> where T : Ord+Clone+'stati
     pub fn produced(&self) -> &Rc<RefCell<ChangeBatch<T>>> {
         &self.produced
     }
-    // /// Extracts shared counts into `updates`.
-    // ///
-    // /// It is unclear why this method exists at the same time the counts are shared.
-    // /// Perhaps this should be investigated, and only one pattern used. Seriously.
-    // #[inline] pub fn pull_progress(&mut self, updates: &mut ChangeBatch<T>) {
-    //     self.counts.borrow_mut().drain_into(updates);
-    // }
 }

@@ -38,12 +38,16 @@ pub trait Operator<G: Scope, D1: Data> {
     ///                 let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
     ///                 let mut notificator = FrontierNotificator::new();
     ///                 let mut stash = HashMap::new();
+    ///                 let mut vector = Vec::new();
     ///                 move |input, output| {
     ///                     if let Some(ref c) = cap.take() {
     ///                         output.session(&c).give(12);
     ///                     }
     ///                     while let Some((time, data)) = input.next() {
-    ///                         stash.entry(time.time().clone()).or_insert(Vec::new());
+    ///                         data.swap(&mut vector);
+    ///                         stash.entry(time.time().clone())
+    ///                              .or_insert(Vec::new())
+    ///                              .extend(vector.drain(..));
     ///                     }
     ///                     notificator.for_each(&[input.frontier()], |time, _not| {
     ///                         if let Some(mut vec) = stash.remove(time.time()) {
@@ -77,10 +81,12 @@ pub trait Operator<G: Scope, D1: Data> {
     ///
     /// fn main() {
     ///     timely::example(|scope| {
+    ///         let mut vector = Vec::new();
     ///         (0u64..10).to_stream(scope)
-    ///             .unary_notify(Pipeline, "example", None, |input, output, notificator| {
+    ///             .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
     ///                 input.for_each(|time, data| {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector);
+    ///                     output.session(&time).give_vec(&mut vector);
     ///                     notificator.notify_at(time.retain());
     ///                 });
     ///                 notificator.for_each(|time, _cnt, _not| {
@@ -113,12 +119,14 @@ pub trait Operator<G: Scope, D1: Data> {
     ///     (0u64..10).to_stream(scope)
     ///         .unary(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///             let mut vector = Vec::new();
     ///             move |input, output| {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
     ///                 while let Some((time, data)) = input.next() {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector);
+    ///                     output.session(&time).give_vec(&mut vector);
     ///                 }
     ///             }
     ///         });
@@ -150,13 +158,17 @@ pub trait Operator<G: Scope, D1: Data> {
     ///        in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
     ///            let mut notificator = FrontierNotificator::new();
     ///            let mut stash = HashMap::new();
+    ///            let mut vector1 = Vec::new();
+    ///            let mut vector2 = Vec::new();
     ///            move |input1, input2, output| {
     ///                while let Some((time, data)) = input1.next() {
-    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
+    ///                    data.swap(&mut vector1);
+    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(vector1.drain(..));
     ///                    notificator.notify_at(time.retain());
     ///                }
     ///                while let Some((time, data)) = input2.next() {
-    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
+    ///                    data.swap(&mut vector2);
+    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(vector2.drain(..));
     ///                    notificator.notify_at(time.retain());
     ///                }
     ///                notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _not| {
@@ -205,14 +217,17 @@ pub trait Operator<G: Scope, D1: Data> {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///
-    ///
-    ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, |input1, input2, output, notificator| {
+    ///        let mut vector1 = Vec::new();
+    ///        let mut vector2 = Vec::new();
+    ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
     ///            input1.for_each(|time, data| {
-    ///                output.session(&time).give_content(data);
+    ///                data.swap(&mut vector1);
+    ///                output.session(&time).give_vec(&mut vector1);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            input2.for_each(|time, data| {
-    ///                output.session(&time).give_content(data);
+    ///                data.swap(&mut vector2);
+    ///                output.session(&time).give_vec(&mut vector2);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            notificator.for_each(|time, _cnt, _not| {
@@ -258,15 +273,19 @@ pub trait Operator<G: Scope, D1: Data> {
     ///     (0u64..10).to_stream(scope)
     ///         .binary(&stream2, Pipeline, Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///             let mut vector1 = Vec::new();
+    ///             let mut vector2 = Vec::new();
     ///             move |input1, input2, output| {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
     ///                 while let Some((time, data)) = input1.next() {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector1);
+    ///                     output.session(&time).give_vec(&mut vector1);
     ///                 }
     ///                 while let Some((time, data)) = input2.next() {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector2);
+    ///                     output.session(&time).give_vec(&mut vector2);
     ///                 }
     ///             }
     ///         }).inspect(|x| println!("{:?}", x));

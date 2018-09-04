@@ -1,11 +1,13 @@
+//! Typed inter-thread, intra-process channels.
+
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
 
-use allocator::{Allocate, Thread};
+use allocator::{Allocate, AllocateBuilder, Message, Thread};
 use {Push, Pull};
 
-// A specific Communicator for inter-thread intra-process communication
+/// An allocater for inter-thread, intra-process communication
 pub struct Process {
     inner:      Thread,                         // inner Thread
     index:      usize,                          // number out of peers
@@ -15,7 +17,9 @@ pub struct Process {
 }
 
 impl Process {
+    /// Access the wrapped inner allocator.
     pub fn inner<'a>(&'a mut self) -> &'a mut Thread { &mut self.inner }
+    /// Allocate a list of connected intra-process allocators.
     pub fn new_vector(count: usize) -> Vec<Process> {
         let channels = Arc::new(Mutex::new(Vec::new()));
         (0 .. count).map(|index| Process {
@@ -31,7 +35,7 @@ impl Process {
 impl Allocate for Process {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Any+Send+'static>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
+    fn allocate<T: Any+Send+'static>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
 
         // ensure exclusive access to shared list of channels
         let mut channels = self.channels.lock().ok().expect("mutex error?");
@@ -41,7 +45,7 @@ impl Allocate for Process {
             let mut pushers = Vec::new();
             let mut pullers = Vec::new();
             for _ in 0..self.peers {
-                let (s, r): (Sender<T>, Receiver<T>) = channel();
+                let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = channel();
                 pushers.push(Pusher { target: s });
                 pullers.push(Puller { source: r, current: None });
             }
@@ -54,25 +58,29 @@ impl Allocate for Process {
             channels.push(Box::new(to_box));
         }
 
+        let vector =
+        channels[self.allocated]
+            .downcast_mut::<(Vec<Option<(Vec<Pusher<Message<T>>>, Puller<Message<T>>)>>)>()
+            .expect("failed to correctly cast channel");
 
-        if let Some(ref mut vector) = channels[self.allocated].downcast_mut::<(Vec<Option<(Vec<Pusher<T>>, Puller<T>)>>)>() {
-            if let Some((send, recv)) = vector[self.index].take() {
-                self.allocated += 1;
-                let mut temp = Vec::new();
-                for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<T>>); }
-                return (temp, Box::new(recv) as Box<Pull<T>>, None)
-            }
-            else {
-                panic!("channel already consumed");
-            }
-        }
-        else {
-            panic!("failed to correctly cast channel");
-        }
+        let (send, recv) =
+        vector[self.index]
+            .take()
+            .expect("channel already consumed");
+
+        self.allocated += 1;
+        let mut temp = Vec::new();
+        for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<Message<T>>>); }
+        (temp, Box::new(recv) as Box<Pull<super::Message<T>>>, None)
     }
 }
 
-// an observer wrapping a Rust channel
+impl AllocateBuilder for Process {
+    type Allocator = Self;
+    fn build(self) -> Self { self }
+}
+
+/// The push half of an intra-process channel.
 struct Pusher<T> {
     target: Sender<T>,
 }
@@ -91,6 +99,7 @@ impl<T> Push<T> for Pusher<T> {
     }
 }
 
+/// The pull half of an intra-process channel.
 struct Puller<T> {
     current: Option<T>,
     source: Receiver<T>,

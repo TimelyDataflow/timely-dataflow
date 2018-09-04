@@ -58,7 +58,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     ///     (0..10).to_stream(scope)
     ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_content(data);
+    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                    let mut time = cap.time().clone();
     ///                    time.inner += 1;
     ///                    notificator.notify_at(cap.delayed(&time));
@@ -199,13 +199,17 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
 ///             let mut notificator = FrontierNotificator::new();
 ///             let mut stash = HashMap::new();
+///             let mut vector1 = Vec::new();
+///             let mut vector2 = Vec::new();
 ///             move |input1, input2, output| {
 ///                 while let Some((time, data)) = input1.next() {
-///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
+///                     data.swap(&mut vector1);
+///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(vector1.drain(..));
 ///                     notificator.notify_at(time.retain());
 ///                 }
 ///                 while let Some((time, data)) = input2.next() {
-///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
+///                     data.swap(&mut vector2);
+///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(vector2.drain(..));
 ///                     notificator.notify_at(time.retain());
 ///                 }
 ///                 notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _| {
@@ -269,7 +273,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///                let mut notificator = FrontierNotificator::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_content(data);
+    ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                        let mut time = cap.time().clone();
     ///                        time.inner += 1;
     ///                        notificator.notify_at(cap.delayed(&time));
@@ -386,7 +390,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///                let mut notificator = FrontierNotificator::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_content(data);
+    ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                        let mut time = cap.time().clone();
     ///                        time.inner += 1;
     ///                        notificator.notify_at(cap.delayed(&time));

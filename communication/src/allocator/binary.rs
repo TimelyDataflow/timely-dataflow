@@ -1,8 +1,8 @@
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::sync::Arc;
 
-use {Allocate, Data, Push, Pull, Serialize};
-use allocator::Process;
+use {Allocate, Data, Push, Pull};
+use allocator::{Message, Process};
 use networking::MessageHeader;
 
 // A communicator intended for binary channels (networking, pipes, shared memory)
@@ -26,8 +26,8 @@ impl Binary {
 impl Allocate for Binary {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T:Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>, Option<usize>) {
-        let mut pushers: Vec<Box<Push<T>>> = Vec::new();
+    fn allocate<T:Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
+        let mut pushers: Vec<Box<Push<Message<T>>>> = Vec::new();
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
         let inner_peers = self.inner.peers();
@@ -73,7 +73,7 @@ impl Allocate for Binary {
             sender: false,
             remote: None,
         });
-        let pullable = Box::new(Puller::new(inner_recv, recv, logger));
+        let pullable = Box::new(Puller::<T>::new(inner_recv, recv, logger)) as Box<Pull<Message<T>>>;
 
         self.allocated += 1;
 
@@ -99,18 +99,25 @@ impl<T> Pusher<T> {
     }
 }
 
-impl<T:Data> Push<T> for Pusher<T> {
-    #[inline] fn push(&mut self, element: &mut Option<T>) {
+impl<T:Data> Push<Message<T>> for Pusher<T> {
+    #[inline] fn push(&mut self, element: &mut Option<Message<T>>) {
         if let Some(ref mut element) = *element {
+
             self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Serialization(::logging::SerializationEvent {
                     seq_no: Some(self.header.seqno),
                     is_start: true,
                 })));
+
             let mut bytes = Vec::new();
-            <T as Serialize>::into_bytes(element, &mut bytes);
+            element.into_bytes(&mut bytes);
+            // match element {
+            //     Message::Binary(b) => bytes.extend(b.as_bytes().iter().cloned()),
+            //     Message::Typed(t) => t.into_bytes(&mut bytes),
+            // };
             let mut header = self.header;
             header.length = bytes.len();
             self.sender.send((header, bytes)).ok();     // TODO : should be unwrap()?
+
             self.log_sender.when_enabled(|l| l.log(::logging::CommsEvent::Serialization(::logging::SerializationEvent {
                     seq_no: Some(self.header.seqno),
                     is_start: true,
@@ -121,37 +128,40 @@ impl<T:Data> Push<T> for Pusher<T> {
 }
 
 struct Puller<T> {
-    inner: Box<Pull<T>>,            // inner pullable (e.g. intra-process typed queue)
-    current: Option<T>,
+    inner: Box<Pull<Message<T>>>,            // inner pullable (e.g. intra-process typed queue)
+    current: Option<Message<T>>,
     receiver: Receiver<Vec<u8>>,    // source of serialized buffers
     log_sender: ::logging::CommsLogger,
 }
 impl<T:Data> Puller<T> {
-    fn new(inner: Box<Pull<T>>, receiver: Receiver<Vec<u8>>, log_sender: ::logging::CommsLogger) -> Puller<T> {
+    fn new(inner: Box<Pull<Message<T>>>, receiver: Receiver<Vec<u8>>, log_sender: ::logging::CommsLogger) -> Puller<T> {
         Puller { inner: inner, receiver: receiver, current: None, log_sender: log_sender }
     }
 }
 
-impl<T:Data> Pull<T> for Puller<T> {
+impl<T:Data> Pull<Message<T>> for Puller<T> {
     #[inline]
-    fn pull(&mut self) -> &mut Option<T> {
+    fn pull(&mut self) -> &mut Option<Message<T>> {
         let inner = self.inner.pull();
         let log_sender = &self.log_sender;
         if inner.is_some() { inner }
         else {
-            self.current = self.receiver.try_recv().ok().map(|mut bytes| {
+            self.current = self.receiver.try_recv().ok().map(|bytes| {
                 log_sender.when_enabled(|l| l.log(
                     ::logging::CommsEvent::Serialization(::logging::SerializationEvent {
                         seq_no: None,
                         is_start: true,
                     })));
-                let result = <T as Serialize>::from_bytes(&mut bytes);
+
+                let bytes = ::bytes::arc::Bytes::from(bytes);
+
                 log_sender.when_enabled(|l| l.log(
                     ::logging::CommsEvent::Serialization(::logging::SerializationEvent {
                         seq_no: None,
                         is_start: false,
                     })));
-                result
+
+                unsafe { Message::from_bytes(bytes) }
             });
             &mut self.current
         }

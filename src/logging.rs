@@ -11,7 +11,7 @@ use ::progress::frontier::MutableAntichain;
 
 use dataflow::operators::capture::{Event, EventPusher};
 
-use timely_communication::logging::{BufferingLogger, LoggerBatch, CommsEvent, CommsSetup};
+use communication::logging::{BufferingLogger, LoggerBatch, CommsEvent, CommsSetup};
 
 type LogMessage = (u64, TimelySetup, TimelyEvent);
 type CommsMessage = (u64, CommsSetup, CommsEvent);
@@ -64,11 +64,11 @@ impl LoggerConfig {
         use std::net::TcpStream;
         use std::collections::HashMap;
 
-        use ::timely_communication::logging::BufferingLogger;
+        use ::communication::logging::BufferingLogger;
         use ::dataflow::operators::capture::EventWriter;
 
         let timely_stream = Mutex::new(HashMap::<usize, TcpStream>::new());
-        let comm_stream = Mutex::new(HashMap::<::timely_communication::logging::CommsSetup, TcpStream>::new());
+        let comm_stream = Mutex::new(HashMap::<::communication::logging::CommsSetup, TcpStream>::new());
 
         ::logging::LoggerConfig {
             timely_logging: match ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
@@ -97,7 +97,7 @@ impl LoggerConfig {
             communication_logging: match ::std::env::var("TIMELY_COMM_LOG_ADDR") {
                 Ok(addr) => {
                     eprintln!("enabled COMM logging to {}", addr);
-                    Arc::new(move |events_setup: ::timely_communication::logging::CommsSetup| {
+                    Arc::new(move |events_setup: ::communication::logging::CommsSetup| {
 
                         let send =
                         comm_stream
@@ -362,18 +362,28 @@ pub struct InputEvent {
 
 #[derive(Debug, Clone, Abomonation)]
 /// An event in a timely worker
-#[allow(missing_docs)]
 pub enum TimelyEvent {
+    /// Operator creation.
     /*  0 */ Operates(OperatesEvent),
+    /// Channel creation.
     /*  1 */ Channels(ChannelsEvent),
+    /// Progress message send or receive.
     /*  2 */ Progress(ProgressEvent),
+    /// Progress propagation (reasoning).
     /*  3 */ PushProgress(PushProgressEvent),
+    /// Message send or receive.
     /*  4 */ Messages(MessagesEvent),
+    /// Operator start or stop.
     /*  5 */ Schedule(ScheduleEvent),
+    /// No clue.
     /*  6 */ Application(ApplicationEvent),
+    /// Per-message computation.
     /*  7 */ GuardedMessage(GuardedMessageEvent),
+    /// Per-notification computation.
     /*  8 */ GuardedProgress(GuardedProgressEvent),
+    /// Communication channel event.
     /*  9 */ CommChannels(CommChannelsEvent),
+    /// Input event.
     /* 10 */ Input(InputEvent),
 }
 

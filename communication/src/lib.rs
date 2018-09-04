@@ -30,17 +30,22 @@
 //!     let (mut senders, mut receiver, _) = allocator.allocate();
 //!
 //!     // send typed data along each channel
-//!     senders[0].send(format!("hello, {}", 0));
-//!     senders[1].send(format!("hello, {}", 1));
+//!     use timely_communication::Message;
+//!     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
+//!     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
 //!
 //!     // no support for termination notification,
 //!     // we have to count down ourselves.
 //!     let mut expecting = 2;
 //!     while expecting > 0 {
+//!
+//!         allocator.pre_work();
 //!         if let Some(message) = receiver.recv() {
-//!             println!("worker {}: received: <{}>", allocator.index(), message);
+//!             use std::ops::Deref;
+//!             println!("worker {}: received: <{}>", allocator.index(), message.deref());
 //!             expecting -= 1;
 //!         }
+//!         allocator.post_work();
 //!     }
 //!
 //!     // optionally, return something
@@ -69,55 +74,34 @@
 //! result: Ok(1)
 //! ```
 
+#![forbid(missing_docs)]
+
 #[cfg(feature = "arg_parse")]
 extern crate getopts;
-extern crate byteorder;
 extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
 extern crate time;
 
+extern crate bytes;
+
 pub mod allocator;
-mod networking;
+pub mod networking;
 pub mod initialize;
-mod drain;
 pub mod logging;
+pub mod message;
 
 use std::any::Any;
-use abomonation::{Abomonation, encode, decode};
+
+use abomonation::Abomonation;
 
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
-pub use initialize::{initialize, Configuration, WorkerGuards};
+pub use initialize::{initialize, initialize_from, Configuration, WorkerGuards};
+pub use message::Message;
 
 /// A composite trait for types that may be used with channels.
-pub trait Data : Send+Any+Serialize+'static { }
-impl<T: Send+Any+Serialize+'static> Data for T { }
-
-/// Conversions to and from `Vec<u8>`.
-///
-/// A type must implement this trait to move along the channels produced by an `A: Allocate`.
-///
-/// A default implementation is provided for any `T: Abomonation+Clone`.
-pub trait Serialize {
-    /// Append the binary representation of `self` to a vector of bytes. The `&mut self` argument
-    /// may be mutated, but the second argument should only be appended to.
-    fn into_bytes(&mut self, &mut Vec<u8>);
-    /// Recover an instance of Self from its binary representation. The `&mut Vec<u8>` argument may
-    /// be taken with `mem::replace` if it is needed.
-    fn from_bytes(&mut Vec<u8>) -> Self;
-}
-
-// NOTE : this should be unsafe, because these methods are.
-// NOTE : figure this out later. don't use for serious things.
-impl<T: Abomonation+Clone> Serialize for T {
-    fn into_bytes(&mut self, bytes: &mut Vec<u8>) {
-        // NOTE: `unwrap` should be ok, as Rust docs say writes to `Vec<u8>` do not fail.
-        unsafe { encode(self, bytes).unwrap(); }
-    }
-    fn from_bytes(bytes: &mut Vec<u8>) -> Self {
-        (* unsafe { decode::<T>(bytes) }.unwrap().0).clone()
-    }
-}
+pub trait Data : Send+Any+Abomonation+'static { }
+impl<T: Send+Any+Abomonation+'static> Data for T { }
 
 /// Pushing elements of type `T`.
 pub trait Push<T> {

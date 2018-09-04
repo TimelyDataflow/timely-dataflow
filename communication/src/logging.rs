@@ -1,3 +1,5 @@
+//! Types and traits related to logging.
+
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -21,11 +23,15 @@ pub fn get_precise_time_ns() -> u64 {
 
 const BUFFERING_LOGGER_CAPACITY: usize = 1024;
 
+/// Either log data or and end marker.
 pub enum LoggerBatch<S: Clone, L: Clone> {
+    /// Log data.
     Logs(Vec<(u64, S, L)>),
+    /// End of log marker.
     End,
 }
 
+/// An active buffering logger.
 pub struct ActiveBufferingLogger<S: Clone, L: Clone> {
     setup: S,
     buffer: Vec<(u64, S, L)>,
@@ -33,6 +39,7 @@ pub struct ActiveBufferingLogger<S: Clone, L: Clone> {
 }
 
 impl<S: Clone, L: Clone> ActiveBufferingLogger<S, L> {
+    /// Adds an element to the log.
     pub fn log(&mut self, l: L) {
         let ts = get_precise_time_ns();
         self.buffer.push((ts, self.setup.clone(), l));
@@ -47,11 +54,13 @@ impl<S: Clone, L: Clone> ActiveBufferingLogger<S, L> {
     }
 }
 
+/// A possibly inactive buffering logger.
 pub struct BufferingLogger<S: Clone, L: Clone> {
     target: Option<RefCell<ActiveBufferingLogger<S, L>>>,
 }
 
 impl<S: Clone, L: Clone> BufferingLogger<S, L> {
+    /// Creates a new active buffering logger.
     pub fn new(setup: S, pusher: Box<Fn(LoggerBatch<S, L>)->()>) -> Self {
         BufferingLogger {
             target: Some(RefCell::new(ActiveBufferingLogger {
@@ -61,19 +70,19 @@ impl<S: Clone, L: Clone> BufferingLogger<S, L> {
             })),
         }
     }
-
+    /// Creates a new inactive buffering logger.
     pub fn new_inactive() -> Rc<BufferingLogger<S, L>> {
         Rc::new(BufferingLogger {
             target: None,
         })
     }
-
+    /// Invokes the closure if active, and ignores it if not active.
     pub fn when_enabled<F: FnOnce(&mut ActiveBufferingLogger<S, L>)->()>(&self, f: F) {
         if let Some(ref logger) = self.target {
             f(&mut *logger.borrow_mut())
         }
     }
-
+    /// Flushes the logs.
     pub fn flush(&self) {
         if let Some(ref logger) = self.target {
             logger.borrow_mut().flush();
@@ -94,13 +103,18 @@ impl<S: Clone, L: Clone> Drop for BufferingLogger<S, L> {
 /// A log writer for a communication thread.
 pub type CommsLogger = Rc<BufferingLogger<CommsSetup, CommsEvent>>;
 
+/// Configuration information about a communication thread.
 #[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct CommsSetup {
+    /// True when this is a send thread (or the receive thread).
     pub sender: bool,
+    /// The process id of the thread.
     pub process: usize,
+    /// The remote process id.
     pub remote: Option<usize>,
 }
 
+/// A communication event, observing a message.
 #[derive(Abomonation, Debug, Clone)]
 pub struct CommunicationEvent {
     /// true for send event, false for receive event
@@ -118,13 +132,18 @@ pub struct CommunicationEvent {
 #[derive(Abomonation, Debug, Clone)]
 /// Serialization
 pub struct SerializationEvent {
+    /// The sequence number of the message.
     pub seq_no: Option<usize>,
+    /// True when this is the start of serialization.
     pub is_start: bool,
 }
 
+/// The types of communication events.
 #[derive(Debug, Clone, Abomonation)]
 pub enum CommsEvent {
+    /// A communication event.
     /*  0 */ Communication(CommunicationEvent),
+    /// A serialization event.
     /*  1 */ Serialization(SerializationEvent),
 }
 

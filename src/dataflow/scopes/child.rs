@@ -5,8 +5,7 @@ use std::cell::RefCell;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
-use timely_communication::{Allocate, Data};
-use {Push, Pull};
+use communication::{Allocate, Data, Push, Pull};
 use logging::Logger;
 
 use super::{ScopeParent, Scope};
@@ -87,10 +86,12 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
     }
 }
 
+use communication::Message;
+
 impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>, Option<usize>) {
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>, Option<usize>) {
         self.parent.allocate()
     }
 }
