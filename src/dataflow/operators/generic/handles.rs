@@ -24,7 +24,7 @@ use dataflow::operators::capability::CapabilityTrait;
 /// Handle to an operator's input stream.
 pub struct InputHandle<T: Timestamp, D, P: Pull<Bundle<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
-    internal: Rc<RefCell<ChangeBatch<T>>>,
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     logging: Logger,
 }
 
@@ -43,7 +43,7 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     /// Returns `None` when there's no more data available.
     #[inline(always)]
     pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<Vec<D>>)> {
-        let internal = &mut self.internal;
+        let internal = &self.internal;
         self.pull_counter.next().map(|bundle| {
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
@@ -141,7 +141,7 @@ pub fn _access_pull_counter<T: Timestamp, D, P: Pull<Bundle<T, D>>>(input: &mut 
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<ChangeBatch<T>>>, logging: Logger) -> InputHandle<T, D, P> {
+pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, logging: Logger) -> InputHandle<T, D, P> {
     InputHandle {
         pull_counter,
         internal,

@@ -29,7 +29,7 @@ pub struct OperatorBuilder<G: Scope> {
     builder: OperatorBuilderRaw<G>,
     frontier: Vec<MutableAntichain<G::Timestamp>>,
     consumed: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
-    internal: Rc<RefCell<ChangeBatch<G::Timestamp>>>,
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     logging: Logger,
 }
@@ -43,7 +43,7 @@ impl<G: Scope> OperatorBuilder<G> {
             builder: OperatorBuilderRaw::new(name, scope),
             frontier: Vec::new(),
             consumed: Vec::new(),
-            internal: Rc::new(RefCell::new(ChangeBatch::new())),
+            internal: Rc::new(RefCell::new(Vec::new())),
             produced: Vec::new(),
             logging,
         }
@@ -88,6 +88,8 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let (tee, stream) = self.builder.new_output_connection(connection);
 
+        self.internal.borrow_mut().push(Rc::new(RefCell::new(ChangeBatch::new())));
+
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(buffer.inner().produced().clone());
 
@@ -97,14 +99,19 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Creates an operator implementation from supplied logic constructor.
     pub fn build<B, L>(self, constructor: B)
     where
-        B: FnOnce(Capability<G::Timestamp>) -> L,
+        B: FnOnce(Vec<Capability<G::Timestamp>>) -> L,
         L: FnMut(&[MutableAntichain<G::Timestamp>])+'static
     {
-        // create a capability, but discard any reference to its creation.
-        let cap = mint_capability(Default::default(), self.internal.clone());
-        self.internal.borrow_mut().clear();
+        // create capabilities, discard references to their creation.
+        let mut capabilities = Vec::new();
+        for output_index in 0  .. self.internal.borrow().len() {
+            let borrow = &self.internal.borrow()[output_index];
+            capabilities.push(mint_capability(Default::default(), borrow.clone()));
+            // Discard evidence of creation, as we are assumed to start with one.
+            borrow.borrow_mut().clear();
+        }
 
-        let mut logic = constructor(cap);
+        let mut logic = constructor(capabilities);
 
         let self_frontier1 = Rc::new(RefCell::new(self.frontier));
         let self_frontier2 = self_frontier1.clone();
@@ -133,11 +140,17 @@ impl<G: Scope> OperatorBuilder<G> {
             }
 
             // move batches of internal changes.
-            for index in 0 .. internal.len() {
-                let mut borrow = self_internal.borrow_mut();
-                internal[index].extend(borrow.iter().cloned());
+            let self_internal_borrow = self_internal.borrow_mut();
+            for index in 0 .. self_internal_borrow.len() {
+                let mut borrow = self_internal_borrow[index].borrow_mut();
+                internal[index].extend(borrow.drain());
             }
-            self_internal.borrow_mut().clear();
+
+            // for index in 0 .. internal.len() {
+            //     let mut borrow = self_internal.borrow_mut();
+            //     internal[index].extend(borrow.iter().cloned());
+            // }
+            // self_internal.borrow_mut().clear();
 
             // move batches of produced changes.
             for index in 0 .. produced.len() {

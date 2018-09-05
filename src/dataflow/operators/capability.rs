@@ -158,7 +158,7 @@ impl<T: Timestamp> ::std::hash::Hash for Capability<T> {
 /// and turns it into an owned capability
 pub struct CapabilityRef<'cap, T: Timestamp+'cap> {
     time: &'cap T,
-    internal: Rc<RefCell<ChangeBatch<T>>>,
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
 }
 
 impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
@@ -178,10 +178,21 @@ impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
     /// This method panics if `self.time` is not less or equal to `new_time`.
     #[inline(always)]
     pub fn delayed(&self, new_time: &T) -> Capability<T> {
+        self.delayed_for_output(new_time, 0)
+    }
+
+    /// Delays capability for a specific output port.
+    pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
+        // TODO : Test operator summary?
         if !self.time.less_equal(new_time) {
             panic!("Attempted to delay {:?} to {:?}, which is not `less_equal` the capability's time.", self, new_time);
         }
-        mint(new_time.clone(), self.internal.clone())
+        if output_port < self.internal.borrow().len() {
+            mint(new_time.clone(), self.internal.borrow()[output_port].clone())
+        }
+        else {
+            panic!("Attempted to acquire a capability for a non-existent output port.");
+        }
     }
 
     /// Transform to an owned capability.
@@ -191,7 +202,18 @@ impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
     /// as long as they are required, as failing to drop them may result in livelock.
     #[inline(always)]
     pub fn retain(self) -> Capability<T> {
-        mint(self.time.clone(), self.internal)
+        // mint(self.time.clone(), self.internal)
+        self.retain_for_output(0)
+    }
+
+    /// Transforms to an owned capability for a specific output port.
+    pub fn retain_for_output(self, output_port: usize) -> Capability<T> {
+        if output_port < self.internal.borrow().len() {
+            mint(self.time.clone(), self.internal.borrow()[output_port].clone())
+        }
+        else {
+            panic!("Attempted to acquire a capability for a non-existent output port.");
+        }
     }
 }
 
@@ -214,7 +236,7 @@ impl<'cap, T: Timestamp> Debug for CapabilityRef<'cap, T> {
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
 #[inline(always)]
-pub fn mint_ref<'cap, T: Timestamp>(time: &'cap T, internal: Rc<RefCell<ChangeBatch<T>>>) -> CapabilityRef<'cap, T> {
+pub fn mint_ref<'cap, T: Timestamp>(time: &'cap T, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>) -> CapabilityRef<'cap, T> {
     CapabilityRef {
         time,
         internal,
