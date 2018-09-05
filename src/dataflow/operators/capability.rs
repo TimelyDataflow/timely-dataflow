@@ -34,13 +34,20 @@ use progress::ChangeBatch;
 pub trait CapabilityTrait<T: Timestamp> {
     /// The timestamp associated with the capability.
     fn time(&self) -> &T;
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool;
 }
 
 impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a C {
     fn time(&self) -> &T { (**self).time() }
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
+        (**self).valid_for_output(query_buffer)
+    }
 }
 impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a mut C {
     fn time(&self) -> &T { (**self).time() }
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
+        (**self).valid_for_output(query_buffer)
+    }
 }
 
 /// The capability to send data with a certain timestamp on a dataflow edge.
@@ -56,6 +63,9 @@ pub struct Capability<T: Timestamp> {
 
 impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
     fn time(&self) -> &T { &self.time }
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
+        Rc::ptr_eq(&self.internal, query_buffer)
+    }
 }
 
 impl<T: Timestamp> Capability<T> {
@@ -163,6 +173,10 @@ pub struct CapabilityRef<'cap, T: Timestamp+'cap> {
 
 impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
     fn time(&self) -> &T { self.time }
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
+        // let borrow = ;
+        self.internal.borrow().iter().any(|rc| Rc::ptr_eq(rc, query_buffer))
+    }
 }
 
 impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {

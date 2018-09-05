@@ -88,12 +88,13 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let (tee, stream) = self.builder.new_output_connection(connection);
 
-        self.internal.borrow_mut().push(Rc::new(RefCell::new(ChangeBatch::new())));
+        let internal = Rc::new(RefCell::new(ChangeBatch::new()));
+        self.internal.borrow_mut().push(internal.clone());
 
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(buffer.inner().produced().clone());
 
-        (OutputWrapper::new(buffer), stream)
+        (OutputWrapper::new(buffer, internal), stream)
     }
 
     /// Creates an operator implementation from supplied logic constructor.
@@ -145,12 +146,6 @@ impl<G: Scope> OperatorBuilder<G> {
                 let mut borrow = self_internal_borrow[index].borrow_mut();
                 internal[index].extend(borrow.drain());
             }
-
-            // for index in 0 .. internal.len() {
-            //     let mut borrow = self_internal.borrow_mut();
-            //     internal[index].extend(borrow.iter().cloned());
-            // }
-            // self_internal.borrow_mut().clear();
 
             // move batches of produced changes.
             for index in 0 .. produced.len() {
