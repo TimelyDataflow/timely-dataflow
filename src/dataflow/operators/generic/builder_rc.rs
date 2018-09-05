@@ -163,3 +163,77 @@ impl<G: Scope> OperatorBuilder<G> {
         self.builder.index()
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    #[should_panic]
+    fn incorrect_capabilities() {
+
+        // This tests that if we attempt to use a capability associated with the
+        // wrong output, there is a run-time assertion.
+
+        use ::dataflow::operators::generic::builder_rc::OperatorBuilder;
+
+        ::example(|scope| {
+
+            let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
+
+            // let mut input = builder.new_input(stream, Pipeline);
+            let (mut output1, _stream1) = builder.new_output::<()>();
+            let (mut output2, _stream2) = builder.new_output::<()>();
+
+            builder.build(move |capabilities| {
+                move |_frontiers| {
+
+                    let mut output_handle1 = output1.activate();
+                    let mut output_handle2 = output2.activate();
+
+                    // NOTE: Using incorrect capabilities here.
+                    output_handle2.session(&capabilities[0]);
+                    output_handle1.session(&capabilities[1]);
+                }
+            });
+        })
+    }
+
+    #[test]
+    fn correct_capabilities() {
+
+        // This tests that if we attempt to use capabilities with the correct outputs
+        // there is no runtime assertion
+
+        use ::dataflow::operators::generic::builder_rc::OperatorBuilder;
+
+        ::example(|scope| {
+
+            let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
+
+            // let mut input = builder.new_input(stream, Pipeline);
+            let (mut output1, _stream1) = builder.new_output::<()>();
+            let (mut output2, _stream2) = builder.new_output::<()>();
+
+            builder.build(move |mut capabilities| {
+                move |_frontiers| {
+
+                    let mut output_handle1 = output1.activate();
+                    let mut output_handle2 = output2.activate();
+
+                    // Avoid second call.
+                    if !capabilities.is_empty() {
+
+                        // NOTE: Using correct capabilities here.
+                        output_handle1.session(&capabilities[0]);
+                        output_handle2.session(&capabilities[1]);
+
+                        capabilities.clear();
+                    }
+                }
+            });
+
+            "Hello".to_owned()
+        });
+    }
+}
