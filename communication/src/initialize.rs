@@ -10,7 +10,6 @@ use std::sync::Arc;
 use std::any::Any;
 
 use allocator::{AllocateBuilder, Thread, Process, Generic, GenericBuilder};
-// use allocator::zero_copy::allocator_process::ProcessBuilder;
 use allocator::zero_copy::initialize::initialize_networking;
 
 /// Possible configurations for the communication infrastructure.
@@ -76,8 +75,8 @@ impl Configuration {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self, logger: LogBuilder) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
-        // let logger = logger.unwrap_or_else()
+    pub fn try_build(self, logger: Option<LogBuilder>) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
+        let logger = logger.unwrap_or_else(|| Arc::new(|_| ::logging::BufferingLogger::new_inactive()));
         match self {
             Configuration::Thread => {
                 Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
@@ -98,6 +97,7 @@ impl Configuration {
 }
 
 type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>;
+
 
 /// Initializes communication and executes a distributed computation.
 ///
@@ -170,7 +170,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     log_sender: LogBuilder,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
-    let (allocators, others) = try!(config.try_build(log_sender));
+    let (allocators, others) = try!(config.try_build(Some(log_sender)));
     initialize_from(allocators, others, func)
 }
 

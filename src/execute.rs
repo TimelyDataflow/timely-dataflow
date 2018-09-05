@@ -147,7 +147,7 @@ pub fn execute_logging<T, F>(config: Configuration, logging_config: LoggerConfig
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     let timely_logging = logging_config.timely_logging.clone();
-    let (allocators, other) = config.try_build(logging_config.communication_logging.clone())?;
+    let (allocators, other) = config.try_build(Some(logging_config.communication_logging.clone()))?;
     initialize_from(allocators, other, move |allocator| {
         let mut root = Root::new(allocator, timely_logging.clone());
         let result = func(&mut root);
@@ -251,8 +251,8 @@ pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig,
 ///
 ///
 /// // execute a timely dataflow using command line parameters
-/// let builders = timely::Configuration::Process(3).try_build()
-/// timely::execute_from(timely::Configuration::Process(3), logger_config, |worker| {
+/// let (builders, other) = timely::Configuration::Process(3).try_build(None).unwrap();
+/// timely::execute::execute_from(builders, other, None, |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
