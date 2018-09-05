@@ -3,7 +3,6 @@
 use std::io::{Read, Result};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
-// use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;

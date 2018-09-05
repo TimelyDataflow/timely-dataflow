@@ -19,6 +19,9 @@ type CommsMessage = (u64, CommsSetup, CommsEvent);
 /// A log writer.
 pub type Logger = Rc<BufferingLogger<TimelySetup, TimelyEvent>>;
 
+/// A logger for timely events.
+pub type TimelyLogger = Arc<Fn(TimelySetup)->Rc<BufferingLogger<TimelySetup, TimelyEvent>>+Send+Sync>;
+
 /// A log writer that does not log anything.
 pub fn new_inactive_logger() -> Logger {
     BufferingLogger::<TimelySetup, TimelyEvent>::new_inactive()

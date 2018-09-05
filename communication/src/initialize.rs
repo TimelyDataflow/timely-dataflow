@@ -74,30 +74,30 @@ impl Configuration {
             else { Configuration::Thread }
         })
     }
+
+    /// Attempts to assemble the described communication infrastructure.
+    pub fn try_build(self, logger: Option<LogBuilder>) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
+        let logger = logger.unwrap_or_else()
+        match self {
+            Configuration::Thread => {
+                Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
+            },
+            Configuration::Process(threads) => {
+                Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
+            },
+            Configuration::Cluster(threads, process, addresses, report) => {
+                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, logger) {
+                    Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
+                }
+                else {
+                    Err("failed to initialize networking".to_owned())
+                }
+            },
+        }
+    }
 }
 
 type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>;
-
-fn create_allocators(config: Configuration, logger: LogBuilder) -> Result<(Vec<GenericBuilder>, Box<Any>),String> {
-    match config {
-        Configuration::Thread => {
-            Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
-            // Ok(ProcessBinaryBuilder::new_vector(1).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect())
-        },
-        Configuration::Process(threads) => {
-            Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
-            // Ok((ProcessBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect(), Box::new(())))
-        },
-        Configuration::Cluster(threads, process, addresses, report) => {
-            if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, logger) {
-                Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
-            }
-            else {
-                Err("failed to initialize networking".to_owned())
-            }
-        },
-    }
-}
 
 /// Initializes communication and executes a distributed computation.
 ///
@@ -170,14 +170,16 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     log_sender: LogBuilder,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
-    let (allocators, others) = try!(create_allocators(config, log_sender));
+    let (allocators, others) = try!(config.try_build(log_sender));
     initialize_from(allocators, others, func)
 }
 
 /// Initializes computation and runs a distributed computation.
 ///
 /// This version of `initialize` allows you to explicitly specify the allocators that
-/// you want to use, by providing an explicit list of allocator builders.
+/// you want to use, by providing an explicit list of allocator builders. Additionally,
+/// you provide `others`, a `Box<Any>` which will be held by the resulting worker guard
+/// and dropped when it is dropped, which allows you to join communication threads.
 ///
 /// #Examples
 /// ```
@@ -256,7 +258,7 @@ pub struct WorkerGuards<T:Send+'static> {
 
 impl<T:Send+'static> WorkerGuards<T> {
     /// Waits on the worker threads and returns the results they produce.
-    pub fn join(mut self) -> Vec<Result<T,String>> {
+    pub fn join(mut self) -> Vec<Result<T, String>> {
         self.guards.drain(..)
                    .map(|guard| guard.join().map_err(|e| format!("{:?}", e)))
                    .collect()

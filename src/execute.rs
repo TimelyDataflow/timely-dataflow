@@ -1,8 +1,8 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use communication::{initialize, Configuration, Allocator, WorkerGuards};
+use communication::{initialize, initialize_from, Configuration, Allocator, allocator::AllocateBuilder, WorkerGuards};
 use dataflow::scopes::{Root, Child};
-use logging::LoggerConfig;
+use logging::{LoggerConfig, TimelyLogger};
 
 /// Executes a single-threaded timely dataflow computation.
 ///
@@ -147,7 +147,8 @@ pub fn execute_logging<T, F>(config: Configuration, logging_config: LoggerConfig
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     let timely_logging = logging_config.timely_logging.clone();
-    initialize(config, logging_config.communication_logging.clone(), move |allocator| {
+    let (allocators, other) = config.try_build(logging_config.communication_logging.clone())?;
+    initialize_from(allocators, other, move |allocator| {
         let mut root = Root::new(allocator, timely_logging.clone());
         let result = func(&mut root);
         while root.step() { }
@@ -207,8 +208,8 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>,
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-
-    execute_from_args_logging(iter, LoggerConfig::default_with_env(), func)
+    let logging_config = LoggerConfig::default_with_env();
+    execute_from_args_logging(iter, logging_config, func)
 }
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
@@ -233,9 +234,41 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 /// }).unwrap();
 /// ```
 pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String>
-    where I: Iterator<Item=String>,
-          T:Send+'static,
-          F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-    execute_logging(try!(Configuration::from_args(iter)), logging_config, func)
+    where
+        I: Iterator<Item=String>,
+        T:Send+'static,
+        F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
+    let configuration = try!(Configuration::from_args(iter));
+    execute_logging(configuration, logging_config, func)
 }
 
+/// Executes a timely dataflow from supplied allocators and logging.
+///
+/// Refer to [`execute`](fn.execute.html) for more details.
+///
+/// ```rust
+/// use timely::dataflow::operators::{ToStream, Inspect};
+///
+///
+/// // execute a timely dataflow using command line parameters
+/// let builders = timely::Configuration::Process(3).try_build()
+/// timely::execute_from(timely::Configuration::Process(3), logger_config, |worker| {
+///     worker.dataflow::<(),_,_>(|scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x));
+///     })
+/// }).unwrap();
+/// ```
+pub fn execute_from<A, T, F>(builders: Vec<A>, others: Box<::std::any::Any>, timely_logging: Option<TimelyLogger>, func: F) -> Result<WorkerGuards<T>,String>
+where
+    A: AllocateBuilder+'static,
+    T: Send+'static,
+    F: Fn(&mut Root<<A as AllocateBuilder>::Allocator>)->T+Send+Sync+'static {
+    let timely_logging = timely_logging.unwrap_or_else(|| LoggerConfig::default_with_env().timely_logging);
+    initialize_from(builders, others, move |allocator| {
+        let mut root = Root::new(allocator, timely_logging.clone());
+        let result = func(&mut root);
+        while root.step() { }
+        result
+    })
+}
