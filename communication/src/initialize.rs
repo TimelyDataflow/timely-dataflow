@@ -76,8 +76,8 @@ impl Configuration {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self, logger: Option<LogBuilder>) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
-        let logger = logger.unwrap_or_else()
+    pub fn try_build(self, logger: LogBuilder) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
+        // let logger = logger.unwrap_or_else()
         match self {
             Configuration::Thread => {
                 Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
