@@ -64,7 +64,7 @@ extern crate time;
 extern crate bytes;
 extern crate logging as logging_core;
 
-pub use execute::{execute, execute_logging, execute_from_args, execute_from_args_logging, example};
+pub use execute::{execute, execute_from_args, example};
 pub use order::PartialOrder;
 
 pub use timely_communication::Configuration;
