@@ -348,7 +348,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
 
-        builder.build(move |capability| {
+        builder.build(move |mut capabilities| {
+            // `capabilities` should be a single-element vector.
+            let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, new_operator_info(index));
             move |frontiers| {
                 let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
@@ -397,7 +399,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         let (mut output, stream) = builder.new_output();
         builder.set_notify(false);
 
-        builder.build(move |capability| {
+        builder.build(move |mut capabilities| {
+            // `capabilities` should be a single-element vector.
+            let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, new_operator_info(index));
             move |_frontiers| {
                 let mut output_handle = output.activate();
@@ -426,7 +430,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         let mut input2 = builder.new_input(other, pact2);
         let (mut output, stream) = builder.new_output();
 
-        builder.build(move |capability| {
+        builder.build(move |mut capabilities| {
+            // `capabilities` should be a single-element vector.
+            let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, new_operator_info(index));
             move |frontiers| {
                 let mut input1_handle = FrontieredInputHandle::new(&mut input1, &frontiers[0]);
@@ -485,7 +491,9 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         let (mut output, stream) = builder.new_output();
         builder.set_notify(false);
 
-        builder.build(move |capability| {
+        builder.build(move |mut capabilities| {
+            // `capabilities` should be a single-element vector.
+            let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, new_operator_info(index));
             move |_frontiers| {
                 let mut output_handle = output.activate();
@@ -504,7 +512,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let mut input = builder.new_input(self, pact);
 
-        builder.build(|_capability| {
+        builder.build(|_capabilities| {
             move |frontiers| {
                 let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
                 logic(&mut input_handle);
@@ -561,7 +569,9 @@ where
     let (mut output, stream) = builder.new_output();
     builder.set_notify(false);
 
-    builder.build(|capability| {
+    builder.build(move |mut capabilities| {
+        // `capabilities` should be a single-element vector.
+        let capability = capabilities.pop().unwrap();
         let mut logic = constructor(capability);
         move |_frontier| {
             logic(&mut output.activate());

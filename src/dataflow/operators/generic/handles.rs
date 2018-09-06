@@ -24,7 +24,7 @@ use dataflow::operators::capability::CapabilityTrait;
 /// Handle to an operator's input stream.
 pub struct InputHandle<T: Timestamp, D, P: Pull<Bundle<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
-    internal: Rc<RefCell<ChangeBatch<T>>>,
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     logging: Option<Logger>,
 }
 
@@ -43,7 +43,7 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     /// Returns `None` when there's no more data available.
     #[inline(always)]
     pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<Vec<D>>)> {
-        let internal = &mut self.internal;
+        let internal = &self.internal;
         self.pull_counter.next().map(|bundle| {
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
@@ -139,7 +139,7 @@ pub fn _access_pull_counter<T: Timestamp, D, P: Pull<Bundle<T, D>>>(input: &mut 
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<ChangeBatch<T>>>, logging: Option<Logger>) -> InputHandle<T, D, P> {
+pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, logging: Option<Logger>) -> InputHandle<T, D, P> {
     InputHandle {
         pull_counter,
         internal,
@@ -153,14 +153,16 @@ pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: Pu
 /// than with an `OutputHandle`, whose methods ensure that capabilities are used and that the
 /// pusher is flushed (via the `cease` method) once it is no longer used.
 pub struct OutputWrapper<T: Timestamp, D, P: Push<Bundle<T, D>>> {
-    push_buffer: Buffer<T, D, PushCounter<T, D, P>>
+    push_buffer: Buffer<T, D, PushCounter<T, D, P>>,
+    internal_buffer: Rc<RefCell<ChangeBatch<T>>>,
 }
 
 impl<T: Timestamp, D, P: Push<Bundle<T, D>>> OutputWrapper<T, D, P> {
     /// Creates a new output wrapper from a push buffer.
-    pub fn new(buffer: Buffer<T, D, PushCounter<T, D, P>>) -> Self {
+    pub fn new(push_buffer: Buffer<T, D, PushCounter<T, D, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>) -> Self {
         OutputWrapper {
-            push_buffer: buffer
+            push_buffer,
+            internal_buffer,
         }
     }
     /// Borrows the push buffer into a handle, which can be used to send records.
@@ -169,7 +171,8 @@ impl<T: Timestamp, D, P: Push<Bundle<T, D>>> OutputWrapper<T, D, P> {
     /// type which ensures the use of capabilities, and which calls `cease` when it is dropped.
     pub fn activate(&mut self) -> OutputHandle<T, D, P> {
         OutputHandle {
-            push_buffer: &mut self.push_buffer
+            push_buffer: &mut self.push_buffer,
+            internal_buffer: &self.internal_buffer,
         }
     }
 }
@@ -178,6 +181,7 @@ impl<T: Timestamp, D, P: Push<Bundle<T, D>>> OutputWrapper<T, D, P> {
 /// Handle to an operator's output stream.
 pub struct OutputHandle<'a, T: Timestamp, D: 'a, P: Push<Bundle<T, D>>+'a> {
     push_buffer: &'a mut Buffer<T, D, PushCounter<T, D, P>>,
+    internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
 }
 
 impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>> OutputHandle<'a, T, D, P> {
@@ -204,6 +208,9 @@ impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>> OutputHandle<'a, T, D, P> {
     /// });
     /// ```
     pub fn session<'b, C: CapabilityTrait<T>>(&'b mut self, cap: &'b C) -> Session<'b, T, D, PushCounter<T, D, P>> where 'a: 'b {
+
+        assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
+
         self.push_buffer.session(cap.time())
     }
 }
