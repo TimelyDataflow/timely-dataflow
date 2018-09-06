@@ -24,13 +24,13 @@ impl Registry {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
-    pub fn insert<T: 'static>(
+    pub fn insert<T: 'static, F: Fn(&Duration, &[(Duration, T)])+'static>(
         &mut self,
-        name: String,
-        action: Box<Fn(&Duration, &[(Duration, T)])>) -> Option<Box<Any>>
+        name: &str,
+        action: F) -> Option<Box<Any>>
     {
-        let logger = Logger::<T>::new(self.time.clone(), action);
-        self.map.insert(name, Box::new(logger))
+        let logger = Logger::<T>::new(self.time.clone(), Box::new(action));
+        self.map.insert(name.to_owned(), Box::new(logger))
     }
 
     /// Removes a bound logger.
@@ -112,4 +112,9 @@ impl<T> Logger<T> {
         (self.action)(&self.time.elapsed(), &buffer[..]);
         buffer.clear();
     }
+}
+
+/// Bit weird, because we only have to flush on the *last* drop, but this should be ok.
+impl<T> Drop for Logger<T> {
+    fn drop(&mut self) { self.flush(); }
 }

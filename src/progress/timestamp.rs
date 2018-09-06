@@ -135,3 +135,12 @@ impl PathSummary<i32> for i32 {
     #[inline]
     fn followed_by(&self, other: &i32) -> Option<i32> { self.checked_add(*other) }
 }
+
+use std::time::Duration;
+impl Timestamp for Duration { type Summary = Duration; }
+impl PathSummary<Duration> for Duration {
+    #[inline]
+    fn results_in(&self, src: &Duration) -> Option<Duration> { self.checked_add(*src) }
+    #[inline]
+    fn followed_by(&self, other: &Duration) -> Option<Duration> { self.checked_add(*other) }
+}
