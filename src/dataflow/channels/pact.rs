@@ -128,7 +128,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
             let counter = self.counter;
             self.counter += 1;
 
-            self.logging.as_ref().map(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
+            self.logging.as_ref().map(|l| l.log(::logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
                 comm_channel: self.comm_channel,
@@ -136,7 +136,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
                 target: self.target,
                 seq_no: counter,
                 length,
-            })));
+            }));
         }
 
         self.pusher.push(pair);
@@ -178,7 +178,7 @@ impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
             let comm_channel = self.comm_channel;
             let target = self.index;
 
-            self.logging.as_mut().map(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
+            self.logging.as_mut().map(|l| l.log(::logging::MessagesEvent {
                 is_send: false,
                 channel,
                 comm_channel,
@@ -186,7 +186,7 @@ impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
                 target,
                 seq_no: bundle.seq,
                 length: bundle.data.len(),
-            })));
+            }));
         }
 
         result

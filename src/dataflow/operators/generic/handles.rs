@@ -78,11 +78,9 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<Vec<D>>)>(&mut self, mut logic: F) {
         let mut logging = self.logging.clone();
         while let Some((cap, data)) = self.next() {
-            logging.as_mut().map(|l| l.log(::logging::TimelyEvent::GuardedMessage(
-                    ::logging::GuardedMessageEvent { is_start: true })));
+            logging.as_mut().map(|l| l.log(::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            logging.as_mut().map(|l| l.log(::logging::TimelyEvent::GuardedMessage(
-                    ::logging::GuardedMessageEvent { is_start: false })));
+            logging.as_mut().map(|l| l.log(::logging::GuardedMessageEvent { is_start: false }));
         }
     }
 

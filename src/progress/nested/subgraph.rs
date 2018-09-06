@@ -132,11 +132,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
-            self.logging.as_mut().map(|l| l.log(::logging::TimelyEvent::Operates(::logging::OperatesEvent {
+            self.logging.as_mut().map(|l| l.log(::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
-            })));
+            }));
         }
         self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
     }
@@ -780,9 +780,9 @@ impl<T: Timestamp> PerOperatorState<T> {
 
                 if any_progress_updates {
                     self.logging.as_mut().map(|l| {
-                        l.log(::logging::TimelyEvent::PushProgress(::logging::PushProgressEvent {
+                        l.log(::logging::PushProgressEvent {
                             op_id: self_id,
-                        }));
+                        });
                     });
                 }
 
@@ -795,9 +795,9 @@ impl<T: Timestamp> PerOperatorState<T> {
                 debug_assert!(!self.external_buffer.iter_mut().any(|x| !x.is_empty()));
                 debug_assert!(external_progress.iter_mut().all(|x| x.is_empty()));
 
-                self.logging.as_mut().map(|l| l.log(::logging::TimelyEvent::Schedule(::logging::ScheduleEvent {
+                self.logging.as_mut().map(|l| l.log(::logging::ScheduleEvent {
                     id: self_id, start_stop: ::logging::StartStop::Start
-                })));
+                }));
 
                 debug_assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
                 debug_assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
@@ -836,10 +836,10 @@ impl<T: Timestamp> PerOperatorState<T> {
                 self.recently_active = did_work || internal_activity;
 
                 self.logging.as_mut().map(|l|
-                    l.log(::logging::TimelyEvent::Schedule(::logging::ScheduleEvent {
+                    l.log(::logging::ScheduleEvent {
                         id: self_id,
                         start_stop: ::logging::StartStop::Stop { activity: did_work }
-                    })));
+                    }));
 
                 internal_activity
             }

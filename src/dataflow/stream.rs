@@ -35,12 +35,12 @@ impl<S: Scope, D> Stream<S, D> {
     pub fn connect_to<P: Push<Bundle<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         let mut logging = self.scope().logging();
-        logging.as_mut().map(|l| l.log(::logging::TimelyEvent::Channels(::logging::ChannelsEvent {
+        logging.as_mut().map(|l| l.log(::logging::ChannelsEvent {
             id: identifier,
             scope_addr: self.scope.addr(),
             source: (self.name.index, self.name.port),
             target: (target.index, target.port),
-        })));
+        }));
 
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);

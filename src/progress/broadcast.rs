@@ -31,10 +31,10 @@ impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied allocator.
     pub fn new<A: Allocate>(allocator: &mut A, path: &Vec<usize>, mut logging: Option<Logger>) -> Progcaster<T> {
         let (pushers, puller, chan) = allocator.allocate();
-        logging.as_mut().map(|l| l.log(::logging::TimelyEvent::CommChannels(::logging::CommChannelsEvent {
+        logging.as_mut().map(|l| l.log(::logging::CommChannelsEvent {
             comm_channel: chan,
             comm_channel_kind: ::logging::CommChannelKind::Progress,
-        })));
+        }));
         let worker = allocator.index();
         let addr = path.clone();
         Progcaster {
@@ -58,7 +58,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     {
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
             if !messages.is_empty() || !internal.is_empty() {
-                self.logging.as_ref().map(|l| l.log(::logging::TimelyEvent::Progress(::logging::ProgressEvent {
+                self.logging.as_ref().map(|l| l.log(::logging::ProgressEvent {
                     is_send: true,
                     source: self.source,
                     comm_channel: self.comm_channel,
@@ -67,7 +67,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     // TODO: fill with additional data
                     messages: Vec::new(),
                     internal: Vec::new(),
-                })));
+                }));
 
                 for pusher in self.pushers.iter_mut() {
 
@@ -111,7 +111,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
                 let comm_channel = self.comm_channel;
                 let addr = &mut self.addr;
-                self.logging.as_mut().map(|l| l.log(::logging::TimelyEvent::Progress(::logging::ProgressEvent {
+                self.logging.as_mut().map(|l| l.log(::logging::ProgressEvent {
                     is_send: false,
                     source: source,
                     seq_no: counter,
@@ -120,7 +120,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     // TODO: fill with additional data
                     messages: Vec::new(),
                     internal: Vec::new(),
-                })));
+                }));
 
                 // We clone rather than drain to avoid deserialization.
                 for &(ref update, delta) in recv_messages.iter() {
