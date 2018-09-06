@@ -2,7 +2,7 @@
 
 use communication::{initialize, initialize_from, Configuration, Allocator, allocator::AllocateBuilder, WorkerGuards};
 use dataflow::scopes::{Root, Child};
-use logging::{LoggerConfig, TimelyLogger};
+// use logging::{LoggerConfig, TimelyLogger};
 
 /// Executes a single-threaded timely dataflow computation.
 ///
@@ -50,10 +50,10 @@ use logging::{LoggerConfig, TimelyLogger};
 pub fn example<T, F>(func: F) -> T
 where T: Send+'static,
       F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
-    let logging_config: LoggerConfig = Default::default();
-    let timely_logging = logging_config.timely_logging.clone();
-    let guards = initialize(Configuration::Thread, logging_config.communication_logging, move |allocator| {
-        let mut root = Root::new(allocator, timely_logging.clone());
+    // let logging_config: LoggerConfig = Default::default();
+    // let timely_logging = logging_config.timely_logging.clone();
+    let guards = initialize(Configuration::Thread, move |allocator| {
+        let mut root = Root::new(allocator);
         let result = root.dataflow(|x| func(x));
         while root.step() { }
         result
@@ -119,7 +119,7 @@ pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,S
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
     // let logging_config = ::logging::blackhole();
-    execute_logging(config, LoggerConfig::default_with_env(), func)
+    execute_logging(config, func)
 }
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
@@ -143,13 +143,13 @@ where T:Send+'static,
 ///     })
 /// }).unwrap();
 /// ```
-pub fn execute_logging<T, F>(config: Configuration, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String>
+pub fn execute_logging<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String>
 where T:Send+'static,
       F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
-    let timely_logging = logging_config.timely_logging.clone();
-    let (allocators, other) = config.try_build(Some(logging_config.communication_logging.clone()))?;
+    // let timely_logging = logging_config.timely_logging.clone();
+    let (allocators, other) = config.try_build()?;
     initialize_from(allocators, other, move |allocator| {
-        let mut root = Root::new(allocator, timely_logging.clone());
+        let mut root = Root::new(allocator);
         let result = func(&mut root);
         while root.step() { }
         result
@@ -208,8 +208,8 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>,
           T:Send+'static,
           F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
-    let logging_config = LoggerConfig::default_with_env();
-    execute_from_args_logging(iter, logging_config, func)
+    // let logging_config = LoggerConfig::default_with_env();
+    execute_from_args_logging(iter, func)
 }
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
@@ -233,13 +233,13 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 ///     })
 /// }).unwrap();
 /// ```
-pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig, func: F) -> Result<WorkerGuards<T>,String>
+pub fn execute_from_args_logging<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String>
     where
         I: Iterator<Item=String>,
         T:Send+'static,
         F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
     let configuration = try!(Configuration::from_args(iter));
-    execute_logging(configuration, logging_config, func)
+    execute_logging(configuration, func)
 }
 
 /// Executes a timely dataflow from supplied allocators and logging.
@@ -259,14 +259,14 @@ pub fn execute_from_args_logging<I, T, F>(iter: I, logging_config: LoggerConfig,
 ///     })
 /// }).unwrap();
 /// ```
-pub fn execute_from<A, T, F>(builders: Vec<A>, others: Box<::std::any::Any>, timely_logging: Option<TimelyLogger>, func: F) -> Result<WorkerGuards<T>,String>
+pub fn execute_from<A, T, F>(builders: Vec<A>, others: Box<::std::any::Any>, func: F) -> Result<WorkerGuards<T>,String>
 where
     A: AllocateBuilder+'static,
     T: Send+'static,
     F: Fn(&mut Root<<A as AllocateBuilder>::Allocator>)->T+Send+Sync+'static {
-    let timely_logging = timely_logging.unwrap_or_else(|| LoggerConfig::default_with_env().timely_logging);
+    // let timely_logging = timely_logging.unwrap_or_else(|| LoggerConfig::default_with_env().timely_logging);
     initialize_from(builders, others, move |allocator| {
-        let mut root = Root::new(allocator, timely_logging.clone());
+        let mut root = Root::new(allocator);
         let result = func(&mut root);
         while root.step() { }
         result

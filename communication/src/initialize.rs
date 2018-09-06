@@ -12,6 +12,7 @@ use std::any::Any;
 use allocator::{AllocateBuilder, Thread, Process, Generic, GenericBuilder};
 use allocator::zero_copy::initialize::initialize_networking;
 
+
 /// Possible configurations for the communication infrastructure.
 pub enum Configuration {
     /// Use one thread.
@@ -75,8 +76,8 @@ impl Configuration {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self, logger: Option<LogBuilder>) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
-        let logger = logger.unwrap_or_else(|| Arc::new(|_| ::logging::BufferingLogger::new_inactive()));
+    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
+        // let logger = logger.unwrap_or_else(|| Arc::new(|_| ::logging::BufferingLogger::new_inactive()));
         match self {
             Configuration::Thread => {
                 Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
@@ -85,7 +86,7 @@ impl Configuration {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             },
             Configuration::Cluster(threads, process, addresses, report) => {
-                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, logger) {
+                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, |_| None) {
                     Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
                 }
                 else {
@@ -96,7 +97,7 @@ impl Configuration {
     }
 }
 
-type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>;
+// type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>;
 
 
 /// Initializes communication and executes a distributed computation.
@@ -167,10 +168,9 @@ type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Syn
 /// ```
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Configuration,
-    log_sender: LogBuilder,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
-    let (allocators, others) = try!(config.try_build(Some(log_sender)));
+    let (allocators, others) = try!(config.try_build());
     initialize_from(allocators, others, func)
 }
 

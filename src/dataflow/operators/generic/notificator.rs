@@ -17,7 +17,7 @@ use logging::Logger;
 pub struct Notificator<'a, T: Timestamp> {
     frontiers: &'a [&'a MutableAntichain<T>],
     inner: &'a mut FrontierNotificator<T>,
-    logging: &'a Logger,
+    logging: &'a Option<Logger>,
 }
 
 impl<'a, T: Timestamp> Notificator<'a, T> {
@@ -27,7 +27,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     pub fn new(
         frontiers: &'a [&'a MutableAntichain<T>],
         inner: &'a mut FrontierNotificator<T>,
-        logging: &'a Logger) -> Self {
+        logging: &'a Option<Logger>) -> Self {
 
         inner.make_available(frontiers);
 
@@ -81,10 +81,10 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
+            self.logging.as_ref().map(|l| l.log(::logging::TimelyEvent::GuardedProgress(
                     ::logging::GuardedProgressEvent { is_start: true })));
             logic(cap, count, self);
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
+            self.logging.as_ref().map(|l| l.log(::logging::TimelyEvent::GuardedProgress(
                     ::logging::GuardedProgressEvent { is_start: false })));
         }
     }
@@ -118,7 +118,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 
     let root_capability = mint_capability(Product::new(0,0), Rc::new(RefCell::new(ChangeBatch::new())));
 
-    let logging = ::logging::new_inactive_logger();
+    let logging = None;//::logging::new_inactive_logger();
 
     // notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(ts_from_tuple((0, 0)), 1)]);
     let times = vec![
@@ -368,7 +368,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// This implementation can be emulated with judicious use of `make_available` and `notify_at_frontiered`,
     /// in the event that `Notificator` provides too restrictive an interface.
     #[inline]
-    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Logger) -> Notificator<'a, T> {
+    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Option<Logger>) -> Notificator<'a, T> {
         Notificator::new(frontiers, self, logging)
     }
 

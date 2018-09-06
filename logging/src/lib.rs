@@ -96,9 +96,9 @@ impl<T> Logger<T> {
     /// This implementation borrows a shared (but thread-local) buffer of log events, to ensure
     /// that the `action` only sees one stream of events with increasing timestamps. This may
     /// have a cost that we don't entirely understand.
-    pub fn log(&self, event: T) {
+    pub fn log<S: Into<T>>(&self, event: S) {
         let mut buffer = self.buffer.borrow_mut();
-        buffer.push((self.time.elapsed(), event));
+        buffer.push((self.time.elapsed(), event.into()));
         if buffer.len() == buffer.capacity() {
             // Would call `self.flush()`, but for `RefCell` panic.
             (self.action)(&self.time.elapsed(), &buffer[..]);

@@ -18,7 +18,7 @@ pub struct Child<'a, G: ScopeParent, T: Timestamp> {
     /// A copy of the child's parent scope.
     pub parent:   G,
     /// The log writer for this scope.
-    pub logging:  Logger,
+    pub logging:  Option<Logger>,
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Child<'a, G, T> {
@@ -35,6 +35,9 @@ impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
 
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
+    }
+    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry> {
+        self.parent.log_register()
     }
 }
 
@@ -79,10 +82,6 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         self.add_operator_with_index(subscope, index);
 
         result
-    }
-
-    fn logging(&self) -> Logger {
-        self.logging.clone()
     }
 }
 

@@ -18,6 +18,14 @@ pub trait ScopeParent: Allocate+Clone {
 
     /// Allocates a new locally unique identifier.
     fn new_identifier(&mut self) -> usize;
+
+    ///
+    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry>;
+
+    ///
+    fn logging(&self) -> Option<Logger> {
+        self.log_register().get("timely")
+    }
 }
 
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
@@ -75,7 +83,4 @@ pub trait Scope: ScopeParent {
     /// });
     /// ```
     fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R;
-
-    /// Obtains the logger associated with this scope.
-    fn logging(&self) -> Logger;
 }

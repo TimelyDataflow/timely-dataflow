@@ -28,15 +28,21 @@ impl Drop for CommsGuard {
     }
 }
 
+use ::log_events::{CommunicationSetup, CommunicationEvent};
+use logging_core::Logger;
+
 /// Initializes network connections
-pub fn initialize_networking(
+pub fn initialize_networking<F>(
     addresses: Vec<String>,
     my_index: usize,
     threads: usize,
     noisy: bool,
-    log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>)
--> ::std::io::Result<(Vec<TcpBuilder<Process>>, CommsGuard)> {
-
+    log_sender: F)
+-> ::std::io::Result<(Vec<TcpBuilder<Process>>, CommsGuard)>
+where
+    F: Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync+'static,
+{
+    let log_sender = Arc::new(log_sender);
     let processes = addresses.len();
 
     let mut results = create_sockets(addresses, my_index, noisy)?;
@@ -63,13 +69,13 @@ pub fn initialize_networking(
                     .name(format!("send thread {}", index))
                     .spawn(move || {
 
-                        let log_sender = log_sender(::logging::CommsSetup {
+                        let logger = log_sender(CommunicationSetup {
                             process: my_index,
                             sender: true,
                             remote: Some(index),
                         });
 
-                        send_loop(stream, remote_recv, signal, log_sender);
+                        send_loop(stream, remote_recv, signal, logger);
                     })?;
 
                 send_guards.push(join_guard);
@@ -85,12 +91,12 @@ pub fn initialize_networking(
                 ::std::thread::Builder::new()
                     .name(format!("recv thread {}", index))
                     .spawn(move || {
-                        let log_sender = log_sender(::logging::CommsSetup {
+                        let logger = log_sender(CommunicationSetup {
                             process: my_index,
                             sender: false,
                             remote: Some(index),
                         });
-                        recv_loop(stream, remote_send, threads * my_index, log_sender);
+                        recv_loop(stream, remote_send, threads * my_index, logger);
                     })?;
 
                 recv_guards.push(join_guard);

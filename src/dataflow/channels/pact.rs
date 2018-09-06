@@ -28,7 +28,7 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
     /// Type implementing `Pull` produced by this pact.
     type Puller: Pull<Bundle<T, D>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller);
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
 
 /// A direct connection
@@ -36,7 +36,7 @@ pub struct Pipeline;
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     type Pusher = LogPusher<T, D, ThreadPusher<Bundle<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<Bundle<T, D>>>;
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         // ignore `&mut A` and use thread allocator
         let (pusher, puller) = Thread::new::<Bundle<T, D>>();
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, None, logging.clone()),
@@ -62,7 +62,7 @@ impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&D)->u64+'st
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<Push<Bundle<T, D>>>;
     type Puller = Box<Pull<Bundle<T, D>>>;
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, channel_id, logging.clone())).collect::<Vec<_>>();
         (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, channel_id, logging.clone())))
@@ -101,11 +101,11 @@ pub struct LogPusher<T, D, P: Push<Bundle<T, D>>> {
     source: usize,
     target: usize,
     phantom: ::std::marker::PhantomData<(T, D)>,
-    logging: Logger,
+    logging: Option<Logger>,
 }
 impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
     /// Allocates a new pusher.
-    pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
+    pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>, logging: Option<Logger>) -> Self {
         LogPusher {
             pusher,
             channel,
@@ -128,7 +128,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
             let counter = self.counter;
             self.counter += 1;
 
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
+            self.logging.as_ref().map(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
                 comm_channel: self.comm_channel,
@@ -150,11 +150,11 @@ pub struct LogPuller<T, D, P: Pull<Bundle<T, D>>> {
     comm_channel: Option<usize>,
     index: usize,
     phantom: ::std::marker::PhantomData<(T, D)>,
-    logging: Logger,
+    logging: Option<Logger>,
 }
 impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
     /// Allocates a new `Puller`.
-    pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>, logging: Logger) -> Self {
+    pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>, logging: Option<Logger>) -> Self {
         LogPuller {
             puller,
             channel,
@@ -178,7 +178,7 @@ impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
             let comm_channel = self.comm_channel;
             let target = self.index;
 
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
+            self.logging.as_mut().map(|l| l.log(::logging::TimelyEvent::Messages(::logging::MessagesEvent {
                 is_send: false,
                 channel,
                 comm_channel,

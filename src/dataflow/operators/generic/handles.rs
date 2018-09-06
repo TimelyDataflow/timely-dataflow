@@ -25,7 +25,7 @@ use dataflow::operators::capability::CapabilityTrait;
 pub struct InputHandle<T: Timestamp, D, P: Pull<Bundle<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<ChangeBatch<T>>>,
-    logging: Logger,
+    logging: Option<Logger>,
 }
 
 /// Handle to an operator's input stream and frontier.
@@ -76,12 +76,12 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     /// ```
     #[inline]
     pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<Vec<D>>)>(&mut self, mut logic: F) {
-        let logging = self.logging.clone();
+        let mut logging = self.logging.clone();
         while let Some((cap, data)) = self.next() {
-            logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedMessage(
+            logging.as_mut().map(|l| l.log(::logging::TimelyEvent::GuardedMessage(
                     ::logging::GuardedMessageEvent { is_start: true })));
             logic(cap, data);
-            logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedMessage(
+            logging.as_mut().map(|l| l.log(::logging::TimelyEvent::GuardedMessage(
                     ::logging::GuardedMessageEvent { is_start: false })));
         }
     }
@@ -141,7 +141,7 @@ pub fn _access_pull_counter<T: Timestamp, D, P: Pull<Bundle<T, D>>>(input: &mut 
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<ChangeBatch<T>>>, logging: Logger) -> InputHandle<T, D, P> {
+pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<ChangeBatch<T>>>, logging: Option<Logger>) -> InputHandle<T, D, P> {
     InputHandle {
         pull_counter,
         internal,

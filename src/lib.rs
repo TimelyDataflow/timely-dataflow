@@ -62,6 +62,7 @@ extern crate abomonation;
 extern crate timely_communication;
 extern crate time;
 extern crate bytes;
+extern crate logging as logging_core;
 
 pub use execute::{execute, execute_logging, execute_from_args, execute_from_args_logging, example};
 pub use order::PartialOrder;
@@ -79,6 +80,7 @@ pub mod execute;
 pub mod order;
 
 pub mod logging;
+// pub mod log_events;
 
 /// A composite trait for types usable as data in timely dataflow.
 ///

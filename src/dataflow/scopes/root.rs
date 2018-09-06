@@ -1,13 +1,11 @@
 //! The root scope of all timely dataflow computations.
 
 use std::rc::Rc;
-use std::sync::Arc;
 use std::cell::RefCell;
 use std::any::Any;
 
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
-use logging::Logger;
 use communication::{Allocate, Data, Push, Pull};
 
 use super::{ScopeParent, Child};
@@ -19,18 +17,19 @@ pub struct Root<A: Allocate> {
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Arc<Fn(::logging::TimelySetup)->Logger+Sync+Send>,
+    logging: Rc<RefCell<::logging_core::Registry>>,
 }
 
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
-    pub fn new(c: A, logging: Arc<Fn(::logging::TimelySetup)->Logger+Sync+Send>) -> Root<A> {
+    pub fn new(c: A) -> Root<A> {
+        let now = ::std::time::Instant::now();
         Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
-            logging,
+            logging: Rc::new(RefCell::new(::logging_core::Registry::new(now))),
         }
     }
 
@@ -82,9 +81,10 @@ impl<A: Allocate> Root<A> {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
-        let logging = (self.logging)(::logging::TimelySetup {
-            index: self.index(),
-        });
+        // let logging = (self.logging)(::logging::TimelySetup {
+        //     index: self.index(),
+        // });
+        let mut logging = self.logging();
         let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone());
         let subscope = RefCell::new(subscope);
 
@@ -97,7 +97,7 @@ impl<A: Allocate> Root<A> {
             func(&mut resources, &mut builder)
         };
 
-        logging.flush();
+        logging.as_mut().map(|l| l.flush());
 
         let mut operator = subscope.into_inner().build(&mut *self.allocator.borrow_mut());
 
@@ -128,6 +128,9 @@ impl<A: Allocate> ScopeParent for Root<A> {
     fn new_identifier(&mut self) -> usize {
         *self.identifiers.borrow_mut() += 1;
         *self.identifiers.borrow() - 1
+    }
+    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry> {
+        self.logging.borrow_mut()
     }
 }
 

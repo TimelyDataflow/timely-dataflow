@@ -83,11 +83,13 @@ extern crate abomonation;
 extern crate time;
 
 extern crate bytes;
+extern crate logging as logging_core;
 
 pub mod allocator;
 pub mod networking;
 pub mod initialize;
-pub mod logging;
+// pub mod logging;
+pub mod log_events;
 pub mod message;
 
 use std::any::Any;

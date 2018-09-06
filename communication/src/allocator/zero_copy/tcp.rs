@@ -8,6 +8,8 @@ use networking::MessageHeader;
 use super::bytes_slab::BytesSlab;
 use super::bytes_exchange::{MergeQueue, Signal};
 
+use logging_core::Logger;
+
 /// Repeatedly reads from a TcpStream and carves out messages.
 ///
 /// The intended communication pattern is a sequence of (header, message)^* for valid
@@ -18,7 +20,7 @@ pub fn recv_loop(
     mut reader: TcpStream,
     mut targets: Vec<MergeQueue>,
     worker_offset: usize,
-    _log_sender: ::logging::CommsLogger)
+    _log_sender: Option<Logger<::log_events::CommunicationEvent>>)
 {
     let mut buffer = BytesSlab::new(20);
 
@@ -96,7 +98,7 @@ pub fn send_loop(
     writer: TcpStream,
     mut sources: Vec<MergeQueue>,
     signal: Signal,
-    _log_sender: ::logging::CommsLogger)
+    _log_sender: Option<Logger<::log_events::CommunicationEvent>>)
 {
 
     let mut writer = ::std::io::BufWriter::with_capacity(1 << 16, writer);
