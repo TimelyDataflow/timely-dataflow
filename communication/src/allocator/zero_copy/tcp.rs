@@ -10,7 +10,7 @@ use super::bytes_exchange::{MergeQueue, Signal};
 
 use logging_core::Logger;
 
-use ::log_events::{CommunicationEvent, MessageEvent, StateEvent};
+use ::logging::{CommunicationEvent, MessageEvent, StateEvent};
 
 /// Repeatedly reads from a TcpStream and carves out messages.
 ///

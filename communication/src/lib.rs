@@ -84,7 +84,7 @@ extern crate logging as logging_core;
 pub mod allocator;
 pub mod networking;
 pub mod initialize;
-pub mod log_events;
+pub mod logging;
 pub mod message;
 
 use std::any::Any;

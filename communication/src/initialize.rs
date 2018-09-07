@@ -12,7 +12,7 @@ use std::any::Any;
 use allocator::{AllocateBuilder, Thread, Process, Generic, GenericBuilder};
 use allocator::zero_copy::initialize::initialize_networking;
 
-use ::log_events::{CommunicationSetup, CommunicationEvent};
+use ::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 
 

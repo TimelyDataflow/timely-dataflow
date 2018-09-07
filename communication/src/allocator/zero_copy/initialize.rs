@@ -28,7 +28,7 @@ impl Drop for CommsGuard {
     }
 }
 
-use ::log_events::{CommunicationSetup, CommunicationEvent};
+use ::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 
 /// Initializes network connections
