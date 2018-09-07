@@ -60,7 +60,6 @@
 extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
 extern crate timely_communication;
-extern crate time;
 extern crate bytes;
 extern crate logging as logging_core;
 

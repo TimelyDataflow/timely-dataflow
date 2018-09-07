@@ -21,7 +21,6 @@ abomonation_derive = "0.3"
 bytes = { path = "./bytes" }
 logging = { path = "./logging" }
 timely_communication = { path = "./communication"}
-time="0.1.34"
 
 [dev-dependencies]
 timely_sort="0.1.6"

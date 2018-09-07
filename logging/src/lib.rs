@@ -24,12 +24,12 @@ impl Registry {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
-    pub fn insert<T: 'static, F: Fn(&Duration, &[(Duration, T)])+'static>(
+    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, T)>)+'static>(
         &mut self,
         name: &str,
         action: F) -> Option<Box<Any>>
     {
-        let logger = Logger::<T>::new(self.time.clone(), Box::new(action));
+        let logger = Logger::<T>::new(self.time.clone(), action);
         self.map.insert(name.to_owned(), Box::new(logger))
     }
 
@@ -62,9 +62,9 @@ impl Registry {
 
 /// A buffering logger.
 pub struct Logger<T> {
-    time:   Instant,                                    // common instant used for all loggers.
-    action: Rc<Box<Fn(&Duration, &[(Duration, T)])>>,   // action to take on full log buffers.
-    buffer: Rc<RefCell<Vec<(Duration, T)>>>,            // shared buffer; not obviously best design.
+    time:   Instant,                                                // common instant used for all loggers.
+    action: Rc<RefCell<FnMut(&Duration, &mut Vec<(Duration, T)>)>>, // action to take on full log buffers.
+    buffer: Rc<RefCell<Vec<(Duration, T)>>>,                        // shared buffer; not obviously best design.
 }
 
 impl<T> Clone for Logger<T> {
@@ -79,10 +79,13 @@ impl<T> Clone for Logger<T> {
 
 impl<T> Logger<T> {
     /// Allocates a new shareable logger bound to a write destination.
-    pub fn new(time: Instant, action: Box<Fn(&Duration, &[(Duration, T)])>) -> Self {
+    pub fn new<F>(time: Instant, action: F) -> Self
+    where
+        F: FnMut(&Duration, &mut Vec<(Duration, T)>)+'static
+    {
         Logger {
             time,
-            action: Rc::new(action),
+            action: Rc::new(RefCell::new(action)),
             buffer: Rc::new(RefCell::new(Vec::with_capacity(1024))),
         }
     }
@@ -101,7 +104,9 @@ impl<T> Logger<T> {
         buffer.push((self.time.elapsed(), event.into()));
         if buffer.len() == buffer.capacity() {
             // Would call `self.flush()`, but for `RefCell` panic.
-            (self.action)(&self.time.elapsed(), &buffer[..]);
+            let mut action = self.action.borrow_mut();
+            let action = &mut *action;
+            (*action)(&self.time.elapsed(), &mut *buffer);
             buffer.clear();
         }
     }
@@ -109,7 +114,9 @@ impl<T> Logger<T> {
     /// Flushes logged messages and communicates the new minimal timestamp.
     pub fn flush(&self) {
         let mut buffer = self.buffer.borrow_mut();
-        (self.action)(&self.time.elapsed(), &buffer[..]);
+        let mut action = self.action.borrow_mut();
+        let action = &mut *action;
+        (*action)(&self.time.elapsed(), &mut *buffer);
         buffer.clear();
     }
 }

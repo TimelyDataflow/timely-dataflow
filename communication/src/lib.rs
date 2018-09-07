@@ -19,11 +19,8 @@
 //! // configure for two threads, just one process.
 //! let config = timely_communication::Configuration::Process(2);
 //!
-//! // create a source of inactive loggers.
-//! let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
-//!
 //! // initializes communication, spawns workers
-//! let guards = timely_communication::initialize(config, logger, |mut allocator| {
+//! let guards = timely_communication::initialize(config, |mut allocator| {
 //!     println!("worker {} started", allocator.index());
 //!
 //!     // allocates pair of senders list and one receiver.
@@ -80,7 +77,6 @@
 extern crate getopts;
 extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
-extern crate time;
 
 extern crate bytes;
 extern crate logging as logging_core;
@@ -88,7 +84,6 @@ extern crate logging as logging_core;
 pub mod allocator;
 pub mod networking;
 pub mod initialize;
-// pub mod logging;
 pub mod log_events;
 pub mod message;
 

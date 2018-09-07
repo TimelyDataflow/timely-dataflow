@@ -12,6 +12,9 @@ use std::any::Any;
 use allocator::{AllocateBuilder, Thread, Process, Generic, GenericBuilder};
 use allocator::zero_copy::initialize::initialize_networking;
 
+use ::log_events::{CommunicationSetup, CommunicationEvent};
+use logging_core::Logger;
+
 
 /// Possible configurations for the communication infrastructure.
 pub enum Configuration {
@@ -76,8 +79,10 @@ impl Configuration {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
-        // let logger = logger.unwrap_or_else(|| Arc::new(|_| ::logging::BufferingLogger::new_inactive()));
+    pub fn try_build<F>(self, log_fn: F) -> Result<(Vec<GenericBuilder>, Box<Any>), String>
+    where
+        F: Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync+'static,
+    {
         match self {
             Configuration::Thread => {
                 Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
@@ -86,7 +91,7 @@ impl Configuration {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             },
             Configuration::Cluster(threads, process, addresses, report) => {
-                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, |_| None) {
+                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, log_fn) {
                     Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
                 }
                 else {
@@ -96,9 +101,6 @@ impl Configuration {
         }
     }
 }
-
-// type LogBuilder = Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>;
-
 
 /// Initializes communication and executes a distributed computation.
 ///
@@ -113,11 +115,8 @@ impl Configuration {
 /// // configure for two threads, just one process.
 /// let config = timely_communication::Configuration::Process(2);
 ///
-/// // create a source of inactive loggers.
-/// let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
-///
 /// // initializes communication, spawns workers
-/// let guards = timely_communication::initialize(config, logger, |mut allocator| {
+/// let guards = timely_communication::initialize(config, |mut allocator| {
 ///     println!("worker {} started", allocator.index());
 ///
 ///     // allocates pair of senders list and one receiver.
@@ -170,7 +169,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Configuration,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
-    let (allocators, others) = try!(config.try_build());
+    let (allocators, others) = try!(config.try_build(|_| None));
     initialize_from(allocators, others, func)
 }
 

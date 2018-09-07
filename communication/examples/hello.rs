@@ -7,8 +7,7 @@ fn main() {
 
     // extract the configuration from user-supplied arguments, initialize the computation.
     let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
-    let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
-    let guards = timely_communication::initialize(config, logger, |mut allocator| {
+    let guards = timely_communication::initialize(config, |mut allocator| {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());
 

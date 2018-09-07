@@ -116,15 +116,67 @@ where T: Send+'static,
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
 pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String>
-where T:Send+'static,
-      F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
-    let (allocators, other) = config.try_build()?;
+where
+    T:Send+'static,
+    F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
+
+    let comms_loggers = |_events_setup| {
+
+        let mut result = None;
+        if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
+
+            use ::std::net::TcpStream;
+            use ::logging::TimelyLogger;
+            use ::dataflow::operators::capture::EventWriter;
+
+            eprintln!("enabled COMM logging to {}", addr);
+
+            if let Ok(stream) = TcpStream::connect(&addr) {
+                let writer = EventWriter::new(stream);
+                let mut logger = TimelyLogger::new(writer);
+                result = Some(::logging_core::Logger::new(
+                    ::std::time::Instant::now(),
+                    move |time, data| logger.publish_batch(time, data)
+                ));
+            }
+            else {
+                eprintln!("Could not connect to communication log address: {:?}", addr);
+            }
+        }
+        result
+    };
+
+    let (allocators, other) = config.try_build(comms_loggers)?;
+
     initialize_from(allocators, other, move |allocator| {
+
         let mut root = Root::new(allocator);
+
+        // If an environment variable is set, use it as the default timely logging.
+        if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
+
+            use ::std::net::TcpStream;
+            use ::logging::{TimelyLogger, TimelyEvent};
+            use ::dataflow::operators::capture::EventWriter;
+
+            if let Ok(stream) = TcpStream::connect(&addr) {
+                let writer = EventWriter::new(stream);
+                let mut logger = TimelyLogger::new(writer);
+                root.log_register()
+                    .insert::<TimelyEvent,_>("timely", move |time, data|
+                        logger.publish_batch(time, data)
+                    );
+            }
+            else {
+                eprintln!("Could not connect logging stream to: {:?}", addr);
+            }
+        }
+
         let result = func(&mut root);
         while root.step() { }
         result
-    })}
+    })
+}
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
 ///

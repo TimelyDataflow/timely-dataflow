@@ -120,6 +120,10 @@ impl<A: Allocate> Root<A> {
         *self.dataflow_counter.borrow_mut() += 1;
         *self.dataflow_counter.borrow() - 1
     }
+    /// Access to named loggers.
+    pub fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry> {
+        self.logging.borrow_mut()
+    }
 }
 
 impl<A: Allocate> ScopeParent for Root<A> {
