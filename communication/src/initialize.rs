@@ -23,7 +23,7 @@ pub enum Configuration {
     /// Use one process with an indicated number of threads.
     Process(usize),
     /// Expect multiple processes indicated by `(threads, process, host_list, report)`.
-    Cluster(usize, usize, Vec<String>, bool)
+    Cluster(usize, usize, Vec<String>, bool, Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync>)
 }
 
 #[cfg(feature = "arg_parse")]
@@ -71,7 +71,7 @@ impl Configuration {
                 }
 
                 assert!(processes == addresses.len());
-                Configuration::Cluster(threads, process, addresses, report)
+                Configuration::Cluster(threads, process, addresses, report, Box::new(|_| None))
             }
             else if threads > 1 { Configuration::Process(threads) }
             else { Configuration::Thread }
@@ -79,10 +79,7 @@ impl Configuration {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build<F>(self, log_fn: F) -> Result<(Vec<GenericBuilder>, Box<Any>), String>
-    where
-        F: Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync+'static,
-    {
+    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
         match self {
             Configuration::Thread => {
                 Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
@@ -90,7 +87,7 @@ impl Configuration {
             Configuration::Process(threads) => {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             },
-            Configuration::Cluster(threads, process, addresses, report) => {
+            Configuration::Cluster(threads, process, addresses, report, log_fn) => {
                 if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, log_fn) {
                     Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
                 }
@@ -169,7 +166,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Configuration,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
-    let (allocators, others) = try!(config.try_build(|_| None));
+    let (allocators, others) = try!(config.try_build());
     initialize_from(allocators, others, func)
 }
 

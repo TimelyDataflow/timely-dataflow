@@ -212,6 +212,8 @@ pub enum TimelyEvent {
     /*  9 */ CommChannels(CommChannelsEvent),
     /// Input event.
     /* 10 */ Input(InputEvent),
+    /// Unstructured event.
+    /* 11 */ Text(String),
 }
 
 impl From<OperatesEvent> for TimelyEvent {

@@ -115,38 +115,41 @@ where T: Send+'static,
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
-pub fn execute<T, F>(config: Configuration, func: F) -> Result<WorkerGuards<T>,String>
+pub fn execute<T, F>(mut config: Configuration, func: F) -> Result<WorkerGuards<T>,String>
 where
     T:Send+'static,
     F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
 
-    let comms_loggers = |_events_setup| {
+    if let Configuration::Cluster(_,_,_,_, ref mut log_fn) = config {
 
-        let mut result = None;
-        if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
+        *log_fn = Box::new(|_events_setup| {
 
-            use ::std::net::TcpStream;
-            use ::logging::TimelyLogger;
-            use ::dataflow::operators::capture::EventWriter;
+            let mut result = None;
+            if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
 
-            eprintln!("enabled COMM logging to {}", addr);
+                use ::std::net::TcpStream;
+                use ::logging::TimelyLogger;
+                use ::dataflow::operators::capture::EventWriter;
 
-            if let Ok(stream) = TcpStream::connect(&addr) {
-                let writer = EventWriter::new(stream);
-                let mut logger = TimelyLogger::new(writer);
-                result = Some(::logging_core::Logger::new(
-                    ::std::time::Instant::now(),
-                    move |time, data| logger.publish_batch(time, data)
-                ));
+                eprintln!("enabled COMM logging to {}", addr);
+
+                if let Ok(stream) = TcpStream::connect(&addr) {
+                    let writer = EventWriter::new(stream);
+                    let mut logger = TimelyLogger::new(writer);
+                    result = Some(::logging_core::Logger::new(
+                        ::std::time::Instant::now(),
+                        move |time, data| logger.publish_batch(time, data)
+                    ));
+                }
+                else {
+                    eprintln!("Could not connect to communication log address: {:?}", addr);
+                }
             }
-            else {
-                eprintln!("Could not connect to communication log address: {:?}", addr);
-            }
-        }
-        result
-    };
+            result
+        });
+    }
 
-    let (allocators, other) = config.try_build(comms_loggers)?;
+    let (allocators, other) = config.try_build()?;
 
     initialize_from(allocators, other, move |allocator| {
 
@@ -242,7 +245,7 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using command line parameters
-/// let (builders, other) = timely::Configuration::Process(3).try_build(|_| None).unwrap();
+/// let (builders, other) = timely::Configuration::Process(3).try_build().unwrap();
 /// timely::execute::execute_from(builders, other, |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)

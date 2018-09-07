@@ -32,15 +32,15 @@ use ::log_events::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 
 /// Initializes network connections
-pub fn initialize_networking<F>(
+pub fn initialize_networking(
     addresses: Vec<String>,
     my_index: usize,
     threads: usize,
     noisy: bool,
-    log_sender: F)
+    log_sender: Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync>)
 -> ::std::io::Result<(Vec<TcpBuilder<Process>>, CommsGuard)>
-where
-    F: Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync+'static,
+// where
+//     F: Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync+'static,
 {
     let log_sender = Arc::new(log_sender);
     let processes = addresses.len();
@@ -75,7 +75,7 @@ where
                             remote: Some(index),
                         });
 
-                        send_loop(stream, remote_recv, signal, logger);
+                        send_loop(stream, remote_recv, signal, my_index, index, logger);
                     })?;
 
                 send_guards.push(join_guard);
@@ -96,7 +96,7 @@ where
                             sender: false,
                             remote: Some(index),
                         });
-                        recv_loop(stream, remote_send, threads * my_index, logger);
+                        recv_loop(stream, remote_send, threads * my_index, my_index, index, logger);
                     })?;
 
                 recv_guards.push(join_guard);

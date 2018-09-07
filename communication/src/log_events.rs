@@ -11,17 +11,40 @@ pub struct CommunicationSetup {
     pub remote: Option<usize>,
 }
 
-/// A communication event, observing a message.
+/// Various communication events.
 #[derive(Abomonation, Debug, Clone)]
-pub struct CommunicationEvent {
+pub enum CommunicationEvent {
+    /// An observed message.
+    Message(MessageEvent),
+    /// A state transition.
+    State(StateEvent),
+}
+
+/// An observed message.
+#[derive(Abomonation, Debug, Clone)]
+pub struct MessageEvent {
     /// true for send event, false for receive event
     pub is_send: bool,
-    /// communication channel id
-    pub comm_channel: usize,
-    /// source worker id
-    pub source: usize,
-    /// target worker id
-    pub target: usize,
-    /// sequence number
-    pub seqno: usize,
+    /// associated message header.
+    pub header: ::networking::MessageHeader,
+}
+
+/// Starting or stopping communication threads.
+#[derive(Abomonation, Debug, Clone)]
+pub struct StateEvent {
+    /// Is the thread a send (vs a recv) thread.
+    pub send: bool,
+    /// The host process id.
+    pub process: usize,
+    /// The remote process id.
+    pub remote: usize,
+    /// Is the thread starting or stopping.
+    pub start: bool,
+}
+
+impl From<MessageEvent> for CommunicationEvent {
+    fn from(v: MessageEvent) -> CommunicationEvent { CommunicationEvent::Message(v) }
+}
+impl From<StateEvent> for CommunicationEvent {
+    fn from(v: StateEvent) -> CommunicationEvent { CommunicationEvent::State(v) }
 }

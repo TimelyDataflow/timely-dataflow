@@ -10,6 +10,8 @@ use super::bytes_exchange::{MergeQueue, Signal};
 
 use logging_core::Logger;
 
+use ::log_events::{CommunicationEvent, MessageEvent, StateEvent};
+
 /// Repeatedly reads from a TcpStream and carves out messages.
 ///
 /// The intended communication pattern is a sequence of (header, message)^* for valid
@@ -20,8 +22,13 @@ pub fn recv_loop(
     mut reader: TcpStream,
     mut targets: Vec<MergeQueue>,
     worker_offset: usize,
-    _log_sender: Option<Logger<::log_events::CommunicationEvent>>)
+    process: usize,
+    remote: usize,
+    mut logger: Option<Logger<CommunicationEvent>>)
 {
+    // Log the receive thread's start.
+    logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: true }));
+
     let mut buffer = BytesSlab::new(20);
 
     // Where we stash Bytes before handing them off.
@@ -64,6 +71,11 @@ pub fn recv_loop(
             let peeled_bytes = header.required_bytes();
             let bytes = buffer.extract(peeled_bytes);
 
+            // Record message receipt.
+            logger.as_mut().map(|logger| {
+                logger.log(MessageEvent { is_send: false, header, });
+            });
+
             if header.length > 0 {
                 stageds[header.target - worker_offset].push(bytes);
             }
@@ -82,11 +94,15 @@ pub fn recv_loop(
 
         // Pass bytes along to targets.
         for (index, staged) in stageds.iter_mut().enumerate() {
+
+
             use allocator::zero_copy::bytes_exchange::BytesPush;
             targets[index].extend(staged.drain(..));
         }
     }
-    // println!("RECVER EXITING");
+
+    // Log the receive thread's start.
+    logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: false, }));
 }
 
 /// Repeatedly sends messages into a TcpStream.
@@ -98,8 +114,13 @@ pub fn send_loop(
     writer: TcpStream,
     mut sources: Vec<MergeQueue>,
     signal: Signal,
-    _log_sender: Option<Logger<::log_events::CommunicationEvent>>)
+    process: usize,
+    remote: usize,
+    mut logger: Option<Logger<CommunicationEvent>>)
 {
+
+    // Log the receive thread's start.
+    logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
 
     let mut writer = ::std::io::BufWriter::with_capacity(1 << 16, writer);
     let mut stash = Vec::new();
@@ -122,7 +143,17 @@ pub fn send_loop(
         }
         else {
             // TODO: Could do scatter/gather write here.
-            for bytes in stash.drain(..) {
+            for mut bytes in stash.drain(..) {
+
+                // Record message sends.
+                logger.as_mut().map(|logger| {
+                    let mut offset = 0;
+                    while let Some(header) = MessageHeader::try_read(&mut bytes[offset..]) {
+                        logger.log(MessageEvent { is_send: true, header, });
+                        offset += header.required_bytes();
+                    }
+                });
+
                 writer.write_all(&bytes[..]).expect("Write failure in send_loop.");
             }
         }
@@ -141,4 +172,8 @@ pub fn send_loop(
     header.write_to(&mut writer).expect("Failed to write header!");
     writer.flush().expect("Failed to flush writer.");
     writer.get_mut().shutdown(::std::net::Shutdown::Write).expect("Write shutdown failed");
+    logger.as_mut().map(|logger| logger.log(MessageEvent { is_send: true, header }));
+
+    // Log the receive thread's start.
+    logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: false, }));
 }
