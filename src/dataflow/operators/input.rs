@@ -320,11 +320,15 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// This method allows timely dataflow to issue progress notifications as it can now determine
     /// that this input can no longer produce data at earlier timestamps.
     pub fn advance_to(&mut self, next: T) {
+        // Assert that we do not rewind time.
         assert!(self.now_at.inner.less_equal(&next));
-        self.close_epoch();
-        self.now_at = RootTimestamp::new(next);
-        for progress in self.progress.iter() {
-            progress.borrow_mut().update(self.now_at.clone(), 1);
+        // Flush buffers if time has actually changed.
+        if !self.now_at.inner.eq(&next) {
+            self.close_epoch();
+            self.now_at = RootTimestamp::new(next);
+            for progress in self.progress.iter() {
+                progress.borrow_mut().update(self.now_at.clone(), 1);
+            }
         }
     }
 
