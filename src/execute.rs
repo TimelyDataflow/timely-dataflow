@@ -242,7 +242,7 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using command line parameters
-/// let (builders, other) = timely::Configuration::Process(3).try_build().unwrap();
+/// let (builders, other) = timely::Configuration::Process(3).try_build(|_| None).unwrap();
 /// timely::execute::execute_from(builders, other, |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
