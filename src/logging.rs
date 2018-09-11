@@ -1,7 +1,9 @@
 //! Traits, implementations, and macros related to logging timely events.
 
 /// Type alias for logging timely events.
-pub type Logger = ::logging_core::Logger<TimelyEvent>;
+pub type WorkerIdentifier = usize;
+/// Logger type for worker-local logging.
+pub type Logger = ::logging_core::Logger<TimelyEvent, WorkerIdentifier>;
 
 use std::time::Duration;
 use ::progress::timestamp::RootTimestamp;
@@ -9,14 +11,14 @@ use ::progress::nested::product::Product;
 use dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
-pub struct TimelyLogger<E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E)> {
+pub struct TimelyLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
     // None when the logging stream is closed
     time: Duration,
     event_pusher: P,
-    _phantom: ::std::marker::PhantomData<E>,
+    _phantom: ::std::marker::PhantomData<(E, T)>,
 }
 
-impl<E, P> TimelyLogger<E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E)> {
+impl<T, E, P> TimelyLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
         TimelyLogger {
@@ -26,7 +28,7 @@ impl<E, P> TimelyLogger<E, P> where P: EventPusher<Product<RootTimestamp, Durati
         }
     }
     /// Publishes a batch of logged events and advances the capability.
-    pub fn publish_batch(&mut self, time: &Duration, data: &mut Vec<(Duration, E)>) {
+    pub fn publish_batch(&mut self, time: &Duration, data: &mut Vec<(Duration, E, T)>) {
         let new_frontier = RootTimestamp::new(time.clone());
         let old_frontier = RootTimestamp::new(self.time.clone());
         self.event_pusher.push(Event::Messages(RootTimestamp::new(self.time), ::std::mem::replace(data, Vec::new())));
@@ -34,7 +36,7 @@ impl<E, P> TimelyLogger<E, P> where P: EventPusher<Product<RootTimestamp, Durati
         self.time = time.clone();
     }
 }
-impl<E, P> Drop for TimelyLogger<E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E)> {
+impl<T, E, P> Drop for TimelyLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
     fn drop(&mut self) {
         self.event_pusher.push(Event::Progress(vec![(RootTimestamp::new(self.time), -1)]));
     }

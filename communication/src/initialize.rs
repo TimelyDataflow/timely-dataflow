@@ -23,7 +23,7 @@ pub enum Configuration {
     /// Use one process with an indicated number of threads.
     Process(usize),
     /// Expect multiple processes indicated by `(threads, process, host_list, report)`.
-    Cluster(usize, usize, Vec<String>, bool, Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync>)
+    Cluster(usize, usize, Vec<String>, bool, Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
 }
 
 #[cfg(feature = "arg_parse")]

@@ -10,7 +10,7 @@ use super::bytes_exchange::{MergeQueue, Signal};
 
 use logging_core::Logger;
 
-use ::logging::{CommunicationEvent, MessageEvent, StateEvent};
+use ::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, StateEvent};
 
 /// Repeatedly reads from a TcpStream and carves out messages.
 ///
@@ -24,7 +24,7 @@ pub fn recv_loop(
     worker_offset: usize,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent>>)
+    mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
 {
     // Log the receive thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: true }));
@@ -116,7 +116,7 @@ pub fn send_loop(
     signal: Signal,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent>>)
+    mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
 {
 
     // Log the receive thread's start.

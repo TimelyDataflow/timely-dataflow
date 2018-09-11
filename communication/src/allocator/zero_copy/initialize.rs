@@ -37,7 +37,7 @@ pub fn initialize_networking(
     my_index: usize,
     threads: usize,
     noisy: bool,
-    log_sender: Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync>)
+    log_sender: Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
 -> ::std::io::Result<(Vec<TcpBuilder<Process>>, CommsGuard)>
 // where
 //     F: Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync+'static,

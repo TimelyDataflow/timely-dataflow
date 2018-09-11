@@ -122,7 +122,7 @@ where
 
     if let Configuration::Cluster(_,_,_,_, ref mut log_fn) = config {
 
-        *log_fn = Box::new(|_events_setup| {
+        *log_fn = Box::new(|events_setup| {
 
             let mut result = None;
             if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
@@ -138,6 +138,7 @@ where
                     let mut logger = TimelyLogger::new(writer);
                     result = Some(::logging_core::Logger::new(
                         ::std::time::Instant::now(),
+                        events_setup,
                         move |time, data| logger.publish_batch(time, data)
                     ));
                 }

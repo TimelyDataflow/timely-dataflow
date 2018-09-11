@@ -17,19 +17,20 @@ pub struct Root<A: Allocate> {
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Rc<RefCell<::logging_core::Registry>>,
+    logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
 }
 
 impl<A: Allocate> Root<A> {
     /// Allocates a new `Root` bound to a channel allocator.
     pub fn new(c: A) -> Root<A> {
         let now = ::std::time::Instant::now();
+        let index = c.index();
         Root {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
-            logging: Rc::new(RefCell::new(::logging_core::Registry::new(now))),
+            logging: Rc::new(RefCell::new(::logging_core::Registry::new(now, index))),
         }
     }
 
@@ -122,7 +123,7 @@ impl<A: Allocate> Root<A> {
         *self.dataflow_counter.borrow() - 1
     }
     /// Access to named loggers.
-    pub fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry> {
+    pub fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.logging.borrow_mut()
     }
 }
@@ -134,7 +135,7 @@ impl<A: Allocate> ScopeParent for Root<A> {
         *self.identifiers.borrow_mut() += 1;
         *self.identifiers.borrow() - 1
     }
-    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry> {
+    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.logging.borrow_mut()
     }
 }

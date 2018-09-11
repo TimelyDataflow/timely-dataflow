@@ -5,14 +5,16 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
 
-pub struct Registry {
-    /// An instant common to all logging statements.
-    time: Instant,
+pub struct Registry<Id> {
+    /// A worker-specific identifier.
+    id: Id,
     /// A map from names to typed loggers.
     map: HashMap<String, (Box<Any>, Box<Flush>)>,
+    /// An instant common to all logging statements.
+    time: Instant,
 }
 
-impl Registry {
+impl<Id: Clone+'static> Registry<Id> {
     /// Binds a log name to an action on log event batches.
     ///
     /// This method also returns any pre-installed action, rather than overwriting it
@@ -24,12 +26,12 @@ impl Registry {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
-    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, T)>)+'static>(
+    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, Id, T)>)+'static>(
         &mut self,
         name: &str,
         action: F) -> Option<Box<Any>>
     {
-        let logger = Logger::<T>::new(self.time.clone(), action);
+        let logger = Logger::<T, Id>::new(self.time.clone(), self.id.clone(), action);
         self.map.insert(name.to_owned(), (Box::new(logger.clone()), Box::new(logger))).map(|x| x.0)
     }
 
@@ -44,16 +46,17 @@ impl Registry {
     }
 
     /// Retrieves a shared logger, if one has been inserted.
-    pub fn get<T: 'static>(&self, name: &str) -> Option<Logger<T>> {
+    pub fn get<T: 'static>(&self, name: &str) -> Option<Logger<T, Id>> {
         self.map
             .get(name)
-            .and_then(|entry| entry.0.downcast_ref::<Logger<T>>())
+            .and_then(|entry| entry.0.downcast_ref::<Logger<T, Id>>())
             .map(|x| (*x).clone())
     }
 
     /// Creates a new logger registry.
-    pub fn new(time: Instant) -> Self {
+    pub fn new(time: Instant, id: Id) -> Self {
         Registry {
+            id,
             time,
             map: HashMap::new(),
         }
@@ -65,7 +68,7 @@ impl Registry {
     }
 }
 
-impl Flush for Registry {
+impl<Id> Flush for Registry<Id> {
     fn flush(&mut self) {
         for value in self.map.values_mut() {
             value.1.flush();
@@ -74,15 +77,17 @@ impl Flush for Registry {
 }
 
 /// A buffering logger.
-pub struct Logger<T> {
-    time:   Instant,                                                // common instant used for all loggers.
-    action: Rc<RefCell<FnMut(&Duration, &mut Vec<(Duration, T)>)>>, // action to take on full log buffers.
-    buffer: Rc<RefCell<Vec<(Duration, T)>>>,                        // shared buffer; not obviously best design.
+pub struct Logger<T, E> {
+    id:     E,
+    time:   Instant,                                                    // common instant used for all loggers.
+    action: Rc<RefCell<FnMut(&Duration, &mut Vec<(Duration, E, T)>)>>,  // action to take on full log buffers.
+    buffer: Rc<RefCell<Vec<(Duration, E, T)>>>,                         // shared buffer; not obviously best design.
 }
 
-impl<T> Clone for Logger<T> {
+impl<T, E: Clone> Clone for Logger<T, E> {
     fn clone(&self) -> Self {
         Logger {
+            id: self.id.clone(),
             time: self.time,
             action: self.action.clone(),
             buffer: self.buffer.clone(),
@@ -90,13 +95,14 @@ impl<T> Clone for Logger<T> {
     }
 }
 
-impl<T> Logger<T> {
+impl<T, E: Clone> Logger<T, E> {
     /// Allocates a new shareable logger bound to a write destination.
-    pub fn new<F>(time: Instant, action: F) -> Self
+    pub fn new<F>(time: Instant, id: E, action: F) -> Self
     where
-        F: FnMut(&Duration, &mut Vec<(Duration, T)>)+'static
+        F: FnMut(&Duration, &mut Vec<(Duration, E, T)>)+'static
     {
         Logger {
+            id,
             time,
             action: Rc::new(RefCell::new(action)),
             buffer: Rc::new(RefCell::new(Vec::with_capacity(1024))),
@@ -114,7 +120,7 @@ impl<T> Logger<T> {
     /// have a cost that we don't entirely understand.
     pub fn log<S: Into<T>>(&self, event: S) {
         let mut buffer = self.buffer.borrow_mut();
-        buffer.push((self.time.elapsed(), event.into()));
+        buffer.push((self.time.elapsed(), self.id.clone(), event.into()));
         if buffer.len() == buffer.capacity() {
             // Would call `self.flush()`, but for `RefCell` panic.
             let mut action = self.action.borrow_mut();
@@ -131,7 +137,7 @@ impl<T> Logger<T> {
 }
 
 /// Bit weird, because we only have to flush on the *last* drop, but this should be ok.
-impl<T> Drop for Logger<T> {
+impl<T, E> Drop for Logger<T, E> {
     fn drop(&mut self) { self.flush(); }
 }
 
@@ -141,7 +147,7 @@ trait Flush {
     fn flush(&mut self);
 }
 
-impl<T> Flush for Logger<T> {
+impl<T, E> Flush for Logger<T, E> {
     fn flush(&mut self) {
         let mut buffer = self.buffer.borrow_mut();
         let mut action = self.action.borrow_mut();

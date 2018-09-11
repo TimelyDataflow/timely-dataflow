@@ -20,7 +20,7 @@ pub trait ScopeParent: Allocate+Clone {
     fn new_identifier(&mut self) -> usize;
 
     ///
-    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry>;
+    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>>;
 
     ///
     fn logging(&self) -> Option<Logger> {

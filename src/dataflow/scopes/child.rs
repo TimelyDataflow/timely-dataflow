@@ -36,7 +36,7 @@ impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
     }
-    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry> {
+    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.parent.log_register()
     }
 }
