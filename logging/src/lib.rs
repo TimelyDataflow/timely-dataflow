@@ -9,7 +9,7 @@ pub struct Registry {
     /// An instant common to all logging statements.
     time: Instant,
     /// A map from names to typed loggers.
-    map: HashMap<String, Box<Any>>,
+    map: HashMap<String, (Box<Any>, Box<Flush>)>,
 }
 
 impl Registry {
@@ -30,7 +30,7 @@ impl Registry {
         action: F) -> Option<Box<Any>>
     {
         let logger = Logger::<T>::new(self.time.clone(), action);
-        self.map.insert(name.to_owned(), Box::new(logger))
+        self.map.insert(name.to_owned(), (Box::new(logger.clone()), Box::new(logger))).map(|x| x.0)
     }
 
     /// Removes a bound logger.
@@ -40,14 +40,14 @@ impl Registry {
     /// then the stream cannot be complete as in principle anyone could acquire a handle to
     /// the logger and start further logging.
     pub fn remove(&mut self, name: &str) -> Option<Box<Any>> {
-        self.map.remove(name)
+        self.map.remove(name).map(|x| x.0)
     }
 
     /// Retrieves a shared logger, if one has been inserted.
     pub fn get<T: 'static>(&self, name: &str) -> Option<Logger<T>> {
         self.map
             .get(name)
-            .and_then(|entry| entry.downcast_ref::<Logger<T>>())
+            .and_then(|entry| entry.0.downcast_ref::<Logger<T>>())
             .map(|x| (*x).clone())
     }
 
@@ -56,6 +56,19 @@ impl Registry {
         Registry {
             time,
             map: HashMap::new(),
+        }
+    }
+
+    /// Flushes all registered logs.
+    pub fn flush(&mut self) {
+        <Self as Flush>::flush(self);
+    }
+}
+
+impl Flush for Registry {
+    fn flush(&mut self) {
+        for value in self.map.values_mut() {
+            value.1.flush();
         }
     }
 }
@@ -112,16 +125,28 @@ impl<T> Logger<T> {
     }
 
     /// Flushes logged messages and communicates the new minimal timestamp.
-    pub fn flush(&self) {
-        let mut buffer = self.buffer.borrow_mut();
-        let mut action = self.action.borrow_mut();
-        let action = &mut *action;
-        (*action)(&self.time.elapsed(), &mut *buffer);
-        buffer.clear();
+    pub fn flush(&mut self) {
+        <Self as Flush>::flush(self);
     }
 }
 
 /// Bit weird, because we only have to flush on the *last* drop, but this should be ok.
 impl<T> Drop for Logger<T> {
     fn drop(&mut self) { self.flush(); }
+}
+
+/// Types that can be flushed.
+trait Flush {
+    /// Flushes buffered data.
+    fn flush(&mut self);
+}
+
+impl<T> Flush for Logger<T> {
+    fn flush(&mut self) {
+        let mut buffer = self.buffer.borrow_mut();
+        let mut action = self.action.borrow_mut();
+        let action = &mut *action;
+        (*action)(&self.time.elapsed(), &mut *buffer);
+        buffer.clear();
+    }
 }

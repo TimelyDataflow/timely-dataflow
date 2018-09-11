@@ -51,6 +51,7 @@ impl<A: Allocate> Root<A> {
         self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
 
         // TODO(andreal) do we want to flush logs here?
+        self.logging.borrow_mut().flush();
 
         self.allocator.borrow_mut().post_work();
 
