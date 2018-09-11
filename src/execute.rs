@@ -128,14 +128,14 @@ where
             if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
 
                 use ::std::net::TcpStream;
-                use ::logging::TimelyLogger;
+                use ::logging::BatchLogger;
                 use ::dataflow::operators::capture::EventWriter;
 
                 eprintln!("enabled COMM logging to {}", addr);
 
                 if let Ok(stream) = TcpStream::connect(&addr) {
                     let writer = EventWriter::new(stream);
-                    let mut logger = TimelyLogger::new(writer);
+                    let mut logger = BatchLogger::new(writer);
                     result = Some(::logging_core::Logger::new(
                         ::std::time::Instant::now(),
                         events_setup,
@@ -160,12 +160,12 @@ where
         if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
 
             use ::std::net::TcpStream;
-            use ::logging::{TimelyLogger, TimelyEvent};
+            use ::logging::{BatchLogger, TimelyEvent};
             use ::dataflow::operators::capture::EventWriter;
 
             if let Ok(stream) = TcpStream::connect(&addr) {
                 let writer = EventWriter::new(stream);
-                let mut logger = TimelyLogger::new(writer);
+                let mut logger = BatchLogger::new(writer);
                 root.log_register()
                     .insert::<TimelyEvent,_>("timely", move |time, data|
                         logger.publish_batch(time, data)

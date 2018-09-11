@@ -6,7 +6,7 @@ use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use communication::{Allocate, Data, Push, Pull};
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use super::{ScopeParent, Scope};
 

@@ -3,7 +3,9 @@
 /// Type alias for logging timely events.
 pub type WorkerIdentifier = usize;
 /// Logger type for worker-local logging.
-pub type Logger = ::logging_core::Logger<TimelyEvent, WorkerIdentifier>;
+pub type Logger<Event> = ::logging_core::Logger<Event, WorkerIdentifier>;
+/// Logger for timely dataflow system events.
+pub type TimelyLogger = Logger<TimelyEvent>;
 
 use std::time::Duration;
 use ::progress::timestamp::RootTimestamp;
@@ -11,17 +13,17 @@ use ::progress::nested::product::Product;
 use dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
-pub struct TimelyLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
+pub struct BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
     // None when the logging stream is closed
     time: Duration,
     event_pusher: P,
     _phantom: ::std::marker::PhantomData<(E, T)>,
 }
 
-impl<T, E, P> TimelyLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
+impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
-        TimelyLogger {
+        BatchLogger {
             time: Default::default(),
             event_pusher,
             _phantom: ::std::marker::PhantomData,
@@ -36,7 +38,7 @@ impl<T, E, P> TimelyLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, 
         self.time = time.clone();
     }
 }
-impl<T, E, P> Drop for TimelyLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
+impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
     fn drop(&mut self) {
         self.event_pusher.push(Event::Progress(vec![(RootTimestamp::new(self.time), -1)]));
     }

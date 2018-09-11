@@ -2,7 +2,7 @@
 
 use progress::{Timestamp, Operate};
 use progress::nested::{Source, Target};
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 use communication::Allocate;
 
 pub mod root;

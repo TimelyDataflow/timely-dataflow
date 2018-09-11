@@ -15,7 +15,7 @@ use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::{Buffer, Session};
 use dataflow::channels::Bundle;
 use communication::{Push, Pull, message::RefOrMut};
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use dataflow::operators::CapabilityRef;
 use dataflow::operators::capability::mint_ref as mint_capability_ref;

@@ -17,7 +17,7 @@ use communication::allocator::thread::Puller as ThreadPuller;
 use dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{Bundle, Message};
 
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use abomonation::Abomonation;
 

@@ -6,7 +6,7 @@ use std::default::Default;
 
 use communication::Allocate;
 
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, Operate};

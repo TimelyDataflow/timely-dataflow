@@ -20,7 +20,7 @@ use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
 
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 

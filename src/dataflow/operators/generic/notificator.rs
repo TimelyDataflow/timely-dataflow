@@ -1,7 +1,7 @@
 use progress::frontier::{AntichainRef, MutableAntichain};
 use progress::Timestamp;
 use dataflow::operators::Capability;
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 /// Tracks requests for notification and delivers available notifications.
 ///

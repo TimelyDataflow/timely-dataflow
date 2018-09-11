@@ -2,7 +2,7 @@
 
 use progress::{ChangeBatch, Timestamp};
 use communication::{Allocate, Message, Push, Pull};
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;
