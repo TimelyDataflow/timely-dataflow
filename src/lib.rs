@@ -75,6 +75,7 @@ pub mod communication {
 
 pub mod progress;
 pub mod dataflow;
+pub mod synchronization;
 pub mod execute;
 pub mod order;
 
