@@ -142,7 +142,7 @@ where
                     ));
                 }
                 else {
-                    eprintln!("Could not connect to communication log address: {:?}", addr);
+                    panic!("Could not connect to communication log address: {:?}", addr);
                 }
             }
             result
@@ -171,7 +171,7 @@ where
                     );
             }
             else {
-                eprintln!("Could not connect logging stream to: {:?}", addr);
+                panic!("Could not connect logging stream to: {:?}", addr);
             }
         }
 

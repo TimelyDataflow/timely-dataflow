@@ -8,7 +8,7 @@ use bytes::arc::Bytes;
 
 use networking::MessageHeader;
 
-use {Allocate, Data, Push, Pull};
+use {Allocate, allocator::AllocateBuilder, Data, Push, Pull};
 use allocator::Message;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
@@ -88,6 +88,15 @@ impl ProcessBuilder {
             _signal: self.signal,
         }
     }
+}
+
+impl AllocateBuilder for ProcessBuilder {
+    type Allocator = ProcessAllocator;
+    /// Builds allocator, consumes self.
+    fn build(self) -> Self::Allocator {
+        self.build()
+    }
+
 }
 
 /// A serializing allocator for inter-thread intra-process communication.
