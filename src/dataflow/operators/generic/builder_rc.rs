@@ -162,6 +162,11 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn index(&self) -> usize {
         self.builder.index()
     }
+
+    /// The operator's worker-unique identifier.
+    pub fn global(&self) -> usize {
+        self.builder.global()
+    }
 }
 
 

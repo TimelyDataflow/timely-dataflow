@@ -16,7 +16,13 @@ pub trait ScopeParent: Allocate+Clone {
     /// The timestamp associated with data in this scope.
     type Timestamp : Timestamp;
 
-    /// Allocates a new locally unique identifier.
+    /// Allocates a new worker-local unique identifier.
+    ///
+    /// These identifiers are currently used to provide short names for operators and channels
+    /// instead of more expansive addresses and addresses plus ports.
+    ///
+    /// The implementation is just a common counter, and one should be welcome to freely call
+    /// this function if it is important to acquire worker-local unique identifiers.
     fn new_identifier(&mut self) -> usize;
 
     ///
@@ -51,14 +57,26 @@ pub trait Scope: ScopeParent {
         index
     }
 
-    /// Allocates a new operator index, for use with `add_operator_with_index`.
+    /// Allocates a new scope-local operator index.
+    ///
+    /// This method is meant for use with `add_operator_with_index`, which accepts a scope-local
+    /// operator index allocated with this method. This method does cause the scope to expect that
+    /// an operator will be added, and it is an error not to eventually add such an operator.
     fn allocate_operator_index(&mut self) -> usize;
 
     /// Adds a child `Operate` to the builder's scope using a supplied index.
     ///
     /// This is used internally when there is a gap between allocate a child identifier and adding the
     /// child, as happens in subgraph creation.
-    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC, index: usize);
+    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC, index: usize) {
+        let global = self.new_identifier();
+        self.add_operator_with_indices(Box::new(scope), index, global);
+    }
+
+    /// Adds a child `Operate` to the builder's scope using supplied indices.
+    ///
+    /// The two indices are the scope-local operator index, and a worker-unique index used for e.g. logging.
+    fn add_operator_with_indices(&mut self, scope: Box<Operate<Self::Timestamp>>, local: usize, global: usize);
 
     /// Creates a `Subgraph` from a closure acting on a `Child` scope, and returning
     /// whatever the closure returns.

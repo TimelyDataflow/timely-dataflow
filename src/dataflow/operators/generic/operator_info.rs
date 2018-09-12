@@ -1,22 +1,24 @@
 
 /// Information about the operator being constructed
 pub struct OperatorInfo {
-    index: usize,
+    local_id: usize,
+    global_id: usize,
 }
 
 /// For use in generic/, not re-exported.
 ///
 /// Constructs `OperatorInfo`.
-pub fn new_operator_info(index: usize) -> OperatorInfo {
+pub fn new_operator_info(local_id: usize, global_id: usize) -> OperatorInfo {
     OperatorInfo {
-        index
+        local_id,
+        global_id,
     }
 }
 
 impl OperatorInfo {
-    /// Identifier assigned to the operator being constructed (unique within a scope)
-    pub fn index(&self) -> usize {
-        self.index
-    }
+    /// Scope-local index assigned to the operator being constructed.
+    pub fn index(&self) -> usize { self.local_id }
+    /// Worker-unique identifier.
+    pub fn global(&self) -> usize { self.global_id }
 }
 
