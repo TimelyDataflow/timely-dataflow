@@ -13,8 +13,6 @@ use dataflow::{Stream, Scope};
 
 use super::builder_rc::OperatorBuilder;
 use dataflow::operators::generic::OperatorInfo;
-use dataflow::operators::generic::operator_info::new_operator_info;
-
 use dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 
 /// Methods to construct generic streaming and blocking operators.
@@ -352,7 +350,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let operator_info = new_operator_info(index, global);
+            let operator_info = OperatorInfo::new(index, global);
             let mut logic = constructor(capability, operator_info);
             move |frontiers| {
                 let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
@@ -405,7 +403,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let operator_info = new_operator_info(index, global);
+            let operator_info = OperatorInfo::new(index, global);
             let mut logic = constructor(capability, operator_info);
             move |_frontiers| {
                 let mut output_handle = output.activate();
@@ -438,7 +436,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let operator_info = new_operator_info(index, global);
+            let operator_info = OperatorInfo::new(index, global);
             let mut logic = constructor(capability, operator_info);
             move |frontiers| {
                 let mut input1_handle = FrontieredInputHandle::new(&mut input1, &frontiers[0]);
@@ -501,7 +499,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let operator_info = new_operator_info(index, global);
+            let operator_info = OperatorInfo::new(index, global);
             let mut logic = constructor(capability, operator_info);
             move |_frontiers| {
                 let mut output_handle = output.activate();
