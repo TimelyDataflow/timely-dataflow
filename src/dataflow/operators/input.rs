@@ -116,11 +116,11 @@ impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Root<A>, T> {
 
         let copies = self.peers();
 
-        let index = self.add_operator(Operator {
+        let index = self.add_operator(Box::new(Operator {
             progress,
             messages: produced,
             copies,
-        });
+        }));
 
         Stream::new(Source { index, port: 0 }, registrar, self.clone())
     }

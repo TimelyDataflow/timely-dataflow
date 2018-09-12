@@ -90,11 +90,11 @@ impl<G: Scope> UnorderedInput<G> for G {
         let helper = UnorderedHandle::new(counter);
         let peers = self.peers();
 
-        let index = self.add_operator(UnorderedOperator {
+        let index = self.add_operator(Box::new(UnorderedOperator {
             internal,
             produced,
             peers,
-        });
+        }));
 
         ((helper, cap), Stream::new(Source { index, port: 0 }, registrar, self.clone()))
     }

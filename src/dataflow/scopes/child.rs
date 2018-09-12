@@ -72,7 +72,7 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         };
         let subscope = subscope.into_inner().build(self);
 
-        self.add_operator_with_index(subscope, index);
+        self.add_operator_with_index(Box::new(subscope), index);
 
         result
     }

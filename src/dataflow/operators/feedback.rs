@@ -57,11 +57,11 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
         });
         let consumed = feedback_input.produced().clone();
 
-        let index = self.add_operator(Operator {
+        let index = self.add_operator(Box::new(Operator {
             consumed_messages:  consumed,
             produced_messages:  produced,
             summary:            Local(summary),
-        });
+        }));
 
         let helper = Handle {
             index,

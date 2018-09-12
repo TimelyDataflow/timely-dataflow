@@ -51,7 +51,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
             output: PushBuffer::new(PushCounter::new(targets)),
         };
 
-        let operator_index = scope.add_operator(operator);
+        let operator_index = scope.add_operator(Box::new(operator));
 
         for (i, pusher) in pushers.into_iter().enumerate() {
             let sender = LogPusher::new(pusher, scope.index(), i, channel_id, comm_chan, scope.logging());

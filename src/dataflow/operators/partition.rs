@@ -51,7 +51,7 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
         }
 
         let operator = Operator::new(PullCounter::new(receiver), targets, route);
-        let index = scope.add_operator(operator);
+        let index = scope.add_operator(Box::new(operator));
         self.connect_to(Target { index, port: 0 }, sender, channel_id);
 
         let mut results = Vec::new();
