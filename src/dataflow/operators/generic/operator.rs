@@ -586,3 +586,29 @@ where
 
     stream
 }
+
+/// Constructs an empty stream.
+///
+/// This method is useful in patterns where an input is required, but there is no
+/// meaningful data to provide. The replaces patterns like `stream.filter(|_| false)`
+/// which are just silly.
+///
+/// # Examples
+/// ```
+/// use timely::dataflow::operators::Inspect;
+/// use timely::dataflow::operators::generic::operator::empty;
+/// use timely::dataflow::Scope;
+///
+/// timely::example(|scope| {
+///
+///
+///     empty(scope)     //-- type required in this example
+///         .inspect(|_: &()| panic!("never called"));
+///
+/// });
+/// ```
+pub fn empty<G: Scope, D: Data>(scope: &G) -> Stream<G, D> {
+    source(scope, "Empty", |_capability| |_output| {
+        // drop capability, do nothing
+    })
+}
