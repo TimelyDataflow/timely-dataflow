@@ -57,11 +57,12 @@
 
 #![forbid(missing_docs)]
 
+#[macro_use]
+extern crate abomonation_derive;
 extern crate abomonation;
-#[macro_use] extern crate abomonation_derive;
 extern crate timely_communication;
-extern crate bytes;
-extern crate logging as logging_core;
+extern crate timely_bytes;
+extern crate timely_logging;
 
 pub use execute::{execute, execute_from_args, example};
 pub use order::PartialOrder;
@@ -71,6 +72,16 @@ pub use timely_communication::Configuration;
 /// Re-export of the `timely_communication` crate.
 pub mod communication {
     pub use timely_communication::*;
+}
+
+/// Re-export of the `timely_bytes` crate.
+pub mod bytes {
+    pub use timely_bytes::*;
+}
+
+/// Re-export of the `timely_logging` crate.
+pub mod logging_core {
+    pub use timely_logging::*;
 }
 
 pub mod progress;

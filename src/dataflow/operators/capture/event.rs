@@ -5,7 +5,7 @@
 //! of timestamps.
 
 /// Data and progress events of the captured stream.
-#[derive(Debug, Clone, Abomonation)]
+#[derive(Debug, Clone, Abomonation, Hash, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Event<T, D> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
@@ -17,6 +17,8 @@ pub enum Event<T, D> {
 ///
 /// The `EventIterator` trait describes types that can iterate over references to events,
 /// and which can be used to replay a stream into a new timely dataflow computation.
+///
+/// This method is not simply an iterator because of the lifetime in the result.
 pub trait EventIterator<T, D> {
     /// Iterates over references to `Event<T, D>` elements.
     fn next(&mut self) -> Option<&Event<T, D>>;
@@ -135,7 +137,7 @@ pub mod binary {
     impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
         fn push(&mut self, event: Event<T, D>) {
             // TODO: `push` has no mechanism to report errors, so we `unwrap`.
-            unsafe { ::abomonation::encode(&event, &mut self.stream).unwrap(); }
+            unsafe { ::abomonation::encode(&event, &mut self.stream).expect("Event abomonation/write failed"); }
         }
     }
 

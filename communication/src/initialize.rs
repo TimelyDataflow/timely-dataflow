@@ -222,7 +222,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 /// ```
 pub fn initialize_from<A, T, F>(
     builders: Vec<A>,
-    others: Box<Any>,
+    _others: Box<Any>,
     func: F,
 ) -> Result<WorkerGuards<T>,String>
 where
@@ -243,13 +243,13 @@ where
                             .map_err(|e| format!("{:?}", e))));
     }
 
-    Ok(WorkerGuards { guards, others })
+    Ok(WorkerGuards { guards, _others })
 }
 
 /// Maintains `JoinHandle`s for worker threads.
 pub struct WorkerGuards<T:Send+'static> {
     guards: Vec<::std::thread::JoinHandle<T>>,
-    others: Box<Any>,
+    _others: Box<Any>,
 }
 
 impl<T:Send+'static> WorkerGuards<T> {

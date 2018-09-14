@@ -78,8 +78,8 @@ extern crate getopts;
 extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
 
-extern crate bytes;
-extern crate logging as logging_core;
+extern crate timely_bytes as bytes;
+extern crate timely_logging as logging_core;
 
 pub mod allocator;
 pub mod networking;

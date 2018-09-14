@@ -1,6 +1,5 @@
 extern crate rand;
 extern crate timely;
-extern crate timely_sort;
 
 use std::collections::HashMap;
 use rand::{Rng, SeedableRng, StdRng};

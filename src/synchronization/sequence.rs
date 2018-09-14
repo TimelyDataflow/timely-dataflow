@@ -57,9 +57,7 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
 
                         // downgrade capability to current time.
                         let mut time = capability.time().clone();
-                        let elapsed = timer.elapsed();
-                        let elapsed_ns = (elapsed.as_secs() * 1000000000 + elapsed.subsec_nanos() as u64) as usize;
-                        time.inner = elapsed_ns;
+                        time.inner = timer.elapsed();
                         capability.downgrade(&time);
 
                         // drain and broadcast `send`.

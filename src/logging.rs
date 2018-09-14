@@ -44,7 +44,7 @@ impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Product<RootTim
     }
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// The creation of an `Operate` implementor.
 pub struct OperatesEvent {
     /// Worker-unique identifier for the operator.
@@ -55,7 +55,7 @@ pub struct OperatesEvent {
     pub name: String,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// The creation of a channel between operators.
 pub struct ChannelsEvent {
     /// Worker-unique identifier for the channel
@@ -68,7 +68,7 @@ pub struct ChannelsEvent {
     pub target: (usize, usize),
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Send or receive of progress information.
 pub struct ProgressEvent {
     /// `true` if the event is a send, and `false` if it is a receive.
@@ -87,14 +87,14 @@ pub struct ProgressEvent {
     pub internal: Vec<(usize, usize, String, i64)>,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// External progress pushed onto an operator
 pub struct PushProgressEvent {
     /// Worker-unique operator identifier
     pub op_id: usize,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Message send or receive event
 pub struct MessagesEvent {
     /// `true` if send event, `false` if receive event.
@@ -114,7 +114,7 @@ pub struct MessagesEvent {
 }
 
 /// Records the starting and stopping of an operator.
-#[derive(Abomonation, Debug, Clone, PartialEq, Eq)]
+#[derive(Abomonation, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum StartStop {
     /// Operator starts.
     Start,
@@ -125,7 +125,7 @@ pub enum StartStop {
     },
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Operator start or stop.
 pub struct ScheduleEvent {
     /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
@@ -136,7 +136,7 @@ pub struct ScheduleEvent {
     pub start_stop: StartStop,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct ApplicationEvent {
     /// Unique event type identifier
@@ -145,14 +145,14 @@ pub struct ApplicationEvent {
     pub is_start: bool,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct GuardedMessageEvent {
     /// True when activity begins, false when it stops
     pub is_start: bool,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct GuardedProgressEvent {
     /// True when activity begins, false when it stops
@@ -166,7 +166,7 @@ pub struct TimelySetup {
     pub index: usize,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Kind of communication channel
 pub enum CommChannelKind {
     /// Communication channel carrying progress information
@@ -175,7 +175,7 @@ pub enum CommChannelKind {
     Data,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Event on a communication channel
 pub struct CommChannelsEvent {
     /// Communication channel identifier
@@ -184,14 +184,14 @@ pub struct CommChannelsEvent {
     pub comm_channel_kind: CommChannelKind,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Input logic start/stop
 pub struct InputEvent {
     /// True when activity begins, false when it stops
     pub start_stop: StartStop,
 }
 
-#[derive(Debug, Clone, Abomonation)]
+#[derive(Debug, Clone, Abomonation, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// An event in a timely worker
 pub enum TimelyEvent {
     /// Operator creation.

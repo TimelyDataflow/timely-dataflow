@@ -167,7 +167,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         MutableAntichain {
             dirty: 0,
             updates: vec![(bottom.clone(), 1)],
-            frontier: vec![bottom.clone()],
+            frontier: vec![bottom],
             frontier_temp: Vec::new(),
         }
     }
