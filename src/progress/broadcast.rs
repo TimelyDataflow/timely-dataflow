@@ -1,7 +1,7 @@
 //! Broadcasts progress information among workers.
 
 use progress::{ChangeBatch, Timestamp};
-use communication::{Allocate, Message, Push, Pull};
+use communication::{Message, Push, Pull};
 use logging::TimelyLogger as Logger;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
@@ -22,29 +22,31 @@ pub struct Progcaster<T:Timestamp> {
     /// Sequence of nested scope identifiers indicating the path from the root to this subgraph
     addr: Vec<usize>,
     /// Communication channel identifier
-    comm_channel: Option<usize>,
+    channel_identifier: usize,
 
     logging: Option<Logger>,
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
-    /// Creates a new `Progcaster` using a channel from the supplied allocator.
-    pub fn new<A: Allocate>(allocator: &mut A, path: &Vec<usize>, mut logging: Option<Logger>) -> Progcaster<T> {
-        let (pushers, puller, chan) = allocator.allocate();
+    /// Creates a new `Progcaster` using a channel from the supplied worker.
+    pub fn new<A: ::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>) -> Progcaster<T> {
+
+        let channel_identifier = worker.new_identifier();
+        let (pushers, puller) = worker.allocate(channel_identifier);
         logging.as_mut().map(|l| l.log(::logging::CommChannelsEvent {
-            comm_channel: chan,
-            comm_channel_kind: ::logging::CommChannelKind::Progress,
+            identifier: channel_identifier,
+            kind: ::logging::CommChannelKind::Progress,
         }));
-        let worker = allocator.index();
+        let worker_index = worker.index();
         let addr = path.clone();
         Progcaster {
             to_push: None,
             pushers,
             puller,
-            source: worker,
+            source: worker_index,
             counter: 0,
             addr,
-            comm_channel: chan,
+            channel_identifier,
             logging,
         }
     }
@@ -61,7 +63,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 self.logging.as_ref().map(|l| l.log(::logging::ProgressEvent {
                     is_send: true,
                     source: self.source,
-                    comm_channel: self.comm_channel,
+                    channel: self.channel_identifier,
                     seq_no: self.counter,
                     addr: self.addr.clone(),
                     // TODO: fill with additional data
@@ -109,13 +111,13 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 let recv_messages = &message.2;
                 let recv_internal = &message.3;
 
-                let comm_channel = self.comm_channel;
                 let addr = &mut self.addr;
-                self.logging.as_mut().map(|l| l.log(::logging::ProgressEvent {
+                let channel = self.channel_identifier;
+                self.logging.as_ref().map(|l| l.log(::logging::ProgressEvent {
                     is_send: false,
                     source: source,
                     seq_no: counter,
-                    comm_channel,
+                    channel,
                     addr: addr.clone(),
                     // TODO: fill with additional data
                     messages: Vec::new(),

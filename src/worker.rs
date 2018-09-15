@@ -1,4 +1,4 @@
-//! The root scope of all timely dataflow computations.
+//! The root of each single-threaded worker.
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -7,12 +7,11 @@ use std::any::Any;
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use communication::{Allocate, Data, Push, Pull};
+use dataflow::scopes::Child;
 
-use super::{ScopeParent, Child};
-
-/// A `Root` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
-/// and has a list of child `Operate`s.
-pub struct Root<A: Allocate> {
+/// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
+/// and has a list of dataflows that it manages.
+pub struct Worker<A: Allocate> {
     allocator: Rc<RefCell<A>>,
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
@@ -20,12 +19,31 @@ pub struct Root<A: Allocate> {
     logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
 }
 
-impl<A: Allocate> Root<A> {
-    /// Allocates a new `Root` bound to a channel allocator.
-    pub fn new(c: A) -> Root<A> {
+/// Methods provided by the root Worker.
+///
+/// These methods are often proxied by child scopes, and this trait provides access.
+pub trait AsWorker: Allocate {
+    /// Allocates a new worker-unique identifier.
+    fn new_identifier(&mut self) -> usize;
+    /// Provides access to named logging streams.
+    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>>;
+    /// Provides access to the timely logging stream.
+    fn logging(&self) -> Option<::logging::TimelyLogger> { self.log_register().get("timely") }
+}
+
+impl<A: Allocate> AsWorker for Worker<A> {
+    fn new_identifier(&mut self) -> usize { self.new_identifier() }
+    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
+        self.log_register()
+    }
+}
+
+impl<A: Allocate> Worker<A> {
+    /// Allocates a new `Worker` bound to a channel allocator.
+    pub fn new(c: A) -> Worker<A> {
         let now = ::std::time::Instant::now();
         let index = c.index();
-        Root {
+        Worker {
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
@@ -68,6 +86,17 @@ impl<A: Allocate> Root<A> {
     /// The total number of peer workers.
     pub fn peers(&self) -> usize { self.allocator.borrow().peers() }
 
+    /// Allocate a new worker-unique identifier.
+    pub fn new_identifier(&mut self) -> usize {
+        *self.identifiers.borrow_mut() += 1;
+        *self.identifiers.borrow() - 1
+    }
+
+    /// Access to named loggers.
+    pub fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
+        self.logging.borrow_mut()
+    }
+
     /// Construct a new dataflow.
     pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
         self.dataflow_using(Box::new(()), |_, child| func(child))
@@ -83,10 +112,8 @@ impl<A: Allocate> Root<A> {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
-        // let logging = (self.logging)(::logging::TimelySetup {
-        //     index: self.index(),
-        // });
-        let mut logging = self.logging();
+
+        let mut logging = self.logging.borrow_mut().get("timely");
         let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone());
         let subscope = RefCell::new(subscope);
 
@@ -101,7 +128,7 @@ impl<A: Allocate> Root<A> {
 
         logging.as_mut().map(|l| l.flush());
 
-        let mut operator = subscope.into_inner().build(&mut *self.allocator.borrow_mut());
+        let mut operator = subscope.into_inner().build(self);
 
         operator.get_internal_summary();
         operator.set_external_summary(Vec::new(), &mut []);
@@ -122,37 +149,21 @@ impl<A: Allocate> Root<A> {
         *self.dataflow_counter.borrow_mut() += 1;
         *self.dataflow_counter.borrow() - 1
     }
-    /// Access to named loggers.
-    pub fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
-        self.logging.borrow_mut()
-    }
-}
-
-impl<A: Allocate> ScopeParent for Root<A> {
-    type Timestamp = RootTimestamp;
-
-    fn new_identifier(&mut self) -> usize {
-        *self.identifiers.borrow_mut() += 1;
-        *self.identifiers.borrow() - 1
-    }
-    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
-        self.logging.borrow_mut()
-    }
 }
 
 use communication::Message;
 
-impl<A: Allocate> Allocate for Root<A> {
+impl<A: Allocate> Allocate for Worker<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>, Option<usize>) {
-        self.allocator.borrow_mut().allocate()
+    fn allocate<D: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
+        self.allocator.borrow_mut().allocate(identifier)
     }
 }
 
-impl<A: Allocate> Clone for Root<A> {
+impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {
-        Root {
+        Worker {
             allocator: self.allocator.clone(),
             identifiers: self.identifiers.clone(),
             dataflows: self.dataflows.clone(),

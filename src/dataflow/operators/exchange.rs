@@ -11,7 +11,7 @@ use progress::timestamp::Timestamp;
 pub trait Exchange<T, D: ExchangeData> {
     /// Exchange records so that all records with the same `route` are at the same worker.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Exchange, Inspect};
     ///

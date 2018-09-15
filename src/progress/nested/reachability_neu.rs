@@ -5,7 +5,7 @@
 //! the graph (along edges and through nodes). This module contains one abstraction
 //! for managing this information.
 //!
-//! #Examples
+//! # Examples
 //!
 //! ```rust
 //! use timely::progress::frontier::Antichain;
@@ -85,7 +85,7 @@ use progress::timestamp::PathSummary;
 /// not be totally ordered (e.g., "increment the timestamp" and "take the maximum of
 /// the timestamp and seven").
 ///
-/// #Examples
+/// # Examples
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;

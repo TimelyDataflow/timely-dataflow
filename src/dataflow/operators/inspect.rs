@@ -9,7 +9,7 @@ use dataflow::operators::generic::Operator;
 pub trait Inspect<G: Scope, D: Data> {
     /// Runs a supplied closure on each observed data element.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Map, Inspect};
     ///
@@ -26,7 +26,7 @@ pub trait Inspect<G: Scope, D: Data> {
 
     /// Runs a supplied closure on each observed data element and associated time.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Map, Inspect};
     ///
@@ -45,7 +45,7 @@ pub trait Inspect<G: Scope, D: Data> {
 
     /// Runs a supplied closure on each observed data batch (time and data slice).
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Map, Inspect};
     ///

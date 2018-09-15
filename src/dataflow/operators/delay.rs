@@ -16,7 +16,7 @@ pub trait Delay<G: Scope, D: Data> {
     /// new timestamp is greater or equal to the old timestamp, and will assert if
     /// it is not.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// The following example takes the sequence `0..10` at time `RootTimestamp(0)`
     /// and delays each element `i` to time `RootTimestamp(i)`.
@@ -44,7 +44,7 @@ pub trait Delay<G: Scope, D: Data> {
     /// it is not. The batch version does not consult the data, and may only view
     /// the timestamp itself.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// The following example takes the sequence `0..10` at time `RootTimestamp(0)`
     /// and delays each batch (there is just one) to time `RootTimestamp(1)`.

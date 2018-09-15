@@ -17,7 +17,7 @@ pub trait Unary<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream and
     /// write to the output stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::unary::Unary;
@@ -46,7 +46,7 @@ pub trait Unary<G: Scope, D1: Data> {
     /// write to the output stream, and request and receive notifications. The method also requires
     /// a vector of the initial notifications the operator requires (commonly none).
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::unary::Unary;

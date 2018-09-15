@@ -21,7 +21,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
@@ -69,7 +69,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
@@ -105,7 +105,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, and write to the output stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -142,7 +142,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
@@ -203,7 +203,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
@@ -258,7 +258,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Inspect, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -304,7 +304,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes the function `logic` which can read from the input stream
     /// and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -533,7 +533,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 /// a method that can be repeatedly called on a output handle. The method is then repeatedly
 /// invoked, and is expected to eventually send data and downgrade and release capabilities.
 ///
-/// #Examples
+/// # Examples
 /// ```
 /// use timely::dataflow::operators::Inspect;
 /// use timely::dataflow::operators::generic::operator::source;

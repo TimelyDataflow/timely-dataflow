@@ -9,7 +9,7 @@ use dataflow::operators::generic::operator::Operator;
 pub trait Filter<D: Data> {
     /// Returns a new instance of `self` containing only records satisfying `predicate`.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Filter, Inspect};
     ///

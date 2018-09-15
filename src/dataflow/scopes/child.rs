@@ -7,6 +7,7 @@ use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use communication::{Allocate, Data, Push, Pull};
 use logging::TimelyLogger as Logger;
+use worker::AsWorker;
 
 use super::{ScopeParent, Scope};
 
@@ -30,15 +31,17 @@ impl<'a, G: ScopeParent, T: Timestamp> Child<'a, G, T> {
     pub fn peers(&self) -> usize { self.parent.peers() }
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
-    type Timestamp = Product<G::Timestamp, T>;
-
+impl<'a, G: ScopeParent, T: Timestamp> AsWorker for Child<'a, G, T> {
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
     }
     fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.parent.log_register()
     }
+}
+
+impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T> {
+    type Timestamp = Product<G::Timestamp, T>;
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
@@ -83,8 +86,8 @@ use communication::Message;
 impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>, Option<usize>) {
-        self.parent.allocate()
+    fn allocate<D: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
+        self.parent.allocate(identifier)
     }
 }
 

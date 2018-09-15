@@ -39,8 +39,8 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         // ignore `&mut A` and use thread allocator
         let (pusher, puller) = Thread::new::<Bundle<T, D>>();
-        (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, None, logging.clone()),
-         LogPuller::new(puller, allocator.index(), identifier, None, logging.clone()))
+        (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
+         LogPuller::new(puller, allocator.index(), identifier, logging.clone()))
     }
 }
 
@@ -63,9 +63,9 @@ impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&D)->u64+'st
     type Pusher = Box<Push<Bundle<T, D>>>;
     type Puller = Box<Pull<Bundle<T, D>>>;
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
-        let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
-        let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, channel_id, logging.clone())).collect::<Vec<_>>();
-        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, channel_id, logging.clone())))
+        let (senders, receiver) = allocator.allocate::<Message<T, D>>(identifier);
+        let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
+        (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, logging.clone())))
     }
 }
 
@@ -96,7 +96,6 @@ impl<T: Eq+Data+Abomonation+Clone, D: Data+Abomonation+Clone, F: Fn(&D)->u64+'st
 pub struct LogPusher<T, D, P: Push<Bundle<T, D>>> {
     pusher: P,
     channel: usize,
-    comm_channel: Option<usize>,
     counter: usize,
     source: usize,
     target: usize,
@@ -105,11 +104,10 @@ pub struct LogPusher<T, D, P: Push<Bundle<T, D>>> {
 }
 impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
     /// Allocates a new pusher.
-    pub fn new(pusher: P, source: usize, target: usize, channel: usize, comm_channel: Option<usize>, logging: Option<Logger>) -> Self {
+    pub fn new(pusher: P, source: usize, target: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPusher {
             pusher,
             channel,
-            comm_channel,
             counter: 0,
             source,
             target,
@@ -122,23 +120,17 @@ impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
 impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
     #[inline(always)]
     fn push(&mut self, pair: &mut Option<Bundle<T, D>>) {
-
         if let Some(bundle) = pair {
-            let length = bundle.data.len();
-            let counter = self.counter;
             self.counter += 1;
-
             self.logging.as_ref().map(|l| l.log(::logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
-                comm_channel: self.comm_channel,
                 source: self.source,
                 target: self.target,
-                seq_no: counter,
-                length,
+                seq_no: self.counter-1,
+                length: bundle.data.len(),
             }));
         }
-
         self.pusher.push(pair);
     }
 }
@@ -147,18 +139,16 @@ impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
 pub struct LogPuller<T, D, P: Pull<Bundle<T, D>>> {
     puller: P,
     channel: usize,
-    comm_channel: Option<usize>,
     index: usize,
     phantom: ::std::marker::PhantomData<(T, D)>,
     logging: Option<Logger>,
 }
 impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
     /// Allocates a new `Puller`.
-    pub fn new(puller: P, index: usize, channel: usize, comm_channel: Option<usize>, logging: Option<Logger>) -> Self {
+    pub fn new(puller: P, index: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPuller {
             puller,
             channel,
-            comm_channel,
             index,
             phantom: ::std::marker::PhantomData,
             logging,
@@ -169,26 +159,19 @@ impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
 impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
     #[inline(always)]
     fn pull(&mut self) -> &mut Option<Bundle<T,D>> {
-
         let result = self.puller.pull();
-
         if let Some(bundle) = result {
-
             let channel = self.channel;
-            let comm_channel = self.comm_channel;
             let target = self.index;
-
-            self.logging.as_mut().map(|l| l.log(::logging::MessagesEvent {
+            self.logging.as_ref().map(|l| l.log(::logging::MessagesEvent {
                 is_send: false,
                 channel,
-                comm_channel,
                 source: bundle.from,
                 target,
                 seq_no: bundle.seq,
                 length: bundle.data.len(),
             }));
         }
-
         result
     }
 }

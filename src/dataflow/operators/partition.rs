@@ -18,7 +18,7 @@ use dataflow::{Stream, Scope};
 pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
     /// Produces `parts` output streams, containing records produced and assigned by `route`.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Partition, Inspect};
     ///

@@ -5,7 +5,7 @@
 //! the graph (along edges and through nodes). This module contains one abstraction
 //! for managing this information.
 //!
-//! #Examples
+//! # Examples
 //!
 //! ```rust
 //! use timely::progress::frontier::Antichain;
@@ -67,7 +67,7 @@ use order::PartialOrder;
 /// not be totally ordered (e.g., "increment the timestamp" and "take the maximum of
 /// the timestamp and seven").
 ///
-/// #Examples
+/// # Examples
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;
@@ -294,7 +294,7 @@ pub struct Summary<T: Timestamp> {
 /// changes propagate their consequences along the graph to any other port that
 /// can be reached. These changes can be read for each node using `pushed_mut`.
 ///
-/// #Examples
+/// # Examples
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;

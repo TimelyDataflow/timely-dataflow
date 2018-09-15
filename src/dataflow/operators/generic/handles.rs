@@ -59,15 +59,15 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     /// Repeatedly calls `logic` till exhaustion of the available input data.
     /// `logic` receives a capability and an input buffer.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
     ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                });
@@ -106,15 +106,15 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>+'a> FrontieredInputHandle<
     /// Repeatedly calls `logic` till exhaustion of the available input data.
     /// `logic` receives a capability and an input buffer.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
     ///                input.for_each(|cap, data| {
     ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                });
@@ -190,15 +190,15 @@ impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>> OutputHandle<'a, T, D, P> {
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp
     /// first, as show in the example.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
     ///                    let mut time = cap.time().clone();
     ///                    time.inner += 1;

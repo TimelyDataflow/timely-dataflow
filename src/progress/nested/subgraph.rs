@@ -4,8 +4,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use communication::Allocate;
-
 use logging::TimelyLogger as Logger;
 
 use progress::frontier::{MutableAntichain, Antichain};
@@ -142,7 +140,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
     }
 
     /// Now that initialization is complete, actually build a subgraph.
-    pub fn build<A: Allocate>(mut self, allocator: &mut A) -> Subgraph<TOuter, TInner> {
+    pub fn build<A: ::worker::AsWorker>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
         // at this point, the subgraph is frozen. we should initialize any internal state which
         // may have been determined after construction (e.g. the numbers of inputs and outputs).
         // we also need to determine what to return as a summary and initial capabilities, which
@@ -170,7 +168,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
 
         let tracker = reachability::Tracker::allocate_from(builder.summarize());
 
-        let progcaster = Progcaster::new(allocator, &self.path, self.logging.clone());
+        let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 
         Subgraph {
             name: self.name,

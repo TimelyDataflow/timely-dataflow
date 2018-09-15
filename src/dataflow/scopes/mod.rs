@@ -2,37 +2,26 @@
 
 use progress::{Timestamp, Operate};
 use progress::nested::{Source, Target};
-use logging::TimelyLogger as Logger;
+// use logging::TimelyLogger as Logger;
 use communication::Allocate;
+use worker::AsWorker;
 
-pub mod root;
+// pub mod root;
 pub mod child;
 
 pub use self::child::Child;
-pub use self::root::Root;
+// pub use self::root::Root;
 
 /// The information a child scope needs from its parent.
-pub trait ScopeParent: Allocate+Clone {
+pub trait ScopeParent: AsWorker+Clone {
     /// The timestamp associated with data in this scope.
     type Timestamp : Timestamp;
-
-    /// Allocates a new worker-local unique identifier.
-    ///
-    /// These identifiers are currently used to provide short names for operators and channels
-    /// instead of more expansive addresses and addresses plus ports.
-    ///
-    /// The implementation is just a common counter, and one should be welcome to freely call
-    /// this function if it is important to acquire worker-local unique identifiers.
-    fn new_identifier(&mut self) -> usize;
-
-    ///
-    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>>;
-
-    ///
-    fn logging(&self) -> Option<Logger> {
-        self.log_register().get("timely")
-    }
 }
+
+impl<A: Allocate> ScopeParent for ::worker::Worker<A> {
+    type Timestamp = ::progress::timestamp::RootTimestamp;
+}
+
 
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
 ///

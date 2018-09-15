@@ -14,8 +14,10 @@
 //! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`](./trait.Push.html) and [`Pull`](./trait.Pull.html)
 //! traits), which is used for more precise control of resources.
 //!
-//! #Examples
+//! # Examples
 //! ```
+//! use timely_communication::Allocate;
+//!
 //! // configure for two threads, just one process.
 //! let config = timely_communication::Configuration::Process(2);
 //!
@@ -24,7 +26,7 @@
 //!     println!("worker {} started", allocator.index());
 //!
 //!     // allocates pair of senders list and one receiver.
-//!     let (mut senders, mut receiver, _) = allocator.allocate();
+//!     let (mut senders, mut receiver) = allocator.allocate(0);
 //!
 //!     // send typed data along each channel
 //!     use timely_communication::Message;

@@ -5,20 +5,15 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::Antichain;
-use progress::{Operate, Timestamp};
-use progress::nested::subgraph::Source;
-use progress::ChangeBatch;
+use progress::{Operate, Timestamp, ChangeBatch};
+use progress::nested::{subgraph::Source, product::Product};
 use progress::timestamp::RootTimestamp;
-use progress::nested::product::Product;
 
-use communication::Allocate;
 use Data;
-use communication::Push;
-use dataflow::channels::Message;
-use dataflow::channels::pushers::{Tee, Counter};
-
-use dataflow::{Stream, Scope};
-use dataflow::scopes::{Child, Root};
+use communication::{Allocate, Push};
+use dataflow::{Stream, Scope, scopes::Child};
+use dataflow::channels::{Message, pushers::{Tee, Counter}};
+use worker::Worker;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
@@ -39,7 +34,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     /// to timely dataflow that the input has advanced beyond certain timestamps, allowing timely
     /// to issue progress notifications.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, Inspect};
@@ -62,7 +57,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>);
+    fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Worker<A>, T>, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -70,7 +65,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     /// argument. Each handle may be used multiple times (or not at all), and will clone data as appropriate
     /// if it as attached to more than one stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, Inspect};
@@ -94,17 +89,17 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Root<A>, T>, D>;
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Worker<A>, T>, D>;
 }
 
-impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Root<A>, T> {
-    fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Root<A>, T>, D>) {
+impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Worker<A>, T> {
+    fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Worker<A>, T>, D>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Root<A>, T>, D> {
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Worker<A>, T>, D> {
 
         let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
         let counter = Counter::new(output);
@@ -170,7 +165,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
     /// Allocates a new input handle, from which one can create timely streams.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, Inspect};
@@ -206,7 +201,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
     /// Creates an input stream from the handle in the supplied scope.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, Inspect};
@@ -230,7 +225,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Root<A>, T>) -> Stream<Child<'a, Root<A>, T>, D>
+    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Worker<A>, T>) -> Stream<Child<'a, Worker<A>, T>, D>
     where T: Ord {
         scope.input_from(self)
     }

@@ -21,7 +21,7 @@ impl<T:Ord> ChangeBatch<T> {
 
     /// Allocates a new empty `ChangeBatch`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -38,7 +38,7 @@ impl<T:Ord> ChangeBatch<T> {
 
     /// Allocates a new `ChangeBatch` with a single entry.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -60,7 +60,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// even under an arbitrary number of updates. This has a cost, and it isn't clear whether it
     /// is worth paying without some experimentation.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -76,7 +76,7 @@ impl<T:Ord> ChangeBatch<T> {
 
     /// Performs a sequence of updates described by `iterator`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -94,7 +94,7 @@ impl<T:Ord> ChangeBatch<T> {
 
     /// Extracts the `Vec<(T, i64)>` from the map, consuming it.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -109,7 +109,7 @@ impl<T:Ord> ChangeBatch<T> {
 
     /// Iterates over the contents of the map.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -133,7 +133,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// This operation first compacts the set of updates so that the drained results
     /// have at most one occurence of each item.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -155,7 +155,7 @@ impl<T:Ord> ChangeBatch<T> {
 
     /// Clears the map.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -177,7 +177,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// `is_empty` which just checks the length of `self.updates`, and which could confirm the absence of
     /// any updates, but could report false negatives if there are updates which would cancel.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;
@@ -211,7 +211,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// As many uses of this method are to propagate updates, this optimization can be quite
     /// handy.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::ChangeBatch;

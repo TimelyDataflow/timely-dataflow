@@ -19,7 +19,7 @@ use dataflow::{Stream, Scope};
 pub trait Probe<G: Scope, D: Data> {
     /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::*;
     /// use timely::dataflow::Scope;
@@ -49,7 +49,7 @@ pub trait Probe<G: Scope, D: Data> {
 
     /// Inserts a progress probe in a stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::*;
     /// use timely::dataflow::Scope;
@@ -156,7 +156,7 @@ impl<T: Timestamp> Handle<T> {
     /// This method allows inspection of the frontier, which cannot be returned by reference as
     /// it is on the other side of a `RefCell`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use timely::dataflow::operators::probe::Handle;

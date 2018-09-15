@@ -12,7 +12,7 @@ use dataflow::operators::generic::operator::Operator;
 pub trait Accumulate<G: Scope, D: Data> {
     /// Accumulates records within a timestamp.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Accumulate, Capture};
@@ -31,7 +31,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, RefOrMut<Vec<D>>)+'static) -> Stream<G, A>;
     /// Counts the number of records observed at each time.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Accumulate, Capture};

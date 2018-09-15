@@ -84,6 +84,7 @@ pub mod logging_core {
     pub use timely_logging::*;
 }
 
+pub mod worker;
 pub mod progress;
 pub mod dataflow;
 pub mod synchronization;

@@ -30,7 +30,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// in computation, uses this method and will drop messages with timestamps that when advanced
     /// result in `None`. Ideally, all other timestamp manipulation should behave similarly.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::progress::timestamp::PathSummary;
     ///
@@ -51,7 +51,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// important that this not be used casually, as this does not prevent the actual movement of
     /// data.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::progress::timestamp::PathSummary;
     ///

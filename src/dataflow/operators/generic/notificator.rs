@@ -48,10 +48,10 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     /// In order to request a notification at future timestamp, obtain a capability for the new
     /// timestamp first, as show in the example.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -183,7 +183,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 /// to them, and there are no other pending notification requests less than them. Each will be
 /// less-or-equal to itself, so we want to dodge that corner case.
 ///
-/// #Examples
+/// # Examples
 /// ```
 /// use std::collections::HashMap;
 /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
@@ -259,7 +259,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// In order to request a notification at future timestamp, obtain a capability for the new
     /// timestamp first, as shown in the example.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -376,7 +376,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// To make sure all pending capabilities are above the frontier, use `for_each` or exhaust
     /// `next` to consume all available capabilities.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;

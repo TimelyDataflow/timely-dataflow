@@ -11,7 +11,7 @@ use dataflow::{Stream, Scope};
 pub trait ToStream<T: Timestamp, D: Data> {
     /// Converts to a timely `Stream`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Capture};

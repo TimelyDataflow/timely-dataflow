@@ -6,7 +6,7 @@ use std::time::Instant;
 use std::collections::VecDeque;
 
 use ::{communication::Allocate, ExchangeData};
-use dataflow::scopes::root::Root;
+use worker::Worker;
 use dataflow::channels::pact::Exchange;
 use dataflow::operators::generic::operator::source;
 use dataflow::operators::generic::operator::Operator;
@@ -27,7 +27,7 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
     /// The `timer` instant is used to synchronize the workers, who use this
     /// elapsed time as their timestamp. Elements are ordered by this time,
     /// and cannot be made visible until all workers have reached the time.
-    pub fn new<A: Allocate>(worker: &mut Root<A>, timer: Instant) -> Self {
+    pub fn new<A: Allocate>(worker: &mut Worker<A>, timer: Instant) -> Self {
 
         let send: Rc<RefCell<VecDeque<T>>> = Rc::new(RefCell::new(VecDeque::new()));
         let recv = Rc::new(RefCell::new(VecDeque::new()));

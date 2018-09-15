@@ -1,7 +1,8 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
 use communication::{initialize, initialize_from, Configuration, Allocator, allocator::AllocateBuilder, WorkerGuards};
-use dataflow::scopes::{Root, Child};
+use dataflow::scopes::Child;
+use worker::Worker;
 // use logging::{LoggerConfig, TimelyLogger};
 
 /// Executes a single-threaded timely dataflow computation.
@@ -16,7 +17,7 @@ use dataflow::scopes::{Root, Child};
 ///
 /// The method aggressively unwraps returned `Result<_>` types.
 ///
-/// #Examples
+/// # Examples
 ///
 /// The simplest example creates a stream of data and inspects it.
 ///
@@ -49,13 +50,13 @@ use dataflow::scopes::{Root, Child};
 /// ```
 pub fn example<T, F>(func: F) -> T
 where T: Send+'static,
-      F: Fn(&mut Child<Root<Allocator>,u64>)->T+Send+Sync+'static {
+      F: Fn(&mut Child<Worker<Allocator>,u64>)->T+Send+Sync+'static {
     // let logging_config: LoggerConfig = Default::default();
     // let timely_logging = logging_config.timely_logging.clone();
     let guards = initialize(Configuration::Thread, move |allocator| {
-        let mut root = Root::new(allocator);
-        let result = root.dataflow(|x| func(x));
-        while root.step() { }
+        let mut worker = Worker::new(allocator);
+        let result = worker.dataflow(|x| func(x));
+        while worker.step() { }
         result
     });
 
@@ -76,7 +77,7 @@ where T: Send+'static,
 /// containing a `WorkerGuards<T>` (or error information), which can be joined
 /// to recover the result `T` values from the local workers.
 ///
-/// #Examples
+/// # Examples
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
@@ -118,7 +119,7 @@ where T: Send+'static,
 pub fn execute<T, F>(mut config: Configuration, func: F) -> Result<WorkerGuards<T>,String>
 where
     T:Send+'static,
-    F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static {
+    F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static {
 
     if let Configuration::Cluster(_,_,_,_, ref mut log_fn) = config {
 
@@ -154,7 +155,7 @@ where
 
     initialize_from(allocators, other, move |allocator| {
 
-        let mut root = Root::new(allocator);
+        let mut worker = Worker::new(allocator);
 
         // If an environment variable is set, use it as the default timely logging.
         if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
@@ -166,7 +167,7 @@ where
             if let Ok(stream) = TcpStream::connect(&addr) {
                 let writer = EventWriter::new(stream);
                 let mut logger = BatchLogger::new(writer);
-                root.log_register()
+                worker.log_register()
                     .insert::<TimelyEvent,_>("timely", move |time, data|
                         logger.publish_batch(time, data)
                     );
@@ -176,8 +177,8 @@ where
             }
         }
 
-        let result = func(&mut root);
-        while root.step() { }
+        let result = func(&mut worker);
+        while worker.step() { }
         result
     })
 }
@@ -204,7 +205,7 @@ where
 /// If not specified, `localhost` will be used, with port numbers increasing from 2101 (chosen
 /// arbitrarily).
 ///
-/// #Examples
+/// # Examples
 ///
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
@@ -233,7 +234,7 @@ where
 pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String>
     where I: Iterator<Item=String>,
           T:Send+'static,
-          F: Fn(&mut Root<Allocator>)->T+Send+Sync+'static, {
+          F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static, {
     let configuration = try!(Configuration::from_args(iter));
     execute(configuration, func)
 }
@@ -258,11 +259,11 @@ pub fn execute_from<A, T, F>(builders: Vec<A>, others: Box<::std::any::Any>, fun
 where
     A: AllocateBuilder+'static,
     T: Send+'static,
-    F: Fn(&mut Root<<A as AllocateBuilder>::Allocator>)->T+Send+Sync+'static {
+    F: Fn(&mut Worker<<A as AllocateBuilder>::Allocator>)->T+Send+Sync+'static {
     initialize_from(builders, others, move |allocator| {
-        let mut root = Root::new(allocator);
-        let result = func(&mut root);
-        while root.step() { }
+        let mut worker = Worker::new(allocator);
+        let result = func(&mut worker);
+        while worker.step() { }
         result
     })
 }

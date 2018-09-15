@@ -107,8 +107,10 @@ impl Configuration {
 /// (or errors) of the workers.
 ///
 ///
-/// #Examples
+/// # Examples
 /// ```
+/// use timely_communication::Allocate;
+///
 /// // configure for two threads, just one process.
 /// let config = timely_communication::Configuration::Process(2);
 ///
@@ -117,7 +119,7 @@ impl Configuration {
 ///     println!("worker {} started", allocator.index());
 ///
 ///     // allocates pair of senders list and one receiver.
-///     let (mut senders, mut receiver, _) = allocator.allocate();
+///     let (mut senders, mut receiver) = allocator.allocate(0);
 ///
 ///     // send typed data along each channel
 ///     use timely_communication::Message;
@@ -177,9 +179,10 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 /// you provide `others`, a `Box<Any>` which will be held by the resulting worker guard
 /// and dropped when it is dropped, which allows you to join communication threads.
 ///
-/// #Examples
+/// # Examples
 /// ```
 /// use timely_communication::Allocate;
+///
 /// // configure for two threads, just one process.
 /// let builders = timely_communication::allocator::process::Process::new_vector(2);
 ///
@@ -188,7 +191,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 ///     println!("worker {} started", allocator.index());
 ///
 ///     // allocates pair of senders list and one receiver.
-///     let (mut senders, mut receiver, _) = allocator.allocate();
+///     let (mut senders, mut receiver) = allocator.allocate(0);
 ///
 ///     // send typed data along each channel
 ///     use timely_communication::Message;

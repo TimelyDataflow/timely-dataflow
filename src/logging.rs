@@ -76,7 +76,7 @@ pub struct ProgressEvent {
     /// Source worker index.
     pub source: usize,
     /// Communication channel identifier
-    pub comm_channel: Option<usize>,
+    pub channel: usize,
     /// Message sequence number.
     pub seq_no: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
@@ -101,8 +101,6 @@ pub struct MessagesEvent {
     pub is_send: bool,
     /// Channel identifier
     pub channel: usize,
-    /// Communication channel identifier
-    pub comm_channel: Option<usize>,
     /// Source worker index.
     pub source: usize,
     /// Target worker index.
@@ -179,9 +177,9 @@ pub enum CommChannelKind {
 /// Event on a communication channel
 pub struct CommChannelsEvent {
     /// Communication channel identifier
-    pub comm_channel: Option<usize>,
+    pub identifier: usize,
     /// Kind of communication channel (progress / data)
-    pub comm_channel_kind: CommChannelKind,
+    pub kind: CommChannelKind,
 }
 
 #[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]

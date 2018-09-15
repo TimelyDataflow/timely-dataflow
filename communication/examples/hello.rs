@@ -1,7 +1,7 @@
 extern crate timely_communication;
 
 use std::ops::Deref;
-use timely_communication::Message;
+use timely_communication::{Message, Allocate};
 
 fn main() {
 
@@ -12,7 +12,7 @@ fn main() {
         println!("worker {} of {} started", allocator.index(), allocator.peers());
 
         // allocates pair of senders list and one receiver.
-        let (mut senders, mut receiver, _) = allocator.allocate();
+        let (mut senders, mut receiver) = allocator.allocate(0);
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {

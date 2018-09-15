@@ -22,7 +22,7 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     /// Aggregation happens within each time, and results are produced once the
     /// time is complete.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Map, Inspect};
     /// use timely::dataflow::operators::aggregation::Aggregate;

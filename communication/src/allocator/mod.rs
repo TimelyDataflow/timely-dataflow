@@ -36,7 +36,7 @@ pub trait Allocate {
     /// The number of workers.
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>);
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>);
     /// Work performed before scheduling dataflows.
     fn pre_work(&mut self) { }
     /// Work performed after scheduling dataflows.

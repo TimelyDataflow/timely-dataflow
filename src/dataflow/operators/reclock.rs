@@ -16,7 +16,7 @@ pub trait Reclock<S: Scope, D: Data> {
     /// workers receive the same clock records, which can be accomplished with
     /// `broadcast`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Delay, Map, Reclock, Capture};

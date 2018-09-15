@@ -34,7 +34,7 @@ pub trait UnorderedInput<G: Scope> {
     ///
     /// To communicate the end-of-input drop all available capabilities.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use std::sync::{Arc, Mutex};
