@@ -4,9 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use communication::Allocate;
-
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use progress::frontier::{MutableAntichain, Antichain};
 use progress::{Timestamp, Operate};
@@ -73,7 +71,7 @@ pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
     output_capabilities: Vec<MutableAntichain<TOuter>>,
 
     /// Logging handle
-    logging: Logger,
+    logging: Option<Logger>,
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
@@ -100,7 +98,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
     }
 
     /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
-    pub fn new_from(index: usize, mut path: Vec<usize>, logging: Logger) -> SubgraphBuilder<TOuter, TInner> {
+    pub fn new_from(index: usize, mut path: Vec<usize>, logging: Option<Logger>) -> SubgraphBuilder<TOuter, TInner> {
         path.push(index);
 
         let children = vec![PerOperatorState::empty(path.clone(), logging.clone())];
@@ -132,17 +130,17 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Operates(::logging::OperatesEvent {
+            self.logging.as_mut().map(|l| l.log(::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
-            })));
+            }));
         }
         self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
     }
 
     /// Now that initialization is complete, actually build a subgraph.
-    pub fn build<A: Allocate>(mut self, allocator: &mut A) -> Subgraph<TOuter, TInner> {
+    pub fn build<A: ::worker::AsWorker>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
         // at this point, the subgraph is frozen. we should initialize any internal state which
         // may have been determined after construction (e.g. the numbers of inputs and outputs).
         // we also need to determine what to return as a summary and initial capabilities, which
@@ -170,7 +168,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
 
         let tracker = reachability::Tracker::allocate_from(builder.summarize());
 
-        let progcaster = Progcaster::new(allocator, &self.path, self.logging.clone());
+        let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 
         Subgraph {
             name: self.name,
@@ -598,7 +596,7 @@ struct PerOperatorState<T: Timestamp> {
     gis_capabilities: Vec<ChangeBatch<T>>,
     gis_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
 
-    logging: Logger,
+    logging: Option<Logger>,
 }
 
 impl<T: Timestamp> PerOperatorState<T> {
@@ -616,7 +614,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         self.produced_buffer.push(ChangeBatch::new());
     }
 
-    fn empty(mut path: Vec<usize>, logging: Logger) -> PerOperatorState<T> {
+    fn empty(mut path: Vec<usize>, logging: Option<Logger>) -> PerOperatorState<T> {
         path.push(0);
         PerOperatorState {
             name:       "External".to_owned(),
@@ -645,7 +643,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         }
     }
 
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut _path: Vec<usize>, identifier: usize, logging: Logger) -> PerOperatorState<T> {
+    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut _path: Vec<usize>, identifier: usize, logging: Option<Logger>) -> PerOperatorState<T> {
 
         let local = scope.local();
         let inputs = scope.inputs();
@@ -779,10 +777,10 @@ impl<T: Timestamp> PerOperatorState<T> {
                 let self_id = self.id;  // avoid capturing `self` in logging closures.
 
                 if any_progress_updates {
-                    self.logging.when_enabled(|l| {
-                        l.log(::logging::TimelyEvent::PushProgress(::logging::PushProgressEvent {
+                    self.logging.as_mut().map(|l| {
+                        l.log(::logging::PushProgressEvent {
                             op_id: self_id,
-                        }));
+                        });
                     });
                 }
 
@@ -795,9 +793,9 @@ impl<T: Timestamp> PerOperatorState<T> {
                 debug_assert!(!self.external_buffer.iter_mut().any(|x| !x.is_empty()));
                 debug_assert!(external_progress.iter_mut().all(|x| x.is_empty()));
 
-                self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::Schedule(::logging::ScheduleEvent {
+                self.logging.as_mut().map(|l| l.log(::logging::ScheduleEvent {
                     id: self_id, start_stop: ::logging::StartStop::Start
-                })));
+                }));
 
                 debug_assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
                 debug_assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
@@ -835,11 +833,11 @@ impl<T: Timestamp> PerOperatorState<T> {
                 // The operator was recently active if it did anything, or reports activity.
                 self.recently_active = did_work || internal_activity;
 
-                self.logging.when_enabled(|l|
-                    l.log(::logging::TimelyEvent::Schedule(::logging::ScheduleEvent {
+                self.logging.as_mut().map(|l|
+                    l.log(::logging::ScheduleEvent {
                         id: self_id,
                         start_stop: ::logging::StartStop::Stop { activity: did_work }
-                    })));
+                    }));
 
                 internal_activity
             }

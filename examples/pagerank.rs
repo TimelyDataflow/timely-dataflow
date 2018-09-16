@@ -1,7 +1,5 @@
-extern crate time;
 extern crate rand;
 extern crate timely;
-extern crate timely_sort;
 
 use std::collections::HashMap;
 use rand::{Rng, SeedableRng, StdRng};
@@ -11,15 +9,10 @@ use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{LoopVariable, ConnectLoop, Probe};
 use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::channels::pact::Exchange;
-use timely::logging::{LoggerConfig, EventPusherTee};
 
 fn main() {
 
-    let logger_config = LoggerConfig::new(
-        |_setup| EventPusherTee::new(),
-        |_setup| EventPusherTee::new());
-
-    timely::execute_from_args_logging(std::env::args().skip(3), logger_config, move |worker| {
+    timely::execute_from_args(std::env::args().skip(3), move |worker| {
 
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();

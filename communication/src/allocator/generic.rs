@@ -42,12 +42,12 @@ impl Generic {
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
-    pub fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
         match self {
-            &mut Generic::Thread(ref mut t) => t.allocate(),
-            &mut Generic::Process(ref mut p) => p.allocate(),
-            &mut Generic::ProcessBinary(ref mut pb) => pb.allocate(),
-            &mut Generic::ZeroCopy(ref mut z) => z.allocate(),
+            &mut Generic::Thread(ref mut t) => t.allocate(identifier),
+            &mut Generic::Process(ref mut p) => p.allocate(identifier),
+            &mut Generic::ProcessBinary(ref mut pb) => pb.allocate(identifier),
+            &mut Generic::ZeroCopy(ref mut z) => z.allocate(identifier),
         }
     }
     /// Perform work before scheduling operators.
@@ -73,8 +73,8 @@ impl Generic {
 impl Allocate for Generic {
     fn index(&self) -> usize { self.index() }
     fn peers(&self) -> usize { self.peers() }
-    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
-        self.allocate()
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
+        self.allocate(identifier)
     }
 
     fn pre_work(&mut self) { self.pre_work(); }

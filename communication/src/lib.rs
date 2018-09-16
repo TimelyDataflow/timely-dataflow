@@ -14,20 +14,19 @@
 //! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`](./trait.Push.html) and [`Pull`](./trait.Pull.html)
 //! traits), which is used for more precise control of resources.
 //!
-//! #Examples
+//! # Examples
 //! ```
+//! use timely_communication::Allocate;
+//!
 //! // configure for two threads, just one process.
 //! let config = timely_communication::Configuration::Process(2);
 //!
-//! // create a source of inactive loggers.
-//! let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
-//!
 //! // initializes communication, spawns workers
-//! let guards = timely_communication::initialize(config, logger, |mut allocator| {
+//! let guards = timely_communication::initialize(config, |mut allocator| {
 //!     println!("worker {} started", allocator.index());
 //!
 //!     // allocates pair of senders list and one receiver.
-//!     let (mut senders, mut receiver, _) = allocator.allocate();
+//!     let (mut senders, mut receiver) = allocator.allocate(0);
 //!
 //!     // send typed data along each channel
 //!     use timely_communication::Message;
@@ -80,9 +79,9 @@
 extern crate getopts;
 extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
-extern crate time;
 
-extern crate bytes;
+extern crate timely_bytes as bytes;
+extern crate timely_logging as logging_core;
 
 pub mod allocator;
 pub mod networking;

@@ -18,7 +18,7 @@ use dataflow::channels::pact::{LogPusher, LogPuller};
 pub trait Broadcast<D: ExchangeData> {
     /// Broadcast records to all workers.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Broadcast, Inspect};
     ///
@@ -35,14 +35,14 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
     fn broadcast(&self) -> Stream<G, D> {
         let mut scope = self.scope();
 
-        let (pushers, puller, comm_chan) = scope.allocate::<Message<G::Timestamp, D>>();
-        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
-
         let channel_id = scope.new_identifier();
+
+        let (pushers, puller) = scope.allocate::<Message<G::Timestamp, D>>(channel_id);
+        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
 
         assert_eq!(pushers.len(), scope.peers());
 
-        let receiver = LogPuller::new(puller, scope.index(), channel_id, comm_chan, scope.logging());
+        let receiver = LogPuller::new(puller, scope.index(), channel_id, scope.logging());
 
         let operator = BroadcastOperator {
             index: scope.index(),
@@ -51,10 +51,10 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
             output: PushBuffer::new(PushCounter::new(targets)),
         };
 
-        let operator_index = scope.add_operator(operator);
+        let operator_index = scope.add_operator(Box::new(operator));
 
         for (i, pusher) in pushers.into_iter().enumerate() {
-            let sender = LogPusher::new(pusher, scope.index(), i, channel_id, comm_chan, scope.logging());
+            let sender = LogPusher::new(pusher, scope.index(), i, channel_id, scope.logging());
             self.connect_to(Target { index: operator_index, port: i }, sender, channel_id);
         }
 

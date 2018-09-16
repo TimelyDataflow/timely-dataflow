@@ -2,23 +2,26 @@
 
 use progress::{Timestamp, Operate};
 use progress::nested::{Source, Target};
-use logging::Logger;
+// use logging::TimelyLogger as Logger;
 use communication::Allocate;
+use worker::AsWorker;
 
-pub mod root;
+// pub mod root;
 pub mod child;
 
 pub use self::child::Child;
-pub use self::root::Root;
+// pub use self::root::Root;
 
 /// The information a child scope needs from its parent.
-pub trait ScopeParent: Allocate+Clone {
+pub trait ScopeParent: AsWorker+Clone {
     /// The timestamp associated with data in this scope.
     type Timestamp : Timestamp;
-
-    /// Allocates a new locally unique identifier.
-    fn new_identifier(&mut self) -> usize;
 }
+
+impl<A: Allocate> ScopeParent for ::worker::Worker<A> {
+    type Timestamp = ::progress::timestamp::RootTimestamp;
+}
+
 
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
 ///
@@ -37,20 +40,33 @@ pub trait Scope: ScopeParent {
     fn add_edge(&self, source: Source, target: Target);
 
     /// Adds a child `Operate` to the builder's scope. Returns the new child's index.
-    fn add_operator<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC) -> usize {
+    fn add_operator(&mut self, operator: Box<Operate<Self::Timestamp>>) -> usize {
         let index = self.allocate_operator_index();
-        self.add_operator_with_index(scope, index);
+        let global = self.new_identifier();
+        self.add_operator_with_indices(operator, index, global);
         index
     }
 
-    /// Allocates a new operator index, for use with `add_operator_with_index`.
+    /// Allocates a new scope-local operator index.
+    ///
+    /// This method is meant for use with `add_operator_with_index`, which accepts a scope-local
+    /// operator index allocated with this method. This method does cause the scope to expect that
+    /// an operator will be added, and it is an error not to eventually add such an operator.
     fn allocate_operator_index(&mut self) -> usize;
 
     /// Adds a child `Operate` to the builder's scope using a supplied index.
     ///
     /// This is used internally when there is a gap between allocate a child identifier and adding the
     /// child, as happens in subgraph creation.
-    fn add_operator_with_index<SC: Operate<Self::Timestamp>+'static>(&mut self, scope: SC, index: usize);
+    fn add_operator_with_index(&mut self, operator: Box<Operate<Self::Timestamp>>, index: usize) {
+        let global = self.new_identifier();
+        self.add_operator_with_indices(operator, index, global);
+    }
+
+    /// Adds a child `Operate` to the builder's scope using supplied indices.
+    ///
+    /// The two indices are the scope-local operator index, and a worker-unique index used for e.g. logging.
+    fn add_operator_with_indices(&mut self, operator: Box<Operate<Self::Timestamp>>, local: usize, global: usize);
 
     /// Creates a `Subgraph` from a closure acting on a `Child` scope, and returning
     /// whatever the closure returns.
@@ -75,7 +91,4 @@ pub trait Scope: ScopeParent {
     /// });
     /// ```
     fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R;
-
-    /// Obtains the logger associated with this scope.
-    fn logging(&self) -> Logger;
 }

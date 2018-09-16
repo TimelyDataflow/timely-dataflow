@@ -4,20 +4,20 @@ use ::communication::Allocate;
 use progress::timestamp::RootTimestamp;
 use progress::nested::product::Product;
 use dataflow::{InputHandle, ProbeHandle};
-use dataflow::scopes::root::Root;
+use worker::Worker;
 
 /// A re-usable barrier synchronization mechanism.
 pub struct Barrier<A: Allocate> {
     round: usize,
     input: InputHandle<usize, ()>,
     probe: ProbeHandle<Product<RootTimestamp, usize>>,
-    worker: Root<A>,
+    worker: Worker<A>,
 }
 
 impl<A: Allocate> Barrier<A> {
 
     /// Allocates a new barrier.
-    pub fn new(worker: &mut Root<A>) -> Self {
+    pub fn new(worker: &mut Worker<A>) -> Self {
         use dataflow::operators::{Input, Probe};
         let (input, probe) = worker.dataflow(|scope| {
             let (handle, stream) = scope.new_input::<()>();

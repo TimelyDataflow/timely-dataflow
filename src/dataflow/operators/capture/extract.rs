@@ -9,7 +9,7 @@ pub trait Extract<T: Ord, D: Ord> {
     /// Currently this is only implemented for `Receiver<Event<T, D>>`, and is used only
     /// to easily pull data out of a timely dataflow computation once it has completed.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```rust
     /// use std::rc::Rc;

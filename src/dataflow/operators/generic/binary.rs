@@ -17,7 +17,7 @@ pub trait Binary<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input streams and
     /// write to the output stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::binary::Binary;
@@ -57,7 +57,7 @@ pub trait Binary<G: Scope, D1: Data> {
     /// write to the output stream, and request and receive notifications. The method also requires
     /// a vector of the initial notifications the operator requires (commonly none).
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::binary::Binary;

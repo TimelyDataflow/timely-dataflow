@@ -16,6 +16,7 @@ use progress::nested::Summary::Local;
 
 use dataflow::channels::Bundle;
 use dataflow::channels::pushers::{Counter, Tee};
+use worker::AsWorker;
 
 use dataflow::{Stream, Scope, ScopeParent};
 use dataflow::scopes::Child;
@@ -28,7 +29,7 @@ pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
     /// its `Handle` passed as an argument. Data passed through the stream will have their
     /// timestamps advanced by `summary`, and will be dropped if the result exceeds `limit`.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
     ///
@@ -57,11 +58,11 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
         });
         let consumed = feedback_input.produced().clone();
 
-        let index = self.add_operator(Operator {
+        let index = self.add_operator(Box::new(Operator {
             consumed_messages:  consumed,
             produced_messages:  produced,
             summary:            Local(summary),
-        });
+        }));
 
         let helper = Handle {
             index,
@@ -102,7 +103,7 @@ impl<TOuter: Timestamp, TInner: Timestamp, D: Data> Push<Bundle<Product<TOuter, 
 pub trait ConnectLoop<G: ScopeParent, T: Timestamp, D: Data> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
     ///

@@ -13,8 +13,6 @@ use dataflow::{Stream, Scope};
 
 use super::builder_rc::OperatorBuilder;
 use dataflow::operators::generic::OperatorInfo;
-use dataflow::operators::generic::operator_info::new_operator_info;
-
 use dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 
 /// Methods to construct generic streaming and blocking operators.
@@ -23,7 +21,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
@@ -71,7 +69,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
@@ -107,7 +105,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, and write to the output stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -144,7 +142,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
@@ -205,7 +203,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
@@ -260,7 +258,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Inspect, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -306,7 +304,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes the function `logic` which can read from the input stream
     /// and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -344,6 +342,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let index = builder.index();
+        let global = builder.global();
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
@@ -351,7 +350,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let mut logic = constructor(capability, new_operator_info(index));
+            let operator_info = OperatorInfo::new(index, global);
+            let mut logic = constructor(capability, operator_info);
             move |frontiers| {
                 let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
                 let mut output_handle = output.activate();
@@ -394,6 +394,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let index = builder.index();
+        let global = builder.global();
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
@@ -402,7 +403,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let mut logic = constructor(capability, new_operator_info(index));
+            let operator_info = OperatorInfo::new(index, global);
+            let mut logic = constructor(capability, operator_info);
             move |_frontiers| {
                 let mut output_handle = output.activate();
                 logic(&mut input, &mut output_handle);
@@ -425,6 +427,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let index = builder.index();
+        let global = builder.global();
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
@@ -433,7 +436,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let mut logic = constructor(capability, new_operator_info(index));
+            let operator_info = OperatorInfo::new(index, global);
+            let mut logic = constructor(capability, operator_info);
             move |frontiers| {
                 let mut input1_handle = FrontieredInputHandle::new(&mut input1, &frontiers[0]);
                 let mut input2_handle = FrontieredInputHandle::new(&mut input2, &frontiers[1]);
@@ -485,6 +489,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let index = builder.index();
+        let global = builder.global();
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
@@ -494,7 +499,8 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let mut logic = constructor(capability, new_operator_info(index));
+            let operator_info = OperatorInfo::new(index, global);
+            let mut logic = constructor(capability, operator_info);
             move |_frontiers| {
                 let mut output_handle = output.activate();
                 logic(&mut input1, &mut input2, &mut output_handle);
@@ -527,7 +533,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 /// a method that can be repeatedly called on a output handle. The method is then repeatedly
 /// invoked, and is expected to eventually send data and downgrade and release capabilities.
 ///
-/// #Examples
+/// # Examples
 /// ```
 /// use timely::dataflow::operators::Inspect;
 /// use timely::dataflow::operators::generic::operator::source;
@@ -579,4 +585,30 @@ where
     });
 
     stream
+}
+
+/// Constructs an empty stream.
+///
+/// This method is useful in patterns where an input is required, but there is no
+/// meaningful data to provide. The replaces patterns like `stream.filter(|_| false)`
+/// which are just silly.
+///
+/// # Examples
+/// ```
+/// use timely::dataflow::operators::Inspect;
+/// use timely::dataflow::operators::generic::operator::empty;
+/// use timely::dataflow::Scope;
+///
+/// timely::example(|scope| {
+///
+///
+///     empty(scope)     //-- type required in this example
+///         .inspect(|_: &()| panic!("never called"));
+///
+/// });
+/// ```
+pub fn empty<G: Scope, D: Data>(scope: &G) -> Stream<G, D> {
+    source(scope, "Empty", |_capability| |_output| {
+        // drop capability, do nothing
+    })
 }

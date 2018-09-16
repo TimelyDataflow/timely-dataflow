@@ -15,7 +15,7 @@ pub trait Branch<S: Scope, D: Data> {
     /// If the result of the closure only depends on the time, not the data,
     /// `branch_when` should be used instead.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Branch, Inspect};
     ///
@@ -77,7 +77,7 @@ pub trait BranchWhen<S: Scope, D: Data> {
     /// the records for that will be sent to the second returned stream, otherwise
     /// they will be sent to the first.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, BranchWhen, Inspect, Delay};
     /// use timely::progress::timestamp::RootTimestamp;

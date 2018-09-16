@@ -3,7 +3,6 @@
 use std::io::{Read, Result};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
-// use std::sync::mpsc::{Sender, Receiver, channel};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
@@ -12,7 +11,7 @@ use abomonation::{encode, decode};
 
 /// Framing data for each `Vec<u8>` transmission, indicating a typed channel, the source and
 /// destination workers, and the length in bytes.
-#[derive(Copy, Clone, Abomonation)]
+#[derive(Copy, Clone, Debug, Abomonation)]
 pub struct MessageHeader {
     /// index of channel.
     pub channel:    usize,

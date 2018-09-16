@@ -10,7 +10,6 @@ pub struct Binary {
     pub inner:      Process,    // inner Process (use for process-local channels)
     pub index:      usize,      // index of this worker
     pub peers:      usize,      // number of peer workers
-    pub allocated:  usize,      // indicates how many channels have been allocated (locally).
 
     // for loading up state in the networking threads.
     pub readers:    Vec<Sender<((usize, usize), Sender<Vec<u8>>)>>,
@@ -26,12 +25,12 @@ impl Binary {
 impl Allocate for Binary {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T:Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
         let mut pushers: Vec<Box<Push<Message<T>>>> = Vec::new();
 
         // we'll need process-local channels as well (no self-loop binary connection in this design; perhaps should allow)
         let inner_peers = self.inner.peers();
-        let (inner_sends, inner_recv, _) = self.inner.allocate();
+        let (inner_sends, inner_recv) = self.inner.allocate(identifier);
 
         // prep a pushable for each endpoint, multiplied by inner_peers
         for index in 0..self.readers.len() {
@@ -42,7 +41,7 @@ impl Allocate for Binary {
                 if index >= self.index / inner_peers { target_index += inner_peers; }
 
                 let header = MessageHeader {
-                    channel:    self.allocated,
+                    channel:    identifier,
                     source:     self.index,
                     target:     target_index,
                     length:     0,
@@ -75,9 +74,7 @@ impl Allocate for Binary {
         });
         let pullable = Box::new(Puller::<T>::new(inner_recv, recv, logger)) as Box<Pull<Message<T>>>;
 
-        self.allocated += 1;
-
-        (pushers, pullable, Some(self.allocated - 1))
+        (pushers, pullable)
     }
 }
 

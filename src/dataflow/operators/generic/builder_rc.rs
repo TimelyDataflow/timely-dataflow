@@ -20,7 +20,7 @@ use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
 
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
@@ -31,7 +31,7 @@ pub struct OperatorBuilder<G: Scope> {
     consumed: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
-    logging: Logger,
+    logging: Option<Logger>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {
@@ -161,6 +161,11 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Get the identifier assigned to the operator being constructed
     pub fn index(&self) -> usize {
         self.builder.index()
+    }
+
+    /// The operator's worker-unique identifier.
+    pub fn global(&self) -> usize {
+        self.builder.global()
     }
 }
 

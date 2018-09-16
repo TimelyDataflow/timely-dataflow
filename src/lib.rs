@@ -57,13 +57,14 @@
 
 #![forbid(missing_docs)]
 
+#[macro_use]
+extern crate abomonation_derive;
 extern crate abomonation;
-#[macro_use] extern crate abomonation_derive;
 extern crate timely_communication;
-extern crate time;
-extern crate bytes;
+extern crate timely_bytes;
+extern crate timely_logging;
 
-pub use execute::{execute, execute_logging, execute_from_args, execute_from_args_logging, example};
+pub use execute::{execute, execute_from_args, example};
 pub use order::PartialOrder;
 
 pub use timely_communication::Configuration;
@@ -73,6 +74,17 @@ pub mod communication {
     pub use timely_communication::*;
 }
 
+/// Re-export of the `timely_bytes` crate.
+pub mod bytes {
+    pub use timely_bytes::*;
+}
+
+/// Re-export of the `timely_logging` crate.
+pub mod logging_core {
+    pub use timely_logging::*;
+}
+
+pub mod worker;
 pub mod progress;
 pub mod dataflow;
 pub mod synchronization;
@@ -80,6 +92,7 @@ pub mod execute;
 pub mod order;
 
 pub mod logging;
+// pub mod log_events;
 
 /// A composite trait for types usable as data in timely dataflow.
 ///

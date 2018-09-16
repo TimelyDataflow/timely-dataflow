@@ -31,7 +31,8 @@ use communication::Push;
 use dataflow::channels::pushers::{Counter, Tee};
 use dataflow::channels::{Bundle, Message};
 
-use dataflow::{Stream, Scope, ScopeParent};
+use worker::AsWorker;
+use dataflow::{Stream, Scope};
 use dataflow::scopes::Child;
 use dataflow::operators::delay::Delay;
 

@@ -1,19 +1,18 @@
 extern crate timely_communication;
 
 use std::ops::Deref;
-use timely_communication::Message;
+use timely_communication::{Message, Allocate};
 
 fn main() {
 
     // extract the configuration from user-supplied arguments, initialize the computation.
     let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
-    let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
-    let guards = timely_communication::initialize(config, logger, |mut allocator| {
+    let guards = timely_communication::initialize(config, |mut allocator| {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());
 
         // allocates pair of senders list and one receiver.
-        let (mut senders, mut receiver, _) = allocator.allocate();
+        let (mut senders, mut receiver) = allocator.allocate(0);
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {

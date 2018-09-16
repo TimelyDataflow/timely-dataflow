@@ -1,7 +1,7 @@
 //! Zero-copy allocator based on TCP.
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashMap};
 // use std::sync::mpsc::{channel, Sender, Receiver};
 
 use bytes::arc::Bytes;
@@ -87,12 +87,12 @@ impl<A: Allocate> TcpBuilder<A> {
             inner: self.inner,
             index: self.index,
             peers: self.peers,
-            allocated: 0,
+            // allocated: 0,
             _signal: self.signal,
             staged: Vec::new(),
             sends,
             recvs: self.recvs,
-            to_local: Vec::new(),
+            to_local: HashMap::new(),
         }
     }
 }
@@ -104,32 +104,29 @@ pub struct TcpAllocator<A: Allocate> {
 
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
-    allocated:  usize,                              // indicates how many channels have been allocated (locally).
+    // allocated:  usize,                              // indicates how many channels have been allocated (locally).
 
     _signal:     Signal,
 
     staged:     Vec<Bytes>,
 
     // sending, receiving, and responding to binary buffers.
-    sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>,         // sends[x] -> goes to process x.
-    recvs:      Vec<MergeQueue>,                    // recvs[x] <- from process x?.
-    to_local:   Vec<Rc<RefCell<VecDeque<Bytes>>>>,  // to worker-local typed pullers.
+    sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>,     // sends[x] -> goes to process x.
+    recvs:      Vec<MergeQueue>,                                // recvs[x] <- from process x?.
+    to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,   // to worker-local typed pullers.
 }
 
 impl<A: Allocate> Allocate for TcpAllocator<A> {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>, Option<usize>) {
-
-        let channel_id = self.allocated;
-        self.allocated += 1;
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
 
         // Result list of boxed pushers.
         let mut pushes = Vec::<Box<Push<Message<T>>>>::new();
 
         // Inner exchange allocations.
         let inner_peers = self.inner.peers();
-        let (mut inner_sends, inner_recv, _) = self.inner.allocate();
+        let (mut inner_sends, inner_recv) = self.inner.allocate(identifier);
 
         for target_index in 0 .. self.peers() {
 
@@ -142,7 +139,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             else {
                 // message header template.
                 let header = MessageHeader {
-                    channel:    channel_id,
+                    channel:    identifier,
                     source:     self.index,
                     target:     target_index,
                     length:     0,
@@ -155,13 +152,11 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             }
         }
 
-        while self.to_local.len() <= channel_id {
-            self.to_local.push(Rc::new(RefCell::new(VecDeque::new())));
-        }
+        self.to_local.insert(identifier, Rc::new(RefCell::new(VecDeque::new())));
 
-        let puller = Box::new(PullerInner::new(inner_recv, self.to_local[channel_id].clone()));
+        let puller = Box::new(PullerInner::new(inner_recv, self.to_local[&identifier].clone()));
 
-        (pushes, puller, None)
+        (pushes, puller, )
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
@@ -186,12 +181,11 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
                     // Ensure that a queue exists.
                     // We may receive data before allocating, and shouldn't block.
-                    while self.to_local.len() <= header.channel {
-                        self.to_local.push(Rc::new(RefCell::new(VecDeque::new())));
-                    }
-
-                    // Introduce the binary slice into the operator input queue.
-                    self.to_local[header.channel].borrow_mut().push_back(peel);
+                    self.to_local
+                        .entry(header.channel)
+                        .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
+                        .borrow_mut()
+                        .push_back(peel);
                 }
                 else {
                     println!("failed to read full header!");

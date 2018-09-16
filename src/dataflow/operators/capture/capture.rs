@@ -23,7 +23,7 @@ use super::{Event, EventPusher};
 pub trait Capture<T: Timestamp, D: Data> {
     /// Captures a stream of timestamped data for later replay.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// The type `Rc<EventLink<T,D>>` implements a typed linked list,
     /// and can be captured into and replayed from.

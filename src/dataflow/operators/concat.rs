@@ -9,7 +9,7 @@ use dataflow::{Stream, Scope};
 pub trait Concat<G: Scope, D: Data> {
     /// Merge the contents of two streams.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Concat, Inspect};
     ///
@@ -33,7 +33,7 @@ impl<G: Scope, D: Data> Concat<G, D> for Stream<G, D> {
 pub trait Concatenate<G: Scope, D: Data> {
     /// Merge the contents of multiple streams.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Concatenate, Inspect};
     ///

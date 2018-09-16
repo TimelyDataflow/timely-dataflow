@@ -15,7 +15,7 @@ use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::{Buffer, Session};
 use dataflow::channels::Bundle;
 use communication::{Push, Pull, message::RefOrMut};
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use dataflow::operators::CapabilityRef;
 use dataflow::operators::capability::mint_ref as mint_capability_ref;
@@ -25,7 +25,7 @@ use dataflow::operators::capability::CapabilityTrait;
 pub struct InputHandle<T: Timestamp, D, P: Pull<Bundle<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
-    logging: Logger,
+    logging: Option<Logger>,
 }
 
 /// Handle to an operator's input stream and frontier.
@@ -59,15 +59,15 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     /// Repeatedly calls `logic` till exhaustion of the available input data.
     /// `logic` receives a capability and an input buffer.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
     ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                });
@@ -76,13 +76,11 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     /// ```
     #[inline]
     pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<Vec<D>>)>(&mut self, mut logic: F) {
-        let logging = self.logging.clone();
+        let mut logging = self.logging.clone();
         while let Some((cap, data)) = self.next() {
-            logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedMessage(
-                    ::logging::GuardedMessageEvent { is_start: true })));
+            logging.as_mut().map(|l| l.log(::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedMessage(
-                    ::logging::GuardedMessageEvent { is_start: false })));
+            logging.as_mut().map(|l| l.log(::logging::GuardedMessageEvent { is_start: false }));
         }
     }
 
@@ -108,15 +106,15 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>+'a> FrontieredInputHandle<
     /// Repeatedly calls `logic` till exhaustion of the available input data.
     /// `logic` receives a capability and an input buffer.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
     ///                input.for_each(|cap, data| {
     ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                });
@@ -141,7 +139,7 @@ pub fn _access_pull_counter<T: Timestamp, D, P: Pull<Bundle<T, D>>>(input: &mut 
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, logging: Logger) -> InputHandle<T, D, P> {
+pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, logging: Option<Logger>) -> InputHandle<T, D, P> {
     InputHandle {
         pull_counter,
         internal,
@@ -192,15 +190,15 @@ impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>> OutputHandle<'a, T, D, P> {
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp
     /// first, as show in the example.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
     ///                    let mut time = cap.time().clone();
     ///                    time.inner += 1;

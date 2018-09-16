@@ -1,7 +1,5 @@
-extern crate time;
 extern crate rand;
 extern crate timely;
-extern crate timely_sort;
 
 use std::cmp::Ordering;
 

@@ -24,7 +24,7 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     /// a `bool` indicating that it is appropriate to deregister the state, cleaning up once
     /// the state is no longer helpful.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Map, Inspect};
     /// use timely::dataflow::operators::aggregation::StateMachine;
