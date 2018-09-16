@@ -59,7 +59,13 @@ impl<T:Timestamp+Send> Progcaster<T> {
         internal: &mut ChangeBatch<(usize, usize, T)>)
     {
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
+
+            // ensure minimality.
+            messages.compact();
+            internal.compact();
+
             if !messages.is_empty() || !internal.is_empty() {
+
                 self.logging.as_ref().map(|l| l.log(::logging::ProgressEvent {
                     is_send: true,
                     source: self.source,

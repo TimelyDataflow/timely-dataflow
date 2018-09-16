@@ -52,6 +52,10 @@ impl<T:Ord> ChangeBatch<T> {
         result
     }
 
+    /// Returns true if the change batch is not guaranteed compact.
+    pub fn is_dirty(&self) -> bool {
+        self.updates.len() > self.clean
+    }
 
     /// Adds a new update, for `item` with `value`.
     ///
@@ -239,7 +243,7 @@ impl<T:Ord> ChangeBatch<T> {
     /// any whose accumulation is zero. It is optimized to only do this if the number of dirty
     /// elements is non-zero.
     #[inline]
-    fn compact(&mut self) {
+    pub fn compact(&mut self) {
         if self.clean < self.updates.len() && self.updates.len() > 1 {
             self.updates.sort_by(|x,y| x.0.cmp(&y.0));
             for i in 0 .. self.updates.len() - 1 {
