@@ -16,11 +16,11 @@ license = "MIT"
 #build = "booktests.rs"
 
 [dependencies]
-abomonation = { git = "https://github.com/frankmcsherry/abomonation" }
+abomonation = "0.7"
 abomonation_derive = "0.3"
-timely_bytes = { path = "./bytes" }
-timely_logging = { path = "./logging" }
-timely_communication = { path = "./communication"}
+timely_bytes = { path = "./bytes", version = "0.7" }
+timely_logging = { path = "./logging", version = "0.7" }
+timely_communication = { path = "./communication", version = "0.7" }
 
 [dev-dependencies]
 timely_sort="0.1.6"
