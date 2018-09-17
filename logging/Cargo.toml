@@ -1,6 +1,15 @@
 [package]
 name = "timely_logging"
-version = "0.1.0"
+version = "0.7.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
+
+description = "Common timely logging infrastructure"
+
+documentation = "https://frankmcsherry.github.com/timely-dataflow"
+homepage = "https://github.com/frankmcsherry/timely-dataflow"
+repository = "https://github.com/frankmcsherry/timely-dataflow.git"
+keywords = ["timely", "dataflow", "logging"]
+license = "MIT"
+
 
 [dependencies]
