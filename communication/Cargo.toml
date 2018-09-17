@@ -1,6 +1,6 @@
 [package]
 name = "timely_communication"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 
 description = "Communication layer for timely dataflow"
@@ -18,10 +18,10 @@ arg_parse=["getopts"]
 
 [dependencies]
 getopts={version="0.2.14", optional=true}
-abomonation = { git = "https://github.com/frankmcsherry/abomonation" }
+abomonation = "0.7"
 abomonation_derive = "0.3"
-timely_bytes = { path = "../bytes" }
-timely_logging = { path = "../logging" }
+timely_bytes = { path = "../bytes", version = "0.7" }
+timely_logging = { path = "../logging", version = "0.7" }
 
 [profile.release]
 opt-level = 3
