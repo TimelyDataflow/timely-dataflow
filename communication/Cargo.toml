@@ -1,8 +1,7 @@
 [package]
 name = "timely_communication"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
-
 description = "Communication layer for timely dataflow"
 
 # These URLs point to more information about the repository
