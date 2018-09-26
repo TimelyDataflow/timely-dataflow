@@ -1,8 +1,9 @@
 [package]
 
 name = "timely"
-version = "0.7.0"
+version = "0.7.1"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
+readme = "README.md"
 
 description = "A low-latency data-parallel dataflow system in Rust"
 
