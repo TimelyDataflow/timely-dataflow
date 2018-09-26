@@ -54,11 +54,14 @@ impl BytesSlab {
 
         if self.empty().len() < capacity {
 
+            let mut increased_shift = false;
+
             // Increase allocation if copy would be insufficient.
             while self.valid + capacity > (1 << self.shift) {
                 self.shift += 1;
                 self.stash.clear();         // clear wrongly sized buffers.
                 self.in_progress.clear();   // clear wrongly sized buffers.
+                increased_shift = true;
             }
 
             // Attempt to reclaim shared slices.
@@ -66,7 +69,10 @@ impl BytesSlab {
                 for shared in self.in_progress.iter_mut() {
                     if let Some(mut bytes) = shared.take() {
                         if bytes.try_regenerate::<Box<[u8]>>() {
-                            self.stash.push(bytes);
+                            // NOTE: Test should be redundant, but better safe...
+                            if bytes.len() == (1 << self.shift) {
+                                self.stash.push(bytes);
+                            }
                         }
                         else {
                             *shared = Some(bytes);
@@ -80,7 +86,9 @@ impl BytesSlab {
             let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
 
             self.buffer[.. self.valid].copy_from_slice(&old_buffer[.. self.valid]);
-            self.in_progress.push(Some(old_buffer));
+            if !increased_shift {
+                self.in_progress.push(Some(old_buffer));
+            }
         }
     }
 }
