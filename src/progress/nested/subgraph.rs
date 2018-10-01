@@ -1,4 +1,9 @@
-//! Implements `Operate` for a scoped collection of child operators.
+//! A dataflow subgraph
+//!
+//! Timely dataflow graphs can be nested hierarchically, where some region of
+//! graph is grouped, and presents upwards as an operator. This grouping needs
+//! some care, to make sure that the presented operator reflects the behavior
+//! of the grouped operators.
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -11,9 +16,7 @@ use progress::{Timestamp, Operate};
 
 use progress::ChangeBatch;
 use progress::broadcast::Progcaster;
-use progress::nested::summary::Summary::{Local, Outer};
-use progress::nested::product::Product;
-use progress::nested::reachability;
+use progress::nested::{reachability, Refines};
 
 // IMPORTANT : by convention, a child identifier of zero is used to indicate inputs and outputs of
 // the Subgraph itself. An identifier greater than zero corresponds to an actual child, which can
@@ -43,12 +46,16 @@ pub struct Target {
     pub port: usize,
 }
 
-/// A builder structure for initializing `Subgraph`s.
+/// A builder for interactively initializing a `Subgraph`.
 ///
 /// This collects all the information necessary to get a `Subgraph` up and
 /// running, and is important largely through its `build` method which
 /// actually creates a `Subgraph`.
-pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
+pub struct SubgraphBuilder<TOuter, TInner>
+where
+    TInner: Timestamp+Refines<TOuter>,
+    TOuter: Timestamp,
+{
     /// The name of this subgraph.
     pub name: String,
 
@@ -59,13 +66,13 @@ pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
     index: usize,
 
     // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
-    children: Vec<PerOperatorState<Product<TOuter, TInner>>>,
+    children: Vec<PerOperatorState<TInner>>,
     child_count: usize,
 
     edge_stash: Vec<(Source, Target)>,
 
     // shared state written to by the datapath, counting records entering this subgraph instance.
-    input_messages: Vec<Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>>,
+    input_messages: Vec<Rc<RefCell<ChangeBatch<TInner>>>>,
 
     // expressed capabilities, used to filter changes against.
     output_capabilities: Vec<MutableAntichain<TOuter>>,
@@ -74,9 +81,13 @@ pub struct SubgraphBuilder<TOuter: Timestamp, TInner: Timestamp> {
     logging: Option<Logger>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
+impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
+where
+    TInner: Timestamp+Refines<TOuter>,
+    TOuter: Timestamp,
+{
     /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
-    pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>) -> Target {
+    pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<TInner>>>) -> Target {
         self.input_messages.push(shared_counts);
         self.children[0].add_output();
         Target { index: self.index, port: self.input_messages.len() - 1 }
@@ -98,13 +109,20 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
     }
 
     /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
-    pub fn new_from(index: usize, mut path: Vec<usize>, logging: Option<Logger>) -> SubgraphBuilder<TOuter, TInner> {
+    pub fn new_from(
+        index: usize,
+        mut path: Vec<usize>,
+        logging: Option<Logger>,
+        name: &str,
+    )
+        -> SubgraphBuilder<TOuter, TInner>
+    {
         path.push(index);
 
         let children = vec![PerOperatorState::empty(path.clone(), logging.clone())];
 
         SubgraphBuilder {
-            name:                "Subgraph".into(),
+            name:                name.into(),
             path,
             index,
 
@@ -126,7 +144,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
     }
 
     /// Adds a new child to the subgraph.
-    pub fn add_child(&mut self, child: Box<Operate<Product<TOuter, TInner>>>, index: usize, identifier: usize) {
+    pub fn add_child(&mut self, child: Box<Operate<TInner>>, index: usize, identifier: usize) {
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
@@ -197,7 +215,11 @@ impl<TOuter: Timestamp, TInner: Timestamp> SubgraphBuilder<TOuter, TInner> {
 ///
 /// The subgraph type contains the infrastructure required to describe the topology of and track
 /// progress within a dataflow subgraph.
-pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
+pub struct Subgraph<TOuter, TInner>
+where
+    TInner: Timestamp+Refines<TOuter>,
+    TOuter: Timestamp,
+{
 
     name: String,           // a helpful name (often "Subgraph").
     /// Path of identifiers from the root.
@@ -206,30 +228,34 @@ pub struct Subgraph<TOuter:Timestamp, TInner:Timestamp> {
     outputs: usize,         // number of outputs.
 
     // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
-    children: Vec<PerOperatorState<Product<TOuter, TInner>>>,
+    children: Vec<PerOperatorState<TInner>>,
 
     // shared state written to by the datapath, counting records entering this subgraph instance.
-    input_messages: Vec<Rc<RefCell<ChangeBatch<Product<TOuter, TInner>>>>>,
+    input_messages: Vec<Rc<RefCell<ChangeBatch<TInner>>>>,
 
     // expressed capabilities, used to filter changes against.
     output_capabilities: Vec<MutableAntichain<TOuter>>,
 
     // pointstamp messages to exchange. ultimately destined for `messages` or `internal`.
-    local_pointstamp_messages: ChangeBatch<(usize, usize, Product<TOuter, TInner>)>,
-    local_pointstamp_internal: ChangeBatch<(usize, usize, Product<TOuter, TInner>)>,
-    final_pointstamp_messages: ChangeBatch<(usize, usize, Product<TOuter, TInner>)>,
-    final_pointstamp_internal: ChangeBatch<(usize, usize, Product<TOuter, TInner>)>,
+    local_pointstamp_messages: ChangeBatch<(usize, usize, TInner)>,
+    local_pointstamp_internal: ChangeBatch<(usize, usize, TInner)>,
+    final_pointstamp_messages: ChangeBatch<(usize, usize, TInner)>,
+    final_pointstamp_internal: ChangeBatch<(usize, usize, TInner)>,
 
     // Graph structure and pointstamp tracker.
-    pointstamp_builder: reachability::Builder<Product<TOuter, TInner>>,
-    pointstamp_tracker: reachability::Tracker<Product<TOuter, TInner>>,
+    pointstamp_builder: reachability::Builder<TInner>,
+    pointstamp_tracker: reachability::Tracker<TInner>,
 
     // channel / whatever used to communicate pointstamp updates to peers.
-    progcaster: Progcaster<Product<TOuter, TInner>>,
+    progcaster: Progcaster<TInner>,
 }
 
 
-impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, TInner> {
+impl<TOuter, TInner> Operate<TOuter> for Subgraph<TOuter, TInner>
+where
+    TInner: Timestamp+Refines<TOuter>,
+    TOuter: Timestamp,
+{
 
     fn name(&self) -> String { self.name.clone() }
     fn local(&self) -> bool { false }
@@ -264,7 +290,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // for the subgraph operator (`initial_capabilities`).
         let mut initial_capabilities = vec![ChangeBatch::new(); self.outputs()];
         for (o_port, capabilities) in self.pointstamp_tracker.pushed_mut(0).iter_mut().enumerate() {
-            let caps1 = capabilities.drain().map(|(time, diff)| (time.outer, diff));
+            let caps1 = capabilities.drain().map(|(time, diff)| (time.to_outer(), diff));
             self.output_capabilities[o_port].update_iter_and(caps1, |t, v| {
                 initial_capabilities[o_port].update(t.clone(), v);
             });
@@ -282,10 +308,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             for &(target, ref antichain) in &summary.source_target[0][input] {
                 if target.index == 0 {
                     for summary in antichain.elements().iter() {
-                        internal_summary[input][target.port].insert(match *summary {
-                            Local(_) => Default::default(),
-                            Outer(ref y, _) => y.clone(),
-                        });
+                        internal_summary[input][target.port].insert(TInner::summarize(summary.clone()));
                     };
                 }
             }
@@ -315,7 +338,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // The element of `frontier` form the initial capabilities of child zero, our proxy for the outside world.
         let mut new_capabilities = vec![ChangeBatch::new(); self.inputs];
         for (index, batch) in frontier.iter_mut().enumerate() {
-            let iterator = batch.drain().map(|(time, value)| (Product::new(time, Default::default()), value));
+            let iterator = batch.drain().map(|(time, value)| (TInner::to_inner(time), value));
             new_capabilities[index].extend(iterator);
         }
         self.children[0].gis_capabilities = new_capabilities;
@@ -399,7 +422,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
             for (time, value) in changes.drain() {
                 self.pointstamp_tracker.update_source(
                     Source { index: 0, port },
-                    Product::new(time, Default::default()),
+                    TInner::to_inner(time),
+                    // Product::new(time, Default::default()),
                     value
                 );
             }
@@ -481,7 +505,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         self.local_pointstamp_messages.drain_into(&mut self.final_pointstamp_messages);
         for ((index, port, timestamp), delta) in self.local_pointstamp_internal.drain() {
             if index == 0 {     // [XXX] Report child 0's capabilities as consumed messages.
-                consumed[port].update(timestamp.outer, delta);
+                consumed[port].update(timestamp.to_outer(), delta);
             }
             else {              // Fold non-cheating capability changes into the final updates.
                 self.final_pointstamp_internal.update((index, port, timestamp), delta);
@@ -491,7 +515,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         // Demultiplex `self.final_` into `self.pointstamp_tracker`. Updates to message counts for
         // inputs to child zero are also deposited in `produced`.
         for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
-            if index == 0 { produced[input].update(time.outer.clone(), delta); }
+            if index == 0 { produced[input].update(time.clone().to_outer(), delta); }
             self.pointstamp_tracker.update_target(Target { index, port: input }, time, delta);
         }
         for ((index, output, time), delta) in self.final_pointstamp_internal.drain() {
@@ -549,7 +573,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
 
         // Step 6. Child zero's frontier information are reported as capabilities via `internal`.
         for (output, pointstamps) in self.pointstamp_tracker.pushed_mut(0).iter_mut().enumerate() {
-            let iterator = pointstamps.drain().map(|(time, diff)| (time.outer, diff));
+            let iterator = pointstamps.drain().map(|(time, diff)| (time.to_outer(), diff));
             self.output_capabilities[output].update_iter_and(iterator, |t, v| {
                 internal[output].update(t.clone(), v);
             });
@@ -564,6 +588,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Operate<TOuter> for Subgraph<TOuter, 
         any_child_active || self.pointstamp_tracker.tracking_anything()
     }
 }
+
 
 
 struct PerOperatorState<T: Timestamp> {

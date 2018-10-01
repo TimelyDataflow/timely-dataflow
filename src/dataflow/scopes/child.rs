@@ -15,7 +15,7 @@ use super::{ScopeParent, Scope};
 /// of `Operate`s to a subgraph, and the connection of edges between them.
 pub struct Child<'a, G: ScopeParent, T: Timestamp> {
     /// The subgraph under assembly.
-    pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
+    pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, Product<G::Timestamp, T>>>,
     /// A copy of the child's parent scope.
     pub parent:   G,
     /// The log writer for this scope.
@@ -64,7 +64,7 @@ impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T> {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging().clone()));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging().clone(), "Subgraph"));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
@@ -92,5 +92,11 @@ impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T> {
 }
 
 impl<'a, G: ScopeParent, T: Timestamp> Clone for Child<'a, G, T> {
-    fn clone(&self) -> Self { Child { subgraph: self.subgraph, parent: self.parent.clone(), logging: self.logging.clone() }}
+    fn clone(&self) -> Self {
+        Child {
+            subgraph: self.subgraph,
+            parent: self.parent.clone(),
+            logging: self.logging.clone()
+        }
+    }
 }

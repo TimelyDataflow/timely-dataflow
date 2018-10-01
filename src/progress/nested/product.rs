@@ -9,6 +9,25 @@ use progress::nested::summary::Summary;
 
 use abomonation::Abomonation;
 
+use super::Refines;
+
+impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, TInner> {
+    fn to_inner(other: TOuter) -> Self {
+        Product::new(other, Default::default())
+    }
+    fn to_outer(self: Product<TOuter, TInner>) -> TOuter {
+        self.outer
+    }
+    fn summarize(path: <Self as Timestamp>::Summary) -> <TOuter as Timestamp>::Summary {
+        use progress::nested::summary::Summary;
+        match path {
+            Summary::Local(_) => Default::default(),
+            Summary::Outer(y, _) => y,
+        }
+
+    }
+}
+
 /// A nested pair of timestamps, one outer and one inner.
 ///
 /// We use `Product` rather than `(TOuter, TInner)` so that we can derive our own `PartialOrd`,
