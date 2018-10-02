@@ -3,13 +3,14 @@
 use std::collections::HashMap;
 
 use Data;
-use order::PartialOrder;
+use order::{PartialOrder, TotalOrder};
 use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
 use dataflow::operators::generic::operator::Operator;
 
 /// Methods to advance the timestamps of records or batches of records.
 pub trait Delay<G: Scope, D: Data> {
+
     /// Advances the timestamp of records using a supplied function.
     ///
     /// The function *must* advance the timestamp; the operator will test that the
@@ -35,13 +36,41 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay(&self, impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Self;
+    fn delay(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Self;
+
+    /// Advances the timestamp of records using a supplied function.
+    ///
+    /// This method is a specialization of `delay` for when the timestamp is totally
+    /// ordered. In this case, we can use a priority queue rather than an unsorted
+    /// list to manage the potentially available timestamps.
+    ///
+    /// # Examples
+    ///
+    /// The following example takes the sequence `0..10` at time `RootTimestamp(0)`
+    /// and delays each element `i` to time `RootTimestamp(i)`.
+    ///
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Delay, Operator};
+    /// use timely::dataflow::channels::pact::Pipeline;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .delay(|data, time| *data)
+    ///            .sink(Pipeline, "example", |input| {
+    ///                input.for_each(|time, data| {
+    ///                    println!("data at time: {:?}", time);
+    ///                });
+    ///            });
+    /// });
+    /// ```
+    fn delay_total(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Self
+    where G::Timestamp: TotalOrder;
+
     /// Advances the timestamp of batches of records using a supplied function.
     ///
-    /// The function *must* advance the timestamp; the operator will test that the
-    /// new timestamp is greater or equal to the old timestamp, and will assert if
-    /// it is not. The batch version does not consult the data, and may only view
-    /// the timestamp itself.
+    /// The operator will test that the new timestamp is greater or equal to the
+    /// old timestamp, and will assert if it is not. The batch version does not
+    /// consult the data, and may only view the timestamp itself.
     ///
     /// # Examples
     ///
@@ -62,7 +91,7 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay_batch(&self, impl Fn(&G::Timestamp)->G::Timestamp+'static) -> Self;
+    fn delay_batch(&self, func: impl Fn(&G::Timestamp)->G::Timestamp+'static) -> Self;
 }
 
 impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
@@ -88,6 +117,13 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
                 }
             });
         })
+    }
+
+    fn delay_total(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Self
+    where
+        G::Timestamp: TotalOrder
+    {
+        self.delay(func)
     }
 
     fn delay_batch(&self, func: impl Fn(&G::Timestamp)->G::Timestamp+'static) -> Stream<G, D> {
