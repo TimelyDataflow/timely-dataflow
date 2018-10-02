@@ -35,7 +35,7 @@ pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
     ///
     /// timely::example(|scope| {
-    ///     scope.scoped(|scope| {
+    ///     scope.scoped("Loop", |scope| {
     ///         // circulate 0..10 for 100 iterations.
     ///         let (handle, cycle) = scope.loop_variable(100, 1);
     ///         (0..10).to_stream(scope)
@@ -112,7 +112,7 @@ pub trait ConnectLoop<G: ScopeParent, T: Timestamp, D: Data> {
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
     ///
     /// timely::example(|scope| {
-    ///     scope.scoped(|scope| {
+    ///     scope.scoped("Loop", |scope| {
     ///         // circulate 0..10 for 100 iterations.
     ///         let (handle, cycle) = scope.loop_variable(100, 1);
     ///         (0..10).to_stream(scope)

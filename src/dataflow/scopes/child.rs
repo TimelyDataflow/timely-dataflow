@@ -78,14 +78,14 @@ where
     }
 
     #[inline]
-    fn scoped<T2: Timestamp, R, F: FnOnce(&mut Child<Self, T2>) -> R>(&mut self, func: F) -> R
+    fn scoped<T2: Timestamp, R, F: FnOnce(&mut Child<Self, T2>) -> R>(&mut self, name: &str, func: F) -> R
     where
         T2: Timestamp+Refines<T>,
     {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging().clone(), "Subgraph"));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging().clone(), name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,

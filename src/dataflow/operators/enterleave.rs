@@ -11,7 +11,7 @@
 //!
 //! timely::example(|outer| {
 //!     let stream = (0..9).to_stream(outer);
-//!     let output = outer.scoped::<u64,_,_>(|inner| {
+//!     let output = outer.region(|inner| {
 //!         stream.enter(inner)
 //!               .inspect(|x| println!("in nested scope: {:?}", x))
 //!               .leave()
@@ -47,7 +47,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> {
     ///
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer);
-    ///     let output = outer.scoped::<u64,_,_>(|inner| {
+    ///     let output = outer.region(|inner| {
     ///         stream.enter(inner).leave()
     ///     });
     /// });
@@ -68,7 +68,7 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     ///
     /// timely::example(|outer| {
     ///     let stream = (0..9u64).to_stream(outer);
-    ///     let output = outer.scoped(|inner| {
+    ///     let output = outer.iterative(|inner| {
     ///         stream.enter_at(inner, |x| *x).leave()
     ///     });
     /// });
@@ -109,7 +109,7 @@ pub trait Leave<G: Scope, D: Data> {
     ///
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer);
-    ///     let output = outer.scoped::<u64,_,_>(|inner| {
+    ///     let output = outer.region(|inner| {
     ///         stream.enter(inner).leave()
     ///     });
     /// });

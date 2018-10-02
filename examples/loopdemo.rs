@@ -26,7 +26,7 @@ fn main() {
             let stream = scope.input_from(&mut input);
 
             scope
-                .scoped(|child| {
+                .iterative(|child| {
 
                     let (loop_handle, loop_stream) = child.loop_variable(usize::max_value(), 1);
 

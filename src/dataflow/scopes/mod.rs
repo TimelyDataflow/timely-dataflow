@@ -1,7 +1,7 @@
 //! Hierarchical organization of timely dataflow graphs.
 
 use progress::{Timestamp, Operate};
-use progress::nested::{Source, Target, Refines};
+use progress::nested::{Source, Target, Refines, product::Product};
 // use logging::TimelyLogger as Logger;
 use communication::Allocate;
 use worker::AsWorker;
@@ -68,11 +68,13 @@ pub trait Scope: ScopeParent {
     /// The two indices are the scope-local operator index, and a worker-unique index used for e.g. logging.
     fn add_operator_with_indices(&mut self, operator: Box<Operate<Self::Timestamp>>, local: usize, global: usize);
 
-    /// Creates a `Subgraph` from a closure acting on a `Child` scope, and returning
-    /// whatever the closure returns.
+    /// Creates a dataflow subgraph.
     ///
-    /// Commonly used to create new timely dataflow subgraphs, either creating new input streams
-    /// and the input handle, or ingressing data streams and returning the egresses stream.
+    /// This method allows the user to create a nested scope with any timestamp that
+    /// "refines" the enclosing timestamp (informally: extends it in a reversible way).
+    ///
+    /// This is most commonly used to create new iterative contexts, and the provided
+    /// method `iterative` for this task demonstrates the use of this method.
     ///
     /// # Examples
     /// ```
@@ -84,12 +86,75 @@ pub trait Scope: ScopeParent {
     ///     // must specify types as nothing else drives inference.
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<String>();
-    ///         let output = child1.scoped::<Product<u64,u32>,_,_>(|child2| {
+    ///         let output = child1.scoped::<Product<u64,u32>,_,_>("ScopeName", |child2| {
     ///             stream.enter(child2).leave()
     ///         });
     ///         input
     ///     });
     /// });
     /// ```
-    fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R where T: Refines<<Self as ScopeParent>::Timestamp>;
+    fn scoped<T, R, F>(&mut self, name: &str, func: F) -> R
+    where
+        T: Timestamp+Refines<<Self as ScopeParent>::Timestamp>,
+        F: FnOnce(&mut Child<Self, T>) -> R;
+
+    /// Creates a iterative dataflow subgraph.
+    ///
+    /// This method is a specialization of `scoped` which uses the `Product` timestamp
+    /// combinator, suitable for iterative computations in which iterative development
+    /// at some time cannot influence prior iterations at a future time.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Enter, Leave};
+    ///
+    /// timely::execute_from_args(std::env::args(), |worker| {
+    ///     // must specify types as nothing else drives inference.
+    ///     let input = worker.dataflow::<u64,_,_>(|child1| {
+    ///         let (input, stream) = child1.new_input::<String>();
+    ///         let output = child1.iterative::<u32,_,_>(|child2| {
+    ///             stream.enter(child2).leave()
+    ///         });
+    ///         input
+    ///     });
+    /// });
+    /// ```
+    fn iterative<T, R, F>(&mut self, func: F) -> R
+    where
+        T: Timestamp,
+        F: FnOnce(&mut Child<Self, Product<<Self as ScopeParent>::Timestamp, T>>) -> R,
+    {
+        self.scoped::<Product<<Self as ScopeParent>::Timestamp, T>,R,F>("Iterative", func)
+    }
+
+    /// Creates a dataflow region with the same timestamp.
+    ///
+    /// This method is a specialization of `scoped` which uses the same timestamp as the
+    /// containing scope. It is used mainly to group regions of a dataflow computation, and
+    /// provides some computational benefits by abstracting the specifics of the region.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Enter, Leave};
+    ///
+    /// timely::execute_from_args(std::env::args(), |worker| {
+    ///     // must specify types as nothing else drives inference.
+    ///     let input = worker.dataflow::<u64,_,_>(|child1| {
+    ///         let (input, stream) = child1.new_input::<String>();
+    ///         let output = child1.region(|child2| {
+    ///             stream.enter(child2).leave()
+    ///         });
+    ///         input
+    ///     });
+    /// });
+    /// ```
+    fn region<R, F>(&mut self, func: F) -> R
+    where
+        F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
+    {
+        self.scoped::<<Self as ScopeParent>::Timestamp,R,F>("Region", func)
+    }
+
 }
