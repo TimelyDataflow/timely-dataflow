@@ -1,7 +1,7 @@
 //! Hierarchical organization of timely dataflow graphs.
 
 use progress::{Timestamp, Operate};
-use progress::nested::{Source, Target};
+use progress::nested::{Source, Target, Refines};
 // use logging::TimelyLogger as Logger;
 use communication::Allocate;
 use worker::AsWorker;
@@ -78,17 +78,18 @@ pub trait Scope: ScopeParent {
     /// ```
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Enter, Leave};
+    /// use timely::progress::nested::product::Product;
     ///
     /// timely::execute_from_args(std::env::args(), |worker| {
     ///     // must specify types as nothing else drives inference.
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<String>();
-    ///         let output = child1.scoped::<u32,_,_>(|child2| {
+    ///         let output = child1.scoped::<Product<u64,u32>,_,_>(|child2| {
     ///             stream.enter(child2).leave()
     ///         });
     ///         input
     ///     });
     /// });
     /// ```
-    fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R;
+    fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R where T: Refines<<Self as ScopeParent>::Timestamp>;
 }

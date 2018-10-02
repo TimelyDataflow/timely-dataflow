@@ -53,7 +53,7 @@ pub struct Target {
 /// actually creates a `Subgraph`.
 pub struct SubgraphBuilder<TOuter, TInner>
 where
-    TInner: Timestamp+Refines<TOuter>,
+    TInner: Timestamp,
     TOuter: Timestamp,
 {
     /// The name of this subgraph.

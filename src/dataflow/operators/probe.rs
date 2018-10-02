@@ -182,7 +182,7 @@ impl<T: Timestamp> Clone for Handle<T> {
 mod tests {
 
     use ::communication::Configuration;
-    use ::progress::timestamp::RootTimestamp;
+    // use ::progress::timestamp::RootTimestamp;
     use dataflow::operators::{Input, Probe};
 
     #[test]
@@ -200,9 +200,9 @@ mod tests {
             // introduce data and watch!
             for round in 0..10 {
                 assert!(!probe.done());
-                assert!(probe.less_equal(&RootTimestamp::new(round)));
+                assert!(probe.less_equal(&round));
                 // assert!(!probe.less_than(&RootTimestamp::new(round)));
-                assert!(probe.less_than(&RootTimestamp::new(round + 1)));
+                assert!(probe.less_than(&(round + 1)));
                 input.advance_to(round + 1);
                 worker.step();
             }

@@ -17,7 +17,6 @@ pub trait Accumulate<G: Scope, D: Data> {
     /// ```
     /// use timely::dataflow::operators::{ToStream, Accumulate, Capture};
     /// use timely::dataflow::operators::capture::Extract;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// let captured = timely::example(|scope| {
     ///     (0..10).to_stream(scope)
@@ -26,7 +25,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     /// });
     ///
     /// let extracted = captured.extract();
-    /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![45])]);
+    /// assert_eq!(extracted, vec![(0, vec![45])]);
     /// ```
     fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, RefOrMut<Vec<D>>)+'static) -> Stream<G, A>;
     /// Counts the number of records observed at each time.
@@ -36,7 +35,6 @@ pub trait Accumulate<G: Scope, D: Data> {
     /// ```
     /// use timely::dataflow::operators::{ToStream, Accumulate, Capture};
     /// use timely::dataflow::operators::capture::Extract;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// let captured = timely::example(|scope| {
     ///     (0..10).to_stream(scope)
@@ -45,7 +43,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     /// });
     ///
     /// let extracted = captured.extract();
-    /// assert_eq!(extracted, vec![(RootTimestamp::new(0), vec![10])]);
+    /// assert_eq!(extracted, vec![(0, vec![10])]);
     /// ```
     fn count(&self) -> Stream<G, usize> {
         self.accumulate(0, |sum, data| *sum += data.len())

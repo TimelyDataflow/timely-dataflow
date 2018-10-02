@@ -200,9 +200,9 @@ impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>> OutputHandle<'a, T, D, P> {
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    let mut time = cap.time().clone();
-    ///                    time.inner += 1;
-    ///                    output.session(&cap.delayed(&time)).give_vec(&mut data.replace(Vec::new()));
+    ///                    let time = cap.time().clone() + 1;
+    ///                    output.session(&cap.delayed(&time))
+    ///                          .give_vec(&mut data.replace(Vec::new()));
     ///                });
     ///            });
     /// });

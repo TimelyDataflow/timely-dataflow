@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::any::Any;
 use std::time::Instant;
 
+use progress::nested::Refines;
 use progress::timestamp::RootTimestamp;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use communication::{Allocate, Data, Push, Pull};
@@ -104,7 +105,10 @@ impl<A: Allocate> Worker<A> {
     }
 
     /// Construct a new dataflow.
-    pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
+    pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R
+    where
+        T: Refines<RootTimestamp>
+    {
         self.dataflow_using(Box::new(()), |_, child| func(child))
     }
 
@@ -114,7 +118,10 @@ impl<A: Allocate> Worker<A> {
     /// with the dataflow until it has completed running. Once complete, the resources are dropped. The most
     /// common use of this method at present is with loading shared libraries, where the library is important
     /// for building the dataflow, and must be kept around until after the dataflow has completed operation.
-    pub fn dataflow_using<T: Timestamp, R, F:FnOnce(&mut V, &mut Child<Self, T>)->R, V: Any+'static>(&mut self, mut resources: V, func: F) -> R {
+    pub fn dataflow_using<T: Timestamp, R, F:FnOnce(&mut V, &mut Child<Self, T>)->R, V: Any+'static>(&mut self, mut resources: V, func: F) -> R
+    where
+        T: Refines<RootTimestamp>,
+    {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();

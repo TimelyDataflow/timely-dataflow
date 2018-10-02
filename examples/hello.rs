@@ -1,6 +1,6 @@
 extern crate timely;
 
-use timely::dataflow::InputHandle;
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
 fn main() {
@@ -9,14 +9,15 @@ fn main() {
 
         let index = worker.index();
         let mut input = InputHandle::new();
+        let mut probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
-        let probe = worker.dataflow(|scope|
+        worker.dataflow(|scope| {
             scope.input_from(&mut input)
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
-                 .probe()
-        );
+                 .probe_with(&mut probe);
+        });
 
         // introduce data and watch!
         for round in 0..10 {

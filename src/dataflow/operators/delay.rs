@@ -24,11 +24,10 @@ pub trait Delay<G: Scope, D: Data> {
     /// ```
     /// use timely::dataflow::operators::{ToStream, Delay, Operator};
     /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .delay(|data, time| RootTimestamp::new(*data))
+    ///            .delay(|data, time| *data)
     ///            .sink(Pipeline, "example", |input| {
     ///                input.for_each(|time, data| {
     ///                    println!("data at time: {:?}", time);
@@ -46,17 +45,16 @@ pub trait Delay<G: Scope, D: Data> {
     ///
     /// # Examples
     ///
-    /// The following example takes the sequence `0..10` at time `RootTimestamp(0)`
-    /// and delays each batch (there is just one) to time `RootTimestamp(1)`.
+    /// The following example takes the sequence `0..10` at time `0`
+    /// and delays each batch (there is just one) to time `1`.
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Delay, Operator};
     /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .delay_batch(|time| RootTimestamp::new(time.inner + 1))
+    ///            .delay_batch(|time| time + 1)
     ///            .sink(Pipeline, "example", |input| {
     ///                input.for_each(|time, data| {
     ///                    println!("data at time: {:?}", time);
