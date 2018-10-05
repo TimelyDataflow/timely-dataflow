@@ -12,7 +12,7 @@ use progress::nested::{Source, Target};
 use progress::ChangeBatch;
 
 use progress::nested::product::Product;
-use progress::nested::Summary::Local;
+// use progress::nested::Summary::Local;
 
 use dataflow::channels::Bundle;
 use dataflow::channels::pushers::{Counter, Tee};
@@ -64,7 +64,7 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
         let index = self.add_operator(Box::new(Operator {
             consumed_messages:  consumed,
             produced_messages:  produced,
-            summary:            Local(summary),
+            summary:            Product::new(Default::default(), summary),
         }));
 
         let helper = Handle {

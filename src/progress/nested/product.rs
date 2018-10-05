@@ -5,7 +5,7 @@ use std::fmt::{Formatter, Error, Debug};
 
 use ::order::{PartialOrder, TotalOrder};
 use progress::Timestamp;
-use progress::nested::summary::Summary;
+// use progress::nested::summary::Summary;
 
 use abomonation::Abomonation;
 
@@ -19,12 +19,12 @@ impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, T
         self.outer
     }
     fn summarize(path: <Self as Timestamp>::Summary) -> <TOuter as Timestamp>::Summary {
-        use progress::nested::summary::Summary;
-        match path {
-            Summary::Local(_) => Default::default(),
-            Summary::Outer(y, _) => y,
-        }
-
+        path.outer
+        // use progress::nested::summary::Summary;
+        // match path {
+        //     Summary::Local(_) => Default::default(),
+        //     Summary::Outer(y, _) => y,
+        // }
     }
 }
 
@@ -63,28 +63,29 @@ impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for Product<TOuter
         self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
     }
 }
-// impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInner> {
-//     #[inline(always)]
-//     fn partial_cmp(&self, other: &Product<TOuter, TInner>) -> Option<Ordering> {
-//         match (self <= other, other <= self) {
-//             (true, true)   => Some(Ordering::Equal),
-//             (true, false)  => Some(Ordering::Less),
-//             (false, true)  => Some(Ordering::Greater),
-//             (false, false) => None,
-//         }
-//     }
-//     #[inline(always)]
-//     fn le(&self, other: &Product<TOuter, TInner>) -> bool {
-//         self.inner <= other.inner && self.outer <= other.outer
-//     }
-//     #[inline(always)]
-//     fn ge(&self, other: &Product<TOuter, TInner>) -> bool {
-//         self.inner >= other.inner && self.outer >= other.outer
-//     }
-// }
 
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner> {
-    type Summary = Summary<TOuter::Summary, TInner::Summary>;
+    type Summary = Product<TOuter::Summary, TInner::Summary>;
+}
+
+use progress::timestamp::PathSummary;
+impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<Product<TOuter, TInner>> for Product<TOuter::Summary, TInner::Summary> {
+    #[inline]
+    fn results_in(&self, product: &Product<TOuter, TInner>) -> Option<Product<TOuter, TInner>> {
+        self.outer.results_in(&product.outer)
+            .and_then(|outer|
+                self.inner.results_in(&product.inner)
+                    .map(|inner| Product::new(outer, inner))
+            )
+    }
+    #[inline]
+    fn followed_by(&self, other: &Product<TOuter::Summary, TInner::Summary>) -> Option<Product<TOuter::Summary, TInner::Summary>> {
+        self.outer.followed_by(&other.outer)
+            .and_then(|outer|
+                self.inner.followed_by(&other.inner)
+                    .map(|inner| Product::new(outer, inner))
+            )
+    }
 }
 
 impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
