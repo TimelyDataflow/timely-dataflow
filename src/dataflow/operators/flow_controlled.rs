@@ -35,19 +35,17 @@ pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: I
 /// # Example
 /// ```rust
 /// extern crate timely;
-/// 
+///
 /// use timely::dataflow::operators::flow_controlled::{iterator_source, IteratorSourceInput};
 /// use timely::dataflow::operators::{probe, Probe, Inspect};
-/// 
-/// use timely::progress::timestamp::RootTimestamp;
-/// 
+///
 /// fn main() {
 ///     timely::execute_from_args(std::env::args(), |worker| {
 ///         let mut input = (0u64..100000).peekable();
 ///         worker.dataflow(|scope| {
 ///             let mut probe_handle = probe::Handle::new();
 ///             let probe_handle_2 = probe_handle.clone();
-/// 
+///
 ///             let mut next_t: u64 = 0;
 ///             iterator_source(
 ///                 scope,
@@ -58,7 +56,7 @@ pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: I
 ///                         Some(IteratorSourceInput {
 ///                             lower_bound: Default::default(),
 ///                             data: vec![
-///                                 (RootTimestamp::new(next_t),
+///                                 (next_t,
 ///                                  input.by_ref().take(10).map(|x| (/* "timestamp" */ x, x)).collect::<Vec<_>>())],
 ///                             target: *prev_t,
 ///                         })

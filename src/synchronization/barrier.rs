@@ -1,8 +1,6 @@
 //! Barrier synchronization.
 
 use ::communication::Allocate;
-// use progress::timestamp::RootTimestamp;
-// use progress::nested::product::Product;
 use dataflow::{InputHandle, ProbeHandle};
 use worker::Worker;
 

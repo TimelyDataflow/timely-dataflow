@@ -5,8 +5,7 @@ use std::cell::RefCell;
 use std::any::Any;
 use std::time::Instant;
 
-use progress::nested::Refines;
-use progress::timestamp::RootTimestamp;
+use progress::timestamp::{Refines};
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use communication::{Allocate, Data, Push, Pull};
 use dataflow::scopes::Child;
@@ -107,7 +106,7 @@ impl<A: Allocate> Worker<A> {
     /// Construct a new dataflow.
     pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R
     where
-        T: Refines<RootTimestamp>
+        T: Refines<()>
     {
         self.dataflow_using(Box::new(()), |_, child| func(child))
     }
@@ -120,7 +119,7 @@ impl<A: Allocate> Worker<A> {
     /// for building the dataflow, and must be kept around until after the dataflow has completed operation.
     pub fn dataflow_using<T: Timestamp, R, F:FnOnce(&mut V, &mut Child<Self, T>)->R, V: Any+'static>(&mut self, mut resources: V, func: F) -> R
     where
-        T: Refines<RootTimestamp>,
+        T: Refines<()>,
     {
 
         let addr = vec![self.allocator.borrow().index()];
@@ -189,7 +188,7 @@ impl<A: Allocate> Clone for Worker<A> {
 
 struct Wrapper {
     _index: usize,
-    operate: Option<Box<Operate<RootTimestamp>>>,
+    operate: Option<Box<Operate<()>>>,
     resources: Option<Box<Any>>,
 }
 

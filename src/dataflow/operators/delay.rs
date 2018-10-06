@@ -19,8 +19,8 @@ pub trait Delay<G: Scope, D: Data> {
     ///
     /// # Examples
     ///
-    /// The following example takes the sequence `0..10` at time `RootTimestamp(0)`
-    /// and delays each element `i` to time `RootTimestamp(i)`.
+    /// The following example takes the sequence `0..10` at time `0`
+    /// and delays each element `i` to time `i`.
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Delay, Operator};
@@ -46,8 +46,8 @@ pub trait Delay<G: Scope, D: Data> {
     ///
     /// # Examples
     ///
-    /// The following example takes the sequence `0..10` at time `RootTimestamp(0)`
-    /// and delays each element `i` to time `RootTimestamp(i)`.
+    /// The following example takes the sequence `0..10` at time `0`
+    /// and delays each element `i` to time `i`.
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Delay, Operator};

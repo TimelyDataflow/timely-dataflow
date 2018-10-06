@@ -3,14 +3,11 @@
 use std::fmt::Debug;
 use std::any::Any;
 use std::default::Default;
-use std::fmt::Formatter;
-use std::fmt::Error;
 use std::hash::Hash;
 
-use order::PartialOrder;
-use progress::nested::product::Product;
-
 use abomonation::Abomonation;
+
+use order::PartialOrder;
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
 pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation+Hash+Ord {
@@ -63,84 +60,77 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     fn followed_by(&self, other: &Self) -> Option<Self>;
 }
 
-/// An empty timestamp used by the root scope.
-#[derive(Copy, Clone, Hash, Eq, Ord, PartialOrd, PartialEq, Default)]
-pub struct RootTimestamp;
-impl Timestamp for RootTimestamp { type Summary = RootSummary; }
-impl Debug for RootTimestamp {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        f.write_str("Root")
-    }
-}
-
-impl PartialOrder for RootTimestamp { #[inline(always)] fn less_equal(&self, _other: &Self) -> bool { true } }
-
-impl Abomonation for RootTimestamp { }
-impl RootTimestamp {
-    /// Constructs a new `Product<RootTimestamp,T>`.
-    #[inline]
-    pub fn new<T: Timestamp>(t: T) -> Product<RootTimestamp, T> {
-        Product::new(RootTimestamp, t)
-    }
-}
-
-/// An empty path summary for root timestamps.
-#[derive(Copy, Clone, Eq, Ord, PartialOrd, PartialEq, Debug, Default)]
-pub struct RootSummary;
-impl PathSummary<RootTimestamp> for RootSummary {
-    #[inline]
-    fn results_in(&self, _: &RootTimestamp) -> Option<RootTimestamp> { Some(RootTimestamp) }
-    #[inline]
-    fn followed_by(&self, _: &RootSummary) -> Option<RootSummary> { Some(RootSummary) }
-}
-
-impl PartialOrder for RootSummary { #[inline(always)] fn less_equal(&self, _other: &Self) -> bool { true } }
-
-
 impl Timestamp for () { type Summary = (); }
 impl PathSummary<()> for () {
-    fn results_in(&self, _src: &()) -> Option<()> { Some(()) }
-    fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
+    #[inline(always)] fn results_in(&self, _src: &()) -> Option<()> { Some(()) }
+    #[inline(always)] fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
 }
 
-impl Timestamp for usize { type Summary = usize; }
-impl PathSummary<usize> for usize {
-    #[inline]
-    fn results_in(&self, src: &usize) -> Option<usize> { self.checked_add(*src) }
-    #[inline]
-    fn followed_by(&self, other: &usize) -> Option<usize> { self.checked_add(*other) }
+/// Implements Timestamp and PathSummary for types with a `checked_add` method.
+macro_rules! implement_timestamp_add {
+    ($($index_type:ty,)*) => (
+        $(
+            impl Timestamp for $index_type { type Summary = $index_type; }
+            impl PathSummary<$index_type> for $index_type {
+                #[inline]
+                fn results_in(&self, src: &$index_type) -> Option<$index_type> { self.checked_add(*src) }
+                #[inline]
+                fn followed_by(&self, other: &$index_type) -> Option<$index_type> { self.checked_add(*other) }
+            }
+        )*
+    )
 }
 
-impl Timestamp for u64 { type Summary = u64; }
-impl PathSummary<u64> for u64 {
-    #[inline]
-    fn results_in(&self, src: &u64) -> Option<u64> { self.checked_add(*src) }
-    #[inline]
-    fn followed_by(&self, other: &u64) -> Option<u64> { self.checked_add(*other) }
-}
+implement_timestamp_add!(usize, u64, u32, u16, u8, i32, ::std::time::Duration,);
 
-impl Timestamp for u32 { type Summary = u32; }
-impl PathSummary<u32> for u32 {
-    #[inline]
-    fn results_in(&self, src: &u32) -> Option<u32> { self.checked_add(*src) }
-    #[inline]
-    fn followed_by(&self, other: &u32) -> Option<u32> { self.checked_add(*other) }
-}
+pub use self::refines::Refines;
+mod refines {
 
-impl Timestamp for i32 { type Summary = i32; }
-impl PathSummary<i32> for i32 {
-    #[inline]
-    fn results_in(&self, src: &i32) -> Option<i32> { self.checked_add(*src) }
-    #[inline]
-    fn followed_by(&self, other: &i32) -> Option<i32> { self.checked_add(*other) }
-}
+    use progress::Timestamp;
 
-use std::time::Duration;
-impl Timestamp for Duration { type Summary = Duration; }
-impl PathSummary<Duration> for Duration {
-    #[inline]
-    fn results_in(&self, src: &Duration) -> Option<Duration> { self.checked_add(*src) }
-    #[inline]
-    fn followed_by(&self, other: &Duration) -> Option<Duration> { self.checked_add(*other) }
+    /// Conversion between pointstamp types.
+    ///
+    /// This trait is central to nested scopes, for which the inner timestamp must be
+    /// related to the outer timestamp. These methods define those relationships.
+    ///
+    /// It would be ideal to use Rust's From and Into traits, but they seem to be messed
+    /// up due to coherence: we can't implement `Into` because it induces a from implementation
+    /// we can't control.
+    pub trait Refines<T: Timestamp> : Timestamp {
+        /// Converts the outer timestamp to an inner timestamp.
+        fn to_inner(other: T) -> Self;
+        /// Converts the inner timestamp to an outer timestamp.
+        fn to_outer(self) -> T;
+        /// Summarizes an inner path summary as an outer path summary.
+        ///
+        /// It is crucial for correctness that the result of this summarization's `results_in`
+        /// method is equivalent to `|time| path.results_in(time.to_inner()).to_outer()`, or
+        /// at least produces times less or equal to that result.
+        fn summarize(path: <Self as Timestamp>::Summary) -> <T as Timestamp>::Summary;
+    }
+
+    /// All types "refine" themselves,
+    impl<T: Timestamp> Refines<T> for T {
+        fn to_inner(other: T) -> T { other }
+        fn to_outer(self) -> T { self }
+        fn summarize(path: <T as Timestamp>::Summary) -> <T as Timestamp>::Summary { path }
+    }
+
+    /// Implements `Refines<()>` for most types.
+    ///
+    /// We have a macro here because a blanket implement would conflict with the "refines self"
+    /// blanket implementation just above. Waiting on specialization to fix that, I guess.
+    macro_rules! implement_refines_empty {
+        ($($index_type:ty,)*) => (
+            $(
+                impl Refines<()> for $index_type {
+                    fn to_inner(_: ()) -> $index_type { Default::default() }
+                    fn to_outer(self) -> () { () }
+                    fn summarize(_: <$index_type as Timestamp>::Summary) -> () { () }
+                }
+            )*
+        )
+    }
+
+    implement_refines_empty!(usize, u64, u32, u16, u8, i32, ::std::time::Duration,);
 }

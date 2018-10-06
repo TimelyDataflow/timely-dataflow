@@ -306,7 +306,6 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::progress::timestamp::RootTimestamp;
     /// use timely::dataflow::Scope;
     ///
     /// timely::example(|scope| {

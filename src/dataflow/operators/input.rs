@@ -7,13 +7,11 @@ use std::default::Default;
 use progress::frontier::Antichain;
 use progress::{Operate, Timestamp, ChangeBatch};
 use progress::nested::Source;
-// use progress::timestamp::RootTimestamp;
 
 use Data;
 use communication::Push;
 use dataflow::{Stream, ScopeParent, Scope};
 use dataflow::channels::{Message, pushers::{Tee, Counter}};
-// use worker::Worker;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.

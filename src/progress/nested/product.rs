@@ -1,15 +1,13 @@
-//! A pair timestamp suitable for use with the product partial order.
+//! A product-order timestamp combinator
 
-// use std::cmp::Ordering;
 use std::fmt::{Formatter, Error, Debug};
 
 use ::order::{PartialOrder, TotalOrder};
 use progress::Timestamp;
-// use progress::nested::summary::Summary;
 
 use abomonation::Abomonation;
 
-use super::Refines;
+use progress::timestamp::Refines;
 
 impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, TInner> {
     fn to_inner(other: TOuter) -> Self {
@@ -20,11 +18,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, T
     }
     fn summarize(path: <Self as Timestamp>::Summary) -> <TOuter as Timestamp>::Summary {
         path.outer
-        // use progress::nested::summary::Summary;
-        // match path {
-        //     Summary::Local(_) => Default::default(),
-        //     Summary::Outer(y, _) => y,
-        // }
     }
 }
 
@@ -89,7 +82,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<Product<TOuter, TInner>> 
 }
 
 impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
-    // unsafe fn embalm(&mut self) { self.outer.embalm(); self.inner.embalm(); }
     unsafe fn entomb<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
         self.outer.entomb(write)?;
         self.inner.entomb(write)?;
@@ -109,9 +101,6 @@ impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, T
 /// public traits for public types.
 pub trait Empty : PartialOrder { }
 
-use progress::timestamp::RootTimestamp;
-
-impl Empty for RootTimestamp { }
 impl Empty for () { }
 impl<T1: Empty, T2: Empty> Empty for Product<T1, T2> { }
 

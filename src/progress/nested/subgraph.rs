@@ -16,7 +16,8 @@ use progress::{Timestamp, Operate};
 
 use progress::ChangeBatch;
 use progress::broadcast::Progcaster;
-use progress::nested::{reachability, Refines};
+use progress::nested::reachability;
+use progress::timestamp::Refines;
 
 // IMPORTANT : by convention, a child identifier of zero is used to indicate inputs and outputs of
 // the Subgraph itself. An identifier greater than zero corresponds to an actual child, which can

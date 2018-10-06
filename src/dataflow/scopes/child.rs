@@ -3,7 +3,8 @@
 use std::cell::RefCell;
 
 use progress::{Timestamp, Operate, SubgraphBuilder};
-use progress::nested::{Refines, Source, Target};
+use progress::nested::{Source, Target};
+use progress::timestamp::Refines;
 use progress::nested::product::Product;
 use communication::{Allocate, Data, Push, Pull};
 use logging::TimelyLogger as Logger;

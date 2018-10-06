@@ -1,8 +1,7 @@
 extern crate timely;
 
+use timely::progress::nested::product::Product;
 use timely::dataflow::channels::pact::Pipeline;
-use timely::progress::timestamp::RootTimestamp;
-
 use timely::dataflow::operators::{LoopVariable, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
 
@@ -17,7 +16,7 @@ fn main() {
             stream.unary_notify(
                 Pipeline,
                 "Barrier",
-                vec![RootTimestamp::new(0)],
+                vec![Product::new((), 0)],
                 move |_, _, notificator| {
                     while let Some((cap, _count)) = notificator.next() {
                         let mut time = cap.time().clone();

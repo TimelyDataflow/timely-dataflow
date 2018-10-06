@@ -24,7 +24,6 @@ pub trait Probe<G: Scope, D: Data> {
     /// use timely::*;
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Probe, Inspect};
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Configuration::Thread, |worker| {
@@ -55,7 +54,6 @@ pub trait Probe<G: Scope, D: Data> {
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Probe, Inspect};
     /// use timely::dataflow::operators::probe::Handle;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Configuration::Thread, |worker| {
@@ -182,7 +180,6 @@ impl<T: Timestamp> Clone for Handle<T> {
 mod tests {
 
     use ::communication::Configuration;
-    // use ::progress::timestamp::RootTimestamp;
     use dataflow::operators::{Input, Probe};
 
     #[test]
@@ -201,7 +198,6 @@ mod tests {
             for round in 0..10 {
                 assert!(!probe.done());
                 assert!(probe.less_equal(&round));
-                // assert!(!probe.less_than(&RootTimestamp::new(round)));
                 assert!(probe.less_than(&(round + 1)));
                 input.advance_to(round + 1);
                 worker.step();

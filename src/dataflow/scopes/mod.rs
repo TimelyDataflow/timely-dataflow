@@ -1,16 +1,14 @@
 //! Hierarchical organization of timely dataflow graphs.
 
 use progress::{Timestamp, Operate};
-use progress::nested::{Source, Target, Refines, product::Product};
-// use logging::TimelyLogger as Logger;
+use progress::nested::{Source, Target, product::Product};
+use progress::timestamp::Refines;
 use communication::Allocate;
 use worker::AsWorker;
 
-// pub mod root;
 pub mod child;
 
 pub use self::child::Child;
-// pub use self::root::Root;
 
 /// The information a child scope needs from its parent.
 pub trait ScopeParent: AsWorker+Clone {
@@ -19,7 +17,7 @@ pub trait ScopeParent: AsWorker+Clone {
 }
 
 impl<A: Allocate> ScopeParent for ::worker::Worker<A> {
-    type Timestamp = ::progress::timestamp::RootTimestamp;
+    type Timestamp = ();
 }
 
 
@@ -32,7 +30,7 @@ pub trait Scope: ScopeParent {
     /// A useful name describing the scope.
     fn name(&self) -> String;
 
-    /// A sequence of scope identifiers describing the path from the `Root` to this scope.
+    /// A sequence of scope identifiers describing the path from the worker root to this scope.
     fn addr(&self) -> Vec<usize>;
 
     /// Connects a source of data with a target of the data. This only links the two for
