@@ -19,7 +19,7 @@ use dataflow::channels::pushers::{Counter, Tee};
 use worker::AsWorker;
 
 use dataflow::{Stream, Scope, ScopeParent};
-use dataflow::scopes::child::Iterative as Child;
+use dataflow::scopes::child::Iterative;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
@@ -45,11 +45,11 @@ pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>);
+    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Iterative<'a, G, T>, D>);
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T> {
-    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>) {
+impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
+    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Iterative<'a, G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
 
@@ -125,7 +125,7 @@ pub trait ConnectLoop<G: ScopeParent, T: Timestamp, D: Data> {
     fn connect_loop(&self, Handle<G::Timestamp, T, D>);
 }
 
-impl<'a, G: ScopeParent, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<'a, G, T>, D> {
+impl<'a, G: ScopeParent, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Iterative<'a, G, T>, D> {
     fn connect_loop(&self, helper: Handle<G::Timestamp, T, D>) {
         let channel_id = self.scope().new_identifier();
         self.connect_to(Target { index: helper.index, port: 0 }, helper.target, channel_id);

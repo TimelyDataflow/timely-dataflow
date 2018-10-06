@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 - Many logging events have been rationalized. Operators and Channels should all have a worker-unique identifier that can be used to connect their metadata with events involving them. Previously this was a bit of a shambles.
 
+- The `Scope` method `scoped` now allows supports new scopes with non-`Product` timestamps. Instead, the new timestamp must implement `Refines<_>` of the parent timestamp. This is the case for `Product` timestamps, but each timestamp also refines itself (allowing logical regions w/o changing the timestamp), and other timestamp combinators (e.g. Lexicographic) can be used.
+
+- Timestamps no longer need to be `Product<RootTimestamp,_>`. Instead, the `_` can be used as the timestamp. The exception here is that the creation of loop variables requires a `Product<_,_>` structured timestamp, and so as much as you might like to have a scope with a `usize` timestamp and a loop, and you *should* be able to, you cannot yet without making the type `Product<(), usize>`.
+
+- The `RootTimestamp` and `RootSummary` types have been excised. Where you previously used `Product<RootTimestamp,T>` you can now use `Product<(),T>`, or even better just `T`. The requirement of a worker's `dataflow()` method is that the timestamp type implement `Refines<()>`, which .. ideally would be true for all timestamps but we can't have a blanket implementation until specialization lands (I believe).
+
 ## 0.7.0
 
 ### Added
