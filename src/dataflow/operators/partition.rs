@@ -18,7 +18,7 @@ use dataflow::{Stream, Scope};
 pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
     /// Produces `parts` output streams, containing records produced and assigned by `route`.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Partition, Inspect};
     ///
@@ -51,7 +51,7 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
         }
 
         let operator = Operator::new(PullCounter::new(receiver), targets, route);
-        let index = scope.add_operator(operator);
+        let index = scope.add_operator(Box::new(operator));
         self.connect_to(Target { index, port: 0 }, sender, channel_id);
 
         let mut results = Vec::new();
@@ -88,8 +88,12 @@ impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operato
                                         _internal: &mut [ChangeBatch<T>],
                                          produced: &mut [ChangeBatch<T>]) -> bool {
 
-        while let Some((time, data)) = self.input.next() {
+        while let Some(message) = self.input.next() {
+
             let outputs = self.outputs.iter_mut();
+            let mut message = message.as_mut();
+            let time = &message.time;
+            let data = &mut message.data;
 
             // TODO : This results in small sends for many parts, as sessions does the buffering
             let mut sessions: Vec<_> = outputs.map(|x| x.session(time)).collect();

@@ -1,28 +1,28 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use dataflow::channels::Content;
+use dataflow::channels::{Bundle, Message};
 use progress::Timestamp;
 use dataflow::operators::Capability;
-use timely_communication::Push;
+use communication::Push;
 
 /// Buffers data sent at the same time, for efficient communication.
 ///
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
 /// data must be flushed and creates a `Session` object which allows sending at the given time.
-pub struct Buffer<T, D, P: Push<(T, Content<D>)>> {
+pub struct Buffer<T, D, P: Push<Bundle<T, D>>> {
     time: Option<T>,  // the currently open time, if it is open
     buffer: Vec<D>,   // a buffer for records, to send at self.time
     pusher: P,
 }
 
-impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
+impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
 
     /// Creates a new `Buffer`.
     pub fn new(pusher: P) -> Buffer<T, D, P> {
         Buffer {
             time: None,
-            buffer: Vec::with_capacity(Content::<D>::default_length()),
+            buffer: Vec::with_capacity(Message::<T, D>::default_length()),
             pusher,
         }
     }
@@ -58,7 +58,7 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
     fn flush(&mut self) {
         if !self.buffer.is_empty() {
             let time = self.time.as_ref().unwrap().clone();
-            Content::push_at(&mut self.buffer, time, &mut self.pusher);
+            Message::push_at(&mut self.buffer, time, &mut self.pusher);
         }
     }
 
@@ -72,20 +72,14 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
     }
 
     // Gives an entire message at a specific time.
-    fn give_content(&mut self, content: &mut Content<D>) {
+    fn give_vec(&mut self, vector: &mut Vec<D>) {
         // flush to ensure fifo-ness
         if !self.buffer.is_empty() {
             self.flush();
         }
 
-        let time = self.time.as_ref().unwrap().clone();
-        let data = ::std::mem::replace(content, Content::Typed(Vec::new()));
-        let mut message = Some((time, data));
-
-        self.pusher.push(&mut message);
-        if let Some((_, data)) = message {
-            *content = data;
-        }
+        let time = self.time.as_ref().expect("Buffer::give_vec(): time is None.").clone();
+        Message::push_at(vector, time, &mut self.pusher);
     }
 }
 
@@ -95,11 +89,11 @@ impl<T, D, P: Push<(T, Content<D>)>> Buffer<T, D, P> where T: Eq+Clone {
 /// The `Session` struct provides the user-facing interface to an operator output, namely
 /// the `Buffer` type. A `Session` wraps a session of output at a specified time, and
 /// avoids what would otherwise be a constant cost of checking timestamp equality.
-pub struct Session<'a, T, D, P: Push<(T, Content<D>)>+'a> where T: Eq+Clone+'a, D: 'a {
+pub struct Session<'a, T, D, P: Push<Bundle<T, D>>+'a> where T: Eq+Clone+'a, D: 'a {
     buffer: &'a mut Buffer<T, D, P>,
 }
 
-impl<'a, T, D, P: Push<(T, Content<D>)>+'a> Session<'a, T, D, P>  where T: Eq+Clone+'a, D: 'a {
+impl<'a, T, D, P: Push<Bundle<T, D>>+'a> Session<'a, T, D, P>  where T: Eq+Clone+'a, D: 'a {
     /// Provides one record at the time specified by the `Session`.
     #[inline(always)]
     pub fn give(&mut self, data: D) {
@@ -118,15 +112,15 @@ impl<'a, T, D, P: Push<(T, Content<D>)>+'a> Session<'a, T, D, P>  where T: Eq+Cl
     /// often be more efficient to re-use this memory rather than have timely allocate
     /// new backing memory.
     #[inline(always)]
-    pub fn give_content(&mut self, message: &mut Content<D>) {
+    pub fn give_vec(&mut self, message: &mut Vec<D>) {
         if message.len() > 0 {
-            self.buffer.give_content(message);
+            self.buffer.give_vec(message);
         }
     }
 }
 
 /// A session which will flush itself when dropped.
-pub struct AutoflushSession<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> where
+pub struct AutoflushSession<'a, T: Timestamp, D, P: Push<Bundle<T, D>>+'a> where
     T: Eq+Clone+'a, D: 'a {
     /// A reference to the underlying buffer.
     buffer: &'a mut Buffer<T, D, P>,
@@ -134,7 +128,7 @@ pub struct AutoflushSession<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> wh
     _capability: Capability<T>,
 }
 
-impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {
+impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>+'a> AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {
     /// Transmits a single record.
     #[inline(always)]
     pub fn give(&mut self, data: D) {
@@ -149,14 +143,14 @@ impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> AutoflushSession<'a, T, D
     }
     /// Transmits a pre-packed batch of data.
     #[inline(always)]
-    pub fn give_content(&mut self, message: &mut Content<D>) {
+    pub fn give_content(&mut self, message: &mut Vec<D>) {
         if message.len() > 0 {
-            self.buffer.give_content(message);
+            self.buffer.give_vec(message);
         }
     }
 }
 
-impl<'a, T: Timestamp, D, P: Push<(T, Content<D>)>+'a> Drop for AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {
+impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>+'a> Drop for AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {
     fn drop(&mut self) {
         self.buffer.cease();
     }

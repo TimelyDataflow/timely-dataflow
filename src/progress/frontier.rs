@@ -93,7 +93,7 @@ pub struct MutableAntichain<T: PartialOrder+Ord> {
 impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// Creates a new empty `MutableAntichain`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::MutableAntichain;
@@ -113,7 +113,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
 
     /// Removes all elements.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::MutableAntichain;
@@ -138,7 +138,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
 
     /// Reveals the minimal elements with positive count.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::MutableAntichain;
@@ -154,7 +154,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
 
     /// Creates a new singleton `MutableAntichain`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
@@ -167,14 +167,14 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         MutableAntichain {
             dirty: 0,
             updates: vec![(bottom.clone(), 1)],
-            frontier: vec![bottom.clone()],
+            frontier: vec![bottom],
             frontier_temp: Vec::new(),
         }
     }
 
     /// Returns true if there are no elements in the `MutableAntichain`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::MutableAntichain;
@@ -190,7 +190,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
 
     /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::MutableAntichain;
@@ -209,7 +209,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
     #[inline]
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::MutableAntichain;
@@ -240,7 +240,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     ///
     /// This method applies a batch of updates and if any affects the frontier it is rebuilt.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
@@ -263,7 +263,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// Once rebuilt, `action` is called with the corresponding changes to the frontier, which
     /// should be various times and `{ +1, -1 }` differences.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
@@ -352,6 +352,15 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         }
         self.frontier_temp.clear();
     }
+
+    /// Reports the count for a queried time.
+    pub fn count_for(&self, query_time: &T) -> i64 {
+        self.updates
+            .iter()
+            .filter(|td| td.0.eq(query_time))
+            .map(|td| td.1)
+            .sum()
+    }
 }
 
 /// A wrapper for elements of an antichain.
@@ -371,7 +380,7 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
 
     /// Returns true if there are no elements in the `AntichainRef`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::AntichainRef;
@@ -386,7 +395,7 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
 
     /// Create an iterator over the elements in this `AntichainRef`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::AntichainRef;
@@ -402,7 +411,7 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
 
     /// Returns true if any item in the `AntichainRef` is strictly less than the argument.
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::AntichainRef;
@@ -420,7 +429,7 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
     /// Returns true if any item in the `AntichainRef` is less than or equal to the argument.
     #[inline]
     ///
-    /// #Examples
+    /// # Examples
     ///
     ///```
     /// use timely::progress::frontier::AntichainRef;

@@ -7,7 +7,6 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::ops::DerefMut;
 
 use ::Data;
 use dataflow::{Scope, Stream};
@@ -24,7 +23,7 @@ use super::{Event, EventPusher};
 pub trait Capture<T: Timestamp, D: Data> {
     /// Captures a stream of timestamped data for later replay.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// The type `Rc<EventLink<T,D>>` implements a typed linked list,
     /// and can be captured into and replayed from.
@@ -140,10 +139,18 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
                 }
             },
             move |consumed, _internal, _external| {
+
+                use communication::message::RefOrMut;
+
                 // turn each received message into an event.
                 let mut borrow = event_pusher2.borrow_mut();
-                while let Some((time, data)) = input.next() {
-                    borrow.push(Event::Messages(time.clone(), data.deref_mut().clone()));
+                while let Some(message) = input.next() {
+                    let (time, data) = match message.as_ref_or_mut() {
+                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
+                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
+                    };
+                    let vector = data.replace(Vec::new());
+                    borrow.push(Event::Messages(time.clone(), vector));
                 }
                 input.consumed().borrow_mut().drain_into(&mut consumed[0]);
                 false

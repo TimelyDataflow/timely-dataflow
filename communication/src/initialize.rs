@@ -7,8 +7,14 @@ use std::io::BufRead;
 use getopts;
 use std::sync::Arc;
 
-use allocator::{Thread, Process, Generic};
-use networking::initialize_networking;
+use std::any::Any;
+
+use allocator::{AllocateBuilder, Thread, Process, Generic, GenericBuilder};
+use allocator::zero_copy::initialize::initialize_networking;
+
+use ::logging::{CommunicationSetup, CommunicationEvent};
+use logging_core::Logger;
+
 
 /// Possible configurations for the communication infrastructure.
 pub enum Configuration {
@@ -17,7 +23,7 @@ pub enum Configuration {
     /// Use one process with an indicated number of threads.
     Process(usize),
     /// Expect multiple processes indicated by `(threads, process, host_list, report)`.
-    Cluster(usize, usize, Vec<String>, bool)
+    Cluster(usize, usize, Vec<String>, bool, Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
 }
 
 #[cfg(feature = "arg_parse")]
@@ -65,26 +71,31 @@ impl Configuration {
                 }
 
                 assert!(processes == addresses.len());
-                Configuration::Cluster(threads, process, addresses, report)
+                Configuration::Cluster(threads, process, addresses, report, Box::new(|_| None))
             }
             else if threads > 1 { Configuration::Process(threads) }
             else { Configuration::Thread }
         })
     }
-}
 
-fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>) -> Result<Vec<Generic>,String> {
-    match config {
-        Configuration::Thread => Ok(vec![Generic::Thread(Thread)]),
-        Configuration::Process(threads) => Ok(Process::new_vector(threads).into_iter().map(Generic::Process).collect()),
-        Configuration::Cluster(threads, process, addresses, report) => {
-            if let Ok(stuff) = initialize_networking(addresses, process, threads, report, logger) {
-                Ok(stuff.into_iter().map(Generic::Binary).collect())
-            }
-            else {
-                Err("failed to initialize networking".to_owned())
-            }
-        },
+    /// Attempts to assemble the described communication infrastructure.
+    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
+        match self {
+            Configuration::Thread => {
+                Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
+            },
+            Configuration::Process(threads) => {
+                Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
+            },
+            Configuration::Cluster(threads, process, addresses, report, log_fn) => {
+                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, log_fn) {
+                    Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
+                }
+                else {
+                    Err("failed to initialize networking".to_owned())
+                }
+            },
+        }
     }
 }
 
@@ -96,33 +107,36 @@ fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup
 /// (or errors) of the workers.
 ///
 ///
-/// #Examples
+/// # Examples
 /// ```
+/// use timely_communication::Allocate;
+///
 /// // configure for two threads, just one process.
 /// let config = timely_communication::Configuration::Process(2);
 ///
-/// // create a source of inactive loggers.
-/// let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
-///
 /// // initializes communication, spawns workers
-/// let guards = timely_communication::initialize(config, logger, |mut allocator| {
+/// let guards = timely_communication::initialize(config, |mut allocator| {
 ///     println!("worker {} started", allocator.index());
 ///
 ///     // allocates pair of senders list and one receiver.
-///     let (mut senders, mut receiver, _) = allocator.allocate();
+///     let (mut senders, mut receiver) = allocator.allocate(0);
 ///
 ///     // send typed data along each channel
-///     senders[0].send(format!("hello, {}", 0));
-///     senders[1].send(format!("hello, {}", 1));
+///     use timely_communication::Message;
+///     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
+///     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
 ///
 ///     // no support for termination notification,
 ///     // we have to count down ourselves.
 ///     let mut expecting = 2;
 ///     while expecting > 0 {
+///         allocator.pre_work();
 ///         if let Some(message) = receiver.recv() {
-///             println!("worker {}: received: <{}>", allocator.index(), message);
+///             use std::ops::Deref;
+///             println!("worker {}: received: <{}>", allocator.index(), message.deref());
 ///             expecting -= 1;
 ///         }
+///         allocator.post_work();
 ///     }
 ///
 ///     // optionally, return something
@@ -152,35 +166,98 @@ fn create_allocators(config: Configuration, logger: Arc<Fn(::logging::CommsSetup
 /// ```
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Configuration,
-    log_sender: Arc<Fn(::logging::CommsSetup)->::logging::CommsLogger+Send+Sync>,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
+    let (allocators, others) = try!(config.try_build());
+    initialize_from(allocators, others, func)
+}
 
-    let allocators = try!(create_allocators(config, log_sender));
+/// Initializes computation and runs a distributed computation.
+///
+/// This version of `initialize` allows you to explicitly specify the allocators that
+/// you want to use, by providing an explicit list of allocator builders. Additionally,
+/// you provide `others`, a `Box<Any>` which will be held by the resulting worker guard
+/// and dropped when it is dropped, which allows you to join communication threads.
+///
+/// # Examples
+/// ```
+/// use timely_communication::Allocate;
+///
+/// // configure for two threads, just one process.
+/// let builders = timely_communication::allocator::process::Process::new_vector(2);
+///
+/// // initializes communication, spawns workers
+/// let guards = timely_communication::initialize_from(builders, Box::new(()), |mut allocator| {
+///     println!("worker {} started", allocator.index());
+///
+///     // allocates pair of senders list and one receiver.
+///     let (mut senders, mut receiver) = allocator.allocate(0);
+///
+///     // send typed data along each channel
+///     use timely_communication::Message;
+///     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
+///     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
+///
+///     // no support for termination notification,
+///     // we have to count down ourselves.
+///     let mut expecting = 2;
+///     while expecting > 0 {
+///         allocator.pre_work();
+///         if let Some(message) = receiver.recv() {
+///             use std::ops::Deref;
+///             println!("worker {}: received: <{}>", allocator.index(), message.deref());
+///             expecting -= 1;
+///         }
+///         allocator.post_work();
+///     }
+///
+///     // optionally, return something
+///     allocator.index()
+/// });
+///
+/// // computation runs until guards are joined or dropped.
+/// if let Ok(guards) = guards {
+///     for guard in guards.join() {
+///         println!("result: {:?}", guard);
+///     }
+/// }
+/// else { println!("error in computation"); }
+/// ```
+pub fn initialize_from<A, T, F>(
+    builders: Vec<A>,
+    _others: Box<Any>,
+    func: F,
+) -> Result<WorkerGuards<T>,String>
+where
+    A: AllocateBuilder+'static,
+    T: Send+'static,
+    F: Fn(<A as AllocateBuilder>::Allocator)->T+Send+Sync+'static
+{
     let logic = Arc::new(func);
-
     let mut guards = Vec::new();
-    for allocator in allocators.into_iter() {
+    for (index, builder) in builders.into_iter().enumerate() {
         let clone = logic.clone();
         guards.push(try!(thread::Builder::new()
-                            .name(format!("worker thread {}", allocator.index()))
+                            .name(format!("worker thread {}", index))
                             .spawn(move || {
-                                (*clone)(allocator)
+                                let communicator = builder.build();
+                                (*clone)(communicator)
                             })
                             .map_err(|e| format!("{:?}", e))));
     }
 
-    Ok(WorkerGuards { guards: guards })
+    Ok(WorkerGuards { guards, _others })
 }
 
 /// Maintains `JoinHandle`s for worker threads.
 pub struct WorkerGuards<T:Send+'static> {
-    guards: Vec<::std::thread::JoinHandle<T>>
+    guards: Vec<::std::thread::JoinHandle<T>>,
+    _others: Box<Any>,
 }
 
 impl<T:Send+'static> WorkerGuards<T> {
     /// Waits on the worker threads and returns the results they produce.
-    pub fn join(mut self) -> Vec<Result<T,String>> {
+    pub fn join(mut self) -> Vec<Result<T, String>> {
         self.guards.drain(..)
                    .map(|guard| guard.join().map_err(|e| format!("{:?}", e)))
                    .collect()
@@ -190,7 +267,8 @@ impl<T:Send+'static> WorkerGuards<T> {
 impl<T:Send+'static> Drop for WorkerGuards<T> {
     fn drop(&mut self) {
         for guard in self.guards.drain(..) {
-            guard.join().unwrap();
+            guard.join().expect("Worker panic");
         }
+        // println!("WORKER THREADS JOINED");
     }
 }

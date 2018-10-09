@@ -6,10 +6,10 @@
 
 use progress::nested::subgraph::{Source, Target};
 
-use Push;
+use communication::Push;
 use dataflow::Scope;
 use dataflow::channels::pushers::tee::TeeHelper;
-use dataflow::channels::Content;
+use dataflow::channels::Bundle;
 
 // use dataflow::scopes::root::loggers::CHANNELS_Q;
 
@@ -23,7 +23,7 @@ pub struct Stream<S: Scope, D> {
     name: Source,
     /// The `Scope` containing the stream.
     scope: S,
-    /// Maintains a list of Push<(T, Content<D>)> interested in the stream's output.
+    /// Maintains a list of Push<Bundle<T, D>> interested in the stream's output.
     ports: TeeHelper<S::Timestamp, D>,
 }
 
@@ -32,15 +32,15 @@ impl<S: Scope, D> Stream<S, D> {
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<(S::Timestamp, Content<D>)>+'static>(&self, target: Target, pusher: P, identifier: usize) {
+    pub fn connect_to<P: Push<Bundle<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
-        let logging = self.scope().logging();
-        logging.when_enabled(|l| l.log(::logging::TimelyEvent::Channels(::logging::ChannelsEvent {
+        let mut logging = self.scope().logging();
+        logging.as_mut().map(|l| l.log(::logging::ChannelsEvent {
             id: identifier,
             scope_addr: self.scope.addr(),
             source: (self.name.index, self.name.port),
             target: (target.index, target.port),
-        })));
+        }));
 
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);

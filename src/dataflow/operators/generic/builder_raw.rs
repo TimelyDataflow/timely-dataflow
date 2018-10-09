@@ -52,6 +52,7 @@ impl OperatorShape {
 pub struct OperatorBuilder<G: Scope> {
     scope: G,
     index: usize,
+    global: usize,
     shape: OperatorShape,
     summary: Vec<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>,
 }
@@ -61,20 +62,27 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Allocates a new generic operator builder from its containing scope.
     pub fn new(name: String, mut scope: G) -> Self {
 
+        let global = scope.new_identifier();
         let index = scope.allocate_operator_index();
         let peers = scope.peers();
 
         OperatorBuilder {
             scope,
             index,
+            global,
             shape: OperatorShape::new(name, peers),
             summary: vec![],
         }
     }
 
-    /// The operator's index
+    /// The operator's scope-local index.
     pub fn index(&self) -> usize {
         self.index
+    }
+
+    /// The operator's worker-unique identifier.
+    pub fn global(&self) -> usize {
+        self.global
     }
 
     /// Return a reference to the operator's shape
@@ -154,7 +162,7 @@ impl<G: Scope> OperatorBuilder<G> {
             phantom: ::std::marker::PhantomData,
         };
 
-        self.scope.add_operator_with_index(operator, self.index);
+        self.scope.add_operator_with_indices(Box::new(operator), self.index, self.global);
     }
 }
 

@@ -1,12 +1,10 @@
 //! Operators acting on timestamps to logically delay records
 
 use std::collections::HashMap;
-use std::ops::DerefMut;
 
 use Data;
 use order::PartialOrder;
 use dataflow::channels::pact::Pipeline;
-use dataflow::channels::Content;
 use dataflow::{Stream, Scope};
 use dataflow::operators::generic::operator::Operator;
 
@@ -18,24 +16,22 @@ pub trait Delay<G: Scope, D: Data> {
     /// new timestamp is greater or equal to the old timestamp, and will assert if
     /// it is not.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// The following example takes the sequence `0..10` at time `RootTimestamp(0)`
     /// and delays each element `i` to time `RootTimestamp(i)`.
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay};
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::{ToStream, Delay, Operator};
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .delay(|data, time| RootTimestamp::new(*data))
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .sink(Pipeline, "example", |input| {
     ///                input.for_each(|time, data| {
     ///                    println!("data at time: {:?}", time);
-    ///                    output.session(&time).give_content(data);
     ///                });
     ///            });
     /// });
@@ -48,24 +44,22 @@ pub trait Delay<G: Scope, D: Data> {
     /// it is not. The batch version does not consult the data, and may only view
     /// the timestamp itself.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// The following example takes the sequence `0..10` at time `RootTimestamp(0)`
     /// and delays each batch (there is just one) to time `RootTimestamp(1)`.
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay};
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::{ToStream, Delay, Operator};
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .delay_batch(|time| RootTimestamp::new(time.inner + 1))
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .sink(Pipeline, "example", |input| {
     ///                input.for_each(|time, data| {
     ///                    println!("data at time: {:?}", time);
-    ///                    output.session(&time).give_content(data);
     ///                });
     ///            });
     /// });
@@ -76,9 +70,11 @@ pub trait Delay<G: Scope, D: Data> {
 impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
     fn delay(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Stream<G, D> {
         let mut elements = HashMap::new();
+        let mut vector = Vec::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
-                for datum in data.drain(..) {
+                data.swap(&mut vector);
+                for datum in vector.drain(..) {
                     let new_time = func(&datum, &time);
                     assert!(time.time().less_equal(&new_time));
                     elements.entry(new_time.clone())
@@ -97,28 +93,21 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
     }
 
     fn delay_batch(&self, func: impl Fn(&G::Timestamp)->G::Timestamp+'static) -> Stream<G, D> {
-        let mut stash = Vec::new();
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
                 let new_time = func(&time);
                 assert!(time.time().less_equal(&new_time));
-                let spare = stash.pop().unwrap_or_else(Vec::new);
-                let data = ::std::mem::replace(data.deref_mut(), spare);
-
                 elements.entry(new_time.clone())
                         .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
-                        .push(data);
+                        .push(data.replace(Vec::new()));
             });
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain(..) {
-                        let mut message = Content::from_typed(&mut data);
-                        output.session(&time).give_content(&mut message);
-                        let buffer = message.into_typed();
-                        if buffer.capacity() == Content::<D>::default_length() { stash.push(buffer); }
+                        output.session(&time).give_vec(&mut data);
                     }
                 }
             });

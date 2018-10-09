@@ -17,17 +17,19 @@ pub trait Unary<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input stream and
     /// write to the output stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
+    ///     let mut vector = Vec::new();
     ///     (0..10).to_stream(scope)
-    ///            .unary_stream(Pipeline, "example", |input, output| {
+    ///            .unary_stream(Pipeline, "example", move |input, output| {
     ///                input.for_each(|time, data| {
-    ///                    output.session(&time).give_content(data);
+    ///                    data.swap(&mut vector);
+    ///                    output.session(&time).give_vec(&mut vector);
     ///                });
     ///            });
     /// });
@@ -44,17 +46,19 @@ pub trait Unary<G: Scope, D1: Data> {
     /// write to the output stream, and request and receive notifications. The method also requires
     /// a vector of the initial notifications the operator requires (commonly none).
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::unary::Unary;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
+    ///     let mut vector = Vec::new();
     ///     (0..10).to_stream(scope)
-    ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
+    ///            .unary_notify(Pipeline, "example", Vec::new(), move |input, output, notificator| {
     ///                input.for_each(|time, data| {
-    ///                    output.session(&time).give_content(data);
+    ///                    data.swap(&mut vector);
+    ///                    output.session(&time).give_vec(&mut vector);
     ///                    notificator.notify_at(time.retain());
     ///                });
     ///                notificator.for_each(|time,_,_| {

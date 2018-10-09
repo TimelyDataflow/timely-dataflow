@@ -1,4 +1,3 @@
-extern crate time;
 extern crate rand;
 extern crate timely;
 extern crate timely_sort;
@@ -40,7 +39,7 @@ fn main() {
         // holds the bfs parent of each node, or u32::max_value() if unset.
         let mut done = vec![u32::max_value(); 1 + (nodes / peers)];
 
-        let start = time::precise_time_s();
+        let start = std::time::Instant::now();
 
         worker.dataflow(move |scope| {
 
@@ -64,7 +63,7 @@ fn main() {
                     // receive edges, start to sort them
                     input1.for_each(|time, data| {
                         notify.notify_at(time.retain());
-                        edge_list.push(data.replace_with(Vec::new()));
+                        edge_list.push(data.replace(Vec::new()));
                     });
 
                     // receive (node, worker) pairs, note any new ones.
@@ -74,7 +73,7 @@ fn main() {
                                       notify.notify_at(time.retain());
                                       Vec::new()
                                   })
-                                  .push(data.replace_with(Vec::new()));
+                                  .push(data.replace(Vec::new()));
                     });
 
                     notify.for_each(|time, _num, _notify| {
@@ -83,7 +82,7 @@ fn main() {
                         if time.inner == 0 {
 
                             // print some diagnostic timing information
-                            if index == 0 { println!("{}:\tsorting", time::precise_time_s() - start); }
+                            if index == 0 { println!("{:?}:\tsorting", start.elapsed()); }
 
                             // sort the edges
                             sorter.sort(&mut edge_list, &|x| x.0);
@@ -114,7 +113,7 @@ fn main() {
                         }
 
                         // print some diagnostic timing information
-                        if index == 0 { println!("{}:\ttime: {:?}", time::precise_time_s() - start, time.time()); }
+                        if index == 0 { println!("{:?}:\ttime: {:?}", start.elapsed(), time.time()); }
 
                         if let Some(mut todo) = node_lists.remove(&time) {
                             let mut session = output.session(&time);

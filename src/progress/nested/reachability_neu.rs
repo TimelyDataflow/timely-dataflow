@@ -5,7 +5,7 @@
 //! the graph (along edges and through nodes). This module contains one abstraction
 //! for managing this information.
 //!
-//! #Examples
+//! # Examples
 //!
 //! ```rust
 //! use timely::progress::frontier::Antichain;
@@ -58,6 +58,7 @@
 //! ```
 
 use std::collections::BinaryHeap;
+use std::cmp::Reverse;
 
 use progress::Timestamp;
 use progress::nested::{Source, Target};
@@ -85,7 +86,7 @@ use progress::timestamp::PathSummary;
 /// not be totally ordered (e.g., "increment the timestamp" and "take the maximum of
 /// the timestamp and seven").
 ///
-/// #Examples
+/// # Examples
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;
@@ -212,7 +213,7 @@ pub struct Tracker<T:Timestamp> {
     target_changes: ChangeBatch<(Target, T)>,
 
     /// Worklist of updates to perform, ordered by increasing timestamp and target.
-    target_worklist: BinaryHeap<OrderReversed<(T, Target, i64)>>,
+    target_worklist: BinaryHeap<Reverse<(T, Target, i64)>>,
 
     /// Buffer of consequent changes.
     pushed_changes: ChangeBatch<(Target, T)>,
@@ -295,7 +296,7 @@ impl<T:Timestamp> Tracker<T> {
         for ((target, time), diff) in self.target_changes.drain() {
             let target_worklist = &mut self.target_worklist;
             self.targets[target.index][target.port].update_iter_and(Some((time, diff)), |time, diff| {
-                target_worklist.push(OrderReversed::new((time.clone(), target, diff)))
+                target_worklist.push(Reverse((time.clone(), target, diff)))
             })
         }
 
@@ -305,7 +306,7 @@ impl<T:Timestamp> Tracker<T> {
             let edges = &self.edges[source.index][source.port];
             self.sources[source.index][source.port].update_iter_and(Some((time, diff)), |time, diff| {
                 for &target in edges.iter() {
-                    target_worklist.push(OrderReversed::new((time.clone(), target, diff)))
+                    target_worklist.push(Reverse((time.clone(), target, diff)))
                 }
             })
         }
@@ -313,11 +314,11 @@ impl<T:Timestamp> Tracker<T> {
         while !self.target_worklist.is_empty() {
 
             // This iteration we will drain all (target, time) work items.
-            let (time, target, mut diff) = self.target_worklist.pop().unwrap().element;
+            let (time, target, mut diff) = self.target_worklist.pop().unwrap().0;
 
             // Drain any other updates that might have the same time; accumulate difference.
-            while self.target_worklist.peek().map(|x| (x.element.0 == time) && (x.element.1 == target)).unwrap_or(false) {
-                diff += self.target_worklist.pop().unwrap().element.2;
+            while self.target_worklist.peek().map(|x| ((x.0).0 == time) && ((x.0).1 == target)).unwrap_or(false) {
+                diff += (self.target_worklist.pop().unwrap().0).2;
             }
 
             // Only act if there is a net change, positive or negative.
@@ -348,7 +349,7 @@ impl<T:Timestamp> Tracker<T> {
                     //     for summary in summaries.elements().iter() {
                     //         if let Some(new_time) = summary.results_in(time) {
                     //             for &new_target in _edges[output].iter() {
-                    //                 target_worklist.push(OrderReversed::new((new_time.clone(), new_target, diff)));
+                    //                 target_worklist.push(Reverse((new_time.clone(), new_target, diff)));
                     //             }
                     //         }
                     //     }
@@ -357,7 +358,7 @@ impl<T:Timestamp> Tracker<T> {
                     // Version 2.
                     for &(new_target, ref summary) in _compiled.iter() {
                         if let Some(new_time) = summary.results_in(time) {
-                            target_worklist.push(OrderReversed::new((new_time.clone(), new_target, diff)));
+                            target_worklist.push(Reverse((new_time, new_target, diff)));
                         }
                     }
 
@@ -370,26 +371,5 @@ impl<T:Timestamp> Tracker<T> {
     /// A mutable reference to the pushed results of changes.
     pub fn pushed(&mut self) -> &mut ChangeBatch<(Target, T)> {
         &mut self.pushed_changes
-    }
-}
-
-
-#[derive(PartialEq, Eq, Debug)]
-struct OrderReversed<T> {
-    pub element: T,
-}
-
-impl<T> OrderReversed<T> {
-    fn new(element: T) -> Self { OrderReversed { element } }
-}
-
-impl<T: PartialOrd> PartialOrd for OrderReversed<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<::std::cmp::Ordering> {
-        other.element.partial_cmp(&self.element)
-    }
-}
-impl<T: Ord> Ord for OrderReversed<T> {
-    fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
-        other.element.cmp(&self.element)
     }
 }

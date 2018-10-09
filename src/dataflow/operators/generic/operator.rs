@@ -13,8 +13,6 @@ use dataflow::{Stream, Scope};
 
 use super::builder_rc::OperatorBuilder;
 use dataflow::operators::generic::OperatorInfo;
-use dataflow::operators::generic::operator_info::new_operator_info;
-
 use dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 
 /// Methods to construct generic streaming and blocking operators.
@@ -23,7 +21,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
@@ -38,12 +36,16 @@ pub trait Operator<G: Scope, D1: Data> {
     ///                 let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
     ///                 let mut notificator = FrontierNotificator::new();
     ///                 let mut stash = HashMap::new();
+    ///                 let mut vector = Vec::new();
     ///                 move |input, output| {
     ///                     if let Some(ref c) = cap.take() {
     ///                         output.session(&c).give(12);
     ///                     }
     ///                     while let Some((time, data)) = input.next() {
-    ///                         stash.entry(time.time().clone()).or_insert(Vec::new());
+    ///                         data.swap(&mut vector);
+    ///                         stash.entry(time.time().clone())
+    ///                              .or_insert(Vec::new())
+    ///                              .extend(vector.drain(..));
     ///                     }
     ///                     notificator.for_each(&[input.frontier()], |time, _not| {
     ///                         if let Some(mut vec) = stash.remove(time.time()) {
@@ -67,7 +69,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
@@ -77,10 +79,12 @@ pub trait Operator<G: Scope, D1: Data> {
     ///
     /// fn main() {
     ///     timely::example(|scope| {
+    ///         let mut vector = Vec::new();
     ///         (0u64..10).to_stream(scope)
-    ///             .unary_notify(Pipeline, "example", None, |input, output, notificator| {
+    ///             .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
     ///                 input.for_each(|time, data| {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector);
+    ///                     output.session(&time).give_vec(&mut vector);
     ///                     notificator.notify_at(time.retain());
     ///                 });
     ///                 notificator.for_each(|time, _cnt, _not| {
@@ -101,7 +105,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, and write to the output stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -113,12 +117,14 @@ pub trait Operator<G: Scope, D1: Data> {
     ///     (0u64..10).to_stream(scope)
     ///         .unary(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///             let mut vector = Vec::new();
     ///             move |input, output| {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
     ///                 while let Some((time, data)) = input.next() {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector);
+    ///                     output.session(&time).give_vec(&mut vector);
     ///                 }
     ///             }
     ///         });
@@ -136,7 +142,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
@@ -150,13 +156,17 @@ pub trait Operator<G: Scope, D1: Data> {
     ///        in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
     ///            let mut notificator = FrontierNotificator::new();
     ///            let mut stash = HashMap::new();
+    ///            let mut vector1 = Vec::new();
+    ///            let mut vector2 = Vec::new();
     ///            move |input1, input2, output| {
     ///                while let Some((time, data)) = input1.next() {
-    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
+    ///                    data.swap(&mut vector1);
+    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(vector1.drain(..));
     ///                    notificator.notify_at(time.retain());
     ///                }
     ///                while let Some((time, data)) = input2.next() {
-    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
+    ///                    data.swap(&mut vector2);
+    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(vector2.drain(..));
     ///                    notificator.notify_at(time.retain());
     ///                }
     ///                notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _not| {
@@ -193,7 +203,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
@@ -205,14 +215,17 @@ pub trait Operator<G: Scope, D1: Data> {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///
-    ///
-    ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, |input1, input2, output, notificator| {
+    ///        let mut vector1 = Vec::new();
+    ///        let mut vector2 = Vec::new();
+    ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
     ///            input1.for_each(|time, data| {
-    ///                output.session(&time).give_content(data);
+    ///                data.swap(&mut vector1);
+    ///                output.session(&time).give_vec(&mut vector1);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            input2.for_each(|time, data| {
-    ///                output.session(&time).give_content(data);
+    ///                data.swap(&mut vector2);
+    ///                output.session(&time).give_vec(&mut vector2);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            notificator.for_each(|time, _cnt, _not| {
@@ -245,7 +258,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Inspect, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -258,15 +271,19 @@ pub trait Operator<G: Scope, D1: Data> {
     ///     (0u64..10).to_stream(scope)
     ///         .binary(&stream2, Pipeline, Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///             let mut vector1 = Vec::new();
+    ///             let mut vector2 = Vec::new();
     ///             move |input1, input2, output| {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
     ///                 while let Some((time, data)) = input1.next() {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector1);
+    ///                     output.session(&time).give_vec(&mut vector1);
     ///                 }
     ///                 while let Some((time, data)) = input2.next() {
-    ///                     output.session(&time).give_content(data);
+    ///                     data.swap(&mut vector2);
+    ///                     output.session(&time).give_vec(&mut vector2);
     ///                 }
     ///             }
     ///         }).inspect(|x| println!("{:?}", x));
@@ -287,7 +304,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes the function `logic` which can read from the input stream
     /// and inspect the frontier at the input.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
@@ -325,12 +342,16 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let index = builder.index();
+        let global = builder.global();
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
 
-        builder.build(move |capability| {
-            let mut logic = constructor(capability, new_operator_info(index));
+        builder.build(move |mut capabilities| {
+            // `capabilities` should be a single-element vector.
+            let capability = capabilities.pop().unwrap();
+            let operator_info = OperatorInfo::new(index, global);
+            let mut logic = constructor(capability, operator_info);
             move |frontiers| {
                 let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
                 let mut output_handle = output.activate();
@@ -373,13 +394,17 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let index = builder.index();
+        let global = builder.global();
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
         builder.set_notify(false);
 
-        builder.build(move |capability| {
-            let mut logic = constructor(capability, new_operator_info(index));
+        builder.build(move |mut capabilities| {
+            // `capabilities` should be a single-element vector.
+            let capability = capabilities.pop().unwrap();
+            let operator_info = OperatorInfo::new(index, global);
+            let mut logic = constructor(capability, operator_info);
             move |_frontiers| {
                 let mut output_handle = output.activate();
                 logic(&mut input, &mut output_handle);
@@ -402,13 +427,17 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let index = builder.index();
+        let global = builder.global();
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
         let (mut output, stream) = builder.new_output();
 
-        builder.build(move |capability| {
-            let mut logic = constructor(capability, new_operator_info(index));
+        builder.build(move |mut capabilities| {
+            // `capabilities` should be a single-element vector.
+            let capability = capabilities.pop().unwrap();
+            let operator_info = OperatorInfo::new(index, global);
+            let mut logic = constructor(capability, operator_info);
             move |frontiers| {
                 let mut input1_handle = FrontieredInputHandle::new(&mut input1, &frontiers[0]);
                 let mut input2_handle = FrontieredInputHandle::new(&mut input2, &frontiers[1]);
@@ -460,14 +489,18 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let index = builder.index();
+        let global = builder.global();
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
         let (mut output, stream) = builder.new_output();
         builder.set_notify(false);
 
-        builder.build(move |capability| {
-            let mut logic = constructor(capability, new_operator_info(index));
+        builder.build(move |mut capabilities| {
+            // `capabilities` should be a single-element vector.
+            let capability = capabilities.pop().unwrap();
+            let operator_info = OperatorInfo::new(index, global);
+            let mut logic = constructor(capability, operator_info);
             move |_frontiers| {
                 let mut output_handle = output.activate();
                 logic(&mut input1, &mut input2, &mut output_handle);
@@ -485,7 +518,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let mut input = builder.new_input(self, pact);
 
-        builder.build(|_capability| {
+        builder.build(|_capabilities| {
             move |frontiers| {
                 let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
                 logic(&mut input_handle);
@@ -500,7 +533,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 /// a method that can be repeatedly called on a output handle. The method is then repeatedly
 /// invoked, and is expected to eventually send data and downgrade and release capabilities.
 ///
-/// #Examples
+/// # Examples
 /// ```
 /// use timely::dataflow::operators::Inspect;
 /// use timely::dataflow::operators::generic::operator::source;
@@ -542,7 +575,9 @@ where
     let (mut output, stream) = builder.new_output();
     builder.set_notify(false);
 
-    builder.build(|capability| {
+    builder.build(move |mut capabilities| {
+        // `capabilities` should be a single-element vector.
+        let capability = capabilities.pop().unwrap();
         let mut logic = constructor(capability);
         move |_frontier| {
             logic(&mut output.activate());
@@ -550,4 +585,30 @@ where
     });
 
     stream
+}
+
+/// Constructs an empty stream.
+///
+/// This method is useful in patterns where an input is required, but there is no
+/// meaningful data to provide. The replaces patterns like `stream.filter(|_| false)`
+/// which are just silly.
+///
+/// # Examples
+/// ```
+/// use timely::dataflow::operators::Inspect;
+/// use timely::dataflow::operators::generic::operator::empty;
+/// use timely::dataflow::Scope;
+///
+/// timely::example(|scope| {
+///
+///
+///     empty(scope)     //-- type required in this example
+///         .inspect(|_: &()| panic!("never called"));
+///
+/// });
+/// ```
+pub fn empty<G: Scope, D: Data>(scope: &G) -> Stream<G, D> {
+    source(scope, "Empty", |_capability| |_output| {
+        // drop capability, do nothing
+    })
 }

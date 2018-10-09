@@ -1,219 +1,50 @@
 //! Traits, implementations, and macros related to logging timely events.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::sync::Arc;
+/// Type alias for logging timely events.
+pub type WorkerIdentifier = usize;
+/// Logger type for worker-local logging.
+pub type Logger<Event> = ::logging_core::Logger<Event, WorkerIdentifier>;
+/// Logger for timely dataflow system events.
+pub type TimelyLogger = Logger<TimelyEvent>;
 
-use ::progress::change_batch::ChangeBatch;
+use std::time::Duration;
 use ::progress::timestamp::RootTimestamp;
 use ::progress::nested::product::Product;
-use ::progress::frontier::MutableAntichain;
-
 use dataflow::operators::capture::{Event, EventPusher};
 
-use timely_communication::logging::{BufferingLogger, LoggerBatch, CommsEvent, CommsSetup};
-
-type LogMessage = (u64, TimelySetup, TimelyEvent);
-type CommsMessage = (u64, CommsSetup, CommsEvent);
-
-/// A log writer.
-pub type Logger = Rc<BufferingLogger<TimelySetup, TimelyEvent>>;
-
-/// A log writer that does not log anything.
-pub fn new_inactive_logger() -> Logger {
-    BufferingLogger::<TimelySetup, TimelyEvent>::new_inactive()
-}
-
-/// Shared wrapper for log writer constructors.
-pub struct LoggerConfig {
-    /// Log writer constructors.
-    pub timely_logging: Arc<Fn(TimelySetup)->Rc<BufferingLogger<TimelySetup, TimelyEvent>>+Send+Sync>,
-    /// Log writer constructors for communication.
-    pub communication_logging: Arc<Fn(CommsSetup)->Rc<BufferingLogger<CommsSetup, CommsEvent>>+Send+Sync>,
-}
-
-impl LoggerConfig {
-    /// Makes a new `LoggerConfig` wrapper from a `LogManager`.
-    pub fn new<P1: 'static, P2: 'static, F1: 'static, F2: 'static>(
-        timely_subscription: F1, communication_subscription: F2) -> Self where
-        P1: EventPusher<Product<RootTimestamp, u64>, LogMessage> + Send,
-        P2: EventPusher<Product<RootTimestamp, u64>, CommsMessage> + Send,
-        F1: Fn(TimelySetup)->P1+Send+Sync,
-        F2: Fn(CommsSetup)->P2+Send+Sync {
-
-        LoggerConfig {
-            timely_logging: Arc::new(move |events_setup: TimelySetup| {
-                let logger = RefCell::new(BatchLogger::new((timely_subscription)(events_setup)));
-                Rc::new(BufferingLogger::new(events_setup, Box::new(move |data| logger.borrow_mut().publish_batch(data))))
-            }),
-            communication_logging: Arc::new(move |comms_setup: CommsSetup| {
-                let logger = RefCell::new(BatchLogger::new((communication_subscription)(comms_setup)));
-                Rc::new(BufferingLogger::new(comms_setup, Box::new(move |data| logger.borrow_mut().publish_batch(data))))
-            }),
-        }
-    }
-
-    /// Sets up the default loggers: disabled, unless either
-    /// TIMELY_WORKER_LOG_ADDR or TIMELY_COMM_LOG_ADDR are environment
-    /// variables set to the log destinations.
-    pub fn default_with_env() -> LoggerConfig {
-
-        use std::sync::{Arc, Mutex};
-        use std::rc::Rc;
-        use std::cell::RefCell;
-        use std::net::TcpStream;
-        use std::collections::HashMap;
-
-        use ::timely_communication::logging::BufferingLogger;
-        use ::dataflow::operators::capture::EventWriter;
-
-        let timely_stream = Mutex::new(HashMap::<usize, TcpStream>::new());
-        let comm_stream = Mutex::new(HashMap::<::timely_communication::logging::CommsSetup, TcpStream>::new());
-
-        ::logging::LoggerConfig {
-            timely_logging: match ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
-                Ok(addr) => {
-                    eprintln!("enabled WORKER logging to {}", addr);
-                    Arc::new(move |events_setup: ::logging::TimelySetup| {
-
-                        let send =
-                        timely_stream
-                            .lock()
-                            .expect("unable to lock worker logging streams")
-                            .entry(events_setup.index)
-                            .or_insert_with(|| TcpStream::connect(&addr).unwrap())
-                            .try_clone()
-                            .expect("unable to clone worker logging stream");
-
-                        let logger = RefCell::new(::logging::BatchLogger::new(EventWriter::new(send)));
-                        Rc::new(BufferingLogger::new(
-                            events_setup,
-                            Box::new(move |data| logger.borrow_mut().publish_batch(data))
-                        ))
-                    })
-                },
-                Err(_) => Arc::new(|_| BufferingLogger::new_inactive()),
-            },
-            communication_logging: match ::std::env::var("TIMELY_COMM_LOG_ADDR") {
-                Ok(addr) => {
-                    eprintln!("enabled COMM logging to {}", addr);
-                    Arc::new(move |events_setup: ::timely_communication::logging::CommsSetup| {
-
-                        let send =
-                        comm_stream
-                            .lock()
-                            .expect("unable to lock comms logging streams")
-                            .entry(events_setup)
-                            .or_insert_with(|| TcpStream::connect(&addr).unwrap())
-                            .try_clone()
-                            .expect("unable to clone comms logging stream");
-
-                        let logger = RefCell::new(::logging::BatchLogger::new(EventWriter::new(send)));
-                        Rc::new(BufferingLogger::new(
-                            events_setup,
-                            Box::new(move |data| logger.borrow_mut().publish_batch(data))
-                        ))
-                    })
-                },
-                _ => Arc::new(|_| BufferingLogger::new_inactive()),
-            }
-        }
-    }
-}
-
-impl Default for LoggerConfig {
-    fn default() -> Self {
-        LoggerConfig {
-            timely_logging: Arc::new(|_setup| BufferingLogger::new_inactive()),
-            communication_logging: Arc::new(|_setup| BufferingLogger::new_inactive()),
-        }
-    }
-}
-
-struct BatchLogger<S, E, P> where P: EventPusher<Product<RootTimestamp, u64>, (u64, S, E)> {
+/// Logs events as a timely stream, with progress statements.
+pub struct BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
     // None when the logging stream is closed
-    frontier: Option<Product<RootTimestamp, u64>>,
+    time: Duration,
     event_pusher: P,
-    _s: ::std::marker::PhantomData<S>,
-    _e: ::std::marker::PhantomData<E>,
+    _phantom: ::std::marker::PhantomData<(E, T)>,
 }
 
-impl<S, E, P> BatchLogger<S, E, P> where P: EventPusher<Product<RootTimestamp, u64>, (u64, S, E)> {
-    fn new(event_pusher: P) -> Self {
+impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
+    /// Creates a new batch logger.
+    pub fn new(event_pusher: P) -> Self {
         BatchLogger {
-            frontier: Some(Default::default()),
+            time: Default::default(),
             event_pusher,
-            _s: ::std::marker::PhantomData,
-            _e: ::std::marker::PhantomData,
+            _phantom: ::std::marker::PhantomData,
         }
+    }
+    /// Publishes a batch of logged events and advances the capability.
+    pub fn publish_batch(&mut self, time: &Duration, data: &mut Vec<(Duration, E, T)>) {
+        let new_frontier = RootTimestamp::new(time.clone());
+        let old_frontier = RootTimestamp::new(self.time.clone());
+        self.event_pusher.push(Event::Messages(RootTimestamp::new(self.time), ::std::mem::replace(data, Vec::new())));
+        self.event_pusher.push(Event::Progress(vec![(new_frontier, 1), (old_frontier, -1)]));
+        self.time = time.clone();
+    }
+}
+impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
+    fn drop(&mut self) {
+        self.event_pusher.push(Event::Progress(vec![(RootTimestamp::new(self.time), -1)]));
     }
 }
 
-impl<S: Clone, E: Clone, P> BatchLogger<S, E, P> where P: EventPusher<Product<RootTimestamp, u64>, (u64, S, E)> {
-    pub fn publish_batch(&mut self, logger_batch: LoggerBatch<S, E>) -> () {
-        match logger_batch {
-            LoggerBatch::Logs(evs) => {
-                if let Some(frontier) = self.frontier {
-                    let &(last_ts, _, _) = evs.last().unwrap();
-                    self.event_pusher.push(Event::Messages(frontier, evs));
-                    let new_frontier = RootTimestamp::new(last_ts);
-                    self.event_pusher.push(Event::Progress(vec![(new_frontier, 1), (frontier, -1)]));
-                    self.frontier = Some(new_frontier);
-                }
-            },
-            LoggerBatch::End => {
-                if let Some(frontier) = self.frontier {
-                    self.event_pusher.push(Event::Progress(vec![(frontier, -1)]));
-                    self.frontier = None;
-                }
-            },
-        }
-    }
-}
-
-/// An `EventPusher` that supports dynamically adding new `EventPushers`.
-///
-/// The tee maintains the frontier as the stream of events passes by. When a new pusher
-/// arrives it advances the frontier to the current value, and starts to forward events
-/// to it as well.
-pub struct EventPusherTee<T: ::order::PartialOrder+Ord+Default+Clone+'static, D: Clone> {
-    frontier: MutableAntichain<T>,
-    listeners: Vec<Box<EventPusher<T, D>+Send>>,
-}
-
-impl<T: ::order::PartialOrder+Ord+Default+Clone+'static, D: Clone> EventPusherTee<T, D> {
-    /// Construct a new tee with no subscribers.
-    pub fn new() -> Self {
-        Self {
-            frontier: MutableAntichain::new_bottom(Default::default()),
-            listeners: Vec::new(),
-        }
-    }
-    /// Subscribe to this tee.
-    pub fn subscribe(&mut self, mut listener: Box<EventPusher<T, D>+Send>) {
-        let mut changes = ChangeBatch::new_from(Default::default(), -1);
-        changes.extend(self.frontier.frontier().iter().map(|x| (x.clone(), 1)));
-        if !changes.is_empty() {
-            listener.push(Event::Progress(changes.into_inner()));
-        }
-        self.listeners.push(listener);
-    }
-}
-
-impl<T: ::order::PartialOrder+Ord+Default+Clone, D: Clone> EventPusher<T, D> for EventPusherTee<T, D> {
-    fn push(&mut self, event: Event<T, D>) {
-        // update the maintained frontier.
-        if let Event::Progress(ref updates) = event {
-            self.frontier.update_iter(updates.iter().cloned());
-        }
-        // present the event to each listener.
-        for listener in self.listeners.iter_mut() {
-            listener.push(event.clone());
-        }
-    }
-}
-
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// The creation of an `Operate` implementor.
 pub struct OperatesEvent {
     /// Worker-unique identifier for the operator.
@@ -224,7 +55,7 @@ pub struct OperatesEvent {
     pub name: String,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// The creation of a channel between operators.
 pub struct ChannelsEvent {
     /// Worker-unique identifier for the channel
@@ -237,7 +68,7 @@ pub struct ChannelsEvent {
     pub target: (usize, usize),
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Send or receive of progress information.
 pub struct ProgressEvent {
     /// `true` if the event is a send, and `false` if it is a receive.
@@ -245,7 +76,7 @@ pub struct ProgressEvent {
     /// Source worker index.
     pub source: usize,
     /// Communication channel identifier
-    pub comm_channel: Option<usize>,
+    pub channel: usize,
     /// Message sequence number.
     pub seq_no: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
@@ -256,22 +87,20 @@ pub struct ProgressEvent {
     pub internal: Vec<(usize, usize, String, i64)>,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// External progress pushed onto an operator
 pub struct PushProgressEvent {
     /// Worker-unique operator identifier
     pub op_id: usize,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Message send or receive event
 pub struct MessagesEvent {
     /// `true` if send event, `false` if receive event.
     pub is_send: bool,
     /// Channel identifier
     pub channel: usize,
-    /// Communication channel identifier
-    pub comm_channel: Option<usize>,
     /// Source worker index.
     pub source: usize,
     /// Target worker index.
@@ -283,7 +112,7 @@ pub struct MessagesEvent {
 }
 
 /// Records the starting and stopping of an operator.
-#[derive(Abomonation, Debug, Clone, PartialEq, Eq)]
+#[derive(Abomonation, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum StartStop {
     /// Operator starts.
     Start,
@@ -294,7 +123,7 @@ pub enum StartStop {
     },
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Operator start or stop.
 pub struct ScheduleEvent {
     /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
@@ -305,7 +134,7 @@ pub struct ScheduleEvent {
     pub start_stop: StartStop,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct ApplicationEvent {
     /// Unique event type identifier
@@ -314,14 +143,14 @@ pub struct ApplicationEvent {
     pub is_start: bool,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct GuardedMessageEvent {
     /// True when activity begins, false when it stops
     pub is_start: bool,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct GuardedProgressEvent {
     /// True when activity begins, false when it stops
@@ -335,7 +164,7 @@ pub struct TimelySetup {
     pub index: usize,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Kind of communication channel
 pub enum CommChannelKind {
     /// Communication channel carrying progress information
@@ -344,37 +173,49 @@ pub enum CommChannelKind {
     Data,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Event on a communication channel
 pub struct CommChannelsEvent {
     /// Communication channel identifier
-    pub comm_channel: Option<usize>,
+    pub identifier: usize,
     /// Kind of communication channel (progress / data)
-    pub comm_channel_kind: CommChannelKind,
+    pub kind: CommChannelKind,
 }
 
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Input logic start/stop
 pub struct InputEvent {
     /// True when activity begins, false when it stops
     pub start_stop: StartStop,
 }
 
-#[derive(Debug, Clone, Abomonation)]
+#[derive(Debug, Clone, Abomonation, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// An event in a timely worker
-#[allow(missing_docs)]
 pub enum TimelyEvent {
+    /// Operator creation.
     /*  0 */ Operates(OperatesEvent),
+    /// Channel creation.
     /*  1 */ Channels(ChannelsEvent),
+    /// Progress message send or receive.
     /*  2 */ Progress(ProgressEvent),
+    /// Progress propagation (reasoning).
     /*  3 */ PushProgress(PushProgressEvent),
+    /// Message send or receive.
     /*  4 */ Messages(MessagesEvent),
+    /// Operator start or stop.
     /*  5 */ Schedule(ScheduleEvent),
+    /// No clue.
     /*  6 */ Application(ApplicationEvent),
+    /// Per-message computation.
     /*  7 */ GuardedMessage(GuardedMessageEvent),
+    /// Per-notification computation.
     /*  8 */ GuardedProgress(GuardedProgressEvent),
+    /// Communication channel event.
     /*  9 */ CommChannels(CommChannelsEvent),
+    /// Input event.
     /* 10 */ Input(InputEvent),
+    /// Unstructured event.
+    /* 11 */ Text(String),
 }
 
 impl From<OperatesEvent> for TimelyEvent {

@@ -20,7 +20,7 @@ use dataflow::operators::capability::mint as mint_capability;
 
 use dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
 
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
@@ -29,9 +29,9 @@ pub struct OperatorBuilder<G: Scope> {
     builder: OperatorBuilderRaw<G>,
     frontier: Vec<MutableAntichain<G::Timestamp>>,
     consumed: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
-    internal: Rc<RefCell<ChangeBatch<G::Timestamp>>>,
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
-    logging: Logger,
+    logging: Option<Logger>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {
@@ -43,7 +43,7 @@ impl<G: Scope> OperatorBuilder<G> {
             builder: OperatorBuilderRaw::new(name, scope),
             frontier: Vec::new(),
             consumed: Vec::new(),
-            internal: Rc::new(RefCell::new(ChangeBatch::new())),
+            internal: Rc::new(RefCell::new(Vec::new())),
             produced: Vec::new(),
             logging,
         }
@@ -88,23 +88,31 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let (tee, stream) = self.builder.new_output_connection(connection);
 
+        let internal = Rc::new(RefCell::new(ChangeBatch::new()));
+        self.internal.borrow_mut().push(internal.clone());
+
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(buffer.inner().produced().clone());
 
-        (OutputWrapper::new(buffer), stream)
+        (OutputWrapper::new(buffer, internal), stream)
     }
 
     /// Creates an operator implementation from supplied logic constructor.
     pub fn build<B, L>(self, constructor: B)
     where
-        B: FnOnce(Capability<G::Timestamp>) -> L,
+        B: FnOnce(Vec<Capability<G::Timestamp>>) -> L,
         L: FnMut(&[MutableAntichain<G::Timestamp>])+'static
     {
-        // create a capability, but discard any reference to its creation.
-        let cap = mint_capability(Default::default(), self.internal.clone());
-        self.internal.borrow_mut().clear();
+        // create capabilities, discard references to their creation.
+        let mut capabilities = Vec::new();
+        for output_index in 0  .. self.internal.borrow().len() {
+            let borrow = &self.internal.borrow()[output_index];
+            capabilities.push(mint_capability(Default::default(), borrow.clone()));
+            // Discard evidence of creation, as we are assumed to start with one.
+            borrow.borrow_mut().clear();
+        }
 
-        let mut logic = constructor(cap);
+        let mut logic = constructor(capabilities);
 
         let self_frontier1 = Rc::new(RefCell::new(self.frontier));
         let self_frontier2 = self_frontier1.clone();
@@ -133,11 +141,11 @@ impl<G: Scope> OperatorBuilder<G> {
             }
 
             // move batches of internal changes.
-            for index in 0 .. internal.len() {
-                let mut borrow = self_internal.borrow_mut();
-                internal[index].extend(borrow.iter().cloned());
+            let self_internal_borrow = self_internal.borrow_mut();
+            for index in 0 .. self_internal_borrow.len() {
+                let mut borrow = self_internal_borrow[index].borrow_mut();
+                internal[index].extend(borrow.drain());
             }
-            self_internal.borrow_mut().clear();
 
             // move batches of produced changes.
             for index in 0 .. produced.len() {
@@ -153,5 +161,84 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Get the identifier assigned to the operator being constructed
     pub fn index(&self) -> usize {
         self.builder.index()
+    }
+
+    /// The operator's worker-unique identifier.
+    pub fn global(&self) -> usize {
+        self.builder.global()
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    #[should_panic]
+    fn incorrect_capabilities() {
+
+        // This tests that if we attempt to use a capability associated with the
+        // wrong output, there is a run-time assertion.
+
+        use ::dataflow::operators::generic::builder_rc::OperatorBuilder;
+
+        ::example(|scope| {
+
+            let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
+
+            // let mut input = builder.new_input(stream, Pipeline);
+            let (mut output1, _stream1) = builder.new_output::<()>();
+            let (mut output2, _stream2) = builder.new_output::<()>();
+
+            builder.build(move |capabilities| {
+                move |_frontiers| {
+
+                    let mut output_handle1 = output1.activate();
+                    let mut output_handle2 = output2.activate();
+
+                    // NOTE: Using incorrect capabilities here.
+                    output_handle2.session(&capabilities[0]);
+                    output_handle1.session(&capabilities[1]);
+                }
+            });
+        })
+    }
+
+    #[test]
+    fn correct_capabilities() {
+
+        // This tests that if we attempt to use capabilities with the correct outputs
+        // there is no runtime assertion
+
+        use ::dataflow::operators::generic::builder_rc::OperatorBuilder;
+
+        ::example(|scope| {
+
+            let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
+
+            // let mut input = builder.new_input(stream, Pipeline);
+            let (mut output1, _stream1) = builder.new_output::<()>();
+            let (mut output2, _stream2) = builder.new_output::<()>();
+
+            builder.build(move |mut capabilities| {
+                move |_frontiers| {
+
+                    let mut output_handle1 = output1.activate();
+                    let mut output_handle2 = output2.activate();
+
+                    // Avoid second call.
+                    if !capabilities.is_empty() {
+
+                        // NOTE: Using correct capabilities here.
+                        output_handle1.session(&capabilities[0]);
+                        output_handle2.session(&capabilities[1]);
+
+                        capabilities.clear();
+                    }
+                }
+            });
+
+            "Hello".to_owned()
+        });
     }
 }

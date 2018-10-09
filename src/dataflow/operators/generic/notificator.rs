@@ -1,7 +1,7 @@
 use progress::frontier::{AntichainRef, MutableAntichain};
 use progress::Timestamp;
 use dataflow::operators::Capability;
-use logging::Logger;
+use logging::TimelyLogger as Logger;
 
 /// Tracks requests for notification and delivers available notifications.
 ///
@@ -20,7 +20,7 @@ use logging::Logger;
 pub struct Notificator<'a, T: Timestamp, D: 'a = ()> {
     frontiers: &'a [&'a MutableAntichain<T>],
     inner: &'a mut FrontierNotificator<T, D>,
-    logging: &'a Logger,
+    logging: &'a Option<Logger>,
 }
 
 impl<'a, T: Timestamp, D> Notificator<'a, T, D> {
@@ -30,7 +30,8 @@ impl<'a, T: Timestamp, D> Notificator<'a, T, D> {
     pub fn new(
         frontiers: &'a [&'a MutableAntichain<T>],
         inner: &'a mut FrontierNotificator<T, D>,
-        logging: &'a Logger) -> Self {
+        logging: &'a Option<Logger>) -> Self {
+
         inner.make_available(frontiers);
 
         Notificator {
@@ -56,14 +57,14 @@ impl<'a, T: Timestamp> Notificator<'a, T, ()> {
     /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_content(data);
+    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                    let mut time = cap.time().clone();
     ///                    time.inner += 1;
     ///                    notificator.notify_at(cap.delayed(&time));
@@ -85,12 +86,10 @@ impl<'a, T: Timestamp> Notificator<'a, T, ()> {
     /// representing how many capabilities were requested for that specific timestamp.
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
-        while let Some((cap, _data)) = self.next() {
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
-                ::logging::GuardedProgressEvent { is_start: true })));
-            logic(cap, 1, self);
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
-                ::logging::GuardedProgressEvent { is_start: false })));
+        while let Some((cap, data)) = self.next() {
+            self.logging.as_ref().map(|l| l.log(::logging::GuardedProgressEvent { is_start: true }));
+            logic(cap, data.len() as u64, self);
+            self.logging.as_ref().map(|l| l.log(::logging::GuardedProgressEvent { is_start: false }));
         }
     }
 }
@@ -105,14 +104,14 @@ impl<'a, T: Timestamp, D> Notificator<'a, T, D> {
     /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::unary::Unary;
+    /// use timely::dataflow::operators::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_content(data);
+    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                    let mut time = cap.time().clone();
     ///                    time.inner += 1;
     ///                    notificator.notify_at(cap.delayed(&time));
@@ -135,11 +134,9 @@ impl<'a, T: Timestamp, D> Notificator<'a, T, D> {
     #[inline]
     pub fn for_each_data<F: FnMut(Capability<T>, Vec<D>, &mut Self)>(&mut self, mut logic: F) {
         while let Some((cap, data)) = self.next() {
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
-                ::logging::GuardedProgressEvent { is_start: true })));
+            self.logging.as_ref().map(|l| l.log(::logging::GuardedProgressEvent { is_start: true }));
             logic(cap, data, self);
-            self.logging.when_enabled(|l| l.log(::logging::TimelyEvent::GuardedProgress(
-                ::logging::GuardedProgressEvent { is_start: false })));
+            self.logging.as_ref().map(|l| l.log(::logging::GuardedProgressEvent { is_start: false }));
         }
     }
 }
@@ -172,7 +169,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 
     let root_capability = mint_capability(Product::new(0,0), Rc::new(RefCell::new(ChangeBatch::new())));
 
-    let logging = ::logging::new_inactive_logger();
+    let logging = None;//::logging::new_inactive_logger();
 
     // notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(ts_from_tuple((0, 0)), 1)]);
     let times = vec![
@@ -254,10 +251,14 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///             let mut notificator = FrontierNotificator::new();
 ///             move |input1, input2, output| {
 ///                 while let Some((time, data)) = input1.next() {
-///                     notificator.notify_at_data(time.retain(), data.drain(..));
+///                     let mut vector1 = Vec::new();
+///                     data.swap(&mut vector1);
+///                     notificator.notify_at_data(time.retain(), vector1);
 ///                 }
 ///                 while let Some((time, data)) = input2.next() {
-///                     notificator.notify_at_data(time.retain(), data.drain(..));
+///                     let mut vector2 = Vec::new();
+///                     data.swap(&mut vector2);
+///                     notificator.notify_at_data(time.retain(), vector2);
 ///                 }
 ///                 notificator.for_each_data(&[input1.frontier(), input2.frontier()], |time, mut data, _| {
 ///                     output.session(&time).give_iterator(data.drain(..));
@@ -318,7 +319,7 @@ impl<T: Timestamp, D> FrontierNotificator<T, D> {
     ///                let mut notificator = FrontierNotificator::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_content(data);
+    ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                        let mut time = cap.time().clone();
     ///                        time.inner += 1;
     ///                        notificator.notify_at_data(cap.delayed(&time), Some(time.inner));
@@ -414,7 +415,7 @@ impl<T: Timestamp, D> FrontierNotificator<T, D> {
     /// This implementation can be emulated with judicious use of `make_available` and `notify_at_frontiered`,
     /// in the event that `Notificator` provides too restrictive an interface.
     #[inline]
-    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Logger) -> Notificator<'a, T, D> {
+    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Option<Logger>) -> Notificator<'a, T, D> {
         Notificator::new(frontiers, self, logging)
     }
 
@@ -436,7 +437,7 @@ impl<T: Timestamp, D> FrontierNotificator<T, D> {
     ///                let mut notificator = FrontierNotificator::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_content(data);
+    ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                        let mut time = cap.time().clone();
     ///                        time.inner += 1;
     ///                        notificator.notify_at(cap.delayed(&time));
@@ -482,7 +483,7 @@ impl<T: Timestamp> FrontierNotificator<T, ()> {
     ///                let mut notificator = FrontierNotificator::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_content(data);
+    ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                        let mut time = cap.time().clone();
     ///                        time.inner += 1;
     ///                        notificator.notify_at(cap.delayed(&time));

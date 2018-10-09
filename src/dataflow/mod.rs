@@ -3,7 +3,7 @@
 //! Timely dataflow programs are constructed by manipulating [`Stream`](./stream/index.html) objects,
 //! most often using pre-defined [operators](./operators/index.html) that implement known patterns.
 //!
-//! #Examples
+//! # Examples
 //! ```
 //! use timely::dataflow::operators::{ToStream, Inspect};
 //!

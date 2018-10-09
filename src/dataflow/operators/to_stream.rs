@@ -3,7 +3,7 @@
 use progress::Timestamp;
 
 use Data;
-use dataflow::channels::Content;
+use dataflow::channels::Message;
 use dataflow::operators::generic::operator::source;
 use dataflow::{Stream, Scope};
 
@@ -11,7 +11,7 @@ use dataflow::{Stream, Scope};
 pub trait ToStream<T: Timestamp, D: Data> {
     /// Converts to a timely `Stream`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Capture};
@@ -40,7 +40,7 @@ impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::
                 if let Some(element) = iterator.next() {
                     let mut session = output.session(capability.as_ref().unwrap());
                     session.give(element);
-                    for element in iterator.by_ref().take((256 * Content::<I::Item>::default_length()) - 1) {
+                    for element in iterator.by_ref().take((256 * Message::<T, I::Item>::default_length()) - 1) {
                         session.give(element);
                     }
                 }

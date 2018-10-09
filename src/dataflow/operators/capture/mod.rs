@@ -13,7 +13,7 @@
 //! There is a protocol the captured stream uses, and implementors of new event streams should
 //! make sure to understand this (and complain if it is not clear).
 //!
-//! #Examples
+//! # Examples
 //!
 //! The type `Rc<EventLink<T,D>>` implements a typed linked list,
 //! and can be captured into and replayed from.

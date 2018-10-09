@@ -19,7 +19,7 @@ use dataflow::{Stream, Scope};
 pub trait Probe<G: Scope, D: Data> {
     /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::*;
     /// use timely::dataflow::Scope;
@@ -49,7 +49,7 @@ pub trait Probe<G: Scope, D: Data> {
 
     /// Inserts a progress probe in a stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::*;
     /// use timely::dataflow::Scope;
@@ -99,6 +99,8 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         let frontier = handle.frontier.clone();
         let mut started = false;
 
+        let mut vector = Vec::new();
+
         builder.build(
             move |changes| {
                 frontier.borrow_mut().update_iter(changes[0].drain());
@@ -110,8 +112,15 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
                     started = true;
                 }
 
-                while let Some((time, data)) = input.next() {
-                    output.session(time).give_content(data);
+                use communication::message::RefOrMut;
+
+                while let Some(message) = input.next() {
+                    let (time, data) = match message.as_ref_or_mut() {
+                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
+                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
+                    };
+                    data.swap(&mut vector);
+                    output.session(time).give_vec(&mut vector);
                 }
                 output.cease();
 
@@ -147,7 +156,7 @@ impl<T: Timestamp> Handle<T> {
     /// This method allows inspection of the frontier, which cannot be returned by reference as
     /// it is on the other side of a `RefCell`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use timely::dataflow::operators::probe::Handle;
@@ -172,7 +181,7 @@ impl<T: Timestamp> Clone for Handle<T> {
 #[cfg(test)]
 mod tests {
 
-    use ::Configuration;
+    use ::communication::Configuration;
     use ::progress::timestamp::RootTimestamp;
     use dataflow::operators::{Input, Probe};
 

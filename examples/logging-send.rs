@@ -1,45 +1,56 @@
 extern crate timely;
 
-use timely::dataflow::InputHandle;
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Probe};
 
-use timely::dataflow::operators::capture::EventWriter;
+// use timely::dataflow::operators::capture::EventWriter;
+// use timely::dataflow::ScopeParent;
+use timely::logging::TimelyEvent;
 
 fn main() {
     // initializes and runs a timely dataflow.
-
-    use timely::logging::{LoggerConfig, EventPusherTee};
-    let logger_config = LoggerConfig::new(
-        |setup| {
-            use std::net::TcpStream;
-            let addr = format!("127.0.0.1:{}", 8000 + setup.index);
-            let send = TcpStream::connect(addr).unwrap();
-            EventWriter::new(send)
-        },
-        |_setup| {
-            // No support for communication threads in this example.
-            unimplemented!();
-            use std::net::TcpStream;
-            let addr = format!("127.0.0.1:{}", 8001);
-            let send = TcpStream::connect(addr).unwrap();
-            EventWriter::new(send)
-        }
-    );
-
-    timely::execute_from_args_logging(std::env::args(), logger_config, |worker| {
+    let config = timely::Configuration::from_args(::std::env::args()).unwrap();
+    timely::execute(config, |worker| {
 
         let batch = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
         let rounds = std::env::args().nth(2).unwrap().parse::<usize>().unwrap();
         let mut input = InputHandle::new();
+        let mut probe = ProbeHandle::new();
+
+        // Register timely worker logging.
+        worker.log_register().insert::<TimelyEvent,_>("timely", |_time, data|
+            data.iter().for_each(|x| println!("LOG1: {:?}", x))
+        );
 
         // create a new input, exchange data, and inspect its output
-        let probe = worker.dataflow(|scope|
+        worker.dataflow(|scope| {
             scope
                 .input_from(&mut input)
                 .exchange(|&x| x as u64)
-                .probe()
+                .probe_with(&mut probe);
+        });
+
+        // Register timely worker logging.
+        worker.log_register().insert::<TimelyEvent,_>("timely", |_time, data|
+            data.iter().for_each(|x| println!("LOG2: {:?}", x))
         );
 
+        // create a new input, exchange data, and inspect its output
+        worker.dataflow(|scope| {
+            scope
+                .input_from(&mut input)
+                .exchange(|&x| x as u64)
+                .probe_with(&mut probe);
+        });
+
+        // Register user-level logging.
+        worker.log_register().insert::<(),_>("input", |_time, data|
+            for element in data.iter() {
+                println!("Round tick at: {:?}", element.0);
+            }
+        );
+
+        let input_logger = worker.log_register().get::<()>("input").expect("Input logger absent");
 
         let timer = std::time::Instant::now();
 
@@ -49,6 +60,7 @@ fn main() {
                 input.send(i);
             }
             input.advance_to(round);
+            input_logger.log(());
 
             while probe.less_than(input.time()) {
                 worker.step();

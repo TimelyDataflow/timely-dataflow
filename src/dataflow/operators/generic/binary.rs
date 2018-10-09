@@ -17,7 +17,7 @@ pub trait Binary<G: Scope, D1: Data> {
     /// strategy `pact`, and repeatedly invokes `logic` which can read from the input streams and
     /// write to the output stream.
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::binary::Binary;
@@ -27,12 +27,17 @@ pub trait Binary<G: Scope, D1: Data> {
     ///     let stream1 = (0..10).to_stream(scope);
     ///     let stream2 = (0..10).to_stream(scope);
     ///
-    ///     stream1.binary_stream(&stream2, Pipeline, Pipeline, "example", |input1, input2, output| {
+    ///     let mut vector1 = Vec::new();
+    ///     let mut vector2 = Vec::new();
+    ///
+    ///     stream1.binary_stream(&stream2, Pipeline, Pipeline, "example", move |input1, input2, output| {
     ///         input1.for_each(|time, data| {
-    ///             output.session(&time).give_content(data);
+    ///             data.swap(&mut vector1);
+    ///             output.session(&time).give_vec(&mut vector1);
     ///         });
     ///         input2.for_each(|time, data| {
-    ///             output.session(&time).give_content(data);
+    ///             data.swap(&mut vector2);
+    ///             output.session(&time).give_vec(&mut vector2);
     ///         });
     ///     });
     /// });
@@ -52,7 +57,7 @@ pub trait Binary<G: Scope, D1: Data> {
     /// write to the output stream, and request and receive notifications. The method also requires
     /// a vector of the initial notifications the operator requires (commonly none).
     ///
-    /// #Examples
+    /// # Examples
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::generic::binary::Binary;
@@ -62,13 +67,18 @@ pub trait Binary<G: Scope, D1: Data> {
     ///     let stream1 = (0..10).to_stream(scope);
     ///     let stream2 = (0..10).to_stream(scope);
     ///
-    ///     stream1.binary_notify(&stream2, Pipeline, Pipeline, "example", Vec::new(), |input1, input2, output, notificator| {
+    ///     let mut vector1 = Vec::new();
+    ///     let mut vector2 = Vec::new();
+    ///
+    ///     stream1.binary_notify(&stream2, Pipeline, Pipeline, "example", Vec::new(), move |input1, input2, output, notificator| {
     ///         input1.for_each(|time, data| {
-    ///             output.session(&time).give_content(data);
+    ///             data.swap(&mut vector1);
+    ///             output.session(&time).give_vec(&mut vector1);
     ///             notificator.notify_at(time.retain());
     ///         });
     ///         input2.for_each(|time, data| {
-    ///             output.session(&time).give_content(data);
+    ///             data.swap(&mut vector2);
+    ///             output.session(&time).give_vec(&mut vector2);
     ///             notificator.notify_at(time.retain());
     ///         });
     ///         notificator.for_each(|time,_count,_notificator| {

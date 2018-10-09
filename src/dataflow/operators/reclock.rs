@@ -16,7 +16,7 @@ pub trait Reclock<S: Scope, D: Data> {
     /// workers receive the same clock records, which can be accomplished with
     /// `broadcast`.
     ///
-    /// #Examples
+    /// # Examples
     ///
     /// ```
     /// use timely::dataflow::operators::{ToStream, Delay, Map, Reclock, Capture};
@@ -58,7 +58,7 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
 
             // stash each data input with its timestamp.
             input1.for_each(|cap, data| {
-                stash.push((cap.time().clone(), data.take()));
+                stash.push((cap.time().clone(), data.replace(Vec::new())));
             });
 
             // request notification at time, to flush stash.
@@ -71,7 +71,7 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
                 let mut session = output.session(&cap);
                 for &mut (ref t, ref mut data) in &mut stash {
                     if t.less_equal(cap.time()) {
-                        session.give_content(data);
+                        session.give_vec(data);
                     }
                 }
                 stash.retain(|x| !x.0.less_equal(cap.time()));

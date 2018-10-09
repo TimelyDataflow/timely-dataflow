@@ -1,20 +1,22 @@
 extern crate timely_communication;
 
+use std::ops::Deref;
+use timely_communication::{Message, Allocate};
+
 fn main() {
 
     // extract the configuration from user-supplied arguments, initialize the computation.
     let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
-    let logger = ::std::sync::Arc::new(|_| timely_communication::logging::BufferingLogger::new_inactive());
-    let guards = timely_communication::initialize(config, logger, |mut allocator| {
+    let guards = timely_communication::initialize(config, |mut allocator| {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());
 
         // allocates pair of senders list and one receiver.
-        let (mut senders, mut receiver, _) = allocator.allocate();
+        let (mut senders, mut receiver) = allocator.allocate(0);
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
-            senders[i].send(format!("hello, {}", i));
+            senders[i].send(Message::from_typed(format!("hello, {}", i)));
             senders[i].done();
         }
 
@@ -22,10 +24,15 @@ fn main() {
         // we have to count down ourselves.
         let mut received = 0;
         while received < allocator.peers() {
+
+            allocator.pre_work();
+
             if let Some(message) = receiver.recv() {
-                println!("worker {}: received: <{}>", allocator.index(), message);
+                println!("worker {}: received: <{}>", allocator.index(), message.deref());
                 received += 1;
             }
+
+            allocator.post_work();
         }
 
         allocator.index()

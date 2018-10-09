@@ -4,7 +4,7 @@
 //! objects as output. Many of the operators provide simple, composable functionality. Some of the
 //! operators are more complicated, for use with advanced timely dataflow features.
 //!
-//! The [`Unary`](./generic/unary/index.html) and [`Binary`](./generic/binary/index.html) operators provide general
+//! The [`Operator`](./generic/operator/index.html) trait provides general
 //! operators whose behavior can be supplied using closures accepting input and output handles.
 //! Most of the operators in this module are defined using these two general operators.
 
@@ -26,7 +26,7 @@ pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
 
-pub use self::generic::{Unary, Binary, Operator};
+pub use self::generic::Operator;
 pub use self::generic::{Notificator, FrontierNotificator};
 
 pub use self::reclock::Reclock;
