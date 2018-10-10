@@ -43,7 +43,6 @@ pub trait UnorderedInput<G: Scope> {
     /// use timely::dataflow::operators::*;
     /// use timely::dataflow::operators::capture::Extract;
     /// use timely::dataflow::Stream;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
@@ -55,7 +54,7 @@ pub trait UnorderedInput<G: Scope> {
     ///     let send = send.lock().unwrap().clone();
     ///
     ///     // create and capture the unordered input.
-    ///     let (mut input, mut cap) = worker.dataflow(|scope| {
+    ///     let (mut input, mut cap) = worker.dataflow::<usize,_,_>(|scope| {
     ///         let (input, stream) = scope.new_unordered_input();
     ///         stream.capture_into(send);
     ///         input
@@ -64,14 +63,14 @@ pub trait UnorderedInput<G: Scope> {
     ///     // feed values 0..10 at times 0..10.
     ///     for round in 0..10 {
     ///         input.session(cap.clone()).give(round);
-    ///         cap = cap.delayed(&RootTimestamp::new(round + 1));
+    ///         cap = cap.delayed(&(round + 1));
     ///         worker.step();
     ///     }
     /// }).unwrap();
     ///
     /// let extract = recv.extract();
     /// for i in 0..10 {
-    ///     assert_eq!(extract[i], (RootTimestamp::new(i), vec![i]));
+    ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
     fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, Capability<G::Timestamp>), Stream<G, D>);

@@ -59,8 +59,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
     ///                input.for_each(|cap, data| {
     ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-    ///                    let mut time = cap.time().clone();
-    ///                    time.inner += 1;
+    ///                    let time = cap.time().clone() + 1;
     ///                    notificator.notify_at(cap.delayed(&time));
     ///                });
     ///                notificator.for_each(|cap,_,_| {
@@ -191,7 +190,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 /// use timely::dataflow::channels::pact::Pipeline;
 ///
 /// timely::execute(timely::Configuration::Thread, |worker| {
-///     let (mut in1, mut in2) = worker.dataflow(|scope| {
+///     let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
 ///         let (in1_handle, in1) = scope.new_input();
 ///         let (in2_handle, in2) = scope.new_input();
 ///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
@@ -272,8 +271,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-    ///                        let mut time = cap.time().clone();
-    ///                        time.inner += 1;
+    ///                        let time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));
     ///                    });
     ///                    notificator.for_each(&[input.frontier()], |cap, _| {
@@ -389,8 +387,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-    ///                        let mut time = cap.time().clone();
-    ///                        time.inner += 1;
+    ///                        let time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));
     ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
     ///                    });

@@ -1,10 +1,10 @@
 extern crate timely;
 
 use std::net::TcpListener;
+use std::time::Duration;
+
 use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::capture::{EventReader, Replay};
-use timely::progress::nested::product::Product;
-use timely::progress::timestamp::RootTimestamp;
 use timely::logging::{TimelySetup, TimelyEvent};
 
 fn main() {
@@ -20,7 +20,7 @@ fn main() {
             .collect::<Vec<_>>()
             .into_iter()
             .map(|l| l.incoming().next().unwrap().unwrap())
-            .map(|r| EventReader::<Product<RootTimestamp, u64>,(u64, TimelySetup, TimelyEvent),_>::new(r))
+            .map(|r| EventReader::<Duration,(Duration,TimelySetup,TimelyEvent),_>::new(r))
             .collect::<Vec<_>>();
 
         worker.dataflow(|scope| {

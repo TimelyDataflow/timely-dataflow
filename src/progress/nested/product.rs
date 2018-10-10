@@ -1,13 +1,25 @@
-//! A pair timestamp suitable for use with the product partial order.
+//! A product-order timestamp combinator
 
-// use std::cmp::Ordering;
 use std::fmt::{Formatter, Error, Debug};
 
 use ::order::{PartialOrder, TotalOrder};
 use progress::Timestamp;
-use progress::nested::summary::Summary;
 
 use abomonation::Abomonation;
+
+use progress::timestamp::Refines;
+
+impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, TInner> {
+    fn to_inner(other: TOuter) -> Self {
+        Product::new(other, Default::default())
+    }
+    fn to_outer(self: Product<TOuter, TInner>) -> TOuter {
+        self.outer
+    }
+    fn summarize(path: <Self as Timestamp>::Summary) -> <TOuter as Timestamp>::Summary {
+        path.outer
+    }
+}
 
 /// A nested pair of timestamps, one outer and one inner.
 ///
@@ -44,32 +56,32 @@ impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for Product<TOuter
         self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
     }
 }
-// impl<TOuter: PartialOrd, TInner: PartialOrd> PartialOrd for Product<TOuter, TInner> {
-//     #[inline(always)]
-//     fn partial_cmp(&self, other: &Product<TOuter, TInner>) -> Option<Ordering> {
-//         match (self <= other, other <= self) {
-//             (true, true)   => Some(Ordering::Equal),
-//             (true, false)  => Some(Ordering::Less),
-//             (false, true)  => Some(Ordering::Greater),
-//             (false, false) => None,
-//         }
-//     }
-//     #[inline(always)]
-//     fn le(&self, other: &Product<TOuter, TInner>) -> bool {
-//         self.inner <= other.inner && self.outer <= other.outer
-//     }
-//     #[inline(always)]
-//     fn ge(&self, other: &Product<TOuter, TInner>) -> bool {
-//         self.inner >= other.inner && self.outer >= other.outer
-//     }
-// }
 
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner> {
-    type Summary = Summary<TOuter::Summary, TInner::Summary>;
+    type Summary = Product<TOuter::Summary, TInner::Summary>;
+}
+
+use progress::timestamp::PathSummary;
+impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<Product<TOuter, TInner>> for Product<TOuter::Summary, TInner::Summary> {
+    #[inline]
+    fn results_in(&self, product: &Product<TOuter, TInner>) -> Option<Product<TOuter, TInner>> {
+        self.outer.results_in(&product.outer)
+            .and_then(|outer|
+                self.inner.results_in(&product.inner)
+                    .map(|inner| Product::new(outer, inner))
+            )
+    }
+    #[inline]
+    fn followed_by(&self, other: &Product<TOuter::Summary, TInner::Summary>) -> Option<Product<TOuter::Summary, TInner::Summary>> {
+        self.outer.followed_by(&other.outer)
+            .and_then(|outer|
+                self.inner.followed_by(&other.inner)
+                    .map(|inner| Product::new(outer, inner))
+            )
+    }
 }
 
 impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
-    // unsafe fn embalm(&mut self) { self.outer.embalm(); self.inner.embalm(); }
     unsafe fn entomb<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
         self.outer.entomb(write)?;
         self.inner.entomb(write)?;
@@ -89,9 +101,6 @@ impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, T
 /// public traits for public types.
 pub trait Empty : PartialOrder { }
 
-use progress::timestamp::RootTimestamp;
-
-impl Empty for RootTimestamp { }
 impl Empty for () { }
 impl<T1: Empty, T2: Empty> Empty for Product<T1, T2> { }
 

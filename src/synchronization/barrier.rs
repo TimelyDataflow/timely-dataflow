@@ -1,8 +1,6 @@
 //! Barrier synchronization.
 
 use ::communication::Allocate;
-use progress::timestamp::RootTimestamp;
-use progress::nested::product::Product;
 use dataflow::{InputHandle, ProbeHandle};
 use worker::Worker;
 
@@ -10,7 +8,7 @@ use worker::Worker;
 pub struct Barrier<A: Allocate> {
     round: usize,
     input: InputHandle<usize, ()>,
-    probe: ProbeHandle<Product<RootTimestamp, usize>>,
+    probe: ProbeHandle<usize>,
     worker: Worker<A>,
 }
 

@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use std::collections::VecDeque;
 
 use ::{communication::Allocate, ExchangeData};
@@ -35,7 +35,7 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
         let recv_weak = Rc::downgrade(&recv);
 
         // build a dataflow used to serialize and circulate commands
-        worker.dataflow(move |dataflow| {
+        worker.dataflow::<Duration,_,_>(move |dataflow| {
 
             let peers = dataflow.peers();
             let mut recvd = Vec::new();
@@ -56,9 +56,7 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
                         let capability = capability.as_mut().expect("Capability unavailable");
 
                         // downgrade capability to current time.
-                        let mut time = capability.time().clone();
-                        time.inner = timer.elapsed();
-                        capability.downgrade(&time);
+                        capability.downgrade(&timer.elapsed());
 
                         // drain and broadcast `send`.
                         let mut session = output.session(&capability);

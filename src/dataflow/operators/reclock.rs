@@ -21,18 +21,17 @@ pub trait Reclock<S: Scope, D: Data> {
     /// ```
     /// use timely::dataflow::operators::{ToStream, Delay, Map, Reclock, Capture};
     /// use timely::dataflow::operators::capture::Extract;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// let captured = timely::example(|scope| {
     ///
     ///     // produce data 0..10 at times 0..10.
     ///     let data = (0..10).to_stream(scope)
-    ///                       .delay(|x,t| RootTimestamp::new(*x));
+    ///                       .delay(|x,t| *x);
     ///
     ///     // product clock ticks at three times.
     ///     let clock = vec![3, 5, 8].into_iter()
     ///                              .to_stream(scope)
-    ///                              .delay(|x,t| RootTimestamp::new(*x))
+    ///                              .delay(|x,t| *x)
     ///                              .map(|_| ());
     ///
     ///     // reclock the data.
@@ -42,9 +41,9 @@ pub trait Reclock<S: Scope, D: Data> {
     ///
     /// let extracted = captured.extract();
     /// assert_eq!(extracted.len(), 3);
-    /// assert_eq!(extracted[0], (RootTimestamp::new(3), vec![0,1,2,3]));
-    /// assert_eq!(extracted[1], (RootTimestamp::new(5), vec![4,5]));
-    /// assert_eq!(extracted[2], (RootTimestamp::new(8), vec![6,7,8]));
+    /// assert_eq!(extracted[0], (3, vec![0,1,2,3]));
+    /// assert_eq!(extracted[1], (5, vec![4,5]));
+    /// assert_eq!(extracted[2], (8, vec![6,7,8]));
     /// ```
     fn reclock(&self, clock: &Stream<S, ()>) -> Stream<S, D>;
 }

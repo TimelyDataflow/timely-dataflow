@@ -3,8 +3,9 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::any::Any;
+use std::time::Instant;
 
-use progress::timestamp::RootTimestamp;
+use progress::timestamp::{Refines};
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use communication::{Allocate, Data, Push, Pull};
 use dataflow::scopes::Child;
@@ -12,6 +13,7 @@ use dataflow::scopes::Child;
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a list of dataflows that it manages.
 pub struct Worker<A: Allocate> {
+    timer: Instant,
     allocator: Rc<RefCell<A>>,
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
@@ -41,9 +43,10 @@ impl<A: Allocate> AsWorker for Worker<A> {
 impl<A: Allocate> Worker<A> {
     /// Allocates a new `Worker` bound to a channel allocator.
     pub fn new(c: A) -> Worker<A> {
-        let now = ::std::time::Instant::now();
+        let now = Instant::now();
         let index = c.index();
         Worker {
+            timer: now.clone(),
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
@@ -86,6 +89,9 @@ impl<A: Allocate> Worker<A> {
     /// The total number of peer workers.
     pub fn peers(&self) -> usize { self.allocator.borrow().peers() }
 
+    /// A timer started at the initiation of the timely computation.
+    pub fn timer(&self) -> Instant { self.timer }
+
     /// Allocate a new worker-unique identifier.
     pub fn new_identifier(&mut self) -> usize {
         *self.identifiers.borrow_mut() += 1;
@@ -98,7 +104,10 @@ impl<A: Allocate> Worker<A> {
     }
 
     /// Construct a new dataflow.
-    pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
+    pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R
+    where
+        T: Refines<()>
+    {
         self.dataflow_using(Box::new(()), |_, child| func(child))
     }
 
@@ -108,13 +117,16 @@ impl<A: Allocate> Worker<A> {
     /// with the dataflow until it has completed running. Once complete, the resources are dropped. The most
     /// common use of this method at present is with loading shared libraries, where the library is important
     /// for building the dataflow, and must be kept around until after the dataflow has completed operation.
-    pub fn dataflow_using<T: Timestamp, R, F:FnOnce(&mut V, &mut Child<Self, T>)->R, V: Any+'static>(&mut self, mut resources: V, func: F) -> R {
+    pub fn dataflow_using<T: Timestamp, R, F:FnOnce(&mut V, &mut Child<Self, T>)->R, V: Any+'static>(&mut self, mut resources: V, func: F) -> R
+    where
+        T: Refines<()>,
+    {
 
         let addr = vec![self.allocator.borrow().index()];
         let dataflow_index = self.allocate_dataflow_index();
 
         let mut logging = self.logging.borrow_mut().get("timely");
-        let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone());
+        let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone(), "Dataflow");
         let subscope = RefCell::new(subscope);
 
         let result = {
@@ -164,6 +176,7 @@ impl<A: Allocate> Allocate for Worker<A> {
 impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {
         Worker {
+            timer: self.timer,
             allocator: self.allocator.clone(),
             identifiers: self.identifiers.clone(),
             dataflows: self.dataflows.clone(),
@@ -175,7 +188,7 @@ impl<A: Allocate> Clone for Worker<A> {
 
 struct Wrapper {
     _index: usize,
-    operate: Option<Box<Operate<RootTimestamp>>>,
+    operate: Option<Box<Operate<()>>>,
     resources: Option<Box<Any>>,
 }
 

@@ -2,7 +2,7 @@ extern crate timely;
 
 use std::collections::HashMap;
 
-use timely::dataflow::InputHandle;
+use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Inspect, Probe};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Exchange;
@@ -12,15 +12,18 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         let index = worker.index();
         let mut input = InputHandle::new();
+        let mut probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
-        let probe = worker.dataflow(|scope| {
+        worker.dataflow::<usize,_,_>(|scope| {
             let mut counts_by_time = HashMap::new();
             scope.input_from(&mut input)
                 .unary(Exchange::new(|x| *x), "Distinct", move |_, _|
                     move |input, output| {
                         input.for_each(|time, data| {
-                            let counts = counts_by_time.entry(time.time().clone())
+                            let counts =
+                            counts_by_time
+                                .entry(time.time().clone())
                                 .or_insert(HashMap::new());
                             let mut session = output.session(&time);
                             for &datum in data.iter() {
@@ -33,7 +36,7 @@ fn main() {
                         })
                     })
                 .inspect(move |x| println!("worker {}:\tvalue {}", index, x))
-                .probe()
+                .probe_with(&mut probe);
         });
 
         // introduce data and watch!
