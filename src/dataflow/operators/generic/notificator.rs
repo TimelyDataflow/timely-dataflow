@@ -1,7 +1,10 @@
+use std::marker::PhantomData;
+
 use progress::frontier::{AntichainRef, MutableAntichain};
 use progress::Timestamp;
 use dataflow::operators::Capability;
 use logging::TimelyLogger as Logger;
+use dataflow::operators::generic::combiner::Combiner;
 
 /// Tracks requests for notification and delivers available notifications.
 ///
@@ -17,19 +20,19 @@ use logging::TimelyLogger as Logger;
 /// Notification requests persist across uses of `Notificator`, and it may help to think of `Notificator`
 /// as a notification *session*. However, idiomatically it seems you mostly want to restrict your usage
 /// to such sessions, which is why this is the main notificator type.
-pub struct Notificator<'a, T: Timestamp, D: 'a + Zero + Combine = u64> {
+pub struct Notificator<'a, T: Timestamp, C: 'a + Combiner<D>, D: 'a + Zero> {
     frontiers: &'a [&'a MutableAntichain<T>],
-    inner: &'a mut FrontierNotificator<T, D>,
+    inner: &'a mut FrontierNotificator<T, C, D>,
     logging: &'a Option<Logger>,
 }
 
-impl<'a, T: Timestamp, D: Zero + Combine> Notificator<'a, T, D> {
+impl<'a, T: Timestamp, D: Zero, C: Combiner<D>> Notificator<'a, T, C, D> {
     /// Allocates a new `Notificator`.
     ///
     /// This is more commonly accomplished using `input.monotonic(frontiers)`.
     pub fn new(
         frontiers: &'a [&'a MutableAntichain<T>],
-        inner: &'a mut FrontierNotificator<T, D>,
+        inner: &'a mut FrontierNotificator<T, C, D>,
         logging: &'a Option<Logger>) -> Self {
 
         inner.make_available(frontiers);
@@ -47,7 +50,7 @@ impl<'a, T: Timestamp, D: Zero + Combine> Notificator<'a, T, D> {
     }
 }
 
-impl<'a, T: Timestamp> Notificator<'a, T, u64> {
+impl<'a, T: Timestamp, C: Combiner<u64>> Notificator<'a, T, C, u64> {
 
     /// Requests a notification at the time associated with capability `cap`.
     ///
@@ -85,7 +88,7 @@ impl<'a, T: Timestamp> Notificator<'a, T, u64> {
     /// `logic` receives a capability for `t`, the timestamp being notified and a `count`
     /// representing how many capabilities were requested for that specific timestamp.
     #[inline]
-    pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
+    pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T, C, u64>)>(&mut self, mut logic: F) {
         while let Some((cap, data)) = self.next() {
             self.logging.as_ref().map(|l| l.log(::logging::GuardedProgressEvent { is_start: true }));
             logic(cap, data, self);
@@ -94,7 +97,7 @@ impl<'a, T: Timestamp> Notificator<'a, T, u64> {
     }
 }
 
-impl<'a, T: Timestamp, D: Zero + Combine> Notificator<'a, T, D> {
+impl<'a, T: Timestamp, C: Combiner<D>, D: Zero> Notificator<'a, T, C, D> {
 
     /// Requests a notification at the time associated with capability `cap`.
     ///
@@ -103,22 +106,27 @@ impl<'a, T: Timestamp, D: Zero + Combine> Notificator<'a, T, D> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::Operator;
+    /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
+    /// use timely::dataflow::operators::generic::operator::Operator;
+    /// use timely::dataflow::operators::generic::combiner::MaxCombiner;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
-    ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-    ///                    let mut time = cap.time().clone();
-    ///                    time.inner += 1;
-    ///                    notificator.notify_at(cap.delayed(&time));
-    ///                });
-    ///                notificator.for_each(|cap,_,_| {
-    ///                    println!("done with time: {:?}", cap.time());
-    ///                });
+    ///            .unary_frontier(Pipeline, "example", |_, _| {
+    ///                let mut notificator = FrontierNotificator::<_, MaxCombiner<_>, _>::new();
+    ///                move |input, output| {
+    ///                    input.for_each(|cap, data| {
+    ///                        let mut time = cap.time().clone();
+    ///                        time.inner += 1;
+    ///                        notificator.notify_at_data(cap.delayed(&time), *data.iter().max().unwrap());
+    ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
+    ///                    });
+    ///                    notificator.for_each_data(&[input.frontier()], |cap, max, _| {
+    ///                        println!("done with time: {:?}", cap.time());
+    ///                        output.session(&cap).give(max);
+    ///                    });
+    ///                }
     ///            });
     /// });
     /// ```
@@ -141,7 +149,7 @@ impl<'a, T: Timestamp, D: Zero + Combine> Notificator<'a, T, D> {
     }
 }
 
-impl<'a, T: Timestamp, D: Zero + Combine> Iterator for Notificator<'a, T, D> {
+impl<'a, T: Timestamp, C: Combiner<D>, D: Zero> Iterator for Notificator<'a, T, C, D> {
     type Item = (Capability<T>, D);
 
     /// Retrieve the next available notification.
@@ -163,6 +171,7 @@ fn notificator_delivers_notifications_in_topo_order() {
     use progress::ChangeBatch;
     use progress::frontier::MutableAntichain;
     use progress::nested::product::Product;
+    use dataflow::operators::generic::combiner::AddCombiner;
     use dataflow::operators::capability::mint as mint_capability;
 
     let mut frontier = MutableAntichain::new_bottom(Product::new(0, 0));
@@ -185,7 +194,7 @@ fn notificator_delivers_notifications_in_topo_order() {
     ];
 
     // create a raw notificator with pending notifications at the times above.
-    let mut frontier_notificator = FrontierNotificator::from(times.iter().map(|t| root_capability.delayed(t)));
+    let mut frontier_notificator = FrontierNotificator::<_, AddCombiner<u64>, _>::from(times.iter().map(|t| root_capability.delayed(t)));
 
     // the frontier is initially (0,0), and so we should deliver no notifications.
     assert!(frontier_notificator.monotonic(&[&frontier], &logging).next().is_none());
@@ -248,7 +257,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///         let (in1_handle, in1) = scope.new_input();
 ///         let (in2_handle, in2) = scope.new_input();
 ///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
-///             let mut notificator = FrontierNotificator::new();
+///             let mut notificator = FrontierNotificator::<_, Vec<_>, _>::new();
 ///             move |input1, input2, output| {
 ///                 while let Some((time, data)) = input1.next() {
 ///                     let mut vector1 = Vec::new();
@@ -279,17 +288,19 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///     in2.close();
 /// }).unwrap();
 /// ```
-pub struct FrontierNotificator<T: Timestamp, D: Zero + Combine> {
+pub struct FrontierNotificator<T: Timestamp, C: Combiner<D>, D: Zero> {
     pending: Vec<(Capability<T>, D)>,
     available: ::std::collections::BinaryHeap<OrderReversed<T, D>>,
+    _phantom_data: PhantomData<C>,
 }
 
-impl<T: Timestamp, D: Zero + Combine> FrontierNotificator<T, D> {
+impl<T: Timestamp, C: Combiner<D>, D: Zero> FrontierNotificator<T, C, D> {
     /// Allocates a new `FrontierNotificator`.
     pub fn new() -> Self {
         FrontierNotificator {
             pending: Vec::new(),
             available: ::std::collections::BinaryHeap::new(),
+            _phantom_data: PhantomData,
         }
     }
 
@@ -298,6 +309,7 @@ impl<T: Timestamp, D: Zero + Combine> FrontierNotificator<T, D> {
         FrontierNotificator {
             pending: iter.into_iter().collect(),
             available: ::std::collections::BinaryHeap::new(),
+            _phantom_data: PhantomData,
         }
     }
 
@@ -316,7 +328,7 @@ impl<T: Timestamp, D: Zero + Combine> FrontierNotificator<T, D> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_frontier(Pipeline, "example", |_, _| {
-    ///                let mut notificator = FrontierNotificator::new();
+    ///                let mut notificator = FrontierNotificator::<_, Vec<_>, _>::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
@@ -365,7 +377,7 @@ impl<T: Timestamp, D: Zero + Combine> FrontierNotificator<T, D> {
             for i in 0 .. self.pending.len() - 1 {
                 if self.pending[i].0.time() == self.pending[i+1].0.time() {
                     let data = ::std::mem::replace(&mut self.pending[i].1, Zero::zero());
-                    self.pending[i+1].1.combine(data);
+                    C::combine(&mut self.pending[i+1].1, data);
                 }
             }
             self.pending.retain(|x| !x.1.is_zero());
@@ -393,7 +405,9 @@ impl<T: Timestamp, D: Zero + Combine> FrontierNotificator<T, D> {
             self.make_available(frontiers);
         }
         self.available.pop().map(|front| {
-            while self.available.peek() == Some(&front) { self.available.pop(); }
+//            TODO: This was here for a reason, but doesn't work correctly currently. The impl for ==
+//            doesn't look at the data, so we'll silently drop some!
+//            while self.available.peek() == Some(&front) { self.available.pop(); }
             (front.element, front.data)
         })
     }
@@ -415,7 +429,7 @@ impl<T: Timestamp, D: Zero + Combine> FrontierNotificator<T, D> {
     /// This implementation can be emulated with judicious use of `make_available` and `notify_at_frontiered`,
     /// in the event that `Notificator` provides too restrictive an interface.
     #[inline]
-    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Option<Logger>) -> Notificator<'a, T, D> {
+    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Option<Logger>) -> Notificator<'a, T, C, D> {
         Notificator::new(frontiers, self, logging)
     }
 
@@ -429,12 +443,13 @@ impl<T: Timestamp, D: Zero + Combine> FrontierNotificator<T, D> {
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
+    /// use timely::dataflow::operators::generic::combiner::AddCombiner;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_frontier(Pipeline, "example", |_, _| {
-    ///                let mut notificator = FrontierNotificator::new();
+    ///                let mut notificator = FrontierNotificator::<_, AddCombiner<_>, _>::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
@@ -455,13 +470,14 @@ impl<T: Timestamp, D: Zero + Combine> FrontierNotificator<T, D> {
     }
 }
 
-impl<T: Timestamp> FrontierNotificator<T, u64> {
+impl<T: Timestamp, C: Combiner<u64>> FrontierNotificator<T, C, u64> {
 
     /// Allocates a new `FrontierNotificator` with initial capabilities.
     pub fn from<I: IntoIterator<Item=Capability<T>>>(iter: I) -> Self {
         FrontierNotificator {
             pending: iter.into_iter().map(|x| (x, 1)).collect(),
             available: ::std::collections::BinaryHeap::new(),
+            _phantom_data: PhantomData,
         }
     }
 
@@ -475,12 +491,13 @@ impl<T: Timestamp> FrontierNotificator<T, u64> {
     /// ```
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
+    /// use timely::dataflow::operators::generic::combiner::AddCombiner;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_frontier(Pipeline, "example", |_, _| {
-    ///                let mut notificator = FrontierNotificator::new();
+    ///                let mut notificator = FrontierNotificator::<_, AddCombiner<_>, _>::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
@@ -529,6 +546,7 @@ impl<T: Timestamp> FrontierNotificator<T, u64> {
     }
 
 }
+
 struct OrderReversed<T: Timestamp, D> {
     element: Capability<T>,
     data: D,
@@ -575,6 +593,16 @@ impl Zero for i64 {
     fn is_zero(&self) -> bool { *self == Zero::zero() }
 }
 
+impl Zero for u32 {
+    fn zero() -> Self { 0 }
+    fn is_zero(&self) -> bool { *self == Zero::zero() }
+}
+
+impl Zero for i32 {
+    fn zero() -> Self { 0 }
+    fn is_zero(&self) -> bool { *self == Zero::zero() }
+}
+
 impl Zero for usize {
     fn zero() -> Self { 0 }
     fn is_zero(&self) -> bool { *self == Zero::zero() }
@@ -583,32 +611,4 @@ impl Zero for usize {
 impl<D> Zero for Vec<D> {
     fn zero() -> Self { Vec::new() }
     fn is_zero(&self) -> bool { self.is_empty() }
-}
-
-/// Combine multiple elements into a single element.
-///
-/// This can be used to both accumulate values similar to the plus operator as well as appending
-/// more complicated data structures.
-pub trait Combine {
-
-    /// Combine the element `other` into self.
-    #[inline(always)] fn combine(&mut self, other: Self);
-}
-
-impl Combine for u64 {
-    fn combine(&mut self, other: Self) { *self += other }
-}
-
-impl Combine for i64 {
-    fn combine(&mut self, other: Self) { *self += other }
-}
-
-impl Combine for usize {
-    fn combine(&mut self, other: Self) { *self += other }
-}
-
-impl<D> Combine for Vec<D> {
-    fn combine(&mut self, other: Self) {
-        Vec::extend(self, other)
-    }
 }

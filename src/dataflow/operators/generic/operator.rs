@@ -14,6 +14,7 @@ use dataflow::{Stream, Scope};
 use super::builder_rc::OperatorBuilder;
 use dataflow::operators::generic::OperatorInfo;
 use dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
+use dataflow::operators::generic::combiner::AddCombiner;
 
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Data> {
@@ -26,6 +27,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::Operator;
+    /// use timely::dataflow::operators::generic::combiner::AddCombiner;
     /// use timely::dataflow::channels::pact::Pipeline;
     /// use timely::progress::timestamp::RootTimestamp;
     ///
@@ -34,7 +36,7 @@ pub trait Operator<G: Scope, D1: Data> {
     ///         (0u64..10).to_stream(scope)
     ///             .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///                 let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
-    ///                 let mut notificator = FrontierNotificator::new();
+    ///                 let mut notificator = FrontierNotificator::<_, AddCombiner<_>, u64>::new();
     ///                 let mut stash = HashMap::new();
     ///                 let mut vector = Vec::new();
     ///                 move |input, output| {
@@ -97,7 +99,7 @@ pub trait Operator<G: Scope, D1: Data> {
     fn unary_notify<D2: Data,
             L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>,
                      &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>,
-                     &mut Notificator<G::Timestamp>)+'static,
+                     &mut Notificator<G::Timestamp, AddCombiner<u64>, u64>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, logic: L) -> Stream<G, D2>;
 
@@ -147,6 +149,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use std::collections::HashMap;
     /// use timely::dataflow::operators::{Input, Inspect, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
+    /// use timely::dataflow::operators::generic::combiner::AddCombiner;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::execute(timely::Configuration::Thread, |worker| {
@@ -154,7 +157,7 @@ pub trait Operator<G: Scope, D1: Data> {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///        in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
-    ///            let mut notificator = FrontierNotificator::new();
+    ///            let mut notificator = FrontierNotificator::<_, AddCombiner<_>, u64>::new();
     ///            let mut stash = HashMap::new();
     ///            let mut vector1 = Vec::new();
     ///            let mut vector2 = Vec::new();
@@ -249,7 +252,7 @@ pub trait Operator<G: Scope, D1: Data> {
               L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
                        &mut InputHandle<G::Timestamp, D2, P2::Puller>,
                        &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>,
-                       &mut Notificator<G::Timestamp>)+'static,
+                       &mut Notificator<G::Timestamp, AddCombiner<u64>, u64>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, logic: L) -> Stream<G, D3>;
@@ -365,12 +368,12 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
     fn unary_notify<D2: Data,
             L: FnMut(&mut InputHandle<G::Timestamp, D1, P::Puller>,
                      &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>,
-                     &mut Notificator<G::Timestamp>)+'static,
+                     &mut Notificator<G::Timestamp, AddCombiner<u64>, u64>)+'static,
              P: ParallelizationContract<G::Timestamp, D1>>
              (&self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> Stream<G, D2> {
 
         self.unary_frontier(pact, name, move |capability, _info| {
-            let mut notificator = FrontierNotificator::new();
+            let mut notificator = FrontierNotificator::<_, AddCombiner<u64>, u64>::new();
             for time in init {
                 notificator.notify_at(capability.delayed(&time));
             }
@@ -454,13 +457,13 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
               L: FnMut(&mut InputHandle<G::Timestamp, D1, P1::Puller>,
                        &mut InputHandle<G::Timestamp, D2, P2::Puller>,
                        &mut OutputHandle<G::Timestamp, D3, Tee<G::Timestamp, D3>>,
-                       &mut Notificator<G::Timestamp>)+'static,
+                       &mut Notificator<G::Timestamp, AddCombiner<u64>, u64>)+'static,
               P1: ParallelizationContract<G::Timestamp, D1>,
               P2: ParallelizationContract<G::Timestamp, D2>>
             (&self, other: &Stream<G, D2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> Stream<G, D3> {
 
         self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
-            let mut notificator = FrontierNotificator::new();
+            let mut notificator = FrontierNotificator::<_, AddCombiner<_>, _>::new();
             for time in init {
                 notificator.notify_at(capability.delayed(&time));
             }
