@@ -116,8 +116,7 @@ impl<'a, T: Timestamp, C: Combiner<D>, D: Zero> Notificator<'a, T, C, D> {
     ///                let mut notificator = FrontierNotificator::<_, MaxCombiner<_>, _>::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
-    ///                        let mut time = cap.time().clone();
-    ///                        time.inner += 1;
+    ///                        let mut time = cap.time().clone() + 1;
     ///                        notificator.notify_at_data(cap.delayed(&time), *data.iter().max().unwrap());
     ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
     ///                    });
@@ -332,7 +331,7 @@ impl<T: Timestamp, C: Combiner<D>, D: Zero> FrontierNotificator<T, C, D> {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                        let time = cap.time().clone() + 1;
-    ///                        notificator.notify_at_data(cap.delayed(&time), vec![time.inner]);
+    ///                        notificator.notify_at_data(cap.delayed(&time), vec![time]);
     ///                    });
     ///                    notificator.for_each_data(&[input.frontier()], |cap, data, _| {
     ///                        println!("done with time: {:?} at: {:?}", cap.time(), data);
@@ -498,8 +497,7 @@ impl<T: Timestamp, C: Combiner<u64>> FrontierNotificator<T, C, u64> {
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-    ///                        let mut time = cap.time().clone();
-    ///                        time.inner += 1;
+    ///                        let mut time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));
     ///                    });
     ///                    notificator.for_each(&[input.frontier()], |cap, _| {

@@ -25,8 +25,7 @@ pub trait Combiner<D> {
 ///                move |input, output| {
 ///                    input.for_each(|cap, data| {
 ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-///                        let mut time = cap.time().clone();
-///                        time.inner += 1;
+///                        let mut time = cap.time().clone() + 1;
 ///                        notificator.notify_at(cap.delayed(&time));
 ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
 ///                    });
@@ -63,8 +62,7 @@ impl<D: ::std::ops::AddAssign<D>> Combiner<D> for AddCombiner<D> {
 ///                move |input, output| {
 ///                    input.for_each(|cap, data| {
 ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-///                        let mut time = cap.time().clone();
-///                        time.inner += 1;
+///                        let mut time = cap.time().clone() + 1;
 ///                        notificator.notify_at(cap.delayed(&time));
 ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
 ///                    });
