@@ -49,21 +49,6 @@ impl<S: PartialOrder, T: PartialOrder> PartialOrder for Summary<S, T> {
     }
 }
 
-// impl<S:PartialOrder+Copy, T:PartialOrder+Copy> PartialOrder for Summary<S, T> {
-//     #[inline]
-//     fn partial_cmp(&self, other: &Summary<S, T>) -> Option<Ordering> {
-//         // Two summaries are comparable if they are of the same type (Local, Outer).
-//         // Otherwise, as Local *updates* and Outer *sets* the inner coordinate, we
-//         // cannot be sure that either strictly improves on the other.
-//         match (*self, *other) {
-//             (Local(t1),    Local(t2))    => t1.partial_cmp(&t2),
-//             (Outer(s1,t1), Outer(s2,t2)) => (s1,t1).partial_cmp(&(s2,t2)),
-//             (Local(_),     Outer(_,_))   |
-//             (Outer(_,_),   Local(_))     => None,
-//         }
-//     }
-// }
-
 impl<TOuter, SOuter, TInner, SInner> PathSummary<Product<TOuter, TInner>> for Summary<SOuter, SInner>
 where TOuter: Timestamp,
       TInner: Timestamp,

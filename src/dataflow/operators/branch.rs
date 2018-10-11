@@ -80,13 +80,12 @@ pub trait BranchWhen<S: Scope, D: Data> {
     /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, BranchWhen, Inspect, Delay};
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// timely::example(|scope| {
     ///     let (before_five, after_five) = (0..10)
     ///         .to_stream(scope)
-    ///         .delay(|x,t| RootTimestamp::new(*x)) // data 0..10 at time 0..10
-    ///         .branch_when(|time| time.inner >= 5);
+    ///         .delay(|x,t| *x) // data 0..10 at time 0..10
+    ///         .branch_when(|time| time >= &5);
     ///
     ///     before_five.inspect(|x| println!("Times 0-4: {:?}", x));
     ///     after_five.inspect(|x| println!("Times 5 and later: {:?}", x));

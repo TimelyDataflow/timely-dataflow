@@ -11,7 +11,7 @@
 //!
 //! timely::example(|outer| {
 //!     let stream = (0..9).to_stream(outer);
-//!     let output = outer.scoped::<u32,_,_>(|inner| {
+//!     let output = outer.region(|inner| {
 //!         stream.enter(inner)
 //!               .inspect(|x| println!("in nested scope: {:?}", x))
 //!               .leave()
@@ -19,12 +19,13 @@
 //! });
 //! ```
 
-use std::default::Default;
+// use std::default::Default;
 
 use std::marker::PhantomData;
 
 use progress::Timestamp;
-use progress::nested::subgraph::{Source, Target};
+use progress::timestamp::Refines;
+use progress::nested::{Source, Target};
 use progress::nested::product::Product;
 use Data;
 use communication::Push;
@@ -33,11 +34,11 @@ use dataflow::channels::{Bundle, Message};
 
 use worker::AsWorker;
 use dataflow::{Stream, Scope};
-use dataflow::scopes::Child;
+use dataflow::scopes::{Child, ScopeParent};
 use dataflow::operators::delay::Delay;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
-pub trait Enter<G: Scope, T: Timestamp, D: Data> {
+pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> {
     /// Moves the `Stream` argument into a child of its current `Scope`.
     ///
     /// # Examples
@@ -47,13 +48,15 @@ pub trait Enter<G: Scope, T: Timestamp, D: Data> {
     ///
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer);
-    ///     let output = outer.scoped::<u32,_,_>(|inner| {
+    ///     let output = outer.region(|inner| {
     ///         stream.enter(inner).leave()
     ///     });
     /// });
     /// ```
     fn enter<'a>(&self, &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D>;
 }
+
+use dataflow::scopes::child::Iterative;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
 pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
@@ -65,27 +68,27 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     /// use timely::dataflow::operators::{EnterAt, Leave, ToStream};
     ///
     /// timely::example(|outer| {
-    ///     let stream = (0..9).to_stream(outer);
-    ///     let output = outer.scoped::<u32,_,_>(|inner| {
+    ///     let stream = (0..9u64).to_stream(outer);
+    ///     let output = outer.iterative(|inner| {
     ///         stream.enter_at(inner, |x| *x).leave()
     ///     });
     /// });
     /// ```
-    fn enter_at<'a, F:Fn(&D)->T+'static>(&self, scope: &Child<'a, G, T>, initial: F) -> Stream<Child<'a, G, T>, D> ;
+    fn enter_at<'a, F:Fn(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, D> ;
 }
 
-impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, T, D>> EnterAt<G, T, D> for E {
-    fn enter_at<'a, F:Fn(&D)->T+'static>(&self, scope: &Child<'a, G, T>, initial: F) ->
-        Stream<Child<'a, G, T>, D> {
-            self.enter(scope).delay(move |datum, time| Product::new(time.outer.clone(), initial(datum)))
+impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, D>> EnterAt<G, T, D> for E {
+    fn enter_at<'a, F:Fn(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) ->
+        Stream<Iterative<'a, G, T>, D> {
+            self.enter(scope).delay(move |datum, time| Product::new(time.clone().to_outer(), initial(datum)))
     }
 }
 
-impl<T: Timestamp, G: Scope, D: Data> Enter<G, T, D> for Stream<G, D> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> Enter<G, T, D> for Stream<G, D> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D> {
 
-        let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
-        let ingress = IngressNub { targets: Counter::new(targets) };
+        let (targets, registrar) = Tee::<T, D>::new();
+        let ingress = IngressNub { targets: Counter::new(targets), phantom: ::std::marker::PhantomData };
         let produced = ingress.targets.produced().clone();
 
         let input = scope.subgraph.borrow_mut().new_input(produced);
@@ -107,7 +110,7 @@ pub trait Leave<G: Scope, D: Data> {
     ///
     /// timely::example(|outer| {
     ///     let stream = (0..9).to_stream(outer);
-    ///     let output = outer.scoped::<u32,_,_>(|inner| {
+    ///     let output = outer.region(|inner| {
     ///         stream.enter(inner).leave()
     ///     });
     /// });
@@ -115,7 +118,7 @@ pub trait Leave<G: Scope, D: Data> {
     fn leave(&self) -> Stream<G, D>;
 }
 
-impl<'a, G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<'a, G, T>, D> {
+impl<'a, G: Scope, D: Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for Stream<Child<'a, G, T>, D> {
     fn leave(&self) -> Stream<G, D> {
 
         let scope = self.scope();
@@ -134,16 +137,17 @@ impl<'a, G: Scope, D: Data, T: Timestamp> Leave<G, D> for Stream<Child<'a, G, T>
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
-    targets: Counter<Product<TOuter, TInner>, TData, Tee<Product<TOuter, TInner>, TData>>,
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> {
+    targets: Counter<TInner, TData, Tee<TInner, TData>>,
+    phantom: ::std::marker::PhantomData<TOuter>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Push<Bundle<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> Push<Bundle<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
     fn push(&mut self, message: &mut Option<Bundle<TOuter, TData>>) {
         if let Some(message) = message {
             let outer_message = message.as_mut();
             let data = ::std::mem::replace(&mut outer_message.data, Vec::new());
-            let mut inner_message = Some(Bundle::from_typed(Message::new(Product::new(outer_message.time.clone(), Default::default()), data, 0, 0)));
+            let mut inner_message = Some(Bundle::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
                 if let Some(inner_message) = inner_message.if_typed() {
@@ -156,18 +160,18 @@ impl<TOuter: Timestamp, TInner: Timestamp, TData: Data> Push<Bundle<TOuter, TDat
 }
 
 
-struct EgressNub<TOuter: Timestamp, TInner: Timestamp, TData: Data> {
+struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> {
     targets: Tee<TOuter, TData>,
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData> Push<Bundle<Product<TOuter, TInner>, TData>> for EgressNub<TOuter, TInner, TData>
-where TOuter: Timestamp, TInner: Timestamp, TData: Data {
-    fn push(&mut self, message: &mut Option<Bundle<Product<TOuter, TInner>, TData>>) {
+impl<TOuter, TInner, TData> Push<Bundle<TInner, TData>> for EgressNub<TOuter, TInner, TData>
+where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
+    fn push(&mut self, message: &mut Option<Bundle<TInner, TData>>) {
         if let Some(message) = message {
             let inner_message = message.as_mut();
             let data = ::std::mem::replace(&mut inner_message.data, Vec::new());
-            let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.outer.clone(), data, 0, 0)));
+            let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
                 if let Some(outer_message) = outer_message.if_typed() {

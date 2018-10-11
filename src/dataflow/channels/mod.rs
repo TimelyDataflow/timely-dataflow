@@ -13,7 +13,7 @@ pub mod pact;
 pub type Bundle<T, D> = ::communication::Message<Message<T, D>>;
 
 /// A serializable representation of timestamped data.
-#[derive(Clone, Abomonation)]
+#[derive(Clone, Abomonation, Serialize, Deserialize)]
 pub struct Message<T, D> {
     /// The timestamp associated with the message.
     pub time: T,

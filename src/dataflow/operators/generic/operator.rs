@@ -29,13 +29,12 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::operators::generic::combiner::AddCombiner;
     /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// fn main() {
     ///     timely::example(|scope| {
     ///         (0u64..10).to_stream(scope)
     ///             .unary_frontier(Pipeline, "example", |default_cap, _info| {
-    ///                 let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///                 let mut cap = Some(default_cap.delayed(&12));
     ///                 let mut notificator = FrontierNotificator::<_, AddCombiner<_>, u64>::new();
     ///                 let mut stash = HashMap::new();
     ///                 let mut vector = Vec::new();
@@ -77,12 +76,12 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::progress::timestamp::RootTimestamp;
     ///
     /// fn main() {
     ///     timely::example(|scope| {
     ///         let mut vector = Vec::new();
-    ///         (0u64..10).to_stream(scope)
+    ///         (0u64..10)
+    ///             .to_stream(scope)
     ///             .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
     ///                 input.for_each(|time, data| {
     ///                     data.swap(&mut vector);
@@ -112,13 +111,12 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::progress::timestamp::RootTimestamp;
     /// use timely::dataflow::Scope;
     ///
     /// timely::example(|scope| {
     ///     (0u64..10).to_stream(scope)
     ///         .unary(Pipeline, "example", |default_cap, _info| {
-    ///             let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///             let mut cap = Some(default_cap.delayed(&12));
     ///             let mut vector = Vec::new();
     ///             move |input, output| {
     ///                 if let Some(ref c) = cap.take() {
@@ -153,7 +151,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::execute(timely::Configuration::Thread, |worker| {
-    ///    let (mut in1, mut in2) = worker.dataflow(|scope| {
+    ///    let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///        in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
@@ -214,7 +212,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::execute(timely::Configuration::Thread, |worker| {
-    ///    let (mut in1, mut in2) = worker.dataflow(|scope| {
+    ///    let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///
@@ -266,14 +264,13 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::operators::{ToStream, Inspect, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::progress::timestamp::RootTimestamp;
     /// use timely::dataflow::Scope;
     ///
     /// timely::example(|scope| {
     ///     let stream2 = (0u64..10).to_stream(scope);
     ///     (0u64..10).to_stream(scope)
     ///         .binary(&stream2, Pipeline, Pipeline, "example", |default_cap, _info| {
-    ///             let mut cap = Some(default_cap.delayed(&RootTimestamp::new(12)));
+    ///             let mut cap = Some(default_cap.delayed(&12));
     ///             let mut vector1 = Vec::new();
     ///             let mut vector2 = Vec::new();
     ///             move |input1, input2, output| {
@@ -312,7 +309,6 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::operators::{ToStream, FrontierNotificator};
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::progress::timestamp::RootTimestamp;
     /// use timely::dataflow::Scope;
     ///
     /// timely::example(|scope| {
@@ -551,14 +547,13 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 ///             let mut done = false;
 ///             if let Some(cap) = cap.as_mut() {
 ///                 // get some data and send it.
-///                 let mut time = cap.time().clone();
+///                 let time = cap.time().clone();
 ///                 output.session(&cap)
-///                       .give(cap.time().inner);
+///                       .give(*cap.time());
 ///
 ///                 // downgrade capability.
-///                 time.inner += 1;
-///                 *cap = cap.delayed(&time);
-///                 done = time.inner > 20;
+///                 cap.downgrade(&(time + 1));
+///                 done = time > 20;
 ///             }
 ///
 ///             if done { cap = None; }

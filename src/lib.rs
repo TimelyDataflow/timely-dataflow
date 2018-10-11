@@ -60,6 +60,9 @@
 #[macro_use]
 extern crate abomonation_derive;
 extern crate abomonation;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate timely_communication;
 extern crate timely_bytes;
 extern crate timely_logging;
@@ -97,8 +100,8 @@ pub mod logging;
 /// A composite trait for types usable as data in timely dataflow.
 ///
 /// The `Data` trait is necessary for all types that go along timely dataflow channels.
-pub trait Data: ::abomonation::Abomonation+Clone+'static { }
-impl<T: ::abomonation::Abomonation+Clone+'static> Data for T { }
+pub trait Data: Clone+'static { }
+impl<T: Clone+'static> Data for T { }
 
 /// A composite trait for types usable on exchange channels in timely dataflow.
 ///

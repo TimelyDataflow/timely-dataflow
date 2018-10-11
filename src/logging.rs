@@ -8,19 +8,17 @@ pub type Logger<Event> = ::logging_core::Logger<Event, WorkerIdentifier>;
 pub type TimelyLogger = Logger<TimelyEvent>;
 
 use std::time::Duration;
-use ::progress::timestamp::RootTimestamp;
-use ::progress::nested::product::Product;
 use dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
-pub struct BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
+pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
     // None when the logging stream is closed
     time: Duration,
     event_pusher: P,
     _phantom: ::std::marker::PhantomData<(E, T)>,
 }
 
-impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
+impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
         BatchLogger {
@@ -31,16 +29,16 @@ impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, D
     }
     /// Publishes a batch of logged events and advances the capability.
     pub fn publish_batch(&mut self, time: &Duration, data: &mut Vec<(Duration, E, T)>) {
-        let new_frontier = RootTimestamp::new(time.clone());
-        let old_frontier = RootTimestamp::new(self.time.clone());
-        self.event_pusher.push(Event::Messages(RootTimestamp::new(self.time), ::std::mem::replace(data, Vec::new())));
+        let new_frontier = time.clone();
+        let old_frontier = self.time.clone();
+        self.event_pusher.push(Event::Messages(self.time, ::std::mem::replace(data, Vec::new())));
         self.event_pusher.push(Event::Progress(vec![(new_frontier, 1), (old_frontier, -1)]));
         self.time = time.clone();
     }
 }
-impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Product<RootTimestamp, Duration>, (Duration, E, T)> {
+impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
     fn drop(&mut self) {
-        self.event_pusher.push(Event::Progress(vec![(RootTimestamp::new(self.time), -1)]));
+        self.event_pusher.push(Event::Progress(vec![(self.time, -1)]));
     }
 }
 

@@ -12,11 +12,13 @@ keywords = ["timely", "dataflow"]
 license = "MIT"
 
 [features]
-default=["arg_parse"]
-arg_parse=["getopts"]
+default = ["getopts"]
 
 [dependencies]
-getopts={version="0.2.14", optional=true}
+getopts = { version = "0.2.14", optional = true}
+bincode = { version = "1.0", optional = true }
+serde_derive = "1.0"
+serde = "1.0"
 abomonation = "0.7"
 abomonation_derive = "0.3"
 timely_bytes = { path = "../bytes", version = "0.7" }

@@ -12,14 +12,14 @@ use progress::nested::{Source, Target};
 use progress::ChangeBatch;
 
 use progress::nested::product::Product;
-use progress::nested::Summary::Local;
+// use progress::nested::Summary::Local;
 
 use dataflow::channels::Bundle;
 use dataflow::channels::pushers::{Counter, Tee};
 use worker::AsWorker;
 
 use dataflow::{Stream, Scope, ScopeParent};
-use dataflow::scopes::Child;
+use dataflow::scopes::child::Iterative;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
@@ -31,22 +31,25 @@ pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
     ///
     /// # Examples
     /// ```
+    /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
     ///
     /// timely::example(|scope| {
-    ///     // circulate 0..10 for 100 iterations.
-    ///     let (handle, cycle) = scope.loop_variable(100, 1);
-    ///     (0..10).to_stream(scope)
-    ///            .concat(&cycle)
-    ///            .inspect(|x| println!("seen: {:?}", x))
-    ///            .connect_loop(handle);
+    ///     scope.scoped("Loop", |scope| {
+    ///         // circulate 0..10 for 100 iterations.
+    ///         let (handle, cycle) = scope.loop_variable(100, 1);
+    ///         (0..10).to_stream(scope)
+    ///                .concat(&cycle)
+    ///                .inspect(|x| println!("seen: {:?}", x))
+    ///                .connect_loop(handle);
+    ///     });
     /// });
     /// ```
-    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>);
+    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Iterative<'a, G, T>, D>);
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T> {
-    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Child<'a, G, T>, D>) {
+impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
+    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Iterative<'a, G, T>, D>) {
 
         let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
 
@@ -61,7 +64,7 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Child<'a, G, T
         let index = self.add_operator(Box::new(Operator {
             consumed_messages:  consumed,
             produced_messages:  produced,
-            summary:            Local(summary),
+            summary:            Product::new(Default::default(), summary),
         }));
 
         let helper = Handle {
@@ -105,21 +108,24 @@ pub trait ConnectLoop<G: ScopeParent, T: Timestamp, D: Data> {
     ///
     /// # Examples
     /// ```
+    /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
     ///
     /// timely::example(|scope| {
-    ///     // circulate 0..10 for 100 iterations.
-    ///     let (handle, cycle) = scope.loop_variable(100, 1);
-    ///     (0..10).to_stream(scope)
-    ///            .concat(&cycle)
-    ///            .inspect(|x| println!("seen: {:?}", x))
-    ///            .connect_loop(handle);
+    ///     scope.scoped("Loop", |scope| {
+    ///         // circulate 0..10 for 100 iterations.
+    ///         let (handle, cycle) = scope.loop_variable(100, 1);
+    ///         (0..10).to_stream(scope)
+    ///                .concat(&cycle)
+    ///                .inspect(|x| println!("seen: {:?}", x))
+    ///                .connect_loop(handle);
+    ///     });
     /// });
     /// ```
     fn connect_loop(&self, Handle<G::Timestamp, T, D>);
 }
 
-impl<'a, G: ScopeParent, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Child<'a, G, T>, D> {
+impl<'a, G: ScopeParent, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Iterative<'a, G, T>, D> {
     fn connect_loop(&self, helper: Handle<G::Timestamp, T, D>) {
         let channel_id = self.scope().new_identifier();
         self.connect_to(Target { index: helper.index, port: 0 }, helper.target, channel_id);

@@ -6,14 +6,12 @@ use std::default::Default;
 
 use progress::frontier::Antichain;
 use progress::{Operate, Timestamp, ChangeBatch};
-use progress::nested::{subgraph::Source, product::Product};
-use progress::timestamp::RootTimestamp;
+use progress::nested::Source;
 
 use Data;
-use communication::{Allocate, Push};
-use dataflow::{Stream, Scope, scopes::Child};
+use communication::Push;
+use dataflow::{Stream, ScopeParent, Scope};
 use dataflow::channels::{Message, pushers::{Tee, Counter}};
-use worker::Worker;
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
@@ -23,7 +21,7 @@ use worker::Worker;
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 /// Create a new `Stream` and `Handle` through which to supply input.
-pub trait Input<'a, A: Allocate, T: Timestamp> {
+pub trait Input : Scope {
     /// Create a new `Stream` and `Handle` through which to supply input.
     ///
     /// The `new_input` method returns a pair `(Handle, Stream)` where the `Stream` can be used
@@ -57,7 +55,7 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Worker<A>, T>, D>);
+    fn new_input<D: Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, Stream<Self, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -89,19 +87,20 @@ pub trait Input<'a, A: Allocate, T: Timestamp> {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Worker<A>, T>, D>;
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, D>;
 }
 
-impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Worker<A>, T> {
-    fn new_input<D: Data>(&mut self) -> (Handle<T, D>, Stream<Child<'a, Worker<A>, T>, D>) {
+use order::TotalOrder;
+impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
+    fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, Stream<G, D>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<T, D>) -> Stream<Child<'a, Worker<A>, T>, D> {
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
 
-        let (output, registrar) = Tee::<Product<RootTimestamp, T>, D>::new();
+        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, D>::new();
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
@@ -122,26 +121,26 @@ impl<'a, A: Allocate, T: Timestamp> Input<'a, A, T> for Child<'a, Worker<A>, T> 
 }
 
 struct Operator<T:Timestamp> {
-    progress:   Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>,           // times closed since last asked
-    messages:   Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>,           // messages sent since last asked
+    progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
+    messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
     copies:     usize,
 }
 
-impl<T:Timestamp> Operate<Product<RootTimestamp, T>> for Operator<T> {
+impl<T:Timestamp> Operate<T> for Operator<T> {
     fn name(&self) -> String { "Input".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<Product<RootTimestamp, T> as Timestamp>::Summary>>>,
-                                           Vec<ChangeBatch<Product<RootTimestamp, T>>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>,
+                                           Vec<ChangeBatch<T>>) {
         let mut map = ChangeBatch::new();
         map.update(Default::default(), self.copies as i64);
         (Vec::new(), vec![map])
     }
 
-    fn pull_internal_progress(&mut self,_messages_consumed: &mut [ChangeBatch<Product<RootTimestamp, T>>],
-                                         frontier_progress: &mut [ChangeBatch<Product<RootTimestamp, T>>],
-                                         messages_produced: &mut [ChangeBatch<Product<RootTimestamp, T>>]) -> bool
+    fn pull_internal_progress(&mut self,_messages_consumed: &mut [ChangeBatch<T>],
+                                         frontier_progress: &mut [ChangeBatch<T>],
+                                         messages_produced: &mut [ChangeBatch<T>]) -> bool
     {
         self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
         self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
@@ -154,11 +153,11 @@ impl<T:Timestamp> Operate<Product<RootTimestamp, T>> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct Handle<T: Timestamp, D: Data> {
-    progress: Vec<Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>>,
-    pushers: Vec<Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>>,
+    progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
+    pushers: Vec<Counter<T, D, Tee<T, D>>>,
     buffer1: Vec<D>,
     buffer2: Vec<D>,
-    now_at: Product<RootTimestamp, T>,
+    now_at: T,
 }
 
 impl<T:Timestamp, D: Data> Handle<T, D> {
@@ -225,15 +224,18 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<'a, A: Allocate>(&mut self, scope: &mut Child<'a, Worker<A>, T>) -> Stream<Child<'a, Worker<A>, T>, D>
-    where T: Ord {
+    pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> Stream<G, D>
+    where
+        T: TotalOrder,
+        G: ScopeParent<Timestamp=T>,
+    {
         scope.input_from(self)
     }
 
     fn register(
         &mut self,
-        pusher: Counter<Product<RootTimestamp, T>, D, Tee<Product<RootTimestamp, T>, D>>,
-        progress: Rc<RefCell<ChangeBatch<Product<RootTimestamp, T>>>>
+        pusher: Counter<T, D, Tee<T, D>>,
+        progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.
         if !self.buffer1.is_empty() { self.flush(); }
@@ -316,11 +318,11 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// that this input can no longer produce data at earlier timestamps.
     pub fn advance_to(&mut self, next: T) {
         // Assert that we do not rewind time.
-        assert!(self.now_at.inner.less_equal(&next));
+        assert!(self.now_at.less_equal(&next));
         // Flush buffers if time has actually changed.
-        if !self.now_at.inner.eq(&next) {
+        if !self.now_at.eq(&next) {
             self.close_epoch();
-            self.now_at = RootTimestamp::new(next);
+            self.now_at = next;
             for progress in self.progress.iter() {
                 progress.borrow_mut().update(self.now_at.clone(), 1);
             }
@@ -335,11 +337,11 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
     /// Reports the current epoch.
     pub fn epoch(&self) -> &T {
-        &self.now_at.inner
+        &self.now_at
     }
 
     /// Reports the current timestamp.
-    pub fn time(&self) -> &Product<RootTimestamp, T> {
+    pub fn time(&self) -> &T {
         &self.now_at
     }
 }
