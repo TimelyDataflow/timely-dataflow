@@ -72,21 +72,6 @@ impl<T> Message<T> {
             TypedOrBinary::Typed(typed) => Some(typed),
         }
     }
-}
-
-impl<T: Abomonation> Message<T> {
-    /// Wrap bytes as a message.
-    ///
-    /// #Safety
-    ///
-    /// This method is unsafe, in that `Abomonated::new()` is unsafe: it presumes that
-    /// the binary data can be safely decoded, which is unsafe for e.g. UTF8 data and
-    /// enumerations (perhaps among many other types).
-    pub unsafe fn from_bytes(bytes: Bytes) -> Self {
-        let abomonated = Abomonated::new(bytes).expect("Abomonated::new() failed.");
-        Message { payload: TypedOrBinary::Binary(abomonated) }
-    }
-
     /// Returns an immutable or mutable typed reference.
     ///
     /// This method returns a mutable reference if the underlying data are typed Rust
@@ -98,6 +83,21 @@ impl<T: Abomonation> Message<T> {
             TypedOrBinary::Typed(typed) => { RefOrMut::Mut(typed) },
         }
     }
+}
+
+/// These methods require `T` to implement `Abomonation`, for serialization functionality.
+impl<T: Abomonation> Message<T> {
+    /// Wrap bytes as a message.
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe, in that `Abomonated::new()` is unsafe: it presumes that
+    /// the binary data can be safely decoded, which is unsafe for e.g. UTF8 data and
+    /// enumerations (perhaps among many other types).
+    pub unsafe fn from_bytes(bytes: Bytes) -> Self {
+        let abomonated = Abomonated::new(bytes).expect("Abomonated::new() failed.");
+        Message { payload: TypedOrBinary::Binary(abomonated) }
+    }
 
     /// The number of bytes required to serialize the data.
     pub fn length_in_bytes(&self) -> usize {
@@ -106,6 +106,7 @@ impl<T: Abomonation> Message<T> {
             TypedOrBinary::Typed(typed) => { measure(typed) },
         }
     }
+
     /// Writes the binary representation into `writer`.
     pub fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
         match &self.payload {
@@ -130,7 +131,7 @@ impl<T> ::std::ops::Deref for Message<T> {
     }
 }
 
-impl<T: Abomonation+Clone> Message<T> {
+impl<T: Clone> Message<T> {
     /// Produces a typed instance of the wrapped element.
     pub fn into_typed(self) -> T {
         match self.payload {
@@ -154,5 +155,4 @@ impl<T: Abomonation+Clone> Message<T> {
             unreachable!()
         }
     }
-
 }

@@ -4,9 +4,6 @@ use std::fmt::{Formatter, Error, Debug};
 
 use ::order::{PartialOrder, TotalOrder};
 use progress::Timestamp;
-
-use abomonation::Abomonation;
-
 use progress::timestamp::Refines;
 
 impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, TInner> {
@@ -25,7 +22,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, T
 ///
 /// We use `Product` rather than `(TOuter, TInner)` so that we can derive our own `PartialOrd`,
 /// because Rust just uses the lexicographic total order.
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd)]
+#[derive(Abomonation, Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd)]
 pub struct Product<TOuter, TInner> {
     /// Outer timestamp.
     pub outer: TOuter,
@@ -78,19 +75,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<Product<TOuter, TInner>> 
                 self.inner.followed_by(&other.inner)
                     .map(|inner| Product::new(outer, inner))
             )
-    }
-}
-
-impl<TOuter: Abomonation, TInner: Abomonation> Abomonation for Product<TOuter, TInner> {
-    unsafe fn entomb<W: ::std::io::Write>(&self, write: &mut W) -> ::std::io::Result<()> {
-        self.outer.entomb(write)?;
-        self.inner.entomb(write)?;
-        Ok(())
-    }
-    unsafe fn exhume<'a,'b>(&'a mut self, mut bytes: &'b mut [u8]) -> Option<&'b mut [u8]> {
-        let tmp = bytes; bytes = if let Some(bytes) = self.outer.exhume(tmp) { bytes } else { return None };
-        let tmp = bytes; bytes = if let Some(bytes) = self.inner.exhume(tmp) { bytes } else { return None };
-        Some(bytes)
     }
 }
 
