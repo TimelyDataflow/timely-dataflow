@@ -60,6 +60,9 @@
 #[macro_use]
 extern crate abomonation_derive;
 extern crate abomonation;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate timely_communication;
 extern crate timely_bytes;
 extern crate timely_logging;

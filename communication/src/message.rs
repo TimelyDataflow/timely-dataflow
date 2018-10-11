@@ -1,12 +1,13 @@
 //! Types wrapping typed data.
 
 use bytes::arc::Bytes;
-use abomonation::{Abomonation, abomonated::Abomonated, encode, measure};
+use abomonation;//::{abomonated::Abomonated, encode, measure};
+use ::Data;
 
 /// Possible returned representations from a channel.
 enum TypedOrBinary<T> {
     /// Binary representation.
-    Binary(Abomonated<T, Bytes>),
+    Binary(abomonation::abomonated::Abomonated<T, Bytes>),
     /// Rust typed instance.
     Typed(T),
 }
@@ -85,8 +86,9 @@ impl<T> Message<T> {
     }
 }
 
-/// These methods require `T` to implement `Abomonation`, for serialization functionality.
-impl<T: Abomonation> Message<T> {
+// These methods require `T` to implement `Abomonation`, for serialization functionality.
+#[cfg(not(feature = "bincode"))]
+impl<T: Data> Message<T> {
     /// Wrap bytes as a message.
     ///
     /// # Safety
@@ -95,7 +97,7 @@ impl<T: Abomonation> Message<T> {
     /// the binary data can be safely decoded, which is unsafe for e.g. UTF8 data and
     /// enumerations (perhaps among many other types).
     pub unsafe fn from_bytes(bytes: Bytes) -> Self {
-        let abomonated = Abomonated::new(bytes).expect("Abomonated::new() failed.");
+        let abomonated = abomonation::abomonated::Abomonated::new(bytes).expect("Abomonated::new() failed.");
         Message { payload: TypedOrBinary::Binary(abomonated) }
     }
 
@@ -103,7 +105,7 @@ impl<T: Abomonation> Message<T> {
     pub fn length_in_bytes(&self) -> usize {
         match &self.payload {
             TypedOrBinary::Binary(bytes) => { bytes.as_bytes().len() },
-            TypedOrBinary::Typed(typed) => { measure(typed) },
+            TypedOrBinary::Typed(typed) => { abomonation::measure(typed) },
         }
     }
 
@@ -114,7 +116,38 @@ impl<T: Abomonation> Message<T> {
                 writer.write_all(bytes.as_bytes()).expect("Message::into_bytes(): write_all failed.");
             },
             TypedOrBinary::Typed(typed) => {
-                unsafe { encode(typed, writer).expect("Message::into_bytes(): Abomonation::encode failed"); }
+                unsafe { abomonation::encode(typed, writer).expect("Message::into_bytes(): Abomonation::encode failed"); }
+            },
+        }
+    }
+}
+
+#[cfg(feature = "bincode")]
+impl<T: Data> Message<T> {
+    /// Wrap bytes as a message.
+    pub fn from_bytes(bytes: Bytes) -> Self {
+        let typed = ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed");
+        Message { payload: TypedOrBinary::Typed(typed) }
+    }
+
+    /// The number of bytes required to serialize the data.
+    pub fn length_in_bytes(&self) -> usize {
+        match &self.payload {
+            TypedOrBinary::Binary(bytes) => { bytes.as_bytes().len() },
+            TypedOrBinary::Typed(typed) => {
+                ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize
+            },
+        }
+    }
+
+    /// Writes the binary representation into `writer`.
+    pub fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+        match &self.payload {
+            TypedOrBinary::Binary(bytes) => {
+                writer.write_all(bytes.as_bytes()).expect("Message::into_bytes(): write_all failed.");
+            },
+            TypedOrBinary::Typed(typed) => {
+                ::bincode::serialize_into(writer, &typed).expect("bincode::serialize_into() failed");
             },
         }
     }
