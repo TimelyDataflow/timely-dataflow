@@ -5,12 +5,11 @@ use std::any::Any;
 use std::default::Default;
 use std::hash::Hash;
 
-use abomonation::Abomonation;
-
+use communication::Data;
 use order::PartialOrder;
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
-pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Abomonation+Hash+Ord {
+pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Data+Hash+Ord {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
 }

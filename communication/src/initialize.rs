@@ -1,9 +1,9 @@
 //! Initialization logic for a generic instance of the `Allocate` channel allocation trait.
 
 use std::thread;
-#[cfg(feature = "arg_parse")]
+#[cfg(feature = "getopts")]
 use std::io::BufRead;
-#[cfg(feature = "arg_parse")]
+#[cfg(feature = "getopts")]
 use getopts;
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ pub enum Configuration {
     Cluster(usize, usize, Vec<String>, bool, Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
 }
 
-#[cfg(feature = "arg_parse")]
+#[cfg(feature = "getopts")]
 impl Configuration {
 
     /// Constructs a new configuration by parsing supplied text arguments.

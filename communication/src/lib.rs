@@ -75,8 +75,13 @@
 
 #![forbid(missing_docs)]
 
-#[cfg(feature = "arg_parse")]
+#[cfg(feature = "getopts")]
 extern crate getopts;
+#[cfg(feature = "bincode")]
+extern crate bincode;
+#[cfg(feature = "bincode")]
+extern crate serde;
+
 extern crate abomonation;
 #[macro_use] extern crate abomonation_derive;
 
@@ -91,6 +96,9 @@ pub mod message;
 
 use std::any::Any;
 
+#[cfg(feature = "bincode")]
+use serde::{Serialize, Deserialize};
+#[cfg(not(feature = "bincode"))]
 use abomonation::Abomonation;
 
 pub use allocator::Generic as Allocator;
@@ -99,8 +107,16 @@ pub use initialize::{initialize, initialize_from, Configuration, WorkerGuards};
 pub use message::Message;
 
 /// A composite trait for types that may be used with channels.
+#[cfg(not(feature = "bincode"))]
 pub trait Data : Send+Any+Abomonation+'static { }
+#[cfg(not(feature = "bincode"))]
 impl<T: Send+Any+Abomonation+'static> Data for T { }
+
+/// A composite trait for types that may be used with channels.
+#[cfg(feature = "bincode")]
+pub trait Data : Send+Any+Serialize+for<'a>Deserialize<'a>+'static { }
+#[cfg(feature = "bincode")]
+impl<T: Send+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
 
 /// Pushing elements of type `T`.
 pub trait Push<T> {
