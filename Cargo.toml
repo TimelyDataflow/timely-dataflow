@@ -16,8 +16,8 @@ license = "MIT"
 
 #build = "booktests.rs"
 
-#[features]
-#bincode= ["communication/bincode"]
+[features]
+bincode= ["timely_communication/bincode"]
 
 [dependencies]
 serde = "1.0"
