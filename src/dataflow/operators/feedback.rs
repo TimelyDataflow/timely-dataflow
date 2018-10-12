@@ -29,14 +29,12 @@ pub trait LoopVariable<G: Scope> {
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
     ///
     /// timely::example(|scope| {
-    ///     scope.scoped("Loop", |scope| {
-    ///         // circulate 0..10 for 100 iterations.
-    ///         let (handle, cycle) = scope.loop_variable(100, 1);
-    ///         (0..10).to_stream(scope)
-    ///                .concat(&cycle)
-    ///                .inspect(|x| println!("seen: {:?}", x))
-    ///                .connect_loop(handle);
-    ///     });
+    ///     // circulate 0..10 for 100 iterations.
+    ///     let (handle, cycle) = scope.loop_variable(100, 1);
+    ///     (0..10).to_stream(scope)
+    ///            .concat(&cycle)
+    ///            .inspect(|x| println!("seen: {:?}", x))
+    ///            .connect_loop(handle);
     /// });
     /// ```
     fn loop_variable<D: Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>);
@@ -106,14 +104,12 @@ pub trait ConnectLoop<G: Scope, D: Data> {
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
     ///
     /// timely::example(|scope| {
-    ///     scope.scoped("Loop", |scope| {
-    ///         // circulate 0..10 for 100 iterations.
-    ///         let (handle, cycle) = scope.loop_variable(100, 1);
-    ///         (0..10).to_stream(scope)
-    ///                .concat(&cycle)
-    ///                .inspect(|x| println!("seen: {:?}", x))
-    ///                .connect_loop(handle);
-    ///     });
+    ///     // circulate 0..10 for 100 iterations.
+    ///     let (handle, cycle) = scope.loop_variable(100, 1);
+    ///     (0..10).to_stream(scope)
+    ///            .concat(&cycle)
+    ///            .inspect(|x| println!("seen: {:?}", x))
+    ///            .connect_loop(handle);
     /// });
     /// ```
     fn connect_loop(&self, Handle<G::Timestamp, D>);
