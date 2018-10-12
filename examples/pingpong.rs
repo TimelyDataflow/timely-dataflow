@@ -11,14 +11,15 @@ fn main() {
     timely::execute_from_args(std::env::args().skip(3), move |worker| {
         let index = worker.index();
         let peers = worker.peers();
-        worker.dataflow(move |scope| {
-            let (helper, cycle) = scope.loop_variable(iterations, 1);
+        worker.dataflow::<u64,_,_>(move |scope| {
+            let (helper, cycle) = scope.loop_variable(1);
             (0 .. elements)
                   .filter(move |&x| (x as usize) % peers == index)
                   .to_stream(scope)
                   .concat(&cycle)
                   .exchange(|&x| x)
                   .map_in_place(|x| *x += 1)
+                  .branch_when(move |t| t < &iterations).0
                   .connect_loop(helper);
         });
     }).unwrap();

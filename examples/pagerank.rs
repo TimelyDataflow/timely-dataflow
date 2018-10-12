@@ -16,13 +16,13 @@ fn main() {
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
 
-        worker.dataflow(|scope| {
+        worker.dataflow::<usize,_,_>(|scope| {
 
             // create a new input, into which we can push edge changes.
             let edge_stream = input.to_stream(scope);
 
             // create a new feedback stream, which will be changes to ranks.
-            let (handle, rank_stream) = scope.loop_variable(usize::max_value(), 1);
+            let (handle, rank_stream) = scope.loop_variable(1);
 
             // bring edges and ranks together!
             let changes = edge_stream.binary_frontier(

@@ -41,7 +41,7 @@ fn main() {
 
         let start = std::time::Instant::now();
 
-        worker.dataflow(move |scope| {
+        worker.dataflow::<usize,_,_>(move |scope| {
 
             // generate part of a random graph.
             let graph = (0..edges / peers)
@@ -49,7 +49,7 @@ fn main() {
                 .to_stream(scope);
 
             // define a loop variable, for the (node, worker) pairs.
-            let (handle, stream) = scope.loop_variable(usize::max_value(), 1);
+            let (handle, stream) = scope.loop_variable(1usize);
 
             // use the stream of edges
             graph.binary_notify(

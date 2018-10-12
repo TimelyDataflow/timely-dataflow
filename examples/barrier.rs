@@ -10,16 +10,15 @@ fn main() {
 
     timely::execute_from_args(std::env::args().skip(2), move |worker| {
 
-        worker.dataflow::<usize,_,_>(move |scope| {
-            let (handle, stream) = scope.loop_variable::<usize>(iterations, 1);
+        worker.dataflow(move |scope| {
+            let (handle, stream) = scope.loop_variable::<usize>(1);
             stream.unary_notify(
                 Pipeline,
                 "Barrier",
                 vec![0],
                 move |_, _, notificator| {
                     while let Some((cap, _count)) = notificator.next() {
-                        let mut time = cap.time().clone();
-                        time += 1;
+                        let time = *cap.time() + 1;
                         if time < iterations {
                             notificator.notify_at(cap.delayed(&time));
                         }

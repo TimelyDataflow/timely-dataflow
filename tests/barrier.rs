@@ -1,8 +1,6 @@
 extern crate timely;
-// extern crate timely_communication;
 
 use timely::Configuration;
-// use timely::progress::nested::product::Product;
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::{LoopVariable, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
@@ -15,7 +13,7 @@ use timely::dataflow::operators::generic::operator::Operator;
 fn barrier_sync_helper(config: ::timely::Configuration) {
     timely::execute(config, move |worker| {
         worker.dataflow(move |scope| {
-            let (handle, stream) = scope.loop_variable::<u64>(100, 1);
+            let (handle, stream) = scope.loop_variable::<u64>(1);
             stream.unary_notify(
                 Pipeline,
                 "Barrier",
@@ -24,8 +22,7 @@ fn barrier_sync_helper(config: ::timely::Configuration) {
                     let mut count = 0;
                     while let Some((cap, _count)) = notificator.next() {
                         count += 1;
-                        let mut time = cap.time().clone();
-                        time += 1;
+                        let time = *cap.time() + 1;
                         if time < 100 {
                             notificator.notify_at(cap.delayed(&time));
                         }

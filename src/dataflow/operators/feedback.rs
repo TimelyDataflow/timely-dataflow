@@ -26,22 +26,27 @@ pub trait LoopVariable<G: Scope> {
     /// # Examples
     /// ```
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
+    /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect, BranchWhen};
     ///
     /// timely::example(|scope| {
     ///     // circulate 0..10 for 100 iterations.
-    ///     let (handle, cycle) = scope.loop_variable(100, 1);
+    ///     let (handle, cycle) = scope.loop_variable(1);
     ///     (0..10).to_stream(scope)
     ///            .concat(&cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
+    ///            .branch_when(|t| t < &100).0
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn loop_variable<D: Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>);
+    fn loop_variable<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>);
 }
 
 impl<G: Scope> LoopVariable<G> for G {
-    fn loop_variable<D: Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>) {
+    fn loop_variable<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>) {
+
+        if summary == Default::default() {
+            panic!("Cannot use default summary for a loop variable");
+        }
 
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
 
@@ -49,7 +54,7 @@ impl<G: Scope> LoopVariable<G> for G {
         let produced_messages = feedback_output.produced().clone();
 
         let feedback_input =  Counter::new(Observer {
-            limit, summary: summary.clone(), targets: feedback_output
+            summary: summary.clone(), targets: feedback_output
         });
         let consumed_messages = feedback_input.produced().clone();
 
@@ -70,7 +75,6 @@ impl<G: Scope> LoopVariable<G> for G {
 
 // implementation of the feedback vertex, essentially, as an observer
 struct Observer<T: Timestamp, D:Data> {
-    limit:      T,
     summary:    T::Summary,
     targets:    Counter<T, D, Tee<T, D>>,
 }
@@ -78,11 +82,14 @@ struct Observer<T: Timestamp, D:Data> {
 impl<T: Timestamp, D: Data> Push<Bundle<T, D>> for Observer<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
+        // We propagate the message either if its time results in something valid,
+        // or in the case that `message` is `None`. Note: we do not push a `None`
+        // when the timestamp is invalid, as we are not yet meant to flush.
         let active = if let Some(message) = message {
             let message = message.as_mut();
             if let Some(new_time) = self.summary.results_in(&message.time) {
                 message.time = new_time;
-                message.time.less_equal(&self.limit)
+                true
             }
             else {
                 false
@@ -101,14 +108,15 @@ pub trait ConnectLoop<G: Scope, D: Data> {
     /// # Examples
     /// ```
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
+    /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect, BranchWhen};
     ///
     /// timely::example(|scope| {
     ///     // circulate 0..10 for 100 iterations.
-    ///     let (handle, cycle) = scope.loop_variable(100, 1);
+    ///     let (handle, cycle) = scope.loop_variable(1);
     ///     (0..10).to_stream(scope)
     ///            .concat(&cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
+    ///            .branch_when(|t| t < &100).0
     ///            .connect_loop(handle);
     /// });
     /// ```

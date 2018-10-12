@@ -1,7 +1,7 @@
 extern crate timely;
 
-use timely::dataflow::{Scope, InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Input, LoopVariable, Enter, Concat, Map, Filter, ConnectLoop, Leave, Probe};
+use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::operators::{Input, LoopVariable, Concat, Map, Filter, ConnectLoop, Probe};
 
 fn main() {
 
@@ -25,7 +25,7 @@ fn main() {
 
             let stream = scope.input_from(&mut input);
 
-            let (loop_handle, loop_stream) = scope.loop_variable(u64::max_value(), 1);
+            let (loop_handle, loop_stream) = scope.loop_variable(1);
 
             let step =
             stream
