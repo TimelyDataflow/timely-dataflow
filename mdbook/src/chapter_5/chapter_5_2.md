@@ -92,7 +92,13 @@ The types implementing `PathSummary` must be partially ordered, and implement tw
 path.results_in(&4) == Some(5);
 path.results_in(&u64::max_value()) == None;
 ```
-It is important that `results_in` only advance timestamps: for all path summaries `p` we require that `p.results_in(x).less_equal(x)`.
+It is important that `results_in` only advance timestamps: for all path summaries `p` we require that
+```rust,ignore
+if let Some(time) = p.results_in(&x) {
+    assert!(x.less_equal(&time));
+}
+```
+
 
 2. The `followed_by` method explains how two path summaries combine. When we build the summaries we will start with paths corresponding to single edges, and build out more complex paths by combining the effects of multiple paths (and their summaries). As with `results_in`, it may be that two paths combined result in something that will never pass a timestamp, and the summary may be `None` (for example, two paths that each increment a loop counter by half of its maximum value).
 
