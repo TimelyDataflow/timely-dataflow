@@ -79,7 +79,7 @@ fn main() {
                     notify.for_each(|time, _num, _notify| {
 
                         // maybe process the graph
-                        if time.inner == 0 {
+                        if *time == 0 {
 
                             // print some diagnostic timing information
                             if index == 0 { println!("{:?}:\tsorting", start.elapsed()); }

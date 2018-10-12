@@ -1,6 +1,5 @@
 extern crate timely;
 
-use timely::progress::nested::product::Product;
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::{LoopVariable, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
@@ -11,17 +10,17 @@ fn main() {
 
     timely::execute_from_args(std::env::args().skip(2), move |worker| {
 
-        worker.dataflow(move |scope| {
-            let (handle, stream) = scope.loop_variable::<u64>(iterations, 1);
+        worker.dataflow::<usize,_,_>(move |scope| {
+            let (handle, stream) = scope.loop_variable::<usize>(iterations, 1);
             stream.unary_notify(
                 Pipeline,
                 "Barrier",
-                vec![Product::new((), 0)],
+                vec![0],
                 move |_, _, notificator| {
                     while let Some((cap, _count)) = notificator.next() {
                         let mut time = cap.time().clone();
-                        time.inner += 1;
-                        if time.inner < iterations {
+                        time += 1;
+                        if time < iterations {
                             notificator.notify_at(cap.delayed(&time));
                         }
                     }

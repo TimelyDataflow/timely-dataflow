@@ -11,18 +11,12 @@ use progress::frontier::Antichain;
 use progress::nested::{Source, Target};
 use progress::ChangeBatch;
 
-use progress::nested::product::Product;
-// use progress::nested::Summary::Local;
-
 use dataflow::channels::Bundle;
 use dataflow::channels::pushers::{Counter, Tee};
-use worker::AsWorker;
-
-use dataflow::{Stream, Scope, ScopeParent};
-use dataflow::scopes::child::Iterative;
+use dataflow::{Stream, Scope};
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
-pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
+pub trait LoopVariable<G: Scope> {
     /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
     ///
     /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
@@ -45,26 +39,26 @@ pub trait LoopVariable<'a, G: ScopeParent, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Iterative<'a, G, T>, D>);
+    fn loop_variable<D: Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>);
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
-    fn loop_variable<D: Data>(&mut self, limit: T, summary: T::Summary) -> (Handle<G::Timestamp, T, D>, Stream<Iterative<'a, G, T>, D>) {
+impl<G: Scope> LoopVariable<G> for G {
+    fn loop_variable<D: Data>(&mut self, limit: G::Timestamp, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>) {
 
-        let (targets, registrar) = Tee::<Product<G::Timestamp, T>, D>::new();
+        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
 
         let feedback_output = Counter::new(targets);
-        let produced = feedback_output.produced().clone();
+        let produced_messages = feedback_output.produced().clone();
 
         let feedback_input =  Counter::new(Observer {
             limit, summary: summary.clone(), targets: feedback_output
         });
-        let consumed = feedback_input.produced().clone();
+        let consumed_messages = feedback_input.produced().clone();
 
         let index = self.add_operator(Box::new(Operator {
-            consumed_messages:  consumed,
-            produced_messages:  produced,
-            summary:            Product::new(Default::default(), summary),
+            consumed_messages,
+            produced_messages,
+            summary,
         }));
 
         let helper = Handle {
@@ -77,20 +71,20 @@ impl<'a, G: ScopeParent, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, 
 }
 
 // implementation of the feedback vertex, essentially, as an observer
-struct Observer<TOuter: Timestamp, TInner: Timestamp, D:Data> {
-    limit:      TInner,
-    summary:    TInner::Summary,
-    targets:    Counter<Product<TOuter, TInner>, D, Tee<Product<TOuter, TInner>, D>>,
+struct Observer<T: Timestamp, D:Data> {
+    limit:      T,
+    summary:    T::Summary,
+    targets:    Counter<T, D, Tee<T, D>>,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp, D: Data> Push<Bundle<Product<TOuter, TInner>, D>> for Observer<TOuter, TInner, D> {
+impl<T: Timestamp, D: Data> Push<Bundle<T, D>> for Observer<T, D> {
     #[inline]
-    fn push(&mut self, message: &mut Option<Bundle<Product<TOuter, TInner>, D>>) {
+    fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         let active = if let Some(message) = message {
             let message = message.as_mut();
-            if let Some(new_time) = self.summary.results_in(&message.time.inner) {
-                message.time.inner = new_time;
-                message.time.inner.less_equal(&self.limit)
+            if let Some(new_time) = self.summary.results_in(&message.time) {
+                message.time = new_time;
+                message.time.less_equal(&self.limit)
             }
             else {
                 false
@@ -103,7 +97,7 @@ impl<TOuter: Timestamp, TInner: Timestamp, D: Data> Push<Bundle<Product<TOuter, 
 }
 
 /// Connect a `Stream` to the input of a loop variable.
-pub trait ConnectLoop<G: ScopeParent, T: Timestamp, D: Data> {
+pub trait ConnectLoop<G: Scope, D: Data> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
     /// # Examples
@@ -122,20 +116,20 @@ pub trait ConnectLoop<G: ScopeParent, T: Timestamp, D: Data> {
     ///     });
     /// });
     /// ```
-    fn connect_loop(&self, Handle<G::Timestamp, T, D>);
+    fn connect_loop(&self, Handle<G::Timestamp, D>);
 }
 
-impl<'a, G: ScopeParent, T: Timestamp, D: Data> ConnectLoop<G, T, D> for Stream<Iterative<'a, G, T>, D> {
-    fn connect_loop(&self, helper: Handle<G::Timestamp, T, D>) {
+impl<G: Scope, D: Data> ConnectLoop<G, D> for Stream<G, D> {
+    fn connect_loop(&self, helper: Handle<G::Timestamp, D>) {
         let channel_id = self.scope().new_identifier();
         self.connect_to(Target { index: helper.index, port: 0 }, helper.target, channel_id);
     }
 }
 
 /// A handle used to bind the source of a loop variable.
-pub struct Handle<TOuter: Timestamp, TInner: Timestamp, D: Data> {
+pub struct Handle<T: Timestamp, D: Data> {
     index:  usize,
-    target: Counter<Product<TOuter, TInner>, D, Observer<TOuter, TInner, D>>
+    target: Counter<T, D, Observer<T, D>>
 }
 
 // the scope that the progress tracker interacts with

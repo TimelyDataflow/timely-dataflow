@@ -4,7 +4,6 @@ extern crate timely;
 use std::collections::HashMap;
 use rand::{Rng, SeedableRng, StdRng};
 
-use timely::progress::nested::product::Product;
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{LoopVariable, ConnectLoop, Probe};
 use timely::dataflow::operators::generic::Operator;
@@ -170,7 +169,7 @@ fn main() {
             input.send(((rng1.gen_range(0, nodes), rng1.gen_range(0, nodes)), 1));
         }
 
-        input.advance_to(Product::new((), 1));
+        input.advance_to(1);
 
         while probe.less_than(input.time()) {
             worker.step();
@@ -179,7 +178,7 @@ fn main() {
         for i in 1 .. 1000 {
             input.send(((rng1.gen_range(0, nodes), rng1.gen_range(0, nodes)), 1));
             input.send(((rng2.gen_range(0, nodes), rng2.gen_range(0, nodes)), -1));
-            input.advance_to(Product::new((), 1 + i));
+            input.advance_to(i + 1);
             while probe.less_than(input.time()) {
                 worker.step();
             }
