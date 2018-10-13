@@ -12,7 +12,7 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
         worker.dataflow::<u64,_,_>(move |scope| {
-            let (helper, cycle) = scope.loop_variable(1);
+            let (helper, cycle) = scope.feedback(1);
             (0 .. elements)
                   .filter(move |&x| (x as usize) % peers == index)
                   .to_stream(scope)

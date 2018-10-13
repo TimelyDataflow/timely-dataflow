@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use rand::{Rng, SeedableRng, StdRng};
 
 use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::{LoopVariable, ConnectLoop, Probe};
+use timely::dataflow::operators::{Feedback, ConnectLoop, Probe};
 use timely::dataflow::operators::generic::Operator;
 use timely::dataflow::channels::pact::Exchange;
 
@@ -22,7 +22,7 @@ fn main() {
             let edge_stream = input.to_stream(scope);
 
             // create a new feedback stream, which will be changes to ranks.
-            let (handle, rank_stream) = scope.loop_variable(1);
+            let (handle, rank_stream) = scope.feedback(1);
 
             // bring edges and ranks together!
             let changes = edge_stream.binary_frontier(

@@ -1,7 +1,7 @@
 extern crate timely;
 
 use timely::dataflow::channels::pact::Pipeline;
-use timely::dataflow::operators::{LoopVariable, ConnectLoop};
+use timely::dataflow::operators::{Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
 
 fn main() {
@@ -11,7 +11,7 @@ fn main() {
     timely::execute_from_args(std::env::args().skip(2), move |worker| {
 
         worker.dataflow(move |scope| {
-            let (handle, stream) = scope.loop_variable::<usize>(1);
+            let (handle, stream) = scope.feedback::<usize>(1);
             stream.unary_notify(
                 Pipeline,
                 "Barrier",

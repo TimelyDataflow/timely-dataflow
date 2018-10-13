@@ -8,7 +8,7 @@ use rand::{Rng, SeedableRng, StdRng};
 use timely_sort::{RadixSorter, RadixSorterBase};
 use timely_sort::LSBRadixSorter as Sorter;
 
-use timely::dataflow::operators::{ToStream, Concat, LoopVariable, ConnectLoop};
+use timely::dataflow::operators::{ToStream, Concat, Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Exchange;
 
@@ -49,7 +49,7 @@ fn main() {
                 .to_stream(scope);
 
             // define a loop variable, for the (node, worker) pairs.
-            let (handle, stream) = scope.loop_variable(1usize);
+            let (handle, stream) = scope.feedback(1usize);
 
             // use the stream of edges
             graph.binary_notify(
