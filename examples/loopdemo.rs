@@ -1,7 +1,7 @@
 extern crate timely;
 
-use timely::dataflow::{Scope, InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Input, LoopVariable, Enter, Concat, Map, Filter, ConnectLoop, Leave, Probe};
+use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::operators::{Input, Feedback, Concat, Map, Filter, ConnectLoop, Probe};
 
 fn main() {
 
@@ -25,22 +25,16 @@ fn main() {
 
             let stream = scope.input_from(&mut input);
 
-            scope
-                .iterative(|child| {
+            let (loop_handle, loop_stream) = scope.feedback(1);
 
-                    let (loop_handle, loop_stream) = child.loop_variable(usize::max_value(), 1);
+            let step =
+            stream
+                .concat(&loop_stream)
+                .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 })
+                .filter(|x| x > &1);
 
-                    let step =
-                    stream
-                        .enter(child)
-                        .concat(&loop_stream)
-                        .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 })
-                        .filter(|x| x > &1);
-
-                    step.connect_loop(loop_handle);
-                    step.leave()
-                })
-                .probe_with(&mut probe);
+            step.connect_loop(loop_handle);
+            step.probe_with(&mut probe);
         });
 
         let ns_per_request = 1_000_000_000 / rate;

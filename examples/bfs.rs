@@ -8,7 +8,7 @@ use rand::{Rng, SeedableRng, StdRng};
 use timely_sort::{RadixSorter, RadixSorterBase};
 use timely_sort::LSBRadixSorter as Sorter;
 
-use timely::dataflow::operators::{ToStream, Concat, LoopVariable, ConnectLoop};
+use timely::dataflow::operators::{ToStream, Concat, Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Exchange;
 
@@ -41,7 +41,7 @@ fn main() {
 
         let start = std::time::Instant::now();
 
-        worker.dataflow(move |scope| {
+        worker.dataflow::<usize,_,_>(move |scope| {
 
             // generate part of a random graph.
             let graph = (0..edges / peers)
@@ -49,7 +49,7 @@ fn main() {
                 .to_stream(scope);
 
             // define a loop variable, for the (node, worker) pairs.
-            let (handle, stream) = scope.loop_variable(usize::max_value(), 1);
+            let (handle, stream) = scope.feedback(1usize);
 
             // use the stream of edges
             graph.binary_notify(
@@ -79,7 +79,7 @@ fn main() {
                     notify.for_each(|time, _num, _notify| {
 
                         // maybe process the graph
-                        if time.inner == 0 {
+                        if *time == 0 {
 
                             // print some diagnostic timing information
                             if index == 0 { println!("{:?}:\tsorting", start.elapsed()); }

@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 
 - The communication crate now has a `bincode` feature flag which should swing serialization over to use serde's `Serialize` trait. While it seems to work the ergonomics are likely in flux, as the choice is crate-wide and doesn't allow you to pick and choose a la carte.
 
+- The `loop_variable` operator now takes a timestamp summary for the timestamp of its scope, not just the timestamp extending its parent scope. The old behavior can be recovered with `Product::new(Default::default(), summary)`, but the change allows cycles in more general scopes and seemed worth it. The operator also no longer takes a `limit`, and if you need to impose a limit other than the summary returning `None` you should use the `branch_when()` operator.
+
 
 ## 0.7.0
 
