@@ -2,12 +2,10 @@
 
 pub use self::thread::Thread;
 pub use self::process::Process;
-// pub use self::binary::Binary;
 pub use self::generic::{Generic, GenericBuilder};
 
 pub mod thread;
 pub mod process;
-// pub mod binary;
 pub mod generic;
 
 pub mod zero_copy;
