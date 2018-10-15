@@ -152,7 +152,6 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             }
         }
 
-
         let channel =
         self.to_local
             .entry(identifier)
