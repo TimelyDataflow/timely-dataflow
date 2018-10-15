@@ -133,9 +133,13 @@ impl Allocate for ProcessAllocator {
             pushes.push(Box::new(Pusher::new(header, self.sends[target_index].clone())));
         }
 
-        self.to_local.insert(identifier, Rc::new(RefCell::new(VecDeque::new())));
+        let channel =
+        self.to_local
+            .entry(identifier)
+            .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
+            .clone();
 
-        let puller = Box::new(Puller::new(self.to_local[&identifier].clone()));
+        let puller = Box::new(Puller::new(channel));
 
         (pushes, puller)
     }
@@ -184,8 +188,8 @@ impl Allocate for ProcessAllocator {
 
         // OPTIONAL: Tattle on channels sitting on borrowed data.
         // OPTIONAL: Perhaps copy borrowed data into owned allocation.
-        // for index in 0 .. self.to_local.len() {
-        //     let len = self.to_local[index].borrow_mut().len();
+        // for (index, list) in self.to_local.iter() {
+        //     let len = list.borrow_mut().len();
         //     if len > 0 {
         //         eprintln!("Warning: worker {}, undrained channel[{}].len() = {}", self.index, index, len);
         //     }
