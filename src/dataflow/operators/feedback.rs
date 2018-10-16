@@ -36,7 +36,7 @@ pub trait Feedback<G: Scope> {
     ///     (0..10).to_stream(scope)
     ///            .concat(&cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
-    ///            .branch_when(|t| t < &100).0
+    ///            .branch_when(|t| t < &100).1
     ///            .connect_loop(handle);
     /// });
     /// ```
@@ -63,7 +63,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///         (0..10).to_stream(inner)
     ///                .concat(&cycle)
     ///                .inspect(|x| println!("seen: {:?}", x))
-    ///                .branch_when(|t| t.inner < 100).0
+    ///                .branch_when(|t| t.inner < 100).1
     ///                .connect_loop(handle);
     ///     });
     /// });
@@ -152,7 +152,7 @@ pub trait ConnectLoop<G: Scope, D: Data> {
     ///     (0..10).to_stream(scope)
     ///            .concat(&cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
-    ///            .branch_when(|t| t < &100).0
+    ///            .branch_when(|t| t < &100).1
     ///            .connect_loop(handle);
     /// });
     /// ```

@@ -19,7 +19,7 @@ fn main() {
                   .concat(&cycle)
                   .exchange(|&x| x)
                   .map_in_place(|x| *x += 1)
-                  .branch_when(move |t| t < &iterations).0
+                  .branch_when(move |t| t < &iterations).1
                   .connect_loop(helper);
         });
     }).unwrap();
