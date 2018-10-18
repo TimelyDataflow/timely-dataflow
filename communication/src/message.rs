@@ -152,7 +152,7 @@ impl<T: Data> Message<T> {
                 ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize
             },
             MessageContents::Arc(typed) => {
-                ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize
+                ::bincode::serialized_size(&**typed).expect("bincode::serialized_size() failed") as usize
             },
         }
     }
@@ -167,7 +167,7 @@ impl<T: Data> Message<T> {
                 ::bincode::serialize_into(writer, &typed).expect("bincode::serialize_into() failed");
             },
             MessageContents::Arc(typed) => {
-                ::bincode::serialize_into(writer, &typed).expect("bincode::serialize_into() failed");
+                ::bincode::serialize_into(writer, &**typed).expect("bincode::serialize_into() failed");
             },
         }
     }
