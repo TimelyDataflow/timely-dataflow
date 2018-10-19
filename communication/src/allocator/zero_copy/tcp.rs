@@ -135,11 +135,16 @@ pub fn send_loop(
 
         if stash.is_empty() {
             // No evidence of records to read, but sources not yet empty (at start of loop).
-            // We are going to flush our writer (to move buffered data) and wait on a signal.
+            // We are going to flush our writer (to move buffered data), double check on the
+            // sources for emptiness and wait on a signal only if we are sure that there will
+            // still be a signal incoming.
+            //
             // We could get awoken by more data, a channel closing, or spuriously perhaps.
             writer.flush().expect("Failed to flush writer.");
-            signal.wait();
             sources.retain(|source| !source.is_complete());
+            if !sources.is_empty() {
+                signal.wait();
+            }
         }
         else {
             // TODO: Could do scatter/gather write here.
