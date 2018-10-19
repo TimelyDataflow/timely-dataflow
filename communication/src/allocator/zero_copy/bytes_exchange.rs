@@ -78,7 +78,7 @@ impl MergeQueue {
     /// Indicates that all input handles to the queue have dropped.
     pub fn is_complete(&self) -> bool {
         if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
-        Arc::strong_count(&self.queue) == 1
+        Arc::strong_count(&self.queue) == 1 && self.queue.lock().expect("Failed to acquire lock").is_empty()
     }
 }
 
