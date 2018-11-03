@@ -437,67 +437,35 @@ where
         debug_assert!(internal.iter_mut().all(|x| x.is_empty()));
         debug_assert!(produced.iter_mut().all(|x| x.is_empty()));
 
-        // Step 1. We first harvest data on records entering the scope, which will be reported upwards as
-        //         "consumed". These records are also marked as changes in child 0's output capabilities,
-        //         which is a bit of a cheat; we use this empty slot to exchange this information with the
-        //         other workers, so that each can report the aggregate messages consumed upwards.
+        // Step 1. Harvest data on records entering the scope.
+        //
+        // These counts are not directly reported upwards as "consumed". Instead, these records
+        // are (CHEAT!, CHEAT!) marked as changes in child 0's output capabilities, exchanged
+        // with other workers, and extracted at mark [XXX].
 
         for input in 0 .. self.inputs {
             let mut borrowed = self.input_messages[input].borrow_mut();
             for (time, delta) in borrowed.drain() {
                 for target in &self.children[0].edges[input] {
-                    // self.local_pointstamp_messages.update((target.index, target.port, time.clone()), delta);
                     self.local_pointstamp.update((Location::from(*target), time.clone()), delta);
                 }
                 // This is the cheat, which we resolve at mark [XXX] before anyone notices.
-                // self.local_pointstamp_internal.update((0, input, time), delta);
                 self.local_pointstamp.update((Location::new_source(0, input), time), delta);
             }
         }
 
-        // Step 2. We exchange progress information with other workers. This also currently involves sending
-        //         information to other workers, which we may want to delay until we have harvested progress
-        //         information from children.
+        // Step 2. Exchange local progress information with other workers.
+        self.progcaster.send_and_recv(&mut self.local_pointstamp);
+
+        // Step 3. Drain the post-exchange progress information into `self.pointstamp_tracker`.
         //
-        //         NB: we only exchange `self.local_` updates, as these are the "pre-exchange" updates that
-        //         have not already been shuffled. Some updates, from children which do not set `self.local`,
-        //         have already been exchange among workers and should not be reshuffled.
-
-        self.progcaster.send_and_recv(
-            &mut self.local_pointstamp,
-            // &mut self.local_pointstamp_messages,
-            // &mut self.local_pointstamp_internal,
-        );
-
-        // Step 3. We drain the post-exchange progress information into `self.pointstamp_tracker`.
-        //         Along the way we extract the cheating child zero capabilities, and report
-        //         aggregate consumed input records.
+        // Child zero statements are extracted and reported either as consumed input records
+        // or produced output records. Other statements are introduced to the progress tracker,
+        // which will propogate the consequences around the dataflow graph.
         //
-        //         By reporting the consumed inputs, we *must* report any associated changes to
-        //         `internal` and `produced`. They cannot be delayed.
-
-        // self.local_pointstamp_messages.drain_into(&mut self.final_pointstamp_messages);
-        // for ((index, port, timestamp), delta) in self.local_pointstamp_internal.drain() {
-        //     if index == 0 {     // [XXX] Report child 0's capabilities as consumed messages.
-        //         consumed[port].update(timestamp.to_outer(), delta);
-        //     }
-        //     else {              // Fold non-cheating capability changes into the final updates.
-        //         self.final_pointstamp_internal.update((index, port, timestamp), delta);
-        //     }
-        // }
-        // Demultiplex `self.final_` into `self.pointstamp_tracker`.
-        // Updates to message counts for inputs to child zero are *instead* deposited in `produced`.
-        // for ((index, input, time), delta) in self.final_pointstamp_messages.drain() {
-        //     if index == 0 {
-        //         produced[input].update(time.clone().to_outer(), delta);
-        //     }
-        //     else {
-        //         self.pointstamp_tracker.update_target(Target { index, port: input }, time, delta);
-        //     }
-        // }
-        // for ((index, output, time), delta) in self.final_pointstamp_internal.drain() {
-        //     self.pointstamp_tracker.update_source(Source { index, port: output }, time, delta);
-        // }
+        // By reporting consumed input records we *must* apply and report all other progress
+        // statements, to make sure that any corresponding internal and produced counts are
+        // surfaced at the same time.
 
         // Drain exchanged pointstamps into "final" pointstamps.
         self.local_pointstamp.drain_into(&mut self.final_pointstamp);
@@ -520,15 +488,7 @@ where
                 }
             }
             else {
-                // TODO: The tracker could handle these homogenously, for simplicity.
-                match location.port {
-                    Port::Source(port) => {
-                        self.pointstamp_tracker.update_source(Source { index: location.node, port }, timestamp, delta);
-                    },
-                    Port::Target(port) => {
-                        self.pointstamp_tracker.update_target(Target { index: location.node, port }, timestamp, delta);
-                    }
-                }
+                self.pointstamp_tracker.update(location, timestamp, delta);
             }
         }
 
@@ -542,14 +502,6 @@ where
             // The child should either fill a "yet to be exchanged" buffer of progress updates, or an
             // "already exchanged" buffer, depending on whether it indicates that its results have been
             // exchanged already (through its `local` field).
-
-            // let (message_buffer, internal_buffer) = if child.local {
-            //     (&mut self.local_pointstamp_messages, &mut self.local_pointstamp_internal)
-            // }
-            // else {
-            //     (&mut self.final_pointstamp_messages, &mut self.final_pointstamp_internal)
-            // };
-
             let pointstamp_buffer = if child.local {
                 &mut self.local_pointstamp
             }
@@ -567,10 +519,8 @@ where
                 pushed,
                 targets,
                 sources,
-                // message_buffer,
-                // internal_buffer,
                 pointstamp_buffer,
-                );
+            );
 
             any_child_active = any_child_active || child_active;
         }
