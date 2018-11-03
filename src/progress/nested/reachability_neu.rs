@@ -8,9 +8,9 @@
 //! # Examples
 //!
 //! ```rust
-//! use timely::progress::Location;
+//! use timely::progress::{Location, Port};
 //! use timely::progress::frontier::Antichain;
-//! use timely::progress::nested::subgraph::{Source, Target};
+//! use timely::progress::{Source, Target};
 //! use timely::progress::nested::reachability_neu::{Builder, Tracker};
 //!
 //! // allocate a new empty topology builder.
@@ -35,8 +35,16 @@
 //! // Propagate changes; until this call updates are simply buffered.
 //! tracker.propagate_all();
 //!
-//! let mut results = tracker.pushed().drain().collect::<Vec<_>>();
+//! let mut results =
+//! tracker
+//!     .pushed()
+//!     .drain()
+//!     .filter(|((location, time), delta)| location.is_target())
+//!     .collect::<Vec<_>>();
+//!
 //! results.sort();
+//!
+//! println!("{:?}", results);
 //!
 //! assert_eq!(results.len(), 3);
 //! assert_eq!(results[0], ((Location::new_target(0, 0), 18), 1));
@@ -49,7 +57,13 @@
 //! // Propagate changes; until this call updates are simply buffered.
 //! tracker.propagate_all();
 //!
-//! let mut results = tracker.pushed().drain().collect::<Vec<_>>();
+//! let mut results =
+//! tracker
+//!     .pushed()
+//!     .drain()
+//!     .filter(|((location, time), delta)| location.is_target())
+//!     .collect::<Vec<_>>();
+//!
 //! results.sort();
 //!
 //! assert_eq!(results.len(), 3);
@@ -92,7 +106,7 @@ use progress::timestamp::PathSummary;
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;
-/// use timely::progress::nested::subgraph::{Source, Target};
+/// use timely::progress::{Source, Target};
 /// use timely::progress::nested::reachability_neu::Builder;
 ///
 /// // allocate a new empty topology builder.

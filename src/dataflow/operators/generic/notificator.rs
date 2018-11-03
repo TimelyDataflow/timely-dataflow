@@ -108,7 +108,7 @@ fn notificator_delivers_notifications_in_topo_order() {
     use std::cell::RefCell;
     use progress::ChangeBatch;
     use progress::frontier::MutableAntichain;
-    use progress::nested::product::Product;
+    use order::Product;
     use dataflow::operators::capability::mint as mint_capability;
 
     let mut frontier = MutableAntichain::new_bottom(Product::new(0, 0));

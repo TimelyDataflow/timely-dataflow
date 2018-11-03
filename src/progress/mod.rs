@@ -31,6 +31,10 @@ impl Location {
     pub fn new_source(node: usize, port: usize) -> Location {
         Location { node, port: Port::Source(port) }
     }
+    /// If the location is a target.
+    pub fn is_target(&self) -> bool { if let Port::Target(_) = self.port { true } else { false } }
+    /// If the location is a source.
+    pub fn is_source(&self) -> bool { if let Port::Source(_) = self.port { true } else { false } }
 }
 
 impl From<Target> for Location {

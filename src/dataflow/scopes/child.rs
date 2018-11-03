@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::{Source, Target};
 use progress::timestamp::Refines;
-use progress::nested::product::Product;
+use order::Product;
 use communication::{Allocate, Data, Push, Pull};
 use logging::TimelyLogger as Logger;
 use worker::AsWorker;

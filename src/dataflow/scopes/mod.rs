@@ -1,7 +1,7 @@
 //! Hierarchical organization of timely dataflow graphs.
 
 use progress::{Timestamp, Operate, Source, Target};
-use progress::nested::product::Product;
+use order::Product;
 use progress::timestamp::Refines;
 use communication::Allocate;
 use worker::AsWorker;
@@ -78,7 +78,7 @@ pub trait Scope: ScopeParent {
     /// ```
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Enter, Leave};
-    /// use timely::progress::nested::product::Product;
+    /// use timely::order::Product;
     ///
     /// timely::execute_from_args(std::env::args(), |worker| {
     ///     // must specify types as nothing else drives inference.

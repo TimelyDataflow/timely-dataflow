@@ -12,7 +12,7 @@ fn main() {
 fn test_alt(nodes: usize, rounds: usize) {
 
     use timely::progress::frontier::Antichain;
-    use timely::progress::nested::subgraph::{Source, Target};
+    use timely::progress::{Source, Target};
     use timely::progress::nested::reachability::{Builder, Tracker};
 
     // This test means to exercise the efficiency of the tracker by performing local changes and expecting
@@ -76,7 +76,7 @@ fn test_alt(nodes: usize, rounds: usize) {
 fn test_neu(nodes: usize, rounds: usize) {
 
     use timely::progress::frontier::Antichain;
-    use timely::progress::nested::subgraph::{Source, Target};
+    use timely::progress::{Source, Target};
     use timely::progress::nested::reachability_neu::Builder;
 
     // This test means to exercise the efficiency of the tracker by performing local changes and expecting

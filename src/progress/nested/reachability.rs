@@ -9,7 +9,7 @@
 //!
 //! ```rust
 //! use timely::progress::frontier::Antichain;
-//! use timely::progress::nested::subgraph::{Source, Target};
+//! use timely::progress::{Source, Target};
 //! use timely::progress::nested::reachability::{Builder, Tracker};
 //!
 //! // allocate a new empty topology builder.
@@ -71,7 +71,7 @@ use order::PartialOrder;
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;
-/// use timely::progress::nested::subgraph::{Source, Target};
+/// use timely::progress::{Source, Target};
 /// use timely::progress::nested::reachability::Builder;
 ///
 /// // allocate a new empty topology builder.
@@ -298,7 +298,7 @@ pub struct Summary<T: Timestamp> {
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;
-/// use timely::progress::nested::subgraph::{Source, Target};
+/// use timely::progress::{Source, Target};
 /// use timely::progress::nested::reachability::{Builder, Tracker};
 ///
 /// // allocate a new empty topology builder.
