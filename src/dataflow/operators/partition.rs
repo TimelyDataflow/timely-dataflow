@@ -1,7 +1,7 @@
 //! Partition a stream of records into multiple streams.
 
 use progress::{Timestamp, Operate};
-use progress::nested::{Source, Target};
+use progress::{Source, Target};
 use progress::ChangeBatch;
 
 use Data;

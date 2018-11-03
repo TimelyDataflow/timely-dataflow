@@ -6,7 +6,7 @@ use std::default::Default;
 
 use progress::frontier::Antichain;
 use progress::{Operate, Timestamp};
-use progress::nested::subgraph::Source;
+use progress::Source;
 use progress::ChangeBatch;
 
 use Data;

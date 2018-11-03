@@ -1,7 +1,7 @@
 //! Hierarchical organization of timely dataflow graphs.
 
-use progress::{Timestamp, Operate};
-use progress::nested::{Source, Target, product::Product};
+use progress::{Timestamp, Operate, Source, Target};
+use progress::nested::product::Product;
 use progress::timestamp::Refines;
 use communication::Allocate;
 use worker::AsWorker;

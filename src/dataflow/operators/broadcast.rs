@@ -3,7 +3,7 @@
 use communication::Pull;
 
 use ::ExchangeData;
-use progress::nested::subgraph::{Source, Target};
+use progress::{Source, Target};
 use dataflow::{Stream, Scope};
 use progress::ChangeBatch;
 use progress::{Timestamp, Operate, Antichain};

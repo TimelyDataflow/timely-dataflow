@@ -25,7 +25,7 @@ use std::marker::PhantomData;
 
 use progress::Timestamp;
 use progress::timestamp::Refines;
-use progress::nested::{Source, Target};
+use progress::{Source, Target};
 use progress::nested::product::Product;
 use Data;
 use communication::Push;

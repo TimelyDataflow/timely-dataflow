@@ -1,7 +1,7 @@
 //! Manages pointstamp counts (timestamp, location) within a sub operator.
 
 use progress::Timestamp;
-use progress::nested::{Source, Target};
+use progress::{Source, Target};
 use progress::ChangeBatch;
 
 /// Represents changes to pointstamps before and after transmission along a scope's topology.

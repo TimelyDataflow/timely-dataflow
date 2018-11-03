@@ -41,7 +41,7 @@
 //! ```
 
 use progress::Timestamp;
-use progress::nested::{Source, Target};
+use progress::{Source, Target};
 use progress::ChangeBatch;
 
 use progress::frontier::{Antichain, MutableAntichain};

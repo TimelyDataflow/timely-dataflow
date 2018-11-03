@@ -8,7 +8,7 @@ use std::default::Default;
 
 use ::Data;
 
-use progress::nested::subgraph::{Source, Target};
+use progress::{Source, Target};
 use progress::ChangeBatch;
 use progress::{Timestamp, Operate, Antichain};
 

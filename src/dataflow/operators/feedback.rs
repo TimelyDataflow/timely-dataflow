@@ -8,7 +8,7 @@ use communication::Push;
 
 use progress::{Timestamp, Operate, PathSummary};
 use progress::frontier::Antichain;
-use progress::nested::{Source, Target};
+use progress::{Source, Target};
 use progress::nested::product::Product;
 use progress::ChangeBatch;
 
