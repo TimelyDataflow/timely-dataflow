@@ -18,6 +18,7 @@ use progress::{Location, Port, Source, Target};
 use progress::ChangeBatch;
 use progress::broadcast::Progcaster;
 use progress::nested::reachability;
+// use progress::nested::reachability_neu as reachability;
 use progress::timestamp::Refines;
 
 // IMPORTANT : by convention, a child identifier of zero is used to indicate inputs and outputs of
@@ -450,16 +451,26 @@ where
                     self.local_pointstamp.update((Location::from(*target), time.clone()), delta);
                 }
                 // This is the cheat, which we resolve at mark [XXX] before anyone notices.
-                self.local_pointstamp.update((Location::new_source(0, input), time), delta);
+                // NB: We negate delta, because these events look like consuming messages,
+                //     and are paired with the production of internal messages.
+                //     Not *strictly* necessary here, but may be important for sanity when
+                //     considering "properties" of batches of updates, or when applying
+                //     rules that "allow" the delay of increments v decrements.
+                self.local_pointstamp.update((Location::new_source(0, input), time), -delta);
             }
         }
 
         // Step 2. Exchange local progress information with other workers.
+        //
+        // We have an opportunity here to *not* exchange local progress information, if we have
+        // reasons to believe it is not productive (as it can be expensive). For example, if we
+        // know that these changes could not advance the `final_pointstamp` frontier we could
+        // safely hold back the changes.
         self.progcaster.send_and_recv(&mut self.local_pointstamp);
 
         // Step 3. Drain the post-exchange progress information into `self.pointstamp_tracker`.
         //
-        // Child zero statements are extracted and reported either as consumed input records
+        // Child-zero statements are extracted and reported either as consumed input records
         // or produced output records. Other statements are introduced to the progress tracker,
         // which will propogate the consequences around the dataflow graph.
         //
@@ -478,7 +489,8 @@ where
                 match location.port {
                     Port::Source(scope_input) => {
                         // [XXX] Report child 0's capabilities as consumed messages.
-                        consumed[scope_input].update(timestamp.to_outer(), delta);
+                        //       Note the re-negation of delta, to make counts positive.
+                        consumed[scope_input].update(timestamp.to_outer(), -delta);
                     },
                     Port::Target(scope_output) => {
                         // [YYY] Report child 0's messages as produced.
@@ -493,6 +505,11 @@ where
         }
 
         // Step 4. Propagate pointstamp updates to inform each source about changes in their frontiers.
+        //
+        // The most crucial thing that happens here is that the implications for the input frontier of
+        // child zero are surfaced, as we will need to report these in `internal`. It is *possible*
+        // that we do not have to propagate progress information from all internal operators, but at
+        // the moment doing so is substantially safer than trying to be clever.
         self.pointstamp_tracker.propagate_all();
 
         // Step 5. Provide each child with updated frontier information and an opportunity to execute.
@@ -515,6 +532,7 @@ where
 
             let (targets, sources, pushed) = self.pointstamp_tracker.node_state(index);
 
+            // This is mis-named, and schedules a child as well as collecting progress data.
             let child_active = child.exchange_progress(
                 pushed,
                 targets,
