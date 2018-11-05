@@ -1,14 +1,15 @@
 //! Broadcasts progress information among workers.
 
 use progress::{ChangeBatch, Timestamp};
+use progress::Location;
 use communication::{Message, Push, Pull};
 use logging::TimelyLogger as Logger;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
-pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;
+pub type ProgressVec<T> = Vec<((Location, T), i64)>;
 /// A progress update message consisting of source worker id, sequence number and lists of
 /// message and internal updates
-pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>, ProgressVec<T>)>;
+pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
 
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
@@ -55,16 +56,19 @@ impl<T:Timestamp+Send> Progcaster<T> {
     /// and updating each with updates from other workers.
     pub fn send_and_recv(
         &mut self,
-        messages: &mut ChangeBatch<(usize, usize, T)>,
-        internal: &mut ChangeBatch<(usize, usize, T)>)
+        changes: &mut ChangeBatch<(Location, T)>)
+        // messages: &mut ChangeBatch<(usize, usize, T)>,
+        // internal: &mut ChangeBatch<(usize, usize, T)>)
     {
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
 
             // ensure minimality.
-            messages.compact();
-            internal.compact();
+            changes.compact();
+            // messages.compact();
+            // internal.compact();
 
-            if !messages.is_empty() || !internal.is_empty() {
+            // if !messages.is_empty() || !internal.is_empty() {
+            if !changes.is_empty() {
 
                 self.logging.as_ref().map(|l| l.log(::logging::ProgressEvent {
                     is_send: true,
@@ -84,16 +88,18 @@ impl<T:Timestamp+Send> Progcaster<T> {
                         let tuple = tuple.as_mut();
                         tuple.0 = self.source;
                         tuple.1 = self.counter;
-                        tuple.2.clear(); tuple.2.extend(messages.iter().cloned());
-                        tuple.3.clear(); tuple.3.extend(internal.iter().cloned());
+                        tuple.2.clear(); tuple.2.extend(changes.iter().cloned());
+                        // tuple.2.clear(); tuple.2.extend(messages.iter().cloned());
+                        // tuple.3.clear(); tuple.3.extend(internal.iter().cloned());
                     }
                     // If we don't have an allocation ...
                     if self.to_push.is_none() {
                         self.to_push = Some(Message::from_typed((
                             self.source,
                             self.counter,
-                            messages.clone().into_inner(),
-                            internal.clone().into_inner(),
+                            changes.clone().into_inner(),
+                            // messages.clone().into_inner(),
+                            // internal.clone().into_inner(),
                         )));
                     }
 
@@ -104,8 +110,9 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
                 self.counter += 1;
 
-                messages.clear();
-                internal.clear();
+                // messages.clear();
+                // internal.clear();
+                changes.clear();
             }
 
             // TODO : Could take ownership, and recycle / reuse for next broadcast ...
@@ -114,8 +121,9 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
                 let source = message.0;
                 let counter = message.1;
-                let recv_messages = &message.2;
-                let recv_internal = &message.3;
+                // let recv_messages = &message.2;
+                // let recv_internal = &message.3;
+                let recv_changes = &message.2;
 
                 let addr = &mut self.addr;
                 let channel = self.channel_identifier;
@@ -131,14 +139,19 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 }));
 
                 // We clone rather than drain to avoid deserialization.
-                for &(ref update, delta) in recv_messages.iter() {
-                    messages.update(update.clone(), delta);
+                for &(ref update, delta) in recv_changes.iter() {
+                    changes.update(update.clone(), delta);
                 }
 
-                // We clone rather than drain to avoid deserialization.
-                for &(ref update, delta) in recv_internal.iter() {
-                    internal.update(update.clone(), delta);
-                }
+                // // We clone rather than drain to avoid deserialization.
+                // for &(ref update, delta) in recv_messages.iter() {
+                //     messages.update(update.clone(), delta);
+                // }
+
+                // // We clone rather than drain to avoid deserialization.
+                // for &(ref update, delta) in recv_internal.iter() {
+                //     internal.update(update.clone(), delta);
+                // }
             }
         }
     }

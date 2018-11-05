@@ -6,7 +6,7 @@ use std::default::Default;
 
 use progress::frontier::Antichain;
 use progress::{Operate, Timestamp, ChangeBatch};
-use progress::nested::Source;
+use progress::Source;
 
 use Data;
 use communication::Push;

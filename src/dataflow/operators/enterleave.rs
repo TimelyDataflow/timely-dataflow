@@ -25,8 +25,8 @@ use std::marker::PhantomData;
 
 use progress::Timestamp;
 use progress::timestamp::Refines;
-use progress::nested::{Source, Target};
-use progress::nested::product::Product;
+use progress::{Source, Target};
+use order::Product;
 use Data;
 use communication::Push;
 use dataflow::channels::pushers::{Counter, Tee};

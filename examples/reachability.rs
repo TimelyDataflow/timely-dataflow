@@ -4,15 +4,18 @@ fn main() {
     let nodes: usize = std::env::args().nth(1).unwrap().parse().unwrap();
     let rounds: usize = std::env::args().nth(2).unwrap().parse().unwrap();
 
-    test_alt(nodes, rounds);
-    test_neu(nodes, rounds);
+    let alt = std::env::args().any(|x| x == "alt");
+    let neu = std::env::args().any(|x| x == "neu");
+
+    if alt { test_alt(nodes, rounds); }
+    if neu { test_neu(nodes, rounds); }
 }
 
 
 fn test_alt(nodes: usize, rounds: usize) {
 
     use timely::progress::frontier::Antichain;
-    use timely::progress::nested::subgraph::{Source, Target};
+    use timely::progress::{Source, Target};
     use timely::progress::nested::reachability::{Builder, Tracker};
 
     // This test means to exercise the efficiency of the tracker by performing local changes and expecting
@@ -76,7 +79,7 @@ fn test_alt(nodes: usize, rounds: usize) {
 fn test_neu(nodes: usize, rounds: usize) {
 
     use timely::progress::frontier::Antichain;
-    use timely::progress::nested::subgraph::{Source, Target};
+    use timely::progress::{Source, Target};
     use timely::progress::nested::reachability_neu::Builder;
 
     // This test means to exercise the efficiency of the tracker by performing local changes and expecting

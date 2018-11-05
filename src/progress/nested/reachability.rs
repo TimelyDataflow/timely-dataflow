@@ -9,7 +9,7 @@
 //!
 //! ```rust
 //! use timely::progress::frontier::Antichain;
-//! use timely::progress::nested::subgraph::{Source, Target};
+//! use timely::progress::{Source, Target};
 //! use timely::progress::nested::reachability::{Builder, Tracker};
 //!
 //! // allocate a new empty topology builder.
@@ -41,7 +41,7 @@
 //! ```
 
 use progress::Timestamp;
-use progress::nested::{Source, Target};
+use progress::{Location, Port, Source, Target};
 use progress::ChangeBatch;
 
 use progress::frontier::{Antichain, MutableAntichain};
@@ -71,7 +71,7 @@ use order::PartialOrder;
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;
-/// use timely::progress::nested::subgraph::{Source, Target};
+/// use timely::progress::{Source, Target};
 /// use timely::progress::nested::reachability::Builder;
 ///
 /// // allocate a new empty topology builder.
@@ -298,7 +298,7 @@ pub struct Summary<T: Timestamp> {
 ///
 /// ```rust
 /// use timely::progress::frontier::Antichain;
-/// use timely::progress::nested::subgraph::{Source, Target};
+/// use timely::progress::{Source, Target};
 /// use timely::progress::nested::reachability::{Builder, Tracker};
 ///
 /// // allocate a new empty topology builder.
@@ -348,6 +348,15 @@ pub struct Tracker<T:Timestamp> {
 }
 
 impl<T:Timestamp> Tracker<T> {
+
+    /// Updates theh count for a time at a location.
+    #[inline]
+    pub fn update(&mut self, location: Location, time: T, value: i64) {
+        match location.port {
+            Port::Target(port) => self.update_target(Target { index: location.node, port }, time, value),
+            Port::Source(port) => self.update_source(Source { index: location.node, port }, time, value),
+        }
+    }
 
     /// Updates the count for a time at a target.
     #[inline]
