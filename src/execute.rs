@@ -121,7 +121,7 @@ where
     T:Send+'static,
     F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static {
 
-    if let Configuration::Cluster(_,_,_,_, ref mut log_fn) = config {
+    if let Configuration::Cluster { ref mut log_fn, .. } = config {
 
         *log_fn = Box::new(|events_setup| {
 
