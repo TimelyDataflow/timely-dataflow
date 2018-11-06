@@ -32,6 +32,8 @@ pub enum Configuration {
         addresses: Vec<String>,
         /// Verbosely report connection process
         report: bool,
+        /// Closure to spawn a new communication thread
+        spawn_fn: Box<Fn(/* index: */ usize, /* sender: */ bool, /* remote: */ Option<usize>, ::allocator::zero_copy::initialize::Loop)->()+Send+Sync>,
         /// Closure to create a new logger for a communication thread
         log_fn: Box<Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent, CommunicationSetup>> + Send + Sync>,
     }
@@ -87,6 +89,7 @@ impl Configuration {
                     process,
                     addresses,
                     report,
+                    spawn_fn: Box::new(|_, _, _, loop_fn| loop_fn.start()),
                     log_fn: Box::new( | _ | None),
                 }
             }
@@ -104,8 +107,8 @@ impl Configuration {
             Configuration::Process(threads) => {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             },
-            Configuration::Cluster { threads, process, addresses, report, log_fn } => {
-                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, log_fn) {
+            Configuration::Cluster { threads, process, addresses, report, spawn_fn, log_fn } => {
+                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, spawn_fn, log_fn) {
                     Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
                 }
                 else {
