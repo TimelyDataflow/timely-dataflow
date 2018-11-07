@@ -1,7 +1,7 @@
 extern crate timely;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Input, Filter, Probe};
+use timely::dataflow::operators::{Input, Exchange, Probe};
 
 fn main() {
 
@@ -24,7 +24,7 @@ fn main() {
         worker.dataflow(|scope| {
             scope
                 .input_from(&mut input)     // read input.
-                .filter(|_| false)          // do nothing.
+                .exchange(|&x| x as u64)     // exchange data.
                 .probe_with(&mut probe);    // observe output.
         });
 
@@ -81,7 +81,7 @@ fn main() {
             if inserted_ns < target_ns {
 
                 while ((insert_counter * ns_per_request) as u64) < target_ns {
-                    input.send(insert_counter);
+                    input.send(insert_counter / peers);
                     insert_counter += peers;
                 }
                 input.advance_to(target_ns);

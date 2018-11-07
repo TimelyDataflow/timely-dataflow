@@ -466,7 +466,37 @@ where
         // reasons to believe it is not productive (as it can be expensive). For example, if we
         // know that these changes could not advance the `final_pointstamp` frontier we could
         // safely hold back the changes.
-        self.progcaster.send_and_recv(&mut self.local_pointstamp);
+
+        let can_skip = {
+            let mut children = &mut self.children;
+            self.local_pointstamp.iter().all(|((location, time), _diff)|
+
+                if let Location { node, port: Port::Target(port) } = location {
+
+                    let dominated = children[*node].external[*port].frontier().iter().any(|t| t.less_than(time));
+                    let redundant = children[*node].external[*port].count_for(time) > 1;
+
+                    dominated || redundant
+                }
+                else {
+                    false
+                }
+            )
+        };
+
+        if !can_skip || ::std::env::var("REACHABILITY_HACK") != Ok("ZOMG".to_owned()) {
+            self.progcaster.send_and_recv(&mut self.local_pointstamp);
+            self.local_pointstamp.drain_into(&mut self.final_pointstamp);
+        }
+        else {
+
+            // if !self.local_pointstamp.is_empty() {
+            //     println!("Skipping: {:?}", self.local_pointstamp);
+            // }
+            let mut temp = ChangeBatch::new();
+            self.progcaster.send_and_recv(&mut temp);
+            temp.drain_into(&mut self.final_pointstamp);
+        }
 
         // Step 3. Drain the post-exchange progress information into `self.pointstamp_tracker`.
         //
@@ -478,8 +508,8 @@ where
         // statements, to make sure that any corresponding internal and produced counts are
         // surfaced at the same time.
 
-        // Drain exchanged pointstamps into "final" pointstamps.
-        self.local_pointstamp.drain_into(&mut self.final_pointstamp);
+        // // Drain exchanged pointstamps into "final" pointstamps.
+        // self.local_pointstamp.drain_into(&mut self.final_pointstamp);
 
         // Process exchange pointstamps. Handle child 0 statements carefully.
         for ((location, timestamp), delta) in self.final_pointstamp.drain() {
