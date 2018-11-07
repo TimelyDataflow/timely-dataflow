@@ -76,6 +76,7 @@ fn main() {
 
             // Technique 3:
             let scale = (inserted_ns - acknowledged_ns).next_power_of_two();
+            let scale = ::std::cmp::max(scale, 1024) / 4;
             let target_ns = elapsed_ns & !(scale - 1);
 
             if inserted_ns < target_ns {

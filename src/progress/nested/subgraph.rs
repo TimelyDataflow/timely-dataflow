@@ -468,18 +468,18 @@ where
         // safely hold back the changes.
 
         let can_skip = {
-            let mut children = &mut self.children;
+            let children = &mut self.children;
+            let tracker = &mut self.pointstamp_tracker;
             self.local_pointstamp.iter().all(|((location, time), _diff)|
-
-                if let Location { node, port: Port::Target(port) } = location {
-
-                    let dominated = children[*node].external[*port].frontier().iter().any(|t| t.less_than(time));
-                    let redundant = children[*node].external[*port].count_for(time) > 1;
-
-                    dominated || redundant
-                }
-                else {
-                    false
+                match location {
+                    Location { node, port: Port::Target(port) } => {
+                        let dominated = children[*node].external[*port].frontier().iter().any(|t| t.less_than(time));
+                        let redundant = children[*node].external[*port].count_for(time) > 1;
+                        dominated || redundant
+                    },
+                    Location { node, port: Port::Source(port) } => {
+                        tracker.node_state(*node).1[*port].frontier().iter().any(|t| t.less_than(time))
+                    },
                 }
             )
         };
