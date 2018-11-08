@@ -188,7 +188,7 @@ where
             pointstamp_builder: builder,
             pointstamp_tracker: tracker,
 
-            reachability_hack: ::std::env::var("REACHABILITY_HACK") != Ok("ZOMG".to_owned()),
+            reachability_hack: ::std::env::var("REACHABILITY_HACK") == Ok("ZOMG".to_owned()),
         }
     }
 }
