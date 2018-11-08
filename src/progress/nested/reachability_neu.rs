@@ -250,7 +250,7 @@ pub struct Tracker<T:Timestamp> {
     // output_summaries: HashMap<Location, Vec<Antichain<T::Summary>>>,
     output_changes: Vec<ChangeBatch<T>>,
 
-    global_frontier: HashSet<(Location, T)>,
+    // global_frontier: HashSet<(Location, T)>,
 }
 
 struct PerOperator<T: Timestamp> {
@@ -294,8 +294,9 @@ struct PortInformation<T: Timestamp> {
 impl<T: Timestamp> PortInformation<T> {
     #[inline(always)]
     fn is_global(&self, time: &T) -> bool {
-        self.pointstamps.count_for(time) > 0 &&
-        self.implications.count_for(time) == 1
+        let dominated = self.implications.frontier().iter().any(|t| t.less_than(time));
+        let redundant = self.implications.count_for(time) > 1;
+        !dominated && !redundant
     }
     #[inline(always)]
     fn update_into<I: IntoIterator<Item=(T, i64)>>(
@@ -378,7 +379,7 @@ impl<T:Timestamp> Tracker<T> {
             worklist: BinaryHeap::new(),
             pushed_changes: ChangeBatch::new(),
             output_changes,
-            global_frontier: HashSet::new(),
+            // global_frontier: HashSet::new(),
         }
     }
 

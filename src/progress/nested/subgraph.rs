@@ -187,6 +187,8 @@ where
 
             pointstamp_builder: builder,
             pointstamp_tracker: tracker,
+
+            reachability_hack: ::std::env::var("REACHABILITY_HACK") != Ok("ZOMG".to_owned()),
         }
     }
 }
@@ -232,6 +234,8 @@ where
 
     // channel / whatever used to communicate pointstamp updates to peers.
     progcaster: Progcaster<TInner>,
+
+    reachability_hack: bool,
 }
 
 
@@ -467,36 +471,41 @@ where
         // know that these changes could not advance the `final_pointstamp` frontier we could
         // safely hold back the changes.
 
-        let can_skip = {
-            let children = &mut self.children;
-            let tracker = &mut self.pointstamp_tracker;
-            self.local_pointstamp.iter().all(|((location, time), _diff)|
-                match location {
-                    Location { node, port: Port::Target(port) } => {
-                        let dominated = children[*node].external[*port].frontier().iter().any(|t| t.less_than(time));
-                        let redundant = children[*node].external[*port].count_for(time) > 1;
-                        dominated || redundant
-                    },
-                    Location { node, port: Port::Source(port) } => {
-                        tracker.node_state(*node).1[*port].frontier().iter().any(|t| t.less_than(time))
-                    },
-                }
-            )
-        };
+        if self.reachability_hack {
 
-        if !can_skip || ::std::env::var("REACHABILITY_HACK") != Ok("ZOMG".to_owned()) {
+            let can_skip = {
+                let children = &mut self.children;
+                let tracker = &mut self.pointstamp_tracker;
+                self.local_pointstamp.iter().all(|((location, time), _diff)|
+                    match location {
+                        Location { node, port: Port::Target(port) } => {
+                            let dominated = children[*node].external[*port].frontier().iter().any(|t| t.less_than(time));
+                            let redundant = children[*node].external[*port].count_for(time) > 1;
+                            dominated || redundant
+                        },
+                        Location { node, port: Port::Source(port) } => {
+                            tracker.node_state(*node).1[*port].frontier().iter().any(|t| t.less_than(time))
+                        },
+                    }
+                )
+            };
+
+            if !can_skip {
+                self.progcaster.send_and_recv(&mut self.local_pointstamp);
+                self.local_pointstamp.drain_into(&mut self.final_pointstamp);
+            }
+            else {
+                let mut temp = ChangeBatch::new();
+                self.progcaster.send_and_recv(&mut temp);
+                temp.drain_into(&mut self.final_pointstamp);
+            }
+
+        }
+        else {
             self.progcaster.send_and_recv(&mut self.local_pointstamp);
             self.local_pointstamp.drain_into(&mut self.final_pointstamp);
         }
-        else {
 
-            // if !self.local_pointstamp.is_empty() {
-            //     println!("Skipping: {:?}", self.local_pointstamp);
-            // }
-            let mut temp = ChangeBatch::new();
-            self.progcaster.send_and_recv(&mut temp);
-            temp.drain_into(&mut self.final_pointstamp);
-        }
 
         // Step 3. Drain the post-exchange progress information into `self.pointstamp_tracker`.
         //
