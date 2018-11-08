@@ -143,7 +143,7 @@ impl<A: Allocate> Worker<A> {
         let mut operator = subscope.into_inner().build(self);
 
         operator.get_internal_summary();
-        operator.set_external_summary(Vec::new(), &mut []);
+        operator.set_external_summary();
 
         let wrapper = Wrapper {
             _index: dataflow_index,
@@ -194,7 +194,7 @@ struct Wrapper {
 
 impl Wrapper {
     fn step(&mut self) -> bool {
-        let active = self.operate.as_mut().map(|op| op.pull_internal_progress(&mut [], &mut [], &mut [])).unwrap_or(false);
+        let active = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false);
         if !active {
             self.operate = None;
             self.resources = None;

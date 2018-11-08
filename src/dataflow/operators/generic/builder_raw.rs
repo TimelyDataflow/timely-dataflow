@@ -5,12 +5,14 @@
 //! an interface that is intentionally harder to mis-use.
 
 use std::default::Default;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use ::Data;
 
 use progress::{Source, Target};
 use progress::ChangeBatch;
-use progress::{Timestamp, Operate, Antichain};
+use progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
 use dataflow::{Stream, Scope};
 use dataflow::channels::pushers::Tee;
@@ -154,12 +156,15 @@ impl<G: Scope> OperatorBuilder<G> {
             &mut [ChangeBatch<G::Timestamp>],
         )->bool+'static
     {
+        let inputs = self.shape.inputs;
+        let outputs = self.shape.outputs;
+
         let operator = OperatorCore {
             shape: self.shape,
             push_external,
             pull_internal,
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             summary: self.summary,
-            phantom: ::std::marker::PhantomData,
         };
 
         self.scope.add_operator_with_indices(Box::new(operator), self.index, self.global);
@@ -175,8 +180,8 @@ struct OperatorCore<T, PEP, PIP>
     shape: OperatorShape,
     push_external: PEP,
     pull_internal: PIP,
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
     summary: Vec<Vec<Antichain<T::Summary>>>,
-    phantom: ::std::marker::PhantomData<T>,
 }
 
 impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
@@ -189,33 +194,32 @@ impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
     fn outputs(&self) -> usize { self.shape.outputs }
 
     // announce internal topology as fully connected, and hold all default capabilities.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
 
         // by default, we reserve a capability for each output port at `Default::default()`.
-        let mut internal = Vec::new();
-        for _ in 0 .. self.shape.outputs {
-            internal.push(ChangeBatch::new_from(Default::default(), self.shape.peers as i64));
-        }
+        self.shared_progress
+            .borrow_mut()
+            .internals
+            .iter_mut()
+            .for_each(|output| output.update(Default::default(), self.shape.peers as i64));
 
-        (self.summary.clone(), internal)
+        (self.summary.clone(), self.shared_progress.clone())
     }
 
     // initialize self.frontier antichains as indicated by hosting scope.
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>,
-                                       count_map: &mut [ChangeBatch<T>]) {
-        (self.push_external)(count_map);
+    fn set_external_summary(&mut self) {
+        (self.push_external)(&mut self.shared_progress.borrow_mut().frontiers[..]);
     }
 
-    // update self.frontier antichains as indicated by hosting scope.
-    fn push_external_progress(&mut self, count_map: &mut [ChangeBatch<T>]) {
-        (self.push_external)(count_map);
-    }
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
 
-    // invoke user logic, propagate changes found in shared ChangeBatches.
-    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
-                                         internal: &mut [ChangeBatch<T>],
-                                         produced: &mut [ChangeBatch<T>]) -> bool
-    {
+        let frontier = &mut shared_progress.frontiers[..];
+        let consumed = &mut shared_progress.consumeds[..];
+        let internal = &mut shared_progress.internals[..];
+        let produced = &mut shared_progress.produceds[..];
+
+        (self.push_external)(frontier);
         (self.pull_internal)(consumed, internal, produced)
     }
 

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::Antichain;
-use progress::{Operate, Timestamp};
+use progress::{Operate, operate::SharedProgress, Timestamp};
 use progress::Source;
 use progress::ChangeBatch;
 
@@ -90,6 +90,7 @@ impl<G: Scope> UnorderedInput<G> for G {
         let peers = self.peers();
 
         let index = self.add_operator(Box::new(UnorderedOperator {
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             internal,
             produced,
             peers,
@@ -100,6 +101,7 @@ impl<G: Scope> UnorderedInput<G> for G {
 }
 
 struct UnorderedOperator<T:Timestamp> {
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
     internal:   Rc<RefCell<ChangeBatch<T>>>,
     produced:   Rc<RefCell<ChangeBatch<T>>>,
     peers:     usize,
@@ -110,25 +112,18 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>,
-                                           Vec<ChangeBatch<T>>) {
-        let mut internal = ChangeBatch::new();
-        // augment the counts for each reserved capability.
-        for &(ref time, count) in self.internal.borrow_mut().iter() {
-            internal.update(time.clone(), count * (self.peers as i64 - 1));
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+        let mut borrow = self.internal.borrow_mut();
+        for (time, count) in borrow.drain() {
+            self.shared_progress.borrow_mut().internals[0].update(time, count * (self.peers as i64));
         }
-
-        // drain the changes to empty out, and complete the counts for internal.
-        self.internal.borrow_mut().drain_into(&mut internal);
-        (Vec::new(), vec![internal])
+        (Vec::new(), self.shared_progress.clone())
     }
 
-    fn pull_internal_progress(&mut self,_consumed: &mut [ChangeBatch<T>],
-                                         internal: &mut [ChangeBatch<T>],
-                                         produced: &mut [ChangeBatch<T>]) -> bool
-    {
-        self.produced.borrow_mut().drain_into(&mut produced[0]);
-        self.internal.borrow_mut().drain_into(&mut internal[0]);
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        self.internal.borrow_mut().drain_into(&mut shared_progress.internals[0]);
+        self.produced.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
         false
     }
 

@@ -1,9 +1,9 @@
 //! Methods which describe an operators topology, and the progress it makes.
 
-use std::default::Default;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use progress::{Timestamp, ChangeBatch, Antichain};
-
 
 /// Methods for describing an operators topology, and the progress it makes.
 pub trait Operate<T: Timestamp> {
@@ -32,6 +32,12 @@ pub trait Operate<T: Timestamp> {
     /// The number of outputs.
     fn outputs(&self) -> usize;
 
+    /// A descriptive name for the operator
+    fn name(&self) -> String;
+
+    /// Schedules the operator.
+    fn schedule(&mut self) -> bool;
+
     /// Fetches summary information about internal structure of the operator.
     ///
     /// Each operator must summarize its internal structure by a map from pairs `(input, output)`
@@ -43,59 +49,35 @@ pub trait Operate<T: Timestamp> {
     ///
     /// The default behavior is to indicate that timestamps on any input can emerge unchanged on
     /// any output, and no initial capabilities are held.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
-        (vec![vec![Antichain::from_elem(Default::default()); self.outputs()]; self.inputs()],
-         vec![ChangeBatch::new(); self.outputs()])
-    }
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>);
 
-    /// Presents summary information about the external structure around the operator.
-    ///
-    /// Each operator exists in the context of a parent scope, and the edges and other operators it
-    /// hosts represent paths messages may take from this operators outputs back to its inputs. For
-    /// an operator to correctly understand the implications of local progress statements, it must
-    /// understand how messages it produces may eventually return to its inputs.
-    ///
-    /// The parent scope must also provide initial capabilities for each of the inputs, reflecting
-    /// work elsewhere in the timely computation. Note: it is not clear whether the parent must not
-    /// include capabilities expressed by the operator itself. It seems possible to exclude such
-    /// capabilities, if it would help the operator, but the operator should not yet rely on any
-    /// specific behavior.
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>, _frontier: &mut [ChangeBatch<T>]) { }
-
-    /// Reports a summary of progress statements external to the operator and its peer group.
-    ///
-    /// This report summarizes *all* of the external world, including updates issued by the operator
-    /// itself. This is important, and means that there is an ordering constraint that needs to be
-    /// enforced by the operator: before reporting any summarized progress to its parent, a child
-    /// must install the non-summarized parts (internal messages, capabilities) locally. Otherwise,
-    /// the child may learn about external "progress" corresponding to its own actions, and without
-    /// noting the consequences of those actions, will be in a bit of a pickle.
-    ///
-    /// Note: Callee is expected to consume the contents of _external to indicate acknowledgement.
-    fn push_external_progress(&mut self, external: &mut [ChangeBatch<T>]) {
-        // default implementation just drains the external updates
-        for updates in external.iter_mut() {
-            updates.clear();
-        }
-    }
-
-    /// Retrieves a summary of progress statements internal to the operator.
-    ///
-    /// Returns a bool indicating if there is any unreported work remaining (e.g. work that doesn't
-    /// project on an output).
-    ///
-    /// Note: not "internal to the operator and its peer group". The operator instance should only
-    /// report progress performed by its own instance. The parent scope will figure out what to do
-    /// with this information (mostly likely exchange it with its peers). There does seem to be the
-    /// opportunity to optimize this, but it may complicate the life of the parent to know which of
-    /// its children are reporting partial information and which are complete.
-    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],          // to populate
-                                         internal: &mut [ChangeBatch<T>],          // to populate
-                                         produced: &mut [ChangeBatch<T>]) -> bool; // to populate
-
-    /// A descriptive name for the operator
-    fn name(&self) -> String;
+    /// Signals that external frontiers have been set.
+    fn set_external_summary(&mut self) { }
 
     /// Indicates of whether the operator requires `push_external_progress` information or not.
     fn notify_me(&self) -> bool { true }
+}
+
+/// Progress information shared between parent and child.
+pub struct SharedProgress<T: Timestamp> {
+    /// Frontier capability changes reported by the parent scope.
+    pub frontiers: Vec<ChangeBatch<T>>,
+    /// Consumed message changes reported by the child operator.
+    pub consumeds: Vec<ChangeBatch<T>>,
+    /// Internal capability changes reported by the child operator.
+    pub internals: Vec<ChangeBatch<T>>,
+    /// Produced message changes reported by the child operator.
+    pub produceds: Vec<ChangeBatch<T>>,
+}
+
+impl<T: Timestamp> SharedProgress<T> {
+    /// Allocates a new shared progress structure.
+    pub fn new(inputs: usize, outputs: usize) -> Self {
+        SharedProgress {
+            frontiers: vec![ChangeBatch::new(); inputs],
+            consumeds: vec![ChangeBatch::new(); inputs],
+            internals: vec![ChangeBatch::new(); outputs],
+            produceds: vec![ChangeBatch::new(); outputs],
+        }
+    }
 }

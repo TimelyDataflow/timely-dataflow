@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::Antichain;
-use progress::{Operate, Timestamp, ChangeBatch};
+use progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use progress::Source;
 
 use Data;
@@ -111,6 +111,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         let copies = self.peers();
 
         let index = self.add_operator(Box::new(Operator {
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             progress,
             messages: produced,
             copies,
@@ -121,6 +122,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 }
 
 struct Operator<T:Timestamp> {
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
     progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
     messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
     copies:     usize,
@@ -131,19 +133,15 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>,
-                                           Vec<ChangeBatch<T>>) {
-        let mut map = ChangeBatch::new();
-        map.update(Default::default(), self.copies as i64);
-        (Vec::new(), vec![map])
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+        self.shared_progress.borrow_mut().internals[0].update(Default::default(), self.copies as i64);
+        (Vec::new(), self.shared_progress.clone())
     }
 
-    fn pull_internal_progress(&mut self,_messages_consumed: &mut [ChangeBatch<T>],
-                                         frontier_progress: &mut [ChangeBatch<T>],
-                                         messages_produced: &mut [ChangeBatch<T>]) -> bool
-    {
-        self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
-        self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        self.progress.borrow_mut().drain_into(&mut shared_progress.internals[0]);
+        self.messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
         false
     }
 

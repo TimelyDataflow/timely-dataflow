@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use Data;
 use communication::Push;
 
-use progress::{Timestamp, Operate, PathSummary};
+use progress::{Timestamp, Operate, operate::SharedProgress, PathSummary};
 use progress::frontier::Antichain;
 use progress::{Source, Target};
 use order::Product;
@@ -89,6 +89,7 @@ impl<G: Scope> Feedback<G> for G {
         let consumed_messages = feedback_input.produced().clone();
 
         let index = self.add_operator(Box::new(Operator {
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(1, 1))),
             consumed_messages,
             produced_messages,
             summary,
@@ -174,6 +175,7 @@ pub struct Handle<T: Timestamp, D: Data> {
 
 // the scope that the progress tracker interacts with
 struct Operator<T:Timestamp> {
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
     consumed_messages:  Rc<RefCell<ChangeBatch<T>>>,
     produced_messages:  Rc<RefCell<ChangeBatch<T>>>,
     summary:            T::Summary,
@@ -185,16 +187,14 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     fn inputs(&self) -> usize { 1 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
-        (vec![vec![Antichain::from_elem(self.summary.clone())]], vec![ChangeBatch::new()])
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+        (vec![vec![Antichain::from_elem(self.summary.clone())]], self.shared_progress.clone())
     }
 
-    fn pull_internal_progress(&mut self, messages_consumed: &mut [ChangeBatch<T>],
-                                        _frontier_progress: &mut [ChangeBatch<T>],
-                                         messages_produced: &mut [ChangeBatch<T>]) -> bool {
-
-        self.consumed_messages.borrow_mut().drain_into(&mut messages_consumed[0]);
-        self.produced_messages.borrow_mut().drain_into(&mut messages_produced[0]);
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        self.consumed_messages.borrow_mut().drain_into(&mut shared_progress.consumeds[0]);
+        self.produced_messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
         false
     }
 

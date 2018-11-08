@@ -1,12 +1,14 @@
 //! Broadcast records to all workers.
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use communication::Pull;
 
 use ::ExchangeData;
 use progress::{Source, Target};
+use progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 use dataflow::{Stream, Scope};
-use progress::ChangeBatch;
-use progress::{Timestamp, Operate, Antichain};
 use dataflow::channels::{Message, Bundle};
 use dataflow::channels::pushers::Counter as PushCounter;
 use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
@@ -45,6 +47,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
         let receiver = LogPuller::new(puller, scope.index(), channel_id, scope.logging());
 
         let operator = BroadcastOperator {
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(scope.peers(), 1))),
             index: scope.index(),
             peers: scope.peers(),
             input: PullCounter::new(receiver),
@@ -65,6 +68,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
 struct BroadcastOperator<T: Timestamp, D: ExchangeData> {
     index: usize,
     peers: usize,
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
     input: PullCounter<T, D, LogPuller<T, D, Box<Pull<Bundle<T, D>>>>>,
     output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
@@ -74,15 +78,13 @@ impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
     fn inputs(&self) -> usize { self.peers }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
         // TODO: (optimization) some of these internal paths do not actually exist
         let summary = (0..self.peers).map(|_| vec![Antichain::from_elem(Default::default())]).collect::<Vec<_>>();
-        (summary, vec![ChangeBatch::new()])
+        (summary, self.shared_progress.clone())
     }
 
-    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
-                                         _internal: &mut [ChangeBatch<T>],
-                                         produced: &mut [ChangeBatch<T>]) -> bool {
+    fn schedule(&mut self) -> bool {
 
         let mut vec = Vec::new();
         while let Some(bundle) = self.input.next() {
@@ -100,8 +102,10 @@ impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
             }
         }
         self.output.cease();
-        self.input.consumed().borrow_mut().drain_into(&mut consumed[self.index]);
-        self.output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
+
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        self.input.consumed().borrow_mut().drain_into(&mut shared_progress.consumeds[self.index]);
+        self.output.inner().produced().borrow_mut().drain_into(&mut shared_progress.produceds[0]);
         false
     }
 

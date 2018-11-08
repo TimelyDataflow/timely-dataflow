@@ -12,7 +12,7 @@ use std::default::Default;
 use logging::TimelyLogger as Logger;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Timestamp, Operate};
+use progress::{Timestamp, Operate, operate::SharedProgress};
 use progress::{Location, Port, Source, Target};
 
 use progress::ChangeBatch;
@@ -170,8 +170,8 @@ where
         Subgraph {
             name: self.name,
             path: self.path,
-            inputs: self.input_messages.len(),
-            outputs: self.output_capabilities.len(),
+            inputs,
+            outputs,
             children: self.children,
             input_messages: self.input_messages,
             output_capabilities: self.output_capabilities,
@@ -187,6 +187,9 @@ where
 
             pointstamp_builder: builder,
             pointstamp_tracker: tracker,
+
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
+
         }
     }
 }
@@ -232,6 +235,8 @@ where
 
     // channel / whatever used to communicate pointstamp updates to peers.
     progcaster: Progcaster<TInner>,
+
+    shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
 }
 
 
@@ -248,7 +253,7 @@ where
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Vec<ChangeBatch<TOuter>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
 
         // double-check that child 0 (the outside world) is correctly shaped.
         assert_eq!(self.children[0].outputs, self.inputs());
@@ -272,7 +277,8 @@ where
         // for each output port at `self.pointstamps.pushed[0]`. We should promote them to their
         // appropriate buffer (`self.output_capabilities`) and present them as initial capabilities
         // for the subgraph operator (`initial_capabilities`).
-        let mut initial_capabilities = vec![ChangeBatch::new(); self.outputs()];
+        let initial_capabilities = &mut self.shared_progress.borrow_mut().internals[..];
+        // let mut initial_capabilities = vec![ChangeBatch::new(); self.outputs()];
         for (o_port, capabilities) in self.pointstamp_tracker.pushed_mut(0).iter_mut().enumerate() {
             let caps1 = capabilities.drain().map(|(time, diff)| (time.to_outer(), diff));
             self.output_capabilities[o_port].update_iter_and(caps1, |t, v| {
@@ -298,14 +304,14 @@ where
             }
         }
 
-        (internal_summary, initial_capabilities)
+        (internal_summary, self.shared_progress.clone())
     }
 
     /// Receive summaries from outputs to inputs, as well as initial external capabilities on inputs.
     ///
     /// This method finalizes the internal reachability of this `Subgraph`, and provides the corresponding
     /// information on to each of its children.
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<TOuter::Summary>>>, frontier: &mut [ChangeBatch<TOuter>]) {
+    fn set_external_summary(&mut self) {
 
         // We must first translate `summaries` to summaries in the subgraph's timestamp type.
         // Each of these summaries correspond to dropping the inner timestamp coordinate and replacing
@@ -321,7 +327,7 @@ where
 
         // The element of `frontier` form the initial capabilities of child zero, our proxy for the outside world.
         let mut new_capabilities = vec![ChangeBatch::new(); self.inputs];
-        for (index, batch) in frontier.iter_mut().enumerate() {
+        for (index, batch) in self.shared_progress.borrow_mut().frontiers.iter_mut().enumerate() {
             let iterator = batch.drain().map(|(time, value)| (TInner::to_inner(time), value));
             new_capabilities[index].extend(iterator);
         }
@@ -346,7 +352,8 @@ where
         // Initialize all expressed capabilities as pointstamps, for propagation.
         for child in self.children.iter_mut() {
             for output in 0 .. child.outputs {
-                for &(ref time, value) in child.gis_capabilities[output].iter() {
+                let mut child_shared_progress = &mut child.shared_progress.borrow_mut();
+                for (time, value) in child_shared_progress.internals[output].drain() {
                     self.pointstamp_tracker.update_source(
                         Source { index: child.index, port: output },
                         time.clone(),
@@ -390,14 +397,11 @@ where
         assert!(self.pointstamp_tracker.is_empty());
     }
 
-    /// Receive changes in the external capabilities of the containing scope.
-    ///
-    /// This method only stashes the received changes in the progress tracker, and awaits
-    /// its next invocation of `pull_internal_progress`.
-    fn push_external_progress(&mut self, external: &mut [ChangeBatch<TOuter>]) {
-        // I believe we can simply move these into our pointstamp staging area.
-        // Nothing will happen until we call `step`, but that is to be expected.
-        for (port, changes) in external.iter_mut().enumerate() {
+    fn schedule(&mut self) -> bool {
+
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+
+        for (port, changes) in shared_progress.frontiers.iter_mut().enumerate() {
             for (time, value) in changes.drain() {
                 self.pointstamp_tracker.update_source(
                     Source { index: 0, port },
@@ -406,21 +410,11 @@ where
                 );
             }
         }
-    }
 
-    /// Report changes in messages and capabilities for the subgraph across all workers.
-    ///
-    /// This method populates its arguments with accumulated changes across all of its peers, indicating
-    /// input messages consumed, internal capabilities retained or dropped, and output messages produced.
-    ///
-    /// Importantly, these changes are aggregated across all peers, reflecting the current information
-    /// received by the operator from its own internal progress tracking. This has the potential to lead
-    /// to confusing conclusions (from experience), and should be treated carefully and with as much rigor
-    /// as possible. This behavior is indicated to others by the `self.local()` method returning `false`.
-    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<TOuter>],
-                                         internal: &mut [ChangeBatch<TOuter>],
-                                         produced: &mut [ChangeBatch<TOuter>]) -> bool
-    {
+        let consumed = &mut shared_progress.consumeds[..];
+        let internal = &mut shared_progress.internals[..];
+        let produced = &mut shared_progress.produceds[..];
+
         // This is a fair hunk of code, which we've broken down into six steps.
         //
         //   Step 1: harvest local data on records entering the scope.
@@ -584,11 +578,7 @@ struct PerOperatorState<T: Timestamp> {
 
     external: Vec<MutableAntichain<T>>, // input capabilities expressed by outer scope
 
-    consumed_buffer: Vec<ChangeBatch<T>>, // per-input: temp buffer used for pull_internal_progress.
-    internal_buffer: Vec<ChangeBatch<T>>, // per-output: temp buffer used for pull_internal_progress.
-    produced_buffer: Vec<ChangeBatch<T>>, // per-output: temp buffer used for pull_internal_progress.
-
-    external_buffer: Vec<ChangeBatch<T>>, // per-input: temp buffer used for push_external_progress.
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
     gis_capabilities: Vec<ChangeBatch<T>>,
     gis_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
@@ -601,14 +591,12 @@ impl<T: Timestamp> PerOperatorState<T> {
     fn add_input(&mut self) {
         self.inputs += 1;
         self.external.push(Default::default());
-        self.external_buffer.push(ChangeBatch::new());
-        self.consumed_buffer.push(ChangeBatch::new());
+        self.shared_progress = Rc::new(RefCell::new(SharedProgress::new(self.inputs,self.outputs)));
     }
     fn add_output(&mut self) {
         self.outputs += 1;
         self.edges.push(vec![]);
-        self.internal_buffer.push(ChangeBatch::new());
-        self.produced_buffer.push(ChangeBatch::new());
+        self.shared_progress = Rc::new(RefCell::new(SharedProgress::new(self.inputs,self.outputs)));
     }
 
     fn empty(mut path: Vec<usize>, logging: Option<Logger>) -> PerOperatorState<T> {
@@ -628,13 +616,10 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             edges: Vec::new(),
             external: Vec::new(),
-            external_buffer: Vec::new(),
-            consumed_buffer: Vec::new(),
-            internal_buffer: Vec::new(),
-            produced_buffer: Vec::new(),
 
             logging,
 
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(0,0))),
             gis_capabilities: Vec::new(),
             gis_summary: Vec::new(),
         }
@@ -647,7 +632,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         let outputs = scope.outputs();
         let notify = scope.notify_me();
 
-        let (gis_summary, gis_capabilities) = scope.get_internal_summary();
+        let (gis_summary, shared_progress) = scope.get_internal_summary();
+        let gis_capabilities = shared_progress.borrow_mut().internals.clone();
 
         assert_eq!(gis_summary.len(), inputs);
         assert!(!gis_summary.iter().any(|x| x.len() != outputs));
@@ -667,14 +653,9 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             external:           vec![Default::default(); inputs],
 
-            external_buffer:    vec![ChangeBatch::new(); inputs],
-
-            consumed_buffer:    vec![ChangeBatch::new(); inputs],
-            internal_buffer:    vec![ChangeBatch::new(); outputs],
-            produced_buffer:    vec![ChangeBatch::new(); outputs],
-
             logging,
 
+            shared_progress,
             gis_capabilities,
             gis_summary,
         }
@@ -682,11 +663,12 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     pub fn set_external_summary(&mut self, summaries: Vec<Vec<Antichain<T::Summary>>>, capabilities: &mut [ChangeBatch<T>]) {
 
+        debug_assert_eq!(self.shared_progress.borrow_mut().frontiers.len(), capabilities.len());
+
         // Filter initial capabilities through `MutableAntichain`, producing only the discrete
         // changes in `self.external_buffer`
-        debug_assert_eq!(self.external_buffer.len(), capabilities.len());
         for input in 0 .. self.inputs {
-            let buffer = &mut self.external_buffer[input];
+            let buffer = &mut self.shared_progress.borrow_mut().frontiers[input];
             self.external[input].update_iter_and(capabilities[input].drain(), |t, v| {
                 buffer.update(t.clone(), v);
             });
@@ -697,13 +679,13 @@ impl<T: Timestamp> PerOperatorState<T> {
         // NOTE: This may not be a bug should we move to messages with capability sets, where one option is an
         //       empty set. This could mean a channel that transmits data but not capabilities, would would
         //       here appear as an input with no initial capabilities.
-        if self.index > 0 && self.notify && !self.external_buffer.is_empty() && !self.external_buffer.iter_mut().any(|x| !x.is_empty()) {
+        if self.index > 0 && self.notify && !self.shared_progress.borrow_mut().frontiers.is_empty() && !self.shared_progress.borrow_mut().frontiers.iter_mut().any(|x| !x.is_empty()) {
             println!("initializing notifiable operator {}[{}] with inputs but no external capabilities", self.name, self.index);
         }
 
         // Pass the summary and filtered capabilities to the operator.
         if let Some(ref mut scope) = self.operator {
-            scope.set_external_summary(summaries, &mut self.external_buffer);
+            scope.set_external_summary();//summaries, &mut self.external_buffer);
         }
     }
 
@@ -722,7 +704,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             // We must filter the changes through a `MutableAntichain` to determine discrete changes in the
             // input capabilities, given all pre-existing updates accepted and communicated.
             for (input, updates) in external_progress.iter_mut().enumerate() {
-                let buffer = &mut self.external_buffer[input];
+                let buffer = &mut self.shared_progress.borrow_mut().frontiers[input];
                 self.external[input].update_iter_and(updates.drain(), |time, val| {
                     buffer.update(time.clone(), val);
                 });
@@ -760,7 +742,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             // activity, removing "holds capability" as a reason to schedule an operator. This may be fairly
             // easy to get wrong (for the operator implementor) and we should be careful here.
 
-            let any_progress_updates = self.external_buffer.iter_mut().any(|buffer| !buffer.is_empty()) && self.notify;
+            let any_progress_updates = self.shared_progress.borrow_mut().frontiers.iter_mut().any(|buffer| !buffer.is_empty()) && self.notify;
             let _was_recently_active = self.recently_active;
             let _outstanding_messages = _outstanding_messages.iter().any(|chain| !chain.is_empty());
             let _held_capabilities = internal_capabilities.iter().any(|chain| !chain.is_empty());
@@ -782,52 +764,39 @@ impl<T: Timestamp> PerOperatorState<T> {
                     });
                 }
 
-                operator.push_external_progress(&mut self.external_buffer);
-
-                // Possibly logic error if operator does not read its changes.
-                if self.external_buffer.iter_mut().any(|x| !x.is_empty()) {
-                    println!("External progress updates not consumed by {:?}", self.name);
-                }
-                debug_assert!(!self.external_buffer.iter_mut().any(|x| !x.is_empty()));
-                debug_assert!(external_progress.iter_mut().all(|x| x.is_empty()));
-
                 self.logging.as_mut().map(|l| l.log(::logging::ScheduleEvent {
                     id: self_id, start_stop: ::logging::StartStop::Start
                 }));
 
-                debug_assert!(self.consumed_buffer.iter_mut().all(|cm| cm.is_empty()));
-                debug_assert!(self.internal_buffer.iter_mut().all(|cm| cm.is_empty()));
-                debug_assert!(self.produced_buffer.iter_mut().all(|cm| cm.is_empty()));
+                debug_assert!(self.shared_progress.borrow_mut().consumeds.iter_mut().all(|cm| cm.is_empty()));
+                debug_assert!(self.shared_progress.borrow_mut().internals.iter_mut().all(|cm| cm.is_empty()));
+                debug_assert!(self.shared_progress.borrow_mut().produceds.iter_mut().all(|cm| cm.is_empty()));
 
-                let internal_activity =
-                    operator.pull_internal_progress(
-                        &mut self.consumed_buffer[..],
-                        &mut self.internal_buffer[..],
-                        &mut self.produced_buffer[..],
-                    );
+                let internal_activity = operator.schedule();
 
-                // Scan reported changes, propagate as appropriate.
-                let mut did_work = false;
-                for output in 0 .. self.outputs {
-                    for (time, delta) in self.produced_buffer[output].drain() {
-                        for target in &self.edges[output] {
-                            did_work = true;
-                            // pointstamp_messages.update((target.index, target.port, time.clone()), delta);
-                            pointstamps.update((Location::from(*target), time.clone()), delta);
-                        }
+                let shared_progress = &mut *self.shared_progress.borrow_mut();
+
+                let did_work =
+                    shared_progress.consumeds.iter_mut().any(|x| !x.is_empty()) ||
+                    shared_progress.internals.iter_mut().any(|x| !x.is_empty()) ||
+                    shared_progress.produceds.iter_mut().any(|x| !x.is_empty());
+
+                for (input, consumed) in shared_progress.consumeds.iter_mut().enumerate() {
+                    for (time, delta) in consumed.drain() {
+                        pointstamps.update((Location::new_target(self.index, input), time), -delta);
                     }
-
-                    for (time, delta) in self.internal_buffer[output].drain() {
-                        did_work = true;
-                        // pointstamp_internal.update((self.index, output, time.clone()), delta);
+                }
+                for (output, internal) in shared_progress.internals.iter_mut().enumerate() {
+                    for (time, delta) in internal.drain() {
                         pointstamps.update((Location::new_source(self.index, output), time.clone()), delta);
                     }
                 }
-                for input in 0 .. self.inputs {
-                    for (time, delta) in self.consumed_buffer[input].drain() {
-                        did_work = true;
-                        // pointstamp_messages.update((self.index, input, time), -delta);
-                        pointstamps.update((Location::new_target(self.index, input), time), -delta);
+                // Scan reported changes, propagate as appropriate.
+                for (output, produced) in shared_progress.produceds.iter_mut().enumerate() {
+                    for (time, delta) in produced.drain() {
+                        for target in &self.edges[output] {
+                            pointstamps.update((Location::from(*target), time.clone()), delta);
+                        }
                     }
                 }
 
