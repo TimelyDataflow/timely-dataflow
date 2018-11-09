@@ -12,7 +12,7 @@ use ::Data;
 
 use progress::{Source, Target};
 use progress::ChangeBatch;
-use progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
+use progress::{Timestamp, Operate, operate::{Schedule, SharedProgress}, Antichain};
 
 use dataflow::{Stream, Scope};
 use dataflow::channels::pushers::Tee;
@@ -174,8 +174,8 @@ impl<G: Scope> OperatorBuilder<G> {
 struct OperatorCore<T, PEP, PIP>
     where
         T: Timestamp,
-        PEP: FnMut(&mut [ChangeBatch<T>])+'static,
-        PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
+        // PEP: FnMut(&mut [ChangeBatch<T>])+'static,
+        // PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
 {
     shape: OperatorShape,
     push_external: PEP,
@@ -184,11 +184,33 @@ struct OperatorCore<T, PEP, PIP>
     summary: Vec<Vec<Antichain<T::Summary>>>,
 }
 
+impl<T, PEP, PIP> Schedule for OperatorCore<T, PEP, PIP>
+where
+    T: Timestamp,
+    PEP: FnMut(&mut [ChangeBatch<T>])+'static,
+    PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
+{
+    fn name(&self) -> &str { &self.shape.name }
+    fn path(&self) -> &[usize] { unimplemented!() }
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+
+        let frontier = &mut shared_progress.frontiers[..];
+        let consumed = &mut shared_progress.consumeds[..];
+        let internal = &mut shared_progress.internals[..];
+        let produced = &mut shared_progress.produceds[..];
+
+        (self.push_external)(frontier);
+        (self.pull_internal)(consumed, internal, produced)
+    }
+
+}
+
 impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
-    where
-        T: Timestamp,
-        PEP: FnMut(&mut [ChangeBatch<T>])+'static,
-        PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
+where
+    T: Timestamp,
+    PEP: FnMut(&mut [ChangeBatch<T>])+'static,
+    PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
 {
     fn inputs(&self) -> usize { self.shape.inputs }
     fn outputs(&self) -> usize { self.shape.outputs }
@@ -211,18 +233,5 @@ impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
         (self.push_external)(&mut self.shared_progress.borrow_mut().frontiers[..]);
     }
 
-    fn schedule(&mut self) -> bool {
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
-
-        let frontier = &mut shared_progress.frontiers[..];
-        let consumed = &mut shared_progress.consumeds[..];
-        let internal = &mut shared_progress.internals[..];
-        let produced = &mut shared_progress.produceds[..];
-
-        (self.push_external)(frontier);
-        (self.pull_internal)(consumed, internal, produced)
-    }
-
-    fn name(&self) -> String { self.shape.name.clone() }
     fn notify_me(&self) -> bool { self.shape.notify }
 }

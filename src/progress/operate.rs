@@ -5,8 +5,22 @@ use std::cell::RefCell;
 
 use progress::{Timestamp, ChangeBatch, Antichain};
 
+/// A type that can be scheduled.
+pub trait Schedule {
+
+    /// A descriptive name for the operator
+    fn name(&self) -> &str;
+
+    /// An address identifying the operator.
+    fn path(&self) -> &[usize];
+
+    /// Schedules the operator, with information about child requests.
+    fn schedule(&mut self) -> bool;
+
+}
+
 /// Methods for describing an operators topology, and the progress it makes.
-pub trait Operate<T: Timestamp> {
+pub trait Operate<T: Timestamp> : Schedule {
 
     /// Indicates if the operator is strictly local to this worker.
     ///
@@ -31,12 +45,6 @@ pub trait Operate<T: Timestamp> {
     fn inputs(&self) -> usize;
     /// The number of outputs.
     fn outputs(&self) -> usize;
-
-    /// A descriptive name for the operator
-    fn name(&self) -> String;
-
-    /// Schedules the operator.
-    fn schedule(&mut self) -> bool;
 
     /// Fetches summary information about internal structure of the operator.
     ///

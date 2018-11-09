@@ -12,7 +12,7 @@ use std::default::Default;
 use logging::TimelyLogger as Logger;
 
 use progress::frontier::{MutableAntichain, Antichain};
-use progress::{Timestamp, Operate, operate::SharedProgress};
+use progress::{Timestamp, Operate, operate::{Schedule, SharedProgress}};
 use progress::{Location, Port, Source, Target};
 
 use progress::ChangeBatch;
@@ -239,163 +239,15 @@ where
     shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
 }
 
-
-impl<TOuter, TInner> Operate<TOuter> for Subgraph<TOuter, TInner>
+impl<TOuter, TInner> Schedule for Subgraph<TOuter, TInner>
 where
     TInner: Timestamp+Refines<TOuter>,
     TOuter: Timestamp,
 {
 
-    fn name(&self) -> String { self.name.clone() }
-    fn local(&self) -> bool { false }
-    fn inputs(&self)  -> usize { self.inputs }
-    fn outputs(&self) -> usize { self.outputs }
+    fn name(&self) -> &str { &self.name }
 
-    // produces connectivity summaries from inputs to outputs, and reports initial internal
-    // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
-
-        // double-check that child 0 (the outside world) is correctly shaped.
-        assert_eq!(self.children[0].outputs, self.inputs());
-        assert_eq!(self.children[0].inputs, self.outputs());
-
-        // collect the initial capabilities of each child, to determine the initial capabilities
-        // of the subgraph.
-        for child in self.children.iter_mut() {
-            for (output, capability) in child.gis_capabilities.iter_mut().enumerate() {
-                for &(ref time, value) in capability.iter() {
-                    self.pointstamp_tracker.update_source(Source { index: child.index, port: output }, time.clone(), value);
-                }
-            }
-        }
-
-        // Move pointstamps along paths to arrive at output ports,
-        // (the only destination of interest at the moment).
-        self.pointstamp_tracker.propagate_all();
-
-        // Capabilities from internal operators have been pushed, and we can now find capabilities
-        // for each output port at `self.pointstamps.pushed[0]`. We should promote them to their
-        // appropriate buffer (`self.output_capabilities`) and present them as initial capabilities
-        // for the subgraph operator (`initial_capabilities`).
-        let initial_capabilities = &mut self.shared_progress.borrow_mut().internals[..];
-        // let mut initial_capabilities = vec![ChangeBatch::new(); self.outputs()];
-        for (o_port, capabilities) in self.pointstamp_tracker.pushed_mut(0).iter_mut().enumerate() {
-            let caps1 = capabilities.drain().map(|(time, diff)| (time.to_outer(), diff));
-            self.output_capabilities[o_port].update_iter_and(caps1, |t, v| {
-                initial_capabilities[o_port].update(t.clone(), v);
-            });
-        }
-
-        // done with the pointstamps, so we should clean up.
-        self.pointstamp_tracker.clear();
-
-        let summary = self.pointstamp_builder.summarize();
-
-        // Summarize the scope internals by looking for source_target_summaries from child 0
-        // sources to child 0 targets. These summaries are only in terms of the outer timestamp.
-        let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
-        for input in 0..self.inputs() {
-            for &(target, ref antichain) in &summary.source_target[0][input] {
-                if target.index == 0 {
-                    for summary in antichain.elements().iter() {
-                        internal_summary[input][target.port].insert(TInner::summarize(summary.clone()));
-                    };
-                }
-            }
-        }
-
-        (internal_summary, self.shared_progress.clone())
-    }
-
-    /// Receive summaries from outputs to inputs, as well as initial external capabilities on inputs.
-    ///
-    /// This method finalizes the internal reachability of this `Subgraph`, and provides the corresponding
-    /// information on to each of its children.
-    fn set_external_summary(&mut self) {
-
-        // We must first translate `summaries` to summaries in the subgraph's timestamp type.
-        // Each of these summaries correspond to dropping the inner timestamp coordinate and replacing
-        // it with the default value, and applying the summary to the outer coordinate.
-        // let mut new_summary = vec![vec![Antichain::new(); self.inputs]; self.outputs];
-        // for output in 0..self.outputs {
-        //     for input in 0..self.inputs {
-        //         for summary in summaries[output][input].elements() {
-        //             new_summary[output][input].insert(Outer(summary.clone(), Default::default()));
-        //         }
-        //     }
-        // }
-
-        // The element of `frontier` form the initial capabilities of child zero, our proxy for the outside world.
-        let mut new_capabilities = vec![ChangeBatch::new(); self.inputs];
-        for (index, batch) in self.shared_progress.borrow_mut().frontiers.iter_mut().enumerate() {
-            let iterator = batch.drain().map(|(time, value)| (TInner::to_inner(time), value));
-            new_capabilities[index].extend(iterator);
-        }
-        self.children[0].gis_capabilities = new_capabilities;
-
-        // Install the new summary, summarize, and remove "unhelpful" summaries.
-        // Specifically, and crucially, we remove summaries from the outputs of child zero to the inputs of child
-        // zero. This prevents the subgraph from reporting the external world's capabilities back as capabilities
-        // held by the subgraph. We also remove summaries to nodes that do not require progress information.
-        // self.pointstamp_builder.add_node(0, self.outputs, self.inputs, new_summary);
-        let mut pointstamp_summaries = self.pointstamp_builder.summarize();
-        for summaries in pointstamp_summaries.target_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
-        for summaries in pointstamp_summaries.source_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
-        for child in 0 .. self.children.len() {
-            for summaries in pointstamp_summaries.target_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
-            for summaries in pointstamp_summaries.source_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
-        }
-
-        // Allocate the pointstamp tracker using the finalized topology.
-        self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries.clone());
-
-        // Initialize all expressed capabilities as pointstamps, for propagation.
-        for child in self.children.iter_mut() {
-            for output in 0 .. child.outputs {
-                let mut child_shared_progress = &mut child.shared_progress.borrow_mut();
-                for (time, value) in child_shared_progress.internals[output].drain() {
-                    self.pointstamp_tracker.update_source(
-                        Source { index: child.index, port: output },
-                        time.clone(),
-                        value,
-                    )
-                }
-            }
-        }
-
-        // Propagate pointstamps using the complete summary to determine initial frontiers for each child.
-        self.pointstamp_tracker.propagate_all();
-
-        // We now have enough information to call `set_external_summary` for each child.
-        for child in self.children.iter_mut() {
-
-            // // Titrate propagated capability changes through a MutableAntichain, and leave them in
-            // // the child's buffer for pending `external` updates to apply in its next `push_external`
-            // // call.
-            // let pushed_mut = self.pointstamp_tracker.pushed_mut(child.index);
-            // for input in 0..child.inputs {
-            //     let buffer = &mut child.external_buffer[input];
-            //     let iterator2 = pushed_mut[input].drain();
-            //     child.external[input].update_iter_and(iterator2, |t, v| { buffer.update(t.clone(), v); });
-            // }
-
-            // Summarize the subgraph by the path summaries from the child's output to its inputs.
-            let mut summary = vec![vec![Antichain::new(); child.inputs]; child.outputs];
-            for output in 0..child.outputs {
-                for &(source, ref antichain) in &pointstamp_summaries.source_target[child.index][output] {
-                    if source.index == child.index {
-                        summary[output][source.port] = (*antichain).clone();
-                    }
-                }
-            }
-
-            let child_index = child.index;
-            child.set_external_summary(summary, self.pointstamp_tracker.pushed_mut(child_index));
-        }
-
-        // clean up after ourselves.
-        assert!(self.pointstamp_tracker.is_empty());
-    }
+    fn path(&self) -> &[usize] { &self.path }
 
     fn schedule(&mut self) -> bool {
 
@@ -553,6 +405,164 @@ where
         // Report activity if any child does, or our pointstamp tracker is tracking something.
         any_child_active || self.pointstamp_tracker.tracking_anything()
     }
+
+}
+
+impl<TOuter, TInner> Operate<TOuter> for Subgraph<TOuter, TInner>
+where
+    TInner: Timestamp+Refines<TOuter>,
+    TOuter: Timestamp,
+{
+
+    fn local(&self) -> bool { false }
+    fn inputs(&self)  -> usize { self.inputs }
+    fn outputs(&self) -> usize { self.outputs }
+
+    // produces connectivity summaries from inputs to outputs, and reports initial internal
+    // capabilities on each of the outputs (projecting capabilities from contained scopes).
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
+
+        // double-check that child 0 (the outside world) is correctly shaped.
+        assert_eq!(self.children[0].outputs, self.inputs());
+        assert_eq!(self.children[0].inputs, self.outputs());
+
+        // collect the initial capabilities of each child, to determine the initial capabilities
+        // of the subgraph.
+        for child in self.children.iter_mut() {
+            for (output, capability) in child.gis_capabilities.iter_mut().enumerate() {
+                for &(ref time, value) in capability.iter() {
+                    self.pointstamp_tracker.update_source(Source { index: child.index, port: output }, time.clone(), value);
+                }
+            }
+        }
+
+        // Move pointstamps along paths to arrive at output ports,
+        // (the only destination of interest at the moment).
+        self.pointstamp_tracker.propagate_all();
+
+        // Capabilities from internal operators have been pushed, and we can now find capabilities
+        // for each output port at `self.pointstamps.pushed[0]`. We should promote them to their
+        // appropriate buffer (`self.output_capabilities`) and present them as initial capabilities
+        // for the subgraph operator (`initial_capabilities`).
+        let initial_capabilities = &mut self.shared_progress.borrow_mut().internals[..];
+        // let mut initial_capabilities = vec![ChangeBatch::new(); self.outputs()];
+        for (o_port, capabilities) in self.pointstamp_tracker.pushed_mut(0).iter_mut().enumerate() {
+            let caps1 = capabilities.drain().map(|(time, diff)| (time.to_outer(), diff));
+            self.output_capabilities[o_port].update_iter_and(caps1, |t, v| {
+                initial_capabilities[o_port].update(t.clone(), v);
+            });
+        }
+
+        // done with the pointstamps, so we should clean up.
+        self.pointstamp_tracker.clear();
+
+        let summary = self.pointstamp_builder.summarize();
+
+        // Summarize the scope internals by looking for source_target_summaries from child 0
+        // sources to child 0 targets. These summaries are only in terms of the outer timestamp.
+        let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
+        for input in 0..self.inputs() {
+            for &(target, ref antichain) in &summary.source_target[0][input] {
+                if target.index == 0 {
+                    for summary in antichain.elements().iter() {
+                        internal_summary[input][target.port].insert(TInner::summarize(summary.clone()));
+                    };
+                }
+            }
+        }
+
+        (internal_summary, self.shared_progress.clone())
+    }
+
+    /// Receive summaries from outputs to inputs, as well as initial external capabilities on inputs.
+    ///
+    /// This method finalizes the internal reachability of this `Subgraph`, and provides the corresponding
+    /// information on to each of its children.
+    fn set_external_summary(&mut self) {
+
+        // We must first translate `summaries` to summaries in the subgraph's timestamp type.
+        // Each of these summaries correspond to dropping the inner timestamp coordinate and replacing
+        // it with the default value, and applying the summary to the outer coordinate.
+        // let mut new_summary = vec![vec![Antichain::new(); self.inputs]; self.outputs];
+        // for output in 0..self.outputs {
+        //     for input in 0..self.inputs {
+        //         for summary in summaries[output][input].elements() {
+        //             new_summary[output][input].insert(Outer(summary.clone(), Default::default()));
+        //         }
+        //     }
+        // }
+
+        // The element of `frontier` form the initial capabilities of child zero, our proxy for the outside world.
+        let mut new_capabilities = vec![ChangeBatch::new(); self.inputs];
+        for (index, batch) in self.shared_progress.borrow_mut().frontiers.iter_mut().enumerate() {
+            let iterator = batch.drain().map(|(time, value)| (TInner::to_inner(time), value));
+            new_capabilities[index].extend(iterator);
+        }
+        self.children[0].gis_capabilities = new_capabilities;
+
+        // Install the new summary, summarize, and remove "unhelpful" summaries.
+        // Specifically, and crucially, we remove summaries from the outputs of child zero to the inputs of child
+        // zero. This prevents the subgraph from reporting the external world's capabilities back as capabilities
+        // held by the subgraph. We also remove summaries to nodes that do not require progress information.
+        // self.pointstamp_builder.add_node(0, self.outputs, self.inputs, new_summary);
+        let mut pointstamp_summaries = self.pointstamp_builder.summarize();
+        for summaries in pointstamp_summaries.target_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
+        for summaries in pointstamp_summaries.source_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
+        for child in 0 .. self.children.len() {
+            for summaries in pointstamp_summaries.target_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
+            for summaries in pointstamp_summaries.source_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
+        }
+
+        // Allocate the pointstamp tracker using the finalized topology.
+        self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries.clone());
+
+        // Initialize all expressed capabilities as pointstamps, for propagation.
+        for child in self.children.iter_mut() {
+            for output in 0 .. child.outputs {
+                let mut child_shared_progress = &mut child.shared_progress.borrow_mut();
+                for (time, value) in child_shared_progress.internals[output].drain() {
+                    self.pointstamp_tracker.update_source(
+                        Source { index: child.index, port: output },
+                        time.clone(),
+                        value,
+                    )
+                }
+            }
+        }
+
+        // Propagate pointstamps using the complete summary to determine initial frontiers for each child.
+        self.pointstamp_tracker.propagate_all();
+
+        // We now have enough information to call `set_external_summary` for each child.
+        for child in self.children.iter_mut() {
+
+            // // Titrate propagated capability changes through a MutableAntichain, and leave them in
+            // // the child's buffer for pending `external` updates to apply in its next `push_external`
+            // // call.
+            // let pushed_mut = self.pointstamp_tracker.pushed_mut(child.index);
+            // for input in 0..child.inputs {
+            //     let buffer = &mut child.external_buffer[input];
+            //     let iterator2 = pushed_mut[input].drain();
+            //     child.external[input].update_iter_and(iterator2, |t, v| { buffer.update(t.clone(), v); });
+            // }
+
+            // Summarize the subgraph by the path summaries from the child's output to its inputs.
+            let mut summary = vec![vec![Antichain::new(); child.inputs]; child.outputs];
+            for output in 0..child.outputs {
+                for &(source, ref antichain) in &pointstamp_summaries.source_target[child.index][output] {
+                    if source.index == child.index {
+                        summary[output][source.port] = (*antichain).clone();
+                    }
+                }
+            }
+
+            let child_index = child.index;
+            child.set_external_summary(summary, self.pointstamp_tracker.pushed_mut(child_index));
+        }
+
+        // clean up after ourselves.
+        assert!(self.pointstamp_tracker.is_empty());
+    }
 }
 
 
@@ -639,7 +649,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         assert!(!gis_summary.iter().any(|x| x.len() != outputs));
 
         PerOperatorState {
-            name:               scope.name(),
+            name:               scope.name().to_owned(),
             operator:           Some(scope),
             index,
             id:                 identifier,

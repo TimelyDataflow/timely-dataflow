@@ -6,7 +6,8 @@ use std::any::Any;
 use std::time::Instant;
 
 use progress::timestamp::{Refines};
-use progress::{Timestamp, Operate, SubgraphBuilder};
+use progress::{Timestamp, SubgraphBuilder};
+use progress::operate::{Schedule, Operate};
 use communication::{Allocate, Data, Push, Pull};
 use dataflow::scopes::Child;
 
@@ -188,7 +189,7 @@ impl<A: Allocate> Clone for Worker<A> {
 
 struct Wrapper {
     _index: usize,
-    operate: Option<Box<Operate<()>>>,
+    operate: Option<Box<Schedule>>,
     resources: Option<Box<Any>>,
 }
 

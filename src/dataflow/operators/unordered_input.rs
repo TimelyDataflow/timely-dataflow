@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::Antichain;
-use progress::{Operate, operate::SharedProgress, Timestamp};
+use progress::{Operate, operate::{Schedule, SharedProgress}, Timestamp};
 use progress::Source;
 use progress::ChangeBatch;
 
@@ -107,8 +107,18 @@ struct UnorderedOperator<T:Timestamp> {
     peers:     usize,
 }
 
+impl<T:Timestamp> Schedule for UnorderedOperator<T> {
+    fn name(&self) -> &str { "Input" }
+    fn path(&self) -> &[usize] { unimplemented!() }
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        self.internal.borrow_mut().drain_into(&mut shared_progress.internals[0]);
+        self.produced.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
+        false
+    }
+}
+
 impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
-    fn name(&self) -> String { "Input".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
@@ -118,13 +128,6 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
             self.shared_progress.borrow_mut().internals[0].update(time, count * (self.peers as i64));
         }
         (Vec::new(), self.shared_progress.clone())
-    }
-
-    fn schedule(&mut self) -> bool {
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
-        self.internal.borrow_mut().drain_into(&mut shared_progress.internals[0]);
-        self.produced.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
-        false
     }
 
     fn notify_me(&self) -> bool { false }

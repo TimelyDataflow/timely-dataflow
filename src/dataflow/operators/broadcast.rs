@@ -7,7 +7,7 @@ use communication::Pull;
 
 use ::ExchangeData;
 use progress::{Source, Target};
-use progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
+use progress::{Timestamp, Operate, operate::{Schedule, SharedProgress}, Antichain};
 use dataflow::{Stream, Scope};
 use dataflow::channels::{Message, Bundle};
 use dataflow::channels::pushers::Counter as PushCounter;
@@ -73,17 +73,9 @@ struct BroadcastOperator<T: Timestamp, D: ExchangeData> {
     output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
 
-impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
-    fn name(&self) -> String { "Broadcast".to_owned() }
-    fn inputs(&self) -> usize { self.peers }
-    fn outputs(&self) -> usize { 1 }
-
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
-        // TODO: (optimization) some of these internal paths do not actually exist
-        let summary = (0..self.peers).map(|_| vec![Antichain::from_elem(Default::default())]).collect::<Vec<_>>();
-        (summary, self.shared_progress.clone())
-    }
-
+impl<T: Timestamp, D: ExchangeData> Schedule for BroadcastOperator<T, D> {
+    fn name(&self) -> &str { "Broadcast" }
+    fn path(&self) -> &[usize] { unimplemented!() }
     fn schedule(&mut self) -> bool {
 
         let mut vec = Vec::new();
@@ -107,6 +99,17 @@ impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
         self.input.consumed().borrow_mut().drain_into(&mut shared_progress.consumeds[self.index]);
         self.output.inner().produced().borrow_mut().drain_into(&mut shared_progress.produceds[0]);
         false
+    }
+}
+
+impl<T: Timestamp, D: ExchangeData> Operate<T> for BroadcastOperator<T, D> {
+    fn inputs(&self) -> usize { self.peers }
+    fn outputs(&self) -> usize { 1 }
+
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+        // TODO: (optimization) some of these internal paths do not actually exist
+        let summary = (0..self.peers).map(|_| vec![Antichain::from_elem(Default::default())]).collect::<Vec<_>>();
+        (summary, self.shared_progress.clone())
     }
 
     fn notify_me(&self) -> bool { false }

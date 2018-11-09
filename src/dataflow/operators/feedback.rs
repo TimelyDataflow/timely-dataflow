@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use Data;
 use communication::Push;
 
-use progress::{Timestamp, Operate, operate::SharedProgress, PathSummary};
+use progress::{Timestamp, Operate, operate::{Schedule, SharedProgress}, PathSummary};
 use progress::frontier::Antichain;
 use progress::{Source, Target};
 use order::Product;
@@ -181,21 +181,23 @@ struct Operator<T:Timestamp> {
     summary:            T::Summary,
 }
 
-
-impl<T:Timestamp> Operate<T> for Operator<T> {
-    fn name(&self) -> String { "Feedback".to_owned() }
-    fn inputs(&self) -> usize { 1 }
-    fn outputs(&self) -> usize { 1 }
-
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
-        (vec![vec![Antichain::from_elem(self.summary.clone())]], self.shared_progress.clone())
-    }
-
+impl<T:Timestamp> Schedule for Operator<T> {
+    fn name(&self) -> &str { "Feedback" }
+    fn path(&self) -> &[usize] { unimplemented!() }
     fn schedule(&mut self) -> bool {
         let shared_progress = &mut *self.shared_progress.borrow_mut();
         self.consumed_messages.borrow_mut().drain_into(&mut shared_progress.consumeds[0]);
         self.produced_messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
         false
+    }
+}
+
+impl<T:Timestamp> Operate<T> for Operator<T> {
+    fn inputs(&self) -> usize { 1 }
+    fn outputs(&self) -> usize { 1 }
+
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+        (vec![vec![Antichain::from_elem(self.summary.clone())]], self.shared_progress.clone())
     }
 
     fn notify_me(&self) -> bool { false }

@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use progress::frontier::Antichain;
-use progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
+use progress::{Operate, operate::{Schedule, SharedProgress}, Timestamp, ChangeBatch};
 use progress::Source;
 
 use Data;
@@ -128,8 +128,21 @@ struct Operator<T:Timestamp> {
     copies:     usize,
 }
 
+impl<T:Timestamp> Schedule for Operator<T> {
+
+    fn name(&self) -> &str { "Input" }
+
+    fn path(&self) -> &[usize] { unimplemented!() }
+
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        self.progress.borrow_mut().drain_into(&mut shared_progress.internals[0]);
+        self.messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
+        false
+    }
+}
+
 impl<T:Timestamp> Operate<T> for Operator<T> {
-    fn name(&self) -> String { "Input".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
@@ -138,12 +151,6 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
         (Vec::new(), self.shared_progress.clone())
     }
 
-    fn schedule(&mut self) -> bool {
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
-        self.progress.borrow_mut().drain_into(&mut shared_progress.internals[0]);
-        self.messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
-        false
-    }
 
     fn notify_me(&self) -> bool { false }
 }
