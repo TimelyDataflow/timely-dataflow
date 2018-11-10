@@ -243,7 +243,7 @@ where
         // into atomic actions that should be able to be safely executed in
         // isolation, by a potentially clueless user (yours truly).
         //
-        // The main atomicity requirement is that `self.commit_pointstamps`
+        // The main atomicity requirement is that `self.commit_pointstamps()`
         // should not be broken apart, but this has been done for you!
 
         self.accept_frontier();     // Accept supplied frontier changes.
@@ -254,7 +254,8 @@ where
         // results into `self.final_pointstamp`. However, if we do either
         // of these then we *MUST* exchange and drain entire sets of changes.
         //
-        // Progress tracking correctness relies on atomic change batches.
+        // Progress tracking correctness relies on the atomic exchange of batches.
+        // Progress tracking liveness relies on the eventual exchange of batches.
         self.progcaster.send_and_recv(&mut self.local_pointstamp);
         self.local_pointstamp.drain_into(&mut self.final_pointstamp);
 
@@ -362,7 +363,7 @@ where
     /// changes for all of the managed child operators.
     fn commit_pointstamps(&mut self) {
 
-        // Process exchange pointstamps. Handle child 0 statements carefully.
+        // Process exchanged pointstamps. Handle child 0 statements carefully.
         for ((location, timestamp), delta) in self.final_pointstamp.drain() {
 
             // Child 0 corresponds to the parent scope and has special handling.
@@ -376,8 +377,9 @@ where
                             .consumeds[scope_input]
                             .update(timestamp.to_outer(), -delta);
                     },
-                    // [YYY] Report child 0's messages as produced.
-                    //       Do not otherwise record, as we will not see subtractions.
+                    // [YYY] Report child 0's input messages as produced messages.
+                    //       Do not otherwise record, as we will not see subtractions,
+                    //       and we do not want to present their implications upward.
                     Port::Target(scope_output) => {
                         self.shared_progress
                             .borrow_mut()
