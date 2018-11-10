@@ -231,7 +231,6 @@ where
     TOuter: Timestamp,
     TInner: Timestamp+Refines<TOuter>,
 {
-
     fn name(&self) -> &str { &self.name }
 
     fn path(&self) -> &[usize] { &self.path }
@@ -274,7 +273,6 @@ where
         // Active iff any active child or outstanding capabilities, messages.
         any_child_active || self.pointstamp_tracker.tracking_anything()
     }
-
 }
 
 
@@ -292,9 +290,8 @@ where
         // to the source in the progress tracker so that the child can determine if it holds
         // any capabilities; if not, it is a candidate for being shut down.
 
-        let (targets, sources, frontier, _pushed) = self.pointstamp_tracker.node_state(child_index);
+        let (targets, sources, frontier) = self.pointstamp_tracker.node_state(child_index);
         let active = self.children[child_index].schedule(targets, sources, frontier);
-        debug_assert!(_pushed.iter_mut().all(|x| x.is_empty()));
 
         // Extract progress statements into either pre- or post-exchange buffers.
         if self.children[child_index].local {
@@ -623,8 +620,8 @@ impl<T: Timestamp> PerOperatorState<T> {
 
                 if any_progress_updates {
                     self.logging.as_mut().map(|l|
-                        l.log(PushProgressEvent { op_id: self_id });
-                    });
+                        l.log(PushProgressEvent { op_id: self_id })
+                    );
                 }
 
                 self.logging.as_mut().map(|l| l.log(ScheduleEvent {

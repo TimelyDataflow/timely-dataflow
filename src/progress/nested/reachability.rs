@@ -372,8 +372,8 @@ impl<T:Timestamp> Tracker<T> {
 
     /// Returns references to per-node state describing input and output frontiers,
     /// and any pending updates to propagated consequences.
-    pub fn node_state(&mut self, index: usize) -> (&[MutableAntichain<T>], &[MutableAntichain<T>], &[MutableAntichain<T>], &mut [ChangeBatch<T>]) {
-        (&self.targets[index], &self.sources[index], &self.buffers[index], &mut self.pusheds[index][..])
+    pub fn node_state(&mut self, index: usize) -> (&[MutableAntichain<T>], &[MutableAntichain<T>], &[MutableAntichain<T>]) {
+        (&self.targets[index], &self.sources[index], &self.buffers[index])
     }
 
     /// Reference to the target mutable antichains.
