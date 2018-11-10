@@ -232,8 +232,6 @@ pub struct Tracker<T:Timestamp> {
     /// frontiers, to protect them from transient negativity in inbound target updates.
 
     per_operator: Vec<PerOperator<T>>,
-    // pointstamps: HashMap<Location, MutableAntichain<T>>,
-    // implications: HashMap<Location, MutableAntichain<T>>,
 
     /// Source and target changes are buffered, which allows us to delay processing until propagation,
     /// and so consolidate updates, but to leap directly to those frontiers that may have changed.
@@ -247,7 +245,6 @@ pub struct Tracker<T:Timestamp> {
     pushed_changes: ChangeBatch<(Location, T)>,
 
     /// Compiled summaries from each internal location (not scope inputs) to each scope output.
-    // output_summaries: HashMap<Location, Vec<Antichain<T::Summary>>>,
     output_changes: Vec<ChangeBatch<T>>,
 
     global_frontier: HashSet<(Location, T)>,
@@ -260,28 +257,15 @@ struct PerOperator<T: Timestamp> {
 
 impl<T: Timestamp> PerOperator<T> {
     fn new(inputs: usize, outputs: usize) -> Self {
-        let mut targets = Vec::with_capacity(inputs);
-        for _input in 0 .. inputs {
-            targets.push(PortInformation {
-                pointstamps: MutableAntichain::new(),
-                implications: MutableAntichain::new(),
-                output_summaries: Vec::new(),
-            })
+        PerOperator {
+            targets: vec![PortInformation::new(); inputs],
+            sources: vec![PortInformation::new(); outputs],
         }
-        let mut sources = Vec::with_capacity(outputs);
-        for _output in 0 .. outputs {
-            sources.push(PortInformation {
-                pointstamps: MutableAntichain::new(),
-                implications: MutableAntichain::new(),
-                output_summaries: Vec::new(),
-            })
-        }
-
-        PerOperator { targets, sources }
     }
 }
 
 /// Per-port progress-tracking information.
+#[derive(Clone)]
 struct PortInformation<T: Timestamp> {
     /// Current counts of active pointstamps.
     pointstamps: MutableAntichain<T>,
@@ -292,31 +276,17 @@ struct PortInformation<T: Timestamp> {
 }
 
 impl<T: Timestamp> PortInformation<T> {
+    fn new() -> Self {
+        PortInformation {
+            pointstamps: MutableAntichain::new(),
+            implications: MutableAntichain::new(),
+            output_summaries: Vec::new(),
+        }
+    }
     #[inline(always)]
     fn is_global(&self, time: &T) -> bool {
         self.pointstamps.count_for(time) > 0 &&
         self.implications.count_for(time) == 1
-    }
-    #[inline(always)]
-    fn update_into<I: IntoIterator<Item=(T, i64)>>(
-        &mut self,
-        iterator: I,
-        location: Location,
-        worklist: &mut BinaryHeap<Reverse<(T, Location, i64)>>,
-        output_changes: &mut Vec<ChangeBatch<T>>)
-    {
-        let summaries = &self.output_summaries;
-        self.pointstamps
-            .update_iter_and(iterator, |time, diff| {
-                // Update our worklist.
-                worklist.push(Reverse((time.clone(), location, diff)));
-                // Also propagate changes to the scope outputs.
-                for (output, summaries) in summaries.iter().enumerate() {
-                    for out_time in summaries.elements().iter().flat_map(|summary| summary.results_in(time)) {
-                        output_changes[output].update(out_time, diff);
-                    }
-                }
-            });
     }
 }
 
@@ -340,6 +310,18 @@ impl<T:Timestamp> Tracker<T> {
     #[inline]
     pub fn update_source(&mut self, source: Source, time: T, value: i64) {
         self.source_changes.update((source, time), value);
+    }
+
+    /// Indicates if any pointstamps have positive count.
+    pub fn tracking_anything(&mut self) -> bool {
+        !self.source_changes.is_empty() ||
+        !self.target_changes.is_empty() ||
+        self.per_operator
+            .iter_mut()
+            .any(|o|
+                o.targets.iter_mut().any(|x| !x.pointstamps.is_empty()) ||
+                o.sources.iter_mut().any(|x| !x.pointstamps.is_empty())
+            )
     }
 
     /// Allocate a new `Tracker` using the shape from `summaries`.
@@ -388,10 +370,6 @@ impl<T:Timestamp> Tracker<T> {
     /// until we cease deriving new implications.
     pub fn propagate_all(&mut self) {
 
-        // Reduces the input changes to actual discrete changes to a frontier.
-        // TODO: Commit changes to the same `location` in one batch.
-        let output_changes = &mut self.output_changes;
-
         // Step 1: Drain `self.input_changes` and determine actual frontier changes.
         //
         // Not all changes in `self.input_changes` may alter the frontier at a location.
@@ -399,17 +377,39 @@ impl<T:Timestamp> Tracker<T> {
         // changes in the frontier, rather than changes in the pointstamp counts that
         // witness that frontier.
         for ((target, time), diff) in self.target_changes.drain() {
-            let worklist = &mut self.worklist;
-            self.per_operator[target.index]
-                .targets[target.port]
-                .update_into(Some((time, diff)), Location::from(target), worklist, output_changes);
+
+            let operator = &mut self.per_operator[target.index].targets[target.port];
+            let changes = operator.pointstamps.update_iter(Some((time, diff)));
+
+            for (time, diff) in changes {
+                for (output, summaries) in operator.output_summaries.iter().enumerate() {
+                    let output_changes = &mut self.output_changes[output];
+                    summaries
+                        .elements()
+                        .iter()
+                        .flat_map(|summary| summary.results_in(&time))
+                        .for_each(|out_time| output_changes.update(out_time, diff));
+                }
+                self.worklist.push(Reverse((time, Location::from(target), diff)));
+            }
         }
 
         for ((source, time), diff) in self.source_changes.drain() {
-            let worklist = &mut self.worklist;
-            self.per_operator[source.index]
-                .sources[source.port]
-                .update_into(Some((time, diff)), Location::from(source), worklist, output_changes);
+
+            let operator = &mut self.per_operator[source.index].sources[source.port];
+            let changes = operator.pointstamps.update_iter(Some((time, diff)));
+
+            for (time, diff) in changes {
+                for (output, summaries) in operator.output_summaries.iter().enumerate() {
+                    let output_changes = &mut self.output_changes[output];
+                    summaries
+                        .elements()
+                        .iter()
+                        .flat_map(|summary| summary.results_in(&time))
+                        .for_each(|out_time| output_changes.update(out_time, diff));
+                }
+                self.worklist.push(Reverse((time, Location::from(source), diff)));
+            }
         }
 
         // Step 2: Circulate implications of changes to `self.pointstamps`.
@@ -428,53 +428,50 @@ impl<T:Timestamp> Tracker<T> {
             // Only act if there is a net change, positive or negative.
             if diff != 0 {
 
-                // Borrow various self fields to appease Rust.
-                let pushed_changes = &mut self.pushed_changes;
-                let worklist = &mut self.worklist;
-
                 match location.port {
                     // Update to an operator input.
                     // Propagate any changes forward across the operator.
                     Port::Target(port_index) => {
-                        let nodes = &self.nodes[location.node][port_index];
+
+                        let changes =
                         self.per_operator[location.node]
                             .targets[port_index]
                             .implications
-                            .update_iter_and(Some((time, diff)), |time, diff| {
-                                pushed_changes.update((location, time.clone()), diff);
-                                for (output_port, summaries) in nodes.iter().enumerate() {
-                                    for summary in summaries.elements().iter() {
-                                        if let Some(new_time) = summary.results_in(time) {
-                                            worklist.push(Reverse((
-                                                new_time,
-                                                Location {
-                                                    node: location.node,
-                                                    port: Port::Source(output_port)
-                                                },
-                                                diff
-                                            )));
-                                        }
+                            .update_iter(Some((time, diff)));
+
+                        for (time, diff) in changes {
+                            let nodes = &self.nodes[location.node][port_index];
+                            for (output_port, summaries) in nodes.iter().enumerate() {
+                                let source = Location { node: location.node, port: Port::Source(output_port) };
+                                for summary in summaries.elements().iter() {
+                                    if let Some(new_time) = summary.results_in(&time) {
+                                        self.worklist.push(Reverse((new_time, source, diff)));
                                     }
                                 }
-                            });
+                            }
+                            self.pushed_changes.update((location, time), diff);
+                        }
                     }
                     // Update to an operator output.
                     // Propagate any changes forward along outgoing edges.
                     Port::Source(port_index) => {
-                        let edges = &self.edges[location.node][port_index];
+
+                        let changes =
                         self.per_operator[location.node]
                             .sources[port_index]
                             .implications
-                            .update_iter_and(Some((time, diff)), |time, diff| {
-                                pushed_changes.update((location, time.clone()), diff);
-                                for &new_target in edges.iter() {
-                                    worklist.push(Reverse((
-                                        time.clone(),
-                                        Location::from(new_target),
-                                        diff
-                                    )));
-                                }
-                            });
+                            .update_iter(Some((time, diff)));
+
+                        for (time, diff) in changes {
+                            for new_target in self.edges[location.node][port_index].iter() {
+                                self.worklist.push(Reverse((
+                                    time.clone(),
+                                    Location::from(*new_target),
+                                    diff,
+                                )));
+                            }
+                            self.pushed_changes.update((location, time), diff);
+                        }
                     },
                 };
             }

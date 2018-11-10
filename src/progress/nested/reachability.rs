@@ -393,7 +393,7 @@ impl<T:Timestamp> Tracker<T> {
     }
 
     ///
-    pub fn is_empty(&mut self) -> bool {
+    pub fn is_drained(&mut self) -> bool {
         self.pusheds.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty()))
     }
 
@@ -447,32 +447,32 @@ impl<T:Timestamp> Tracker<T> {
         for input in 0..self.targets[index].len() {
             let target_target = &self.target_target[index][input];
             let pusheds = &mut self.pusheds;
-            self.targets[index][input].update_iter_and(None, |time, value| {
+            for (time, diff) in self.targets[index][input].update_iter(None) {
                 for &(target, ref antichain) in target_target.iter() {
                     let pusheds = &mut pusheds[target.index][target.port];
                     for summary in antichain.elements().iter() {
-                        if let Some(new_time) = summary.results_in(time) {
-                            pusheds.update(new_time, value);
+                        if let Some(new_time) = summary.results_in(&time) {
+                            pusheds.update(new_time, diff);
                         }
                     }
                 }
-            });
+            }
         }
 
         // Propagate changes at each output (source).
         for output in 0..self.sources[index].len() {
             let source_target = &self.source_target[index][output];
             let pusheds = &mut self.pusheds;
-            self.sources[index][output].update_iter_and(None, |time, value| {
+            for (time, diff) in self.sources[index][output].update_iter(None) {
                 for &(target, ref antichain) in source_target.iter() {
                     let pusheds = &mut pusheds[target.index][target.port];
                     for summary in antichain.elements().iter() {
-                        if let Some(new_time) = summary.results_in(time) {
-                            pusheds.update(new_time, value);
+                        if let Some(new_time) = summary.results_in(&time) {
+                            pusheds.update(new_time, diff);
                         }
                     }
                 }
-            });
+            }
         }
     }
 
