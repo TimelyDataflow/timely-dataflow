@@ -236,9 +236,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         self.dirty += 1;
     }
 
-    /// Applies updates to the antichain and applies `action` to each frontier change.
-    ///
-    /// This method applies a batch of updates and if any affects the frontier it is rebuilt.
+    /// Applies updates to the antichain and enumerates any changes.
     ///
     /// # Examples
     ///
@@ -246,12 +244,16 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
     ///
     /// let mut frontier = MutableAntichain::new_bottom(1u64);
-    /// frontier.update_iter(vec![(1, -1), (2, 1)].into_iter());
+    /// let changes =
+    /// frontier
+    ///     .update_iter(vec![(1, -1), (2, 7)])
+    ///     .collect::<Vec<_>>();
+    ///
     /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
+    /// assert!(changes == vec![(1, -1), (2, 1)]);
     ///```
     #[inline]
-    #[inline]
-    pub fn update_iter<'a, I>(&'a mut self, updates: I) -> impl Iterator<Item=(T, i64)> + 'a
+    pub fn update_iter<'a, I>(&'a mut self, updates: I) -> ::std::vec::Drain<'a, (T, i64)>
     where
         I: IntoIterator<Item = (T, i64)>,
     {
@@ -297,7 +299,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     ///
     /// let mut frontier = MutableAntichain::new_bottom(1u64);
     /// let mut changes = Vec::new();
-    /// frontier.update_iter_and(vec![(1, -1), (2, 1)].into_iter(), |time, diff| {
+    /// frontier.update_iter_and(vec![(1, -1), (2, 1)], |time, diff| {
     ///     changes.push((time.clone(), diff));
     /// });
     /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
@@ -358,6 +360,32 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
             .filter(|td| td.0.eq(query_time))
             .map(|td| td.1)
             .sum()
+    }
+}
+
+/// Extension trait for filtering time changes through antichains.
+pub trait MutableAntichainFilter<T: PartialOrder+Ord+Clone> {
+    /// Filters time changes through an antichain.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::{MutableAntichain, MutableAntichainFilter};
+    ///
+    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// let changes =
+    /// vec![(1, -1), (2, 7)]
+    ///     .filter_through(&mut frontier)
+    ///     .collect::<Vec<_>>();
+    ///
+    /// assert!(changes == vec![(1, -1), (2, 1)]);
+    ///```
+    fn filter_through(self, antichain: &mut MutableAntichain<T>) -> ::std::vec::Drain<(T,i64)>;
+}
+
+impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainFilter<T> for I {
+    fn filter_through(self, antichain: &mut MutableAntichain<T>) -> ::std::vec::Drain<(T,i64)> {
+        antichain.update_iter(self.into_iter())
     }
 }
 
