@@ -1,6 +1,6 @@
 //! Tracks minimal sets of mutually incomparable elements of a partial order.
 
-// use progress::CountMap;
+use progress::ChangeBatch;
 use order::PartialOrder;
 
 /// A set of mutually incomparable elements.
@@ -82,12 +82,12 @@ impl<T: PartialOrder> Antichain<T> {
 /// There is an `update_dirty` method for single updates that leave the `MutableAntichain` in a dirty state,
 /// but I strongly recommend against using them unless you must (on part of timely progress tracking seems
 /// to be greatly simplified by access to this)
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MutableAntichain<T: PartialOrder+Ord> {
     dirty: usize,
     updates: Vec<(T, i64)>,
     frontier: Vec<T>,
-    frontier_temp: Vec<T>,
+    changes: ChangeBatch<T>,
 }
 
 impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
@@ -107,7 +107,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
             dirty: 0,
             updates: Vec::new(),
             frontier:  Vec::new(),
-            frontier_temp: Vec::new(),
+            changes: ChangeBatch::new(),
         }
     }
 
@@ -127,7 +127,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         self.dirty = 0;
         self.updates.clear();
         self.frontier.clear();
-        self.frontier_temp.clear();
+        self.changes.clear();
     }
 
     /// This method deletes the contents. Unlike `clear` it records doing so.
@@ -168,7 +168,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
             dirty: 0,
             updates: vec![(bottom.clone(), 1)],
             frontier: vec![bottom],
-            frontier_temp: Vec::new(),
+            changes: ChangeBatch::new(),
         }
     }
 
@@ -250,38 +250,10 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
     ///```
     #[inline]
-    pub fn update_iter<I>(&mut self, updates: I)
-    where
-        I: IntoIterator<Item = (T, i64)>
-    {
-        self.update_iter_and(updates, |_,_| { });
-    }
-
-    /// Applies updates to the antichain and applies `action` to each frontier change.
-    ///
-    /// This method applies a batch of updates and if any affects the frontier it is rebuilt.
-    /// Once rebuilt, `action` is called with the corresponding changes to the frontier, which
-    /// should be various times and `{ +1, -1 }` differences.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
-    ///
-    /// let mut frontier = MutableAntichain::new_bottom(1u64);
-    /// let mut changes = Vec::new();
-    /// frontier.update_iter_and(vec![(1, -1), (2, 1)].into_iter(), |time, diff| {
-    ///     changes.push((time.clone(), diff));
-    /// });
-    /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
-    /// changes.sort();
-    /// assert_eq!(&changes[..], &[(1, -1), (2, 1)]);
-    ///```
     #[inline]
-    pub fn update_iter_and<I, A>(&mut self, updates: I, action: A)
+    pub fn update_iter<'a, I>(&'a mut self, updates: I) -> impl Iterator<Item=(T, i64)> + 'a
     where
         I: IntoIterator<Item = (T, i64)>,
-        A: FnMut(&T, i64)
     {
         for (time, delta) in updates {
             self.updates.push((time, delta));
@@ -307,8 +279,40 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         self.dirty = 0;
 
         if rebuild_required {
-            self.rebuild_and(action);
+            self.rebuild()
         }
+        self.changes.drain()
+    }
+
+    /// Applies updates to the antichain and applies `action` to each frontier change.
+    ///
+    /// This method applies a batch of updates and if any affects the frontier it is rebuilt.
+    /// Once rebuilt, `action` is called with the corresponding changes to the frontier, which
+    /// should be various times and `{ +1, -1 }` differences.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
+    ///
+    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// let mut changes = Vec::new();
+    /// frontier.update_iter_and(vec![(1, -1), (2, 1)].into_iter(), |time, diff| {
+    ///     changes.push((time.clone(), diff));
+    /// });
+    /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
+    /// changes.sort();
+    /// assert_eq!(&changes[..], &[(1, -1), (2, 1)]);
+    ///```
+    #[inline]
+    #[deprecated(since="0.8.0", note="`update_iter` now provides an iterator as output")]
+    pub fn update_iter_and<I, A>(&mut self, updates: I, mut action: A)
+    where
+        I: IntoIterator<Item = (T, i64)>,
+        A: FnMut(&T, i64)
+    {
+        self.update_iter(updates)
+            .for_each(|(time, diff)| action(&time, diff));
     }
 
     /// Sorts and consolidates `self.updates` and applies `action` to any frontier changes.
@@ -316,7 +320,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// This method is meant to be used for bulk updates to the frontier, and does more work than one might do
     /// for single updates, but is meant to be an efficient way to process multiple updates together. This is
     /// especially true when we want to apply very large numbers of updates.
-    fn rebuild_and<A: FnMut(&T, i64)>(&mut self, mut action: A) {
+    fn rebuild(&mut self) {
 
         // sort and consolidate updates; retain non-zero accumulations.
         if !self.updates.is_empty() {
@@ -330,27 +334,21 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
             self.updates.retain(|x| x.1 != 0);
         }
 
+        for time in self.frontier.drain(..) {
+            self.changes.update(time, -1);
+        }
+
         // build new frontier using strictly positive times.
         // as the times are sorted, we don't need to worry that we might displace frontier elements.
         for time in self.updates.iter().filter(|x| x.1 > 0) {
-            if !self.frontier_temp.iter().any(|f| f.less_equal(&time.0)) {
-                self.frontier_temp.push(time.0.clone());
+            if !self.frontier.iter().any(|f| f.less_equal(&time.0)) {
+                self.frontier.push(time.0.clone());
             }
         }
 
-        // TODO: This is quadratic in the frontier size, but could be linear (with a merge).
         for time in self.frontier.iter() {
-            if !self.frontier_temp.contains(time) {
-                action(time, -1);
-            }
+            self.changes.update(time.clone(), 1);
         }
-        ::std::mem::swap(&mut self.frontier, &mut self.frontier_temp);
-        for time in self.frontier.iter() {
-            if !self.frontier_temp.contains(time) {
-                action(time, 1);
-            }
-        }
-        self.frontier_temp.clear();
     }
 
     /// Reports the count for a queried time.
