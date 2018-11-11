@@ -16,28 +16,28 @@
 //! let mut builder = Builder::<usize>::new();
 //!
 //! // Each node with one input connected to one output.
-//! builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 //! builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-//! builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)]]);
+//! builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(0)]]);
+//! builder.add_node(3, 1, 1, vec![vec![Antichain::from_elem(1)]]);
 //!
 //! // Connect nodes in sequence, looping around to the first from the last.
-//! builder.add_edge(Source { index: 0, port: 0}, Target { index: 1, port: 0} );
 //! builder.add_edge(Source { index: 1, port: 0}, Target { index: 2, port: 0} );
-//! builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
+//! builder.add_edge(Source { index: 2, port: 0}, Target { index: 3, port: 0} );
+//! builder.add_edge(Source { index: 3, port: 0}, Target { index: 1, port: 0} );
 //!
 //! // Construct a reachability tracker.
 //! let mut tracker = Tracker::allocate_from(builder.summarize());
 //!
 //! // Introduce a pointstamp at the output of the first node.
-//! tracker.update_source(Source { index: 0, port: 0}, 17, 1);
+//! tracker.update_source(Source { index: 1, port: 0}, 17, 1);
 //!
 //! // Propagate changes; until this call updates are simply buffered.
 //! tracker.propagate_all();
 //!
 //! // Propagated changes should have a single element, incremented for node zero.
-//! assert_eq!(tracker.pushed_mut(0)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
-//! assert_eq!(tracker.pushed_mut(1)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
+//! assert_eq!(tracker.pushed_mut(1)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
 //! assert_eq!(tracker.pushed_mut(2)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
+//! assert_eq!(tracker.pushed_mut(3)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
 //! ```
 
 use progress::Timestamp;
@@ -305,28 +305,28 @@ pub struct Summary<T: Timestamp> {
 /// let mut builder = Builder::<usize>::new();
 ///
 /// // Each node with one input connected to one output.
-/// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 /// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-/// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)]]);
+/// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(0)]]);
+/// builder.add_node(3, 1, 1, vec![vec![Antichain::from_elem(1)]]);
 ///
 /// // Connect nodes in sequence, looping around to the first from the last.
-/// builder.add_edge(Source { index: 0, port: 0}, Target { index: 1, port: 0} );
 /// builder.add_edge(Source { index: 1, port: 0}, Target { index: 2, port: 0} );
-/// builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
+/// builder.add_edge(Source { index: 2, port: 0}, Target { index: 3, port: 0} );
+/// builder.add_edge(Source { index: 3, port: 0}, Target { index: 1, port: 0} );
 ///
 /// // Construct a reachability tracker.
 /// let mut tracker = Tracker::allocate_from(builder.summarize());
 ///
 /// // Introduce a pointstamp at the output of the first node.
-/// tracker.update_source(Source { index: 0, port: 0}, 17, 1);
+/// tracker.update_source(Source { index: 1, port: 0}, 17, 1);
 ///
 /// // Propagate changes; until this call updates are simply buffered.
 /// tracker.propagate_all();
 ///
 /// // Propagated changes should have a single element, incremented for node zero.
-/// assert_eq!(tracker.pushed_mut(0)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
-/// assert_eq!(tracker.pushed_mut(1)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
+/// assert_eq!(tracker.pushed_mut(1)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
 /// assert_eq!(tracker.pushed_mut(2)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
+/// assert_eq!(tracker.pushed_mut(3)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
 /// ```
 
 #[derive(Default, Debug)]
@@ -407,8 +407,16 @@ impl<T:Timestamp> Tracker<T> {
     /// Allocate a new `Tracker` using the shape from `summaries`.
     pub fn allocate_from(summary: Summary<T>) -> Self {
 
-        let source_target = summary.source_target;
-        let target_target = summary.target_target;
+        let mut source_target = summary.source_target;
+        let mut target_target = summary.target_target;
+
+        // Discard summaries from the scope input to the scope output.
+        for summaries in target_target[0].iter_mut() {
+            summaries.retain(|&(t, _)| t.index > 0);
+        }
+        for summaries in source_target[0].iter_mut() {
+            summaries.retain(|&(t, _)| t.index > 0);
+        }
 
         debug_assert_eq!(source_target.len(), target_target.len());
 
