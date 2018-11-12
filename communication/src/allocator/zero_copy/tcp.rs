@@ -94,8 +94,7 @@ pub fn recv_loop(
 
         // Pass bytes along to targets.
         for (index, staged) in stageds.iter_mut().enumerate() {
-
-
+            // FIXME: try to merge `staged` before handing it to BytesPush::extend
             use allocator::zero_copy::bytes_exchange::BytesPush;
             targets[index].extend(staged.drain(..));
         }
