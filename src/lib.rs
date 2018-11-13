@@ -97,6 +97,8 @@ pub mod order;
 pub mod logging;
 // pub mod log_events;
 
+pub mod activate;
+
 /// A composite trait for types usable as data in timely dataflow.
 ///
 /// The `Data` trait is necessary for all types that go along timely dataflow channels.

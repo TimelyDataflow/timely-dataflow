@@ -1,5 +1,6 @@
 //! A child dataflow scope, used to build nested dataflow scopes.
 
+use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::{Timestamp, Operate, SubgraphBuilder};
@@ -9,6 +10,7 @@ use order::Product;
 use communication::{Allocate, Data, Push, Pull};
 use logging::TimelyLogger as Logger;
 use worker::AsWorker;
+use activate::Activations;
 
 use super::{ScopeParent, Scope};
 
@@ -17,9 +19,10 @@ pub type Iterative<'a, G, T> = Child<'a, G, Product<<G as ScopeParent>::Timestam
 
 /// A `Child` wraps a `Subgraph` and a parent `G: Scope`. It manages the addition
 /// of `Operate`s to a subgraph, and the connection of edges between them.
-pub struct Child<'a, G: ScopeParent, T: Timestamp>
+pub struct Child<'a, G, T>
 where
-    T: Refines<G::Timestamp>
+    G: ScopeParent,
+    T: Timestamp+Refines<G::Timestamp>
 {
     /// The subgraph under assembly.
     pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
@@ -29,9 +32,10 @@ where
     pub logging:  Option<Logger>,
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> Child<'a, G, T>
+impl<'a, G, T> Child<'a, G, T>
 where
-    T: Refines<G::Timestamp>
+    G: ScopeParent,
+    T: Timestamp+Refines<G::Timestamp>
 {
     /// This worker's unique identifier.
     ///
@@ -41,9 +45,10 @@ where
     pub fn peers(&self) -> usize { self.parent.peers() }
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> AsWorker for Child<'a, G, T>
+impl<'a, G, T> AsWorker for Child<'a, G, T>
 where
-    T: Refines<G::Timestamp>
+    G: ScopeParent,
+    T: Timestamp+Refines<G::Timestamp>
 {
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
@@ -51,18 +56,22 @@ where
     fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.parent.log_register()
     }
+    fn activations(&self) -> Rc<RefCell<Activations>> {
+        self.parent.activations()
+    }
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> ScopeParent for Child<'a, G, T>
+impl<'a, G, T> ScopeParent for Child<'a, G, T>
 where
-    T: Refines<G::Timestamp>
+    G: ScopeParent,
+    T: Timestamp+Refines<G::Timestamp>
 {
     type Timestamp = T;
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> Scope for Child<'a, G, T>
-where
-    T: Refines<G::Timestamp>
+impl<'a, G, T> Scope for Child<'a, G, T>
+    G: ScopeParent,
+    T: Timestamp+Refines<G::Timestamp>
 {
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
     fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
@@ -79,9 +88,10 @@ where
     }
 
     #[inline]
-    fn scoped<T2: Timestamp, R, F: FnOnce(&mut Child<Self, T2>) -> R>(&mut self, name: &str, func: F) -> R
+    fn scoped<T2, R, F>(&mut self, name: &str, func: F) -> R
     where
         T2: Timestamp+Refines<T>,
+        F: FnOnce(&mut Child<Self, T2>) -> R,
     {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
@@ -105,9 +115,10 @@ where
 
 use communication::Message;
 
-impl<'a, G: ScopeParent, T: Timestamp> Allocate for Child<'a, G, T>
+impl<'a, G, T> Allocate for Child<'a, G, T>
 where
-    T: Refines<G::Timestamp>
+    G: ScopeParent,
+    T: Timestamp+Refines<G::Timestamp>,
 {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
@@ -116,9 +127,10 @@ where
     }
 }
 
-impl<'a, G: ScopeParent, T: Timestamp> Clone for Child<'a, G, T>
+impl<'a, G, T> Clone for Child<'a, G, T>
 where
-    T: Refines<G::Timestamp>
+    G: ScopeParent,
+    T: Timestamp+Refines<G::Timestamp>
 {
     fn clone(&self) -> Self {
         Child {

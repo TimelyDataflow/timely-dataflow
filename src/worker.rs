@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::any::Any;
 use std::time::Instant;
 
+use activate::Activations;
 use progress::timestamp::{Refines};
 use progress::{Timestamp, SubgraphBuilder};
 use progress::operate::{Schedule, Operate};
@@ -20,6 +21,8 @@ pub struct Worker<A: Allocate> {
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
     logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
+
+    activations: Rc<RefCell<Activations>>,
 }
 
 /// Methods provided by the root Worker.
@@ -32,12 +35,17 @@ pub trait AsWorker: Allocate {
     fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>>;
     /// Provides access to the timely logging stream.
     fn logging(&self) -> Option<::logging::TimelyLogger> { self.log_register().get("timely") }
+    /// Provides a shared handle to the activation scheduler.
+    fn activations(&self) -> Rc<RefCell<Activations>>;
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
     fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.log_register()
+    }
+    fn activations(&self) -> Rc<RefCell<Activations>> {
+        self.activations.clone()
     }
 }
 
@@ -53,6 +61,7 @@ impl<A: Allocate> Worker<A> {
             dataflows: Rc::new(RefCell::new(Vec::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
             logging: Rc::new(RefCell::new(::logging_core::Registry::new(now, index))),
+            activations: Rc::new(RefCell::new(Activations::new())),
         }
     }
 
@@ -183,6 +192,7 @@ impl<A: Allocate> Clone for Worker<A> {
             dataflows: self.dataflows.clone(),
             dataflow_counter: self.dataflow_counter.clone(),
             logging: self.logging.clone(),
+            activations: self.activations.clone(),
         }
     }
 }
