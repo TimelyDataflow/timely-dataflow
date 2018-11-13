@@ -48,14 +48,13 @@ use progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
 use progress::timestamp::PathSummary;
 use order::PartialOrder;
 
-
 /// A topology builder, which can summarize reachability along paths.
 ///
 /// A `Builder` takes descriptions of the nodes and edges in a graph, and compiles
 /// a static summary of the minimal actions a timestamp must endure going from any
 /// input or output port to a destination input port.
 ///
-/// A graph is provides as (i) several indexed nodes, each with some number of input
+/// A graph is provided as (i) several indexed nodes, each with some number of input
 /// and output ports, and each with a summary of the internal paths connecting each
 /// input to each output, and (ii) a set of edges connecting output ports to input
 /// ports. Edges do not adjust timestamps; only nodes do this.
@@ -90,7 +89,6 @@ use order::PartialOrder;
 /// // Summarize reachability information.
 /// let summary = builder.summarize();
 /// ```
-
 #[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
     /// Internal connections within hosted operators.
@@ -372,8 +370,8 @@ impl<T:Timestamp> Tracker<T> {
 
     /// Returns references to per-node state describing input and output frontiers,
     /// and any pending updates to propagated consequences.
-    pub fn node_state(&mut self, index: usize) -> (&[MutableAntichain<T>], &[MutableAntichain<T>], &[MutableAntichain<T>]) {
-        (&self.targets[index], &self.sources[index], &self.buffers[index])
+    pub fn node_state(&mut self, index: usize) -> (&[MutableAntichain<T>], &[MutableAntichain<T>]) {
+        (&self.sources[index], &self.buffers[index])
     }
 
     /// Reference to the target mutable antichains.

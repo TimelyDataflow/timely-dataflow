@@ -72,6 +72,7 @@ pub trait Operate<T: Timestamp> : Schedule {
 }
 
 /// Progress information shared between parent and child.
+#[derive(Debug)]
 pub struct SharedProgress<T: Timestamp> {
     /// Frontier capability changes reported by the parent scope.
     pub frontiers: Vec<ChangeBatch<T>>,

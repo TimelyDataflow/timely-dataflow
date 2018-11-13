@@ -153,7 +153,7 @@ where
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
         builder.add_node(0, outputs, inputs, vec![vec![Antichain::new(); inputs]; outputs]);
         for (index, child) in self.children.iter().enumerate().skip(1) {
-            builder.add_node(index, child.inputs, child.outputs, child.gis_summary.clone());
+            builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
         }
 
         for (source, target) in self.edge_stash {
@@ -242,11 +242,11 @@ where
         // into atomic actions that should be able to be safely executed in
         // isolation, by a potentially clueless user (yours truly).
         //
-        // The main atomicity requirement is that `self.commit_pointstamps()`
+        // The main atomicity requirement is that `self.propagate_pointstamps()`
         // should not be broken apart, but this has been done for you!
 
-        self.accept_frontier();     // Accept supplied frontier changes.
-        self.harvest_inputs();      // Count records entering the scope.
+        self.accept_frontier();         // Accept supplied frontier changes.
+        self.harvest_inputs();          // Count records entering the scope.
 
         // These next steps have some flexibility, in that we do not *need*
         // to exchange progress information, nor do we *need* to drain the
@@ -258,7 +258,7 @@ where
         self.progcaster.send_and_recv(&mut self.local_pointstamp);
         self.local_pointstamp.drain_into(&mut self.final_pointstamp);
 
-        self.commit_pointstamps();  // Commit and propagate final pointstamps.
+        self.propagate_pointstamps();   // Commit and propagate final pointstamps.
 
         // Schedule child operators.
         //
@@ -271,6 +271,8 @@ where
         }
 
         // Active iff any active child or outstanding capabilities, messages.
+        // TODO: This may become incorrect if we do not re-execute every active
+        //       child every iteration.
         any_child_active || self.pointstamp_tracker.tracking_anything()
     }
 }
@@ -286,19 +288,31 @@ where
     /// The return value indicates that the child task cannot yet shut down.
     fn activate_child(&mut self, child_index: usize) -> bool {
 
-        // Activate the child and harvest its progress updates. Here we pass along a reference
-        // to the source in the progress tracker so that the child can determine if it holds
-        // any capabilities; if not, it is a candidate for being shut down.
+        let child = &mut self.children[child_index];
 
-        let (targets, sources, frontier) = self.pointstamp_tracker.node_state(child_index);
-        let active = self.children[child_index].schedule(targets, sources, frontier);
+        let active = child.schedule();
 
-        // Extract progress statements into either pre- or post-exchange buffers.
-        if self.children[child_index].local {
-            self.children[child_index].extract_progress(&mut self.local_pointstamp);
+        if !active {
+            // Consider shutting down the child, if neither capabilities nor input frontier.
+            let (internals, frontiers) = self.pointstamp_tracker.node_state(child_index);
+            if internals.iter().all(|x| x.is_empty()) && frontiers.iter().all(|x| x.is_empty()) {
+                child.shut_down();
+            }
         }
         else {
-            self.children[child_index].extract_progress(&mut self.final_pointstamp);
+            // In debug mode, check that the progress statements do not violate invariants.
+            #[cfg(debug_assertions)] {
+                let (internals, frontiers) = self.pointstamp_tracker.node_state(child_index);
+                child.validate_progress(frontiers, internals);
+            }
+        }
+
+        // Extract progress statements into either pre- or post-exchange buffers.
+        if child.local {
+            child.extract_progress(&mut self.local_pointstamp);
+        }
+        else {
+            child.extract_progress(&mut self.final_pointstamp);
         }
 
         active
@@ -340,11 +354,11 @@ where
     /// Commits pointstamps in `self.final_pointstamp`.
     ///
     /// This method performs several steps that for reasons of correctness must
-    /// be performed atomically, before control is returned again. These are:
+    /// be performed atomically, before control is returned. These are:
     ///
-    /// 1. Changes to child zero outputs are reported as consumed messages.
-    /// 2. Changes to child zero inputs are reported as produced messages.
-    /// 3. Frontiers for child zero inputs are reported as internal capabilities.
+    /// 1. Changes to child zero's outputs are reported as consumed messages.
+    /// 2. Changes to child zero's inputs are reported as produced messages.
+    /// 3. Frontiers for child zero's inputs are reported as internal capabilities.
     ///
     /// Perhaps importantly, the frontiers for child zero are determined *without*
     /// the messages that are produced for child zero inputs, as we only want to
@@ -352,7 +366,7 @@ where
     ///
     /// In the course of propagating progress changes, we also propagate progress
     /// changes for all of the managed child operators.
-    fn commit_pointstamps(&mut self) {
+    fn propagate_pointstamps(&mut self) {
 
         // Process exchanged pointstamps. Handle child 0 statements carefully.
         for ((location, timestamp), delta) in self.final_pointstamp.drain() {
@@ -430,7 +444,7 @@ where
         assert_eq!(self.children[0].inputs, self.outputs());
 
         // Step 1:  Our topology is now fixed, so we can establish reachability.
-        let mut pointstamp_summaries = self.pointstamp_builder.summarize();
+        let pointstamp_summaries = self.pointstamp_builder.summarize();
 
         //          This operator's summaries are the child zero output -> input summaries.
         let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
@@ -444,15 +458,6 @@ where
             }
         }
 
-        //          We should now discard child zero to zero summaries, to avoid tracking them.
-        for summaries in pointstamp_summaries.target_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
-        for summaries in pointstamp_summaries.source_target[0].iter_mut() { summaries.retain(|&(t, _)| t.index > 0); }
-        //          We also discard summaries to children that do not require notification.
-        for child in 0 .. self.children.len() {
-            for summaries in pointstamp_summaries.target_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
-            for summaries in pointstamp_summaries.source_target[child].iter_mut() { summaries.retain(|&(t,_)| self.children[t.index].notify); }
-        }
-
         //          Allocate the pointstamp tracker using the finalized topology.
         self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries);
 
@@ -464,14 +469,14 @@ where
             child.extract_progress(&mut self.final_pointstamp);
         }
 
-        self.commit_pointstamps();  // Propagate expressed capabilities to output frontiers.
+        self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
 
         // Step 3:  Return summaries and shared progress information.
         (internal_summary, self.shared_progress.clone())
     }
 
     fn set_external_summary(&mut self) {
-        self.commit_pointstamps();  // ensure propagation of input frontiers.
+        self.propagate_pointstamps();  // ensure propagation of input frontiers.
         self.children
             .iter_mut()
             .flat_map(|child| child.operator.as_mut())
@@ -482,17 +487,13 @@ where
 struct PerOperatorState<T: Timestamp> {
 
     name: String,       // name of the operator
-    // addr: Vec<usize>,   // address of the operator
     index: usize,       // index of the operator within its parent scope
     id: usize,          // worker-unique identifier
 
     local: bool,        // indicates whether the operator will exchange data or not
     notify: bool,
-
     inputs: usize,      // number of inputs to the operator
     outputs: usize,     // number of outputs from the operator
-
-    recently_active: bool,
 
     operator: Option<Box<Operate<T>>>,
 
@@ -500,7 +501,7 @@ struct PerOperatorState<T: Timestamp> {
 
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    gis_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
+    internal_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
 
     logging: Option<Logger>,
 }
@@ -514,18 +515,16 @@ impl<T: Timestamp> PerOperatorState<T> {
             index:      0,
             id:         usize::max_value(),
             local:      false,
+            notify:     true,
             inputs,
             outputs,
-
-            recently_active: true,
-            notify:     true,
 
             edges: vec![Vec::new(); outputs],
 
             logging: None,
 
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs,outputs))),
-            gis_summary: Vec::new(),
+            internal_summary: Vec::new(),
         }
     }
 
@@ -536,10 +535,10 @@ impl<T: Timestamp> PerOperatorState<T> {
         let outputs = scope.outputs();
         let notify = scope.notify_me();
 
-        let (gis_summary, shared_progress) = scope.get_internal_summary();
+        let (internal_summary, shared_progress) = scope.get_internal_summary();
 
-        assert_eq!(gis_summary.len(), inputs);
-        assert!(!gis_summary.iter().any(|x| x.len() != outputs));
+        assert_eq!(internal_summary.len(), inputs);
+        assert!(!internal_summary.iter().any(|x| x.len() != outputs));
 
         PerOperatorState {
             name:               scope.name().to_owned(),
@@ -547,109 +546,51 @@ impl<T: Timestamp> PerOperatorState<T> {
             index,
             id:                 identifier,
             local,
+            notify,
             inputs,
             outputs,
             edges:              vec![vec![]; outputs],
 
-            recently_active:    true,
-            notify,
-
             logging,
 
             shared_progress,
-            gis_summary,
+            internal_summary,
         }
     }
 
-    pub fn schedule(
-        &mut self,
-        _outstanding_messages: &[MutableAntichain<T>],  // the reported outstanding messages to the operator.
-        internal_capabilities: &[MutableAntichain<T>],  // the reported internal capabilities of the operator.
-        external_frontier: &[MutableAntichain<T>],      // the reported external frontier of the operator.
-    ) -> bool {
+    pub fn schedule(&mut self) -> bool {
 
         let active = if let Some(ref mut operator) = self.operator {
 
-            // At this point we can assemble several signals to determine if we can possibly not schedule
-            // the operator. At the moment we take what I hope is a conservative approach in which any of
-            // the following will require an operator to be rescheduled:
-            //
-            //   1. There are any post-filter progress changes to communicate and self.notify is true, or
-            //   2. The operator performed progress updates in its last execution or reported activity, or
-            //   3. There exist outstanding input messages on any input, or
-            //   4. There exist held internal capabilities on any output.
-            //
-            // The first reason is important because any operator could respond arbitrarily to progress
-            // updates, with the most obvious example being the `probe` operator. Not invoking this call
-            // on a probe operator can currently spin-block the computation, which is clearly a disaster.
-            //
-            // The second reason is due to the implicit communication that calling `push_external_progress`
-            // indicates a receipt of sent messages. Even with no change in capabilities, if they are empty
-            // and the messages are now received this can unblock an operator. Furthermore, if an operator
-            // reports that it is active despite the absence of messages and capabilities, then we must
-            // reschedule it due to a lack of insight as to whether it can run or not (consider: subgraphs
-            // with internal messages or capabilities).
-            //
-            // The third reason is that the operator could plausibly receive a input data. If there are no
-            // outstanding input messages, then while the operator *could* receive input data, the progress
-            // information announcing the message's existence hasn't arrived yet, but soon will. It is safe
-            // to await this progress information.
-            //
-            // The fourth reason is that operators holding capabilities can decide to exert or drop them for
-            // any reason, perhaps just based on the number of times they have been called. In the absence
-            // of any restriction on what would unblock them, we need to continually poll them.
-            // NOTE: We could consider changing this to: operators that may unblock arbitrarily must express
-            // activity, removing "holds capability" as a reason to schedule an operator. This may be fairly
-            // easy to get wrong (for the operator implementor) and we should be careful here.
-
-            let any_progress_updates = self.shared_progress.borrow_mut().frontiers.iter_mut().any(|buffer| !buffer.is_empty()) && self.notify;
-            let _was_recently_active = self.recently_active;
-            let _outstanding_messages = _outstanding_messages.iter().any(|chain| !chain.is_empty());
-            let _held_capabilities = internal_capabilities.iter().any(|chain| !chain.is_empty());
-
-            // TODO: This is reasonable, in principle, but `_outstanding_messages` determined from pointstamps
-            //       alone leaves us in a weird state should progress messages get blocked by non-execution of
-            //       e.g. the exchange operator in the exchange.rs example.
-
-            if any_progress_updates || _was_recently_active || _outstanding_messages || _held_capabilities
-            {
-
-                use ::logging::{PushProgressEvent, ScheduleEvent, StartStop};
-
-                let self_id = self.id;  // avoid capturing `self` in logging closures.
-
-                if any_progress_updates {
-                    self.logging.as_mut().map(|l|
-                        l.log(PushProgressEvent { op_id: self_id })
-                    );
+            // Perhaps log information about the start of the schedule call.
+            if let Some(l) = self.logging.as_mut() {
+                // FIXME: There is no contract that the operator must consume frontier changes.
+                //        This report could be spurious.
+                let frontiers = &mut self.shared_progress.borrow_mut().frontiers[..];
+                if frontiers.iter_mut().any(|buffer| !buffer.is_empty()) {
+                    l.log(::logging::PushProgressEvent { op_id: self.id })
                 }
 
-                self.logging.as_mut().map(|l| l.log(ScheduleEvent {
-                    id: self_id, start_stop: StartStop::Start
-                }));
+                l.log(::logging::ScheduleEvent::start(self.id));
+            }
 
-                let internal_activity = operator.schedule();
+            let internal_activity = operator.schedule();
 
+            // Perhaps log information about the stop of the schedule call.
+            if let Some(l) = self.logging.as_mut() {
+                // TODO: Schedule logging requires `activity`, because the system
+                //       is not event-driven and calls could be spurious.
+                //       This may want to be removed.
                 let shared_progress = &mut *self.shared_progress.borrow_mut();
                 let did_work =
                     shared_progress.consumeds.iter_mut().any(|x| !x.is_empty()) ||
                     shared_progress.internals.iter_mut().any(|x| !x.is_empty()) ||
                     shared_progress.produceds.iter_mut().any(|x| !x.is_empty());
 
-                // // The operator was recently active if it did anything, or reports activity.
-                self.recently_active = did_work || internal_activity;
-
-                self.logging.as_mut().map(|l|
-                    l.log(ScheduleEvent {
-                        id: self_id,
-                        start_stop: StartStop::Stop { activity: did_work }
-                    }));
-
-                internal_activity
+                l.log(::logging::ScheduleEvent::stop(self.id, did_work));
             }
-            else {
-                false
-            }
+
+            internal_activity
         }
         else {
 
@@ -665,55 +606,17 @@ impl<T: Timestamp> PerOperatorState<T> {
             false
         };
 
-        // DEBUG: test validity of updates.
-        // TODO: This test is overly pessimistic for current implementations, which may report they acquire
-        // capabilities based on the receipt of messages they cannot express (e.g. messages internal to a
-        // subgraph). This suggests a weakness in the progress tracking protocol, that it is hard to validate
-        // locally, which we could aim to improve.
-        // #[cfg(debug_assertions)]
-        // {
-        //     // 1. each increment to self.internal_buffer needs to correspond to a positive self.consumed_buffer
-        //     for index in 0 .. self.internal_buffer.len() {
-        //         for change in self.internal_buffer[index].iter() {
-        //             if change.1 > 0 {
-        //                 let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
-        //                 let internal = self.internal_capabilities[index].less_equal(&change.0);
-        //                 if !consumed && !internal {
-        //                     panic!("Progress error; internal {:?}: {:?}", self.name, change);
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     // 2. each produced message must correspond to a held capability or consumed message
-        //     for index in 0 .. self.produced_buffer.len() {
-        //         for change in self.produced_buffer[index].iter() {
-        //             if change.1 > 0 {
-        //                 let consumed = self.consumed_buffer.iter_mut().any(|x| x.iter().any(|y| y.1 > 0 && y.0.less_equal(&change.0)));
-        //                 let internal = self.internal_capabilities[index].less_equal(&change.0);
-        //                 if !consumed && !internal {
-        //                     panic!("Progress error; produced {:?}: {:?}", self.name, change);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-        // DEBUG: end validity test.
-
-        // We can shut down the operator if several conditions are met.
-        //
-        // We look for operators that (i) still exist, (ii) report no activity, (iii) will no longer
-        // receive incoming messages, and (iv) hold no capabilities.
-        if self.operator.is_some() &&
-           !active &&
-           self.notify && external_frontier.iter().all(|x| x.is_empty()) &&
-           internal_capabilities.iter().all(|x| x.is_empty()) {
-               self.operator = None;
-               self.name = format!("{}(tombstone)", self.name);
-           }
-
         active
     }
 
+    fn shut_down(&mut self) {
+        if self.operator.is_some() {
+            self.operator = None;
+            self.name = format!("{}(tombstone)", self.name);
+        }
+    }
+
+    /// Extracts shared progress information and converts to pointstamp changes.
     fn extract_progress(&mut self, pointstamps: &mut ChangeBatch<(Location, T)>) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
@@ -735,6 +638,45 @@ impl<T: Timestamp> PerOperatorState<T> {
             for (time, delta) in produced.drain() {
                 for target in &self.edges[output] {
                     pointstamps.update((Location::from(*target), time.clone()), delta);
+                }
+            }
+        }
+    }
+
+    /// Test the validity of `self.shared_progress`.
+    ///
+    /// The validity of shared progress information depends on both the external frontiers and the
+    /// internal capabilities, as events can occur that cannot be explained locally otherwise.
+    fn validate_progress(
+        &mut self,
+        external_frontiers: &[MutableAntichain<T>],
+        internal_capabilities: &[MutableAntichain<T>]
+    )
+    {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+
+        // Increments to internal capabilities require a consumed input message, a
+        for (output, internal) in shared_progress.internals.iter_mut().enumerate() {
+            for (time, diff) in internal.iter() {
+                if *diff > 0 {
+                    let consumed = shared_progress.consumeds.iter_mut().any(|x| x.iter().any(|(t,d)| *d > 0 && t.less_equal(time)));
+                    let internal = internal_capabilities[output].less_equal(time);
+                    let external = external_frontiers.iter().any(|x| x.less_equal(time));
+                    if !consumed && !internal && !external {
+                        panic!("Progress error; internal {:?}", self.name);
+                    }
+                }
+            }
+        }
+        for (output, produced) in shared_progress.produceds.iter_mut().enumerate() {
+            for (time, diff) in produced.iter() {
+                if *diff > 0 {
+                    let consumed = shared_progress.consumeds.iter_mut().any(|x| x.iter().any(|(t,d)| *d > 0 && t.less_equal(time)));
+                    let internal = internal_capabilities[output].less_equal(time);
+                    let external = external_frontiers.iter().any(|x| x.less_equal(time));
+                    if !consumed && !internal && !external {
+                        panic!("Progress error; produced {:?}", self.name);
+                    }
                 }
             }
         }

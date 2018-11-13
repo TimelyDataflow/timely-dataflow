@@ -246,8 +246,6 @@ pub struct Tracker<T:Timestamp> {
 
     /// Compiled summaries from each internal location (not scope inputs) to each scope output.
     output_changes: Vec<ChangeBatch<T>>,
-
-    global_frontier: HashSet<(Location, T)>,
 }
 
 struct PerOperator<T: Timestamp> {
@@ -360,7 +358,6 @@ impl<T:Timestamp> Tracker<T> {
             worklist: BinaryHeap::new(),
             pushed_changes: ChangeBatch::new(),
             output_changes,
-            global_frontier: HashSet::new(),
         }
     }
 
