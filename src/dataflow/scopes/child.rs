@@ -70,8 +70,9 @@ where
 }
 
 impl<'a, G, T> Scope for Child<'a, G, T>
+where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp+Refines<G::Timestamp>,
 {
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
     fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
