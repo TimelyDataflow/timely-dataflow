@@ -87,9 +87,15 @@ impl BytesPush for MergeQueue {
 
         if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
 
-        // should lock once, extend; shouldn't re-lock.
-        let mut queue = self.queue.lock().expect("Failed to lock queue");
+        // try to acquire lock without going to sleep (Rust's lock() might yield)
+        let mut lock_ok = self.queue.try_lock();
+        while let Result::Err(::std::sync::TryLockError::WouldBlock) = lock_ok {
+            lock_ok = self.queue.try_lock();
+        }
+        let mut queue = lock_ok.expect("MergeQueue mutex poisoned.");
+
         let mut iterator = iterator.into_iter();
+        let mut should_ping = false;
         if let Some(bytes) = iterator.next() {
             let mut tail = if let Some(mut tail) = queue.pop_back() {
                 if let Err(bytes) = tail.try_merge(bytes) {
@@ -98,7 +104,7 @@ impl BytesPush for MergeQueue {
                 tail
             }
             else {
-                self.dirty.ping();  // only signal from empty to non-empty.
+                should_ping = true;
                 bytes
             };
 
@@ -109,13 +115,26 @@ impl BytesPush for MergeQueue {
             }
             queue.push_back(tail);
         }
+
+        // Wakeup corresponding thread *after* releasing the lock
+        ::std::mem::drop(queue);
+        if should_ping {
+            self.dirty.ping();  // only signal from empty to non-empty.
+        }
     }
 }
 
 impl BytesPull for MergeQueue {
     fn drain_into(&mut self, vec: &mut Vec<Bytes>) {
         if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
-        let mut queue = self.queue.lock().expect("unable to lock mutex");
+
+        // try to acquire lock without going to sleep (Rust's lock() might yield)
+        let mut lock_ok = self.queue.try_lock();
+        while let Result::Err(::std::sync::TryLockError::WouldBlock) = lock_ok {
+            lock_ok = self.queue.try_lock();
+        }
+        let mut queue = lock_ok.expect("MergeQueue mutex poisoned.");
+
         vec.extend(queue.drain(..));
     }
 }

@@ -22,8 +22,19 @@ pub enum Configuration {
     Thread,
     /// Use one process with an indicated number of threads.
     Process(usize),
-    /// Expect multiple processes indicated by `(threads, process, host_list, report)`.
-    Cluster(usize, usize, Vec<String>, bool, Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
+    /// Expect multiple processes.
+    Cluster {
+        /// Number of per-process worker threads
+        threads: usize,
+        /// Identity of this process
+        process: usize,
+        /// Addresses of all processes
+        addresses: Vec<String>,
+        /// Verbosely report connection process
+        report: bool,
+        /// Closure to create a new logger for a communication thread
+        log_fn: Box<Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent, CommunicationSetup>> + Send + Sync>,
+    }
 }
 
 #[cfg(feature = "getopts")]
@@ -71,7 +82,13 @@ impl Configuration {
                 }
 
                 assert!(processes == addresses.len());
-                Configuration::Cluster(threads, process, addresses, report, Box::new(|_| None))
+                Configuration::Cluster {
+                    threads,
+                    process,
+                    addresses,
+                    report,
+                    log_fn: Box::new( | _ | None),
+                }
             }
             else if threads > 1 { Configuration::Process(threads) }
             else { Configuration::Thread }
@@ -87,7 +104,7 @@ impl Configuration {
             Configuration::Process(threads) => {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             },
-            Configuration::Cluster(threads, process, addresses, report, log_fn) => {
+            Configuration::Cluster { threads, process, addresses, report, log_fn } => {
                 if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, log_fn) {
                     Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
                 }
