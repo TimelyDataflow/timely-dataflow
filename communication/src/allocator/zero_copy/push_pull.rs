@@ -100,9 +100,9 @@ impl<T:Data> Pull<Message<T>> for Puller<T> {
 /// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
 /// allocation.
 pub struct PullerInner<T> {
-    inner: Box<Pull<Message<T>>>,            // inner pullable (e.g. intra-process typed queue)
+    inner: Box<Pull<Message<T>>>,               // inner pullable (e.g. intra-process typed queue)
     current: Option<Message<T>>,
-    receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
+    receiver: Rc<RefCell<VecDeque<Bytes>>>,     // source of serialized buffers
 }
 
 impl<T:Data> PullerInner<T> {

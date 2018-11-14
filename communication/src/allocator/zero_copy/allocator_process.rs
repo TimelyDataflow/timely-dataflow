@@ -79,6 +79,7 @@ impl ProcessBuilder {
         ProcessAllocator {
             index: self.index,
             peers: self.peers,
+            counts: Rc::new(RefCell::new(Vec::new())),
             staged: Vec::new(),
             sends,
             recvs: self.recvs,
@@ -102,6 +103,8 @@ pub struct ProcessAllocator {
 
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
+
+    counts: Rc<RefCell<Vec<(usize, i64)>>>,
 
     _signal:     Signal,
     // sending, receiving, and responding to binary buffers.
@@ -139,14 +142,17 @@ impl Allocate for ProcessAllocator {
             .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
             .clone();
 
-        let puller = Box::new(Puller::new(channel));
+        use allocator::counters::Puller as CountPuller;
+        let puller = Box::new(CountPuller::new(Puller::new(channel), identifier, self.counts().clone()));
 
         (pushes, puller)
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn pre_work(&mut self) {
+    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) {
+
+        let mut counts = self.counts.borrow_mut();
 
         for recv in self.recvs.iter_mut() {
             recv.drain_into(&mut self.staged);
@@ -164,6 +170,9 @@ impl Allocate for ProcessAllocator {
                     let mut peel = bytes.extract_to(header.required_bytes());
                     let _ = peel.extract_to(40);
 
+                    // Increment message count for channel.
+                    counts.push((header.channel, 1));
+
                     // Ensure that a queue exists.
                     // We may receive data before allocating, and shouldn't block.
                     self.to_local
@@ -177,10 +186,13 @@ impl Allocate for ProcessAllocator {
                 }
             }
         }
+
+        action(&counts[..]);
+        counts.clear();
     }
 
     // Perform postparatory work, most likely sending un-full binary buffers.
-    fn post_work(&mut self) {
+    fn flush(&mut self) {
         // Publish outgoing byte ledgers.
         for send in self.sends.iter_mut() {
             send.borrow_mut().publish();
@@ -194,5 +206,9 @@ impl Allocate for ProcessAllocator {
         //         eprintln!("Warning: worker {}, undrained channel[{}].len() = {}", self.index, index, len);
         //     }
         // }
+    }
+
+    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> {
+        &self.counts
     }
 }

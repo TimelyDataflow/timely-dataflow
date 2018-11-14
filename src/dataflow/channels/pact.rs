@@ -1,7 +1,7 @@
 //! Parallelization contracts, describing requirements for data movement along dataflow edges.
 //!
 //! Pacts describe how data should be exchanged between workers, and implement a method which
-//! creates a pair of `Push` and `Pull` implementors from an `A: Allocate`. These two endpoints
+//! creates a pair of `Push` and `Pull` implementors from an `A: AsWorker`. These two endpoints
 //! respectively distribute and collect data among workers according to the pact.
 //!
 //! The only requirement of a pact is that it not alter the number of `D` records at each time `T`.
@@ -9,11 +9,10 @@
 
 use std::marker::PhantomData;
 
-use communication::{Allocate, Push, Pull, Data};
-use communication::allocator::Thread;
-use communication::allocator::thread::Pusher as ThreadPusher;
-use communication::allocator::thread::Puller as ThreadPuller;
+use communication::{Push, Pull, Data};
+use communication::allocator::thread::{ThreadPusher, ThreadPuller};
 
+use worker::AsWorker;
 use dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{Bundle, Message};
 
@@ -26,7 +25,7 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
     /// Type implementing `Pull` produced by this pact.
     type Puller: Pull<Bundle<T, D>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
 
 /// A direct connection
@@ -34,9 +33,10 @@ pub struct Pipeline;
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     type Pusher = LogPusher<T, D, ThreadPusher<Bundle<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<Bundle<T, D>>>;
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
-        // ignore `&mut A` and use thread allocator
-        let (pusher, puller) = Thread::new::<Bundle<T, D>>();
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+        let (pusher, puller) = allocator.pipeline::<Message<T, D>>(identifier);
+        // // ignore `&mut A` and use thread allocator
+        // let (pusher, puller) = Thread::new::<Bundle<T, D>>();
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
          LogPuller::new(puller, allocator.index(), identifier, logging.clone()))
     }
@@ -60,7 +60,7 @@ impl<T: Eq+Data+Clone, D: Data+Clone, F: Fn(&D)->u64+'static> ParallelizationCon
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<Push<Bundle<T, D>>>;
     type Puller = Box<Pull<Bundle<T, D>>>;
-    fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, D>>(identifier);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
         (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, logging.clone())))
@@ -82,7 +82,7 @@ impl<T: Eq+Data+Clone, D: Data+Clone, F: Fn(&D)->u64+'static> ParallelizationCon
 // impl<T: Eq+Data+Clone, D: Data+Clone, F: Fn(&T, &D)->u64+'static> ParallelizationContract<T, D> for TimeExchange<D, T, F> {
 //     type Pusher = ExchangePusher<T, D, Pusher<T, D, Box<Push<CommMessage<Message<T, D>>>>>, F>;
 //     type Puller = Puller<T, D, Box<Pull<CommMessage<Message<T, D>>>>>;
-//     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
+//     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
 //         let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
 //         let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id, logging.clone())).collect::<Vec<_>>();
 //         (ExchangePusher::new(senders, self.hash_func), Puller::new(receiver, allocator.index(), identifier, channel_id, logging.clone()))

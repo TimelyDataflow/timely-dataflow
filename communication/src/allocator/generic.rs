@@ -3,6 +3,11 @@
 //! This type is useful in settings where it is difficult to write code generic in `A: Allocate`,
 //! for example closures whose type arguments must be specified.
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
+use allocator::thread::ThreadBuilder;
+use allocator::process::ProcessBuilder as TypedProcessBuilder;
 use allocator::{Allocate, AllocateBuilder, Message, Thread, Process};
 use allocator::zero_copy::allocator_process::{ProcessBuilder, ProcessAllocator};
 use allocator::zero_copy::allocator::{TcpBuilder, TcpAllocator};
@@ -51,21 +56,29 @@ impl Generic {
         }
     }
     /// Perform work before scheduling operators.
-    pub fn pre_work(&mut self) {
+    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) {
         match self {
-            &mut Generic::Thread(ref mut t) => t.pre_work(),
-            &mut Generic::Process(ref mut p) => p.pre_work(),
-            &mut Generic::ProcessBinary(ref mut pb) => pb.pre_work(),
-            &mut Generic::ZeroCopy(ref mut z) => z.pre_work(),
+            &mut Generic::Thread(ref mut t) => t.receive(action),
+            &mut Generic::Process(ref mut p) => p.receive(action),
+            &mut Generic::ProcessBinary(ref mut pb) => pb.receive(action),
+            &mut Generic::ZeroCopy(ref mut z) => z.receive(action),
         }
     }
     /// Perform work after scheduling operators.
-    pub fn post_work(&mut self) {
+    pub fn flush(&mut self) {
         match self {
-            &mut Generic::Thread(ref mut t) => t.post_work(),
-            &mut Generic::Process(ref mut p) => p.post_work(),
-            &mut Generic::ProcessBinary(ref mut pb) => pb.post_work(),
-            &mut Generic::ZeroCopy(ref mut z) => z.post_work(),
+            &mut Generic::Thread(ref mut t) => t.flush(),
+            &mut Generic::Process(ref mut p) => p.flush(),
+            &mut Generic::ProcessBinary(ref mut pb) => pb.flush(),
+            &mut Generic::ZeroCopy(ref mut z) => z.flush(),
+        }
+    }
+    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> {
+        match self {
+            &Generic::Thread(ref t) => t.counts(),
+            &Generic::Process(ref p) => p.counts(),
+            &Generic::ProcessBinary(ref pb) => pb.counts(),
+            &Generic::ZeroCopy(ref z) => z.counts(),
         }
     }
 }
@@ -77,8 +90,9 @@ impl Allocate for Generic {
         self.allocate(identifier)
     }
 
-    fn pre_work(&mut self) { self.pre_work(); }
-    fn post_work(&mut self) { self.post_work(); }
+    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) { self.receive(action); }
+    fn flush(&mut self) { self.flush(); }
+    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> { self.counts() }
 }
 
 
@@ -89,21 +103,21 @@ impl Allocate for Generic {
 /// contains `Rc` wrapped state, and so cannot itself be moved across threads.
 pub enum GenericBuilder {
     /// Builder for `Thread` allocator.
-    Thread(Thread),
+    Thread(ThreadBuilder),
     /// Builder for `Process` allocator.
-    Process(Process),
+    Process(TypedProcessBuilder),
     /// Builder for `ProcessBinary` allocator.
     ProcessBinary(ProcessBuilder),
     /// Builder for `ZeroCopy` allocator.
-    ZeroCopy(TcpBuilder<Process>),
+    ZeroCopy(TcpBuilder<TypedProcessBuilder>),
 }
 
 impl AllocateBuilder for GenericBuilder {
     type Allocator = Generic;
     fn build(self) -> Generic {
         match self {
-            GenericBuilder::Thread(t) => Generic::Thread(t),
-            GenericBuilder::Process(p) => Generic::Process(p),
+            GenericBuilder::Thread(t) => Generic::Thread(t.build()),
+            GenericBuilder::Process(p) => Generic::Process(p.build()),
             GenericBuilder::ProcessBinary(pb) => Generic::ProcessBinary(pb.build()),
             GenericBuilder::ZeroCopy(z) => Generic::ZeroCopy(z.build()),
         }

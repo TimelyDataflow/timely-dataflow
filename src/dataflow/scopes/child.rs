@@ -7,7 +7,8 @@ use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::{Source, Target};
 use progress::timestamp::Refines;
 use order::Product;
-use communication::{Allocate, Data, Push, Pull};
+use communication::{Data, Push, Pull};
+use communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use logging::TimelyLogger as Logger;
 use worker::AsWorker;
 use activate::Activations;
@@ -50,6 +51,14 @@ where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>
 {
+    fn index(&self) -> usize { self.parent.index() }
+    fn peers(&self) -> usize { self.parent.peers() }
+    fn allocate<D: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
+        self.parent.allocate(identifier)
+    }
+    fn pipeline<D: 'static>(&mut self, identifier: usize) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
+        self.parent.pipeline(identifier)
+    }
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
     }
@@ -115,18 +124,6 @@ where
 }
 
 use communication::Message;
-
-impl<'a, G, T> Allocate for Child<'a, G, T>
-where
-    G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>,
-{
-    fn index(&self) -> usize { self.parent.index() }
-    fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
-        self.parent.allocate(identifier)
-    }
-}
 
 impl<'a, G, T> Clone for Child<'a, G, T>
 where

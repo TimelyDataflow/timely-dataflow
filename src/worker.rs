@@ -10,6 +10,7 @@ use progress::timestamp::{Refines};
 use progress::{Timestamp, SubgraphBuilder};
 use progress::operate::{Schedule, Operate};
 use communication::{Allocate, Data, Push, Pull};
+use communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use dataflow::scopes::Child;
 
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
@@ -25,10 +26,24 @@ pub struct Worker<A: Allocate> {
     activations: Rc<RefCell<Activations>>,
 }
 
+
 /// Methods provided by the root Worker.
 ///
 /// These methods are often proxied by child scopes, and this trait provides access.
-pub trait AsWorker: Allocate {
+pub trait AsWorker {
+
+    ///
+    fn index(&self) -> usize;
+    ///
+    fn peers(&self) -> usize;
+    ///
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>);
+    /// Constructs a pipeline channel from the worker to itself.
+    ///
+    /// By default this method uses the native channel allocation mechanism, but the expectation is
+    /// that this behavior will be overriden to be more efficient.
+    fn pipeline<T: 'static>(&mut self, identifier: usize) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>);
+
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
     /// Provides access to named logging streams.
@@ -40,6 +55,15 @@ pub trait AsWorker: Allocate {
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
+    fn index(&self) -> usize { self.allocator.borrow().index() }
+    fn peers(&self) -> usize { self.allocator.borrow().peers() }
+    fn allocate<D: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
+        self.allocator.borrow_mut().allocate(identifier)
+    }
+    fn pipeline<T: 'static>(&mut self, identifier: usize) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
+        self.allocator.borrow_mut().pipeline(identifier)
+    }
+
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
     fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.log_register()
@@ -71,7 +95,7 @@ impl<A: Allocate> Worker<A> {
     /// main way to ensure that a computation proceeds.
     pub fn step(&mut self) -> bool {
 
-        self.allocator.borrow_mut().pre_work();
+        self.allocator.borrow_mut().receive(|_| { });
 
         let mut active = false;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
@@ -85,7 +109,7 @@ impl<A: Allocate> Worker<A> {
         // TODO(andreal) do we want to flush logs here?
         self.logging.borrow_mut().flush();
 
-        self.allocator.borrow_mut().post_work();
+        self.allocator.borrow_mut().flush();
 
         active
     }
@@ -174,14 +198,6 @@ impl<A: Allocate> Worker<A> {
 }
 
 use communication::Message;
-
-impl<A: Allocate> Allocate for Worker<A> {
-    fn index(&self) -> usize { self.allocator.borrow().index() }
-    fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
-        self.allocator.borrow_mut().allocate(identifier)
-    }
-}
 
 impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {

@@ -1,5 +1,8 @@
 //! Types and traits for the allocation of channels.
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 pub use self::thread::Thread;
 pub use self::process::Process;
 pub use self::generic::{Generic, GenericBuilder};
@@ -7,6 +10,9 @@ pub use self::generic::{Generic, GenericBuilder};
 pub mod thread;
 pub mod process;
 pub mod generic;
+
+pub mod canary;
+pub mod counters;
 
 pub mod zero_copy;
 
@@ -35,8 +41,23 @@ pub trait Allocate {
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
     fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>);
-    /// Work performed before scheduling dataflows.
-    fn pre_work(&mut self) { }
+    ///
+    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>>;
+
+    /// Reports the changes in message counts in each channel.
+    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) {
+        let mut borrow = self.counts().borrow_mut();
+        action(&borrow[..]);
+        borrow.clear();
+    }
     /// Work performed after scheduling dataflows.
-    fn post_work(&mut self) { }
+    fn flush(&mut self) { }
+
+    /// Constructs a pipeline channel from the worker to itself.
+    ///
+    /// By default this method uses the native channel allocation mechanism, but the expectation is
+    /// that this behavior will be overriden to be more efficient.
+    fn pipeline<T: 'static>(&mut self, identifier: usize) -> (thread::ThreadPusher<Message<T>>, thread::ThreadPuller<Message<T>>) {
+        thread::Thread::new_from(identifier, self.counts().clone())
+    }
 }

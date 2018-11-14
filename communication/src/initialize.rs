@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use std::any::Any;
 
+use allocator::thread::ThreadBuilder;
 use allocator::{AllocateBuilder, Thread, Process, Generic, GenericBuilder};
 use allocator::zero_copy::initialize::initialize_networking;
 
@@ -99,7 +100,7 @@ impl Configuration {
     pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<Any>), String> {
         match self {
             Configuration::Thread => {
-                Ok((vec![GenericBuilder::Thread(Thread)], Box::new(())))
+                Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
             },
             Configuration::Process(threads) => {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
