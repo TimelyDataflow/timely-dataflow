@@ -137,7 +137,6 @@ impl Allocate for Process {
         use allocator::counters::ArcPusher as CountPusher;
         use allocator::counters::Puller as CountPuller;
 
-        unimplemented!();   // The below is totally wrong; needs to chat with a *remote* counts.
         let sends =
         sends.into_iter()
              .enumerate()
@@ -154,7 +153,7 @@ impl Allocate for Process {
         self.inner.counts()
     }
 
-    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) {
+    fn receive(&mut self, mut action: impl FnMut(&[(usize,i64)])) {
         let mut counts = self.inner.counts().borrow_mut();
         while let Ok((index, delta)) = self.counters_recv.try_recv() {
             counts.push((index, delta));

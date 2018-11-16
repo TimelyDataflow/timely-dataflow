@@ -168,45 +168,46 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) {
-
-        let mut counts = self.inner.counts().borrow_mut();
+    fn receive(&mut self, action: impl FnMut(&[(usize,i64)])) {
 
         for recv in self.recvs.iter_mut() {
             recv.drain_into(&mut self.staged);
         }
 
-        for mut bytes in self.staged.drain(..) {
+        {   // scoped to let borrow on counts drop.
+            let mut counts = self.inner.counts().borrow_mut();
 
-            // We expect that `bytes` contains an integral number of messages.
-            // No splitting occurs across allocations.
-            while bytes.len() > 0 {
+            for mut bytes in self.staged.drain(..) {
 
-                if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
+                // We expect that `bytes` contains an integral number of messages.
+                // No splitting occurs across allocations.
+                while bytes.len() > 0 {
 
-                    // Get the header and payload, ditch the header.
-                    let mut peel = bytes.extract_to(header.required_bytes());
-                    let _ = peel.extract_to(40);
+                    if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
 
-                    // Increment message count for channel.
-                    counts.push((header.channel, 1));
+                        // Get the header and payload, ditch the header.
+                        let mut peel = bytes.extract_to(header.required_bytes());
+                        let _ = peel.extract_to(40);
 
-                    // Ensure that a queue exists.
-                    // We may receive data before allocating, and shouldn't block.
-                    self.to_local
-                        .entry(header.channel)
-                        .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
-                        .borrow_mut()
-                        .push_back(peel);
-                }
-                else {
-                    println!("failed to read full header!");
+                        // Increment message count for channel.
+                        counts.push((header.channel, 1));
+
+                        // Ensure that a queue exists.
+                        // We may receive data before allocating, and shouldn't block.
+                        self.to_local
+                            .entry(header.channel)
+                            .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
+                            .borrow_mut()
+                            .push_back(peel);
+                    }
+                    else {
+                        println!("failed to read full header!");
+                    }
                 }
             }
         }
 
-        action(&counts[..]);
-        counts.clear();
+        self.inner.receive(action);
     }
 
     // Perform postparatory work, most likely sending un-full binary buffers.

@@ -56,7 +56,7 @@ impl Generic {
         }
     }
     /// Perform work before scheduling operators.
-    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) {
+    fn receive(&mut self, action: impl FnMut(&[(usize,i64)])) {
         match self {
             &mut Generic::Thread(ref mut t) => t.receive(action),
             &mut Generic::Process(ref mut p) => p.receive(action),
@@ -90,7 +90,7 @@ impl Allocate for Generic {
         self.allocate(identifier)
     }
 
-    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) { self.receive(action); }
+    fn receive(&mut self, action: impl FnMut(&[(usize,i64)])) { self.receive(action); }
     fn flush(&mut self) { self.flush(); }
     fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> { self.counts() }
 }

@@ -1,7 +1,7 @@
 //! Network initialization.
 
 use std::sync::Arc;
-use allocator::Process;
+// use allocator::Process;
 use allocator::process::ProcessBuilder;
 use networking::create_sockets;
 use super::tcp::{send_loop, recv_loop};

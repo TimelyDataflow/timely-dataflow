@@ -150,7 +150,7 @@ impl Allocate for ProcessAllocator {
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) {
+    fn receive(&mut self, mut action: impl FnMut(&[(usize,i64)])) {
 
         let mut counts = self.counts.borrow_mut();
 

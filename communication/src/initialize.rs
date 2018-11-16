@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::any::Any;
 
 use allocator::thread::ThreadBuilder;
-use allocator::{AllocateBuilder, Thread, Process, Generic, GenericBuilder};
+use allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
 use allocator::zero_copy::initialize::initialize_networking;
 
 use ::logging::{CommunicationSetup, CommunicationEvent};

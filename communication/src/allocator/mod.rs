@@ -45,7 +45,7 @@ pub trait Allocate {
     fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>>;
 
     /// Reports the changes in message counts in each channel.
-    fn receive(&mut self, action: impl Fn(&[(usize,i64)])) {
+    fn receive(&mut self, mut action: impl FnMut(&[(usize,i64)])) {
         let mut borrow = self.counts().borrow_mut();
         action(&borrow[..]);
         borrow.clear();

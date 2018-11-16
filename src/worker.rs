@@ -24,6 +24,7 @@ pub struct Worker<A: Allocate> {
     logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
 
     activations: Rc<RefCell<Activations>>,
+    messages: Vec<i64>,
 }
 
 
@@ -86,6 +87,7 @@ impl<A: Allocate> Worker<A> {
             dataflow_counter: Rc::new(RefCell::new(0)),
             logging: Rc::new(RefCell::new(::logging_core::Registry::new(now, index))),
             activations: Rc::new(RefCell::new(Activations::new())),
+            messages: Vec::new(),
         }
     }
 
@@ -95,7 +97,16 @@ impl<A: Allocate> Worker<A> {
     /// main way to ensure that a computation proceeds.
     pub fn step(&mut self) -> bool {
 
-        self.allocator.borrow_mut().receive(|_| { });
+        let messages = &mut self.messages;
+        self.allocator.borrow_mut().receive(|x| {
+            for &(channel, diff) in x.iter() {
+                while messages.len() <= channel {
+                    messages.push(0);
+                }
+                messages[channel] += diff;
+            }
+            // println!("messages: {:?}", messages);
+        });
 
         let mut active = false;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
@@ -209,6 +220,7 @@ impl<A: Allocate> Clone for Worker<A> {
             dataflow_counter: self.dataflow_counter.clone(),
             logging: self.logging.clone(),
             activations: self.activations.clone(),
+            messages: self.messages.clone(),
         }
     }
 }
