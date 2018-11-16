@@ -10,6 +10,7 @@ use networking::MessageHeader;
 
 use {Allocate, allocator::AllocateBuilder, Data, Push, Pull};
 use allocator::Message;
+use allocator::canary::Canary;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
 
@@ -80,6 +81,7 @@ impl ProcessBuilder {
             index: self.index,
             peers: self.peers,
             counts: Rc::new(RefCell::new(Vec::new())),
+            canaries: Rc::new(RefCell::new(Vec::new())),
             staged: Vec::new(),
             sends,
             recvs: self.recvs,
@@ -105,6 +107,8 @@ pub struct ProcessAllocator {
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
 
     counts: Rc<RefCell<Vec<(usize, i64)>>>,
+
+    canaries: Rc<RefCell<Vec<usize>>>,
 
     _signal:     Signal,
     // sending, receiving, and responding to binary buffers.
@@ -143,7 +147,8 @@ impl Allocate for ProcessAllocator {
             .clone();
 
         use allocator::counters::Puller as CountPuller;
-        let puller = Box::new(CountPuller::new(Puller::new(channel), identifier, self.counts().clone()));
+        let canary = Canary::new(identifier, self.canaries.clone());
+        let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, self.counts().clone()));
 
         (pushes, puller)
     }
@@ -151,6 +156,17 @@ impl Allocate for ProcessAllocator {
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
     fn receive(&mut self, mut action: impl FnMut(&[(usize,i64)])) {
+
+        // Check for channels whose `Puller` has been dropped.
+        let mut canaries = self.canaries.borrow_mut();
+        for dropped_channel in canaries.drain(..) {
+            let dropped =
+            self.to_local
+                .remove(&dropped_channel)
+                .expect("non-existent channel dropped");
+            assert!(dropped.borrow().is_empty());
+        }
+        ::std::mem::drop(canaries);
 
         let mut counts = self.counts.borrow_mut();
 

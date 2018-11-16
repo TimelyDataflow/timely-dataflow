@@ -12,6 +12,7 @@ use {Allocate, Data, Push, Pull};
 use allocator::AllocateBuilder;
 use allocator::{Message, Process};
 use allocator::process::ProcessBuilder;
+use allocator::canary::Canary;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
 use super::push_pull::{Pusher, PullerInner};
@@ -91,6 +92,7 @@ impl<A: AllocateBuilder> TcpBuilder<A> {
             peers: self.peers,
             // allocated: 0,
             _signal: self.signal,
+            canaries: Rc::new(RefCell::new(Vec::new())),
             staged: Vec::new(),
             sends,
             recvs: self.recvs,
@@ -111,6 +113,7 @@ pub struct TcpAllocator<A: Allocate> {
     _signal:     Signal,
 
     staged:     Vec<Bytes>,
+    canaries:   Rc<RefCell<Vec<usize>>>,
 
     // sending, receiving, and responding to binary buffers.
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>,     // sends[x] -> goes to process x.
@@ -161,7 +164,8 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             .clone();
 
         use allocator::counters::Puller as CountPuller;
-        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel), identifier, self.inner.counts().clone()));
+        let canary = Canary::new(identifier, self.canaries.clone());
+        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.inner.counts().clone()));
 
         (pushes, puller, )
     }
@@ -169,6 +173,17 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
     fn receive(&mut self, action: impl FnMut(&[(usize,i64)])) {
+
+        // Check for channels whose `Puller` has been dropped.
+        let mut canaries = self.canaries.borrow_mut();
+        for dropped_channel in canaries.drain(..) {
+            let dropped =
+            self.to_local
+                .remove(&dropped_channel)
+                .expect("non-existent channel dropped");
+            assert!(dropped.borrow().is_empty());
+        }
+        ::std::mem::drop(canaries);
 
         for recv in self.recvs.iter_mut() {
             recv.drain_into(&mut self.staged);
