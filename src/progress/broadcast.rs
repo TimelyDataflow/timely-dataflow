@@ -33,7 +33,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     pub fn new<A: ::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
-        let (pushers, puller) = worker.allocate(channel_identifier);
+        let (pushers, puller) = worker.allocate(channel_identifier, &path[..]);
         logging.as_mut().map(|l| l.log(::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: ::logging::CommChannelKind::Progress,

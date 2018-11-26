@@ -33,17 +33,26 @@ pub struct Worker<A: Allocate> {
 /// These methods are often proxied by child scopes, and this trait provides access.
 pub trait AsWorker {
 
-    ///
+    /// Index of the worker among its peers.
     fn index(&self) -> usize;
-    ///
+    /// Number of peer workers.
     fn peers(&self) -> usize;
+    /// Allocates a new channel from a supplied identifier and address.
     ///
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>);
+    /// The identifier is used to identify the underlying channel and route
+    /// its data. It should be distinct from other identifiers passed used
+    /// for allocation, but can otherwise be arbitrary.
+    ///
+    /// The address should specify a path to an operator that should be
+    /// scheduled in response to the receipt of records on the channel.
+    /// Most commonly, this would be the address of the *target* of the
+    /// channel.
+    fn allocate<T: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>);
     /// Constructs a pipeline channel from the worker to itself.
     ///
     /// By default this method uses the native channel allocation mechanism, but the expectation is
     /// that this behavior will be overriden to be more efficient.
-    fn pipeline<T: 'static>(&mut self, identifier: usize) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>);
+    fn pipeline<T: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>);
 
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
@@ -58,10 +67,10 @@ pub trait AsWorker {
 impl<A: Allocate> AsWorker for Worker<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
+    fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
         self.allocator.borrow_mut().allocate(identifier)
     }
-    fn pipeline<T: 'static>(&mut self, identifier: usize) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
+    fn pipeline<T: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
         self.allocator.borrow_mut().pipeline(identifier)
     }
 

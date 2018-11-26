@@ -104,24 +104,32 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
+        let index = self.allocate_operator_index();
+        let mut address = self.addr();
+        address.push(index);
+
         let progress = Rc::new(RefCell::new(ChangeBatch::new()));
 
         handle.register(counter, progress.clone());
 
         let copies = self.peers();
 
-        let index = self.add_operator(Box::new(Operator {
+        self.add_operator_with_index(Box::new(Operator {
+            name: "Input".to_owned(),
+            address,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             progress,
             messages: produced,
             copies,
-        }));
+        }), index);
 
         Stream::new(Source { index, port: 0 }, registrar, self.clone())
     }
 }
 
 struct Operator<T:Timestamp> {
+    name: String,
+    address: Vec<usize>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
     messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
@@ -130,9 +138,9 @@ struct Operator<T:Timestamp> {
 
 impl<T:Timestamp> Schedule for Operator<T> {
 
-    fn name(&self) -> &str { "Input" }
+    fn name(&self) -> &str { &self.name }
 
-    fn path(&self) -> &[usize] { unimplemented!() }
+    fn path(&self) -> &[usize] { &self.address[..] }
 
     fn schedule(&mut self) -> bool {
         let shared_progress = &mut *self.shared_progress.borrow_mut();

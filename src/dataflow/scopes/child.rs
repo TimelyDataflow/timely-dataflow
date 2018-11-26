@@ -53,11 +53,11 @@ where
 {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
-        self.parent.allocate(identifier)
+    fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
+        self.parent.allocate(identifier, address)
     }
-    fn pipeline<D: 'static>(&mut self, identifier: usize) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
-        self.parent.pipeline(identifier)
+    fn pipeline<D: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
+        self.parent.pipeline(identifier, address)
     }
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()

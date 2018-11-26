@@ -89,18 +89,26 @@ impl<G: Scope> UnorderedInput<G> for G {
         let helper = UnorderedHandle::new(counter);
         let peers = self.peers();
 
-        let index = self.add_operator(Box::new(UnorderedOperator {
+        let index = self.allocate_operator_index();
+        let mut address = self.addr();
+        address.push(index);
+
+        self.add_operator_with_index(Box::new(UnorderedOperator {
+            name: "UnorderedInput".to_owned(),
+            address,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             internal,
             produced,
             peers,
-        }));
+        }), index);
 
         ((helper, cap), Stream::new(Source { index, port: 0 }, registrar, self.clone()))
     }
 }
 
 struct UnorderedOperator<T:Timestamp> {
+    name: String,
+    address: Vec<usize>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     internal:   Rc<RefCell<ChangeBatch<T>>>,
     produced:   Rc<RefCell<ChangeBatch<T>>>,
@@ -108,8 +116,8 @@ struct UnorderedOperator<T:Timestamp> {
 }
 
 impl<T:Timestamp> Schedule for UnorderedOperator<T> {
-    fn name(&self) -> &str { "Input" }
-    fn path(&self) -> &[usize] { unimplemented!() }
+    fn name(&self) -> &str { &self.name }
+    fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
         let shared_progress = &mut *self.shared_progress.borrow_mut();
         self.internal.borrow_mut().drain_into(&mut shared_progress.internals[0]);

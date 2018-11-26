@@ -55,6 +55,7 @@ pub struct OperatorBuilder<G: Scope> {
     scope: G,
     index: usize,
     global: usize,
+    address: Vec<usize>,    // path to the operator (ending with index).
     shape: OperatorShape,
     summary: Vec<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>,
 }
@@ -66,12 +67,15 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let global = scope.new_identifier();
         let index = scope.allocate_operator_index();
+        let mut address = scope.addr();
+        address.push(index);
         let peers = scope.peers();
 
         OperatorBuilder {
             scope,
             index,
             global,
+            address,
             shape: OperatorShape::new(name, peers),
             summary: vec![],
         }
@@ -112,7 +116,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, logging);
+        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, &self.address[..], logging);
         let target = Target { index: self.index, port: self.shape.inputs };
         stream.connect_to(target, sender, channel_id);
 
@@ -161,6 +165,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let operator = OperatorCore {
             shape: self.shape,
+            address: self.address,
             push_external,
             pull_internal,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
@@ -178,6 +183,7 @@ struct OperatorCore<T, PEP, PIP>
         // PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
 {
     shape: OperatorShape,
+    address: Vec<usize>,
     push_external: PEP,
     pull_internal: PIP,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
@@ -191,7 +197,7 @@ where
     PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
 {
     fn name(&self) -> &str { &self.shape.name }
-    fn path(&self) -> &[usize] { unimplemented!() }
+    fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 

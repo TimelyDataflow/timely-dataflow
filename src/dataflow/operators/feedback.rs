@@ -88,12 +88,18 @@ impl<G: Scope> Feedback<G> for G {
         });
         let consumed_messages = feedback_input.produced().clone();
 
-        let index = self.add_operator(Box::new(Operator {
+        let index = self.allocate_operator_index();
+        let mut address = self.addr();
+        address.push(index);
+
+        self.add_operator_with_index(Box::new(Operator {
+            name: "Feedback".to_owned(),
+            address,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(1, 1))),
             consumed_messages,
             produced_messages,
             summary,
-        }));
+        }), index);
 
         let helper = Handle {
             index,
@@ -175,6 +181,8 @@ pub struct Handle<T: Timestamp, D: Data> {
 
 // the scope that the progress tracker interacts with
 struct Operator<T:Timestamp> {
+    name: String,
+    address: Vec<usize>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     consumed_messages:  Rc<RefCell<ChangeBatch<T>>>,
     produced_messages:  Rc<RefCell<ChangeBatch<T>>>,
@@ -182,8 +190,8 @@ struct Operator<T:Timestamp> {
 }
 
 impl<T:Timestamp> Schedule for Operator<T> {
-    fn name(&self) -> &str { "Feedback" }
-    fn path(&self) -> &[usize] { unimplemented!() }
+    fn name(&self) -> &str { &self.name }
+    fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
         let shared_progress = &mut *self.shared_progress.borrow_mut();
         self.consumed_messages.borrow_mut().drain_into(&mut shared_progress.consumeds[0]);

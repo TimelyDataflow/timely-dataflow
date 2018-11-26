@@ -46,7 +46,12 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
 
         let receiver = LogPuller::new(puller, scope.index(), channel_id, scope.logging());
 
+        let operator_index = self.allocate_operator_index();
+        let mut address = self.addr();
+        address.push(operator_index);
+
         let operator = BroadcastOperator {
+            address,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(scope.peers(), 1))),
             index: scope.index(),
             peers: scope.peers(),
@@ -54,7 +59,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
             output: PushBuffer::new(PushCounter::new(targets)),
         };
 
-        let operator_index = scope.add_operator(Box::new(operator));
+        scope.add_operator_with_index(Box::new(operator), operator_index);
 
         for (i, pusher) in pushers.into_iter().enumerate() {
             let sender = LogPusher::new(pusher, scope.index(), i, channel_id, scope.logging());
@@ -68,6 +73,7 @@ impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
 struct BroadcastOperator<T: Timestamp, D: ExchangeData> {
     index: usize,
     peers: usize,
+    address: Vec<usize>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     input: PullCounter<T, D, LogPuller<T, D, Box<Pull<Bundle<T, D>>>>>,
     output: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
@@ -75,7 +81,7 @@ struct BroadcastOperator<T: Timestamp, D: ExchangeData> {
 
 impl<T: Timestamp, D: ExchangeData> Schedule for BroadcastOperator<T, D> {
     fn name(&self) -> &str { "Broadcast" }
-    fn path(&self) -> &[usize] { unimplemented!() }
+    fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
 
         let mut vec = Vec::new();
