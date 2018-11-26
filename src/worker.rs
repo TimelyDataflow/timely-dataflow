@@ -97,16 +97,32 @@ impl<A: Allocate> Worker<A> {
     /// main way to ensure that a computation proceeds.
     pub fn step(&mut self) -> bool {
 
+        // We should probably activate any operator who receives a message
+        // in a channel whose total ends up strictly positive. This excludes
+        // folks who receive and the process those messages, but not folks who had
+        // residual messages, processed them, and then received some more.
+        let mut allocator = self.allocator.borrow_mut();
+
+        allocator.receive();
+
+        // TODO: This should surely be a hash map, or a map to a dataflow-
+        // specific vector, rather than a channel-id keyed vector.
         let messages = &mut self.messages;
-        self.allocator.borrow_mut().receive(|x| {
-            for &(channel, diff) in x.iter() {
+        {
+            let events = allocator.events().clone();
+            let mut borrow = events.borrow_mut();
+            for (channel, event) in borrow.drain(..) {
                 while messages.len() <= channel {
                     messages.push(0);
                 }
-                messages[channel] += diff;
+                use communication::allocator::Event;
+                match event {
+                    Event::Pushed(count) => messages[channel] += count as i64,
+                    Event::Pulled(count) => messages[channel] -= count as i64,
+                }
+                // println!("messages: {:?}", messages);
             }
-            // println!("messages: {:?}", messages);
-        });
+        }
 
         let mut active = false;
         for dataflow in self.dataflows.borrow_mut().iter_mut() {
@@ -120,7 +136,7 @@ impl<A: Allocate> Worker<A> {
         // TODO(andreal) do we want to flush logs here?
         self.logging.borrow_mut().flush();
 
-        self.allocator.borrow_mut().flush();
+        allocator.release();
 
         active
     }

@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 
 pub use self::thread::Thread;
 pub use self::process::Process;
@@ -20,11 +21,12 @@ use {Data, Push, Pull, Message};
 
 /// A proto-allocator, which implements `Send` and can be completed with `build`.
 ///
-/// This trait exists because some allocators contain non-Send elements, like `Rc` wrappers for
-/// shared state. As such, what we actually need to create to initialize a computation are builders,
-/// which we can then spawn in new threads each of which then construct their actual allocator.
+/// This trait exists because some allocators contain elements that do not implement
+/// the `Send` trait, for example `Rc` wrappers for shared state. As such, what we
+/// actually need to create to initialize a computation are builders, which we can
+/// then move into new threads each of which then construct their actual allocator.
 pub trait AllocateBuilder : Send {
-    /// The type of built allocator.
+    /// The type of allocator to be built.
     type Allocator: Allocate;
     /// Builds allocator, consumes self.
     fn build(self) -> Self::Allocator;
@@ -37,27 +39,55 @@ pub trait AllocateBuilder : Send {
 pub trait Allocate {
     /// The index of the worker out of `(0..self.peers())`.
     fn index(&self) -> usize;
-    /// The number of workers.
+    /// The number of workers in the communication group.
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
     fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>);
+    /// A shared queue of communication events with channel identifier.
     ///
-    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>>;
+    /// It is expected that users of the channel allocator will regularly
+    /// drain these events in order to drive their computation. If they
+    /// fail to do so the event queue may become quite large, and turn
+    /// into a performance problem.
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>>;
 
-    /// Reports the changes in message counts in each channel.
-    fn receive(&mut self, mut action: impl FnMut(&[(usize,i64)])) {
-        let mut borrow = self.counts().borrow_mut();
-        action(&borrow[..]);
-        borrow.clear();
-    }
-    /// Work performed after scheduling dataflows.
-    fn flush(&mut self) { }
+    /// Ensure that received messages are surfaced in each channel.
+    ///
+    /// This method should be called to ensure that received messages are
+    /// surfaced in each channel, but failing to call the method does not
+    /// ensure that they are not surfaced.
+    ///
+    /// Generally, this method is the indication that the allocator should
+    /// present messages contained in otherwise scarce resources (for example
+    /// network buffers), under the premise that someone is about to consume
+    /// the messages and release the resources.
+    fn receive(&mut self) { }
+
+    /// Signal the completion of a batch of reads from channels.
+    ///
+    /// Conventionally, this method signals to the communication fabric
+    /// that the worker is taking a break from reading from channels, and
+    /// the fabric should consider re-acquiring scarce resources. This can
+    /// lead to the fabric performing defensive copies out of un-consumed
+    /// buffers, and can be a performance problem if invoked casually.
+    fn release(&mut self) { }
 
     /// Constructs a pipeline channel from the worker to itself.
     ///
-    /// By default this method uses the native channel allocation mechanism, but the expectation is
-    /// that this behavior will be overriden to be more efficient.
-    fn pipeline<T: 'static>(&mut self, identifier: usize) -> (thread::ThreadPusher<Message<T>>, thread::ThreadPuller<Message<T>>) {
-        thread::Thread::new_from(identifier, self.counts().clone())
+    /// By default, this method uses the thread-local channel constructor
+    /// based on a shared `VecDeque` which updates the event queue.
+    fn pipeline<T: 'static>(&mut self, identifier: usize) ->
+        (thread::ThreadPusher<Message<T>>,
+         thread::ThreadPuller<Message<T>>)
+    {
+        thread::Thread::new_from(identifier, self.events().clone())
     }
+}
+
+/// A communication channel event.
+pub enum Event {
+    /// A number of messages pushed into the channel.
+    Pushed(usize),
+    /// A number of messages pulled from the channel.
+    Pulled(usize),
 }

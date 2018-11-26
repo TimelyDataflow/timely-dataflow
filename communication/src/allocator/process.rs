@@ -5,11 +5,11 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use allocator::thread::{ThreadBuilder};
-use allocator::{Allocate, AllocateBuilder, Message, Thread};
-use {Push, Pull};
+use allocator::{Allocate, AllocateBuilder, Event, Thread};
+use {Push, Pull, Message};
 
 /// An allocater for inter-thread, intra-process communication
 pub struct ProcessBuilder {
@@ -19,8 +19,8 @@ pub struct ProcessBuilder {
     // below: `Box<Any+Send>` is a `Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>`
     channels: Arc<Mutex<HashMap<usize, Box<Any+Send>>>>,
 
-    counters_send: Vec<Sender<(usize, i64)>>,
-    counters_recv: Receiver<(usize, i64)>,
+    counters_send: Vec<Sender<(usize, Event)>>,
+    counters_recv: Receiver<(usize, Event)>,
 }
 
 impl AllocateBuilder for ProcessBuilder {
@@ -44,8 +44,8 @@ pub struct Process {
     peers: usize,
     // below: `Box<Any+Send>` is a `Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>`
     channels: Arc<Mutex<HashMap<usize, Box<Any+Send>>>>,
-    counters_send: Vec<Sender<(usize, i64)>>,
-    counters_recv: Receiver<(usize, i64)>,
+    counters_send: Vec<Sender<(usize, Event)>>,
+    counters_recv: Receiver<(usize, Event)>,
 }
 
 impl Process {
@@ -78,12 +78,6 @@ impl Process {
                 }
             })
             .collect()
-        // (0 .. count).map(|index| ProcessBuilder {
-        //     inner:      ThreadBuilder,
-        //     index:      index,
-        //     peers:      count,
-        //     channels:   channels.clone(),
-        // }).collect()
     }
 }
 
@@ -144,23 +138,20 @@ impl Allocate for Process {
              .map(|s| Box::new(s) as Box<Push<super::Message<T>>>)
              .collect::<Vec<_>>();
 
-        let recv = Box::new(CountPuller::new(recv, identifier, self.inner.counts().clone())) as Box<Pull<super::Message<T>>>;
+        let recv = Box::new(CountPuller::new(recv, identifier, self.inner.events().clone())) as Box<Pull<super::Message<T>>>;
 
         (sends, recv)
     }
 
-    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> {
-        self.inner.counts()
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
+        self.inner.events()
     }
 
-    fn receive(&mut self, mut action: impl FnMut(&[(usize,i64)])) {
-        let mut counts = self.inner.counts().borrow_mut();
-        while let Ok((index, delta)) = self.counters_recv.try_recv() {
-            counts.push((index, delta));
+    fn receive(&mut self) {
+        let mut events = self.inner.events().borrow_mut();
+        while let Ok((index, event)) = self.counters_recv.try_recv() {
+            events.push_back((index, event));
         }
-
-        action(&counts[..]);
-        counts.clear();
     }
 }
 

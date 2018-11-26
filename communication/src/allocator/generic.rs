@@ -5,14 +5,15 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 
 use allocator::thread::ThreadBuilder;
 use allocator::process::ProcessBuilder as TypedProcessBuilder;
-use allocator::{Allocate, AllocateBuilder, Message, Thread, Process};
+use allocator::{Allocate, AllocateBuilder, Event, Thread, Process};
 use allocator::zero_copy::allocator_process::{ProcessBuilder, ProcessAllocator};
 use allocator::zero_copy::allocator::{TcpBuilder, TcpAllocator};
 
-use {Push, Pull, Data};
+use {Push, Pull, Data, Message};
 
 /// Enumerates known implementors of `Allocate`.
 /// Passes trait method calls on to members.
@@ -56,29 +57,29 @@ impl Generic {
         }
     }
     /// Perform work before scheduling operators.
-    fn receive(&mut self, action: impl FnMut(&[(usize,i64)])) {
+    fn receive(&mut self) {
         match self {
-            &mut Generic::Thread(ref mut t) => t.receive(action),
-            &mut Generic::Process(ref mut p) => p.receive(action),
-            &mut Generic::ProcessBinary(ref mut pb) => pb.receive(action),
-            &mut Generic::ZeroCopy(ref mut z) => z.receive(action),
+            &mut Generic::Thread(ref mut t) => t.receive(),
+            &mut Generic::Process(ref mut p) => p.receive(),
+            &mut Generic::ProcessBinary(ref mut pb) => pb.receive(),
+            &mut Generic::ZeroCopy(ref mut z) => z.receive(),
         }
     }
     /// Perform work after scheduling operators.
-    pub fn flush(&mut self) {
+    pub fn release(&mut self) {
         match self {
-            &mut Generic::Thread(ref mut t) => t.flush(),
-            &mut Generic::Process(ref mut p) => p.flush(),
-            &mut Generic::ProcessBinary(ref mut pb) => pb.flush(),
-            &mut Generic::ZeroCopy(ref mut z) => z.flush(),
+            &mut Generic::Thread(ref mut t) => t.release(),
+            &mut Generic::Process(ref mut p) => p.release(),
+            &mut Generic::ProcessBinary(ref mut pb) => pb.release(),
+            &mut Generic::ZeroCopy(ref mut z) => z.release(),
         }
     }
-    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> {
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
         match self {
-            &Generic::Thread(ref t) => t.counts(),
-            &Generic::Process(ref p) => p.counts(),
-            &Generic::ProcessBinary(ref pb) => pb.counts(),
-            &Generic::ZeroCopy(ref z) => z.counts(),
+            &Generic::Thread(ref t) => t.events(),
+            &Generic::Process(ref p) => p.events(),
+            &Generic::ProcessBinary(ref pb) => pb.events(),
+            &Generic::ZeroCopy(ref z) => z.events(),
         }
     }
 }
@@ -90,9 +91,9 @@ impl Allocate for Generic {
         self.allocate(identifier)
     }
 
-    fn receive(&mut self, action: impl FnMut(&[(usize,i64)])) { self.receive(action); }
-    fn flush(&mut self) { self.flush(); }
-    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> { self.counts() }
+    fn receive(&mut self) { self.receive(); }
+    fn release(&mut self) { self.release(); }
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> { self.events() }
 }
 
 

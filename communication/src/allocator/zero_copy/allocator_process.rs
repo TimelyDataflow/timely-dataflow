@@ -8,8 +8,8 @@ use bytes::arc::Bytes;
 
 use networking::MessageHeader;
 
-use {Allocate, allocator::AllocateBuilder, Data, Push, Pull};
-use allocator::Message;
+use {Allocate, Message, Data, Push, Pull};
+use allocator::{AllocateBuilder, Event};
 use allocator::canary::Canary;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
@@ -80,7 +80,7 @@ impl ProcessBuilder {
         ProcessAllocator {
             index: self.index,
             peers: self.peers,
-            counts: Rc::new(RefCell::new(Vec::new())),
+            events: Rc::new(RefCell::new(VecDeque::new())),
             canaries: Rc::new(RefCell::new(Vec::new())),
             staged: Vec::new(),
             sends,
@@ -106,7 +106,7 @@ pub struct ProcessAllocator {
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
 
-    counts: Rc<RefCell<Vec<(usize, i64)>>>,
+    events: Rc<RefCell<VecDeque<(usize, Event)>>>,
 
     canaries: Rc<RefCell<Vec<usize>>>,
 
@@ -148,14 +148,14 @@ impl Allocate for ProcessAllocator {
 
         use allocator::counters::Puller as CountPuller;
         let canary = Canary::new(identifier, self.canaries.clone());
-        let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, self.counts().clone()));
+        let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, self.events().clone()));
 
         (pushes, puller)
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn receive(&mut self, mut action: impl FnMut(&[(usize,i64)])) {
+    fn receive(&mut self) {
 
         // Check for channels whose `Puller` has been dropped.
         let mut canaries = self.canaries.borrow_mut();
@@ -168,7 +168,7 @@ impl Allocate for ProcessAllocator {
         }
         ::std::mem::drop(canaries);
 
-        let mut counts = self.counts.borrow_mut();
+        let mut events = self.events.borrow_mut();
 
         for recv in self.recvs.iter_mut() {
             recv.drain_into(&mut self.staged);
@@ -187,7 +187,7 @@ impl Allocate for ProcessAllocator {
                     let _ = peel.extract_to(40);
 
                     // Increment message count for channel.
-                    counts.push((header.channel, 1));
+                    events.push_back((header.channel, Event::Pushed(1)));
 
                     // Ensure that a queue exists.
                     // We may receive data before allocating, and shouldn't block.
@@ -202,13 +202,10 @@ impl Allocate for ProcessAllocator {
                 }
             }
         }
-
-        action(&counts[..]);
-        counts.clear();
     }
 
     // Perform postparatory work, most likely sending un-full binary buffers.
-    fn flush(&mut self) {
+    fn release(&mut self) {
         // Publish outgoing byte ledgers.
         for send in self.sends.iter_mut() {
             send.borrow_mut().publish();
@@ -224,7 +221,7 @@ impl Allocate for ProcessAllocator {
         // }
     }
 
-    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> {
-        &self.counts
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
+        &self.events
     }
 }

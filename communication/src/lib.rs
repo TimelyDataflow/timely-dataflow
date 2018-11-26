@@ -119,12 +119,17 @@ pub trait Data : Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static { }
 impl<T: Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
 
 /// Pushing elements of type `T`.
+///
+/// This trait moves data around using references rather than ownership,
+/// which provides the opportunity for zero-copy operation. In the call
+/// to `push(element)` the implementor can *swap* some other value to
+/// replace `element`, effectively returning the value to the caller.
+///
+/// Conventionally, a sequence of calls to `push()` should conclude with
+/// a call of `push(&mut None)` or `done()` to signal to implementors that
+/// another call to `push()` may not be coming.
 pub trait Push<T> {
-    /// Pushes `element` and provides the opportunity to take ownership.
-    ///
-    /// The value of `element` after the call may be changed. A change does not imply anything other
-    /// than that the implementor took resources associated with `element` and is returning other
-    /// resources.
+    /// Pushes `element` with the opportunity to take ownership.
     fn push(&mut self, element: &mut Option<T>);
     /// Pushes `element` and drops any resulting resources.
     #[inline(always)]
@@ -143,10 +148,12 @@ impl<T, P: ?Sized + Push<T>> Push<T> for Box<P> {
 pub trait Pull<T> {
     /// Pulls an element and provides the opportunity to take ownership.
     ///
-    /// The receiver may mutate the result, in particular take ownership of the data by replacing
-    /// it with other data or even `None`.
+    /// The puller may mutate the result, in particular take ownership of the data by
+    /// replacing it with other data or even `None`. This allows the puller to return
+    /// resources to the implementor.
+    ///
     /// If `pull` returns `None` this conventionally signals that no more data is available
-    /// at the moment.
+    /// at the moment, and the puller should find something better to do.
     fn pull(&mut self) -> &mut Option<T>;
     /// Takes an `Option<T>` and leaves `None` behind.
     #[inline(always)]

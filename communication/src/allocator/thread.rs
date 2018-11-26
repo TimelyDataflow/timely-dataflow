@@ -4,10 +4,10 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use allocator::{Allocate, AllocateBuilder, Message};
+use allocator::{Allocate, AllocateBuilder, Event};
 use allocator::counters::Pusher as CountPusher;
 use allocator::counters::Puller as CountPuller;
-use {Push, Pull};
+use {Push, Pull, Message};
 
 /// Builder for single-threaded allocator.
 pub struct ThreadBuilder;
@@ -21,18 +21,18 @@ impl AllocateBuilder for ThreadBuilder {
 /// An allocator for intra-thread communication.
 pub struct Thread {
     /// Shared counts of messages in channels.
-    counts: Rc<RefCell<Vec<(usize, i64)>>>,
+    events: Rc<RefCell<VecDeque<(usize, Event)>>>,
 }
 
 impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
     fn allocate<T: 'static>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
-        let (pusher, puller) = Thread::new_from(identifier, self.counts.clone());
+        let (pusher, puller) = Thread::new_from(identifier, self.events.clone());
         (vec![Box::new(pusher)], Box::new(puller))
     }
-    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> {
-        &self.counts
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
+        &self.events
     }
 }
 
@@ -45,19 +45,19 @@ impl Thread {
     /// Allocates a new thread-local channel allocator.
     pub fn new() -> Self {
         Thread {
-            counts: Rc::new(RefCell::new(Vec::new())),
+            events: Rc::new(RefCell::new(VecDeque::new())),
         }
     }
 
     /// Creates a new thread-local channel from an identifier and shared counts.
-    pub fn new_from<T: 'static>(identifier: usize, counts: Rc<RefCell<Vec<(usize, i64)>>>)
+    pub fn new_from<T: 'static>(identifier: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>)
         -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>)
     {
         let shared = Rc::new(RefCell::new((VecDeque::<Message<T>>::new(), VecDeque::<Message<T>>::new())));
         let pusher = Pusher { target: shared.clone() };
-        let pusher = CountPusher::new(pusher, identifier, counts.clone());
+        let pusher = CountPusher::new(pusher, identifier, events.clone());
         let puller = Puller { source: shared, current: None };
-        let puller = CountPuller::new(puller, identifier, counts.clone());
+        let puller = CountPuller::new(puller, identifier, events.clone());
         (pusher, puller)
     }
 }

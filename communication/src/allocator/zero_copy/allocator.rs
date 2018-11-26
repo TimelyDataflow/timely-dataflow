@@ -8,9 +8,9 @@ use bytes::arc::Bytes;
 
 use networking::MessageHeader;
 
-use {Allocate, Data, Push, Pull};
+use {Allocate, Message, Data, Push, Pull};
 use allocator::AllocateBuilder;
-use allocator::{Message, Process};
+use allocator::{Event, Process};
 use allocator::process::ProcessBuilder;
 use allocator::canary::Canary;
 
@@ -165,14 +165,14 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
         use allocator::counters::Puller as CountPuller;
         let canary = Canary::new(identifier, self.canaries.clone());
-        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.inner.counts().clone()));
+        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.events().clone()));
 
         (pushes, puller, )
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn receive(&mut self, action: impl FnMut(&[(usize,i64)])) {
+    fn receive(&mut self) {
 
         // Check for channels whose `Puller` has been dropped.
         let mut canaries = self.canaries.borrow_mut();
@@ -185,48 +185,46 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
         }
         ::std::mem::drop(canaries);
 
+        self.inner.receive();
+
         for recv in self.recvs.iter_mut() {
             recv.drain_into(&mut self.staged);
         }
 
-        {   // scoped to let borrow on counts drop.
-            let mut counts = self.inner.counts().borrow_mut();
+        let mut events = self.inner.events().borrow_mut();
 
-            for mut bytes in self.staged.drain(..) {
+        for mut bytes in self.staged.drain(..) {
 
-                // We expect that `bytes` contains an integral number of messages.
-                // No splitting occurs across allocations.
-                while bytes.len() > 0 {
+            // We expect that `bytes` contains an integral number of messages.
+            // No splitting occurs across allocations.
+            while bytes.len() > 0 {
 
-                    if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
+                if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
 
-                        // Get the header and payload, ditch the header.
-                        let mut peel = bytes.extract_to(header.required_bytes());
-                        let _ = peel.extract_to(40);
+                    // Get the header and payload, ditch the header.
+                    let mut peel = bytes.extract_to(header.required_bytes());
+                    let _ = peel.extract_to(40);
 
-                        // Increment message count for channel.
-                        counts.push((header.channel, 1));
+                    // Increment message count for channel.
+                    events.push_back((header.channel, Event::Pushed(1)));
 
-                        // Ensure that a queue exists.
-                        // We may receive data before allocating, and shouldn't block.
-                        self.to_local
-                            .entry(header.channel)
-                            .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
-                            .borrow_mut()
-                            .push_back(peel);
-                    }
-                    else {
-                        println!("failed to read full header!");
-                    }
+                    // Ensure that a queue exists.
+                    // We may receive data before allocating, and shouldn't block.
+                    self.to_local
+                        .entry(header.channel)
+                        .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
+                        .borrow_mut()
+                        .push_back(peel);
+                }
+                else {
+                    println!("failed to read full header!");
                 }
             }
         }
-
-        self.inner.receive(action);
     }
 
     // Perform postparatory work, most likely sending un-full binary buffers.
-    fn flush(&mut self) {
+    fn release(&mut self) {
         // Publish outgoing byte ledgers.
         for send in self.sends.iter_mut() {
             send.borrow_mut().publish();
@@ -241,7 +239,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
         //     }
         // }
     }
-    fn counts(&self) -> &Rc<RefCell<Vec<(usize, i64)>>> {
-        self.inner.counts()
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
+        self.inner.events()
     }
 }
