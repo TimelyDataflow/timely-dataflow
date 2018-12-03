@@ -72,7 +72,7 @@
 //! assert_eq!(results[2], ((Location::new_target(2, 0), 17), -1));
 //! ```
 
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
 
 use progress::Timestamp;
@@ -478,37 +478,6 @@ impl<T:Timestamp> Tracker<T> {
     /// A mutable reference to the pushed results of changes.
     pub fn pushed(&mut self) -> &mut ChangeBatch<(Location, T)> {
         &mut self.pushed_changes
-    }
-
-    /// A reference to the minimal pointstamps in the scope.
-    pub fn global(&self) -> &HashSet<(Location, T)> {
-
-        // A pointstamp (location, timestamp) is in the global frontier exactly when:
-        //
-        //  1. `self.pointstamps[location]` has count[timestamp] > 0.
-        //  2. `self.implications[location]` has count[timestamp] == 1.
-        //
-        // Such a pointstamp would, if removed, cause a change to `self.implications`,
-        // which is what we track for per operator input frontiers. If the above do not
-        // hold, then its removal either 1. shouldn't be possible, or 2. will not affect
-        // the output of `self.implications`.
-        //
-        // As we grind through changes to `self.implications` we *should* be able to
-        // notice changes to the above properties. At least, we can notice as the counts
-        // for `self.implications` changes to and from 1.
-
-        // There are some monotonicity properties we could perhaps exploit. A pointstamp
-        // may have its `self.poinstamps` incremented to non-zero only when it is in
-        // advance of its `self.implications`, it may then enter the global frontier
-        // when this count goes to one, and it may then depart when its count goes to zero.
-        // A pointstamp cannot return to the global frontier once departed.
-
-        // Alternately, perhaps, we could just have a slighly more complicated test for
-        // "is in global frontier" where we just test these properties for stashed updates.
-        // We might need to re-check for many (all?) stashed updates, unless we can track
-        // which have potentially changed (which we can do, I think).
-
-        unimplemented!()
     }
 
     /// Indicates if pointstamp is in the scope-wide frontier.

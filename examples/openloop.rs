@@ -15,6 +15,9 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
 
+        // re-synchronize all workers (account for start-up).
+        timely::synchronization::Barrier::new(worker).wait();
+
         let timer = std::time::Instant::now();
 
         let mut input = InputHandle::new();
@@ -66,7 +69,7 @@ fn main() {
             //
             //   1. Wait until previous batch acknowledged.
             //   2. Tick at most once every millisecond-ish.
-            //   3. Geometrically increasing outstanding batches.
+            //   3. Geometrically increase outstanding batches.
 
             // Technique 1:
             // let target_ns = if acknowledged_ns >= inserted_ns { elapsed_ns } else { inserted_ns };
@@ -78,6 +81,7 @@ fn main() {
             let scale = (inserted_ns - acknowledged_ns).next_power_of_two();
             let target_ns = elapsed_ns & !(scale - 1);
 
+            // Common for each technique.
             if inserted_ns < target_ns {
 
                 while ((insert_counter * ns_per_request) as u64) < target_ns {
