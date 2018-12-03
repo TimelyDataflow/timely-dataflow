@@ -11,7 +11,7 @@ use communication::{Data, Push, Pull};
 use communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use logging::TimelyLogger as Logger;
 use worker::AsWorker;
-use activate::Activations;
+use activate::{Activations, ActivationHandle};
 
 use super::{ScopeParent, Scope};
 
@@ -67,6 +67,9 @@ where
     }
     fn activations(&self) -> Rc<RefCell<Activations>> {
         self.parent.activations()
+    }
+    fn activator_for(&self, path: &[usize]) -> ActivationHandle {
+        self.parent.activator_for(path)
     }
 }
 

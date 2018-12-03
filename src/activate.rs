@@ -1,79 +1,58 @@
 //! Parking and unparking timely fibers.
 
-use progress::ChangeBatch;
+use std::collections::BTreeSet;
+use std::collections::btree_set::Range;
 
-/// A tree-structured representation of active tasks.
+/// Tracks a set of active paths.
+///
+/// This struct is currently based on a BTreeSet<Vec<usize>>,
+/// whereas it could be more efficiently packed with fewer
+/// allocations, especially in its methods which require some
+/// allocations.
 pub struct Activations {
-    /// Indicates that this specific location is active.
-    active: bool,
-    /// Activity counts for immediate children.
-    active_children: ChangeBatch<usize>,
-    /// All activation states for immediate children.
-    child_activations: Vec<Activations>,
+    active: BTreeSet<Vec<usize>>,
 }
 
 impl Activations {
-
-    /// Parks the task described by `path`.
-
-    pub fn park(&mut self, path: &[usize]) {
-        if self.is_active(path) {
-            self.change_path(path, -1);
-        }
-    }
-
-    /// Unparks the task described by `path`.
-    pub fn unpark(&mut self, path: &[usize]) {
-        if !self.is_active(path) {
-            self.change_path(path, 1);
-        }
-    }
-
-    /// Enumerates the active children of the task described by `path`.
-    pub fn active_children<'a>(&'a mut self, path: &[usize]) -> impl Iterator<Item=usize>+'a {
-        self.ensure(path)
-            .active_children
-            .iter()
-            .cloned()
-            .map(|(child,_diff)| child)
-    }
-
-    /// Allocates a new empty `Activations`.
+    /// Allocates a new activation tracker.
     pub fn new() -> Self {
-        Activations {
-            active: false,
-            active_children: ChangeBatch::new(),
-            child_activations: Vec::new(),
+        Self { active: BTreeSet::new() }
+    }
+    /// Mark a path as inactive.
+    pub fn park(&mut self, path: &[usize]) {
+        self.active.remove(path);
+    }
+    /// Mark a path as active.
+    pub fn unpark(&mut self, path: &[usize]) {
+        self.active.insert(path.to_vec());
+    }
+    /// Return active paths in an interval.
+    pub fn range(&self, lower: &[usize], upper: &[usize]) -> Range<Vec<usize>> {
+        let lower = lower.to_vec();
+        let upper = upper.to_vec();
+        self.active.range(lower .. upper)
+    }
+}
+
+use std::rc::Rc;
+use std::cell::RefCell;
+
+/// A handle to activate a specific path.
+pub struct ActivationHandle {
+    path: Vec<usize>,
+    queue: Rc<RefCell<Vec<Vec<usize>>>>,
+}
+
+impl ActivationHandle {
+    /// Creates a new activation handle
+    pub fn new(path: &[usize], queue: Rc<RefCell<Vec<Vec<usize>>>>) -> Self {
+        Self {
+            path: path.to_vec(),
+            queue,
         }
     }
-
-    /// Ensures that a child path exists,
-    pub fn is_active(&mut self, path: &[usize]) -> bool {
-        self.ensure(path).active
+    /// Activates the associated path.
+    pub fn activate(&self) {
+        self.queue.borrow_mut().push(self.path.clone());
     }
-
-    /// Applies a change to the active counts along a path.
-    fn change_path(&mut self, path: &[usize], delta: i64) -> bool {
-        let mut node = self;
-        for &child in path.iter() {
-            node.active_children.update(child, delta);
-            let temp = node;    // borrow to explain to Rust.
-            node = &mut temp.child_activations[child];
-        }
-        node.active
-    }
-
-    /// Ensures, returns a reference to the state at a path.
-    fn ensure(&mut self, path: &[usize]) -> &mut Activations {
-        let mut node = self;
-        for &child in path.iter() {
-            while node.child_activations.len() <= child {
-                node.child_activations.push(Activations::new());
-            }
-            let temp = node;    // borrow to explain to Rust.
-            node = &mut temp.child_activations[child];
-        }
-        node
-    }
-
 }

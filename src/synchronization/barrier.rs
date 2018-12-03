@@ -6,7 +6,6 @@ use worker::Worker;
 
 /// A re-usable barrier synchronization mechanism.
 pub struct Barrier<A: Allocate> {
-    round: usize,
     input: InputHandle<usize, ()>,
     probe: ProbeHandle<usize>,
     worker: Worker<A>,
@@ -21,19 +20,35 @@ impl<A: Allocate> Barrier<A> {
             let (handle, stream) = scope.new_input::<()>();
             (handle, stream.probe())
         });
-        Barrier { round: 0, input, probe, worker: worker.clone() }
+        Barrier { input, probe, worker: worker.clone() }
     }
 
     /// Blocks until all other workers have reached this barrier.
     ///
-    /// This method does *not* block dataflow execution, which continues to execute while
-    /// we await the arrival of the other workers.
+    /// This method does *not* block dataflow execution, which continues
+    /// to execute while we await the arrival of the other workers.
     pub fn wait(&mut self) {
-        self.round += 1;
-        self.input.advance_to(self.round);
-        while self.probe.less_than(self.input.time()) {
+        self.advance();
+        while !self.reached() {
             self.worker.step();
         }
+    }
+
+    /// Advances this worker to the next barrier stage.
+    ///
+    /// This change is not communicated until `worker.step()` is called.
+    #[inline]
+    pub fn advance(&mut self) {
+        let round = *self.input.time();
+        self.input.advance_to(round + 1);
+    }
+
+    /// Indicates that the barrier has been reached by all workers.
+    ///
+    /// This method may not change until `worker.step()` is called.
+    #[inline]
+    pub fn reached(&mut self) -> bool {
+        !self.probe.less_than(self.input.time())
     }
 }
 

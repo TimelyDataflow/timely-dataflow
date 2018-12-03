@@ -1,31 +1,17 @@
 //! The root of each single-threaded worker.
 
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::any::Any;
 use std::time::Instant;
 
-use activate::Activations;
+use activate::{Activations, ActivationHandle};
 use progress::timestamp::{Refines};
 use progress::{Timestamp, SubgraphBuilder};
 use progress::operate::{Schedule, Operate};
 use communication::{Allocate, Data, Push, Pull};
 use communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use dataflow::scopes::Child;
-
-/// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
-/// and has a list of dataflows that it manages.
-pub struct Worker<A: Allocate> {
-    timer: Instant,
-    allocator: Rc<RefCell<A>>,
-    identifiers: Rc<RefCell<usize>>,
-    dataflows: Rc<RefCell<Vec<Wrapper>>>,
-    dataflow_counter: Rc<RefCell<usize>>,
-    logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
-
-    activations: Rc<RefCell<Activations>>,
-    messages: Vec<i64>,
-}
 
 
 /// Methods provided by the root Worker.
@@ -62,24 +48,52 @@ pub trait AsWorker {
     fn logging(&self) -> Option<::logging::TimelyLogger> { self.log_register().get("timely") }
     /// Provides a shared handle to the activation scheduler.
     fn activations(&self) -> Rc<RefCell<Activations>>;
+    ///
+    fn activator_for(&self, path: &[usize]) -> ActivationHandle;
+}
+
+/// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
+/// and has a list of dataflows that it manages.
+pub struct Worker<A: Allocate> {
+    timer: Instant,
+    paths: Vec<Vec<usize>>,
+    allocator: Rc<RefCell<A>>,
+    identifiers: Rc<RefCell<usize>>,
+    dataflows: Rc<RefCell<Vec<Wrapper>>>,
+    dataflow_counter: Rc<RefCell<usize>>,
+    logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
+
+    activations: Rc<RefCell<Activations>>,
+    activation_queue: Rc<RefCell<Vec<Vec<usize>>>>,
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
     fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
+        while self.paths.len() <= identifier {
+            self.paths.push(Vec::new());
+        }
+        self.paths[identifier] = address.to_vec();
         self.allocator.borrow_mut().allocate(identifier)
     }
     fn pipeline<T: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
+        while self.paths.len() <= identifier {
+            self.paths.push(Vec::new());
+        }
+        self.paths[identifier] = address.to_vec();
         self.allocator.borrow_mut().pipeline(identifier)
     }
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
-    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
+    fn log_register(&self) -> RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.log_register()
     }
     fn activations(&self) -> Rc<RefCell<Activations>> {
         self.activations.clone()
+    }
+    fn activator_for(&self, path: &[usize]) -> ActivationHandle {
+        ActivationHandle::new(path, self.activation_queue.clone())
     }
 }
 
@@ -90,13 +104,14 @@ impl<A: Allocate> Worker<A> {
         let index = c.index();
         Worker {
             timer: now.clone(),
+            paths: Vec::new(),
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
             logging: Rc::new(RefCell::new(::logging_core::Registry::new(now, index))),
             activations: Rc::new(RefCell::new(Activations::new())),
-            messages: Vec::new(),
+            activation_queue: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
@@ -106,49 +121,46 @@ impl<A: Allocate> Worker<A> {
     /// main way to ensure that a computation proceeds.
     pub fn step(&mut self) -> bool {
 
-        // We should probably activate any operator who receives a message
-        // in a channel whose total ends up strictly positive. This excludes
-        // folks who receive and the process those messages, but not folks who had
-        // residual messages, processed them, and then received some more.
-        let mut allocator = self.allocator.borrow_mut();
-
-        allocator.receive();
-
-        // TODO: This should surely be a hash map, or a map to a dataflow-
-        // specific vector, rather than a channel-id keyed vector.
-        let messages = &mut self.messages;
-        {
-            let events = allocator.events().clone();
-            let mut borrow = events.borrow_mut();
-            for (channel, event) in borrow.drain(..) {
-                while messages.len() <= channel {
-                    messages.push(0);
-                }
-                use communication::allocator::Event;
-                match event {
-                    Event::Pushed(count) => messages[channel] += count as i64,
-                    Event::Pulled(count) => messages[channel] -= count as i64,
-                }
-                // println!("messages: {:?}", messages);
+        {   // Drain external activations. Scoped to let borrow drop.
+            let mut activation_queue = self.activation_queue.borrow_mut();
+            for path in activation_queue.drain(..) {
+                self.activations.borrow_mut().unpark(&path[..]);
             }
         }
 
-        let mut active = false;
-        for dataflow in self.dataflows.borrow_mut().iter_mut() {
-            let sub_active = dataflow.step();
-            active = active || sub_active;
+        {   // Process channel events. Activate responders.
+            let mut allocator = self.allocator.borrow_mut();
+            allocator.receive();
+            let events = allocator.events().clone();
+            let mut borrow = events.borrow_mut();
+            for (channel, _event) in borrow.drain(..) {
+                // TODO: Pay more attent to `_event`.
+                // Consider tracking whether a channel
+                // in non-empty, and only activating
+                // on the basis of non-empty channels.
+                self.activations
+                    .borrow_mut()
+                    .unpark(&self.paths[channel][..]);
+            }
         }
 
-        // discard completed dataflows.
-        self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
+        // Step each dataflow once.
+        self.dataflows
+            .borrow_mut()
+            .iter_mut()
+            .for_each(|dataflow| { dataflow.step(); });
 
-        // TODO(andreal) do we want to flush logs here?
+        // Flush logging infrastructure.
         self.logging.borrow_mut().flush();
 
-        allocator.release();
+        // Flush communication infrastructure.
+        self.allocator.borrow_mut().release();
 
-        active
+        // Discard completed dataflows, indicate non-emptiness.
+        self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
+        !self.dataflows.borrow().is_empty()
     }
+
     /// Calls `self.step()` as long as `func` evaluates to true.
     pub fn step_while<F: FnMut()->bool>(&mut self, mut func: F) {
         while func() { self.step(); }
@@ -226,7 +238,7 @@ impl<A: Allocate> Worker<A> {
 
     }
 
-    // sane way to get new dataflow identifiers; used to be self.dataflows.len(). =/
+    // Acquire a new distinct dataflow identifier.
     fn allocate_dataflow_index(&mut self) -> usize {
         *self.dataflow_counter.borrow_mut() += 1;
         *self.dataflow_counter.borrow() - 1
@@ -239,13 +251,14 @@ impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {
         Worker {
             timer: self.timer,
+            paths: self.paths.clone(),
             allocator: self.allocator.clone(),
             identifiers: self.identifiers.clone(),
             dataflows: self.dataflows.clone(),
             dataflow_counter: self.dataflow_counter.clone(),
             logging: self.logging.clone(),
             activations: self.activations.clone(),
-            messages: self.messages.clone(),
+            activation_queue: self.activation_queue.clone(),
         }
     }
 }
