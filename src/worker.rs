@@ -138,6 +138,7 @@ impl<A: Allocate> Worker<A> {
                 // in non-empty, and only activating
                 // on the basis of non-empty channels.
                 let path = &self.paths.borrow_mut()[channel][..];
+                // println!("Message for {:?}", path);
                 self.activations
                     .borrow_mut()
                     .unpark(path);

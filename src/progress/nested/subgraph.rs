@@ -270,8 +270,7 @@ where
         //
         // Progress tracking correctness relies on the atomic exchange of batches.
         // Progress tracking liveness relies on the eventual exchange of batches.
-        self.progcaster.send_and_recv(&mut self.local_pointstamp);
-        self.local_pointstamp.drain_into(&mut self.final_pointstamp);
+        self.progcaster.recv(&mut self.final_pointstamp);
 
         self.propagate_pointstamps();   // Commit and propagate final pointstamps.
 
@@ -302,10 +301,18 @@ where
             }
         }
 
-        // Active iff any active child or outstanding capabilities, messages.
-        // TODO: This may become incorrect if we do not re-execute every active
-        //       child every iteration.
-        self.incomplete_count > 0 || self.pointstamp_tracker.tracking_anything()
+        // Having activated various children, we should communicate progress updates.
+        self.progcaster.send(&mut self.local_pointstamp);
+
+        // If child scopes surface more final pointstamp updates we must re-execute.
+        if !self.final_pointstamp.is_empty() {
+            self.activations.borrow_mut().unpark(&self.path[..]);
+        }
+
+        let incomplete = self.incomplete_count > 0;
+        let tracking = self.pointstamp_tracker.tracking_anything();
+
+        incomplete || tracking
     }
 }
 
