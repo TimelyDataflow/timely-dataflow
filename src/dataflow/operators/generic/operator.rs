@@ -523,13 +523,17 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 ///
 /// # Examples
 /// ```
+/// use timely::scheduling::Scheduler;
 /// use timely::dataflow::operators::Inspect;
 /// use timely::dataflow::operators::generic::operator::source;
 /// use timely::dataflow::Scope;
 ///
 /// timely::example(|scope| {
 ///
-///     source(scope, "Source", |capability, _info| {
+///     source(scope, "Source", |capability, info| {
+///
+///         let activator = scope.activator_for(&info.address[..]);
+///
 ///         let mut cap = Some(capability);
 ///         move |output| {
 ///
@@ -546,6 +550,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 ///             }
 ///
 ///             if done { cap = None; }
+///             else    { activator.activate(); }
 ///         }
 ///     })
 ///     .inspect(|x| println!("number: {:?}", x));

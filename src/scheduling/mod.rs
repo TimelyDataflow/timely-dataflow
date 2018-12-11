@@ -24,4 +24,10 @@ pub trait Schedule {
 pub trait Scheduler {
     /// Provides a shared handle to the activation scheduler.
     fn activations(&self) -> Rc<RefCell<Activations>>;
+    ///
+    fn activator_for(&self, path: &[usize]) -> ActivationHandle {
+        let activations = self.activations().clone();
+        let activator = activations.borrow_mut().activator_for(path);
+        activator
+    }
 }

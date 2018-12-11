@@ -43,6 +43,16 @@ impl Activations {
         let upper = upper.to_vec();
         self.active.range(lower .. upper)
     }
+
+    /// Determines if an active path extends `path`.
+    pub fn active_extension(&self, path: &[usize]) -> bool {
+        self.active
+            .range(path.to_vec() ..)
+            .next()
+            .map(|next| next.len() >= path.len() && &next[..path.len()] == path)
+            .unwrap_or(false)
+    }
+
     /// Creates a capability to activate `path`.
     pub fn activator_for(&self, path: &[usize]) -> ActivationHandle {
         ActivationHandle::new(path, self.queued.clone())

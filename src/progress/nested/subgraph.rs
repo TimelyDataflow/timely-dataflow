@@ -11,6 +11,8 @@ use std::cell::RefCell;
 use logging::TimelyLogger as Logger;
 
 use scheduling::Schedule;
+use scheduling::activate::Activations;
+
 use progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
 use progress::{Timestamp, Operate, operate::SharedProgress};
 use progress::{Location, Port, Source, Target};
@@ -166,11 +168,18 @@ where
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 
+        let mut incomplete = vec![true; self.children.len()];
+        incomplete[0] = false;
+        let incomplete_count = incomplete.len() - 1;
+
         Subgraph {
             name: self.name,
             path: self.path,
             inputs,
             outputs,
+            incomplete,
+            incomplete_count,
+            activations: worker.activations().clone(),
             children: self.children,
             input_messages: self.input_messages,
             output_capabilities: self.output_capabilities,
@@ -197,8 +206,7 @@ where
     TOuter: Timestamp,
     TInner: Timestamp+Refines<TOuter>,
 {
-
-    name: String,           // a helpful name (often "Subgraph").
+    name: String,           // an informative name.
     /// Path of identifiers from the root.
     pub path: Vec<usize>,
     inputs: usize,          // number of inputs.
@@ -206,6 +214,12 @@ where
 
     // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
     children: Vec<PerOperatorState<TInner>>,
+
+    incomplete: Vec<bool>,   // the incompletion status of each child.
+    incomplete_count: usize, // the number of incomplete children.
+
+    // shared activations (including children).
+    activations: Rc<RefCell<Activations>>,
 
     // shared state written to by the datapath, counting records entering this subgraph instance.
     input_messages: Vec<Rc<RefCell<ChangeBatch<TInner>>>>,
@@ -265,16 +279,33 @@ where
         //
         // We should be able to schedule arbitrary subsets of children, as
         // long as we eventually schedule all children that need to do work.
-        let mut any_child_active = false;
         for index in 1 .. self.children.len() {
-            let child_active = self.activate_child(index);
-            any_child_active = any_child_active || child_active;
+
+            // We could schedule the child because we have frontier changes to communicate.
+            let any_progress = self.children[index].shared_progress.borrow_mut().frontiers.iter_mut().any(|x| !x.is_empty());
+
+            // We could schedule the child if any extension of its path is active.
+            let mut path = self.path.clone();
+            path.push(index);
+            let any_active = self.activations.borrow_mut().active_extension(&path[..]);
+
+            // Schedule if active extensions, or progress updates.
+            if any_progress || any_active {
+
+                // Schedule child, record new "incomplete" bit.
+                let child_active = self.activate_child(index);
+                if child_active != self.incomplete[index] {
+                    if child_active { self.incomplete_count += 1; }
+                    else            { self.incomplete_count -= 1; }
+                    self.incomplete[index] = child_active;
+                }
+            }
         }
 
         // Active iff any active child or outstanding capabilities, messages.
         // TODO: This may become incorrect if we do not re-execute every active
         //       child every iteration.
-        any_child_active || self.pointstamp_tracker.tracking_anything()
+        self.incomplete_count > 0 || self.pointstamp_tracker.tracking_anything()
     }
 }
 

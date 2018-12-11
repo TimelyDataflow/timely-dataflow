@@ -34,8 +34,7 @@ impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::
         source(scope, "ToStream", |capability, info| {
 
             // Acquire an activator, so that the operator can rescheduled itself.
-            let cloned = scope.activations().clone();
-            let activator = cloned.borrow_mut().activator_for(&info.address[..]);
+            let activator = scope.activator_for(&info.address[..]);
 
             let mut iterator = self.into_iter().fuse();
             let mut capability = Some(capability);
