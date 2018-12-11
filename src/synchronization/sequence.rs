@@ -42,7 +42,7 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
             let mut vector = Vec::new();
 
             // a source that attempts to pull from `recv` and produce commands for everyone
-            source(dataflow, "SequenceInput", move |capability| {
+            source(dataflow, "SequenceInput", move |capability, _info| {
 
                 // so we can drop, if input queue vanishes.
                 let mut capability = Some(capability);

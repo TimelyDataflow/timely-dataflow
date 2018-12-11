@@ -4,8 +4,11 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
+use scheduling::Schedule;
+use scheduling::activate::ActivationHandle;
+
 use progress::frontier::Antichain;
-use progress::{Operate, operate::{Schedule, SharedProgress}, Timestamp, ChangeBatch};
+use progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use progress::Source;
 
 use Data;
@@ -108,6 +111,10 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         let mut address = self.addr();
         address.push(index);
 
+        let activations = self.activations().clone();
+        let activator = activations.borrow_mut().activator_for(&address[..]);
+        handle.activate.push(activator);
+
         let progress = Rc::new(RefCell::new(ChangeBatch::new()));
 
         handle.register(counter, progress.clone());
@@ -166,6 +173,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct Handle<T: Timestamp, D: Data> {
+    activate: Vec<ActivationHandle>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     pushers: Vec<Counter<T, D, Tee<T, D>>>,
     buffer1: Vec<D>,
@@ -203,6 +211,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// ```
     pub fn new() -> Self {
         Handle {
+            activate: Vec::new(),
             progress: Vec::new(),
             pushers: Vec::new(),
             buffer1: Vec::with_capacity(Message::<T, D>::default_length()),
@@ -287,6 +296,10 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         }
         for progress in self.progress.iter() {
             progress.borrow_mut().update(self.now_at.clone(), -1);
+        }
+        // Alert worker of each active input operator.
+        for activate in self.activate.iter() {
+            activate.activate();
         }
     }
 

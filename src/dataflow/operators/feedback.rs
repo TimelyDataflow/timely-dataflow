@@ -6,7 +6,8 @@ use std::cell::RefCell;
 use Data;
 use communication::Push;
 
-use progress::{Timestamp, Operate, operate::{Schedule, SharedProgress}, PathSummary};
+use scheduling::Schedule;
+use progress::{Timestamp, Operate, operate::SharedProgress, PathSummary};
 use progress::frontier::Antichain;
 use progress::{Source, Target};
 use order::Product;

@@ -3,15 +3,16 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use communication::{Data, Push, Pull};
+use communication::allocator::thread::{ThreadPusher, ThreadPuller};
+use scheduling::Scheduler;
+use scheduling::activate::Activations;
 use progress::{Timestamp, Operate, SubgraphBuilder};
 use progress::{Source, Target};
 use progress::timestamp::Refines;
 use order::Product;
-use communication::{Data, Push, Pull};
-use communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use logging::TimelyLogger as Logger;
 use worker::AsWorker;
-use activate::{Activations, ActivationHandle};
 
 use super::{ScopeParent, Scope};
 
@@ -65,11 +66,15 @@ where
     fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.parent.log_register()
     }
+}
+
+impl<'a, G, T> Scheduler for Child<'a, G, T>
+where
+    G: ScopeParent,
+    T: Timestamp+Refines<G::Timestamp>
+{
     fn activations(&self) -> Rc<RefCell<Activations>> {
         self.parent.activations()
-    }
-    fn activator_for(&self, path: &[usize]) -> ActivationHandle {
-        self.parent.activator_for(path)
     }
 }
 

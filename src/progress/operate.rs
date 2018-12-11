@@ -3,21 +3,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use scheduling::Schedule;
 use progress::{Timestamp, ChangeBatch, Antichain};
-
-/// A type that can be scheduled.
-pub trait Schedule {
-
-    /// A descriptive name for the operator
-    fn name(&self) -> &str;
-
-    /// An address identifying the operator.
-    fn path(&self) -> &[usize];
-
-    /// Schedules the operator, with information about child requests.
-    fn schedule(&mut self) -> bool;
-
-}
 
 /// Methods for describing an operators topology, and the progress it makes.
 pub trait Operate<T: Timestamp> : Schedule {

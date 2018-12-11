@@ -31,7 +31,12 @@ pub trait ToStream<T: Timestamp, D: Data> {
 impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::Item: Data {
     fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, I::Item> {
 
-        source(scope, "ToStream", |capability| {
+        source(scope, "ToStream", |capability, info| {
+
+            // Acquire an activator, so that the operator can rescheduled itself.
+            let cloned = scope.activations().clone();
+            let activator = cloned.borrow_mut().activator_for(&info.address[..]);
+
             let mut iterator = self.into_iter().fuse();
             let mut capability = Some(capability);
 
@@ -43,6 +48,7 @@ impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::
                     for element in iterator.by_ref().take((256 * Message::<T, I::Item>::default_length()) - 1) {
                         session.give(element);
                     }
+                    activator.activate();
                 }
                 else {
                     capability = None;

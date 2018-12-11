@@ -97,7 +97,7 @@ pub mod order;
 pub mod logging;
 // pub mod log_events;
 
-pub mod activate;
+pub mod scheduling;
 
 /// A composite trait for types usable as data in timely dataflow.
 ///

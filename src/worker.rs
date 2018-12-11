@@ -5,19 +5,20 @@ use std::cell::{RefCell, RefMut};
 use std::any::Any;
 use std::time::Instant;
 
-use activate::{Activations, ActivationHandle};
-use progress::timestamp::{Refines};
-use progress::{Timestamp, SubgraphBuilder};
-use progress::operate::{Schedule, Operate};
 use communication::{Allocate, Data, Push, Pull};
 use communication::allocator::thread::{ThreadPusher, ThreadPuller};
+use scheduling::{Schedule, Scheduler};
+use scheduling::activate::Activations;
+use progress::timestamp::{Refines};
+use progress::{Timestamp, SubgraphBuilder};
+use progress::operate::Operate;
 use dataflow::scopes::Child;
 
 
 /// Methods provided by the root Worker.
 ///
 /// These methods are often proxied by child scopes, and this trait provides access.
-pub trait AsWorker {
+pub trait AsWorker : Scheduler {
 
     /// Index of the worker among its peers.
     fn index(&self) -> usize;
@@ -46,17 +47,13 @@ pub trait AsWorker {
     fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>>;
     /// Provides access to the timely logging stream.
     fn logging(&self) -> Option<::logging::TimelyLogger> { self.log_register().get("timely") }
-    /// Provides a shared handle to the activation scheduler.
-    fn activations(&self) -> Rc<RefCell<Activations>>;
-    ///
-    fn activator_for(&self, path: &[usize]) -> ActivationHandle;
 }
 
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a list of dataflows that it manages.
 pub struct Worker<A: Allocate> {
     timer: Instant,
-    paths: Vec<Vec<usize>>,
+    paths: Rc<RefCell<Vec<Vec<usize>>>>,
     allocator: Rc<RefCell<A>>,
     identifiers: Rc<RefCell<usize>>,
     dataflows: Rc<RefCell<Vec<Wrapper>>>,
@@ -64,24 +61,29 @@ pub struct Worker<A: Allocate> {
     logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
 
     activations: Rc<RefCell<Activations>>,
-    activation_queue: Rc<RefCell<Vec<Vec<usize>>>>,
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
     fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
-        while self.paths.len() <= identifier {
-            self.paths.push(Vec::new());
+        if address.len() == 0 { panic!("Unacceptable address: Length zero"); }
+        // println!("Exchange allocation; path: {:?}, identifier: {:?}", address, identifier);
+        let mut paths = self.paths.borrow_mut();
+        while paths.len() <= identifier {
+            paths.push(Vec::new());
         }
-        self.paths[identifier] = address.to_vec();
+        paths[identifier] = address.to_vec();
         self.allocator.borrow_mut().allocate(identifier)
     }
     fn pipeline<T: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
-        while self.paths.len() <= identifier {
-            self.paths.push(Vec::new());
+        if address.len() == 0 { panic!("Unacceptable address: Length zero"); }
+        // println!("Pipeline allocation; path: {:?}, identifier: {:?}", address, identifier);
+        let mut paths = self.paths.borrow_mut();
+        while paths.len() <= identifier {
+            paths.push(Vec::new());
         }
-        self.paths[identifier] = address.to_vec();
+        paths[identifier] = address.to_vec();
         self.allocator.borrow_mut().pipeline(identifier)
     }
 
@@ -89,11 +91,11 @@ impl<A: Allocate> AsWorker for Worker<A> {
     fn log_register(&self) -> RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
         self.log_register()
     }
+}
+
+impl<A: Allocate> Scheduler for Worker<A> {
     fn activations(&self) -> Rc<RefCell<Activations>> {
         self.activations.clone()
-    }
-    fn activator_for(&self, path: &[usize]) -> ActivationHandle {
-        ActivationHandle::new(path, self.activation_queue.clone())
     }
 }
 
@@ -104,14 +106,13 @@ impl<A: Allocate> Worker<A> {
         let index = c.index();
         Worker {
             timer: now.clone(),
-            paths: Vec::new(),
+            paths: Rc::new(RefCell::new(Vec::new())),
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(Vec::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
             logging: Rc::new(RefCell::new(::logging_core::Registry::new(now, index))),
             activations: Rc::new(RefCell::new(Activations::new())),
-            activation_queue: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
@@ -121,12 +122,10 @@ impl<A: Allocate> Worker<A> {
     /// main way to ensure that a computation proceeds.
     pub fn step(&mut self) -> bool {
 
-        {   // Drain external activations. Scoped to let borrow drop.
-            let mut activation_queue = self.activation_queue.borrow_mut();
-            for path in activation_queue.drain(..) {
-                self.activations.borrow_mut().unpark(&path[..]);
-            }
-        }
+        // Drain external activations.
+        self.activations
+            .borrow_mut()
+            .drain_queued();
 
         {   // Process channel events. Activate responders.
             let mut allocator = self.allocator.borrow_mut();
@@ -138,11 +137,17 @@ impl<A: Allocate> Worker<A> {
                 // Consider tracking whether a channel
                 // in non-empty, and only activating
                 // on the basis of non-empty channels.
+                let path = &self.paths.borrow_mut()[channel][..];
                 self.activations
                     .borrow_mut()
-                    .unpark(&self.paths[channel][..]);
+                    .unpark(path);
             }
         }
+
+        // println!("Active operators:");
+        // for path in self.activations.borrow().active.iter() {
+        //     println!("\t{:?}", path);
+        // }
 
         // Step each dataflow once.
         self.dataflows
@@ -258,7 +263,6 @@ impl<A: Allocate> Clone for Worker<A> {
             dataflow_counter: self.dataflow_counter.clone(),
             logging: self.logging.clone(),
             activations: self.activations.clone(),
-            activation_queue: self.activation_queue.clone(),
         }
     }
 }

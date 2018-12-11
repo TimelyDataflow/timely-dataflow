@@ -4,8 +4,9 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
+use scheduling::Schedule;
 use progress::frontier::Antichain;
-use progress::{Operate, operate::{Schedule, SharedProgress}, Timestamp};
+use progress::{Operate, operate::SharedProgress, Timestamp};
 use progress::Source;
 use progress::ChangeBatch;
 

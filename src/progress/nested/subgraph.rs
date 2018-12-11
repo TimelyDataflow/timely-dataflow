@@ -10,8 +10,9 @@ use std::cell::RefCell;
 
 use logging::TimelyLogger as Logger;
 
+use scheduling::Schedule;
 use progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
-use progress::{Timestamp, Operate, operate::{Schedule, SharedProgress}};
+use progress::{Timestamp, Operate, operate::SharedProgress};
 use progress::{Location, Port, Source, Target};
 
 use progress::ChangeBatch;

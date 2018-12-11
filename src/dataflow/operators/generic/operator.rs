@@ -337,8 +337,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P: ParallelizationContract<G::Timestamp, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
-        let index = builder.index();
-        let global = builder.global();
+        let operator_info = builder.operator_info();
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
@@ -346,7 +345,6 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let operator_info = OperatorInfo::new(index, global);
             let mut logic = constructor(capability, operator_info);
             move |frontiers| {
                 let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
@@ -389,8 +387,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P: ParallelizationContract<G::Timestamp, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
-        let index = builder.index();
-        let global = builder.global();
+        let operator_info = builder.operator_info();
 
         let mut input = builder.new_input(self, pact);
         let (mut output, stream) = builder.new_output();
@@ -399,7 +396,6 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let operator_info = OperatorInfo::new(index, global);
             let mut logic = constructor(capability, operator_info);
             move |_frontiers| {
                 let mut output_handle = output.activate();
@@ -422,8 +418,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P2: ParallelizationContract<G::Timestamp, D2> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
-        let index = builder.index();
-        let global = builder.global();
+        let operator_info = builder.operator_info();
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
@@ -432,7 +427,6 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let operator_info = OperatorInfo::new(index, global);
             let mut logic = constructor(capability, operator_info);
             move |frontiers| {
                 let mut input1_handle = FrontieredInputHandle::new(&mut input1, &frontiers[0]);
@@ -484,8 +478,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P2: ParallelizationContract<G::Timestamp, D2> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
-        let index = builder.index();
-        let global = builder.global();
+        let operator_info = builder.operator_info();
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
@@ -495,7 +488,6 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
-            let operator_info = OperatorInfo::new(index, global);
             let mut logic = constructor(capability, operator_info);
             move |_frontiers| {
                 let mut output_handle = output.activate();
@@ -537,7 +529,7 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 ///
 /// timely::example(|scope| {
 ///
-///     source(scope, "Source", |capability| {
+///     source(scope, "Source", |capability, _info| {
 ///         let mut cap = Some(capability);
 ///         move |output| {
 ///
@@ -562,10 +554,11 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
 pub fn source<G: Scope, D, B, L>(scope: &G, name: &str, constructor: B) -> Stream<G, D>
 where
     D: Data,
-    B: FnOnce(Capability<G::Timestamp>) -> L,
+    B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
     L: FnMut(&mut OutputHandle<G::Timestamp, D, Tee<G::Timestamp, D>>)+'static {
 
     let mut builder = OperatorBuilder::new(name.to_owned(), scope.clone());
+    let operator_info = builder.operator_info();
 
     let (mut output, stream) = builder.new_output();
     builder.set_notify(false);
@@ -573,7 +566,7 @@ where
     builder.build(move |mut capabilities| {
         // `capabilities` should be a single-element vector.
         let capability = capabilities.pop().unwrap();
-        let mut logic = constructor(capability);
+        let mut logic = constructor(capability, operator_info);
         move |_frontier| {
             logic(&mut output.activate());
         }
@@ -603,7 +596,7 @@ where
 /// });
 /// ```
 pub fn empty<G: Scope, D: Data>(scope: &G) -> Stream<G, D> {
-    source(scope, "Empty", |_capability| |_output| {
+    source(scope, "Empty", |_capability, _info| |_output| {
         // drop capability, do nothing
     })
 }

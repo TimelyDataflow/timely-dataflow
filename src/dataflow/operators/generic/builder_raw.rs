@@ -10,13 +10,17 @@ use std::cell::RefCell;
 
 use ::Data;
 
+use scheduling::Schedule;
+use scheduling::activate::Activations;
+
 use progress::{Source, Target};
 use progress::ChangeBatch;
-use progress::{Timestamp, Operate, operate::{Schedule, SharedProgress}, Antichain};
+use progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
 use dataflow::{Stream, Scope};
 use dataflow::channels::pushers::Tee;
 use dataflow::channels::pact::ParallelizationContract;
+use dataflow::operators::generic::operator_info::OperatorInfo;
 
 /// Contains type-free information about the operator properties.
 pub struct OperatorShape {
@@ -166,6 +170,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let operator = OperatorCore {
             shape: self.shape,
             address: self.address,
+            activations: self.scope.activations().clone(),
             push_external,
             pull_internal,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
@@ -174,19 +179,23 @@ impl<G: Scope> OperatorBuilder<G> {
 
         self.scope.add_operator_with_indices(Box::new(operator), self.index, self.global);
     }
+
+    /// Information describing the operator.
+    pub fn operator_info(&self) -> OperatorInfo {
+        OperatorInfo::new(self.index, self.global, &self.address[..])
+    }
 }
 
 struct OperatorCore<T, PEP, PIP>
     where
         T: Timestamp,
-        // PEP: FnMut(&mut [ChangeBatch<T>])+'static,
-        // PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
 {
     shape: OperatorShape,
     address: Vec<usize>,
     push_external: PEP,
     pull_internal: PIP,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
+    activations: Rc<RefCell<Activations>>,
     summary: Vec<Vec<Antichain<T::Summary>>>,
 }
 
@@ -199,6 +208,11 @@ where
     fn name(&self) -> &str { &self.shape.name }
     fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
+
+        // Indicate that the operator need not be rescheduled.
+        // To reschedule the operator, it should indicate such.
+        self.activations.borrow_mut().park(&self.address[..]);
+
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 
         let frontier = &mut shared_progress.frontiers[..];
@@ -209,7 +223,6 @@ where
         (self.push_external)(frontier);
         (self.pull_internal)(consumed, internal, produced)
     }
-
 }
 
 impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
@@ -223,6 +236,9 @@ where
 
     // announce internal topology as fully connected, and hold all default capabilities.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+
+        // Request the operator to be scheduled at least once.
+        self.activations.borrow_mut().unpark(&self.address[..]);
 
         // by default, we reserve a capability for each output port at `Default::default()`.
         self.shared_progress
