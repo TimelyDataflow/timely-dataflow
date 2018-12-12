@@ -122,11 +122,6 @@ impl<A: Allocate> Worker<A> {
     /// main way to ensure that a computation proceeds.
     pub fn step(&mut self) -> bool {
 
-        // Drain external activations.
-        self.activations
-            .borrow_mut()
-            .drain_queued();
-
         {   // Process channel events. Activate responders.
             let mut allocator = self.allocator.borrow_mut();
             allocator.receive();
@@ -144,6 +139,11 @@ impl<A: Allocate> Worker<A> {
                     .unpark(path);
             }
         }
+
+        // Organize activations.
+        self.activations
+            .borrow_mut()
+            .tidy();
 
         // println!("Active operators:");
         // for path in self.activations.borrow().active.iter() {

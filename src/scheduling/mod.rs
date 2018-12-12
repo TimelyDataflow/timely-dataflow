@@ -27,7 +27,6 @@ pub trait Scheduler {
     ///
     fn activator_for(&self, path: &[usize]) -> ActivationHandle {
         let activations = self.activations().clone();
-        let activator = activations.borrow_mut().activator_for(path);
-        activator
+        ActivationHandle::new(path, activations)
     }
 }

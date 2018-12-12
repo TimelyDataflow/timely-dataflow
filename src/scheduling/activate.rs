@@ -1,82 +1,17 @@
 //! Parking and unparking timely fibers.
 
-use std::collections::BTreeSet;
-use std::collections::btree_set::Range;
-
 use std::rc::Rc;
 use std::cell::RefCell;
-
-/// Tracks a set of active paths.
-///
-/// This struct is currently based on a BTreeSet<Vec<usize>>,
-/// whereas it could be more efficiently packed with fewer
-/// allocations, especially in its methods which require some
-/// allocations.
-pub struct Activations {
-    /// Active paths.
-    pub active: BTreeSet<Vec<usize>>,
-    /// Queued unparking requests.
-    queued: Rc<RefCell<Vec<Vec<usize>>>>,
-}
-
-impl Activations {
-    /// Allocates a new activation tracker.
-    pub fn new() -> Self {
-        Self {
-            active: BTreeSet::new(),
-            queued: Rc::new(RefCell::new(Vec::new())),
-        }
-    }
-    /// Mark a path as inactive.
-    pub fn park(&mut self, path: &[usize]) {
-        // println!("Parking: {:?}", path);
-        self.active.remove(path);
-    }
-    /// Mark a path as active.
-    pub fn unpark(&mut self, path: &[usize]) {
-        // println!("Unparking: {:?}", path);
-        self.active.insert(path.to_vec());
-    }
-    /// Return active paths in an interval.
-    pub fn range(&self, lower: &[usize], upper: &[usize]) -> Range<Vec<usize>> {
-        let lower = lower.to_vec();
-        let upper = upper.to_vec();
-        self.active.range(lower .. upper)
-    }
-
-    /// Determines if an active path extends `path`.
-    pub fn active_extension(&self, path: &[usize]) -> bool {
-        self.active
-            .range(path.to_vec() ..)
-            .next()
-            .map(|next| next.len() >= path.len() && &next[..path.len()] == path)
-            .unwrap_or(false)
-    }
-
-    /// Creates a capability to activate `path`.
-    pub fn activator_for(&self, path: &[usize]) -> ActivationHandle {
-        ActivationHandle::new(path, self.queued.clone())
-    }
-
-    /// Processes queued activations.
-    pub fn drain_queued(&mut self) {
-        let cloned = self.queued.clone();
-        let mut borrow = cloned.borrow_mut();
-        for path in borrow.drain(..) {
-            self.unpark(&path[..]);
-        }
-    }
-}
 
 /// A capability to activate a specific path.
 pub struct ActivationHandle {
     path: Vec<usize>,
-    queue: Rc<RefCell<Vec<Vec<usize>>>>,
+    queue: Rc<RefCell<Activations>>,
 }
 
 impl ActivationHandle {
     /// Creates a new activation handle
-    pub fn new(path: &[usize], queue: Rc<RefCell<Vec<Vec<usize>>>>) -> Self {
+    pub fn new(path: &[usize], queue: Rc<RefCell<Activations>>) -> Self {
         Self {
             path: path.to_vec(),
             queue,
@@ -84,10 +19,9 @@ impl ActivationHandle {
     }
     /// Activates the associated path.
     pub fn activate(&self) {
-        // println!("ActivationHandle::activate() for path: {:?}", self.path);
         self.queue
             .borrow_mut()
-            .push(self.path.clone());
+            .unpark(&self.path[..]);
     }
 }
 
@@ -123,5 +57,97 @@ impl<'a, T> DerefMut for UnparkOnDrop<'a, T> {
 impl<'a, T> Drop for UnparkOnDrop<'a, T> {
     fn drop(&mut self) {
         self.activator.borrow_mut().unpark(self.address);
+    }
+}
+
+/// Allocation-free activation tracker.
+///
+/// This activity tracker accepts `park` and `unpark` commands, but they only
+/// become visible after a call to `tidy`, which puts the commands in sorted
+/// order by path, and retains only those paths whose last command was unpark.
+pub struct Activations {
+    clean: usize,
+    /// `(offset, length, unpark)`
+    bounds: Vec<(usize, usize, bool)>,
+    slices: Vec<usize>,
+    buffer: Vec<usize>,
+}
+
+impl Activations {
+
+    /// Creates a new activation tracker.
+    pub fn new() -> Self {
+        Self {
+            clean: 0,
+            bounds: Vec::new(),
+            slices: Vec::new(),
+            buffer: Vec::new(),
+        }
+    }
+
+    /// Parks task addressed by `path`.
+    pub fn park(&mut self, path: &[usize]) {
+        self.bounds.push((self.slices.len(), path.len(), false));
+        self.slices.extend(path);
+    }
+    /// Unparks task addressed by `path`.
+    pub fn unpark(&mut self, path: &[usize]) {
+        self.bounds.push((self.slices.len(), path.len(), true));
+        self.slices.extend(path);
+    }
+
+    /// Removes duplicate
+    pub fn tidy(&mut self) {
+
+        {   // Scoped, to allow borrow to drop.
+            let slices = &self.slices[..];
+            // Sort slices, retaining park/unpark order.
+            self.bounds.sort_by_key(|x| &slices[x.0 .. (x.0 + x.1)]);
+            // Discard all but the most recent state.
+            self.bounds.reverse();
+            self.bounds.dedup_by_key(|x| &slices[x.0 .. (x.0 + x.1)]);
+            self.bounds.reverse();
+            // Retain unpark events.
+            self.bounds.retain(|x| x.2);
+        }
+
+        // Compact the slices.
+        self.buffer.clear();
+        for (offset, length, _unpark) in self.bounds.iter_mut() {
+            self.buffer.extend(&self.slices[*offset .. (*offset + *length)]);
+            *offset = self.buffer.len() - *length;
+        }
+        ::std::mem::swap(&mut self.buffer, &mut self.slices);
+
+        self.clean = self.bounds.len();
+    }
+
+    /// Sets as active any symbols that follow `path`.
+    pub fn extensions(&self, path: &[usize], active: &mut Vec<usize>) {
+
+        let position =
+        self.bounds[..self.clean]
+            .binary_search_by_key(&path, |x| &self.slices[x.0 .. (x.0 + x.1)]);
+        let position = match position {
+            Ok(x) => x,
+            Err(x) => x,
+        };
+
+        self.bounds
+            .iter()
+            .cloned()
+            .skip(position)
+            .map(|(offset, length, _)| &self.slices[offset .. (offset + length)])
+            .take_while(|x| x.starts_with(path))
+            .for_each(|x| {
+                // push non-empty, non-duplicate extensions.
+                if let Some(extension) = x.get(path.len()) {
+                    if active.last() != Some(extension) {
+                        active.push(*extension);
+                    }
+                }
+            });
+
+        active.dedup();
     }
 }

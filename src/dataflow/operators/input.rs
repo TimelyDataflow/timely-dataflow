@@ -111,9 +111,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         let mut address = self.addr();
         address.push(index);
 
-        let activations = self.activations().clone();
-        let activator = activations.borrow_mut().activator_for(&address[..]);
-        handle.activate.push(activator);
+        handle.activate.push(self.activator_for(&address[..]));
 
         let progress = Rc::new(RefCell::new(ChangeBatch::new()));
 

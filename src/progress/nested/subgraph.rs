@@ -180,6 +180,7 @@ where
             incomplete,
             incomplete_count,
             activations: worker.activations().clone(),
+            temp_active: Vec::new(),
             children: self.children,
             input_messages: self.input_messages,
             output_capabilities: self.output_capabilities,
@@ -220,6 +221,7 @@ where
 
     // shared activations (including children).
     activations: Rc<RefCell<Activations>>,
+    temp_active: Vec<usize>,
 
     // shared state written to by the datapath, counting records entering this subgraph instance.
     input_messages: Vec<Rc<RefCell<ChangeBatch<TInner>>>>,
@@ -281,15 +283,14 @@ where
         //
         // We should be able to schedule arbitrary subsets of children, as
         // long as we eventually schedule all children that need to do work.
+        self.activations.borrow_mut().extensions(&self.path[..], &mut self.temp_active);
         for index in 1 .. self.children.len() {
 
             // We could schedule the child because we have frontier changes to communicate.
             let any_progress = self.children[index].shared_progress.borrow_mut().frontiers.iter_mut().any(|x| !x.is_empty());
 
             // We could schedule the child if any extension of its path is active.
-            let mut path = self.path.clone();
-            path.push(index);
-            let any_active = self.activations.borrow_mut().active_extension(&path[..]);
+            let any_active = self.temp_active.contains(&index);
 
             // Schedule if active extensions, or progress updates.
             if any_progress || any_active {
@@ -303,6 +304,7 @@ where
                 }
             }
         }
+        self.temp_active.drain(..);
 
         // Having activated various children, we should communicate progress updates.
         self.progcaster.send(&mut self.local_pointstamp);
