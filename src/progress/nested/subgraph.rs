@@ -252,6 +252,9 @@ where
 
     fn schedule(&mut self) -> bool {
 
+        // By default, we park ourself unless reason not to.
+        self.activations.borrow_mut().park(&self.path[..]);
+
         // This method performs several actions related to progress tracking
         // and child operator scheduling. The actions have been broken apart
         // into atomic actions that should be able to be safely executed in
