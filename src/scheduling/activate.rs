@@ -90,3 +90,38 @@ impl ActivationHandle {
             .push(self.path.clone());
     }
 }
+
+/// A wrapper that unparks on drop.
+pub struct UnparkOnDrop<'a, T>  {
+    wrapped: T,
+    address: &'a [usize],
+    activator: Rc<RefCell<Activations>>,
+}
+
+use std::ops::{Deref, DerefMut};
+
+impl<'a, T> UnparkOnDrop<'a, T> {
+    /// Wraps an element so that it is unparked on drop.
+    pub fn new(wrapped: T, address: &'a [usize], activator: Rc<RefCell<Activations>>) -> Self {
+        Self { wrapped, address, activator }
+    }
+}
+
+impl<'a, T> Deref for UnparkOnDrop<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.wrapped
+    }
+}
+
+impl<'a, T> DerefMut for UnparkOnDrop<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.wrapped
+    }
+}
+
+impl<'a, T> Drop for UnparkOnDrop<'a, T> {
+    fn drop(&mut self) {
+        self.activator.borrow_mut().unpark(self.address);
+    }
+}

@@ -5,6 +5,8 @@ use std::cell::RefCell;
 use std::default::Default;
 
 use scheduling::Schedule;
+use scheduling::activate::{Activations, UnparkOnDrop};
+
 use progress::frontier::Antichain;
 use progress::{Operate, operate::SharedProgress, Timestamp};
 use progress::Source;
@@ -87,12 +89,13 @@ impl<G: Scope> UnorderedInput<G> for G {
         let cap = mint_capability(Default::default(), internal.clone());
         let counter = PushCounter::new(output);
         let produced = counter.produced().clone();
-        let helper = UnorderedHandle::new(counter);
         let peers = self.peers();
 
         let index = self.allocate_operator_index();
         let mut address = self.addr();
         address.push(index);
+
+        let helper = UnorderedHandle::new(counter, &address[..], self.activations().clone());
 
         self.add_operator_with_index(Box::new(UnorderedOperator {
             name: "UnorderedInput".to_owned(),
@@ -145,23 +148,25 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct UnorderedHandle<T: Timestamp, D: Data> {
     buffer: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
+    address: Vec<usize>,
+    activator: Rc<RefCell<Activations>>,
 }
 
 impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
-    fn new(pusher: PushCounter<T, D, Tee<T, D>>) -> UnorderedHandle<T, D> {
+    fn new(pusher: PushCounter<T, D, Tee<T, D>>, address: &[usize], activator: Rc<RefCell<Activations>>) -> UnorderedHandle<T, D> {
         UnorderedHandle {
             buffer: PushBuffer::new(pusher),
+            address: address.to_vec(),
+            activator,
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: Capability<T>) -> AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>> {
-        self.buffer.autoflush_session(cap)
-    }
-}
-
-impl<T: Timestamp, D: Data> Drop for UnorderedHandle<T, D> {
-    fn drop(&mut self) {
-        // TODO: explode if not all capabilities were given up?
+    // pub fn session<'b>(&'b mut self, cap: Capability<T>) -> AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>> {
+    //     self.buffer.autoflush_session(cap)
+    // }
+    pub fn session<'b>(&'b mut self, cap: Capability<T>) -> UnparkOnDrop<'b, AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
+        let session = self.buffer.autoflush_session(cap);
+        UnparkOnDrop::new(session, &self.address[..], self.activator.clone())
     }
 }
