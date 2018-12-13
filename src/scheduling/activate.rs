@@ -96,6 +96,19 @@ impl Activations {
         self.slices.extend(path);
     }
 
+    /// Parks all tasks with the prefix `path`.
+    ///
+    /// More precisely, this converts all `unpark` statements for tasks with
+    /// the prefix `path` to park statements, which will cause them to be
+    /// cleaned up in the next call to `self.tidy()`.
+    pub fn park_prefix(&mut self, path: &[usize]) {
+        for (offset, length, unpark) in self.bounds.iter_mut() {
+            if self.slices[*offset .. (*offset + *length)].starts_with(path) {
+                *unpark = false;
+            }
+        }
+    }
+
     /// Removes duplicate
     pub fn tidy(&mut self) {
 

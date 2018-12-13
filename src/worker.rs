@@ -4,13 +4,15 @@ use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
 use std::any::Any;
 use std::time::Instant;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use communication::{Allocate, Data, Push, Pull};
 use communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use scheduling::{Schedule, Scheduler};
 use scheduling::activate::Activations;
 use progress::timestamp::{Refines};
-use progress::{Timestamp, SubgraphBuilder};
+use progress::SubgraphBuilder;
 use progress::operate::Operate;
 use dataflow::scopes::Child;
 
@@ -56,11 +58,13 @@ pub struct Worker<A: Allocate> {
     paths: Rc<RefCell<Vec<Vec<usize>>>>,
     allocator: Rc<RefCell<A>>,
     identifiers: Rc<RefCell<usize>>,
-    dataflows: Rc<RefCell<Vec<Wrapper>>>,
+    // dataflows: Rc<RefCell<Vec<Wrapper>>>,
+    dataflows: Rc<RefCell<HashMap<usize, Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
     logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
 
     activations: Rc<RefCell<Activations>>,
+    active_dataflows: Vec<usize>,
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
@@ -109,10 +113,11 @@ impl<A: Allocate> Worker<A> {
             paths: Rc::new(RefCell::new(Vec::new())),
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
-            dataflows: Rc::new(RefCell::new(Vec::new())),
+            dataflows: Rc::new(RefCell::new(HashMap::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
             logging: Rc::new(RefCell::new(::logging_core::Registry::new(now, index))),
             activations: Rc::new(RefCell::new(Activations::new())),
+            active_dataflows: Vec::new(),
         }
     }
 
@@ -145,25 +150,28 @@ impl<A: Allocate> Worker<A> {
             .borrow_mut()
             .tidy();
 
-        // println!("Active operators:");
-        // for path in self.activations.borrow().active.iter() {
-        //     println!("\t{:?}", path);
-        // }
+        {   // Schedule active dataflows.
 
-        // Step each dataflow once.
-        self.dataflows
-            .borrow_mut()
-            .iter_mut()
-            .for_each(|dataflow| { dataflow.step(); });
+            self.activations
+                .borrow_mut()
+                .extensions(&[], &mut self.active_dataflows);
 
-        // Flush logging infrastructure.
+            let mut dataflows = self.dataflows.borrow_mut();
+            for index in self.active_dataflows.drain(..) {
+                // Step dataflow if it exists, remove if not incomplete.
+                if let Entry::Occupied(mut entry) = dataflows.entry(index) {
+                    let incomplete = entry.get_mut().step();
+                    if !incomplete {
+                        entry.remove_entry();
+                        self.activations.borrow_mut().park_prefix(&[index]);
+                    }
+                }
+            }
+        }
+
+        // Clean up, indicate if dataflows remain.
         self.logging.borrow_mut().flush();
-
-        // Flush communication infrastructure.
         self.allocator.borrow_mut().release();
-
-        // Discard completed dataflows, indicate non-emptiness.
-        self.dataflows.borrow_mut().retain(|dataflow| dataflow.active());
         !self.dataflows.borrow().is_empty()
     }
 
@@ -192,9 +200,10 @@ impl<A: Allocate> Worker<A> {
     }
 
     /// Construct a new dataflow.
-    pub fn dataflow<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R
+    pub fn dataflow<T, R, F>(&mut self, func: F) -> R
     where
-        T: Refines<()>
+        T: Refines<()>,
+        F: FnOnce(&mut Child<Self, T>)->R,
     {
         self.dataflow_using(Box::new(()), |_, child| func(child))
     }
@@ -205,12 +214,15 @@ impl<A: Allocate> Worker<A> {
     /// with the dataflow until it has completed running. Once complete, the resources are dropped. The most
     /// common use of this method at present is with loading shared libraries, where the library is important
     /// for building the dataflow, and must be kept around until after the dataflow has completed operation.
-    pub fn dataflow_using<T: Timestamp, R, F:FnOnce(&mut V, &mut Child<Self, T>)->R, V: Any+'static>(&mut self, mut resources: V, func: F) -> R
+    pub fn dataflow_using<T, R, F, V>(&mut self, mut resources: V, func: F) -> R
     where
         T: Refines<()>,
+        F: FnOnce(&mut V, &mut Child<Self, T>)->R,
+        V: Any+'static,
     {
 
-        let addr = vec![self.allocator.borrow().index()];
+        // let addr = vec![self.allocator.borrow().index()];
+        let addr = vec![];
         let dataflow_index = self.allocate_dataflow_index();
 
         let mut logging = self.logging.borrow_mut().get("timely");
@@ -234,11 +246,10 @@ impl<A: Allocate> Worker<A> {
         operator.set_external_summary();
 
         let wrapper = Wrapper {
-            _index: dataflow_index,
             operate: Some(Box::new(operator)),
             resources: Some(Box::new(resources)),
         };
-        self.dataflows.borrow_mut().push(wrapper);
+        self.dataflows.borrow_mut().insert(dataflow_index, wrapper);
 
         result
 
@@ -264,32 +275,34 @@ impl<A: Allocate> Clone for Worker<A> {
             dataflow_counter: self.dataflow_counter.clone(),
             logging: self.logging.clone(),
             activations: self.activations.clone(),
+            active_dataflows: Vec::new(),
         }
     }
 }
 
 struct Wrapper {
-    _index: usize,
     operate: Option<Box<Schedule>>,
     resources: Option<Box<Any>>,
 }
 
 impl Wrapper {
+    /// Steps the dataflow, indicates if it remains incomplete.
+    ///
+    /// If the dataflow is incomplete, this call will drop it and its resources,
+    /// dropping the dataflow first and then the resources (so that, e.g., shared
+    /// library bindings will outlive the dataflow).
     fn step(&mut self) -> bool {
-        let active = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false);
-        if !active {
+        let incomplete = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false);
+        if !incomplete {
             self.operate = None;
             self.resources = None;
         }
-        // TODO consider flushing logs here (possibly after an arbitrary timeout)
-        active
+        incomplete
     }
-    fn active(&self) -> bool { self.operate.is_some() }
 }
 
 impl Drop for Wrapper {
     fn drop(&mut self) {
-        // println!("dropping dataflow {:?}", self._index);
         // ensure drop order
         self.operate = None;
         self.resources = None;
