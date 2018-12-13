@@ -6,6 +6,7 @@ use std::default::Default;
 
 use scheduling::Schedule;
 use scheduling::activate::ActivationHandle;
+use scheduling::activate::Activations;
 
 use progress::frontier::Antichain;
 use progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
@@ -119,9 +120,12 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 
         let copies = self.peers();
 
+        let activations = self.activations().clone();
+
         self.add_operator_with_index(Box::new(Operator {
             name: "Input".to_owned(),
             address,
+            activations,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             progress,
             messages: produced,
@@ -135,6 +139,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 struct Operator<T:Timestamp> {
     name: String,
     address: Vec<usize>,
+    activations: Rc<RefCell<Activations>>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
     messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
@@ -148,6 +153,7 @@ impl<T:Timestamp> Schedule for Operator<T> {
     fn path(&self) -> &[usize] { &self.address[..] }
 
     fn schedule(&mut self) -> bool {
+        self.activations.borrow_mut().park(&self.address[..]);
         let shared_progress = &mut *self.shared_progress.borrow_mut();
         self.progress.borrow_mut().drain_into(&mut shared_progress.internals[0]);
         self.messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);

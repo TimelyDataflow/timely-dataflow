@@ -14,6 +14,7 @@ fn main() {
 
         let dataflows = args.next().unwrap().parse::<usize>().unwrap();
         let length = args.next().unwrap().parse::<usize>().unwrap();
+        let record = args.next() == Some("record".to_string());
 
         let mut inputs = Vec::new();
         let mut probes = Vec::new();
@@ -35,7 +36,9 @@ fn main() {
 
         for round in 0 .. {
             let dataflow = round % dataflows;
-            inputs[dataflow].send(());
+            if record {
+                inputs[dataflow].send(());
+            }
             inputs[dataflow].advance_to(round);
             let mut steps = 0;
             while probes[dataflow].less_than(&round) {

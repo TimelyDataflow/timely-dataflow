@@ -135,6 +135,13 @@ impl Activations {
         self.clean = self.bounds.len();
     }
 
+    ///
+    pub fn map_active(&self, logic: impl Fn(&[usize])) {
+        for (offset, length, _) in self.bounds.iter() {
+            logic(&self.slices[*offset .. (*offset + *length)]);
+        }
+    }
+
     /// Sets as active any symbols that follow `path`.
     pub fn extensions(&self, path: &[usize], active: &mut Vec<usize>) {
 

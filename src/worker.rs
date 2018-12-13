@@ -150,11 +150,15 @@ impl<A: Allocate> Worker<A> {
             .borrow_mut()
             .tidy();
 
+        // self.activations.borrow().map_active(|path| println!("active path: {:?}", path));
+
         {   // Schedule active dataflows.
 
             self.activations
                 .borrow_mut()
                 .extensions(&[], &mut self.active_dataflows);
+
+            // println!("scheduling {} dataflows", self.active_dataflows.len());
 
             let mut dataflows = self.dataflows.borrow_mut();
             for index in self.active_dataflows.drain(..) {
