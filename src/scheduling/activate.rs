@@ -3,72 +3,11 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-/// A capability to activate a specific path.
-pub struct ActivationHandle {
-    path: Vec<usize>,
-    queue: Rc<RefCell<Activations>>,
-}
-
-impl ActivationHandle {
-    /// Creates a new activation handle
-    pub fn new(path: &[usize], queue: Rc<RefCell<Activations>>) -> Self {
-        Self {
-            path: path.to_vec(),
-            queue,
-        }
-    }
-    /// Activates the associated path.
-    pub fn activate(&self) {
-        self.queue
-            .borrow_mut()
-            .unpark(&self.path[..]);
-    }
-}
-
-/// A wrapper that unparks on drop.
-pub struct UnparkOnDrop<'a, T>  {
-    wrapped: T,
-    address: &'a [usize],
-    activator: Rc<RefCell<Activations>>,
-}
-
-use std::ops::{Deref, DerefMut};
-
-impl<'a, T> UnparkOnDrop<'a, T> {
-    /// Wraps an element so that it is unparked on drop.
-    pub fn new(wrapped: T, address: &'a [usize], activator: Rc<RefCell<Activations>>) -> Self {
-        Self { wrapped, address, activator }
-    }
-}
-
-impl<'a, T> Deref for UnparkOnDrop<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.wrapped
-    }
-}
-
-impl<'a, T> DerefMut for UnparkOnDrop<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.wrapped
-    }
-}
-
-impl<'a, T> Drop for UnparkOnDrop<'a, T> {
-    fn drop(&mut self) {
-        self.activator.borrow_mut().unpark(self.address);
-    }
-}
-
 /// Allocation-free activation tracker.
-///
-/// This activity tracker accepts `park` and `unpark` commands, but they only
-/// become visible after a call to `tidy`, which puts the commands in sorted
-/// order by path, and retains only those paths whose last command was unpark.
 pub struct Activations {
     clean: usize,
-    /// `(offset, length, unpark)`
-    bounds: Vec<(usize, usize, bool)>,
+    /// `(offset, length)`
+    bounds: Vec<(usize, usize)>,
     slices: Vec<usize>,
     buffer: Vec<usize>,
 }
@@ -85,48 +24,26 @@ impl Activations {
         }
     }
 
-    /// Parks task addressed by `path`.
-    pub fn park(&mut self, path: &[usize]) {
-        self.bounds.push((self.slices.len(), path.len(), false));
-        self.slices.extend(path);
-    }
     /// Unparks task addressed by `path`.
-    pub fn unpark(&mut self, path: &[usize]) {
-        self.bounds.push((self.slices.len(), path.len(), true));
+    pub fn activate(&mut self, path: &[usize]) {
+        self.bounds.push((self.slices.len(), path.len()));
         self.slices.extend(path);
     }
 
-    /// Parks all tasks with the prefix `path`.
-    ///
-    /// More precisely, this converts all `unpark` statements for tasks with
-    /// the prefix `path` to park statements, which will cause them to be
-    /// cleaned up in the next call to `self.tidy()`.
-    pub fn park_prefix(&mut self, path: &[usize]) {
-        for (offset, length, unpark) in self.bounds.iter_mut() {
-            if self.slices[*offset .. (*offset + *length)].starts_with(path) {
-                *unpark = false;
-            }
-        }
-    }
+    /// Discards the current active set and presents the next active set.
+    pub fn advance(&mut self) {
 
-    /// Removes duplicate
-    pub fn tidy(&mut self) {
+        self.bounds.drain(.. self.clean);
 
         {   // Scoped, to allow borrow to drop.
             let slices = &self.slices[..];
-            // Sort slices, retaining park/unpark order.
             self.bounds.sort_by_key(|x| &slices[x.0 .. (x.0 + x.1)]);
-            // Discard all but the most recent state.
-            self.bounds.reverse();
             self.bounds.dedup_by_key(|x| &slices[x.0 .. (x.0 + x.1)]);
-            self.bounds.reverse();
-            // Retain unpark events.
-            self.bounds.retain(|x| x.2);
         }
 
         // Compact the slices.
         self.buffer.clear();
-        for (offset, length, _unpark) in self.bounds.iter_mut() {
+        for (offset, length) in self.bounds.iter_mut() {
             self.buffer.extend(&self.slices[*offset .. (*offset + *length)]);
             *offset = self.buffer.len() - *length;
         }
@@ -137,13 +54,13 @@ impl Activations {
 
     ///
     pub fn map_active(&self, logic: impl Fn(&[usize])) {
-        for (offset, length, _) in self.bounds.iter() {
+        for (offset, length) in self.bounds.iter() {
             logic(&self.slices[*offset .. (*offset + *length)]);
         }
     }
 
     /// Sets as active any symbols that follow `path`.
-    pub fn extensions(&self, path: &[usize], active: &mut Vec<usize>) {
+    pub fn for_extensions(&self, path: &[usize], mut action: impl FnMut(usize)) {
 
         let position =
         self.bounds[..self.clean]
@@ -153,21 +70,78 @@ impl Activations {
             Err(x) => x,
         };
 
+        let mut previous = None;
         self.bounds
             .iter()
             .cloned()
             .skip(position)
-            .map(|(offset, length, _)| &self.slices[offset .. (offset + length)])
+            .map(|(offset, length)| &self.slices[offset .. (offset + length)])
             .take_while(|x| x.starts_with(path))
             .for_each(|x| {
                 // push non-empty, non-duplicate extensions.
                 if let Some(extension) = x.get(path.len()) {
-                    if active.last() != Some(extension) {
-                        active.push(*extension);
+                    if previous != Some(*extension) {
+                        action(*extension);
+                        previous = Some(*extension);
                     }
                 }
             });
+    }
+}
 
-        active.dedup();
+/// A capability to activate a specific path.
+pub struct Activator {
+    path: Vec<usize>,
+    queue: Rc<RefCell<Activations>>,
+}
+
+impl Activator {
+    /// Creates a new activation handle
+    pub fn new(path: &[usize], queue: Rc<RefCell<Activations>>) -> Self {
+        Self {
+            path: path.to_vec(),
+            queue,
+        }
+    }
+    /// Activates the associated path.
+    pub fn activate(&self) {
+        self.queue
+            .borrow_mut()
+            .activate(&self.path[..]);
+    }
+}
+
+/// A wrapper that unparks on drop.
+pub struct ActivateOnDrop<T>  {
+    wrapped: T,
+    address: Rc<Vec<usize>>,
+    activator: Rc<RefCell<Activations>>,
+}
+
+use std::ops::{Deref, DerefMut};
+
+impl<T> ActivateOnDrop<T> {
+    /// Wraps an element so that it is unparked on drop.
+    pub fn new(wrapped: T, address: Rc<Vec<usize>>, activator: Rc<RefCell<Activations>>) -> Self {
+        Self { wrapped, address, activator }
+    }
+}
+
+impl<T> Deref for ActivateOnDrop<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.wrapped
+    }
+}
+
+impl<T> DerefMut for ActivateOnDrop<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.wrapped
+    }
+}
+
+impl<T> Drop for ActivateOnDrop<T> {
+    fn drop(&mut self) {
+        self.activator.borrow_mut().activate(&self.address[..]);
     }
 }

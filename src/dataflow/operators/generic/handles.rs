@@ -208,9 +208,7 @@ impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>> OutputHandle<'a, T, D, P> {
     /// });
     /// ```
     pub fn session<'b, C: CapabilityTrait<T>>(&'b mut self, cap: &'b C) -> Session<'b, T, D, PushCounter<T, D, P>> where 'a: 'b {
-
         assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
-
         self.push_buffer.session(cap.time())
     }
 }

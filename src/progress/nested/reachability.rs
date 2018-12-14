@@ -402,6 +402,24 @@ impl<T:Timestamp> Tracker<T> {
         self.targets.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty()))
     }
 
+    // ///
+    // pub fn report_tracking_anything(&mut self) {
+    //     for i in 0 .. self.sources.len() {
+    //         for j in 0 .. self.sources[i].len() {
+    //             if !self.sources[i][j].is_empty() {
+    //                 println!("Non-empty source: {}, {}", i, j);
+    //             }
+    //         }
+    //     }
+    //     for i in 0 .. self.targets.len() {
+    //         for j in 0 .. self.targets[i].len() {
+    //             if !self.targets[i][j].is_empty() {
+    //                 println!("Non-empty target: {}, {}", i, j);
+    //             }
+    //         }
+    //     }
+    // }
+
     /// Allocate a new `Tracker` using the shape from `summaries`.
     pub fn allocate_from(summary: Summary<T>) -> Self {
 

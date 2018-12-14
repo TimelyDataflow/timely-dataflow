@@ -7,6 +7,8 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::BinaryHeap;
+use std::cmp::Reverse;
 
 use logging::TimelyLogger as Logger;
 
@@ -180,7 +182,7 @@ where
             incomplete,
             incomplete_count,
             activations: worker.activations().clone(),
-            temp_active: Vec::new(),
+            temp_active: BinaryHeap::new(),
             children: self.children,
             input_messages: self.input_messages,
             output_capabilities: self.output_capabilities,
@@ -221,7 +223,7 @@ where
 
     // shared activations (including children).
     activations: Rc<RefCell<Activations>>,
-    temp_active: Vec<usize>,
+    temp_active: BinaryHeap<Reverse<usize>>,
 
     // shared state written to by the datapath, counting records entering this subgraph instance.
     input_messages: Vec<Rc<RefCell<ChangeBatch<TInner>>>>,
@@ -254,9 +256,6 @@ where
 
     fn schedule(&mut self) -> bool {
 
-        // By default, we park ourself unless reason not to.
-        self.activations.borrow_mut().park(&self.path[..]);
-
         // This method performs several actions related to progress tracking
         // and child operator scheduling. The actions have been broken apart
         // into atomic actions that should be able to be safely executed in
@@ -279,43 +278,41 @@ where
 
         self.propagate_pointstamps();   // Commit and propagate final pointstamps.
 
+        {   // Enqueue active children; scoped to let borrow drop.
+            let temp_active = &mut self.temp_active;
+            self.activations
+                .borrow_mut()
+                .for_extensions(&self.path[..], |index| temp_active.push(Reverse(index)));
+        }
+
         // Schedule child operators.
         //
         // We should be able to schedule arbitrary subsets of children, as
         // long as we eventually schedule all children that need to do work.
-        self.activations.borrow_mut().extensions(&self.path[..], &mut self.temp_active);
-        for index in 1 .. self.children.len() {
-
-            // We could schedule the child because we have frontier changes to communicate.
-            let any_progress = self.children[index].shared_progress.borrow_mut().frontiers.iter_mut().any(|x| !x.is_empty());
-
-            // We could schedule the child if any extension of its path is active.
-            let any_active = self.temp_active.contains(&index);
-
-            // Schedule if active extensions, or progress updates.
-            if any_progress || any_active {
-
-                // Schedule child, record new "incomplete" bit.
-                let child_active = self.activate_child(index);
-                if child_active != self.incomplete[index] {
-                    if child_active { self.incomplete_count += 1; }
-                    else            { self.incomplete_count -= 1; }
-                    self.incomplete[index] = child_active;
-                }
+        let mut previous = 0;
+        while let Some(Reverse(index)) = self.temp_active.pop() {
+            // De-duplicate, and don't revisit.
+            if index > previous {
+                // println!("  Scheduling child {} ({})", index, self.children[index].name);
+                self.activate_child(index);
+                previous = index;
             }
         }
-        self.temp_active.drain(..);
 
         // Having activated various children, we should communicate progress updates.
+        // println!("  Sending pointstamp things: {}", !self.local_pointstamp.is_empty());
         self.progcaster.send(&mut self.local_pointstamp);
 
         // If child scopes surface more final pointstamp updates we must re-execute.
         if !self.final_pointstamp.is_empty() {
-            self.activations.borrow_mut().unpark(&self.path[..]);
+            self.activations.borrow_mut().activate(&self.path[..]);
         }
 
         let incomplete = self.incomplete_count > 0;
         let tracking = self.pointstamp_tracker.tracking_anything();
+
+        // println!("  Incomplete: {}, {}", incomplete, tracking);
+        // self.pointstamp_tracker.report_tracking_anything();
 
         incomplete || tracking
     }
@@ -334,9 +331,15 @@ where
 
         let child = &mut self.children[child_index];
 
-        let active = child.schedule();
+        let incomplete = child.schedule();
 
-        if !active {
+        if incomplete != self.incomplete[child_index] {
+            if incomplete { self.incomplete_count += 1; }
+            else          { self.incomplete_count -= 1; }
+            self.incomplete[child_index] = incomplete;
+        }
+
+        if !incomplete {
             // Consider shutting down the child, if neither capabilities nor input frontier.
             let (internals, frontiers) = self.pointstamp_tracker.node_state(child_index);
             if internals.iter().all(|x| x.is_empty()) && frontiers.iter().all(|x| x.is_empty()) {
@@ -359,7 +362,7 @@ where
             child.extract_progress(&mut self.final_pointstamp);
         }
 
-        active
+        incomplete
     }
 
     /// Move frontier changes from parent into progress statements.
@@ -447,12 +450,15 @@ where
 
         // Drain propagated information into shared progress structure.
         for child in 0 .. self.children.len() {
-            let frontier = &mut self.children[child].shared_progress.borrow_mut().frontiers[..];
-            self.pointstamp_tracker
-                .pushed_mut(child)
-                .iter_mut()
-                .enumerate()
-                .for_each(|(output, pointstamps)| pointstamps.drain_into(&mut frontier[output]));
+            let changes = self.pointstamp_tracker.pushed_mut(child);
+            if changes.iter_mut().any(|x| !x.is_empty()) {
+                self.temp_active.push(Reverse(child));
+                let frontier = &mut self.children[child].shared_progress.borrow_mut().frontiers[..];
+                changes
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(output, pointstamps)| pointstamps.drain_into(&mut frontier[output]));
+            }
         }
 
         // Extract child zero frontier changes and report as internal capability changes.

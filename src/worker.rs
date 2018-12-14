@@ -9,8 +9,7 @@ use std::collections::hash_map::Entry;
 
 use communication::{Allocate, Data, Push, Pull};
 use communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use scheduling::{Schedule, Scheduler};
-use scheduling::activate::Activations;
+use scheduling::{Schedule, Scheduler, Activations};
 use progress::timestamp::{Refines};
 use progress::SubgraphBuilder;
 use progress::operate::Operate;
@@ -141,33 +140,34 @@ impl<A: Allocate> Worker<A> {
                 // println!("Message for {:?}", path);
                 self.activations
                     .borrow_mut()
-                    .unpark(path);
+                    .activate(path);
             }
         }
 
         // Organize activations.
         self.activations
             .borrow_mut()
-            .tidy();
+            .advance();
 
         // self.activations.borrow().map_active(|path| println!("active path: {:?}", path));
 
         {   // Schedule active dataflows.
 
+            let active_dataflows = &mut self.active_dataflows;
             self.activations
                 .borrow_mut()
-                .extensions(&[], &mut self.active_dataflows);
+                .for_extensions(&[], |index| active_dataflows.push(index));
 
-            // println!("scheduling {} dataflows", self.active_dataflows.len());
+            // println!("scheduling {} dataflows", active_dataflows.len());
 
             let mut dataflows = self.dataflows.borrow_mut();
-            for index in self.active_dataflows.drain(..) {
+            for index in active_dataflows.drain(..) {
                 // Step dataflow if it exists, remove if not incomplete.
                 if let Entry::Occupied(mut entry) = dataflows.entry(index) {
+                    // println!("Scheduling dataflow {}", index);
                     let incomplete = entry.get_mut().step();
                     if !incomplete {
                         entry.remove_entry();
-                        self.activations.borrow_mut().park_prefix(&[index]);
                     }
                 }
             }

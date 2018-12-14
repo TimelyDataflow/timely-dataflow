@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 pub mod activate;
 
-pub use self::activate::{Activations, ActivationHandle};
+pub use self::activate::{Activations, Activator, ActivateOnDrop};
 
 /// A type that can be scheduled.
 pub trait Schedule {
@@ -25,8 +25,8 @@ pub trait Scheduler {
     /// Provides a shared handle to the activation scheduler.
     fn activations(&self) -> Rc<RefCell<Activations>>;
     ///
-    fn activator_for(&self, path: &[usize]) -> ActivationHandle {
+    fn activator_for(&self, path: &[usize]) -> Activator {
         let activations = self.activations().clone();
-        ActivationHandle::new(path, activations)
+        Activator::new(path, activations)
     }
 }

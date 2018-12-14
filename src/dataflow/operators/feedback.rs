@@ -1,22 +1,17 @@
 //! Create cycles in a timely dataflow graph.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use Data;
-use communication::Push;
 
-use scheduling::Schedule;
-use progress::{Timestamp, Operate, operate::SharedProgress, PathSummary};
+use progress::{Timestamp, PathSummary};
 use progress::frontier::Antichain;
-use progress::{Source, Target};
 use order::Product;
-use progress::ChangeBatch;
 
-use dataflow::channels::Bundle;
-use dataflow::channels::pushers::{Counter, Tee};
+use dataflow::channels::pushers::Tee;
+use dataflow::channels::pact::Pipeline;
 use dataflow::{Stream, Scope};
 use dataflow::scopes::child::Iterative;
+use dataflow::operators::generic::builder_rc::OperatorBuilder;
+use dataflow::operators::generic::OutputWrapper;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait Feedback<G: Scope> {
@@ -41,7 +36,7 @@ pub trait Feedback<G: Scope> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>);
+    fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, D>, Stream<G, D>);
 }
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
@@ -69,79 +64,26 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<D: Data>(&mut self, summary: T::Summary) -> (Handle<Product<G::Timestamp, T>, D>, Stream<Iterative<'a, G, T>, D>);
+    fn loop_variable<D: Data>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, D>, Stream<Iterative<'a, G, T>, D>);
 }
 
 impl<G: Scope> Feedback<G> for G {
-    fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G::Timestamp, D>, Stream<G, D>) {
+    fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, D>, Stream<G, D>) {
 
         if summary == Default::default() {
             panic!("Cannot use default summary for a loop variable");
         }
 
-        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
+        let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
+        let (output, stream) = builder.new_output();
 
-        let feedback_output = Counter::new(targets);
-        let produced_messages = feedback_output.produced().clone();
-
-        let feedback_input =  Counter::new(Observer {
-            summary: summary.clone(), targets: feedback_output
-        });
-        let consumed_messages = feedback_input.produced().clone();
-
-        let index = self.allocate_operator_index();
-        let mut address = self.addr();
-        address.push(index);
-
-        self.add_operator_with_index(Box::new(Operator {
-            name: "Feedback".to_owned(),
-            address,
-            shared_progress: Rc::new(RefCell::new(SharedProgress::new(1, 1))),
-            consumed_messages,
-            produced_messages,
-            summary,
-        }), index);
-
-        let helper = Handle {
-            index,
-            target: feedback_input,
-        };
-
-        (helper, Stream::new(Source { index, port: 0 }, registrar, self.clone()))
+        (Handle { builder, summary, output }, stream)
     }
 }
 
 impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
-    fn loop_variable<D: Data>(&mut self, summary: T::Summary) -> (Handle<Product<G::Timestamp, T>, D>, Stream<Iterative<'a, G, T>, D>) {
+    fn loop_variable<D: Data>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, D>, Stream<Iterative<'a, G, T>, D>) {
         self.feedback(Product::new(Default::default(), summary))
-    }
-}
-
-// implementation of the feedback vertex, essentially, as an observer
-struct Observer<T: Timestamp, D:Data> {
-    summary:    T::Summary,
-    targets:    Counter<T, D, Tee<T, D>>,
-}
-
-impl<T: Timestamp, D: Data> Push<Bundle<T, D>> for Observer<T, D> {
-    #[inline]
-    fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
-        // We propagate the message either if its time results in something valid,
-        // or in the case that `message` is `None`. Note: we do not push a `None`
-        // when the timestamp is invalid, as we are not yet meant to flush.
-        let active = if let Some(message) = message {
-            let message = message.as_mut();
-            if let Some(new_time) = self.summary.results_in(&message.time) {
-                message.time = new_time;
-                true
-            }
-            else {
-                false
-            }
-        }
-        else { true };
-
-        if active { self.targets.push(message); }
     }
 }
 
@@ -164,50 +106,37 @@ pub trait ConnectLoop<G: Scope, D: Data> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn connect_loop(&self, Handle<G::Timestamp, D>);
+    fn connect_loop(&self, Handle<G, D>);
 }
 
 impl<G: Scope, D: Data> ConnectLoop<G, D> for Stream<G, D> {
-    fn connect_loop(&self, helper: Handle<G::Timestamp, D>) {
-        let channel_id = self.scope().new_identifier();
-        self.connect_to(Target { index: helper.index, port: 0 }, helper.target, channel_id);
+    fn connect_loop(&self, helper: Handle<G, D>) {
+
+        let mut builder = helper.builder;
+        let summary = helper.summary;
+        let mut output = helper.output;
+
+        let mut input = builder.new_input_connection(self, Pipeline, vec![Antichain::from_elem(summary.clone())]);
+
+        let mut vector = Vec::new();
+        builder.build(move |_capability| move |_frontier| {
+            let mut output = output.activate();
+            input.for_each(|cap, data| {
+                data.swap(&mut vector);
+                if let Some(new_time) = summary.results_in(cap.time()) {
+                    let new_cap = cap.delayed(&new_time);
+                    output
+                        .session(&new_cap)
+                        .give_vec(&mut vector);
+                }
+            });
+        });
     }
 }
 
 /// A handle used to bind the source of a loop variable.
-pub struct Handle<T: Timestamp, D: Data> {
-    index:  usize,
-    target: Counter<T, D, Observer<T, D>>
-}
-
-// the scope that the progress tracker interacts with
-struct Operator<T:Timestamp> {
-    name: String,
-    address: Vec<usize>,
-    shared_progress: Rc<RefCell<SharedProgress<T>>>,
-    consumed_messages:  Rc<RefCell<ChangeBatch<T>>>,
-    produced_messages:  Rc<RefCell<ChangeBatch<T>>>,
-    summary:            T::Summary,
-}
-
-impl<T:Timestamp> Schedule for Operator<T> {
-    fn name(&self) -> &str { &self.name }
-    fn path(&self) -> &[usize] { &self.address[..] }
-    fn schedule(&mut self) -> bool {
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
-        self.consumed_messages.borrow_mut().drain_into(&mut shared_progress.consumeds[0]);
-        self.produced_messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
-        false
-    }
-}
-
-impl<T:Timestamp> Operate<T> for Operator<T> {
-    fn inputs(&self) -> usize { 1 }
-    fn outputs(&self) -> usize { 1 }
-
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
-        (vec![vec![Antichain::from_elem(self.summary.clone())]], self.shared_progress.clone())
-    }
-
-    fn notify_me(&self) -> bool { false }
+pub struct Handle<G: Scope, D: Data> {
+    builder: OperatorBuilder<G>,
+    summary: <G::Timestamp as Timestamp>::Summary,
+    output: OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>,
 }

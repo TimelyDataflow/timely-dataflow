@@ -4,8 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use scheduling::Schedule;
-use scheduling::activate::{Activations, UnparkOnDrop};
+use scheduling::{Schedule, Activations, ActivateOnDrop};
 
 use progress::frontier::Antichain;
 use progress::{Operate, operate::SharedProgress, Timestamp};
@@ -76,12 +75,12 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, Capability<G::Timestamp>), Stream<G, D>);
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>);
 }
 
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, Capability<G::Timestamp>), Stream<G, D>) {
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
 
         let (output, registrar) = Tee::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
@@ -95,7 +94,9 @@ impl<G: Scope> UnorderedInput<G> for G {
         let mut address = self.addr();
         address.push(index);
 
-        let helper = UnorderedHandle::new(counter, &address[..], self.activations().clone());
+        let cap = ActivateCapability::new(cap, &address[..], self.activations().clone());
+
+        let helper = UnorderedHandle::new(counter);
 
         self.add_operator_with_index(Box::new(UnorderedOperator {
             name: "UnorderedInput".to_owned(),
@@ -148,25 +149,50 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct UnorderedHandle<T: Timestamp, D: Data> {
     buffer: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
-    address: Vec<usize>,
-    activator: Rc<RefCell<Activations>>,
 }
 
 impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
-    fn new(pusher: PushCounter<T, D, Tee<T, D>>, address: &[usize], activator: Rc<RefCell<Activations>>) -> UnorderedHandle<T, D> {
+    fn new(pusher: PushCounter<T, D, Tee<T, D>>) -> UnorderedHandle<T, D> {
         UnorderedHandle {
             buffer: PushBuffer::new(pusher),
-            address: address.to_vec(),
-            activator,
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    // pub fn session<'b>(&'b mut self, cap: Capability<T>) -> AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>> {
-    //     self.buffer.autoflush_session(cap)
-    // }
-    pub fn session<'b>(&'b mut self, cap: Capability<T>) -> UnparkOnDrop<'b, AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
-        let session = self.buffer.autoflush_session(cap);
-        UnparkOnDrop::new(session, &self.address[..], self.activator.clone())
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
+        ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
+    }
+}
+
+/// Capability that activates on drop.
+#[derive(Clone)]
+pub struct ActivateCapability<T: Timestamp> {
+    capability: Capability<T>,
+    address: Rc<Vec<usize>>,
+    activations: Rc<RefCell<Activations>>,
+}
+
+impl<T: Timestamp> ActivateCapability<T> {
+    /// Creates a new activating capability.
+    pub fn new(capability: Capability<T>, address: &[usize], activations: Rc<RefCell<Activations>>) -> Self {
+        Self {
+            capability,
+            address: Rc::new(address.to_vec()),
+            activations,
+        }
+    }
+    /// Delays the capability.
+    pub fn delayed(&self, time: &T) -> Self {
+        ActivateCapability {
+            capability: self.capability.delayed(time),
+            address: self.address.clone(),
+            activations: self.activations.clone(),
+        }
+    }
+}
+
+impl<T: Timestamp> Drop for ActivateCapability<T> {
+    fn drop(&mut self) {
+        self.activations.borrow_mut().activate(&self.address[..]);
     }
 }

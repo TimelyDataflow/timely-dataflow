@@ -10,8 +10,7 @@ use std::cell::RefCell;
 
 use ::Data;
 
-use scheduling::Schedule;
-use scheduling::activate::Activations;
+use scheduling::{Schedule, Activations};
 
 use progress::{Source, Target};
 use progress::ChangeBatch;
@@ -209,10 +208,6 @@ where
     fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
 
-        // Indicate that the operator need not be rescheduled.
-        // To reschedule the operator, it should indicate such.
-        self.activations.borrow_mut().park(&self.address[..]);
-
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 
         let frontier = &mut shared_progress.frontiers[..];
@@ -238,7 +233,7 @@ where
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
 
         // Request the operator to be scheduled at least once.
-        self.activations.borrow_mut().unpark(&self.address[..]);
+        self.activations.borrow_mut().activate(&self.address[..]);
 
         // by default, we reserve a capability for each output port at `Default::default()`.
         self.shared_progress
