@@ -27,7 +27,7 @@
 //! builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
 //!
 //! // Construct a reachability tracker.
-//! let mut tracker = builder.build();
+//! let (mut tracker, _) = builder.build();
 //!
 //! // Introduce a pointstamp at the output of the first node.
 //! tracker.update_source(Source { index: 0, port: 0}, 17, 1);
@@ -123,7 +123,7 @@ use progress::timestamp::PathSummary;
 /// builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
 ///
 /// // Summarize reachability information.
-/// let tracker = builder.build();
+/// let (tracker, _) = builder.build();
 /// ```
 
 #[derive(Clone, Debug)]
@@ -194,7 +194,7 @@ impl<T: Timestamp> Builder<T> {
     /// This method has the opportunity to perform some error checking that the path summaries
     /// are valid, including references to undefined nodes and ports, as well as self-loops with
     /// default summaries (a serious liveness issue).
-    pub fn build(&self) -> Tracker<T> {
+    pub fn build(&self) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
         Tracker::allocate_from(self)
     }
 }
@@ -246,11 +246,22 @@ pub struct Tracker<T:Timestamp> {
 
     /// Compiled summaries from each internal location (not scope inputs) to each scope output.
     output_changes: Vec<ChangeBatch<T>>,
+
+    /// A non-negative sum of post-filtration input changes.
+    ///
+    /// This sum should be zero exactly when the accumulated input changes are zero,
+    /// indicating that the progress tracker is currently tracking nothing. It should
+    /// always be exactly equal to the sum across all operators of the frontier sizes
+    /// of the target and source `pointstamps` member.
+    total_counts: i64,
 }
 
-struct PerOperator<T: Timestamp> {
-    targets: Vec<PortInformation<T>>,
-    sources: Vec<PortInformation<T>>,
+///
+pub struct PerOperator<T: Timestamp> {
+    ///
+    pub targets: Vec<PortInformation<T>>,
+    ///
+    pub sources: Vec<PortInformation<T>>,
 }
 
 impl<T: Timestamp> PerOperator<T> {
@@ -264,13 +275,13 @@ impl<T: Timestamp> PerOperator<T> {
 
 /// Per-port progress-tracking information.
 #[derive(Clone)]
-struct PortInformation<T: Timestamp> {
+pub struct PortInformation<T: Timestamp> {
     /// Current counts of active pointstamps.
-    pointstamps: MutableAntichain<T>,
+    pub pointstamps: MutableAntichain<T>,
     /// Current implications of active pointstamps across the dataflow.
-    implications: MutableAntichain<T>,
+    pub implications: MutableAntichain<T>,
     /// Path summaries to each of the scope outputs.
-    output_summaries: Vec<Antichain<T::Summary>>,
+    pub output_summaries: Vec<Antichain<T::Summary>>,
 }
 
 impl<T: Timestamp> PortInformation<T> {
@@ -314,16 +325,14 @@ impl<T:Timestamp> Tracker<T> {
     pub fn tracking_anything(&mut self) -> bool {
         !self.source_changes.is_empty() ||
         !self.target_changes.is_empty() ||
-        self.per_operator
-            .iter_mut()
-            .any(|o|
-                o.targets.iter_mut().any(|x| !x.pointstamps.is_empty()) ||
-                o.sources.iter_mut().any(|x| !x.pointstamps.is_empty())
-            )
+        self.total_counts > 0
     }
 
     /// Allocate a new `Tracker` using the shape from `summaries`.
-    pub fn allocate_from(builder: &Builder<T>) -> Self {
+    ///
+    /// The result is a pair of tracker, and the summaries from each input port to each
+    /// output port.
+    pub fn allocate_from(builder: &Builder<T>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
 
         // Allocate buffer space for each input and input port.
         let mut per_operator =
@@ -333,22 +342,38 @@ impl<T:Timestamp> Tracker<T> {
             .map(|&(inputs, outputs)| PerOperator::new(inputs, outputs))
             .collect::<Vec<_>>();
 
+        // Summary of scope inputs to scope outputs.
+        let mut builder_summary = vec![vec![]; builder.shape[0].0];
+
         // Compile summaries from each location to each scope output.
         let output_summaries = summarize_outputs::<T>(&builder.nodes, &builder.edges);
         for (location, summaries) in output_summaries.into_iter() {
-            match location.port {
-                Port::Target(port) => {
-                    per_operator[location.node].targets[port].output_summaries = summaries;
-                },
-                Port::Source(port) => {
-                    per_operator[location.node].sources[port].output_summaries = summaries;
-                },
+            // Summaries from scope inputs are useful in summarizing the scope.
+            if location.node == 0 {
+                if let Port::Source(port) = location.port {
+                    builder_summary[port] = summaries;
+                }
+                else {
+                    // Ignore (ideally trivial) output to output summaries.
+                }
+            }
+            // Summaries from internal nodes are important for projecting capabilities.
+            else {
+                match location.port {
+                    Port::Target(port) => {
+                        per_operator[location.node].targets[port].output_summaries = summaries;
+                    },
+                    Port::Source(port) => {
+                        per_operator[location.node].sources[port].output_summaries = summaries;
+                    },
+                }
             }
         }
 
         let scope_outputs = builder.shape[0].0;
         let output_changes = vec![ChangeBatch::new(); scope_outputs];
 
+        let tracker =
         Tracker {
             nodes: builder.nodes.clone(),
             edges: builder.edges.clone(),
@@ -358,7 +383,10 @@ impl<T:Timestamp> Tracker<T> {
             worklist: BinaryHeap::new(),
             pushed_changes: ChangeBatch::new(),
             output_changes,
-        }
+            total_counts: 0,
+        };
+
+        (tracker, builder_summary)
     }
 
     /// Propagates all pending updates.
@@ -379,6 +407,7 @@ impl<T:Timestamp> Tracker<T> {
             let changes = operator.pointstamps.update_iter(Some((time, diff)));
 
             for (time, diff) in changes {
+                self.total_counts += diff;
                 for (output, summaries) in operator.output_summaries.iter().enumerate() {
                     let output_changes = &mut self.output_changes[output];
                     summaries
@@ -397,6 +426,7 @@ impl<T:Timestamp> Tracker<T> {
             let changes = operator.pointstamps.update_iter(Some((time, diff)));
 
             for (time, diff) in changes {
+                self.total_counts += diff;
                 for (output, summaries) in operator.output_summaries.iter().enumerate() {
                     let output_changes = &mut self.output_changes[output];
                     summaries
@@ -478,6 +508,11 @@ impl<T:Timestamp> Tracker<T> {
     /// A mutable reference to the pushed results of changes.
     pub fn pushed(&mut self) -> &mut ChangeBatch<(Location, T)> {
         &mut self.pushed_changes
+    }
+
+    /// Reveals per-operator frontier state.
+    pub fn node_state(&self, index: usize) -> &PerOperator<T> {
+        &self.per_operator[index]
     }
 
     /// Indicates if pointstamp is in the scope-wide frontier.
@@ -587,7 +622,5 @@ fn summarize_outputs<T: Timestamp>(
 
     }
 
-    // Discard summaries from the scope input.
-    results.retain(|key,_val| key.node != 0);
     results
 }

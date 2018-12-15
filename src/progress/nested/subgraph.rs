@@ -21,8 +21,8 @@ use progress::{Location, Port, Source, Target};
 
 use progress::ChangeBatch;
 use progress::broadcast::Progcaster;
-use progress::nested::reachability;
-// use progress::nested::reachability_neu as reachability;
+// use progress::nested::reachability;
+use progress::nested::reachability_neu as reachability;
 use progress::timestamp::Refines;
 
 // IMPORTANT : by convention, a child identifier of zero is used to indicate inputs and outputs of
@@ -166,7 +166,8 @@ where
             builder.add_edge(source, target);
         }
 
-        let tracker = reachability::Tracker::allocate_from(builder.summarize());
+        // let tracker = reachability::Tracker::allocate_from(builder.summarize());
+        let (tracker, scope_summary) = builder.build();
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 
@@ -194,7 +195,7 @@ where
             pointstamp_tracker: tracker,
 
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
-
+            scope_summary,
         }
     }
 }
@@ -243,6 +244,7 @@ where
     progcaster: Progcaster<TInner>,
 
     shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
+    scope_summary: Vec<Vec<Antichain<TInner::Summary>>>,
 }
 
 impl<TOuter, TInner> Schedule for Subgraph<TOuter, TInner>
@@ -341,16 +343,21 @@ where
 
         if !incomplete {
             // Consider shutting down the child, if neither capabilities nor input frontier.
-            let (internals, frontiers) = self.pointstamp_tracker.node_state(child_index);
-            if internals.iter().all(|x| x.is_empty()) && frontiers.iter().all(|x| x.is_empty()) {
+            // let (internals, frontiers) = self.pointstamp_tracker.node_state(child_index);
+            let child_state = self.pointstamp_tracker.node_state(child_index);
+            let frontiers_empty = child_state.targets.iter().all(|x| x.implications.is_empty());
+            let no_capabilities = child_state.sources.iter().all(|x| x.pointstamps.is_empty());
+            // if internals.iter().all(|x| x.is_empty()) && frontiers.iter().all(|x| x.is_empty()) {
+            if frontiers_empty && no_capabilities {
                 child.shut_down();
             }
         }
         else {
             // In debug mode, check that the progress statements do not violate invariants.
             #[cfg(debug_assertions)] {
-                let (internals, frontiers) = self.pointstamp_tracker.node_state(child_index);
-                child.validate_progress(frontiers, internals);
+                child.validate_progress(self.pointstamp_tracker.node_state(child_index));
+                // let (internals, frontiers) = self.pointstamp_tracker.node_state(child_index);
+                // child.validate_progress(frontiers, internals);
             }
         }
 
@@ -449,21 +456,32 @@ where
         self.pointstamp_tracker.propagate_all();
 
         // Drain propagated information into shared progress structure.
-        for child in 0 .. self.children.len() {
-            let changes = self.pointstamp_tracker.pushed_mut(child);
-            if changes.iter_mut().any(|x| !x.is_empty()) {
-                self.temp_active.push(Reverse(child));
-                let frontier = &mut self.children[child].shared_progress.borrow_mut().frontiers[..];
-                changes
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(output, pointstamps)| pointstamps.drain_into(&mut frontier[output]));
+        for ((location, time), diff) in self.pointstamp_tracker.pushed().drain() {
+            // Targets are actionable, sources are not.
+            if let ::progress::Port::Target(port) = location.port {
+                self.temp_active.push(Reverse(location.node));
+                self.children[location.node]
+                    .shared_progress
+                    .borrow_mut()
+                    .frontiers[port]
+                    .update(time, diff);
             }
         }
 
+        // // Prior version of above code, for posterity.
+        // for child in 0 .. self.children.len() {
+        //     let changes = self.pointstamp_tracker.pushed_mut(child);
+        //     if changes.iter_mut().any(|x| !x.is_empty()) {
+        //         self.temp_active.push(Reverse(child));
+        //         let frontier = &mut self.children[child].shared_progress.borrow_mut().frontiers[..];
+        //         changes
+        //             .iter_mut()
+        //             .enumerate()
+        //             .for_each(|(output, pointstamps)| pointstamps.drain_into(&mut frontier[output]));
+        //     }
+        // }
+
         // Extract child zero frontier changes and report as internal capability changes.
-        // This could have been fused with the previous step, with a special case for child zero;
-        // this was not done in anticipation of event-driven progress statement reports.
         for (output, internal) in self.shared_progress.borrow_mut().internals.iter_mut().enumerate() {
             let frontiers = &mut self.children[0].shared_progress.borrow_mut().frontiers[..];
             frontiers[output]
@@ -493,23 +511,32 @@ where
         assert_eq!(self.children[0].outputs, self.inputs());
         assert_eq!(self.children[0].inputs, self.outputs());
 
-        // Step 1:  Our topology is now fixed, so we can establish reachability.
-        let pointstamp_summaries = self.pointstamp_builder.summarize();
-
-        //          This operator's summaries are the child zero output -> input summaries.
         let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
-        for input in 0..self.inputs() {
-            for &(target, ref antichain) in &pointstamp_summaries.source_target[0][input] {
-                if target.index == 0 {
-                    for summary in antichain.elements().iter() {
-                        internal_summary[input][target.port].insert(TInner::summarize(summary.clone()));
-                    };
+        for input in 0 .. self.scope_summary.len() {
+            for output in 0 .. self.scope_summary[input].len() {
+                for path_summary in self.scope_summary[input][output].elements().iter() {
+                    internal_summary[input][output].insert(TInner::summarize(path_summary.clone()));
                 }
             }
         }
 
-        //          Allocate the pointstamp tracker using the finalized topology.
-        self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries);
+        // // Step 1:  Our topology is now fixed, so we can establish reachability.
+        // let pointstamp_summaries = self.pointstamp_builder.summarize();
+
+        // //          This operator's summaries are the child zero output -> input summaries.
+        // let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
+        // for input in 0..self.inputs() {
+        //     for &(target, ref antichain) in &pointstamp_summaries.source_target[0][input] {
+        //         if target.index == 0 {
+        //             for summary in antichain.elements().iter() {
+        //                 internal_summary[input][target.port].insert(TInner::summarize(summary.clone()));
+        //             };
+        //         }
+        //     }
+        // }
+
+        // //          Allocate the pointstamp tracker using the finalized topology.
+        // self.pointstamp_tracker = reachability::Tracker::allocate_from(pointstamp_summaries);
 
 
         // Step 2:  Each child has expressed initial capabilities (their `shared_progress.internals`).
@@ -578,8 +605,14 @@ impl<T: Timestamp> PerOperatorState<T> {
         }
     }
 
-    pub fn new(mut scope: Box<Operate<T>>, index: usize, mut _path: Vec<usize>, identifier: usize, logging: Option<Logger>) -> PerOperatorState<T> {
-
+    pub fn new(
+        mut scope: Box<Operate<T>>,
+        index: usize,
+        mut _path: Vec<usize>,
+        identifier: usize,
+        logging: Option<Logger>
+    ) -> PerOperatorState<T>
+    {
         let local = scope.local();
         let inputs = scope.inputs();
         let outputs = scope.outputs();
@@ -699,8 +732,9 @@ impl<T: Timestamp> PerOperatorState<T> {
     /// internal capabilities, as events can occur that cannot be explained locally otherwise.
     fn validate_progress(
         &mut self,
-        external_frontiers: &[MutableAntichain<T>],
-        internal_capabilities: &[MutableAntichain<T>]
+        child_state: &reachability::PerOperator<T>,
+        // external_frontiers: &[MutableAntichain<T>],
+        // internal_capabilities: &[MutableAntichain<T>]
     )
     {
         let shared_progress = &mut *self.shared_progress.borrow_mut();
@@ -710,8 +744,10 @@ impl<T: Timestamp> PerOperatorState<T> {
             for (time, diff) in internal.iter() {
                 if *diff > 0 {
                     let consumed = shared_progress.consumeds.iter_mut().any(|x| x.iter().any(|(t,d)| *d > 0 && t.less_equal(time)));
-                    let internal = internal_capabilities[output].less_equal(time);
-                    let external = external_frontiers.iter().any(|x| x.less_equal(time));
+                    // let internal = internal_capabilities[output].less_equal(time);
+                    // let external = external_frontiers.iter().any(|x| x.less_equal(time));
+                    let internal = child_state.sources[output].pointstamps.less_equal(time);
+                    let external = child_state.targets.iter().any(|x| x.implications.less_equal(time));
                     if !consumed && !internal && !external {
                         panic!("Progress error; internal {:?}", self.name);
                     }
@@ -722,8 +758,10 @@ impl<T: Timestamp> PerOperatorState<T> {
             for (time, diff) in produced.iter() {
                 if *diff > 0 {
                     let consumed = shared_progress.consumeds.iter_mut().any(|x| x.iter().any(|(t,d)| *d > 0 && t.less_equal(time)));
-                    let internal = internal_capabilities[output].less_equal(time);
-                    let external = external_frontiers.iter().any(|x| x.less_equal(time));
+                    // let internal = internal_capabilities[output].less_equal(time);
+                    // let external = external_frontiers.iter().any(|x| x.less_equal(time));
+                    let internal = child_state.sources[output].pointstamps.less_equal(time);
+                    let external = child_state.targets.iter().any(|x| x.implications.less_equal(time));
                     if !consumed && !internal && !external {
                         panic!("Progress error; produced {:?}", self.name);
                     }
