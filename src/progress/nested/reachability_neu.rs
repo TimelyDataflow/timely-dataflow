@@ -343,7 +343,7 @@ impl<T:Timestamp> Tracker<T> {
             .collect::<Vec<_>>();
 
         // Summary of scope inputs to scope outputs.
-        let mut builder_summary = vec![vec![]; builder.shape[0].0];
+        let mut builder_summary = vec![vec![]; builder.shape[0].1];
 
         // Compile summaries from each location to each scope output.
         let output_summaries = summarize_outputs::<T>(&builder.nodes, &builder.edges);
