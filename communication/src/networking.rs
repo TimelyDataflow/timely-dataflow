@@ -54,6 +54,9 @@ impl MessageHeader {
 }
 
 /// Creates socket connections from a list of host addresses.
+///
+/// The item at index i in the resulting vec, is a Some(TcpSocket) to process i, except
+/// for item `my_index` which is None (no socket to self).
 pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
 
     let hosts1 = Arc::new(addresses);

@@ -27,7 +27,9 @@ impl AllocateBuilder for Thread {
 impl Thread {
     /// Allocates a new pusher and puller pair.
     pub fn new<T: 'static>() -> (Pusher<T>, Puller<T>) {
-        let shared = Rc::new(RefCell::new((VecDeque::<T>::new(), VecDeque::<T>::new())));
+        let shared = Rc::new(RefCell::new((
+                    /* queue of data buffers moving downstream */        VecDeque::<T>::new(),
+                    /* queue of empty buffers being returned upstream */ VecDeque::<T>::new())));
         (Pusher { target: shared.clone() }, Puller { source: shared, current: None })
     }
 }
