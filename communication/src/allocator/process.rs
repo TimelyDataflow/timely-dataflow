@@ -5,12 +5,11 @@ use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::collections::HashMap;
 
-use allocator::{Allocate, AllocateBuilder, Message, Thread};
+use allocator::{Allocate, AllocateBuilder, Message};
 use {Push, Pull};
 
 /// An allocater for inter-thread, intra-process communication
 pub struct Process {
-    inner: Thread,
     index: usize,
     peers: usize,
     // below: `Box<Any+Send>` is a `Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>`
@@ -18,13 +17,10 @@ pub struct Process {
 }
 
 impl Process {
-    /// Access the wrapped inner allocator.
-    pub fn inner<'a>(&'a mut self) -> &'a mut Thread { &mut self.inner }
     /// Allocate a list of connected intra-process allocators.
     pub fn new_vector(count: usize) -> Vec<Process> {
         let channels = Arc::new(Mutex::new(HashMap::new()));
         (0 .. count).map(|index| Process {
-            inner:      Thread,
             index:      index,
             peers:      count,
             channels:   channels.clone(),
