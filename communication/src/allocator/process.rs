@@ -13,7 +13,7 @@ pub struct Process {
     index: usize,
     peers: usize,
     // below: `Box<Any+Send>` is a `Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>`
-    channels: Arc<Mutex<HashMap<usize, Box<Any+Send>>>>,
+    channels: Arc<Mutex<HashMap</* channel id */ usize, Box<Any+Send>>>>,
 }
 
 impl Process {
@@ -32,6 +32,9 @@ impl Allocate for Process {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
     fn allocate<T: Any+Send+Sync+'static>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
+
+        // this is race-y global initialisation of all channels for all workers, performed by the
+        // first worker that enters this critical section
 
         // ensure exclusive access to shared list of channels
         let mut channels = self.channels.lock().ok().expect("mutex error?");
@@ -72,11 +75,12 @@ impl Allocate for Process {
             (send, recv, empty)
         };
 
+        // send is a vec of all senders, recv is this worker's receiver
+
         if empty { channels.remove(&identifier); }
 
-        let mut temp = Vec::new();
-        for s in send.into_iter() { temp.push(Box::new(s) as Box<Push<Message<T>>>); }
-        (temp, Box::new(recv) as Box<Pull<super::Message<T>>>)
+        let send: Vec<_> = send.into_iter().map(|s| Box::new(s) as Box<Push<Message<T>>>).collect();
+        (send, Box::new(recv) as Box<Pull<super::Message<T>>>)
     }
 }
 
