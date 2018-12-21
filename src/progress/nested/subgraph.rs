@@ -483,13 +483,22 @@ where
 
         // Extract child zero frontier changes and report as internal capability changes.
         for (output, internal) in self.shared_progress.borrow_mut().internals.iter_mut().enumerate() {
-            let frontiers = &mut self.children[0].shared_progress.borrow_mut().frontiers[..];
-            frontiers[output]
+            self.pointstamp_tracker
+                .pushed_output()[output]
                 .drain()
                 .map(|(time, diff)| (time.to_outer(), diff))
                 .filter_through(&mut self.output_capabilities[output])
                 .for_each(|(time, diff)| internal.update(time, diff));
         }
+
+        // for (output, internal) in self.shared_progress.borrow_mut().internals.iter_mut().enumerate() {
+        //     let frontiers = &mut self.children[0].shared_progress.borrow_mut().frontiers[..];
+        //     frontiers[output]
+        //         .drain()
+        //         .map(|(time, diff)| (time.to_outer(), diff))
+        //         .filter_through(&mut self.output_capabilities[output])
+        //         .for_each(|(time, diff)| internal.update(time, diff));
+        // }
     }
 }
 

@@ -505,6 +505,11 @@ impl<T:Timestamp> Tracker<T> {
         }
     }
 
+    /// Implications of maintained capabilities projected to each output.
+    pub fn pushed_output(&mut self) -> &mut [ChangeBatch<T>] {
+        &mut self.output_changes[..]
+    }
+
     /// A mutable reference to the pushed results of changes.
     pub fn pushed(&mut self) -> &mut ChangeBatch<(Location, T)> {
         &mut self.pushed_changes
