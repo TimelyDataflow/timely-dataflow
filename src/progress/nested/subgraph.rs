@@ -191,7 +191,7 @@ where
             local_pointstamp: ChangeBatch::new(),
             final_pointstamp: ChangeBatch::new(),
             progcaster,
-            pointstamp_builder: builder,
+            // pointstamp_builder: builder,
             pointstamp_tracker: tracker,
 
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
@@ -237,7 +237,7 @@ where
     final_pointstamp: ChangeBatch<(Location, TInner)>,
 
     // Graph structure and pointstamp tracker.
-    pointstamp_builder: reachability::Builder<TInner>,
+    // pointstamp_builder: reachability::Builder<TInner>,
     pointstamp_tracker: reachability::Tracker<TInner>,
 
     // channel / whatever used to communicate pointstamp updates to peers.

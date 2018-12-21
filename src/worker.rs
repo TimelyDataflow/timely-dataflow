@@ -131,16 +131,20 @@ impl<A: Allocate> Worker<A> {
             allocator.receive();
             let events = allocator.events().clone();
             let mut borrow = events.borrow_mut();
+            let paths = self.paths.borrow();
             for (channel, _event) in borrow.drain(..) {
                 // TODO: Pay more attent to `_event`.
                 // Consider tracking whether a channel
                 // in non-empty, and only activating
                 // on the basis of non-empty channels.
-                let path = &self.paths.borrow_mut()[channel][..];
-                // println!("Message for {:?}", path);
-                self.activations
-                    .borrow_mut()
-                    .activate(path);
+                // TODO: This is a sloppy way to deal
+                // with channels that may not be alloc'd.
+                if let Some(path) = paths.get(channel) {
+                    // println!("Message for {:?}", path);
+                    self.activations
+                        .borrow_mut()
+                        .activate(&path[..]);
+                }
             }
         }
 
