@@ -58,7 +58,10 @@ impl Signal {
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
-/// Who knows.
+/// An unbounded queue of bytes intended for point-to-point communication
+/// between threads. Cloning returns another handle to the same queue.
+///
+/// TODO: explain "extend"
 #[derive(Clone)]
 pub struct MergeQueue {
     queue: Arc<Mutex<VecDeque<Bytes>>>, // queue of bytes.
