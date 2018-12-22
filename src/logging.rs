@@ -132,6 +132,13 @@ pub struct ScheduleEvent {
     pub start_stop: StartStop,
 }
 
+impl ScheduleEvent {
+    /// Creates a new start scheduling event.
+    pub fn start(id: usize) -> Self { ScheduleEvent { id, start_stop: StartStop::Start } }
+    /// Creates a new stop scheduling event and reports whether work occurred.
+    pub fn stop(id: usize, activity: bool) -> Self { ScheduleEvent { id, start_stop: StartStop::Stop { activity } } }
+}
+
 #[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct ApplicationEvent {

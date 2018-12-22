@@ -101,7 +101,8 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
 
         builder.build(
             move |changes| {
-                frontier.borrow_mut().update_iter(changes[0].drain());
+                let mut borrow = frontier.borrow_mut();
+                borrow.update_iter(changes[0].drain());
             },
             move |consumed, internal, produced| {
 

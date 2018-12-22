@@ -101,7 +101,7 @@ fn test_neu(nodes: usize, rounds: usize) {
     builder.add_edge(Source { index: nodes - 1, port: 0 }, Target { index: 0, port: 0 } );
 
     // Construct a reachability tracker.
-    let mut tracker = builder.build();
+    let (mut tracker, _) = builder.build();
 
     let timer = ::std::time::Instant::now();
 

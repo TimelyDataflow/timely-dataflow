@@ -4,31 +4,61 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use allocator::{Allocate, AllocateBuilder, Message};
-use {Push, Pull};
+use allocator::{Allocate, AllocateBuilder, Event};
+use allocator::counters::Pusher as CountPusher;
+use allocator::counters::Puller as CountPuller;
+use {Push, Pull, Message};
+
+/// Builder for single-threaded allocator.
+pub struct ThreadBuilder;
+
+impl AllocateBuilder for ThreadBuilder {
+    type Allocator = Thread;
+    fn build(self) -> Self::Allocator { Thread::new() }
+}
 
 
 /// An allocator for intra-thread communication.
-pub struct Thread;
+pub struct Thread {
+    /// Shared counts of messages in channels.
+    events: Rc<RefCell<VecDeque<(usize, Event)>>>,
+}
+
 impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
-    fn allocate<T: 'static>(&mut self, _identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
-        let (pusher, puller) = Thread::new();
+    fn allocate<T: 'static>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
+        let (pusher, puller) = Thread::new_from(identifier, self.events.clone());
         (vec![Box::new(pusher)], Box::new(puller))
+    }
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
+        &self.events
     }
 }
 
-impl AllocateBuilder for Thread {
-    type Allocator = Self;
-    fn build(self) -> Self { self }
-}
+/// Thread-local counting channel push endpoint.
+pub type ThreadPusher<T> = CountPusher<T, Pusher<T>>;
+/// Thread-local counting channel pull endpoint.
+pub type ThreadPuller<T> = CountPuller<T, Puller<T>>;
 
 impl Thread {
-    /// Allocates a new pusher and puller pair.
-    pub fn new<T: 'static>() -> (Pusher<T>, Puller<T>) {
-        let shared = Rc::new(RefCell::new((VecDeque::<T>::new(), VecDeque::<T>::new())));
-        (Pusher { target: shared.clone() }, Puller { source: shared, current: None })
+    /// Allocates a new thread-local channel allocator.
+    pub fn new() -> Self {
+        Thread {
+            events: Rc::new(RefCell::new(VecDeque::new())),
+        }
+    }
+
+    /// Creates a new thread-local channel from an identifier and shared counts.
+    pub fn new_from<T: 'static>(identifier: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>)
+        -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>)
+    {
+        let shared = Rc::new(RefCell::new((VecDeque::<Message<T>>::new(), VecDeque::<Message<T>>::new())));
+        let pusher = Pusher { target: shared.clone() };
+        let pusher = CountPusher::new(pusher, identifier, events.clone());
+        let puller = Puller { source: shared, current: None };
+        let puller = CountPuller::new(puller, identifier, events.clone());
+        (pusher, puller)
     }
 }
 

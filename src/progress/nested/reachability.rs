@@ -16,38 +16,37 @@
 //! let mut builder = Builder::<usize>::new();
 //!
 //! // Each node with one input connected to one output.
-//! builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 //! builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-//! builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)]]);
+//! builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(0)]]);
+//! builder.add_node(3, 1, 1, vec![vec![Antichain::from_elem(1)]]);
 //!
 //! // Connect nodes in sequence, looping around to the first from the last.
-//! builder.add_edge(Source { index: 0, port: 0}, Target { index: 1, port: 0} );
 //! builder.add_edge(Source { index: 1, port: 0}, Target { index: 2, port: 0} );
-//! builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
+//! builder.add_edge(Source { index: 2, port: 0}, Target { index: 3, port: 0} );
+//! builder.add_edge(Source { index: 3, port: 0}, Target { index: 1, port: 0} );
 //!
 //! // Construct a reachability tracker.
 //! let mut tracker = Tracker::allocate_from(builder.summarize());
 //!
 //! // Introduce a pointstamp at the output of the first node.
-//! tracker.update_source(Source { index: 0, port: 0}, 17, 1);
+//! tracker.update_source(Source { index: 1, port: 0}, 17, 1);
 //!
 //! // Propagate changes; until this call updates are simply buffered.
 //! tracker.propagate_all();
 //!
 //! // Propagated changes should have a single element, incremented for node zero.
-//! assert_eq!(tracker.pushed_mut(0)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
-//! assert_eq!(tracker.pushed_mut(1)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
+//! assert_eq!(tracker.pushed_mut(1)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
 //! assert_eq!(tracker.pushed_mut(2)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
+//! assert_eq!(tracker.pushed_mut(3)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
 //! ```
 
 use progress::Timestamp;
 use progress::{Location, Port, Source, Target};
 use progress::ChangeBatch;
 
-use progress::frontier::{Antichain, MutableAntichain};
+use progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
 use progress::timestamp::PathSummary;
 use order::PartialOrder;
-
 
 /// A topology builder, which can summarize reachability along paths.
 ///
@@ -55,7 +54,7 @@ use order::PartialOrder;
 /// a static summary of the minimal actions a timestamp must endure going from any
 /// input or output port to a destination input port.
 ///
-/// A graph is provides as (i) several indexed nodes, each with some number of input
+/// A graph is provided as (i) several indexed nodes, each with some number of input
 /// and output ports, and each with a summary of the internal paths connecting each
 /// input to each output, and (ii) a set of edges connecting output ports to input
 /// ports. Edges do not adjust timestamps; only nodes do this.
@@ -90,7 +89,6 @@ use order::PartialOrder;
 /// // Summarize reachability information.
 /// let summary = builder.summarize();
 /// ```
-
 #[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
     /// Internal connections within hosted operators.
@@ -305,28 +303,28 @@ pub struct Summary<T: Timestamp> {
 /// let mut builder = Builder::<usize>::new();
 ///
 /// // Each node with one input connected to one output.
-/// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
 /// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-/// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)]]);
+/// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(0)]]);
+/// builder.add_node(3, 1, 1, vec![vec![Antichain::from_elem(1)]]);
 ///
 /// // Connect nodes in sequence, looping around to the first from the last.
-/// builder.add_edge(Source { index: 0, port: 0}, Target { index: 1, port: 0} );
 /// builder.add_edge(Source { index: 1, port: 0}, Target { index: 2, port: 0} );
-/// builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
+/// builder.add_edge(Source { index: 2, port: 0}, Target { index: 3, port: 0} );
+/// builder.add_edge(Source { index: 3, port: 0}, Target { index: 1, port: 0} );
 ///
 /// // Construct a reachability tracker.
 /// let mut tracker = Tracker::allocate_from(builder.summarize());
 ///
 /// // Introduce a pointstamp at the output of the first node.
-/// tracker.update_source(Source { index: 0, port: 0}, 17, 1);
+/// tracker.update_source(Source { index: 1, port: 0}, 17, 1);
 ///
 /// // Propagate changes; until this call updates are simply buffered.
 /// tracker.propagate_all();
 ///
 /// // Propagated changes should have a single element, incremented for node zero.
-/// assert_eq!(tracker.pushed_mut(0)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
-/// assert_eq!(tracker.pushed_mut(1)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
+/// assert_eq!(tracker.pushed_mut(1)[0].drain().collect::<Vec<_>>(), vec![(18, 1)]);
 /// assert_eq!(tracker.pushed_mut(2)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
+/// assert_eq!(tracker.pushed_mut(3)[0].drain().collect::<Vec<_>>(), vec![(17, 1)]);
 /// ```
 
 #[derive(Default, Debug)]
@@ -340,7 +338,8 @@ pub struct Tracker<T:Timestamp> {
     targets: Vec<Vec<MutableAntichain<T>>>,
 
     /// Buffers of consequent propagated changes.
-    pusheds:  Vec<Vec<ChangeBatch<T>>>,
+    buffers: Vec<Vec<MutableAntichain<T>>>,
+    pusheds: Vec<Vec<ChangeBatch<T>>>,
 
     /// Compiled reachability along edges and through internal connections.
     source_target: Vec<Vec<Vec<(Target, Antichain<T::Summary>)>>>,
@@ -371,8 +370,8 @@ impl<T:Timestamp> Tracker<T> {
 
     /// Returns references to per-node state describing input and output frontiers,
     /// and any pending updates to propagated consequences.
-    pub fn node_state(&mut self, index: usize) -> (&[MutableAntichain<T>], &[MutableAntichain<T>], &mut [ChangeBatch<T>]) {
-        (&self.targets[index], &self.sources[index], &mut self.pusheds[index][..])
+    pub fn node_state(&mut self, index: usize) -> (&[MutableAntichain<T>], &[MutableAntichain<T>]) {
+        (&self.sources[index], &self.buffers[index])
     }
 
     /// Reference to the target mutable antichains.
@@ -393,7 +392,7 @@ impl<T:Timestamp> Tracker<T> {
     }
 
     ///
-    pub fn is_empty(&mut self) -> bool {
+    pub fn is_drained(&mut self) -> bool {
         self.pusheds.iter_mut().all(|x| x.iter_mut().all(|y| y.is_empty()))
     }
 
@@ -403,16 +402,43 @@ impl<T:Timestamp> Tracker<T> {
         self.targets.iter_mut().any(|x| x.iter_mut().any(|y| !y.is_empty()))
     }
 
+    // ///
+    // pub fn report_tracking_anything(&mut self) {
+    //     for i in 0 .. self.sources.len() {
+    //         for j in 0 .. self.sources[i].len() {
+    //             if !self.sources[i][j].is_empty() {
+    //                 println!("Non-empty source: {}, {}", i, j);
+    //             }
+    //         }
+    //     }
+    //     for i in 0 .. self.targets.len() {
+    //         for j in 0 .. self.targets[i].len() {
+    //             if !self.targets[i][j].is_empty() {
+    //                 println!("Non-empty target: {}, {}", i, j);
+    //             }
+    //         }
+    //     }
+    // }
+
     /// Allocate a new `Tracker` using the shape from `summaries`.
     pub fn allocate_from(summary: Summary<T>) -> Self {
 
-        let source_target = summary.source_target;
-        let target_target = summary.target_target;
+        let mut source_target = summary.source_target;
+        let mut target_target = summary.target_target;
+
+        // Discard summaries from the scope input to the scope output.
+        for summaries in target_target[0].iter_mut() {
+            summaries.retain(|&(t, _)| t.index > 0);
+        }
+        for summaries in source_target[0].iter_mut() {
+            summaries.retain(|&(t, _)| t.index > 0);
+        }
 
         debug_assert_eq!(source_target.len(), target_target.len());
 
         let mut sources = Vec::with_capacity(source_target.len());
         let mut targets = Vec::with_capacity(target_target.len());
+        let mut buffers = Vec::with_capacity(target_target.len());
         let mut pusheds = Vec::with_capacity(target_target.len());
 
         // Allocate buffer space for each input and input port.
@@ -425,12 +451,14 @@ impl<T:Timestamp> Tracker<T> {
         for index in 0 .. target_target.len() {
             let target_count = target_target[index].len();
             targets.push(vec![MutableAntichain::new(); target_count]);
+            buffers.push(vec![MutableAntichain::new(); target_count]);
             pusheds.push(vec![ChangeBatch::new(); target_count]);
         }
 
         Tracker {
             sources,
             targets,
+            buffers,
             pusheds,
             source_target,
             target_target,
@@ -446,33 +474,33 @@ impl<T:Timestamp> Tracker<T> {
         // Propagate changes at each input (target).
         for input in 0..self.targets[index].len() {
             let target_target = &self.target_target[index][input];
-            let pusheds = &mut self.pusheds;
-            self.targets[index][input].update_iter_and(None, |time, value| {
+            for (time, diff) in self.targets[index][input].update_iter(None) {
                 for &(target, ref antichain) in target_target.iter() {
-                    let pusheds = &mut pusheds[target.index][target.port];
-                    for summary in antichain.elements().iter() {
-                        if let Some(new_time) = summary.results_in(time) {
-                            pusheds.update(new_time, value);
-                        }
-                    }
+                    let changes =
+                    antichain
+                        .elements().iter()
+                        .flat_map(|s| s.results_in(&time))
+                        .map(|nt| (nt,diff))
+                        .filter_through(&mut self.buffers[target.index][target.port]);
+                    self.pusheds[target.index][target.port].extend(changes);
                 }
-            });
+            }
         }
 
         // Propagate changes at each output (source).
         for output in 0..self.sources[index].len() {
             let source_target = &self.source_target[index][output];
-            let pusheds = &mut self.pusheds;
-            self.sources[index][output].update_iter_and(None, |time, value| {
+            for (time, diff) in self.sources[index][output].update_iter(None) {
                 for &(target, ref antichain) in source_target.iter() {
-                    let pusheds = &mut pusheds[target.index][target.port];
-                    for summary in antichain.elements().iter() {
-                        if let Some(new_time) = summary.results_in(time) {
-                            pusheds.update(new_time, value);
-                        }
-                    }
+                    let changes =
+                    antichain
+                        .elements().iter()
+                        .flat_map(|s| s.results_in(&time))
+                        .map(|nt| (nt, diff))
+                        .filter_through(&mut self.buffers[target.index][target.port]);
+                    self.pusheds[target.index][target.port].extend(changes);
                 }
-            });
+            }
         }
     }
 

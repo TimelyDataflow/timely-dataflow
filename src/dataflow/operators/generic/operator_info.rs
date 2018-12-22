@@ -5,14 +5,17 @@ pub struct OperatorInfo {
     pub local_id: usize,
     /// Worker-unique identifier.
     pub global_id: usize,
+    /// Operator address.
+    pub address: Vec<usize>,
 }
 
 impl OperatorInfo {
     /// Construct a new `OperatorInfo`.
-    pub fn new(local_id: usize, global_id: usize) -> OperatorInfo {
+    pub fn new(local_id: usize, global_id: usize, address: &[usize]) -> OperatorInfo {
         OperatorInfo {
             local_id,
             global_id,
+            address: address.to_vec(),
         }
     }
 }

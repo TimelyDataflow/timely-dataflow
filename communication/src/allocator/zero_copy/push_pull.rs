@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 
 use bytes::arc::Bytes;
 
+use allocator::canary::Canary;
 use networking::MessageHeader;
 
 use {Data, Push, Pull};
@@ -66,14 +67,16 @@ impl<T:Data, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
 /// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
 /// allocation.
 pub struct Puller<T> {
+    _canary: Canary,
     current: Option<Message<T>>,
     receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
 }
 
 impl<T:Data> Puller<T> {
     /// Creates a new `Puller` instance from a shared queue.
-    pub fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>) -> Puller<T> {
+    pub fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Puller<T> {
         Puller {
+            _canary,
             current: None,
             receiver,
         }
@@ -100,16 +103,18 @@ impl<T:Data> Pull<Message<T>> for Puller<T> {
 /// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
 /// allocation.
 pub struct PullerInner<T> {
-    inner: Box<Pull<Message<T>>>,            // inner pullable (e.g. intra-process typed queue)
+    inner: Box<Pull<Message<T>>>,               // inner pullable (e.g. intra-process typed queue)
+    _canary: Canary,
     current: Option<Message<T>>,
-    receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
+    receiver: Rc<RefCell<VecDeque<Bytes>>>,     // source of serialized buffers
 }
 
 impl<T:Data> PullerInner<T> {
     /// Creates a new `PullerInner` instance from a shared queue.
-    pub fn new(inner: Box<Pull<Message<T>>>, receiver: Rc<RefCell<VecDeque<Bytes>>>) -> Self {
+    pub fn new(inner: Box<Pull<Message<T>>>, receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
         PullerInner {
             inner,
+            _canary,
             current: None,
             receiver,
         }

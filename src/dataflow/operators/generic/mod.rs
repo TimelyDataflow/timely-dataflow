@@ -10,7 +10,7 @@ mod handles;
 mod notificator;
 mod operator_info;
 
-pub use self::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
+pub use self::handles::{InputHandle, FrontieredInputHandle, OutputHandle, OutputWrapper};
 pub use self::notificator::{Notificator, FrontierNotificator};
 
 // pub use self::unary::Unary;

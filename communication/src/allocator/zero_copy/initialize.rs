@@ -1,7 +1,8 @@
 //! Network initialization.
 
 use std::sync::Arc;
-use allocator::Process;
+// use allocator::Process;
+use allocator::process::ProcessBuilder;
 use networking::create_sockets;
 use super::tcp::{send_loop, recv_loop};
 use super::allocator::{TcpBuilder, new_vector};
@@ -38,7 +39,7 @@ pub fn initialize_networking(
     threads: usize,
     noisy: bool,
     log_sender: Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
--> ::std::io::Result<(Vec<TcpBuilder<Process>>, CommsGuard)>
+-> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 // where
 //     F: Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync+'static,
 {

@@ -4,8 +4,10 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
+use scheduling::{Schedule, Activations, ActivateOnDrop};
+
 use progress::frontier::Antichain;
-use progress::{Operate, Timestamp};
+use progress::{Operate, operate::SharedProgress, Timestamp};
 use progress::Source;
 use progress::ChangeBatch;
 
@@ -73,12 +75,12 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, Capability<G::Timestamp>), Stream<G, D>);
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>);
 }
 
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, Capability<G::Timestamp>), Stream<G, D>) {
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
 
         let (output, registrar) = Tee::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
@@ -86,50 +88,59 @@ impl<G: Scope> UnorderedInput<G> for G {
         let cap = mint_capability(Default::default(), internal.clone());
         let counter = PushCounter::new(output);
         let produced = counter.produced().clone();
-        let helper = UnorderedHandle::new(counter);
         let peers = self.peers();
 
-        let index = self.add_operator(Box::new(UnorderedOperator {
+        let index = self.allocate_operator_index();
+        let mut address = self.addr();
+        address.push(index);
+
+        let cap = ActivateCapability::new(cap, &address[..], self.activations().clone());
+
+        let helper = UnorderedHandle::new(counter);
+
+        self.add_operator_with_index(Box::new(UnorderedOperator {
+            name: "UnorderedInput".to_owned(),
+            address,
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             internal,
             produced,
             peers,
-        }));
+        }), index);
 
         ((helper, cap), Stream::new(Source { index, port: 0 }, registrar, self.clone()))
     }
 }
 
 struct UnorderedOperator<T:Timestamp> {
+    name: String,
+    address: Vec<usize>,
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
     internal:   Rc<RefCell<ChangeBatch<T>>>,
     produced:   Rc<RefCell<ChangeBatch<T>>>,
     peers:     usize,
 }
 
+impl<T:Timestamp> Schedule for UnorderedOperator<T> {
+    fn name(&self) -> &str { &self.name }
+    fn path(&self) -> &[usize] { &self.address[..] }
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        self.internal.borrow_mut().drain_into(&mut shared_progress.internals[0]);
+        self.produced.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
+        false
+    }
+}
+
 impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
-    fn name(&self) -> String { "Input".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>,
-                                           Vec<ChangeBatch<T>>) {
-        let mut internal = ChangeBatch::new();
-        // augment the counts for each reserved capability.
-        for &(ref time, count) in self.internal.borrow_mut().iter() {
-            internal.update(time.clone(), count * (self.peers as i64 - 1));
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+        let mut borrow = self.internal.borrow_mut();
+        for (time, count) in borrow.drain() {
+            self.shared_progress.borrow_mut().internals[0].update(time, count * (self.peers as i64));
         }
-
-        // drain the changes to empty out, and complete the counts for internal.
-        self.internal.borrow_mut().drain_into(&mut internal);
-        (Vec::new(), vec![internal])
-    }
-
-    fn pull_internal_progress(&mut self,_consumed: &mut [ChangeBatch<T>],
-                                         internal: &mut [ChangeBatch<T>],
-                                         produced: &mut [ChangeBatch<T>]) -> bool
-    {
-        self.produced.borrow_mut().drain_into(&mut produced[0]);
-        self.internal.borrow_mut().drain_into(&mut internal[0]);
-        false
+        (Vec::new(), self.shared_progress.clone())
     }
 
     fn notify_me(&self) -> bool { false }
@@ -148,13 +159,40 @@ impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: Capability<T>) -> AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>> {
-        self.buffer.autoflush_session(cap)
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
+        ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }
 
-impl<T: Timestamp, D: Data> Drop for UnorderedHandle<T, D> {
+/// Capability that activates on drop.
+#[derive(Clone)]
+pub struct ActivateCapability<T: Timestamp> {
+    capability: Capability<T>,
+    address: Rc<Vec<usize>>,
+    activations: Rc<RefCell<Activations>>,
+}
+
+impl<T: Timestamp> ActivateCapability<T> {
+    /// Creates a new activating capability.
+    pub fn new(capability: Capability<T>, address: &[usize], activations: Rc<RefCell<Activations>>) -> Self {
+        Self {
+            capability,
+            address: Rc::new(address.to_vec()),
+            activations,
+        }
+    }
+    /// Delays the capability.
+    pub fn delayed(&self, time: &T) -> Self {
+        ActivateCapability {
+            capability: self.capability.delayed(time),
+            address: self.address.clone(),
+            activations: self.activations.clone(),
+        }
+    }
+}
+
+impl<T: Timestamp> Drop for ActivateCapability<T> {
     fn drop(&mut self) {
-        // TODO: explode if not all capabilities were given up?
+        self.activations.borrow_mut().activate(&self.address[..]);
     }
 }

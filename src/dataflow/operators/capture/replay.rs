@@ -60,6 +60,10 @@ where I : IntoIterator,
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
+
+        let address = builder.operator_info().address;
+        let activator = scope.activator_for(&address[..]);
+
         let (targets, stream) = builder.new_output();
 
         let mut output = PushBuffer::new(PushCounter::new(targets));
@@ -90,6 +94,9 @@ where I : IntoIterator,
                         }
                     }
                 }
+
+                // Always reschedule `replay`.
+                activator.activate();
 
                 output.cease();
                 output.inner().produced().borrow_mut().drain_into(&mut produced[0]);

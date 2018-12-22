@@ -8,8 +8,9 @@ use bytes::arc::Bytes;
 
 use networking::MessageHeader;
 
-use {Allocate, allocator::AllocateBuilder, Data, Push, Pull};
-use allocator::Message;
+use {Allocate, Message, Data, Push, Pull};
+use allocator::{AllocateBuilder, Event};
+use allocator::canary::Canary;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
 
@@ -79,6 +80,8 @@ impl ProcessBuilder {
         ProcessAllocator {
             index: self.index,
             peers: self.peers,
+            events: Rc::new(RefCell::new(VecDeque::new())),
+            canaries: Rc::new(RefCell::new(Vec::new())),
             staged: Vec::new(),
             sends,
             recvs: self.recvs,
@@ -102,6 +105,10 @@ pub struct ProcessAllocator {
 
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
+
+    events: Rc<RefCell<VecDeque<(usize, Event)>>>,
+
+    canaries: Rc<RefCell<Vec<usize>>>,
 
     _signal:     Signal,
     // sending, receiving, and responding to binary buffers.
@@ -139,14 +146,29 @@ impl Allocate for ProcessAllocator {
             .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
             .clone();
 
-        let puller = Box::new(Puller::new(channel));
+        use allocator::counters::Puller as CountPuller;
+        let canary = Canary::new(identifier, self.canaries.clone());
+        let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, self.events().clone()));
 
         (pushes, puller)
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn pre_work(&mut self) {
+    fn receive(&mut self) {
+
+        // Check for channels whose `Puller` has been dropped.
+        let mut canaries = self.canaries.borrow_mut();
+        for dropped_channel in canaries.drain(..) {
+            let dropped =
+            self.to_local
+                .remove(&dropped_channel)
+                .expect("non-existent channel dropped");
+            assert!(dropped.borrow().is_empty());
+        }
+        ::std::mem::drop(canaries);
+
+        let mut events = self.events.borrow_mut();
 
         for recv in self.recvs.iter_mut() {
             recv.drain_into(&mut self.staged);
@@ -164,6 +186,9 @@ impl Allocate for ProcessAllocator {
                     let mut peel = bytes.extract_to(header.required_bytes());
                     let _ = peel.extract_to(40);
 
+                    // Increment message count for channel.
+                    events.push_back((header.channel, Event::Pushed(1)));
+
                     // Ensure that a queue exists.
                     // We may receive data before allocating, and shouldn't block.
                     self.to_local
@@ -180,7 +205,7 @@ impl Allocate for ProcessAllocator {
     }
 
     // Perform postparatory work, most likely sending un-full binary buffers.
-    fn post_work(&mut self) {
+    fn release(&mut self) {
         // Publish outgoing byte ledgers.
         for send in self.sends.iter_mut() {
             send.borrow_mut().publish();
@@ -194,5 +219,9 @@ impl Allocate for ProcessAllocator {
         //         eprintln!("Warning: worker {}, undrained channel[{}].len() = {}", self.index, index, len);
         //     }
         // }
+    }
+
+    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
+        &self.events
     }
 }

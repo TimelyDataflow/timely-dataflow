@@ -5,16 +5,21 @@
 //! an interface that is intentionally harder to mis-use.
 
 use std::default::Default;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use ::Data;
 
+use scheduling::{Schedule, Activations};
+
 use progress::{Source, Target};
 use progress::ChangeBatch;
-use progress::{Timestamp, Operate, Antichain};
+use progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
 use dataflow::{Stream, Scope};
 use dataflow::channels::pushers::Tee;
 use dataflow::channels::pact::ParallelizationContract;
+use dataflow::operators::generic::operator_info::OperatorInfo;
 
 /// Contains type-free information about the operator properties.
 pub struct OperatorShape {
@@ -53,6 +58,7 @@ pub struct OperatorBuilder<G: Scope> {
     scope: G,
     index: usize,
     global: usize,
+    address: Vec<usize>,    // path to the operator (ending with index).
     shape: OperatorShape,
     summary: Vec<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>,
 }
@@ -64,12 +70,15 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let global = scope.new_identifier();
         let index = scope.allocate_operator_index();
+        let mut address = scope.addr();
+        address.push(index);
         let peers = scope.peers();
 
         OperatorBuilder {
             scope,
             index,
             global,
+            address,
             shape: OperatorShape::new(name, peers),
             summary: vec![],
         }
@@ -110,7 +119,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, logging);
+        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, &self.address[..], logging);
         let target = Target { index: self.index, port: self.shape.inputs };
         stream.connect_to(target, sender, channel_id);
 
@@ -154,71 +163,92 @@ impl<G: Scope> OperatorBuilder<G> {
             &mut [ChangeBatch<G::Timestamp>],
         )->bool+'static
     {
+        let inputs = self.shape.inputs;
+        let outputs = self.shape.outputs;
+
         let operator = OperatorCore {
             shape: self.shape,
+            address: self.address,
+            activations: self.scope.activations().clone(),
             push_external,
             pull_internal,
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             summary: self.summary,
-            phantom: ::std::marker::PhantomData,
         };
 
         self.scope.add_operator_with_indices(Box::new(operator), self.index, self.global);
+    }
+
+    /// Information describing the operator.
+    pub fn operator_info(&self) -> OperatorInfo {
+        OperatorInfo::new(self.index, self.global, &self.address[..])
     }
 }
 
 struct OperatorCore<T, PEP, PIP>
     where
         T: Timestamp,
-        PEP: FnMut(&mut [ChangeBatch<T>])+'static,
-        PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
 {
     shape: OperatorShape,
+    address: Vec<usize>,
     push_external: PEP,
     pull_internal: PIP,
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
+    activations: Rc<RefCell<Activations>>,
     summary: Vec<Vec<Antichain<T::Summary>>>,
-    phantom: ::std::marker::PhantomData<T>,
+}
+
+impl<T, PEP, PIP> Schedule for OperatorCore<T, PEP, PIP>
+where
+    T: Timestamp,
+    PEP: FnMut(&mut [ChangeBatch<T>])+'static,
+    PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
+{
+    fn name(&self) -> &str { &self.shape.name }
+    fn path(&self) -> &[usize] { &self.address[..] }
+    fn schedule(&mut self) -> bool {
+
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+
+        let frontier = &mut shared_progress.frontiers[..];
+        let consumed = &mut shared_progress.consumeds[..];
+        let internal = &mut shared_progress.internals[..];
+        let produced = &mut shared_progress.produceds[..];
+
+        (self.push_external)(frontier);
+        (self.pull_internal)(consumed, internal, produced)
+    }
 }
 
 impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
-    where
-        T: Timestamp,
-        PEP: FnMut(&mut [ChangeBatch<T>])+'static,
-        PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
+where
+    T: Timestamp,
+    PEP: FnMut(&mut [ChangeBatch<T>])+'static,
+    PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
 {
     fn inputs(&self) -> usize { self.shape.inputs }
     fn outputs(&self) -> usize { self.shape.outputs }
 
     // announce internal topology as fully connected, and hold all default capabilities.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Vec<ChangeBatch<T>>) {
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+
+        // Request the operator to be scheduled at least once.
+        self.activations.borrow_mut().activate(&self.address[..]);
 
         // by default, we reserve a capability for each output port at `Default::default()`.
-        let mut internal = Vec::new();
-        for _ in 0 .. self.shape.outputs {
-            internal.push(ChangeBatch::new_from(Default::default(), self.shape.peers as i64));
-        }
+        self.shared_progress
+            .borrow_mut()
+            .internals
+            .iter_mut()
+            .for_each(|output| output.update(Default::default(), self.shape.peers as i64));
 
-        (self.summary.clone(), internal)
+        (self.summary.clone(), self.shared_progress.clone())
     }
 
     // initialize self.frontier antichains as indicated by hosting scope.
-    fn set_external_summary(&mut self, _summaries: Vec<Vec<Antichain<T::Summary>>>,
-                                       count_map: &mut [ChangeBatch<T>]) {
-        (self.push_external)(count_map);
+    fn set_external_summary(&mut self) {
+        (self.push_external)(&mut self.shared_progress.borrow_mut().frontiers[..]);
     }
 
-    // update self.frontier antichains as indicated by hosting scope.
-    fn push_external_progress(&mut self, count_map: &mut [ChangeBatch<T>]) {
-        (self.push_external)(count_map);
-    }
-
-    // invoke user logic, propagate changes found in shared ChangeBatches.
-    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
-                                         internal: &mut [ChangeBatch<T>],
-                                         produced: &mut [ChangeBatch<T>]) -> bool
-    {
-        (self.pull_internal)(consumed, internal, produced)
-    }
-
-    fn name(&self) -> String { self.shape.name.clone() }
     fn notify_me(&self) -> bool { self.shape.notify }
 }

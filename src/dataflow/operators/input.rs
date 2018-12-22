@@ -4,8 +4,10 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
+use scheduling::{Schedule, Activator};
+
 use progress::frontier::Antichain;
-use progress::{Operate, Timestamp, ChangeBatch};
+use progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use progress::Source;
 
 use Data;
@@ -104,48 +106,63 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
+        let index = self.allocate_operator_index();
+        let mut address = self.addr();
+        address.push(index);
+
+        handle.activate.push(self.activator_for(&address[..]));
+
         let progress = Rc::new(RefCell::new(ChangeBatch::new()));
 
         handle.register(counter, progress.clone());
 
         let copies = self.peers();
 
-        let index = self.add_operator(Box::new(Operator {
+        self.add_operator_with_index(Box::new(Operator {
+            name: "Input".to_owned(),
+            address,
+            shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             progress,
             messages: produced,
             copies,
-        }));
+        }), index);
 
         Stream::new(Source { index, port: 0 }, registrar, self.clone())
     }
 }
 
 struct Operator<T:Timestamp> {
+    name: String,
+    address: Vec<usize>,
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
     progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
     messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
     copies:     usize,
 }
 
+impl<T:Timestamp> Schedule for Operator<T> {
+
+    fn name(&self) -> &str { &self.name }
+
+    fn path(&self) -> &[usize] { &self.address[..] }
+
+    fn schedule(&mut self) -> bool {
+        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        self.progress.borrow_mut().drain_into(&mut shared_progress.internals[0]);
+        self.messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
+        false
+    }
+}
+
 impl<T:Timestamp> Operate<T> for Operator<T> {
-    fn name(&self) -> String { "Input".to_owned() }
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>,
-                                           Vec<ChangeBatch<T>>) {
-        let mut map = ChangeBatch::new();
-        map.update(Default::default(), self.copies as i64);
-        (Vec::new(), vec![map])
+    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+        self.shared_progress.borrow_mut().internals[0].update(Default::default(), self.copies as i64);
+        (Vec::new(), self.shared_progress.clone())
     }
 
-    fn pull_internal_progress(&mut self,_messages_consumed: &mut [ChangeBatch<T>],
-                                         frontier_progress: &mut [ChangeBatch<T>],
-                                         messages_produced: &mut [ChangeBatch<T>]) -> bool
-    {
-        self.messages.borrow_mut().drain_into(&mut messages_produced[0]);
-        self.progress.borrow_mut().drain_into(&mut frontier_progress[0]);
-        false
-    }
 
     fn notify_me(&self) -> bool { false }
 }
@@ -153,6 +170,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 pub struct Handle<T: Timestamp, D: Data> {
+    activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     pushers: Vec<Counter<T, D, Tee<T, D>>>,
     buffer1: Vec<D>,
@@ -190,6 +208,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// ```
     pub fn new() -> Self {
         Handle {
+            activate: Vec::new(),
             progress: Vec::new(),
             pushers: Vec::new(),
             buffer1: Vec::with_capacity(Message::<T, D>::default_length()),
@@ -274,6 +293,10 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         }
         for progress in self.progress.iter() {
             progress.borrow_mut().update(self.now_at.clone(), -1);
+        }
+        // Alert worker of each active input operator.
+        for activate in self.activate.iter() {
+            activate.activate();
         }
     }
 

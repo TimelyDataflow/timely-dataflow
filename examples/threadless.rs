@@ -6,7 +6,7 @@ use timely::dataflow::operators::{Inspect, Probe};
 fn main() {
 
     // create a naked single-threaded worker.
-    let allocator = timely::communication::allocator::Thread;
+    let allocator = timely::communication::allocator::Thread::new();
     let mut worker = timely::worker::Worker::new(allocator);
 
     // create input and probe handles.

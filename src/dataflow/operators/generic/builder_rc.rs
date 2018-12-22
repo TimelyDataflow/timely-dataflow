@@ -17,8 +17,8 @@ use dataflow::channels::pact::ParallelizationContract;
 use dataflow::channels::pullers::Counter as PullCounter;
 use dataflow::operators::capability::Capability;
 use dataflow::operators::capability::mint as mint_capability;
-
 use dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
+use dataflow::operators::generic::operator_info::OperatorInfo;
 
 use logging::TimelyLogger as Logger;
 
@@ -166,6 +166,11 @@ impl<G: Scope> OperatorBuilder<G> {
     /// The operator's worker-unique identifier.
     pub fn global(&self) -> usize {
         self.builder.global()
+    }
+
+    /// Creates operator info for the operator.
+    pub fn operator_info(&self) -> OperatorInfo {
+        self.builder.operator_info()
     }
 }
 

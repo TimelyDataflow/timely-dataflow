@@ -1,18 +1,9 @@
 //! Partition a stream of records into multiple streams.
 
-use progress::{Timestamp, Operate};
-use progress::{Source, Target};
-use progress::ChangeBatch;
-
+use dataflow::channels::pact::Pipeline;
+use dataflow::operators::generic::builder_rc::OperatorBuilder;
+use dataflow::{Scope, Stream};
 use Data;
-
-use dataflow::channels::pact::{ParallelizationContract, Pipeline};
-use dataflow::channels::pushers::tee::Tee;
-use dataflow::channels::pushers::counter::Counter as PushCounter;
-use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
-use dataflow::channels::pullers::Counter as PullCounter;
-
-use dataflow::{Stream, Scope};
 
 /// Partition a stream of records into multiple streams.
 pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
@@ -37,80 +28,33 @@ pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
 impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D2, F> for Stream<G, D> {
     fn partition(&self, parts: u64, route: F) -> Vec<Stream<G, D2>> {
 
-        let mut scope = self.scope();
-        let channel_id = scope.new_identifier();
+        let mut builder = OperatorBuilder::new("Partition".to_owned(), self.scope());
 
-        let (sender, receiver) = Pipeline.connect(&mut scope, channel_id, self.scope().logging());
+        let mut input = builder.new_input(self, Pipeline);
+        let mut outputs = Vec::new();
+        let mut streams = Vec::new();
 
-        let mut targets = Vec::new();
-        let mut registrars = Vec::new();
-        for _ in 0..parts {
-            let (target, registrar) = Tee::<G::Timestamp,D2>::new();
-            targets.push(target);
-            registrars.push(registrar);
+        for _ in 0 .. parts {
+            let (output, stream) = builder.new_output();
+            outputs.push(output);
+            streams.push(stream);
         }
 
-        let operator = Operator::new(PullCounter::new(receiver), targets, route);
-        let index = scope.add_operator(Box::new(operator));
-        self.connect_to(Target { index, port: 0 }, sender, channel_id);
-
-        let mut results = Vec::new();
-        for (output, registrar) in registrars.into_iter().enumerate() {
-            results.push(Stream::new(Source { index, port: output }, registrar, scope.clone()));
-        }
-
-        results
-    }
-}
-
-struct Operator<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
-    input:   PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>,
-    outputs: Vec<PushBuffer<T, D2, PushCounter<T, D2, Tee<T, D2>>>>,
-    route:    F,
-}
-
-impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operator<T, D, D2, F> {
-    fn new(input: PullCounter<T, D, <Pipeline as ParallelizationContract<T, D>>::Puller>, outputs: Vec<Tee<T, D2>>, route: F) -> Operator<T, D, D2, F> {
-        Operator {
-            input,
-            outputs: outputs.into_iter().map(|x| PushBuffer::new(PushCounter::new(x))).collect(),
-            route,
-        }
-    }
-}
-
-impl<T:Timestamp, D: Data, D2: Data, F: Fn(D)->(u64, D2)> Operate<T> for Operator<T, D, D2, F> {
-    fn name(&self) -> String { "Partition".to_owned() }
-    fn inputs(&self) -> usize { 1 }
-    fn outputs(&self) -> usize { self.outputs.len() }
-
-    fn pull_internal_progress(&mut self, consumed: &mut [ChangeBatch<T>],
-                                        _internal: &mut [ChangeBatch<T>],
-                                         produced: &mut [ChangeBatch<T>]) -> bool {
-
-        while let Some(message) = self.input.next() {
-
-            let outputs = self.outputs.iter_mut();
-            let mut message = message.as_mut();
-            let time = &message.time;
-            let data = &mut message.data;
-
-            // TODO : This results in small sends for many parts, as sessions does the buffering
-            let mut sessions: Vec<_> = outputs.map(|x| x.session(time)).collect();
-
-            for (part, datum) in data.drain(..).map(&self.route) {
-                sessions[part as usize].give(datum);
+        builder.build(move |_| {
+            let mut vector = Vec::new();
+            move |_frontiers| {
+                let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
+                input.for_each(|time, data| {
+                    data.swap(&mut vector);
+                    let mut sessions = handles.iter_mut().map(|h| h.session(&time)).collect::<Vec<_>>();
+                    for datum in vector.drain(..) {
+                        let (part, datum2) = route(datum);
+                        sessions[part as usize].give(datum2);
+                    }
+                });
             }
-        }
+        });
 
-        self.input.consumed().borrow_mut().drain_into(&mut consumed[0]);
-        for (index, output) in self.outputs.iter_mut().enumerate() {
-            output.cease();
-            output.inner().produced().borrow_mut().drain_into(&mut produced[index]);
-        }
-
-        false   // no reason to keep running on Partition's account
+        streams
     }
-
-    fn notify_me(&self) -> bool { false }
 }
