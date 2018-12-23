@@ -113,8 +113,8 @@ pub struct ProcessAllocator {
     _signal:     Signal,
     // sending, receiving, and responding to binary buffers.
     staged:     Vec<Bytes>,
-    sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to process x.
-    recvs:      Vec<MergeQueue>,                            // recvs[x] <- from process x?.
+    sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to thread x.
+    recvs:      Vec<MergeQueue>,                            // recvs[x] <- from thread x.
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,          // to worker-local typed pullers.
 }
 
