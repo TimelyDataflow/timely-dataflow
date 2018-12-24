@@ -11,7 +11,7 @@ use abomonation::{encode, decode};
 
 /// Framing data for each `Vec<u8>` transmission, indicating a typed channel, the source and
 /// destination workers, and the length in bytes.
-#[derive(Copy, Clone, Debug, Abomonation)]
+#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct MessageHeader {
     /// index of channel.
     pub channel:    usize,

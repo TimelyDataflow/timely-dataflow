@@ -114,11 +114,8 @@ pub struct MessagesEvent {
 pub enum StartStop {
     /// Operator starts.
     Start,
-    /// Operator stops; did it have any activity?
-    Stop {
-        /// Did the operator perform non-trivial work.
-        activity: bool
-    },
+    /// Operator stops.
+    Stop,
 }
 
 #[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -136,7 +133,7 @@ impl ScheduleEvent {
     /// Creates a new start scheduling event.
     pub fn start(id: usize) -> Self { ScheduleEvent { id, start_stop: StartStop::Start } }
     /// Creates a new stop scheduling event and reports whether work occurred.
-    pub fn stop(id: usize, activity: bool) -> Self { ScheduleEvent { id, start_stop: StartStop::Stop { activity } } }
+    pub fn stop(id: usize) -> Self { ScheduleEvent { id, start_stop: StartStop::Stop } }
 }
 
 #[derive(Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
