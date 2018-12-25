@@ -120,6 +120,13 @@ impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
     fn push(&mut self, pair: &mut Option<Bundle<T, D>>) {
         if let Some(bundle) = pair {
             self.counter += 1;
+            // Stamp the sequence number and source.
+            // FIXME: Awkward moment/logic.
+            if let Some(message) = bundle.if_mut() {
+                message.seq = self.counter-1;
+                message.from = self.source;
+            }
+
             self.logging.as_ref().map(|l| l.log(::logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
