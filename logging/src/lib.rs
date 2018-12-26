@@ -127,6 +127,7 @@ impl<T, E: Clone> Logger<T, E> {
             let action = &mut *action;
             (*action)(&self.time.elapsed(), &mut *buffer);
             buffer.clear();
+            buffer.reserve(1024);
         }
     }
 
@@ -154,5 +155,6 @@ impl<T, E> Flush for Logger<T, E> {
         let action = &mut *action;
         (*action)(&self.time.elapsed(), &mut *buffer);
         buffer.clear();
+        buffer.reserve(1024);
     }
 }
