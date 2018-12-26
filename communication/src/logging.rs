@@ -12,7 +12,7 @@ pub struct CommunicationSetup {
 }
 
 /// Various communication events.
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum CommunicationEvent {
     /// An observed message.
     Message(MessageEvent),
@@ -21,7 +21,7 @@ pub enum CommunicationEvent {
 }
 
 /// An observed message.
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct MessageEvent {
     /// true for send event, false for receive event
     pub is_send: bool,
@@ -30,7 +30,7 @@ pub struct MessageEvent {
 }
 
 /// Starting or stopping communication threads.
-#[derive(Abomonation, Debug, Clone)]
+#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct StateEvent {
     /// Is the thread a send (vs a recv) thread.
     pub send: bool,
