@@ -14,7 +14,7 @@ use progress::timestamp::{Refines};
 use progress::SubgraphBuilder;
 use progress::operate::Operate;
 use dataflow::scopes::Child;
-
+use logging::TimelyLogger;
 
 /// Methods provided by the root Worker.
 ///
@@ -232,8 +232,10 @@ impl<A: Allocate> Worker<A> {
         // let addr = vec![self.allocator.borrow().index()];
         let addr = vec![];
         let dataflow_index = self.allocate_dataflow_index();
+        let identifier = self.new_identifier();
 
         let mut logging = self.logging.borrow_mut().get("timely");
+
         let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone(), "Dataflow");
         let subscope = RefCell::new(subscope);
 
@@ -246,14 +248,22 @@ impl<A: Allocate> Worker<A> {
             func(&mut resources, &mut builder)
         };
 
-        logging.as_mut().map(|l| l.flush());
-
         let mut operator = subscope.into_inner().build(self);
+
+        logging.as_mut().map(|l| l.log(::logging::OperatesEvent {
+            id: identifier,
+            addr: operator.path().to_vec(),
+            name: operator.name().to_string(),
+        }));
+
+        logging.as_mut().map(|l| l.flush());
 
         operator.get_internal_summary();
         operator.set_external_summary();
 
         let wrapper = Wrapper {
+            logging,
+            identifier,
             operate: Some(Box::new(operator)),
             resources: Some(Box::new(resources)),
         };
@@ -289,6 +299,8 @@ impl<A: Allocate> Clone for Worker<A> {
 }
 
 struct Wrapper {
+    logging: Option<TimelyLogger>,
+    identifier: usize,
     operate: Option<Box<Schedule>>,
     resources: Option<Box<Any>>,
 }
@@ -300,11 +312,23 @@ impl Wrapper {
     /// dropping the dataflow first and then the resources (so that, e.g., shared
     /// library bindings will outlive the dataflow).
     fn step(&mut self) -> bool {
+
+        // Perhaps log information about the start of the schedule call.
+        if let Some(l) = self.logging.as_mut() {
+            l.log(::logging::ScheduleEvent::start(self.identifier));
+        }
+
         let incomplete = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false);
         if !incomplete {
             self.operate = None;
             self.resources = None;
         }
+
+        // Perhaps log information about the stop of the schedule call.
+        if let Some(l) = self.logging.as_mut() {
+            l.log(::logging::ScheduleEvent::stop(self.identifier));
+        }
+
         incomplete
     }
 }
