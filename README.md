@@ -56,21 +56,20 @@ For a more involved example, consider the very similar (but more explicit) [exam
 ```rust
 extern crate timely;
 
-use timely::dataflow::*;
-use timely::dataflow::operators::*;
+use timely::dataflow::{InputHandle, ProbeHandle};
+use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
 fn main() {
-    // initializes and runs a timely dataflow computation
+    // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
 
-        // create a new input, output probe.
         let index = worker.index();
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
 
-        // exchange data and inspect its output.
-        worker.dataflow(move |scope| {
-            input.to_stream(scope)
+        // create a new input, exchange data, and inspect its output
+        worker.dataflow(|scope| {
+            scope.input_from(&mut input)
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe_with(&mut probe);
