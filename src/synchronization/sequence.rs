@@ -6,6 +6,7 @@ use std::time::{Instant, Duration};
 use std::collections::VecDeque;
 
 use ::{communication::Allocate, ExchangeData};
+use ::scheduling::Scheduler;
 use worker::Worker;
 use dataflow::channels::pact::Exchange;
 use dataflow::operators::generic::operator::source;
@@ -41,8 +42,12 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
             let mut recvd = Vec::new();
             let mut vector = Vec::new();
 
+            let scope = dataflow.clone();
+
             // a source that attempts to pull from `recv` and produce commands for everyone
-            source(dataflow, "SequenceInput", move |capability, _info| {
+            source(dataflow, "SequenceInput", move |capability, info| {
+
+                let activator = scope.activator_for(&info.address[..]);
 
                 // so we can drop, if input queue vanishes.
                 let mut capability = Some(capability);
@@ -66,6 +71,8 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
                                 session.give((worker_index, element.clone()));
                             }
                         }
+
+                        activator.activate();
                     }
                     else {
                         capability = None;
