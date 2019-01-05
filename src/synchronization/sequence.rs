@@ -13,6 +13,24 @@ use dataflow::operators::generic::operator::source;
 use dataflow::operators::generic::operator::Operator;
 use scheduling::activate::Activator;
 
+// A Sequencer needs all operators firing with high frequency, because
+// it uses the timer to gauge progress. If other workers cease
+// advancing their own capabilities, although they might receive a
+// record they may not actually tick forward their own source clocks,
+// and no one will actually form the sequence.
+//
+// A CatchupActivator is an activator with an optional timestamp
+// attached. This allows us to represent a special state, where after
+// receiving an action from another worker, each of the other workers
+// will keep scheduling its source operator, until its capability
+// timestamp exceeds the greatest timestamp that the sink has
+// received.
+//
+// This allows operators to go quiet again until a new requests shows
+// up. The operators lose the ability to confirm that nothing is
+// scheduled for a particular time (they could request this with a
+// no-op event bearing a timestamp), but everyone still sees the same
+// sequence.
 struct CatchupActivator {
     pub catchup_until: Option<Duration>,
     activator: Activator,
@@ -24,11 +42,10 @@ impl CatchupActivator {
     }
 }
 
-
 /// Orders elements inserted across all workers.
 ///
-/// A Sequencer allows each worker to insert into a consistent ordered sequence
-/// that is seen by all workers in the same order.
+/// A Sequencer allows each worker to insert into a consistent ordered
+/// sequence that is seen by all workers in the same order.
 pub struct Sequencer<T> {
     activator: Rc<RefCell<Option<CatchupActivator>>>,
     send: Rc<RefCell<VecDeque<T>>>, // proposed items.
@@ -49,23 +66,28 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
         let send_weak = Rc::downgrade(&send);
         let recv_weak = Rc::downgrade(&recv);
 
+        // The SequenceInput activator will be held by the sequencer,
+        // by the operator itself, and by the sink operator. We can
+        // only initialize the activator once we obtain the operator
+        // address.
         let activator = Rc::new(RefCell::new(None));
-        let activator_weak = Rc::downgrade(&activator);
-        let activator_weak_sink = Rc::downgrade(&activator);
+        let activator_source = Rc::downgrade(&activator);
+        let activator_sink = Rc::downgrade(&activator);
 
         // build a dataflow used to serialize and circulate commands
         worker.dataflow::<Duration,_,_>(move |dataflow| {
 
+            let scope = dataflow.clone();
             let peers = dataflow.peers();
+            
             let mut recvd = Vec::new();
             let mut vector = Vec::new();
-
-            let scope = dataflow.clone();
         
             // a source that attempts to pull from `recv` and produce commands for everyone
             source(dataflow, "SequenceInput", move |capability, info| {
 
-                activator_weak.upgrade()
+                // intialize activator, now that we have the address
+                activator_source.upgrade()
                     .unwrap()
                     .replace(Some(CatchupActivator {
                         activator: scope.activator_for(&info.address[..]),
@@ -95,23 +117,18 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
                             }
                         }
 
-                        if let Some(activator) = activator_weak.upgrade() {
-
-                            let mut activator_borrow = activator.borrow_mut();
-                            let mut activator = activator_borrow.as_mut().unwrap();
+                        let activator_cell = activator_source.upgrade().expect("can't upgrade activator ref");
+                        let mut activator_borrow = activator_cell.borrow_mut();
+                        let mut activator = activator_borrow.as_mut().unwrap();
                             
-                            if let Some(t) = activator.catchup_until {
-                                if capability.time().less_than(&t) {
-                                    activator.activate();
-                                } else {
-                                    activator.catchup_until = None;
-                                }
+                        if let Some(t) = activator.catchup_until {
+                            if capability.time().less_than(&t) {
+                                activator.activate();
+                            } else {
+                                activator.catchup_until = None;
                             }
-                        } else {
-                            panic!("can't upgrade activator");
                         }
-                    }
-                    else {
+                    } else {
                         capability = None;
                     }
                 }
@@ -132,15 +149,12 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
                     recvd.sort();
 
                     if let Some(last) = recvd.last() {
-                        if let Some(activator) = activator_weak_sink.upgrade() {
-                            let mut activator_borrow = activator.borrow_mut();
-                            let mut activator = activator_borrow.as_mut().unwrap();
+                        let activator_cell = activator_sink.upgrade().expect("can't upgrade activator ref");
+                        let mut activator_borrow = activator_cell.borrow_mut();
+                        let mut activator = activator_borrow.as_mut().unwrap();
 
-                            activator.catchup_until = Some(last.0);
-                            activator.activate();
-                        } else {
-                            panic!("can't upgrade activator");
-                        }
+                        activator.catchup_until = Some(last.0);
+                        activator.activate();
                     }
 
                     // determine how many (which) elements to read from `recvd`.
