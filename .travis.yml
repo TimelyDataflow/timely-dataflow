@@ -4,7 +4,7 @@ rust:
 - stable
 script:
 - cargo build
-- cargo test
+- cargo test && (cd bytes; cargo test)
 - cargo bench
 - cargo doc
 after_success: |

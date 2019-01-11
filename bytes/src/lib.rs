@@ -3,7 +3,7 @@
 //! #Examples
 //!
 //! ```
-//! use bytes::rc::Bytes;
+//! use timely_bytes::rc::Bytes;
 //!
 //! let bytes = vec![0u8; 1024];
 //! let mut shared1 = Bytes::from(bytes);
@@ -199,7 +199,7 @@ pub mod arc {
         /// #Examples
         ///
         /// ```
-        /// use bytes::arc::Bytes;
+        /// use timely_bytes::arc::Bytes;
         ///
         /// let bytes = vec![0u8; 1024];
         /// let mut shared1 = Bytes::from(bytes);
@@ -234,7 +234,7 @@ pub mod arc {
         /// #Examples
         ///
         /// ```
-        /// use bytes::arc::Bytes;
+        /// use timely_bytes::arc::Bytes;
         ///
         /// let bytes = vec![0u8; 1024];
         /// let mut shared1 = Bytes::from(bytes);
@@ -269,7 +269,7 @@ pub mod arc {
         /// #Examples
         ///
         /// ```
-        /// use bytes::arc::Bytes;
+        /// use timely_bytes::arc::Bytes;
         ///
         /// let bytes = vec![0u8; 1024];
         /// let mut shared1 = Bytes::from(bytes);
