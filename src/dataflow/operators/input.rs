@@ -155,6 +155,7 @@ impl<T:Timestamp> Schedule for Operator<T> {
 }
 
 impl<T:Timestamp> Operate<T> for Operator<T> {
+
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
@@ -162,7 +163,6 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
         self.shared_progress.borrow_mut().internals[0].update(Default::default(), self.copies as i64);
         (Vec::new(), self.shared_progress.clone())
     }
-
 
     fn notify_me(&self) -> bool { false }
 }

@@ -162,7 +162,9 @@ impl<A: Allocate> Worker<A> {
                 .borrow_mut()
                 .for_extensions(&[], |index| active_dataflows.push(index));
 
-            // println!("scheduling {} dataflows", active_dataflows.len());
+            // if active_dataflows.len() > 0 {
+            //     println!("scheduling {} dataflows", active_dataflows.len());
+            // }
 
             let mut dataflows = self.dataflows.borrow_mut();
             for index in active_dataflows.drain(..) {

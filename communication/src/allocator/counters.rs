@@ -32,17 +32,23 @@ impl<T, P: Push<T>>  Pusher<T, P> {
 impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
     #[inline(always)]
     fn push(&mut self, element: &mut Option<T>) {
-        if element.is_none() {
-            if self.count != 0 {
-                self.events
-                    .borrow_mut()
-                    .push_back((self.index, Event::Pushed(self.count)));
-                self.count = 0;
-            }
-        }
-        else {
-            self.count += 1;
-        }
+        // if element.is_none() {
+        //     if self.count != 0 {
+        //         self.events
+        //             .borrow_mut()
+        //             .push_back((self.index, Event::Pushed(self.count)));
+        //         self.count = 0;
+        //     }
+        // }
+        // else {
+        //     self.count += 1;
+        // }
+        // TODO: Version above is less chatty, but can be a bit late in
+        //       moving information along. Better, but needs cooperation.
+        self.events
+            .borrow_mut()
+            .push_back((self.index, Event::Pushed(1)));
+
         self.pusher.push(element)
     }
 }
@@ -74,17 +80,21 @@ impl<T, P: Push<T>>  ArcPusher<T, P> {
 impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
     #[inline(always)]
     fn push(&mut self, element: &mut Option<T>) {
-        if element.is_none() {
-            if self.count != 0 {
-                self.events
-                    .send((self.index, Event::Pushed(self.count)))
-                    .expect("Failed to send message count");
-                self.count = 0;
-            }
-        }
-        else {
-            self.count += 1;
-        }
+        // if element.is_none() {
+        //     if self.count != 0 {
+        //         self.events
+        //             .send((self.index, Event::Pushed(self.count)))
+        //             .expect("Failed to send message count");
+        //         self.count = 0;
+        //     }
+        // }
+        // else {
+        //     self.count += 1;
+        // }
+        self.events
+            .send((self.index, Event::Pushed(1)))
+            .expect("Failed to send message count");
+
         self.pusher.push(element)
     }
 }
@@ -125,6 +135,7 @@ impl<T, P: Pull<T>> Pull<T> for Puller<T, P> {
         else {
             self.count += 1;
         }
+
         result
     }
 }
