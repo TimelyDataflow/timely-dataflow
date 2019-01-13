@@ -16,6 +16,8 @@ The address associated with each operator, a `[usize]` used to start with the id
 
 The `Worker` and the `Subgraph` operator no longer schedules all of their child dataflows and scopes by default. Instead, they track "active" children and schedule only those. Operators become active by receiving a message, a progress update, or by explicit activation. Some operators, source as `source`, have no inputs and will require explicit activation to run more than once. Operators that yield before completing all of their work (good for you!) should explicitly re-activate themselves to ensure they are re-scheduled even if they receive no further messages or progress updates.
 
+The `dataflow_using` method has been generalized to support arbitrary dataflow names, loggers, and additional resources the dataflow should keep alive. Its name has been chaged to `dataflow_core`.
+
 ## 0.8.0
 
 This release made several breaking modifications to the types associated with scopes, and in particular the generic parameters for the `Child<'a, G: ScopeParent, T: Timestamp>` type. Where previously the `T` parameter would be the *new coordinate* to add to `G`'s timestamp, it is now the *new timestamp* including `G`'s timestamp as well. This was done to support a broader class of timestamps to be used, beyond always requiring product combinations with new timestamps.
