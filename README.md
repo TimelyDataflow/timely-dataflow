@@ -4,7 +4,7 @@ Timely dataflow is a low-latency cyclic dataflow computational model, introduced
 
 This project is something akin to a distributed data-parallel compute engine, which scales the same program up from a single thread on your laptop to distributed execution across a cluster of computers. The main goals are expressive power and high performance. It is probably strictly more expressive and faster than whatever you are currently using, assuming you aren't yet using timely dataflow.
 
-Be sure to read the [documentation for timely dataflow](https://docs.rs/timely). It is a work in progress, but mostly improving. There is more [long-form text](http://frankmcsherry.github.io/timely-dataflow) in `mdbook` format with examples tested against the current builds. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow in a different way, though be warned that the examples there may need tweaks to build against the current code.
+Be sure to read the [documentation for timely dataflow](https://docs.rs/timely). It is a work in progress, but mostly improving. There is more [long-form text](https://timelydataflow.github.io/timely-dataflow/) in `mdbook` format with examples tested against the current builds. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow in a different way, though be warned that the examples there may need tweaks to build against the current code.
 
 # An example
 
@@ -15,7 +15,7 @@ To use timely dataflow, add the following to the dependencies section of your pr
 timely="*"
 ```
 
-This will bring in the [`timely` crate](https://crates.io/crates/timely) from [crates.io](http://crates.io), which should allow you to start writing timely dataflow programs like this one (also available in [examples/simple.rs](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/simple.rs)):
+This will bring in the [`timely` crate](https://crates.io/crates/timely) from [crates.io](http://crates.io), which should allow you to start writing timely dataflow programs like this one (also available in [examples/simple.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/examples/simple.rs)):
 
 ```rust
 extern crate timely;
@@ -51,7 +51,7 @@ This is a very simple example (it's in the name), which only just suggests at ho
 
 ## Doing more things
 
-For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/hello.rs), which creates and drives the dataflow separately:
+For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/examples/hello.rs), which creates and drives the dataflow separately:
 
 ```rust
 extern crate timely;
@@ -145,7 +145,7 @@ There are currently a few options for writing timely dataflow programs. Ideally 
 
 * [**Timely dataflow**](https://docs.rs/timely/0.6.0/timely/dataflow/operators/index.html): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also including more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
 
-* [**Differential dataflow**](https://github.com/frankmcsherry/differential-dataflow): A higher-level language built on timely dataflow, differential dataflow includes operators like `group`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
+* [**Differential dataflow**](https://github.com/timelydataflow/differential-dataflow): A higher-level language built on timely dataflow, differential dataflow includes operators like `group`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
 
 There are also a few applications built on timely dataflow, including [a streaming worst-case optimal join implementation](https://github.com/frankmcsherry/dataflow_join) and a [PageRank](https://github.com/frankmcsherry/pagerank) implementation, both of which should provide helpful examples of writing timely dataflow programs.
 
@@ -159,13 +159,13 @@ There are a few classes of work that are helpful for us, and may be interesting 
 
 * If you like writing little example programs or documentation tests, there are many places throughout timely dataflow where the examples are relatively sparse, or do not actually test the demonstrated functionality. These can often be easy to pick up, flesh out, and push without a large up-front obligation. It is probably also a great way to get one of us to explain something in detail to you, if that is what you are looking for.
 
-* If you like the idea of getting your hands dirty in timely dataflow, the [issue tracker](https://github.com/frankmcsherry/timely-dataflow/issues) has a variety of issues that touch on different levels of the stack. For example:
+* If you like the idea of getting your hands dirty in timely dataflow, the [issue tracker](https://github.com/timelydataflow/timely-dataflow/issues) has a variety of issues that touch on different levels of the stack. For example:
 
-    * Timely currently [does more copies of data than it must](https://github.com/frankmcsherry/timely-dataflow/issues/111), in the interest of appeasing Rust's ownership discipline most directly. Several of these copies could be elided with some more care in the resource management (for example, using shared regions of one `Vec<u8>` in the way that the [bytes crate](https://crates.io/crates/bytes) does). Not everything is obvious here, so there is the chance for a bit of design work too.
+    * Timely currently [does more copies of data than it must](https://github.com/timelydataflow/timely-dataflow/issues/111), in the interest of appeasing Rust's ownership discipline most directly. Several of these copies could be elided with some more care in the resource management (for example, using shared regions of one `Vec<u8>` in the way that the [bytes crate](https://crates.io/crates/bytes) does). Not everything is obvious here, so there is the chance for a bit of design work too.
 
-    * We recently landed a bunch of logging changes, but there is still [a list of nice to have features](https://github.com/frankmcsherry/timely-dataflow/issues/114) that haven't made it yet. If you are interested in teasing out how timely works in part by poking around at the infrastructure that records what it does, this could be a good fit! It has the added benefit that the logs are timely streams themselves, so you can even do some log processing on timely. Whoa...
+    * We recently landed a bunch of logging changes, but there is still [a list of nice to have features](https://github.com/timelydataflow/timely-dataflow/issues/114) that haven't made it yet. If you are interested in teasing out how timely works in part by poking around at the infrastructure that records what it does, this could be a good fit! It has the added benefit that the logs are timely streams themselves, so you can even do some log processing on timely. Whoa...
 
-    * There is an open issue on [integrating Rust ownership idioms into timely dataflow](https://github.com/frankmcsherry/timely-dataflow/issues/77). Right now, timely streams are of cloneable objects, and when a stream is re-used, items will be cloned. We could make that more explicit, and require calling a `.cloned()` method to get owned objects in the same way that iterators require it. At the same time, using a reference to a stream without taking ownership should get you the chance to look at the records that go past without taking ownership (and without requiring a clone, as is currently done). This is often plenty for exchange channels which may need to serialize the data and can't take much advantage of ownership anyhow.
+    * There is an open issue on [integrating Rust ownership idioms into timely dataflow](https://github.com/timelydataflow/timely-dataflow/issues/77). Right now, timely streams are of cloneable objects, and when a stream is re-used, items will be cloned. We could make that more explicit, and require calling a `.cloned()` method to get owned objects in the same way that iterators require it. At the same time, using a reference to a stream without taking ownership should get you the chance to look at the records that go past without taking ownership (and without requiring a clone, as is currently done). This is often plenty for exchange channels which may need to serialize the data and can't take much advantage of ownership anyhow.
 
     * There is a bunch of interesting work in scheduling timely dataflow operators, where when given the chance to schedule many operators, we might think for a moment and realize that several of them have to work to do and can be skipped. Better, we might maintain the list of operators with anything to do, and do nothing for those without work to do.
 
