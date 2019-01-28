@@ -31,6 +31,7 @@
     - [Iteration](./chapter_4/chapter_4_2.md)
     - [Flow Control](./chapter_4/chapter_4_3.md)
     - [Capture and Replay](./chapter_4/chapter_4_4.md)
+    - [Custom Datatypes](./chapter_4/chapter_4_5.md)
 
 - [Internals](./chapter_5/chapter_5.md)
     - [Communication](./chapter_5/chapter_5_1.md)
