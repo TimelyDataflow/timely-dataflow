@@ -59,7 +59,13 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
     /// The `timer` instant is used to synchronize the workers, who use this
     /// elapsed time as their timestamp. Elements are ordered by this time,
     /// and cannot be made visible until all workers have reached the time.
-    pub fn new<A: Allocate>(worker: &mut Worker<A>, timer: Instant, preload: VecDeque<T>) -> Self {
+    pub fn new<A: Allocate>(worker: &mut Worker<A>, timer: Instant) -> Self {
+        Sequencer::preloaded(worker, timer, VecDeque::new())
+    }
+
+    /// Creates a new Sequencer preloaded with a queue of
+    /// elements.
+    pub fn preloaded<A: Allocate>(worker: &mut Worker<A>, timer: Instant, preload: VecDeque<T>) -> Self {
 
         let send: Rc<RefCell<VecDeque<T>>> = Rc::new(RefCell::new(VecDeque::new()));
         let recv = Rc::new(RefCell::new(preload));
