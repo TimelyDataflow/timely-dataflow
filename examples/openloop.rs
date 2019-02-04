@@ -78,8 +78,12 @@ fn main() {
             // let target_ns = elapsed_ns & !((1 << 20) - 1);
 
             // Technique 3:
-            let scale = (inserted_ns - acknowledged_ns).next_power_of_two();
-            let target_ns = elapsed_ns & !(scale - 1);
+            let target_ns = {
+                let delta: u64 = inserted_ns - acknowledged_ns;
+                let bits = ::std::mem::size_of::<u64>() * 8 - delta.leading_zeros() as usize;
+                let scale = ::std::cmp::max((1 << bits) / 4, 1024);
+                elapsed_ns & !(scale - 1)
+            };
 
             // Common for each technique.
             if inserted_ns < target_ns {
