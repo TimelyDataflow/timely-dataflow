@@ -99,9 +99,9 @@ impl<T: ExchangeData> Sequencer<T> {
         // by the operator itself, and by the sink operator. We can
         // only initialize the activator once we obtain the operator
         // address.
-        let activator: Rc<RefCell<Option<CatchupActivator>>> = Rc::new(RefCell::new(None));
-        let activator_source = activator.clone(); //Rc::downgrade(&activator);
-        let activator_sink = activator.clone(); //Rc::downgrade(&activator);
+        let activator = Rc::new(RefCell::new(None));
+        let activator_source = activator.clone();
+        let activator_sink = activator.clone();
 
         // build a dataflow used to serialize and circulate commands
         worker.dataflow::<Duration,_,_>(move |dataflow| {
