@@ -52,13 +52,42 @@ pub struct Sequencer<T> {
     recv: Rc<RefCell<VecDeque<T>>>, // sequenced items.
 }
 
-impl<T: Ord+ExchangeData> Sequencer<T> {
+impl<T: ExchangeData> Sequencer<T> {
 
     /// Creates a new Sequencer.
     ///
     /// The `timer` instant is used to synchronize the workers, who use this
     /// elapsed time as their timestamp. Elements are ordered by this time,
     /// and cannot be made visible until all workers have reached the time.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use std::time::{Instant, Duration};
+    ///
+    /// use timely::Configuration;
+    /// use timely::synchronization::Sequencer;
+    ///
+    /// timely::execute(Configuration::Process(4), |worker| {
+    ///     let timer = Instant::now();
+    ///     let mut sequencer = Sequencer::new(worker, timer);
+    ///
+    ///     for round in 0 .. 10 {
+    ///
+    ///         // Sleep, and then send an announcement on wake-up.
+    ///         std::thread::sleep(Duration::from_millis(1 + worker.index() as u64));
+    ///         sequencer.push(format!("worker {:?}, round {:?}", worker.index(), round));
+    ///
+    ///         // Ensures the pushed string is sent.
+    ///         worker.step();
+    ///
+    ///         // Read out received announcements.
+    ///         while let Some(element) = sequencer.next() {
+    ///             println!("{:?}:\tWorker {:?}:\t recv'd: {:?}", timer.elapsed(), worker.index(), element);
+    ///         }
+    ///     }
+    /// }).expect("Timely computation did not complete correctly.");
+    /// ```
     pub fn new<A: Allocate>(worker: &mut Worker<A>, timer: Instant) -> Self {
         Sequencer::preloaded(worker, timer, VecDeque::new())
     }
@@ -77,28 +106,31 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
         // only initialize the activator once we obtain the operator
         // address.
         let activator = Rc::new(RefCell::new(None));
-        let activator_source = Rc::downgrade(&activator);
-        let activator_sink = Rc::downgrade(&activator);
+        let activator_source = activator.clone();
+        let activator_sink = activator.clone();
 
         // build a dataflow used to serialize and circulate commands
         worker.dataflow::<Duration,_,_>(move |dataflow| {
 
             let scope = dataflow.clone();
             let peers = dataflow.peers();
-            
+
             let mut recvd = Vec::new();
             let mut vector = Vec::new();
-        
+
+            // monotonic counter to maintain per-worker total order.
+            let mut counter = 0;
+
             // a source that attempts to pull from `recv` and produce commands for everyone
             source(dataflow, "SequenceInput", move |capability, info| {
 
                 // intialize activator, now that we have the address
-                activator_source.upgrade()
-                    .unwrap()
-                    .replace(Some(CatchupActivator {
+                activator_source
+                    .borrow_mut()
+                    .replace(CatchupActivator {
                         activator: scope.activator_for(&info.address[..]),
                         catchup_until: None,
-                    }));
+                    });
 
                 // so we can drop, if input queue vanishes.
                 let mut capability = Some(capability);
@@ -119,14 +151,14 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
                         let mut borrow = send_queue.borrow_mut();
                         for element in borrow.drain(..) {
                             for worker_index in 0 .. peers {
-                                session.give((worker_index, element.clone()));
+                                session.give((worker_index, counter, element.clone()));
                             }
+                            counter += 1;
                         }
 
-                        let activator_cell = activator_source.upgrade().expect("can't upgrade activator ref");
-                        let mut activator_borrow = activator_cell.borrow_mut();
+                        let mut activator_borrow = activator_source.borrow_mut();
                         let mut activator = activator_borrow.as_mut().unwrap();
-                            
+
                         if let Some(t) = activator.catchup_until {
                             if capability.time().less_than(&t) {
                                 activator.activate();
@@ -140,35 +172,34 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
                 }
             })
             .sink(
-                Exchange::new(|x: &(usize, T)| x.0 as u64),
+                Exchange::new(|x: &(usize, usize, T)| x.0 as u64),
                 "SequenceOutput",
                 move |input| {
 
                     // grab each command and queue it up
                     input.for_each(|time, data| {
                         data.swap(&mut vector);
-                        for (_worker, element) in vector.drain(..) {
-                            recvd.push((time.time().clone(), element));
+                        for (worker, counter, element) in vector.drain(..) {
+                            recvd.push(((time.time().clone(), worker, counter), element));
                         }
                     });
 
-                    recvd.sort();
+                    recvd.sort_by(|x,y| x.0.cmp(&y.0));
 
                     if let Some(last) = recvd.last() {
-                        let activator_cell = activator_sink.upgrade().expect("can't upgrade activator ref");
-                        let mut activator_borrow = activator_cell.borrow_mut();
+                        let mut activator_borrow = activator_sink.borrow_mut();
                         let mut activator = activator_borrow.as_mut().unwrap();
 
-                        activator.catchup_until = Some(last.0);
+                        activator.catchup_until = Some((last.0).0);
                         activator.activate();
                     }
 
                     // determine how many (which) elements to read from `recvd`.
-                    let count = recvd.iter().filter(|&(ref time, _)| !input.frontier().less_equal(time)).count();
+                    let count = recvd.iter().filter(|&((ref time, _, _), _)| !input.frontier().less_equal(time)).count();
                     let iter = recvd.drain(..count);
 
                     if let Some(recv_queue) = recv_weak.upgrade() {
-                        recv_queue.borrow_mut().extend(iter.map(|(_time,elem)| elem));
+                        recv_queue.borrow_mut().extend(iter.map(|(_,elem)| elem));
                     }
                 }
             );
@@ -182,9 +213,11 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
         self.send.borrow_mut().push_back(element);
         self.activator.borrow_mut().as_mut().unwrap().activate();
     }
+}
 
-    /// Reads the next element from the shared log.
-    pub fn next(&mut self) -> Option<T> {
+impl<T> Iterator for Sequencer<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
         self.recv.borrow_mut().pop_front()
     }
 }
