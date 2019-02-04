@@ -207,9 +207,11 @@ impl<T: ExchangeData> Sequencer<T> {
         self.send.borrow_mut().push_back(element);
         self.activator.borrow_mut().as_mut().unwrap().activate();
     }
+}
 
-    /// Reads the next element from the shared log.
-    pub fn next(&mut self) -> Option<T> {
+impl<T> Iterator for Sequencer<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
         self.recv.borrow_mut().pop_front()
     }
 }
