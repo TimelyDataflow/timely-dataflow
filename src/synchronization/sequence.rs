@@ -52,7 +52,7 @@ pub struct Sequencer<T> {
     recv: Rc<RefCell<VecDeque<T>>>, // sequenced items.
 }
 
-impl<T: Ord+ExchangeData> Sequencer<T> {
+impl<T: ExchangeData> Sequencer<T> {
 
     /// Creates a new Sequencer.
     ///
@@ -174,26 +174,26 @@ impl<T: Ord+ExchangeData> Sequencer<T> {
                     input.for_each(|time, data| {
                         data.swap(&mut vector);
                         for (worker, counter, element) in vector.drain(..) {
-                            recvd.push((time.time().clone(), (worker, counter, element)));
+                            recvd.push(((time.time().clone(), worker, counter), element));
                         }
                     });
 
-                    recvd.sort();
+                    recvd.sort_by(|x,y| x.0.cmp(&y.0));
 
                     if let Some(last) = recvd.last() {
                         let mut activator_borrow = activator_sink.borrow_mut();
                         let mut activator = activator_borrow.as_mut().unwrap();
 
-                        activator.catchup_until = Some(last.0);
+                        activator.catchup_until = Some((last.0).0);
                         activator.activate();
                     }
 
                     // determine how many (which) elements to read from `recvd`.
-                    let count = recvd.iter().filter(|&(ref time, _)| !input.frontier().less_equal(time)).count();
+                    let count = recvd.iter().filter(|&((ref time, _, _), _)| !input.frontier().less_equal(time)).count();
                     let iter = recvd.drain(..count);
 
                     if let Some(recv_queue) = recv_weak.upgrade() {
-                        recv_queue.borrow_mut().extend(iter.map(|(_time,(_worker,_counter,elem))| elem));
+                        recv_queue.borrow_mut().extend(iter.map(|(_,elem)| elem));
                     }
                 }
             );
