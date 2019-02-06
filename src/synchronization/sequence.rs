@@ -167,7 +167,6 @@ impl<T: ExchangeData> Sequencer<T> {
                             }
                         }
                     } else {
-                        println!("Shutting down sequencer");
                         capability = None;
                     }
                 }
