@@ -167,6 +167,7 @@ impl<T: ExchangeData> Sequencer<T> {
                             }
                         }
                     } else {
+                        println!("Shutting down sequencer");
                         capability = None;
                     }
                 }
@@ -219,5 +220,16 @@ impl<T> Iterator for Sequencer<T> {
     type Item = T;
     fn next(&mut self) -> Option<T> {
         self.recv.borrow_mut().pop_front()
+    }
+}
+
+// We should activate on drop, as this will cause the source to drop its capability.
+impl<T> Drop for Sequencer<T> {
+    fn drop(&mut self) {
+        self.activator
+            .borrow()
+            .as_ref()
+            .expect("Sequencer.activator unavailable")
+            .activate()
     }
 }
