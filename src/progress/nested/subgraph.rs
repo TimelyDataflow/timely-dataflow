@@ -345,10 +345,10 @@ where
 
         // Extract progress statements into either pre- or post-exchange buffers.
         if child.local {
-            child.extract_progress(&mut self.local_pointstamp);
+            child.extract_progress(&mut self.local_pointstamp, &mut self.temp_active);
         }
         else {
-            child.extract_progress(&mut self.final_pointstamp);
+            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active);
         }
 
         incomplete
@@ -493,7 +493,7 @@ where
         // We introduce these into the progress tracker to determine the scope's initial
         // internal capabilities.
         for child in self.children.iter_mut() {
-            child.extract_progress(&mut self.final_pointstamp);
+            child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active);
         }
 
         self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
@@ -640,7 +640,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
     /// Extracts shared progress information and converts to pointstamp changes.
-    fn extract_progress(&mut self, pointstamps: &mut ChangeBatch<(Location, T)>) {
+    fn extract_progress(&mut self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 
@@ -661,6 +661,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             for (time, delta) in produced.drain() {
                 for target in &self.edges[output] {
                     pointstamps.update((Location::from(*target), time.clone()), delta);
+                    temp_active.push(Reverse(target.index));
                 }
             }
         }
