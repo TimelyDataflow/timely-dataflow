@@ -54,7 +54,7 @@ pub trait AsWorker : Scheduler {
 /// and has a list of dataflows that it manages.
 pub struct Worker<A: Allocate> {
     timer: Instant,
-    paths: Rc<RefCell<Vec<Vec<usize>>>>,
+    paths: Rc<RefCell<HashMap<usize, Vec<usize>>>>,
     allocator: Rc<RefCell<A>>,
     identifiers: Rc<RefCell<usize>>,
     // dataflows: Rc<RefCell<Vec<Wrapper>>>,
@@ -64,6 +64,10 @@ pub struct Worker<A: Allocate> {
 
     activations: Rc<RefCell<Activations>>,
     active_dataflows: Vec<usize>,
+
+    // Temporary storage for channel identifiers during dataflow construction.
+    // These are then associated with a dataflow once constructed.
+    temp_channel_ids: Rc<RefCell<Vec<usize>>>,
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
@@ -73,20 +77,20 @@ impl<A: Allocate> AsWorker for Worker<A> {
         if address.len() == 0 { panic!("Unacceptable address: Length zero"); }
         // println!("Exchange allocation; path: {:?}, identifier: {:?}", address, identifier);
         let mut paths = self.paths.borrow_mut();
-        while paths.len() <= identifier {
-            paths.push(Vec::new());
-        }
-        paths[identifier] = address.to_vec();
+        paths.insert(identifier, address.to_vec());
+        self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().allocate(identifier)
     }
     fn pipeline<T: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
         if address.len() == 0 { panic!("Unacceptable address: Length zero"); }
         // println!("Pipeline allocation; path: {:?}, identifier: {:?}", address, identifier);
         let mut paths = self.paths.borrow_mut();
-        while paths.len() <= identifier {
-            paths.push(Vec::new());
-        }
-        paths[identifier] = address.to_vec();
+        paths.insert(identifier, address.to_vec());
+        // while paths.len() <= identifier {
+        //     paths.push(Vec::new());
+        // }
+        // paths[identifier] = address.to_vec();
+        self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().pipeline(identifier)
     }
 
@@ -109,7 +113,7 @@ impl<A: Allocate> Worker<A> {
         let index = c.index();
         Worker {
             timer: now.clone(),
-            paths: Rc::new(RefCell::new(Vec::new())),
+            paths: Rc::new(RefCell::new(HashMap::new())),
             allocator: Rc::new(RefCell::new(c)),
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(HashMap::new())),
@@ -117,6 +121,7 @@ impl<A: Allocate> Worker<A> {
             logging: Rc::new(RefCell::new(::logging_core::Registry::new(now, index))),
             activations: Rc::new(RefCell::new(Activations::new())),
             active_dataflows: Vec::new(),
+            temp_channel_ids: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
@@ -139,7 +144,7 @@ impl<A: Allocate> Worker<A> {
                 // on the basis of non-empty channels.
                 // TODO: This is a sloppy way to deal
                 // with channels that may not be alloc'd.
-                if let Some(path) = paths.get(channel) {
+                if let Some(path) = paths.get(&channel) {
                     // println!("Message for {:?}", path);
                     self.activations
                         .borrow_mut()
@@ -153,8 +158,6 @@ impl<A: Allocate> Worker<A> {
             .borrow_mut()
             .advance();
 
-        // self.activations.borrow().map_active(|path| println!("active path: {:?}", path));
-
         {   // Schedule active dataflows.
 
             let active_dataflows = &mut self.active_dataflows;
@@ -162,17 +165,16 @@ impl<A: Allocate> Worker<A> {
                 .borrow_mut()
                 .for_extensions(&[], |index| active_dataflows.push(index));
 
-            // if active_dataflows.len() > 0 {
-            //     println!("scheduling {} dataflows", active_dataflows.len());
-            // }
-
             let mut dataflows = self.dataflows.borrow_mut();
             for index in active_dataflows.drain(..) {
                 // Step dataflow if it exists, remove if not incomplete.
                 if let Entry::Occupied(mut entry) = dataflows.entry(index) {
-                    // println!("Scheduling dataflow {}", index);
                     let incomplete = entry.get_mut().step();
                     if !incomplete {
+                        let mut paths = self.paths.borrow_mut();
+                        for channel in entry.get_mut().channel_ids.drain(..) {
+                            paths.remove(&channel);
+                        }
                         entry.remove_entry();
                     }
                 }
@@ -260,11 +262,15 @@ impl<A: Allocate> Worker<A> {
         operator.get_internal_summary();
         operator.set_external_summary();
 
+        let mut temp_channel_ids = self.temp_channel_ids.borrow_mut();
+        let channel_ids = temp_channel_ids.drain(..).collect::<Vec<_>>();
+
         let wrapper = Wrapper {
             logging,
             identifier,
             operate: Some(Box::new(operator)),
             resources: Some(Box::new(resources)),
+            channel_ids,
         };
         self.dataflows.borrow_mut().insert(dataflow_index, wrapper);
 
@@ -293,6 +299,7 @@ impl<A: Allocate> Clone for Worker<A> {
             logging: self.logging.clone(),
             activations: self.activations.clone(),
             active_dataflows: Vec::new(),
+            temp_channel_ids: self.temp_channel_ids.clone(),
         }
     }
 }
@@ -302,6 +309,7 @@ struct Wrapper {
     identifier: usize,
     operate: Option<Box<Schedule>>,
     resources: Option<Box<Any>>,
+    channel_ids: Vec<usize>,
 }
 
 impl Wrapper {
