@@ -441,7 +441,12 @@ where
         for ((location, time), diff) in self.pointstamp_tracker.pushed().drain() {
             // Targets are actionable, sources are not.
             if let ::progress::Port::Target(port) = location.port {
-                self.temp_active.push(Reverse(location.node));
+                if self.children[location.node].notify {
+                    self.temp_active.push(Reverse(location.node));
+                }
+                // TODO: This logic could also be guarded by `.notify`, but
+                // we want to be a bit careful to make sure all related logic
+                // agrees with this (e.g. initialization, operator logic, etc.)
                 self.children[location.node]
                     .shared_progress
                     .borrow_mut()
