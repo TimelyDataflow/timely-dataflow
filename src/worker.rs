@@ -75,7 +75,6 @@ impl<A: Allocate> AsWorker for Worker<A> {
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
     fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
         if address.len() == 0 { panic!("Unacceptable address: Length zero"); }
-        // println!("Exchange allocation; path: {:?}, identifier: {:?}", address, identifier);
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address.to_vec());
         self.temp_channel_ids.borrow_mut().push(identifier);
@@ -83,13 +82,8 @@ impl<A: Allocate> AsWorker for Worker<A> {
     }
     fn pipeline<T: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
         if address.len() == 0 { panic!("Unacceptable address: Length zero"); }
-        // println!("Pipeline allocation; path: {:?}, identifier: {:?}", address, identifier);
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address.to_vec());
-        // while paths.len() <= identifier {
-        //     paths.push(Vec::new());
-        // }
-        // paths[identifier] = address.to_vec();
         self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().pipeline(identifier)
     }
@@ -145,7 +139,6 @@ impl<A: Allocate> Worker<A> {
                 // TODO: This is a sloppy way to deal
                 // with channels that may not be alloc'd.
                 if let Some(path) = paths.get(&channel) {
-                    // println!("Message for {:?}", path);
                     self.activations
                         .borrow_mut()
                         .activate(&path[..]);
