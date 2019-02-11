@@ -194,6 +194,8 @@ where
 
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             scope_summary,
+
+            eager_progress_send: ::std::env::var("DEFAULT_PROGRESS_MODE") == Ok("EAGER".to_owned()),
         }
     }
 }
@@ -243,6 +245,8 @@ where
 
     shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
     scope_summary: Vec<Vec<Antichain<TInner::Summary>>>,
+
+    eager_progress_send: bool,
 }
 
 impl<TOuter, TInner> Schedule for Subgraph<TOuter, TInner>
@@ -291,7 +295,7 @@ where
         }
 
         // Transmit produced progress updates.
-        self.progcaster.send(&mut self.local_pointstamp);
+        self.send_progress();
 
         // If child scopes surface more final pointstamp updates we must re-execute.
         if !self.final_pointstamp.is_empty() {
@@ -463,6 +467,29 @@ where
                 .map(|(time, diff)| (time.to_outer(), diff))
                 .filter_through(&mut self.output_capabilities[output])
                 .for_each(|(time, diff)| internal.update(time, diff));
+        }
+    }
+
+    /// Sends local progress updates to all workers.
+    ///
+    /// This method does not guarantee that all of `self.local_pointstamps` are
+    /// sent, but that no blocking pointstamps remain
+    fn send_progress(&mut self) {
+
+        // If we are requested to eagerly send progress updates, or if there are
+        // updates visible in the scope-wide frontier, we must send all updates.
+        let must_send = self.eager_progress_send || {
+            let tracker = &mut self.pointstamp_tracker;
+            self.local_pointstamp
+                .iter()
+                .any(|((location, time), diff)|
+                    // Must publish scope-wide visible subtractions.
+                    tracker.is_global(*location, time) && *diff < 0
+                )
+        };
+
+        if must_send {
+            self.progcaster.send(&mut self.local_pointstamp);
         }
     }
 }
