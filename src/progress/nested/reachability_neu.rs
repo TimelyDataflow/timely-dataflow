@@ -195,7 +195,107 @@ impl<T: Timestamp> Builder<T> {
     /// are valid, including references to undefined nodes and ports, as well as self-loops with
     /// default summaries (a serious liveness issue).
     pub fn build(&self) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
+
+        if !self.is_acyclic() {
+            println!("Cycle detected without timestamp increment");
+            println!("{:?}", self);
+            panic!();
+        }
+
         Tracker::allocate_from(self)
+    }
+
+    /// Tests whether the graph a cycle of default path summaries.
+    ///
+    /// Graphs containing cycles of default path summaries will most likely
+    /// not work well with progress tracking, as a timestamp can result in
+    /// itself. Such computations can still *run*, but one should not block
+    /// on frontier information before yielding results, as you many never
+    /// unblock.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use timely::progress::frontier::Antichain;
+    /// use timely::progress::{Source, Target};
+    /// use timely::progress::nested::reachability_neu::Builder;
+    ///
+    /// // allocate a new empty topology builder.
+    /// let mut builder = Builder::<usize>::new();
+    ///
+    /// // Each node with one input connected to one output.
+    /// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
+    /// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
+    /// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(0)]]);
+    ///
+    /// // Connect nodes in sequence, looping around to the first from the last.
+    /// builder.add_edge(Source { index: 0, port: 0}, Target { index: 1, port: 0} );
+    /// builder.add_edge(Source { index: 1, port: 0}, Target { index: 2, port: 0} );
+    ///
+    /// assert!(builder.is_acyclic());
+    ///
+    /// builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
+    ///
+    /// assert!(!builder.is_acyclic());
+    /// ```
+    pub fn is_acyclic(&self) -> bool {
+
+        let mut in_degree = HashMap::new();
+        let mut out_edges = HashMap::new();
+
+        // Load edges as default summaries.
+        for (index, ports) in self.edges.iter().enumerate() {
+            for (output, targets) in ports.iter().enumerate() {
+                let source = Location::new_source(index, output);
+                for &target in targets.iter() {
+                    let target = Location::from(target);
+                    *in_degree.entry(target).or_insert(0) += 1;
+                    out_edges.entry(source).or_insert(Vec::new()).push(target);
+                }
+            }
+        }
+
+        // Load default intra-node summaries.
+        for (index, summary) in self.nodes.iter().enumerate() {
+            for (input, outputs) in summary.iter().enumerate() {
+                let target = Location::new_target(index, input);
+                for (output, summaries) in outputs.iter().enumerate() {
+                    let source = Location::new_source(index, output);
+                    for summary in summaries.elements().iter() {
+                        if summary == &Default::default() {
+                            *in_degree.entry(source).or_insert(0) += 1;
+                            out_edges.entry(target).or_insert(Vec::new()).push(source);
+                        }
+                    }
+                }
+            }
+        }
+
+        // A list of nodes with out-edges but without in-edges.
+        let mut worklist = Vec::new();
+
+        for (key, _) in out_edges.iter() {
+            if !in_degree.contains_key(key) {
+                worklist.push(*key);
+            }
+        }
+
+        // Repeatedly remove nodes and update adjacent in-edges.
+        while let Some(node) = worklist.pop() {
+            if let Some(edges) = out_edges.remove(&node) {
+                for dest in edges.into_iter() {
+                    *in_degree.get_mut(&dest).unwrap() -= 1;
+                    if in_degree[&dest] == 0 {
+                        in_degree.remove(&dest);
+                        worklist.push(dest);
+                    }
+                }
+            }
+        }
+
+        // Acyclic graphs should reduce to empty collections.
+        in_degree.is_empty() && out_edges.is_empty()
+
     }
 }
 
