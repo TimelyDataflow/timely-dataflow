@@ -199,7 +199,6 @@ impl<T: Timestamp> Builder<T> {
         if !self.is_acyclic() {
             println!("Cycle detected without timestamp increment");
             println!("{:?}", self);
-            panic!();
         }
 
         Tracker::allocate_from(self)
