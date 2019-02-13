@@ -237,6 +237,30 @@ impl<T: Timestamp> Builder<T> {
     ///
     /// assert!(!builder.is_acyclic());
     /// ```
+    ///
+    /// This test exists because it is possible to describe dataflow graphs
+    /// that do
+    ///
+    /// ```rust
+    /// use timely::progress::frontier::Antichain;
+    /// use timely::progress::{Source, Target};
+    /// use timely::progress::nested::reachability_neu::Builder;
+    ///
+    /// // allocate a new empty topology builder.
+    /// let mut builder = Builder::<usize>::new();
+    ///
+    /// // Two inputs and outputs, only one of which advances.
+    /// builder.add_node(0, 2, 2, vec![
+    ///     vec![Antichain::from_elem(0),Antichain::new(),],
+    ///     vec![Antichain::new(),Antichain::from_elem(1),],
+    /// ]);
+    ///
+    /// // Connect each output to the opposite input.
+    /// builder.add_edge(Source { index: 0, port: 0}, Target { index: 0, port: 1} );
+    /// builder.add_edge(Source { index: 0, port: 1}, Target { index: 0, port: 0} );
+    ///
+    /// assert!(builder.is_acyclic());
+    /// ```
     pub fn is_acyclic(&self) -> bool {
 
         let mut in_degree = HashMap::new();
