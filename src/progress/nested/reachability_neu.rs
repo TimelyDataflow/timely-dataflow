@@ -238,8 +238,9 @@ impl<T: Timestamp> Builder<T> {
     /// assert!(!builder.is_acyclic());
     /// ```
     ///
-    /// This test exists because it is possible to describe dataflow graphs
-    /// that do
+    /// This test exists because it is possible to describe dataflow graphs that
+    /// do not contain non-incrementing cycles, but without feedback nodes that
+    /// strictly increment timestamps. For example,
     ///
     /// ```rust
     /// use timely::progress::frontier::Antichain;
