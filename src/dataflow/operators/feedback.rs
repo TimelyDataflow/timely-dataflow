@@ -70,10 +70,6 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
 impl<G: Scope> Feedback<G> for G {
     fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, D>, Stream<G, D>) {
 
-        if summary == Default::default() {
-            panic!("Cannot use default summary for a loop variable");
-        }
-
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
         let (output, stream) = builder.new_output();
 
