@@ -195,7 +195,7 @@ where
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             scope_summary,
 
-            eager_progress_send: ::std::env::var("DEFAULT_PROGRESS_MODE") == Ok("EAGER".to_owned()),
+            eager_progress_send: ::std::env::var("DEFAULT_PROGRESS_MODE") != Ok("DEMAND".to_owned()),
         }
     }
 }
