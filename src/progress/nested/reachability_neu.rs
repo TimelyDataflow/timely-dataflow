@@ -416,10 +416,19 @@ impl<T: Timestamp> PortInformation<T> {
             output_summaries: Vec::new(),
         }
     }
+    /// True if updates at this pointstamp uniquely block progress.
+    ///
+    /// This method returns true if the currently maintained pointstamp
+    /// counts are such that zeroing out outstanding updates at *this*
+    /// pointstamp would change the frontiers at this operator. When the
+    /// method returns false it means that, temporarily at least, there
+    /// are outstanding pointstamp updates that are strictly less than
+    /// this pointstamp.
     #[inline(always)]
     fn is_global(&self, time: &T) -> bool {
-        self.pointstamps.count_for(time) > 0 &&
-        self.implications.count_for(time) == 1
+        let dominated = self.implications.frontier().iter().any(|t| t.less_than(time));
+        let redundant = self.implications.count_for(time) > 1;
+        !dominated && !redundant
     }
 }
 
@@ -645,11 +654,6 @@ impl<T:Timestamp> Tracker<T> {
     }
 
     /// Indicates if pointstamp is in the scope-wide frontier.
-    ///
-    /// A pointstamp (location, timestamp) is in the global frontier exactly when:
-    ///
-    ///  1. `self.pointstamps[location]` has count[timestamp] > 0.
-    ///  2. `self.implications[location]` has count[timestamp] == 1.
     ///
     /// Such a pointstamp would, if removed from `self.pointstamps`, cause a change
     /// to `self.implications`, which is what we track for per operator input frontiers.
