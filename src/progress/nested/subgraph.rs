@@ -174,6 +174,10 @@ where
         incomplete[0] = false;
         let incomplete_count = incomplete.len() - 1;
 
+        let activations = worker.activations().clone();
+
+        activations.borrow_mut().activate(&self.path[..]);
+
         Subgraph {
             name: self.name,
             path: self.path,
@@ -181,7 +185,7 @@ where
             outputs,
             incomplete,
             incomplete_count,
-            activations: worker.activations().clone(),
+            activations,
             temp_active: BinaryHeap::new(),
             children: self.children,
             input_messages: self.input_messages,
