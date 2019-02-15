@@ -4,16 +4,16 @@ The first bit of complexity we will introduce is the timely dataflow *scope*.
 
 You can create a new scope in any scope, just by invoking the `scoped` method:
 
-```rust,ignore
+```rust
 extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::Scope;
 
 fn main() {
     timely::example(|scope| {
 
-        // create a new nested scope
-        scope.scoped(|subscope| {
+        // Create a new scope with the same (u64) timestamp.
+        scope.scoped::<u64,_,_>("SubScope", |subscope| {
             // probably want something here
         })
 
@@ -34,9 +34,10 @@ In addition to *creating* scopes, we will also need to get streams of data into 
 There are two simple methods, `enter` and `leave`, that allow streams of data into and out of scopes. It is important that you use them! If you try to use a stream in a nested scope, Rust will be confused because it can't get the timestamps of your streams to typecheck.
 
 
-```rust,ignore
+```rust
 extern crate timely;
 
+use timely::dataflow::Scope;
 use timely::dataflow::operators::*;
 
 fn main() {
@@ -44,7 +45,8 @@ fn main() {
 
         let stream = (0 .. 10).to_stream(scope);
 
-        let result = scope.scoped(|subscope| {
+        // Create a new scope with the same (u64) timestamp.
+        let result = scope.scoped::<u64,_,_>("SubScope", |subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
                   .leave()

@@ -6,7 +6,7 @@ This section will be a bit of a tour through the dataflow construction process, 
 
 Here is a relatively simple example, taken from `examples/simple.rs`, that turns the numbers zero through nine into a stream, and then feeds them through an `inspect` operator printing them to the screen.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect};

@@ -6,7 +6,7 @@ Almost all operators in timely can only be defined from a source of data, with a
 
 For example, we can create a new dataflow with one interactive input and one static input:
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::InputHandle;

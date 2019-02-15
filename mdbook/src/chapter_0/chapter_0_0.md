@@ -2,7 +2,7 @@
 
 Let's start with what may be the simplest non-trivial timely dataflow program.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect};
@@ -38,7 +38,7 @@ If we run the program up above, we see it print out the numbers zero through nin
 
 This isn't very different from a Rust program that would do this much more simply, namely the program
 
-```rust,no_run
+```rust
 fn main() {
     (0..10).for_each(|x| println!("seen: {:?}", x));
 }
