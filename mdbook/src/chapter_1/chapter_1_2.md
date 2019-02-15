@@ -30,6 +30,7 @@ The `inspect_batch` operator gets lower-level access to data in timely dataflow,
 
 The output we get with two workers is now:
 
+```ignore
     Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
@@ -44,6 +45,7 @@ The output we get with two workers is now:
     worker 1:	hello 7 @ (Root, 7)
     worker 1:	hello 9 @ (Root, 9)
     Echidnatron%
+```
 
 The timestamps are the `(Root, i)` things for various values of `i`. These happen to correspond to the data themselves, but had we provided random input data rather than `i` itself we would still be able to make sense of the output and put it back "in order".
 

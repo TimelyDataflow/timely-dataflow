@@ -6,7 +6,7 @@ Timely has several "generic" dataflow operators that are pretty much ready to ru
 
 Let's look at an example
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::ToStream;
@@ -17,16 +17,19 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
-            .unary(Pipeline, "increment", |capability|
-                |input, output| {
+            .unary(Pipeline, "increment", |capability, info| {
+
+                let mut vector = Vec::new();
+                move |input, output| {
                     while let Some((time, data)) = input.next() {
+                        data.swap(&mut vector);
                         let mut session = output.session(&time);
-                        for datum in data.drain(..) {
+                        for datum in vector.drain(..) {
                             session.give(datum + 1);
                         }
                     }
                 }
-            );
+            });
     });
 }
 ```
@@ -63,7 +66,7 @@ The `capability` argument exists so that we can construct operators with the abi
 
 Here is an example `source` implementation that produces all numbers up to some limit, each at a distinct time.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::Inspect;
@@ -72,7 +75,11 @@ use timely::dataflow::operators::generic::operator::source;
 fn main() {
     timely::example(|scope| {
 
-        source(scope, "Source", |capability| {
+        source(scope, "Source", |capability, info| {
+
+            // Acquire a re-activator for this operator.
+            use timely::scheduling::Scheduler;
+            let activator = scope.activator_for(&info.address[..]);
 
             let mut cap = Some(capability);
             move |output| {
@@ -81,17 +88,17 @@ fn main() {
                 if let Some(cap) = cap.as_mut() {
 
                     // get some data and send it.
-                    let mut time = cap.time().clone();
+                    let time = cap.time().clone();
                     output.session(&cap)
-                          .give(cap.time().inner);
+                          .give(*cap.time());
 
                     // downgrade capability.
-                    time.inner += 1;
-                    *cap = cap.delayed(&time);
-                    done = time.inner > 20;
+                    cap.downgrade(&(time + 1));
+                    done = time > 20;
                 }
 
                 if done { cap = None; }
+                else    { activator.activate(); }
             }
         })
         .inspect(|x| println!("number: {:?}", x));
@@ -113,7 +120,7 @@ It may seem that we have only considered stateless operators, those that are onl
 
 Our `unary` example from way back just incremented the value and passed it along. What if we wanted to only pass values larger than any value we have seen so far? We just define a variable `max` which we check and update as we would normally. Importantly, we should define it *outside* the closure we return, so that it persists across calls, and we need to use the `move` keyword so that the closure knows it is supposed to take ownership of the variable.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::ToStream;
@@ -124,14 +131,16 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
-            .unary(Pipeline, "increment", |capability| {
+            .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
+                let mut vector = Vec::new();
 
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
+                        data.swap(&mut vector);
                         let mut session = output.session(&time);
-                        for datum in data.drain(..) {
+                        for datum in vector.drain(..) {
                             if datum > maximum {
                                 session.give(datum + 1);
                                 maximum = datum;
@@ -160,7 +169,7 @@ To make life easier for you, we've written a helper type called `Notificator` wh
 
 Here is a worked example where we use a binary operator that implements the behavior of `concat`, but it puts its inputs in order, buffering its inputs until their associated timestamp is complete, and then sending all data at that time. The operator defines and captures a `HashMap<Time, Vec<Data>>` named `stash` which it uses to buffer received input data that are not yet ready to send.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use std::collections::HashMap;
@@ -174,28 +183,33 @@ fn main() {
         let in1 = (0 .. 10).to_stream(scope);
         let in2 = (0 .. 10).to_stream(scope);
 
-        in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |mut _builder| {
+        in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
             let mut notificator = FrontierNotificator::new();
             let mut stash = HashMap::new();
 
             move |input1, input2, output| {
                 while let Some((time, data)) = input1.next() {
-                    stash.entry(time.time().clone()).or_insert(Vec::new()).push(data.take());
-                    notificator.notify_at(time);
+                    stash.entry(time.time().clone())
+                         .or_insert(Vec::new())
+                         .push(data.replace(Vec::new()));
+                    notificator.notify_at(time.retain());
                 }
                 while let Some((time, data)) = input2.next() {
-                    stash.entry(time.time().clone()).or_insert(Vec::new()).push(data.take());
-                    notificator.notify_at(time);
+                    stash.entry(time.time().clone())
+                         .or_insert(Vec::new())
+                         .push(data.replace(Vec::new()));
+                    notificator.notify_at(time.retain());
                 }
-                for time in notificator.iter(&[input1.frontier(), input2.frontier()]) {
+
+                notificator.for_each(&[input1.frontier(), input2.frontier()], |time, notificator| {
                     let mut session = output.session(&time);
-                    if let Some(vec) = stash.remove(time.time()) {
-                        for mut data in vec.into_iter() {
-                            session.give_content(&mut data);
+                    if let Some(list) = stash.remove(time.time()) {
+                        for mut vector in list.into_iter() {
+                            session.give_vec(&mut vector);
                         }
                     }
-                }
+                });
             }
         });
     });
@@ -206,7 +220,7 @@ As an exercise, this example could be improved in a few ways. How might you chan
 
 Before ending the section, let's rewrite this example without the `notificator`, in an attempt to de-mystify how it works. Whether you use a notificator or not is up to you; they are mostly about staying sane in what can be a confusing setting, and you can totally skip them once you have internalized how capabilities and frontiers work.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use std::collections::HashMap;
@@ -220,17 +234,21 @@ fn main() {
         let in1 = (0 .. 10).to_stream(scope);
         let in2 = (0 .. 10).to_stream(scope);
 
-        in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |mut _builder| {
+        in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
             let mut stash = HashMap::new();
 
             move |input1, input2, output| {
 
                 while let Some((time, data)) = input1.next() {
-                    stash.entry(time).or_insert(Vec::new()).push(data.take());
+                    stash.entry(time.retain())
+                         .or_insert(Vec::new())
+                         .push(data.replace(Vec::new()));
                 }
                 while let Some((time, data)) = input2.next() {
-                    stash.entry(time).or_insert(Vec::new()).push(data.take());
+                    stash.entry(time.retain())
+                         .or_insert(Vec::new())
+                         .push(data.replace(Vec::new()));
                 }
 
                 // consider sending everything in `stash`.
@@ -239,8 +257,8 @@ fn main() {
                     // if neither input can produce data at `time`, ship `list`.
                     if frontiers.iter().all(|f| !f.less_equal(time.time())) {
                         let mut session = output.session(&time);
-                        for mut data in list.drain(..) {
-                            session.give_content(&mut data);
+                        for mut vector in list.drain(..) {
+                            session.give_vec(&mut vector);
                         }
                     }
                 }

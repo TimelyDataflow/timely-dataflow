@@ -19,6 +19,7 @@ This program gives us a bit of a flavor for what a timely dataflow program might
 
 If we run the program up above, we see it print out the numbers zero through nine.
 
+```ignore
     Echidnatron% cargo run --example simple
         Finished dev [unoptimized + debuginfo] target(s) in 0.05s
          Running `target/debug/examples/simple`
@@ -33,6 +34,7 @@ If we run the program up above, we see it print out the numbers zero through nin
     seen: 8
     seen: 9
     Echidnatron%
+```
 
 This isn't very different from a Rust program that would do this much more simply, namely the program
 

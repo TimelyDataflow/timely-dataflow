@@ -8,12 +8,12 @@ Let's model a changing corpus of text as a list of pairs of *times* which will b
 
 We are going to write a program that is the moral equivalent of the following sequential Rust program:
 
-```rust,ignore
+```rust
 /// From a sequence of changes to the occurrences of text,
 /// produce the changing counts of words in that text.
-fn word_count(history: Vec<(u64, Vec<(String, i64)>)>) {
-    let mut counts = HashMap::new();
-    for (time, changes) in history.drain(..) {
+fn word_count(mut history: Vec<(u64, Vec<(String, i64)>)>) {
+    let mut counts = ::std::collections::HashMap::new();
+    for (time, mut changes) in history.drain(..) {
         for (text, diff) in changes.drain(..) {
             for word in text.split_whitespace() {
                 let mut entry = counts.entry(word.to_owned())
@@ -34,7 +34,7 @@ Our program will be a bit larger, but it will be more flexible. By specifying mo
 
 Let's first build a timely computation into which we can send text and which will show us the text back. Our next steps will be to put more clever logic in place, but let's start here to get some boiler-plate out of the way.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
@@ -262,6 +262,7 @@ Remember that `time` we capture as the key, and how it acts as our ability to se
 
 You can check out the result in [`examples/wordcount.rs`](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/wordcount.rs). If you run it as written, you'll see output that looks like:
 
+```ignore
     Echidnatron% cargo run --example wordcount
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/wordcount`
@@ -276,9 +277,11 @@ You can check out the result in [`examples/wordcount.rs`](https://github.com/fra
     seen: ("round", 9)
     seen: ("round", 10)
     Echidnatron%
+```
 
 We kept sending the same word over and over, so its count goes up. Neat. If you'd like to run it with two workers, you just need to put `-- -w2` at the end of the command, like so:
 
+```ignore
     Echidnatron% cargo run --example wordcount -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/wordcount -w2`
@@ -288,5 +291,6 @@ We kept sending the same word over and over, so its count goes up. Neat. If you'
     seen: ("round", 19)
     seen: ("round", 20)
     Echidnatron%
+```
 
 Because there are two workers, each inputting `"round"` repeatedly, we count up to twenty. By the end of this text you should be able to produce more interesting examples, for example reading the contents of directories and divvying up responsibility for the files between the workers.

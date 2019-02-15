@@ -14,8 +14,6 @@ repository = "https://github.com/TimelyDataflow/timely-dataflow.git"
 keywords = ["timely", "dataflow"]
 license = "MIT"
 
-#build = "booktests.rs"
-
 [features]
 bincode= ["timely_communication/bincode"]
 
@@ -31,10 +29,6 @@ timely_communication = { path = "./communication", version = "0.8" }
 [dev-dependencies]
 timely_sort="0.1.6"
 rand="0.4"
-#skeptic = "0.12"
-
-#[build-dependencies]
-#skeptic = "0.12"
 
 [profile.release]
 opt-level = 3
