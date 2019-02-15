@@ -176,14 +176,19 @@ Finally, each worker just uses the list of `EventReader`s as the argument to `re
 
 If you want to try it out, make sure to start up the `capture_recv` example first (otherwise the connections will be refused for `capture_send`) and specify the expected number of source workers, modifying the number of received workers if you like. Here we are expecting five source workers, and distributing them among three receive workers (to make life complicated):
 
+```ignore
     shell1% cargo run --example capture_recv -- 5 -w3
+```
 
 Nothing happens yet, so head over to another shell and run `capture_send` with the specified number of workers (five, in this case):
 
+```ignore
     shell2% cargo run --example capture_send -- -w5
+```
 
 Now, back in your other shell you should see something like
 
+```ignore
     shell1% cargo run --example capture_recv -- 5 -w3
     replayed: 0
     replayed: 1
@@ -195,6 +200,7 @@ Now, back in your other shell you should see something like
     replayed: 6
     replayed: 1
     ...
+```
 
 which just goes on and on, but which should produce 50 lines of text, with five copies of `0 .. 10` interleaved variously.
 

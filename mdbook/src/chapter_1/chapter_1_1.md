@@ -8,7 +8,7 @@ Let's write an overly simple dataflow program. Remember our `examples/hello.rs` 
 
 Here is a reduced version of `examples/hello.rs` that just feeds data in to our dataflow, without paying any attention to progress made. In particular, we have removed the `probe()` operation, the resulting `probe` variable, and the use of `probe` to determine how long we should step the worker before introducing more data.
 
-```rust,no_run
+```rust
 #![allow(unused_variables)]
 extern crate timely;
 
@@ -46,6 +46,7 @@ This program is a *dataflow program*. There are two dataflow operators here, `ex
 
 Importantly, we haven't imposed any constraints on how these operators need to run. We removed the code that caused the input to be delayed until a certain amount of progress had been made, and it shows in the results when we run with more than one worker:
 
+```ignore
     Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
@@ -60,6 +61,7 @@ Importantly, we haven't imposed any constraints on how these operators need to r
     worker 0:	hello 6
     worker 0:	hello 8
     Echidnatron%
+```
 
 What a mess. Nothing in our dataflow program requires that workers zero and one alternate printing to the screen, and you can even see that worker one is *done* before worker zero even gets to printing `hello 4`.
 
@@ -81,26 +83,32 @@ However, this is only a mess if we are concerned about the order, and in many ca
 
  Let's check out the time to print out the prime numbers up to 10,000 using one worker:
 
+```ignore
     Echidnatron% time cargo run --example hello -- -w1 > output1.txt
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w1`
     cargo run --example hello -- -w1 > output1.txt  59.84s user 0.10s system 99% cpu 1:00.01 total
     Echidnatron%
+```
 
 And now again with two workers:
 
+```ignore
     Echidnatron% time cargo run --example hello -- -w2 > output2.txt
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
     cargo run --example hello -- -w2 > output2.txt  60.74s user 0.12s system 196% cpu 30.943 total
     Echidnatron%
+```
 
 The time is basically halved, from one minute to thirty seconds, which is a great result for those of us who like factoring small numbers. Furthermore, although the 1,262 lines of results of `output1.txt` and `output2.txt` are not in the same order, it takes a fraction of a second to make them so, and verify that they are identical:
 
+```ignore
     Echidnatron% sort output1.txt > sorted1.txt
     Echidnatron% sort output2.txt > sorted2.txt
     Echidnatron% diff sorted1.txt sorted2.txt
     Echidnatron%
+```
 
 ---
 

@@ -10,7 +10,7 @@ The `map` operator takes as argument a closure from the input data type to an ou
 
 The following program should print out the numbers one through ten.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect, Map};
@@ -29,7 +29,7 @@ fn main() {
 
 The closure `map` takes *owned* data as input, which means you are able to mutate it as you like without cloning or copying the data. For example, if you have a stream of `String` data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect, Map};
@@ -53,7 +53,7 @@ There are a few variants of `map` with different functionality.
 
 For example, the `map_in_place` method takes a closure which receives a mutable reference and produces no output; instead, this method allows you to change the data *in-place*, which can be a valuable way to avoid duplication of resources.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect, Map};
@@ -73,7 +73,7 @@ fn main() {
 
 Alternately, the `flat_map` method takes input data and allows your closure to transform each element to an iterator, which it then enumerates into the output stream. The following fragment takes each number from zero through eight and has each produce all numbers less than it. The result should be 8 zeros, 7 ones, and so on up to 1 seven.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect, Map};
@@ -94,7 +94,7 @@ fn main() {
 
 Another fundamental operation is *filtering*, in which a predicate dictates a subset of the stream to retain.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect, Filter};
@@ -119,7 +119,7 @@ There are two operators for spliting and combining streams, `partition` and `con
 
 The `partition` operator takes two arguments, a number of resulting streams to produce, and a closure which takes each record to a pair of the target partition identifier and the output record. The output of `partition` is a list of streams, where each stream contains those elements mapped to the stream under the closure.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Partition, Inspect};
@@ -140,7 +140,7 @@ This example breaks the input stream apart into three logical streams, which are
 
 In the other direction, `concat` takes two streams and produces one output stream containing elements sent along either. The following example merges the partitioned streams back together.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Partition, Concat, Inspect};
@@ -159,7 +159,7 @@ fn main() {
 
 There is also a `concatenate` method defined for scopes which collects all streams from a supplied vector, effectively undoing the work of `partition` in one operator.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Partition, Concatenate, Inspect};

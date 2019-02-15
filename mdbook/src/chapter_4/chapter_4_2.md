@@ -18,8 +18,8 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
 
-        // create a loop that cycles at most 100 times.
-        let (handle, stream) = scope.loop_variable(100, 1);
+        // create a loop that cycles unboundedly.
+        let (handle, stream) = scope.feedback(1);
 
         // circulate numbers, Collatz stepping each time.
         (1 .. 10)
@@ -29,7 +29,6 @@ fn main() {
             .inspect(|x| println!("{:?}", x))
             .filter(|x| *x != 1)
             .connect_loop(handle);
-
     });
 }
 ```
@@ -54,9 +53,9 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
 
-        // create a loop that cycles at most 100 times.
-        let (handle0, stream0) = scope.loop_variable(100, 1);
-        let (handle1, stream1) = scope.loop_variable(100, 1);
+        // create a loop that cycles unboundedly.
+        let (handle0, stream0) = scope.feedback(1);
+        let (handle1, stream1) = scope.feedback(1);
 
         // do the right steps for even and odd numbers, respectively.
         let results0 = stream0.map(|x| x / 2).filter(|x| *x != 1);
@@ -95,9 +94,11 @@ fn main() {
 
         let input = (1 .. 10).to_stream(scope);
 
-        scope.scoped(|subscope| {
+        // Create a nested iterative scope.
+        // Rust needs help understanding the iteration counter type.
+        scope.iterative::<u64,_,_>(|subscope| {
 
-            let (handle, stream) = subscope.loop_variable(100, 1);
+            let (handle, stream) = subscope.loop_variable(1);
 
             input
                 .enter(subscope)

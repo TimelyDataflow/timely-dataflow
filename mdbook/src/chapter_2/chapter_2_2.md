@@ -4,7 +4,7 @@ Having constructed a minimal streaming computation, we might like to take a peek
 
 The `inspect` operator is called with a closure, and it ensures that the closure is run on each record that passes through the operator. This closure can do just about anything, from printing to the screen or writing to a file.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect};
@@ -26,7 +26,7 @@ This simple example turns the sequence zero through nine into a stream and then 
 
 The `inspect` operator has a big sibling, `inspect_batch`, whose closure gets access to whole batches of records at a time, just like the underlying operator. More precisely, `inspect_batch` takes a closure of two parameters: first, the timestamp of a batch, and second a reference to the batch itself. The `inspect_batch` operator can be especially helpful if you want to process the outputs more efficiently.
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Inspect};
@@ -50,7 +50,7 @@ The simplest form of capture is the `capture()` method, which turns the stream i
 
 Consider the documentation test for the `ToStream` trait:
 
-```rust,no_run
+```rust
 extern crate timely;
 
 use timely::dataflow::operators::{ToStream, Capture};
