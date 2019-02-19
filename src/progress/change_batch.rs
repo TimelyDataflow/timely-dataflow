@@ -76,6 +76,7 @@ impl<T:Ord> ChangeBatch<T> {
     #[inline]
     pub fn update(&mut self, item: T, value: i64) {
         self.updates.push((item, value));
+        self.maintain_bounds();
     }
 
     /// Performs a sequence of updates described by `iterator`.
@@ -91,9 +92,8 @@ impl<T:Ord> ChangeBatch<T> {
     ///```
     #[inline]
     pub fn extend<I: Iterator<Item=(T, i64)>>(&mut self, iterator: I) {
-        for (key, val) in iterator {
-            self.update(key, val);
-        }
+        self.updates.extend(iterator);
+        self.maintain_bounds();
     }
 
     /// Extracts the `Vec<(T, i64)>` from the map, consuming it.
@@ -202,6 +202,7 @@ impl<T:Ord> ChangeBatch<T> {
     }
 
     /// Compact and sort data, so that two instances can be compared without false negatives.
+    #[deprecated(since="0.9.0", note="please use `compact` instead")]
     pub fn canonicalize(&mut self) {
         self.compact();
         self.updates.sort_by(|x,y| x.0.cmp(&y.0));
@@ -255,5 +256,20 @@ impl<T:Ord> ChangeBatch<T> {
             self.updates.retain(|x| x.1 != 0);
         }
         self.clean = self.updates.len();
+    }
+
+    /// Expose the internal vector of updates.
+    pub fn unstable_internal_updates(&self) -> &Vec<(T, i64)> { &self.updates }
+
+    /// Expose the internal value of `clean`.
+    pub fn unstable_internal_clean(&self) -> usize { self.clean }
+
+    /// Maintain the bounds of pending (non-compacted) updates versus clean (compacted) data.
+    /// This function tries to minimize work by only compacting if enough work has accumulated.
+    fn maintain_bounds(&mut self) {
+        // if we have more than 32 elements and at least half of them are not clean, compact
+        if self.updates.len() > 32 && self.updates.len() >> 1 >= self.clean {
+            self.compact()
+        }
     }
 }
