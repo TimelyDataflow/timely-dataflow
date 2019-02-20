@@ -181,13 +181,22 @@ impl<T: Timestamp> ActivateCapability<T> {
             activations,
         }
     }
-    /// Delays the capability.
+    /// The timestamp associated with this capability.
+    pub fn time(&self) -> &T {
+        self.capability.time()
+    }
+    /// Creates a new delayed capability.
     pub fn delayed(&self, time: &T) -> Self {
         ActivateCapability {
             capability: self.capability.delayed(time),
             address: self.address.clone(),
             activations: self.activations.clone(),
         }
+    }
+    /// Downgrades this capability.
+    pub fn downgrade(&mut self, time: &T) {
+        self.capability.downgrade(time);
+        self.activations.borrow_mut().activate(&self.address[..]);
     }
 }
 
