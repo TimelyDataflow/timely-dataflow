@@ -3,7 +3,5 @@
 pub use self::subgraph::{Subgraph, SubgraphBuilder};
 
 pub mod pointstamp_counter;
-// pub mod product;
 pub mod subgraph;
-// pub mod reachability;
-pub mod reachability_neu;
+pub mod reachability;
