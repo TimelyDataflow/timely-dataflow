@@ -11,7 +11,7 @@
 //! use timely::progress::{Location, Port};
 //! use timely::progress::frontier::Antichain;
 //! use timely::progress::{Source, Target};
-//! use timely::progress::nested::reachability_neu::{Builder, Tracker};
+//! use timely::progress::reachability::{Builder, Tracker};
 //!
 //! // allocate a new empty topology builder.
 //! let mut builder = Builder::<usize>::new();
@@ -107,7 +107,7 @@ use progress::timestamp::PathSummary;
 /// ```rust
 /// use timely::progress::frontier::Antichain;
 /// use timely::progress::{Source, Target};
-/// use timely::progress::nested::reachability_neu::Builder;
+/// use timely::progress::reachability::Builder;
 ///
 /// // allocate a new empty topology builder.
 /// let mut builder = Builder::<usize>::new();
@@ -217,7 +217,7 @@ impl<T: Timestamp> Builder<T> {
     /// ```rust
     /// use timely::progress::frontier::Antichain;
     /// use timely::progress::{Source, Target};
-    /// use timely::progress::nested::reachability_neu::Builder;
+    /// use timely::progress::reachability::Builder;
     ///
     /// // allocate a new empty topology builder.
     /// let mut builder = Builder::<usize>::new();
@@ -245,7 +245,7 @@ impl<T: Timestamp> Builder<T> {
     /// ```rust
     /// use timely::progress::frontier::Antichain;
     /// use timely::progress::{Source, Target};
-    /// use timely::progress::nested::reachability_neu::Builder;
+    /// use timely::progress::reachability::Builder;
     ///
     /// // allocate a new empty topology builder.
     /// let mut builder = Builder::<usize>::new();

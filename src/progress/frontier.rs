@@ -18,6 +18,16 @@ impl<T: PartialOrder> Antichain<T> {
     /// Updates the `Antichain` if the element is not greater than or equal to some present element.
     ///
     /// Returns true if element is added to the set
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::new();
+    /// assert!(frontier.insert(2));
+    /// assert!(!frontier.insert(3));
+    ///```
     pub fn insert(&mut self, element: T) -> bool {
         if !self.elements.iter().any(|x| x.less_equal(&element)) {
             self.elements.retain(|x| !element.less_equal(x));
@@ -30,24 +40,78 @@ impl<T: PartialOrder> Antichain<T> {
     }
 
     /// Creates a new empty `Antichain`.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::<u32>::new();
+    ///```
     pub fn new() -> Antichain<T> { Antichain { elements: Vec::new() } }
 
     /// Creates a new singleton `Antichain`.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::from_elem(2);
+    ///```
     pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
 
     /// Clears the contents of the antichain.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::from_elem(2);
+    /// frontier.clear();
+    /// assert!(frontier.elements().is_empty());
+    ///```
     pub fn clear(&mut self) { self.elements.clear() }
 
     /// Sorts the elements so that comparisons between antichains can be made.
     pub fn sort(&mut self) where T: Ord { self.elements.sort() }
 
     /// Returns true if any item in the antichain is strictly less than the argument.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::from_elem(2);
+    /// assert!(frontier.less_than(&3));
+    /// assert!(!frontier.less_than(&2));
+    /// assert!(!frontier.less_than(&1));
+    ///
+    /// frontier.clear();
+    /// assert!(!frontier.less_than(&3));
+    ///```
     #[inline]
     pub fn less_than(&self, time: &T) -> bool {
         self.elements.iter().any(|x| x.less_than(time))
     }
 
     /// Returns true if any item in the antichain is less than or equal to the argument.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::from_elem(2);
+    /// assert!(frontier.less_equal(&3));
+    /// assert!(frontier.less_equal(&2));
+    /// assert!(!frontier.less_equal(&1));
+    ///
+    /// frontier.clear();
+    /// assert!(!frontier.less_equal(&3));
+    ///```
     #[inline]
     pub fn less_equal(&self, time: &T) -> bool {
         self.elements.iter().any(|x| x.less_equal(time))
@@ -60,6 +124,15 @@ impl<T: PartialOrder> Antichain<T> {
     }
 
     /// Reveals the elements in the antichain.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::from_elem(2);
+    /// assert_eq!(frontier.elements(), &[2]);
+    ///```
     #[inline] pub fn elements(&self) -> &[T] { &self.elements[..] }
 }
 
@@ -207,7 +280,6 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     }
 
     /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
-    #[inline]
     ///
     /// # Examples
     ///
@@ -219,6 +291,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// assert!(frontier.less_equal(&1));
     /// assert!(frontier.less_equal(&2));
     ///```
+    #[inline]
     pub fn less_equal(&self, time: &T) -> bool {
         debug_assert_eq!(self.dirty, 0);
         self.frontier().less_equal(time)
