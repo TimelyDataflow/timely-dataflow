@@ -174,11 +174,11 @@ As before, I'm just going to show you the new code, which now lives just after `
 #
 # use timely::dataflow::{InputHandle, ProbeHandle};
 # use timely::dataflow::operators::{Inspect, Probe, Map};
-
-use std::collections::HashMap;
-use timely::dataflow::channels::pact::Exchange;
-use timely::dataflow::operators::Operator;
-
+#
+# use std::collections::HashMap;
+# use timely::dataflow::channels::pact::Exchange;
+# use timely::dataflow::operators::Operator;
+#
 #
 # fn main() {
 #     // initializes and runs a timely dataflow.
