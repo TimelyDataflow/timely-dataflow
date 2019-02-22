@@ -1,10 +1,10 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
-use Data;
-use order::PartialOrder;
-use dataflow::{Stream, Scope};
-use dataflow::channels::pact::Pipeline;
-use dataflow::operators::generic::operator::Operator;
+use crate::Data;
+use crate::order::PartialOrder;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for reclocking a stream.
 pub trait Reclock<S: Scope, D: Data> {

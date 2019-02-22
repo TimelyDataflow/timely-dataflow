@@ -1,9 +1,9 @@
 //! Filters a stream by a predicate.
 
-use Data;
-use dataflow::channels::pact::Pipeline;
-use dataflow::{Stream, Scope};
-use dataflow::operators::generic::operator::Operator;
+use crate::Data;
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
 pub trait Filter<D: Data> {

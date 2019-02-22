@@ -1,7 +1,7 @@
-use progress::frontier::{AntichainRef, MutableAntichain};
-use progress::Timestamp;
-use dataflow::operators::Capability;
-use logging::TimelyLogger as Logger;
+use crate::progress::frontier::{AntichainRef, MutableAntichain};
+use crate::progress::Timestamp;
+use crate::dataflow::operators::Capability;
+use crate::logging::TimelyLogger as Logger;
 
 /// Tracks requests for notification and delivers available notifications.
 ///
@@ -80,9 +80,9 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
-            self.logging.as_ref().map(|l| l.log(::logging::GuardedProgressEvent { is_start: true }));
+            self.logging.as_ref().map(|l| l.log(crate::logging::GuardedProgressEvent { is_start: true }));
             logic(cap, count, self);
-            self.logging.as_ref().map(|l| l.log(::logging::GuardedProgressEvent { is_start: false }));
+            self.logging.as_ref().map(|l| l.log(crate::logging::GuardedProgressEvent { is_start: false }));
         }
     }
 }
@@ -106,10 +106,10 @@ impl<'a, T: Timestamp> Iterator for Notificator<'a, T> {
 fn notificator_delivers_notifications_in_topo_order() {
     use std::rc::Rc;
     use std::cell::RefCell;
-    use progress::ChangeBatch;
-    use progress::frontier::MutableAntichain;
-    use order::Product;
-    use dataflow::operators::capability::mint as mint_capability;
+    use crate::progress::ChangeBatch;
+    use crate::progress::frontier::MutableAntichain;
+    use crate::order::Product;
+    use crate::dataflow::operators::capability::mint as mint_capability;
 
     let mut frontier = MutableAntichain::new_bottom(Product::new(0, 0));
 

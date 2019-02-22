@@ -2,10 +2,10 @@
 use std::hash::Hash;
 use std::collections::HashMap;
 
-use ::{Data, ExchangeData};
-use dataflow::{Stream, Scope};
-use dataflow::operators::generic::operator::Operator;
-use dataflow::channels::pact::Exchange;
+use crate::{Data, ExchangeData};
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::operators::generic::operator::Operator;
+use crate::dataflow::channels::pact::Exchange;
 
 /// Generic state-transition machinery: each key has a state, and receives a sequence of events.
 /// Events are applied in time-order, but no other promises are made. Each state transition can

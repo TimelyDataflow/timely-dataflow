@@ -1,9 +1,9 @@
 //! Merges the contents of multiple streams.
 
 
-use Data;
-use dataflow::channels::pact::Pipeline;
-use dataflow::{Stream, Scope};
+use crate::Data;
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::{Stream, Scope};
 
 /// Merge the contents of two streams.
 pub trait Concat<G: Scope, D: Data> {
@@ -20,7 +20,7 @@ pub trait Concat<G: Scope, D: Data> {
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concat(&self, &Stream<G, D>) -> Stream<G, D>;
+    fn concat(&self, _: &Stream<G, D>) -> Stream<G, D>;
 }
 
 impl<G: Scope, D: Data> Concat<G, D> for Stream<G, D> {
@@ -47,14 +47,14 @@ pub trait Concatenate<G: Scope, D: Data> {
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate(&self, impl IntoIterator<Item=Stream<G, D>>) -> Stream<G, D>;
+    fn concatenate(&self, _: impl IntoIterator<Item=Stream<G, D>>) -> Stream<G, D>;
 }
 
 impl<G: Scope, D: Data> Concatenate<G, D> for G {
     fn concatenate(&self, sources: impl IntoIterator<Item=Stream<G, D>>) -> Stream<G, D> {
 
         // create an operator builder.
-        use dataflow::operators::generic::builder_rc::OperatorBuilder;
+        use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
         let mut builder = OperatorBuilder::new("Concatenate".to_string(), self.clone());
 
         // create new input handles for each input stream.

@@ -6,20 +6,20 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use ::Data;
-use progress::Timestamp;
-use progress::ChangeBatch;
-use progress::frontier::MutableAntichain;
-use dataflow::channels::pullers::Counter as PullCounter;
-use dataflow::channels::pushers::Counter as PushCounter;
-use dataflow::channels::pushers::buffer::{Buffer, Session};
-use dataflow::channels::Bundle;
-use communication::{Push, Pull, message::RefOrMut};
-use logging::TimelyLogger as Logger;
+use crate::Data;
+use crate::progress::Timestamp;
+use crate::progress::ChangeBatch;
+use crate::progress::frontier::MutableAntichain;
+use crate::dataflow::channels::pullers::Counter as PullCounter;
+use crate::dataflow::channels::pushers::Counter as PushCounter;
+use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
+use crate::dataflow::channels::Bundle;
+use crate::communication::{Push, Pull, message::RefOrMut};
+use crate::logging::TimelyLogger as Logger;
 
-use dataflow::operators::CapabilityRef;
-use dataflow::operators::capability::mint_ref as mint_capability_ref;
-use dataflow::operators::capability::CapabilityTrait;
+use crate::dataflow::operators::CapabilityRef;
+use crate::dataflow::operators::capability::mint_ref as mint_capability_ref;
+use crate::dataflow::operators::capability::CapabilityTrait;
 
 /// Handle to an operator's input stream.
 pub struct InputHandle<T: Timestamp, D, P: Pull<Bundle<T, D>>> {
@@ -78,9 +78,9 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<Vec<D>>)>(&mut self, mut logic: F) {
         let mut logging = self.logging.clone();
         while let Some((cap, data)) = self.next() {
-            logging.as_mut().map(|l| l.log(::logging::GuardedMessageEvent { is_start: true }));
+            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            logging.as_mut().map(|l| l.log(::logging::GuardedMessageEvent { is_start: false }));
+            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
         }
     }
 

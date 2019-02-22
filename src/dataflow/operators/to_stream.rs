@@ -1,11 +1,11 @@
 //! Conversion to the `Stream` type from iterators.
 
-use progress::Timestamp;
+use crate::progress::Timestamp;
 
-use Data;
-use dataflow::channels::Message;
-use dataflow::operators::generic::operator::source;
-use dataflow::{Stream, Scope};
+use crate::Data;
+use crate::dataflow::channels::Message;
+use crate::dataflow::operators::generic::operator::source;
+use crate::dataflow::{Stream, Scope};
 
 /// Converts to a timely `Stream`.
 pub trait ToStream<T: Timestamp, D: Data> {

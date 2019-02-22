@@ -3,10 +3,10 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use Data;
-use dataflow::channels::{Bundle, Message};
+use crate::Data;
+use crate::dataflow::channels::{Bundle, Message};
 
-use communication::Push;
+use crate::communication::Push;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct Tee<T: 'static, D: 'static> {

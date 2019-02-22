@@ -7,14 +7,14 @@ use std::time::Instant;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use communication::{Allocate, Data, Push, Pull};
-use communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use scheduling::{Schedule, Scheduler, Activations};
-use progress::timestamp::{Refines};
-use progress::SubgraphBuilder;
-use progress::operate::Operate;
-use dataflow::scopes::Child;
-use logging::TimelyLogger;
+use crate::communication::{Allocate, Data, Push, Pull};
+use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
+use crate::scheduling::{Schedule, Scheduler, Activations};
+use crate::progress::timestamp::{Refines};
+use crate::progress::SubgraphBuilder;
+use crate::progress::operate::Operate;
+use crate::dataflow::scopes::Child;
+use crate::logging::TimelyLogger;
 
 /// Methods provided by the root Worker.
 ///
@@ -45,9 +45,9 @@ pub trait AsWorker : Scheduler {
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
     /// Provides access to named logging streams.
-    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>>;
+    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>;
     /// Provides access to the timely logging stream.
-    fn logging(&self) -> Option<::logging::TimelyLogger> { self.log_register().get("timely") }
+    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().get("timely") }
 }
 
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
@@ -60,7 +60,7 @@ pub struct Worker<A: Allocate> {
     // dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflows: Rc<RefCell<HashMap<usize, Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Rc<RefCell<::logging_core::Registry<::logging::WorkerIdentifier>>>,
+    logging: Rc<RefCell<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>>,
 
     activations: Rc<RefCell<Activations>>,
     active_dataflows: Vec<usize>,
@@ -89,7 +89,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
     }
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
-    fn log_register(&self) -> RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
+    fn log_register(&self) -> RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
         self.log_register()
     }
 }
@@ -112,7 +112,7 @@ impl<A: Allocate> Worker<A> {
             identifiers: Rc::new(RefCell::new(0)),
             dataflows: Rc::new(RefCell::new(HashMap::new())),
             dataflow_counter: Rc::new(RefCell::new(0)),
-            logging: Rc::new(RefCell::new(::logging_core::Registry::new(now, index))),
+            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now, index))),
             activations: Rc::new(RefCell::new(Activations::new())),
             active_dataflows: Vec::new(),
             temp_channel_ids: Rc::new(RefCell::new(Vec::new())),
@@ -290,7 +290,7 @@ impl<A: Allocate> Worker<A> {
     ///           );
     /// });
     /// ```
-    pub fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
+    pub fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
         self.logging.borrow_mut()
     }
 
@@ -367,7 +367,7 @@ impl<A: Allocate> Worker<A> {
 
         let mut operator = subscope.into_inner().build(self);
 
-        logging.as_mut().map(|l| l.log(::logging::OperatesEvent {
+        logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
             id: identifier,
             addr: operator.path().to_vec(),
             name: operator.name().to_string(),
@@ -401,7 +401,7 @@ impl<A: Allocate> Worker<A> {
     }
 }
 
-use communication::Message;
+use crate::communication::Message;
 
 impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {
@@ -438,7 +438,7 @@ impl Wrapper {
 
         // Perhaps log information about the start of the schedule call.
         if let Some(l) = self.logging.as_mut() {
-            l.log(::logging::ScheduleEvent::start(self.identifier));
+            l.log(crate::logging::ScheduleEvent::start(self.identifier));
         }
 
         let incomplete = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false);
@@ -449,7 +449,7 @@ impl Wrapper {
 
         // Perhaps log information about the stop of the schedule call.
         if let Some(l) = self.logging.as_mut() {
-            l.log(::logging::ScheduleEvent::stop(self.identifier));
+            l.log(crate::logging::ScheduleEvent::stop(self.identifier));
         }
 
         incomplete

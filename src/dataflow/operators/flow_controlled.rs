@@ -1,10 +1,10 @@
 //! Methods to construct flow-controlled sources.
 
-use ::Data;
-use order::{PartialOrder, TotalOrder};
-use dataflow::operators::generic::operator::source;
-use dataflow::operators::probe::Handle;
-use dataflow::{Stream, Scope};
+use crate::Data;
+use crate::order::{PartialOrder, TotalOrder};
+use crate::dataflow::operators::generic::operator::source;
+use crate::dataflow::operators::probe::Handle;
+use crate::dataflow::{Stream, Scope};
 
 /// Output of the input reading function for iterator_source.
 pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: IntoIterator<Item=(T, DI)>> {

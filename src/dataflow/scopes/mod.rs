@@ -1,10 +1,10 @@
 //! Hierarchical organization of timely dataflow graphs.
 
-use progress::{Timestamp, Operate, Source, Target};
-use order::Product;
-use progress::timestamp::Refines;
-use communication::Allocate;
-use worker::AsWorker;
+use crate::progress::{Timestamp, Operate, Source, Target};
+use crate::order::Product;
+use crate::progress::timestamp::Refines;
+use crate::communication::Allocate;
+use crate::worker::AsWorker;
 
 pub mod child;
 
@@ -16,7 +16,7 @@ pub trait ScopeParent: AsWorker+Clone {
     type Timestamp : Timestamp;
 }
 
-impl<A: Allocate> ScopeParent for ::worker::Worker<A> {
+impl<A: Allocate> ScopeParent for crate::worker::Worker<A> {
     type Timestamp = ();
 }
 

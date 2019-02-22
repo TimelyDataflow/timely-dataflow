@@ -9,14 +9,14 @@
 
 use std::marker::PhantomData;
 
-use communication::{Push, Pull, Data};
-use communication::allocator::thread::{ThreadPusher, ThreadPuller};
+use crate::communication::{Push, Pull, Data};
+use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 
-use worker::AsWorker;
-use dataflow::channels::pushers::Exchange as ExchangePusher;
+use crate::worker::AsWorker;
+use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{Bundle, Message};
 
-use logging::TimelyLogger as Logger;
+use crate::logging::TimelyLogger as Logger;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T: 'static, D: 'static> {
@@ -127,7 +127,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
                 message.from = self.source;
             }
 
-            self.logging.as_ref().map(|l| l.log(::logging::MessagesEvent {
+            self.logging.as_ref().map(|l| l.log(crate::logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
                 source: self.source,
@@ -168,7 +168,7 @@ impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
         if let Some(bundle) = result {
             let channel = self.channel;
             let target = self.index;
-            self.logging.as_ref().map(|l| l.log(::logging::MessagesEvent {
+            self.logging.as_ref().map(|l| l.log(crate::logging::MessagesEvent {
                 is_send: false,
                 channel,
                 source: bundle.from,

@@ -3,9 +3,9 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use dataflow::channels::Bundle;
-use progress::ChangeBatch;
-use communication::Pull;
+use crate::dataflow::channels::Bundle;
+use crate::progress::ChangeBatch;
+use crate::communication::Pull;
 
 /// A wrapper which accounts records pulled past in a shared count map.
 pub struct Counter<T: Ord+Clone+'static, D, P: Pull<Bundle<T, D>>> {

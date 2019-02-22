@@ -5,13 +5,13 @@ use std::cell::RefCell;
 use std::time::{Instant, Duration};
 use std::collections::VecDeque;
 
-use ::{communication::Allocate, ExchangeData, PartialOrder};
-use ::scheduling::Scheduler;
-use worker::Worker;
-use dataflow::channels::pact::Exchange;
-use dataflow::operators::generic::operator::source;
-use dataflow::operators::generic::operator::Operator;
-use scheduling::activate::Activator;
+use crate::{communication::Allocate, ExchangeData, PartialOrder};
+use crate::scheduling::Scheduler;
+use crate::worker::Worker;
+use crate::dataflow::channels::pact::Exchange;
+use crate::dataflow::operators::generic::operator::source;
+use crate::dataflow::operators::generic::operator::Operator;
+use crate::scheduling::activate::Activator;
 
 // A Sequencer needs all operators firing with high frequency, because
 // it uses the timer to gauge progress. If other workers cease

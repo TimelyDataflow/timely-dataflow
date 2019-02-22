@@ -1,11 +1,11 @@
 //! Exchange records between workers.
 
-use ::ExchangeData;
-use dataflow::channels::pact::Exchange as ExchangePact;
+use crate::ExchangeData;
+use crate::dataflow::channels::pact::Exchange as ExchangePact;
 // use dataflow::channels::pact::TimeExchange as TimeExchangePact;
-use dataflow::{Stream, Scope};
-use dataflow::operators::generic::operator::Operator;
-use progress::timestamp::Timestamp;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::operators::generic::operator::Operator;
+use crate::progress::timestamp::Timestamp;
 
 /// Exchange records between workers.
 pub trait Exchange<T, D: ExchangeData> {

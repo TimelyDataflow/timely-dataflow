@@ -1,9 +1,9 @@
 //! Partition a stream of records into multiple streams.
 
-use dataflow::channels::pact::Pipeline;
-use dataflow::operators::generic::builder_rc::OperatorBuilder;
-use dataflow::{Scope, Stream};
-use Data;
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::{Scope, Stream};
+use crate::Data;
 
 /// Partition a stream of records into multiple streams.
 pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {

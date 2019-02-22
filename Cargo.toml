@@ -4,6 +4,7 @@ name = "timely"
 version = "0.8.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 readme = "README.md"
+edition = "2018"
 
 description = "A low-latency data-parallel dataflow system in Rust"
 

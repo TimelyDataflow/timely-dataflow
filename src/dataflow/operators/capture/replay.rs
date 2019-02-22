@@ -38,12 +38,12 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
-use ::Data;
-use dataflow::{Scope, Stream};
-use dataflow::channels::pushers::Counter as PushCounter;
-use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
-use dataflow::operators::generic::builder_raw::OperatorBuilder;
-use progress::Timestamp;
+use crate::Data;
+use crate::dataflow::{Scope, Stream};
+use crate::dataflow::channels::pushers::Counter as PushCounter;
+use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
+use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
+use crate::progress::Timestamp;
 
 use super::Event;
 use super::event::EventIterator;

@@ -50,8 +50,8 @@ implement_total!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, (), ::std::
 
 use std::fmt::{Formatter, Error, Debug};
 
-use progress::Timestamp;
-use progress::timestamp::Refines;
+use crate::progress::Timestamp;
+use crate::progress::timestamp::Refines;
 
 impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, TInner> {
     fn to_inner(other: TOuter) -> Self {
@@ -105,7 +105,7 @@ impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner>
     type Summary = Product<TOuter::Summary, TInner::Summary>;
 }
 
-use progress::timestamp::PathSummary;
+use crate::progress::timestamp::PathSummary;
 impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<Product<TOuter, TInner>> for Product<TOuter::Summary, TInner::Summary> {
     #[inline]
     fn results_in(&self, product: &Product<TOuter, TInner>) -> Option<Product<TOuter, TInner>> {

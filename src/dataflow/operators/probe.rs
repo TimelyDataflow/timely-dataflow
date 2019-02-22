@@ -3,17 +3,17 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::Timestamp;
-use progress::frontier::{AntichainRef, MutableAntichain};
-use dataflow::channels::pushers::Counter as PushCounter;
-use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
-use dataflow::channels::pact::Pipeline;
-use dataflow::channels::pullers::Counter as PullCounter;
-use dataflow::operators::generic::builder_raw::OperatorBuilder;
+use crate::progress::Timestamp;
+use crate::progress::frontier::{AntichainRef, MutableAntichain};
+use crate::dataflow::channels::pushers::Counter as PushCounter;
+use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::channels::pullers::Counter as PullCounter;
+use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
-use Data;
-use dataflow::{Stream, Scope};
+use crate::Data;
+use crate::dataflow::{Stream, Scope};
 
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, D: Data> {
@@ -111,7 +111,7 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
                     started = true;
                 }
 
-                use communication::message::RefOrMut;
+                use crate::communication::message::RefOrMut;
 
                 while let Some(message) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {
@@ -180,14 +180,14 @@ impl<T: Timestamp> Clone for Handle<T> {
 #[cfg(test)]
 mod tests {
 
-    use ::communication::Configuration;
-    use dataflow::operators::{Input, Probe};
+    use crate::communication::Configuration;
+    use crate::dataflow::operators::{Input, Probe};
 
     #[test]
     fn probe() {
 
         // initializes and runs a timely dataflow computation
-        ::execute(Configuration::Thread, |worker| {
+        crate::execute(Configuration::Thread, |worker| {
 
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {

@@ -3,8 +3,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use scheduling::Schedule;
-use progress::{Timestamp, ChangeBatch, Antichain};
+use crate::scheduling::Schedule;
+use crate::progress::{Timestamp, ChangeBatch, Antichain};
 
 /// Methods for describing an operators topology, and the progress it makes.
 pub trait Operate<T: Timestamp> : Schedule {

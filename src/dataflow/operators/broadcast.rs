@@ -5,11 +5,11 @@
 
 // use communication::Pull;
 
-use ::ExchangeData;
+use crate::ExchangeData;
 // use progress::{Source, Target};
 // use progress::{Timestamp, Operate, operate::{Schedule, SharedProgress}, Antichain};
-use dataflow::{Stream, Scope};
-use dataflow::operators::{Map, Exchange};
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::operators::{Map, Exchange};
 
 // use dataflow::channels::{Message, Bundle};
 // use dataflow::channels::pushers::Counter as PushCounter;

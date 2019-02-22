@@ -4,23 +4,23 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use ::Data;
+use crate::Data;
 
-use progress::{ChangeBatch, Timestamp};
-use progress::frontier::{Antichain, MutableAntichain};
+use crate::progress::{ChangeBatch, Timestamp};
+use crate::progress::frontier::{Antichain, MutableAntichain};
 
-use dataflow::{Stream, Scope};
-use dataflow::channels::pushers::Tee;
-use dataflow::channels::pushers::Counter as PushCounter;
-use dataflow::channels::pushers::buffer::Buffer as PushBuffer;
-use dataflow::channels::pact::ParallelizationContract;
-use dataflow::channels::pullers::Counter as PullCounter;
-use dataflow::operators::capability::Capability;
-use dataflow::operators::capability::mint as mint_capability;
-use dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
-use dataflow::operators::generic::operator_info::OperatorInfo;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::channels::pushers::Tee;
+use crate::dataflow::channels::pushers::Counter as PushCounter;
+use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
+use crate::dataflow::channels::pact::ParallelizationContract;
+use crate::dataflow::channels::pullers::Counter as PullCounter;
+use crate::dataflow::operators::capability::Capability;
+use crate::dataflow::operators::capability::mint as mint_capability;
+use crate::dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
+use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 
-use logging::TimelyLogger as Logger;
+use crate::logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
@@ -185,9 +185,9 @@ mod tests {
         // This tests that if we attempt to use a capability associated with the
         // wrong output, there is a run-time assertion.
 
-        use ::dataflow::operators::generic::builder_rc::OperatorBuilder;
+        use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 
-        ::example(|scope| {
+        crate::example(|scope| {
 
             let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
 
@@ -215,9 +215,9 @@ mod tests {
         // This tests that if we attempt to use capabilities with the correct outputs
         // there is no runtime assertion
 
-        use ::dataflow::operators::generic::builder_rc::OperatorBuilder;
+        use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 
-        ::example(|scope| {
+        crate::example(|scope| {
 
             let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
 

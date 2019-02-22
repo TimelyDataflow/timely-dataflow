@@ -5,8 +5,8 @@ use std::any::Any;
 use std::default::Default;
 use std::hash::Hash;
 
-use communication::Data;
-use order::PartialOrder;
+use crate::communication::Data;
+use crate::order::PartialOrder;
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
 pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Data+Hash+Ord {
@@ -85,7 +85,7 @@ implement_timestamp_add!(usize, u64, u32, u16, u8, i32, ::std::time::Duration,);
 pub use self::refines::Refines;
 mod refines {
 
-    use progress::Timestamp;
+    use crate::progress::Timestamp;
 
     /// Conversion between pointstamp types.
     ///

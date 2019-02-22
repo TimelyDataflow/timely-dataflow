@@ -1,9 +1,9 @@
 //! Operators that separate one stream into two streams based on some condition
 
-use dataflow::channels::pact::Pipeline;
-use dataflow::operators::generic::builder_rc::OperatorBuilder;
-use dataflow::{Scope, Stream};
-use Data;
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::{Scope, Stream};
+use crate::Data;
 
 /// Extension trait for `Stream`.
 pub trait Branch<S: Scope, D: Data> {
