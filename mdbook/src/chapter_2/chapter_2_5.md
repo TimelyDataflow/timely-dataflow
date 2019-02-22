@@ -115,12 +115,42 @@ More specifically, we will take `(String, i64)` pairs and break them into many `
 
 Rather than repeat all the code up above, I'm just going to show you the fragment you insert between `to_stream` and `inspect`:
 
-```rust,ignore
-.flat_map(|(text, diff): (String, i64)|
-    text.split_whitespace()
-        .map(move |word| (word.to_owned(), diff))
-        .collect::<Vec<_>>()
-)
+```rust
+# extern crate timely;
+#
+# use timely::dataflow::{InputHandle, ProbeHandle};
+# use timely::dataflow::operators::{Inspect, Probe, Map};
+#
+# fn main() {
+#     // initializes and runs a timely dataflow.
+#     timely::execute_from_args(std::env::args(), |worker| {
+#
+#         // create input and output handles.
+#         let mut input = InputHandle::new();
+#         let mut probe = ProbeHandle::new();
+#
+#         // build a new dataflow.
+#         worker.dataflow(|scope| {
+#             input.to_stream(scope)
+                 .flat_map(|(text, diff): (String, i64)|
+                     text.split_whitespace()
+                         .map(move |word| (word.to_owned(), diff))
+                         .collect::<Vec<_>>()
+                 )
+#                  .inspect(|x| println!("seen: {:?}", x))
+#                  .probe_with(&mut probe);
+#         });
+#
+#         // feed the dataflow with data.
+#         for round in 0..10 {
+#             input.send(("round".to_owned(), 1));
+#             input.advance_to(round + 1);
+#             while probe.less_than(input.time()) {
+#                 worker.step();
+#             }
+#         }
+#     }).unwrap();
+# }
 ```
 
 The `flat_map` method expects to be told how to take each record and turn it into an iterator. Here, we are saying that each received `text` should be split (at whitespace boundaries), and each resulting `word` should be paired up with `diff`. We do a weird `collect` thing at the end because `split_whitespace` tries to hand back pointers into `text` and it makes life complicated. Sorry, blame Rust (and then blame me for using Rust).
@@ -139,43 +169,83 @@ Having exchanged the data, each worker will need a moment of care when it proces
 
 As before, I'm just going to show you the new code, which now lives just after `flat_map` and just before `inspect`:
 
-```rust,ignore
-.unary_frontier(
-    Exchange::new(|x: &(String, i64)| (x.0).len() as u64),
-    "WordCount",
-    |_capability| {
+```rust
+# extern crate timely;
+#
+# use timely::dataflow::{InputHandle, ProbeHandle};
+# use timely::dataflow::operators::{Inspect, Probe, Map};
 
-    // allocate operator-local storage.
-    let mut queues = HashMap::new();
-    let mut counts = HashMap::new();
+use std::collections::HashMap;
+use timely::dataflow::channels::pact::Exchange;
+use timely::dataflow::operators::Operator;
 
-    move |input, output| {
+#
+# fn main() {
+#     // initializes and runs a timely dataflow.
+#     timely::execute_from_args(std::env::args(), |worker| {
+#
+#         // create input and output handles.
+#         let mut input = InputHandle::new();
+#         let mut probe = ProbeHandle::new();
+#
+#         // build a new dataflow.
+#         worker.dataflow::<usize,_,_>(|scope| {
+#             input.to_stream(scope)
+#                 .flat_map(|(text, diff): (String, i64)|
+#                     text.split_whitespace()
+#                         .map(move |word| (word.to_owned(), diff))
+#                         .collect::<Vec<_>>()
+#                 )
+                .unary_frontier(
+                    Exchange::new(|x: &(String, i64)| (x.0).len() as u64),
+                    "WordCount",
+                    |capability, operator_info| {
 
-        // for each input batch, stash it at `time`.
-        while let Some((time, data)) = input.next() {
-            queues.entry(time)
-                  .or_insert(Vec::new())
-                  .push(data.take());
-        }
+                    // allocate operator-local storage.
+                    let mut queues = HashMap::new();
+                    let mut counts = HashMap::new();
 
-        // for each stashed time, apply if ready.
-        for (key, val) in queues.iter_mut() {
-            if !input.frontier().less_equal(key.time()) {
-                let mut session = output.session(key);
-                for mut batch in val.drain(..) {
-                    for (word, diff) in batch.drain(..) {
-                        let entry = counts.entry(word.clone()).or_insert(0i64);
-                        *entry += diff;
-                        session.give((word, *entry));
+                    move |input, output| {
+
+                        // for each input batch, stash it at `time`.
+                        while let Some((time, data)) = input.next() {
+                            queues.entry(time.retain())
+                                  .or_insert(Vec::new())
+                                  .push(data.replace(Vec::new()));
+                        }
+
+                        // for each stashed time, apply if ready.
+                        for (key, val) in queues.iter_mut() {
+                            if !input.frontier().less_equal(key.time()) {
+                                let mut session = output.session(key);
+                                for mut batch in val.drain(..) {
+                                    for (word, diff) in batch.drain(..) {
+                                        let entry = counts.entry(word.clone()).or_insert(0i64);
+                                        *entry += diff;
+                                        session.give((word, *entry));
+                                    }
+                                }
+                            }
+                        }
+
+                        // drop complete time and allocations.
+                        queues.retain(|key, val| val.len() > 0);
                     }
-                }
-            }
-        }
-
-        // drop complete time and allocations.
-        queues.retain(|key, val| val.len() > 0);
-    }
-})
+                })
+#                  .inspect(|x| println!("seen: {:?}", x))
+#                  .probe_with(&mut probe);
+#         });
+#
+#         // feed the dataflow with data.
+#         for round in 0..10 {
+#             input.send(("round".to_owned(), 1));
+#             input.advance_to(round + 1);
+#             while probe.less_than(input.time()) {
+#                 worker.step();
+#             }
+#         }
+#     }).unwrap();
+# }
 ```
 
 That was probably a lot to see all at once. So let's break down each of the things we did.
@@ -184,7 +254,7 @@ That was probably a lot to see all at once. So let's break down each of the thin
 .unary_frontier(
     Exchange::new(|x: &(String, i64)| (x.0).len() as u64),
     "WordCount",
-    |_capability| {
+    |_capability, operator_info| {
         // coming soon!
     }
 )
@@ -215,9 +285,9 @@ Inside the closure, we do two things: (i) read inputs and (ii) update counts and
 ```rust,ignore
         // for each input batch, stash it at `time`.
         while let Some((time, data)) = input.next() {
-            queues.entry(time)
+            queues.entry(time.retain())
                   .or_insert(Vec::new())
-                  .push(data.take());
+                  .push(data.replace(Vec::new()));
         }
 ```
 
