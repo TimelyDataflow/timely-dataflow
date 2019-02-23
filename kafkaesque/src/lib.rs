@@ -16,6 +16,9 @@ use rdkafka::consumer::{Consumer, BaseConsumer, EmptyConsumerContext};
 
 use rdkafka::config::FromClientConfigAndContext;
 
+pub mod kafka_source;
+pub use kafka_source::kafka_source as source;
+
 struct OutstandingCounterContext {
     outstanding: Arc<AtomicIsize>,
 }
