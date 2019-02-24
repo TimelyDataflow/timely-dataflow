@@ -1,19 +1,19 @@
 
 //! Methods to construct generic streaming and blocking unary operators.
 
-use dataflow::channels::pushers::Tee;
-use dataflow::channels::pact::ParallelizationContract;
+use crate::dataflow::channels::pushers::Tee;
+use crate::dataflow::channels::pact::ParallelizationContract;
 
-use dataflow::operators::generic::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
-use dataflow::operators::capability::Capability;
+use crate::dataflow::operators::generic::handles::{InputHandle, FrontieredInputHandle, OutputHandle};
+use crate::dataflow::operators::capability::Capability;
 
-use ::Data;
+use crate::Data;
 
-use dataflow::{Stream, Scope};
+use crate::dataflow::{Stream, Scope};
 
 use super::builder_rc::OperatorBuilder;
-use dataflow::operators::generic::OperatorInfo;
-use dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
+use crate::dataflow::operators::generic::OperatorInfo;
+use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Data> {

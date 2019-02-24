@@ -1,9 +1,9 @@
 //! Broadcasts progress information among workers.
 
-use progress::{ChangeBatch, Timestamp};
-use progress::Location;
-use communication::{Message, Push, Pull};
-use logging::TimelyLogger as Logger;
+use crate::progress::{ChangeBatch, Timestamp};
+use crate::progress::Location;
+use crate::communication::{Message, Push, Pull};
+use crate::logging::TimelyLogger as Logger;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
@@ -30,13 +30,13 @@ pub struct Progcaster<T:Timestamp> {
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: ::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>) -> Progcaster<T> {
+    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         let (pushers, puller) = worker.allocate(channel_identifier, &path[..]);
-        logging.as_mut().map(|l| l.log(::logging::CommChannelsEvent {
+        logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
-            kind: ::logging::CommChannelKind::Progress,
+            kind: crate::logging::CommChannelKind::Progress,
         }));
         let worker_index = worker.index();
         let addr = path.clone();
@@ -58,7 +58,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
         changes.compact();
         if !changes.is_empty() {
 
-            self.logging.as_ref().map(|l| l.log(::logging::ProgressEvent {
+            self.logging.as_ref().map(|l| l.log(crate::logging::ProgressEvent {
                 is_send: true,
                 source: self.source,
                 channel: self.channel_identifier,
@@ -108,7 +108,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
             let addr = &mut self.addr;
             let channel = self.channel_identifier;
-            self.logging.as_ref().map(|l| l.log(::logging::ProgressEvent {
+            self.logging.as_ref().map(|l| l.log(crate::logging::ProgressEvent {
                 is_send: false,
                 source: source,
                 seq_no: counter,

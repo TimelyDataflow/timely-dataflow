@@ -1,8 +1,8 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use communication::{initialize, initialize_from, Configuration, Allocator, allocator::AllocateBuilder, WorkerGuards};
-use dataflow::scopes::Child;
-use worker::Worker;
+use crate::communication::{initialize, initialize_from, Configuration, Allocator, allocator::AllocateBuilder, WorkerGuards};
+use crate::dataflow::scopes::Child;
+use crate::worker::Worker;
 // use logging::{LoggerConfig, TimelyLogger};
 
 /// Executes a single-threaded timely dataflow computation.
@@ -129,15 +129,15 @@ where
             if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
 
                 use ::std::net::TcpStream;
-                use ::logging::BatchLogger;
-                use ::dataflow::operators::capture::EventWriter;
+                use crate::logging::BatchLogger;
+                use crate::dataflow::operators::capture::EventWriter;
 
                 eprintln!("enabled COMM logging to {}", addr);
 
                 if let Ok(stream) = TcpStream::connect(&addr) {
                     let writer = EventWriter::new(stream);
                     let mut logger = BatchLogger::new(writer);
-                    result = Some(::logging_core::Logger::new(
+                    result = Some(crate::logging_core::Logger::new(
                         ::std::time::Instant::now(),
                         events_setup,
                         move |time, data| logger.publish_batch(time, data)
@@ -161,8 +161,8 @@ where
         if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
 
             use ::std::net::TcpStream;
-            use ::logging::{BatchLogger, TimelyEvent};
-            use ::dataflow::operators::capture::EventWriter;
+            use crate::logging::{BatchLogger, TimelyEvent};
+            use crate::dataflow::operators::capture::EventWriter;
 
             if let Ok(stream) = TcpStream::connect(&addr) {
                 let writer = EventWriter::new(stream);
@@ -235,7 +235,7 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>,
           T:Send+'static,
           F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static, {
-    let configuration = try!(Configuration::from_args(iter));
+    let configuration = Configuration::from_args(iter)?;
     execute(configuration, func)
 }
 

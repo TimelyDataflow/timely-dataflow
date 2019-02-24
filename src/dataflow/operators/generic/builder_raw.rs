@@ -8,18 +8,18 @@ use std::default::Default;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use ::Data;
+use crate::Data;
 
-use scheduling::{Schedule, Activations};
+use crate::scheduling::{Schedule, Activations};
 
-use progress::{Source, Target};
-use progress::ChangeBatch;
-use progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
+use crate::progress::{Source, Target};
+use crate::progress::ChangeBatch;
+use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
-use dataflow::{Stream, Scope};
-use dataflow::channels::pushers::Tee;
-use dataflow::channels::pact::ParallelizationContract;
-use dataflow::operators::generic::operator_info::OperatorInfo;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::channels::pushers::Tee;
+use crate::dataflow::channels::pact::ParallelizationContract;
+use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 
 /// Contains type-free information about the operator properties.
 pub struct OperatorShape {

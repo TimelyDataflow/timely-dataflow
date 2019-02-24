@@ -75,13 +75,13 @@
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
 
-use progress::Timestamp;
-use progress::{Source, Target};
-use progress::ChangeBatch;
-use progress::{Location, Port};
+use crate::progress::Timestamp;
+use crate::progress::{Source, Target};
+use crate::progress::ChangeBatch;
+use crate::progress::{Location, Port};
 
-use progress::frontier::{Antichain, MutableAntichain};
-use progress::timestamp::PathSummary;
+use crate::progress::frontier::{Antichain, MutableAntichain};
+use crate::progress::timestamp::PathSummary;
 
 
 /// A topology builder, which can summarize reachability along paths.

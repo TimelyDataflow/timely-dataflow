@@ -3,9 +3,9 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use progress::ChangeBatch;
-use dataflow::channels::Bundle;
-use communication::Push;
+use crate::progress::ChangeBatch;
+use crate::dataflow::channels::Bundle;
+use crate::communication::Push;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 pub struct Counter<T: Ord, D, P: Push<Bundle<T, D>>> {

@@ -1,10 +1,10 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use dataflow::channels::{Bundle, Message};
-use progress::Timestamp;
-use dataflow::operators::Capability;
-use communication::Push;
+use crate::dataflow::channels::{Bundle, Message};
+use crate::progress::Timestamp;
+use crate::dataflow::operators::Capability;
+use crate::communication::Push;
 
 /// Buffers data sent at the same time, for efficient communication.
 ///

@@ -1,6 +1,6 @@
 //! Structured communication between timely dataflow operators.
 
-use communication::Push;
+use crate::communication::Push;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -10,7 +10,7 @@ pub mod pullers;
 pub mod pact;
 
 /// The input to and output from timely dataflow communication channels.
-pub type Bundle<T, D> = ::communication::Message<Message<T, D>>;
+pub type Bundle<T, D> = crate::communication::Message<Message<T, D>>;
 
 /// A serializable representation of timestamped data.
 #[derive(Clone, Abomonation, Serialize, Deserialize)]

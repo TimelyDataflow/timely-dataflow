@@ -3,16 +3,16 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use communication::{Data, Push, Pull};
-use communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use scheduling::Scheduler;
-use scheduling::activate::Activations;
-use progress::{Timestamp, Operate, SubgraphBuilder};
-use progress::{Source, Target};
-use progress::timestamp::Refines;
-use order::Product;
-use logging::TimelyLogger as Logger;
-use worker::AsWorker;
+use crate::communication::{Data, Push, Pull};
+use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
+use crate::scheduling::Scheduler;
+use crate::scheduling::activate::Activations;
+use crate::progress::{Timestamp, Operate, SubgraphBuilder};
+use crate::progress::{Source, Target};
+use crate::progress::timestamp::Refines;
+use crate::order::Product;
+use crate::logging::TimelyLogger as Logger;
+use crate::worker::AsWorker;
 
 use super::{ScopeParent, Scope};
 
@@ -63,7 +63,7 @@ where
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
     }
-    fn log_register(&self) -> ::std::cell::RefMut<::logging_core::Registry<::logging::WorkerIdentifier>> {
+    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
         self.parent.log_register()
     }
 }
@@ -131,7 +131,7 @@ where
     }
 }
 
-use communication::Message;
+use crate::communication::Message;
 
 impl<'a, G, T> Clone for Child<'a, G, T>
 where

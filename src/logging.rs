@@ -3,12 +3,12 @@
 /// Type alias for logging timely events.
 pub type WorkerIdentifier = usize;
 /// Logger type for worker-local logging.
-pub type Logger<Event> = ::logging_core::Logger<Event, WorkerIdentifier>;
+pub type Logger<Event> = crate::logging_core::Logger<Event, WorkerIdentifier>;
 /// Logger for timely dataflow system events.
 pub type TimelyLogger = Logger<TimelyEvent>;
 
 use std::time::Duration;
-use dataflow::operators::capture::{Event, EventPusher};
+use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
 pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {

@@ -23,19 +23,19 @@
 
 use std::marker::PhantomData;
 
-use progress::Timestamp;
-use progress::timestamp::Refines;
-use progress::{Source, Target};
-use order::Product;
-use Data;
-use communication::Push;
-use dataflow::channels::pushers::{Counter, Tee};
-use dataflow::channels::{Bundle, Message};
+use crate::progress::Timestamp;
+use crate::progress::timestamp::Refines;
+use crate::progress::{Source, Target};
+use crate::order::Product;
+use crate::Data;
+use crate::communication::Push;
+use crate::dataflow::channels::pushers::{Counter, Tee};
+use crate::dataflow::channels::{Bundle, Message};
 
-use worker::AsWorker;
-use dataflow::{Stream, Scope};
-use dataflow::scopes::{Child, ScopeParent};
-use dataflow::operators::delay::Delay;
+use crate::worker::AsWorker;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::scopes::{Child, ScopeParent};
+use crate::dataflow::operators::delay::Delay;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
 pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> {
@@ -53,10 +53,10 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D>;
+    fn enter<'a>(&self, _: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D>;
 }
 
-use dataflow::scopes::child::Iterative;
+use crate::dataflow::scopes::child::Iterative;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
 pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {

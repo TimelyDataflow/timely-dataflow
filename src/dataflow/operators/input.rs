@@ -4,16 +4,16 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use scheduling::{Schedule, Activator};
+use crate::scheduling::{Schedule, Activator};
 
-use progress::frontier::Antichain;
-use progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
-use progress::Source;
+use crate::progress::frontier::Antichain;
+use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
+use crate::progress::Source;
 
-use Data;
-use communication::Push;
-use dataflow::{Stream, ScopeParent, Scope};
-use dataflow::channels::{Message, pushers::{Tee, Counter}};
+use crate::Data;
+use crate::communication::Push;
+use crate::dataflow::{Stream, ScopeParent, Scope};
+use crate::dataflow::channels::{Message, pushers::{Tee, Counter}};
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
@@ -92,7 +92,7 @@ pub trait Input : Scope {
     fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, D>;
 }
 
-use order::TotalOrder;
+use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
     fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, Stream<G, D>) {
         let mut handle = Handle::new();

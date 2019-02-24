@@ -26,9 +26,9 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{self, Debug};
 
-use order::PartialOrder;
-use progress::Timestamp;
-use progress::ChangeBatch;
+use crate::order::PartialOrder;
+use crate::progress::Timestamp;
+use crate::progress::ChangeBatch;
 
 /// An internal trait expressing the capability to send messages with a given timestamp.
 pub trait CapabilityTrait<T: Timestamp> {

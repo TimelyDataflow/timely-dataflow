@@ -1,12 +1,12 @@
 //! Counts the number of records at each time.
 use std::collections::HashMap;
 
-use communication::message::RefOrMut;
+use crate::communication::message::RefOrMut;
 
-use Data;
-use dataflow::channels::pact::Pipeline;
-use dataflow::{Stream, Scope};
-use dataflow::operators::generic::operator::Operator;
+use crate::Data;
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::operators::generic::operator::Operator;
 
 /// Accumulates records within a timestamp.
 pub trait Accumulate<G: Scope, D: Data> {

@@ -4,21 +4,21 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
-use scheduling::{Schedule, Activations, ActivateOnDrop};
+use crate::scheduling::{Schedule, Activations, ActivateOnDrop};
 
-use progress::frontier::Antichain;
-use progress::{Operate, operate::SharedProgress, Timestamp};
-use progress::Source;
-use progress::ChangeBatch;
+use crate::progress::frontier::Antichain;
+use crate::progress::{Operate, operate::SharedProgress, Timestamp};
+use crate::progress::Source;
+use crate::progress::ChangeBatch;
 
-use Data;
-use dataflow::channels::pushers::{Tee, Counter as PushCounter};
-use dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
+use crate::Data;
+use crate::dataflow::channels::pushers::{Tee, Counter as PushCounter};
+use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
 
-use dataflow::operators::Capability;
-use dataflow::operators::capability::mint as mint_capability;
+use crate::dataflow::operators::Capability;
+use crate::dataflow::operators::capability::mint as mint_capability;
 
-use dataflow::{Stream, Scope};
+use crate::dataflow::{Stream, Scope};
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {

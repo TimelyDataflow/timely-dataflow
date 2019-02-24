@@ -1,7 +1,7 @@
 //! Tracks minimal sets of mutually incomparable elements of a partial order.
 
-use progress::ChangeBatch;
-use order::PartialOrder;
+use crate::progress::ChangeBatch;
+use crate::order::PartialOrder;
 
 /// A set of mutually incomparable elements.
 ///

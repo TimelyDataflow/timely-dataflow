@@ -4,12 +4,12 @@
 //! operator output. Extension methods on the `Stream` type provide the appearance of higher-level
 //! declarative programming, while constructing a dataflow graph underneath.
 
-use progress::{Source, Target};
+use crate::progress::{Source, Target};
 
-use communication::Push;
-use dataflow::Scope;
-use dataflow::channels::pushers::tee::TeeHelper;
-use dataflow::channels::Bundle;
+use crate::communication::Push;
+use crate::dataflow::Scope;
+use crate::dataflow::channels::pushers::tee::TeeHelper;
+use crate::dataflow::channels::Bundle;
 
 // use dataflow::scopes::root::loggers::CHANNELS_Q;
 
@@ -35,7 +35,7 @@ impl<S: Scope, D> Stream<S, D> {
     pub fn connect_to<P: Push<Bundle<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         let mut logging = self.scope().logging();
-        logging.as_mut().map(|l| l.log(::logging::ChannelsEvent {
+        logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
             id: identifier,
             scope_addr: self.scope.addr(),
             source: (self.name.index, self.name.port),

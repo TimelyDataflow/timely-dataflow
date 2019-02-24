@@ -1,17 +1,17 @@
 //! Create cycles in a timely dataflow graph.
 
-use Data;
+use crate::Data;
 
-use progress::{Timestamp, PathSummary};
-use progress::frontier::Antichain;
-use order::Product;
+use crate::progress::{Timestamp, PathSummary};
+use crate::progress::frontier::Antichain;
+use crate::order::Product;
 
-use dataflow::channels::pushers::Tee;
-use dataflow::channels::pact::Pipeline;
-use dataflow::{Stream, Scope};
-use dataflow::scopes::child::Iterative;
-use dataflow::operators::generic::builder_rc::OperatorBuilder;
-use dataflow::operators::generic::OutputWrapper;
+use crate::dataflow::channels::pushers::Tee;
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::scopes::child::Iterative;
+use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::operators::generic::OutputWrapper;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait Feedback<G: Scope> {
@@ -102,7 +102,7 @@ pub trait ConnectLoop<G: Scope, D: Data> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn connect_loop(&self, Handle<G, D>);
+    fn connect_loop(&self, _: Handle<G, D>);
 }
 
 impl<G: Scope, D: Data> ConnectLoop<G, D> for Stream<G, D> {

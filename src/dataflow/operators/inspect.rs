@@ -1,9 +1,9 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
-use Data;
-use dataflow::channels::pact::Pipeline;
-use dataflow::{Stream, Scope};
-use dataflow::operators::generic::Operator;
+use crate::Data;
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::{Stream, Scope};
+use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
 pub trait Inspect<G: Scope, D: Data> {

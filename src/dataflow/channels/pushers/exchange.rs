@@ -1,8 +1,8 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
-use Data;
-use communication::Push;
-use dataflow::channels::{Bundle, Message};
+use crate::Data;
+use crate::communication::Push;
+use crate::dataflow::channels::{Bundle, Message};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.

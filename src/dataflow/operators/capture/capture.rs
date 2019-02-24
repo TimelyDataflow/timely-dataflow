@@ -8,14 +8,14 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use ::Data;
-use dataflow::{Scope, Stream};
-use dataflow::channels::pact::Pipeline;
-use dataflow::channels::pullers::Counter as PullCounter;
-use dataflow::operators::generic::builder_raw::OperatorBuilder;
+use crate::Data;
+use crate::dataflow::{Scope, Stream};
+use crate::dataflow::channels::pact::Pipeline;
+use crate::dataflow::channels::pullers::Counter as PullCounter;
+use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
-use progress::ChangeBatch;
-use progress::Timestamp;
+use crate::progress::ChangeBatch;
+use crate::progress::Timestamp;
 
 use super::{Event, EventPusher};
 
@@ -140,7 +140,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
             },
             move |consumed, _internal, _external| {
 
-                use communication::message::RefOrMut;
+                use crate::communication::message::RefOrMut;
 
                 // turn each received message into an event.
                 let mut borrow = event_pusher2.borrow_mut();

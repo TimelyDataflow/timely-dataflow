@@ -10,19 +10,19 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
-use logging::TimelyLogger as Logger;
+use crate::logging::TimelyLogger as Logger;
 
-use scheduling::Schedule;
-use scheduling::activate::Activations;
+use crate::scheduling::Schedule;
+use crate::scheduling::activate::Activations;
 
-use progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
-use progress::{Timestamp, Operate, operate::SharedProgress};
-use progress::{Location, Port, Source, Target};
+use crate::progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
+use crate::progress::{Timestamp, Operate, operate::SharedProgress};
+use crate::progress::{Location, Port, Source, Target};
 
-use progress::ChangeBatch;
-use progress::broadcast::Progcaster;
-use progress::reachability;
-use progress::timestamp::Refines;
+use crate::progress::ChangeBatch;
+use crate::progress::broadcast::Progcaster;
+use crate::progress::reachability;
+use crate::progress::timestamp::Refines;
 
 // IMPORTANT : by convention, a child identifier of zero is used to indicate inputs and outputs of
 // the Subgraph itself. An identifier greater than zero corresponds to an actual child, which can
@@ -126,7 +126,7 @@ where
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
-            self.logging.as_mut().map(|l| l.log(::logging::OperatesEvent {
+            self.logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
@@ -136,7 +136,7 @@ where
     }
 
     /// Now that initialization is complete, actually build a subgraph.
-    pub fn build<A: ::worker::AsWorker>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
+    pub fn build<A: crate::worker::AsWorker>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
         // at this point, the subgraph is frozen. we should initialize any internal state which
         // may have been determined after construction (e.g. the numbers of inputs and outputs).
         // we also need to determine what to return as a summary and initial capabilities, which
@@ -447,7 +447,7 @@ where
         // Drain propagated information into shared progress structure.
         for ((location, time), diff) in self.pointstamp_tracker.pushed().drain() {
             // Targets are actionable, sources are not.
-            if let ::progress::Port::Target(port) = location.port {
+            if let crate::progress::Port::Target(port) = location.port {
                 if self.children[location.node].notify {
                     self.temp_active.push(Reverse(location.node));
                 }
@@ -637,17 +637,17 @@ impl<T: Timestamp> PerOperatorState<T> {
                 // TODO:  Perhaps fold this in to `ScheduleEvent::start()` as a "reason"?
                 let frontiers = &mut self.shared_progress.borrow_mut().frontiers[..];
                 if frontiers.iter_mut().any(|buffer| !buffer.is_empty()) {
-                    l.log(::logging::PushProgressEvent { op_id: self.id })
+                    l.log(crate::logging::PushProgressEvent { op_id: self.id })
                 }
 
-                l.log(::logging::ScheduleEvent::start(self.id));
+                l.log(crate::logging::ScheduleEvent::start(self.id));
             }
 
             let incomplete = operator.schedule();
 
             // Perhaps log information about the stop of the schedule call.
             if let Some(l) = self.logging.as_mut() {
-                l.log(::logging::ScheduleEvent::stop(self.id));
+                l.log(crate::logging::ScheduleEvent::stop(self.id));
             }
 
             incomplete
