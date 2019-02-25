@@ -721,7 +721,7 @@ fn summarize_outputs<T: Timestamp>(
 
                     // Determine the current path summaries from the input port.
                     let location = Location { node: location.node, port: Port::Target(input_port) };
-                    let mut antichains = results.entry(location).or_insert(Vec::new());
+                    let antichains = results.entry(location).or_insert(Vec::new());
                     while antichains.len() <= output { antichains.push(Antichain::new()); }
 
                     // Combine each operator-internal summary to the output with `summary`.
@@ -742,7 +742,7 @@ fn summarize_outputs<T: Timestamp>(
 
                 // Each target should have (at most) one source.
                 if let Some(source) = reverse.get(&location) {
-                    let mut antichains = results.entry(*source).or_insert(Vec::new());
+                    let antichains = results.entry(*source).or_insert(Vec::new());
                     while antichains.len() <= output { antichains.push(Antichain::new()); }
 
                     if antichains[output].insert(summary.clone()) {
