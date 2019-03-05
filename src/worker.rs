@@ -458,6 +458,9 @@ impl Wrapper {
 
 impl Drop for Wrapper {
     fn drop(&mut self) {
+        if let Some(l) = self.logging.as_mut() {
+            l.log(crate::logging::ShutdownEvent { id: self.identifier });
+        }
         // ensure drop order
         self.operate = None;
         self.resources = None;

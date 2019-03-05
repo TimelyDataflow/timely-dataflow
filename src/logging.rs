@@ -137,6 +137,13 @@ impl ScheduleEvent {
 }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+/// Operator shutdown.
+pub struct ShutdownEvent {
+    /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
+    pub id: usize,
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct ApplicationEvent {
     /// Unique event type identifier
@@ -195,29 +202,31 @@ pub struct InputEvent {
 /// An event in a timely worker
 pub enum TimelyEvent {
     /// Operator creation.
-    /*  0 */ Operates(OperatesEvent),
+    Operates(OperatesEvent),
     /// Channel creation.
-    /*  1 */ Channels(ChannelsEvent),
+    Channels(ChannelsEvent),
     /// Progress message send or receive.
-    /*  2 */ Progress(ProgressEvent),
+    Progress(ProgressEvent),
     /// Progress propagation (reasoning).
-    /*  3 */ PushProgress(PushProgressEvent),
+    PushProgress(PushProgressEvent),
     /// Message send or receive.
-    /*  4 */ Messages(MessagesEvent),
+    Messages(MessagesEvent),
     /// Operator start or stop.
-    /*  5 */ Schedule(ScheduleEvent),
+    Schedule(ScheduleEvent),
+    /// Operator shutdown.
+    Shutdown(ShutdownEvent),
     /// No clue.
-    /*  6 */ Application(ApplicationEvent),
+    Application(ApplicationEvent),
     /// Per-message computation.
-    /*  7 */ GuardedMessage(GuardedMessageEvent),
+    GuardedMessage(GuardedMessageEvent),
     /// Per-notification computation.
-    /*  8 */ GuardedProgress(GuardedProgressEvent),
+    GuardedProgress(GuardedProgressEvent),
     /// Communication channel event.
-    /*  9 */ CommChannels(CommChannelsEvent),
+    CommChannels(CommChannelsEvent),
     /// Input event.
-    /* 10 */ Input(InputEvent),
+    Input(InputEvent),
     /// Unstructured event.
-    /* 11 */ Text(String),
+    Text(String),
 }
 
 impl From<OperatesEvent> for TimelyEvent {
@@ -242,6 +251,10 @@ impl From<MessagesEvent> for TimelyEvent {
 
 impl From<ScheduleEvent> for TimelyEvent {
     fn from(v: ScheduleEvent) -> TimelyEvent { TimelyEvent::Schedule(v) }
+}
+
+impl From<ShutdownEvent> for TimelyEvent {
+    fn from(v: ShutdownEvent) -> TimelyEvent { TimelyEvent::Shutdown(v) }
 }
 
 impl From<ApplicationEvent> for TimelyEvent {

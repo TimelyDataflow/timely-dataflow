@@ -669,6 +669,9 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     fn shut_down(&mut self) {
         if self.operator.is_some() {
+            if let Some(l) = self.logging.as_mut() {
+                l.log(crate::logging::ShutdownEvent{ id: self.id });
+            }
             self.operator = None;
             self.name = format!("{}(tombstone)", self.name);
         }
