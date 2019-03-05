@@ -10,7 +10,7 @@ use allocator::Event;
 /// The push half of an intra-thread channel.
 pub struct Pusher<T, P: Push<T>> {
     index: usize,
-    count: usize,
+    // count: usize,
     events: Rc<RefCell<VecDeque<(usize, Event)>>>,
     pusher: P,
     phantom: ::std::marker::PhantomData<T>,
@@ -21,7 +21,7 @@ impl<T, P: Push<T>>  Pusher<T, P> {
     pub fn new(pusher: P, index: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>) -> Self {
         Pusher {
             index,
-            count: 0,
+            // count: 0,
             events,
             pusher,
             phantom: ::std::marker::PhantomData,
@@ -58,7 +58,7 @@ use std::sync::mpsc::Sender;
 /// The push half of an intra-thread channel.
 pub struct ArcPusher<T, P: Push<T>> {
     index: usize,
-    count: usize,
+    // count: usize,
     events: Sender<(usize, Event)>,
     pusher: P,
     phantom: ::std::marker::PhantomData<T>,
@@ -69,7 +69,7 @@ impl<T, P: Push<T>>  ArcPusher<T, P> {
     pub fn new(pusher: P, index: usize, events: Sender<(usize, Event)>) -> Self {
         ArcPusher {
             index,
-            count: 0,
+            // count: 0,
             events,
             pusher,
             phantom: ::std::marker::PhantomData,
