@@ -78,17 +78,14 @@ pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> R
 
 /// Result contains connections [0, my_index - 1].
 pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
-    let mut results: Vec<_> = (0..my_index).map(|_| None).collect();
-    for index in 0..my_index {
-        let mut connected = false;
-        while !connected {
-            match TcpStream::connect(&addresses[index][..]) {
+    let results = addresses.iter().take(my_index).enumerate().map(|(index, address)| {
+        loop {
+            match TcpStream::connect(address) {
                 Ok(mut stream) => {
                     stream.set_nodelay(true).expect("set_nodelay call failed");
                     unsafe { encode(&(my_index as u64), &mut stream) }.expect("failed to encode/send worker index");
-                    results[index as usize] = Some(stream);
                     if noisy { println!("worker {}:\tconnection to worker {}", my_index, index); }
-                    connected = true;
+                    break Some(stream);
                 },
                 Err(error) => {
                     println!("worker {}:\terror connecting to worker {}: {}; retrying", my_index, index, error);
@@ -96,7 +93,7 @@ pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
                 },
             }
         }
-    }
+    }).collect();
 
     Ok(results)
 }
