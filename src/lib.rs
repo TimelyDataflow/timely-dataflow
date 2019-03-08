@@ -67,7 +67,7 @@ extern crate timely_communication;
 extern crate timely_bytes;
 extern crate timely_logging;
 
-pub use execute::{execute, execute_from_args, example};
+pub use execute::{execute, execute_directly, execute_from_args, example};
 pub use order::PartialOrder;
 
 pub use timely_communication::Configuration;

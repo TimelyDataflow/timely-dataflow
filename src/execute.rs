@@ -1,9 +1,8 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use crate::communication::{initialize, initialize_from, Configuration, Allocator, allocator::AllocateBuilder, WorkerGuards};
+use crate::communication::{initialize_from, Configuration, Allocator, allocator::AllocateBuilder, WorkerGuards};
 use crate::dataflow::scopes::Child;
 use crate::worker::Worker;
-// use logging::{LoggerConfig, TimelyLogger};
 
 /// Executes a single-threaded timely dataflow computation.
 ///
@@ -49,22 +48,44 @@ use crate::worker::Worker;
 /// assert_eq!(data.extract()[0].1, (0..10).collect::<Vec<_>>());
 /// ```
 pub fn example<T, F>(func: F) -> T
-where T: Send+'static,
-      F: Fn(&mut Child<Worker<Allocator>,u64>)->T+Send+Sync+'static {
-    // let logging_config: LoggerConfig = Default::default();
-    // let timely_logging = logging_config.timely_logging.clone();
-    let guards = initialize(Configuration::Thread, move |allocator| {
-        let mut worker = Worker::new(allocator);
-        let result = worker.dataflow(|x| func(x));
-        while worker.step() { }
-        result
-    });
+where
+    T: Send+'static,
+    F: FnOnce(&mut Child<Worker<crate::communication::allocator::thread::Thread>,u64>)->T+Send+Sync+'static
+{
+    crate::execute::execute_directly(|worker| worker.dataflow(|scope| func(scope)))
+}
 
-    guards.expect("Example computation did not start correctly!")
-          .join()   // wait for the worker to finish
-          .pop()    // grab the known-to-exist result
-          .expect("Result does not exist!")
-          .expect("Unable to retrieve result!")
+
+/// Executes a single-threaded timely dataflow computation.
+///
+/// The `execute_directly` constructs a `Worker` and directly executes the supplied
+/// closure to construct and run a timely dataflow computation. It does not create any
+/// worker threads, and simply uses the current thread of control.
+///
+/// The closure may return a result, which will be returned from the computation.
+///
+/// # Examples
+/// ```rust
+/// use timely::dataflow::operators::{ToStream, Inspect};
+///
+/// // execute a timely dataflow using three worker threads.
+/// timely::execute_directly(|worker| {
+///     worker.dataflow::<(),_,_>(|scope| {
+///         (0..10).to_stream(scope)
+///                .inspect(|x| println!("seen: {:?}", x));
+///     })
+/// });
+/// ```
+pub fn execute_directly<T, F>(func: F) -> T
+where
+    T: Send+'static,
+    F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
+{
+    let alloc = crate::communication::allocator::thread::Thread::new();
+    let mut worker = crate::worker::Worker::new(alloc);
+    let result = func(&mut worker);
+    while worker.step() { }
+    result
 }
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
