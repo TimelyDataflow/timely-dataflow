@@ -11,7 +11,7 @@ use allocator::thread::{ThreadBuilder};
 use allocator::{Allocate, AllocateBuilder, Event, Thread};
 use {Push, Pull, Message};
 
-/// An allocater for inter-thread, intra-process communication
+/// An allocator for inter-thread, intra-process communication
 pub struct ProcessBuilder {
     inner: ThreadBuilder,
     index: usize,
@@ -37,7 +37,7 @@ impl AllocateBuilder for ProcessBuilder {
     }
 }
 
-/// An allocater for inter-thread, intra-process communication
+/// An allocator for inter-thread, intra-process communication
 pub struct Process {
     inner: Thread,
     index: usize,
