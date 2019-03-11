@@ -50,7 +50,7 @@ pub struct Sorter<T> {
 
 impl<T, U: Unsigned> RadixSorter<T, U> for Sorter<T> {
 
-    #[inline(always)]
+    #[inline]
     fn push<F: Fn(&T)->U>(&mut self, element: T, bytes: &F) {
         let depth = U::bytes() - 1;
         let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;

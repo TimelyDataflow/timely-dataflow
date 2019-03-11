@@ -70,7 +70,7 @@ impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
 
 impl<T: Timestamp> Capability<T> {
     /// The timestamp associated with this capability.
-    #[inline(always)]
+    #[inline]
     pub fn time(&self) -> &T {
         &self.time
     }
@@ -79,7 +79,7 @@ impl<T: Timestamp> Capability<T> {
     /// the source capability (`self`).
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
-    #[inline(always)]
+    #[inline]
     pub fn delayed(&self, new_time: &T) -> Capability<T> {
         if !self.time.less_equal(new_time) {
             panic!("Attempted to delay {:?} to {:?}, which is not `less_equal` the capability's time.", self, new_time);
@@ -90,7 +90,7 @@ impl<T: Timestamp> Capability<T> {
     /// Downgrades the capability to one corresponding to `new_time`.
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
-    #[inline(always)]
+    #[inline]
     pub fn downgrade(&mut self, new_time: &T) {
         let new_cap = self.delayed(new_time);
         *self = new_cap;
@@ -100,7 +100,7 @@ impl<T: Timestamp> Capability<T> {
 /// Creates a new capability at `t` while incrementing (and keeping a reference to) the provided
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
-#[inline(always)]
+#[inline]
 pub fn mint<T: Timestamp>(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T> {
     internal.borrow_mut().update(time.clone(), 1);
     Capability {
@@ -181,7 +181,7 @@ impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
 
 impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
     /// The timestamp associated with this capability.
-    #[inline(always)]
+    #[inline]
     pub fn time(&self) -> &T {
         self.time
     }
@@ -190,7 +190,7 @@ impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
     /// the source capability (`self`).
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
-    #[inline(always)]
+    #[inline]
     pub fn delayed(&self, new_time: &T) -> Capability<T> {
         self.delayed_for_output(new_time, 0)
     }
@@ -214,7 +214,7 @@ impl<'cap, T: Timestamp+'cap> CapabilityRef<'cap, T> {
     /// This method produces an owned capability which must be dropped to release the
     /// capability. Users should take care that these capabilities are only stored for
     /// as long as they are required, as failing to drop them may result in livelock.
-    #[inline(always)]
+    #[inline]
     pub fn retain(self) -> Capability<T> {
         // mint(self.time.clone(), self.internal)
         self.retain_for_output(0)
@@ -249,7 +249,7 @@ impl<'cap, T: Timestamp> Debug for CapabilityRef<'cap, T> {
 /// Creates a new capability at `t` while incrementing (and keeping a reference to) the provided
 /// `ChangeBatch`.
 /// Declared separately so that it can be kept private when `Capability` is re-exported.
-#[inline(always)]
+#[inline]
 pub fn mint_ref<'cap, T: Timestamp>(time: &'cap T, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>) -> CapabilityRef<'cap, T> {
     CapabilityRef {
         time,

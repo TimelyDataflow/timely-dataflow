@@ -424,7 +424,7 @@ impl<T: Timestamp> PortInformation<T> {
     /// method returns false it means that, temporarily at least, there
     /// are outstanding pointstamp updates that are strictly less than
     /// this pointstamp.
-    #[inline(always)]
+    #[inline]
     fn is_global(&self, time: &T) -> bool {
         let dominated = self.implications.frontier().iter().any(|t| t.less_than(time));
         let redundant = self.implications.count_for(time) > 1;

@@ -37,7 +37,7 @@ impl<T, D> Message<T, D> {
     }
 
     /// Forms a message, and pushes contents at `pusher`.
-    #[inline(always)]
+    #[inline]
     pub fn push_at<P: Push<Bundle<T, D>>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
 
         let data = ::std::mem::replace(buffer, Vec::new());

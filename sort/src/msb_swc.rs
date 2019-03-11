@@ -62,7 +62,7 @@ pub enum Work<T> {
 
 impl<T, U: Unsigned> RadixSorter<T, U> for Sorter<T> {
 
-    #[inline(always)]
+    #[inline]
     fn push<F: Fn(&T)->U>(&mut self, element: T, bytes: &F) {
         let depth = U::bytes() - 1;
         let byte = ((bytes(&element).as_u64() >> (8 * depth)) & 0xFF) as usize;
@@ -111,7 +111,7 @@ impl<T> RadixSorterBase<T> for Sorter<T> {
 impl<T> Sorter<T> {
 
     /// Finishes the sorting for the session, using the supplied finalizing action when given the option to exit early.
-    #[inline(always)]
+    #[inline]
     pub fn finish_into_and<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, target: &mut Vec<Vec<T>>, bytes: F, action: L) {
 
         let depth = U::bytes() - 1;
@@ -147,7 +147,7 @@ impl<T> Sorter<T> {
     /// so we have an `action` you get to apply to finish things off. We could make this sort by radix, but
     /// there are several use cases where we need to follow up with additional sorting / compaction and would
     /// like to hook this clean-up method anyhow.
-    #[inline(always)]
+    #[inline]
     pub fn sort_and<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, source: &mut Vec<Vec<T>>, bytes: F, action: L) {
         if source.len() > 1 {
             self.work.push(Work::Sort(U::bytes(), replace(source, Vec::new())));
@@ -159,7 +159,7 @@ impl<T> Sorter<T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn grind<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, bytes: &F, action: &L) {
 
         while let Some(work) = self.work.pop() {
@@ -174,7 +174,7 @@ impl<T> Sorter<T> {
     }
 
     // digests a list of batches, which we assume (for some reason) to be densely packed.
-    #[inline(always)]
+    #[inline]
     fn ingest<U: Unsigned, F: Fn(&T)->U, L: Fn(&mut Vec<T>)>(&mut self, source: &mut Vec<Vec<T>>, bytes: &F, depth: usize, action: &L) {
 
         // in this case, we should have a non-trivial number of elements, and so we can spend some effort

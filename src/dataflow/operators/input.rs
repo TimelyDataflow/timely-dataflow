@@ -300,7 +300,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     pub fn send(&mut self, data: D) {
         // assert!(self.buffer1.capacity() == Message::<T, D>::default_length());

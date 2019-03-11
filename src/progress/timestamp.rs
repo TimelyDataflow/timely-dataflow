@@ -61,8 +61,8 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
 
 impl Timestamp for () { type Summary = (); }
 impl PathSummary<()> for () {
-    #[inline(always)] fn results_in(&self, _src: &()) -> Option<()> { Some(()) }
-    #[inline(always)] fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
+    #[inline] fn results_in(&self, _src: &()) -> Option<()> { Some(()) }
+    #[inline] fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
 }
 
 /// Implements Timestamp and PathSummary for types with a `checked_add` method.

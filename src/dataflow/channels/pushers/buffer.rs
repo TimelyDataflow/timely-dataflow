@@ -95,12 +95,12 @@ pub struct Session<'a, T, D, P: Push<Bundle<T, D>>+'a> where T: Eq+Clone+'a, D: 
 
 impl<'a, T, D, P: Push<Bundle<T, D>>+'a> Session<'a, T, D, P>  where T: Eq+Clone+'a, D: 'a {
     /// Provides one record at the time specified by the `Session`.
-    #[inline(always)]
+    #[inline]
     pub fn give(&mut self, data: D) {
         self.buffer.give(data);
     }
     /// Provides an iterator of records at the time specified by the `Session`.
-    #[inline(always)]
+    #[inline]
     pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
         for item in iter {
             self.give(item);
@@ -111,7 +111,7 @@ impl<'a, T, D, P: Push<Bundle<T, D>>+'a> Session<'a, T, D, P>  where T: Eq+Clone
     /// The `Content` type is the backing memory for communication in timely, and it can
     /// often be more efficient to re-use this memory rather than have timely allocate
     /// new backing memory.
-    #[inline(always)]
+    #[inline]
     pub fn give_vec(&mut self, message: &mut Vec<D>) {
         if message.len() > 0 {
             self.buffer.give_vec(message);
@@ -130,19 +130,19 @@ pub struct AutoflushSession<'a, T: Timestamp, D, P: Push<Bundle<T, D>>+'a> where
 
 impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>+'a> AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {
     /// Transmits a single record.
-    #[inline(always)]
+    #[inline]
     pub fn give(&mut self, data: D) {
         self.buffer.give(data);
     }
     /// Transmits records produced by an iterator.
-    #[inline(always)]
+    #[inline]
     pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
         for item in iter {
             self.give(item);
         }
     }
     /// Transmits a pre-packed batch of data.
-    #[inline(always)]
+    #[inline]
     pub fn give_content(&mut self, message: &mut Vec<D>) {
         if message.len() > 0 {
             self.buffer.give_vec(message);

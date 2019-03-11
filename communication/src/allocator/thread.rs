@@ -69,7 +69,7 @@ pub struct Pusher<T> {
 }
 
 impl<T> Push<T> for Pusher<T> {
-    #[inline(always)]
+    #[inline]
     fn push(&mut self, element: &mut Option<T>) {
         let mut borrow = self.target.borrow_mut();
         if let Some(element) = element.take() {
@@ -86,7 +86,7 @@ pub struct Puller<T> {
 }
 
 impl<T> Pull<T> for Puller<T> {
-    #[inline(always)]
+    #[inline]
     fn pull(&mut self) -> &mut Option<T> {
         let mut borrow = self.source.borrow_mut();
         // if let Some(element) = self.current.take() {
