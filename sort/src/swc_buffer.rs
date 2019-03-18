@@ -1,7 +1,7 @@
 use std::slice;
 
-use stash::Stash;
-use batched_vec::BatchedVecRef;
+use crate::stash::Stash;
+use crate::batched_vec::BatchedVecRef;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::max(64 / ::std::mem::size_of::<$t>(), 4) }}

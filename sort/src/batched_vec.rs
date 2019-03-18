@@ -1,5 +1,5 @@
 use std::{cmp, mem, ptr};
-use stash::Stash;
+use crate::stash::Stash;
 
 pub struct BatchedVecRef<'a, T: 'a> {
     tail: &'a mut Vec<T>,

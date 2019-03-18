@@ -2,6 +2,7 @@
 name = "timely_sort"
 version = "0.1.7"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
+edition = "2018"
 
 description = "Sorting infrastructure for timely dataflow"
 

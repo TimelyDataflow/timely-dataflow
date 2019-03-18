@@ -1,9 +1,9 @@
 // use std::slice;
 
-use ::{Unsigned, RadixSorter, RadixSorterBase};
-use stash::Stash;
-use swc_buffer::SWCBuffer;
-use batched_vec::BatchedVecX256;
+use crate::{Unsigned, RadixSorter, RadixSorterBase};
+use crate::stash::Stash;
+use crate::swc_buffer::SWCBuffer;
+use crate::batched_vec::BatchedVecX256;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::max(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -145,7 +145,7 @@ mod test {
             vector.push(size - index);
         }
 
-        use {RadixSorter, RadixSorterBase};
+        use crate::{RadixSorter, RadixSorterBase};
         let mut sorter = super::Sorter::new();
 
         for &element in &vector {
@@ -176,7 +176,7 @@ mod test {
             vector.push([size - index; 16]);
         }
 
-        use {RadixSorter, RadixSorterBase};
+        use crate::{RadixSorter, RadixSorterBase};
         let mut sorter = super::Sorter::new();
 
         for &element in &vector {
