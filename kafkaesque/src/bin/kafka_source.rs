@@ -3,7 +3,7 @@ use timely::dataflow::operators::Inspect;
 
 extern crate rdkafka;
 use rdkafka::config::ClientConfig;
-use rdkafka::consumer::{Consumer, BaseConsumer, EmptyConsumerContext};
+use rdkafka::consumer::{Consumer, BaseConsumer, DefaultConsumerContext};
 
 extern crate kafkaesque;
 
@@ -35,7 +35,7 @@ fn main() {
         worker.dataflow::<u64,_,_>(|scope| {
 
             // Create a Kafka consumer.
-            let consumer : BaseConsumer<EmptyConsumerContext> = consumer_config.create().expect("Couldn't create consumer");
+            let consumer : BaseConsumer<DefaultConsumerContext> = consumer_config.create().expect("Couldn't create consumer");
             consumer.subscribe(&[&topic]).expect("Failed to subscribe to topic");
 
             let strings =

@@ -26,7 +26,7 @@ use rdkafka::consumer::{ConsumerContext, BaseConsumer};
 /// extern crate rdkafka;
 /// use rdkafka::Message;
 /// use rdkafka::config::ClientConfig;
-/// use rdkafka::consumer::{Consumer, BaseConsumer, EmptyConsumerContext};
+/// use rdkafka::consumer::{Consumer, BaseConsumer, DefaultConsumerContext};
 ///
 /// fn main() {
 ///
@@ -56,7 +56,7 @@ use rdkafka::consumer::{ConsumerContext, BaseConsumer};
 ///         worker.dataflow::<u64,_,_>(|scope| {
 ///
 ///             // Create a Kafka consumer.
-///             let consumer : BaseConsumer<EmptyConsumerContext> = consumer_config.create().expect("Couldn't create consumer");
+///             let consumer : BaseConsumer<DefaultConsumerContext> = consumer_config.create().expect("Couldn't create consumer");
 ///             consumer.subscribe(&[&topic]).expect("Failed to subscribe to topic");
 ///
 ///             let strings =
@@ -119,7 +119,7 @@ where
                 // Repeatedly interrogate Kafka for [u8] messages.
                 // Cease only when Kafka stops returning new data.
                 // Could cease earlier, if we had a better policy.
-                while let Some(result) = consumer.poll(0) {
+                while let Some(result) = consumer.poll(std::time::Duration::from_millis(0)) {
                     // If valid data back from Kafka
                     if let Ok(message) = result {
                         // Attempt to interpret bytes as utf8  ...
