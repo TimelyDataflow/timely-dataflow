@@ -1,11 +1,7 @@
-extern crate timely;
 use timely::dataflow::operators::Inspect;
 
-extern crate rdkafka;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{Consumer, BaseConsumer, DefaultConsumerContext};
-
-extern crate kafkaesque;
 
 fn main() {
 

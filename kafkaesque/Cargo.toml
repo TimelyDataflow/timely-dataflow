@@ -2,6 +2,7 @@
 name = "kafkaesque"
 version = "0.1.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
+edition = "2018"
 
 [dependencies]
 clap="*"
