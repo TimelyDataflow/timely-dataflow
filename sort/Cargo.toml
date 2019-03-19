@@ -13,8 +13,12 @@ repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow", "radix", "sort"]
 license = "MIT"
 
+[[bench]]
+name = "benches"
+harness = false
+
 [dependencies]
 rand="*"
 
 [dev-dependencies]
-rand="0.4"
+bencher = "0.1.5"
