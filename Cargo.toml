@@ -1,35 +1,12 @@
-[package]
-
-name = "timely"
-version = "0.9.0"
-authors = ["Frank McSherry <fmcsherry@me.com>"]
-readme = "README.md"
-edition = "2018"
-
-description = "A low-latency data-parallel dataflow system in Rust"
-
-# These URLs point to more information about the repository
-documentation = "https://docs.rs/timely/"
-homepage = "https://github.com/TimelyDataflow/timely-dataflow"
-repository = "https://github.com/TimelyDataflow/timely-dataflow.git"
-keywords = ["timely", "dataflow"]
-license = "MIT"
-
-[features]
-bincode= ["timely_communication/bincode"]
-
-[dependencies]
-serde = "1.0"
-serde_derive = "1.0"
-abomonation = "0.7"
-abomonation_derive = "0.3"
-timely_bytes = { path = "./bytes", version = "0.9" }
-timely_logging = { path = "./logging", version = "0.9" }
-timely_communication = { path = "./communication", version = "0.9" }
-
-[dev-dependencies]
-timely_sort="0.1.6"
-rand="0.4"
+[workspace]
+members = [
+    "bytes",
+    "communication",
+    "kafkaesque",
+    "logging",
+    "sort",
+    "timely",
+]
 
 [profile.release]
 opt-level = 3

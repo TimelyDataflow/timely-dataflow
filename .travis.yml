@@ -4,7 +4,7 @@ rust:
 - stable
 script:
 - cargo build
-- cargo test && (cd bytes; cargo test)
+- cargo test
 - cargo bench
 - cargo doc
 - for file in $(find mdbook -name '*.md'); do rustdoc --test $file  -L ./target/debug/deps; done
