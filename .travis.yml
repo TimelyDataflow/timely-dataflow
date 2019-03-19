@@ -6,10 +6,14 @@ install:
 - pip install --user ghp-import
 script:
 - cargo build
+# rustdoc doesn't build dependencies, so it needs to run after `cargo build`,
+# but its dependency search gets confused if there are multiple copies of any
+# dependency in target/debug/deps, so it needs to run before `cargo test` et al.
+# clutter target/debug/deps with multiple copies of things.
+- for file in $(find mdbook -name '*.md'); do rustdoc --test $file  -L ./target/debug/deps; done
 - cargo test
 - cargo bench
 - cargo doc
-- for file in $(find mdbook -name '*.md'); do rustdoc --test $file  -L ./target/debug/deps; done
 after_success: |
   [ $TRAVIS_BRANCH = master ] &&
   [ $TRAVIS_PULL_REQUEST = false ] &&
