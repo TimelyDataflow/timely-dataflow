@@ -9,11 +9,11 @@ use std::sync::Arc;
 
 use std::any::Any;
 
-use allocator::thread::ThreadBuilder;
-use allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
-use allocator::zero_copy::initialize::initialize_networking;
+use crate::allocator::thread::ThreadBuilder;
+use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
+use crate::allocator::zero_copy::initialize::initialize_networking;
 
-use ::logging::{CommunicationSetup, CommunicationEvent};
+use crate::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 
 
@@ -186,7 +186,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Configuration,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
-    let (allocators, others) = try!(config.try_build());
+    let (allocators, others) = config.try_build()?;
     initialize_from(allocators, others, func)
 }
 
@@ -255,13 +255,13 @@ where
     let mut guards = Vec::new();
     for (index, builder) in builders.into_iter().enumerate() {
         let clone = logic.clone();
-        guards.push(try!(thread::Builder::new()
+        guards.push(thread::Builder::new()
                             .name(format!("worker thread {}", index))
                             .spawn(move || {
                                 let communicator = builder.build();
                                 (*clone)(communicator)
                             })
-                            .map_err(|e| format!("{:?}", e))));
+                            .map_err(|e| format!("{:?}", e))?);
     }
 
     Ok(WorkerGuards { guards, _others })

@@ -6,13 +6,13 @@ use std::collections::{VecDeque, HashMap};
 
 use bytes::arc::Bytes;
 
-use networking::MessageHeader;
+use crate::networking::MessageHeader;
 
-use {Allocate, Message, Data, Push, Pull};
-use allocator::AllocateBuilder;
-use allocator::{Event, Process};
-use allocator::process::ProcessBuilder;
-use allocator::canary::Canary;
+use crate::{Allocate, Message, Data, Push, Pull};
+use crate::allocator::AllocateBuilder;
+use crate::allocator::{Event, Process};
+use crate::allocator::process::ProcessBuilder;
+use crate::allocator::canary::Canary;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
 use super::push_pull::{Pusher, PullerInner};
@@ -181,7 +181,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
             .clone();
 
-        use allocator::counters::Puller as CountPuller;
+        use crate::allocator::counters::Puller as CountPuller;
         let canary = Canary::new(identifier, self.canaries.clone());
         let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.events().clone()));
 

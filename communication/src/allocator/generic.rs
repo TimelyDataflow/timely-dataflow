@@ -7,13 +7,13 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use allocator::thread::ThreadBuilder;
-use allocator::process::ProcessBuilder as TypedProcessBuilder;
-use allocator::{Allocate, AllocateBuilder, Event, Thread, Process};
-use allocator::zero_copy::allocator_process::{ProcessBuilder, ProcessAllocator};
-use allocator::zero_copy::allocator::{TcpBuilder, TcpAllocator};
+use crate::allocator::thread::ThreadBuilder;
+use crate::allocator::process::ProcessBuilder as TypedProcessBuilder;
+use crate::allocator::{Allocate, AllocateBuilder, Event, Thread, Process};
+use crate::allocator::zero_copy::allocator_process::{ProcessBuilder, ProcessAllocator};
+use crate::allocator::zero_copy::allocator::{TcpBuilder, TcpAllocator};
 
-use {Push, Pull, Data, Message};
+use crate::{Push, Pull, Data, Message};
 
 /// Enumerates known implementors of `Allocate`.
 /// Passes trait method calls on to members.

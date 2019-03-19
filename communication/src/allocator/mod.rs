@@ -17,7 +17,7 @@ pub mod counters;
 
 pub mod zero_copy;
 
-use {Data, Push, Pull, Message};
+use crate::{Data, Push, Pull, Message};
 
 /// A proto-allocator, which implements `Send` and can be completed with `build`.
 ///

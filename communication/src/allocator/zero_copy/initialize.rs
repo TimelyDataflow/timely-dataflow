@@ -1,9 +1,9 @@
 //! Network initialization.
 
 use std::sync::Arc;
-// use allocator::Process;
-use allocator::process::ProcessBuilder;
-use networking::create_sockets;
+// use crate::allocator::Process;
+use crate::allocator::process::ProcessBuilder;
+use crate::networking::create_sockets;
 use super::tcp::{send_loop, recv_loop};
 use super::allocator::{TcpBuilder, new_vector};
 
@@ -29,7 +29,7 @@ impl Drop for CommsGuard {
     }
 }
 
-use ::logging::{CommunicationSetup, CommunicationEvent};
+use crate::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 
 /// Initializes network connections

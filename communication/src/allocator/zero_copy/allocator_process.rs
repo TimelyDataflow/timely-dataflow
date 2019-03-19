@@ -6,11 +6,11 @@ use std::collections::{VecDeque, HashMap};
 
 use bytes::arc::Bytes;
 
-use networking::MessageHeader;
+use crate::networking::MessageHeader;
 
-use {Allocate, Message, Data, Push, Pull};
-use allocator::{AllocateBuilder, Event};
-use allocator::canary::Canary;
+use crate::{Allocate, Message, Data, Push, Pull};
+use crate::allocator::{AllocateBuilder, Event};
+use crate::allocator::canary::Canary;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
 
@@ -146,7 +146,7 @@ impl Allocate for ProcessAllocator {
             .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
             .clone();
 
-        use allocator::counters::Puller as CountPuller;
+        use crate::allocator::counters::Puller as CountPuller;
         let canary = Canary::new(identifier, self.canaries.clone());
         let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, self.events().clone()));
 
@@ -166,7 +166,7 @@ impl Allocate for ProcessAllocator {
                 .expect("non-existent channel dropped");
             assert!(dropped.borrow().is_empty());
         }
-        ::std::mem::drop(canaries);
+        std::mem::drop(canaries);
 
         let mut events = self.events.borrow_mut();
 

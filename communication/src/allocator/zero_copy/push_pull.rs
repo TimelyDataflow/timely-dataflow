@@ -6,11 +6,11 @@ use std::collections::VecDeque;
 
 use bytes::arc::Bytes;
 
-use allocator::canary::Canary;
-use networking::MessageHeader;
+use crate::allocator::canary::Canary;
+use crate::networking::MessageHeader;
 
-use {Data, Push, Pull};
-use allocator::Message;
+use crate::{Data, Push, Pull};
+use crate::allocator::Message;
 
 use super::bytes_exchange::{BytesPush, SendEndpoint};
 
@@ -51,7 +51,7 @@ impl<T:Data, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
             {
                 let mut bytes = borrow.reserve(header.required_bytes());
                 assert!(bytes.len() >= header.required_bytes());
-                let mut writer = &mut bytes;
+                let writer = &mut bytes;
                 header.write_to(writer).expect("failed to write header!");
                 element.into_bytes(writer);
             }
