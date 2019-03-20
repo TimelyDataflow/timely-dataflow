@@ -99,8 +99,6 @@ impl<T: ExchangeData> Sequencer<T> {
         preload: VecDeque<T>,
     ) -> Self {
         if worker.peers() == 1 {
-            println!("no dataflow");
-            
             let send = Rc::new(RefCell::new(preload));
             let recv = send.clone();
 
