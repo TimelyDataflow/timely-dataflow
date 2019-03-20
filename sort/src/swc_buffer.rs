@@ -1,10 +1,11 @@
+use std::mem::size_of;
 use std::slice;
 
 use crate::stash::Stash;
 use crate::batched_vec::BatchedVecRef;
 
-macro_rules! per_cache_line {
-    ($t:ty) => {{ ::std::cmp::max(64 / ::std::mem::size_of::<$t>(), 4) }}
+fn per_cache_line<T>() -> usize {
+    std::cmp::max(64 / size_of::<T>(), 4)
 }
 
 #[repr(align(64))]
@@ -17,9 +18,8 @@ pub struct SWCBuffer<T> {
 }
 
 impl<T> SWCBuffer<T> {
-
     pub fn new() -> Self {
-        let nlines = (256 * per_cache_line!(T) * std::mem::size_of::<T>()) / 64;
+        let nlines = (256 * per_cache_line::<T>() * size_of::<T>()) / 64;
         let staged = Vec::<CacheLine>::with_capacity(nlines);
 
         // verify cache alignment
@@ -45,7 +45,7 @@ impl<T> SWCBuffer<T> {
     pub fn slice(&self, byte: usize) -> &[T] {
         unsafe {
             slice::from_raw_parts(
-                self.staged_ptr().offset(per_cache_line!(T) as isize * byte as isize),
+                self.staged_ptr().offset(per_cache_line::<T>() as isize * byte as isize),
                 *self.counts.get_unchecked(byte) as usize
             )
         }
@@ -53,7 +53,7 @@ impl<T> SWCBuffer<T> {
 
     #[inline]
     pub fn full(&self, byte: usize) -> bool {
-        unsafe { (*self.counts.get_unchecked(byte) as usize) == per_cache_line!(T) }
+        unsafe { (*self.counts.get_unchecked(byte) as usize) == per_cache_line::<T>() }
     }
 
     #[inline]
@@ -64,8 +64,8 @@ impl<T> SWCBuffer<T> {
     #[inline]
     pub fn push(&mut self, element: T, byte: usize) {
         unsafe {
-            let offset = per_cache_line!(T) as isize * byte as isize + *self.counts.get_unchecked(byte as usize) as isize;
-            ::std::ptr::write(self.staged_mut_ptr().offset(offset), element);
+            let offset = per_cache_line::<T>() as isize * byte as isize + *self.counts.get_unchecked(byte as usize) as isize;
+            std::ptr::write(self.staged_mut_ptr().offset(offset), element);
             *self.counts.get_unchecked_mut(byte) += 1;
         }
     }
@@ -84,7 +84,7 @@ impl<T> SWCBuffer<T> {
     pub fn drain_into_vec(&mut self, byte: usize, batch: &mut Vec<T>, _stash: &mut Stash<T>) {
         unsafe {
             for i in 0 .. *self.counts.get_unchecked(byte) {
-                batch.push(::std::ptr::read(self.staged_mut_ptr().offset(per_cache_line!(T) as isize * byte as isize + i as isize)));
+                batch.push(std::ptr::read(self.staged_mut_ptr().offset(per_cache_line::<T>() as isize * byte as isize + i as isize)));
             }
             *self.counts.get_unchecked_mut(byte) = 0;
         }
