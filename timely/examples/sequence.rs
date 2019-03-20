@@ -1,15 +1,16 @@
 extern crate timely;
 
 use std::time::{Instant, Duration};
+use std::collections::VecDeque;
 
 use timely::Configuration;
 use timely::synchronization::Sequencer;
 
 fn main() {
-    timely::execute(Configuration::Process(4), |worker| {
+    timely::execute(Configuration::Process(2), |worker| {
 
         let timer = Instant::now();
-        let mut sequencer = Sequencer::new(worker, Instant::now());
+        let mut sequencer = Sequencer::preloaded(worker, Instant::now(), VecDeque::new());
 
         for round in 0 .. {
             // if worker.index() < 3 {

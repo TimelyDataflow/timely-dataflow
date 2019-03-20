@@ -4,4 +4,4 @@ pub mod barrier;
 pub mod sequence;
 
 pub use self::barrier::Barrier;
-pub use self::sequence::{GenericSequencer, Sequencing};
+pub use self::sequence::Sequencer;

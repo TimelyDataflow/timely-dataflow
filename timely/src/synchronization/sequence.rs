@@ -13,76 +13,6 @@ use crate::scheduling::Scheduler;
 use crate::worker::Worker;
 use crate::{communication::Allocate, ExchangeData, PartialOrder};
 
-/// A thing that can ensure an unbounded sequence of elements is
-/// consumed in order by all workers.
-pub trait Sequencing<T>: Iterator<Item = T> {
-    /// Adds an element to the shared log.
-    fn push(&mut self, element: T);
-}
-
-/// Sequencer variants for different Timely environments.
-pub enum GenericSequencer<T> {
-    /// Sequencer for a single-threaded environment (a queue).
-    Thread(ThreadSequencer<T>),
-    /// Full-blown, sequencing, broadcasting command dataflow.
-    Process(Sequencer<T>),
-}
-
-impl<T: ExchangeData> GenericSequencer<T> {
-    /// Creates an instance of the sequencer, initialized with an empty queue.
-    pub fn preloaded<A: Allocate>(
-        worker: &mut Worker<A>,
-        timer: Instant,
-        preload: VecDeque<T>,
-    ) -> Self {
-        if worker.peers() == 1 {
-            GenericSequencer::Thread(ThreadSequencer { queue: preload })
-        } else {
-            GenericSequencer::Process(Sequencer::preloaded(worker, timer, preload))
-        }
-    }
-}
-
-impl<T: ExchangeData> Iterator for GenericSequencer<T> {
-    type Item = T;
-    fn next(&mut self) -> Option<T> {
-        match *self {
-            GenericSequencer::Thread(ref mut sequencer) => sequencer.next(),
-            GenericSequencer::Process(ref mut sequencer) => sequencer.next(),
-        }
-    }
-}
-
-impl<T: ExchangeData> Sequencing<T> for GenericSequencer<T> {
-    fn push(&mut self, element: T) {
-        match *self {
-            GenericSequencer::Thread(ref mut sequencer) => sequencer.push(element),
-            GenericSequencer::Process(ref mut sequencer) => sequencer.push(element),
-        }
-    }
-}
-
-/// Wrapper around a `VecDeque`, implementing `Sequencing` for a
-/// Configuration::Thread environment.
-pub struct ThreadSequencer<T> {
-    queue: VecDeque<T>,
-}
-
-impl<T> Iterator for ThreadSequencer<T> {
-    type Item = T;
-    #[inline(always)]
-    fn next(&mut self) -> Option<T> {
-        self.queue.pop_front()
-    }
-}
-
-impl<T> Sequencing<T> for ThreadSequencer<T> {
-    #[inline(always)]
-    fn push(&mut self, element: T) {
-        self.queue.push_back(element);
-    }
-}
-
 // A Sequencer needs all operators firing with high frequency, because
 // it uses the timer to gauge progress. If other workers cease
 // advancing their own capabilities, although they might receive a
@@ -117,7 +47,7 @@ impl CatchupActivator {
 /// A Sequencer allows each worker to insert into a consistent ordered
 /// sequence that is seen by all workers in the same order.
 pub struct Sequencer<T> {
-    activator: Rc<RefCell<Option<CatchupActivator>>>,
+    activator: Option<Rc<RefCell<Option<CatchupActivator>>>>,
     send: Rc<RefCell<VecDeque<T>>>, // proposed items.
     recv: Rc<RefCell<VecDeque<T>>>, // sequenced items.
 }
@@ -168,123 +98,138 @@ impl<T: ExchangeData> Sequencer<T> {
         timer: Instant,
         preload: VecDeque<T>,
     ) -> Self {
-        let send: Rc<RefCell<VecDeque<T>>> = Rc::new(RefCell::new(VecDeque::new()));
-        let recv = Rc::new(RefCell::new(preload));
-        let send_weak = Rc::downgrade(&send);
-        let recv_weak = Rc::downgrade(&recv);
+        if worker.peers() == 1 {
+            println!("no dataflow");
+            
+            let send = Rc::new(RefCell::new(preload));
+            let recv = send.clone();
 
-        // The SequenceInput activator will be held by the sequencer,
-        // by the operator itself, and by the sink operator. We can
-        // only initialize the activator once we obtain the operator
-        // address.
-        let activator = Rc::new(RefCell::new(None));
-        let activator_source = activator.clone();
-        let activator_sink = activator.clone();
+            Sequencer {
+                activator: None,
+                send,
+                recv,
+            }
+        } else {
+            let send: Rc<RefCell<VecDeque<T>>> = Rc::new(RefCell::new(VecDeque::new()));
+            let recv = Rc::new(RefCell::new(preload));
+            let send_weak = Rc::downgrade(&send);
+            let recv_weak = Rc::downgrade(&recv);
 
-        // build a dataflow used to serialize and circulate commands
-        worker.dataflow::<Duration, _, _>(move |dataflow| {
-            let scope = dataflow.clone();
-            let peers = dataflow.peers();
+            // The SequenceInput activator will be held by the sequencer,
+            // by the operator itself, and by the sink operator. We can
+            // only initialize the activator once we obtain the operator
+            // address.
+            let activator = Rc::new(RefCell::new(None));
+            let activator_source = activator.clone();
+            let activator_sink = activator.clone();
 
-            let mut recvd = Vec::new();
-            let mut vector = Vec::new();
+            // build a dataflow used to serialize and circulate commands
+            worker.dataflow::<Duration, _, _>(move |dataflow| {
+                let scope = dataflow.clone();
+                let peers = dataflow.peers();
 
-            // monotonic counter to maintain per-worker total order.
-            let mut counter = 0;
+                let mut recvd = Vec::new();
+                let mut vector = Vec::new();
 
-            // a source that attempts to pull from `recv` and produce commands for everyone
-            source(dataflow, "SequenceInput", move |capability, info| {
-                // intialize activator, now that we have the address
-                activator_source.borrow_mut().replace(CatchupActivator {
-                    activator: scope.activator_for(&info.address[..]),
-                    catchup_until: None,
-                });
+                // monotonic counter to maintain per-worker total order.
+                let mut counter = 0;
 
-                // so we can drop, if input queue vanishes.
-                let mut capability = Some(capability);
-
-                // closure broadcasts any commands it grabs.
-                move |output| {
-                    if let Some(send_queue) = send_weak.upgrade() {
-                        // capability *should* still be non-None.
-                        let capability = capability.as_mut().expect("Capability unavailable");
-
-                        // downgrade capability to current time.
-                        capability.downgrade(&timer.elapsed());
-
-                        // drain and broadcast `send`.
-                        let mut session = output.session(&capability);
-                        let mut borrow = send_queue.borrow_mut();
-                        for element in borrow.drain(..) {
-                            for worker_index in 0..peers {
-                                session.give((worker_index, counter, element.clone()));
-                            }
-                            counter += 1;
-                        }
-
-                        let mut activator_borrow = activator_source.borrow_mut();
-                        let mut activator = activator_borrow.as_mut().unwrap();
-
-                        if let Some(t) = activator.catchup_until {
-                            if capability.time().less_than(&t) {
-                                activator.activate();
-                            } else {
-                                activator.catchup_until = None;
-                            }
-                        }
-                    } else {
-                        capability = None;
-                    }
-                }
-            })
-            .sink(
-                Exchange::new(|x: &(usize, usize, T)| x.0 as u64),
-                "SequenceOutput",
-                move |input| {
-                    // grab each command and queue it up
-                    input.for_each(|time, data| {
-                        data.swap(&mut vector);
-                        for (worker, counter, element) in vector.drain(..) {
-                            recvd.push(((time.time().clone(), worker, counter), element));
-                        }
+                // a source that attempts to pull from `recv` and produce commands for everyone
+                source(dataflow, "SequenceInput", move |capability, info| {
+                    // intialize activator, now that we have the address
+                    activator_source.borrow_mut().replace(CatchupActivator {
+                        activator: scope.activator_for(&info.address[..]),
+                        catchup_until: None,
                     });
 
-                    recvd.sort_by(|x, y| x.0.cmp(&y.0));
+                    // so we can drop, if input queue vanishes.
+                    let mut capability = Some(capability);
 
-                    if let Some(last) = recvd.last() {
-                        let mut activator_borrow = activator_sink.borrow_mut();
-                        let mut activator = activator_borrow.as_mut().unwrap();
+                    // closure broadcasts any commands it grabs.
+                    move |output| {
+                        if let Some(send_queue) = send_weak.upgrade() {
+                            // capability *should* still be non-None.
+                            let capability = capability.as_mut().expect("Capability unavailable");
 
-                        activator.catchup_until = Some((last.0).0);
-                        activator.activate();
+                            // downgrade capability to current time.
+                            capability.downgrade(&timer.elapsed());
+
+                            // drain and broadcast `send`.
+                            let mut session = output.session(&capability);
+                            let mut borrow = send_queue.borrow_mut();
+                            for element in borrow.drain(..) {
+                                for worker_index in 0..peers {
+                                    session.give((worker_index, counter, element.clone()));
+                                }
+                                counter += 1;
+                            }
+
+                            let mut activator_borrow = activator_source.borrow_mut();
+                            let mut activator = activator_borrow.as_mut().unwrap();
+
+                            if let Some(t) = activator.catchup_until {
+                                if capability.time().less_than(&t) {
+                                    activator.activate();
+                                } else {
+                                    activator.catchup_until = None;
+                                }
+                            }
+                        } else {
+                            capability = None;
+                        }
                     }
+                })
+                    .sink(
+                        Exchange::new(|x: &(usize, usize, T)| x.0 as u64),
+                        "SequenceOutput",
+                        move |input| {
+                            // grab each command and queue it up
+                            input.for_each(|time, data| {
+                                data.swap(&mut vector);
+                                for (worker, counter, element) in vector.drain(..) {
+                                    recvd.push(((time.time().clone(), worker, counter), element));
+                                }
+                            });
 
-                    // determine how many (which) elements to read from `recvd`.
-                    let count = recvd
-                        .iter()
-                        .filter(|&((ref time, _, _), _)| !input.frontier().less_equal(time))
-                        .count();
-                    let iter = recvd.drain(..count);
+                            recvd.sort_by(|x, y| x.0.cmp(&y.0));
 
-                    if let Some(recv_queue) = recv_weak.upgrade() {
-                        recv_queue.borrow_mut().extend(iter.map(|(_, elem)| elem));
-                    }
-                },
-            );
-        });
+                            if let Some(last) = recvd.last() {
+                                let mut activator_borrow = activator_sink.borrow_mut();
+                                let mut activator = activator_borrow.as_mut().unwrap();
 
-        Sequencer {
-            activator,
-            send,
-            recv,
+                                activator.catchup_until = Some((last.0).0);
+                                activator.activate();
+                            }
+
+                            // determine how many (which) elements to read from `recvd`.
+                            let count = recvd
+                                .iter()
+                                .filter(|&((ref time, _, _), _)| !input.frontier().less_equal(time))
+                                .count();
+                            let iter = recvd.drain(..count);
+
+                            if let Some(recv_queue) = recv_weak.upgrade() {
+                                recv_queue.borrow_mut().extend(iter.map(|(_, elem)| elem));
+                            }
+                        },
+                    );
+            });
+
+            Sequencer {
+                activator: Some(activator),
+                send,
+                recv,
+            }
         }
     }
-}
 
-impl<T> Sequencing<T> for Sequencer<T> {
-    fn push(&mut self, element: T) {
+    /// Adds an element to the shared log.
+    pub fn push(&mut self, element: T) {
         self.send.borrow_mut().push_back(element);
-        self.activator.borrow_mut().as_mut().unwrap().activate();
+
+        if let Some(ref activator) = self.activator {
+            activator.borrow_mut().as_mut().unwrap().activate();
+        }
     }
 }
 
@@ -298,10 +243,12 @@ impl<T> Iterator for Sequencer<T> {
 // We should activate on drop, as this will cause the source to drop its capability.
 impl<T> Drop for Sequencer<T> {
     fn drop(&mut self) {
-        self.activator
-            .borrow()
-            .as_ref()
-            .expect("Sequencer.activator unavailable")
-            .activate()
+        if let Some(ref activator) = self.activator {
+            activator
+                .borrow()
+                .as_ref()
+                .expect("Sequencer.activator unavailable")
+                .activate();
+        }
     }
 }
