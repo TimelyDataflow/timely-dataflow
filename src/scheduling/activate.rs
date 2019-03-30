@@ -30,6 +30,11 @@ impl Activations {
         self.slices.extend(path);
     }
 
+    /// Are there pending activations?
+    pub fn has_pending(&self) -> bool {
+        (self.bounds.len() - self.clean) > 0
+    }
+
     /// Discards the current active set and presents the next active set.
     pub fn advance(&mut self) {
 
