@@ -148,13 +148,13 @@ impl Configuration {
 ///     // we have to count down ourselves.
 ///     let mut expecting = 2;
 ///     while expecting > 0 {
-///         allocator.pre_work();
+///         allocator.receive();
 ///         if let Some(message) = receiver.recv() {
 ///             use std::ops::Deref;
 ///             println!("worker {}: received: <{}>", allocator.index(), message.deref());
 ///             expecting -= 1;
 ///         }
-///         allocator.post_work();
+///         allocator.release();
 ///     }
 ///
 ///     // optionally, return something
@@ -220,13 +220,13 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 ///     // we have to count down ourselves.
 ///     let mut expecting = 2;
 ///     while expecting > 0 {
-///         allocator.pre_work();
+///         allocator.receive();
 ///         if let Some(message) = receiver.recv() {
 ///             use std::ops::Deref;
 ///             println!("worker {}: received: <{}>", allocator.index(), message.deref());
 ///             expecting -= 1;
 ///         }
-///         allocator.post_work();
+///         allocator.release();
 ///     }
 ///
 ///     // optionally, return something
