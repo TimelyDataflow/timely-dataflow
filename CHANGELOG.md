@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 0.9.0
 
 ### Added
 
@@ -14,7 +14,7 @@ The `source` operator requires a closure that accepts an `OperatorInfo` struct i
 
 The address associated with each operator, a `[usize]` used to start with the identifier of the worker hosting the operator, followed by the dataflow identifier and the path down the dataflow to the operator. The worker identifier has been removed.
 
-The `Worker` and the `Subgraph` operator no longer schedules all of their child dataflows and scopes by default. Instead, they track "active" children and schedule only those. Operators become active by receiving a message, a progress update, or by explicit activation. Some operators, source as `source`, have no inputs and will require explicit activation to run more than once. Operators that yield before completing all of their work (good for you!) should explicitly re-activate themselves to ensure they are re-scheduled even if they receive no further messages or progress updates.
+The `Worker` and the `Subgraph` operator no longer schedules all of their child dataflows and scopes by default. Instead, they track "active" children and schedule only those. Operators become active by receiving a message, a progress update, or by explicit activation. Some operators, source as `source`, have no inputs and will require explicit activation to run more than once. Operators that yield before completing all of their work (good for you!) should explicitly re-activate themselves to ensure they are re-scheduled even if they receive no further messages or progress updates. Documentation examples for the `source` method demonstrate this.
 
 The `dataflow_using` method has been generalized to support arbitrary dataflow names, loggers, and additional resources the dataflow should keep alive. Its name has been chaged to `dataflow_core`.
 
