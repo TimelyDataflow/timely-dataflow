@@ -37,7 +37,7 @@ pub struct TcpBuilder<A: AllocateBuilder> {
 /// `threads` is the number of workers in a single process, `processes` is the
 /// total number of processes.
 /// The returned tuple contains
-/// ```
+/// ```ignore
 /// (
 ///   AllocateBuilder for local threads,
 ///   info to spawn egress comm threads,
