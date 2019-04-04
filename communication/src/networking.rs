@@ -33,7 +33,7 @@ pub struct MessageHeader {
 
 impl MessageHeader {
     /// Returns a header when there is enough supporting data
-    #[inline(always)]
+    #[inline]
     pub fn try_read(bytes: &mut [u8]) -> Option<MessageHeader> {
         unsafe { decode::<MessageHeader>(bytes) }
             .and_then(|(header, remaining)| {
@@ -47,13 +47,13 @@ impl MessageHeader {
     }
 
     /// Writes the header as binary data.
-    #[inline(always)]
+    #[inline]
     pub fn write_to<W: ::std::io::Write>(&self, writer: &mut W) -> ::std::io::Result<()> {
         unsafe { encode(self, writer) }
     }
 
     /// The number of bytes required for the header and data.
-    #[inline(always)]
+    #[inline]
     pub fn required_bytes(&self) -> usize {
         ::std::mem::size_of::<MessageHeader>() + self.length
     }

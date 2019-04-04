@@ -24,7 +24,7 @@ pub struct Sorter<T> {
 
 impl<T, U: Unsigned> RadixSorter<T, U> for Sorter<T> {
 
-    #[inline(always)]
+    #[inline]
     fn push<F: Fn(&T)->U>(&mut self, element: T, key: &F) {
         self.shuffler.push(element, &|x| (key(x).as_u64() % 256) as u8);
     }
@@ -50,7 +50,7 @@ impl<T> RadixSorterBase<T> for Sorter<T> {
 }
 
 impl<T> Sorter<T> {
-    #[inline(always)]
+    #[inline]
     fn reshuffle<F: Fn(&T)->u8>(&mut self, buffers: &mut Vec<Vec<T>>, key: &F) {
         for buffer in buffers.drain(..) {
             self.shuffler.push_batch(buffer, key);

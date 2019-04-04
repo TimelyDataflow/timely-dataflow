@@ -7,14 +7,14 @@ pub struct BatchedVecRef<'a, T: 'a> {
 }
 
 impl<'a, T> BatchedVecRef<'a, T> {
-    #[inline(always)]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         // It is sufficient to only check the tail for emptiness, since any time we flush
         // the tail (in .reserve), we also push some elements.
         self.tail.is_empty()
     }
 
-    #[inline(always)]
+    #[inline]
     fn reserve(&mut self, stash: &mut Stash<T>) {
         if self.tail.len() == self.tail.capacity() {
             let complete = mem::replace(self.tail, stash.get());
@@ -24,7 +24,7 @@ impl<'a, T> BatchedVecRef<'a, T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn push(&mut self, element: T, stash: &mut Stash<T>) {
         self.reserve(stash);
 
@@ -56,7 +56,7 @@ impl<'a, T> BatchedVecRef<'a, T> {
 
     // Note: this method is unsafe because it simply copies `elements`, and relies on the data backing it
     // to be discarded without being dropped.
-    #[inline(always)]
+    #[inline]
     pub unsafe fn push_all(&mut self, elements: &[T], stash: &mut Stash<T>) {
         self.reserve(stash);
 
@@ -69,7 +69,7 @@ impl<'a, T> BatchedVecRef<'a, T> {
         self.tail.set_len(len + elements.len());
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn finish_into(&mut self, target: &mut Vec<Vec<T>>) {
         target.extend(self.batches.drain(..));
         if !self.tail.is_empty() {
@@ -77,7 +77,7 @@ impl<'a, T> BatchedVecRef<'a, T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn finish(&mut self) -> Vec<Vec<T>> {
         if !self.tail.is_empty() {
             self.batches.push(mem::replace(&mut self.tail, Vec::new()));
@@ -140,7 +140,7 @@ impl<T> BatchedVecX256<T> {
     }
 
     /// Access the `BatchedVec` at the `byte` position.
-    #[inline(always)]
+    #[inline]
     pub fn get_mut(&mut self, byte: usize) -> BatchedVecRef<T> {
         unsafe {
             BatchedVecRef {

@@ -15,7 +15,7 @@ pub struct Counter<T: Ord, D, P: Push<Bundle<T, D>>> {
 }
 
 impl<T, D, P> Push<Bundle<T, D>> for Counter<T, D, P> where T : Ord+Clone+'static, P: Push<Bundle<T, D>> {
-    #[inline(always)]
+    #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         if let Some(message) = message {
             self.produced.borrow_mut().update(message.time.clone(), message.data.len() as i64);
@@ -38,7 +38,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Counter<T, D, P> where T : Ord+Clone+'static {
         }
     }
     /// A references to shared changes in counts, for cloning or draining.
-    #[inline(always)]
+    #[inline]
     pub fn produced(&self) -> &Rc<RefCell<ChangeBatch<T>>> {
         &self.produced
     }

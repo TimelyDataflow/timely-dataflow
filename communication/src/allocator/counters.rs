@@ -30,7 +30,7 @@ impl<T, P: Push<T>>  Pusher<T, P> {
 }
 
 impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
-    #[inline(always)]
+    #[inline]
     fn push(&mut self, element: &mut Option<T>) {
         // if element.is_none() {
         //     if self.count != 0 {
@@ -78,7 +78,7 @@ impl<T, P: Push<T>>  ArcPusher<T, P> {
 }
 
 impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
-    #[inline(always)]
+    #[inline]
     fn push(&mut self, element: &mut Option<T>) {
         // if element.is_none() {
         //     if self.count != 0 {
@@ -121,7 +121,7 @@ impl<T, P: Pull<T>>  Puller<T, P> {
     }
 }
 impl<T, P: Pull<T>> Pull<T> for Puller<T, P> {
-    #[inline(always)]
+    #[inline]
     fn pull(&mut self) -> &mut Option<T> {
         let result = self.puller.pull();
         if result.is_none() {

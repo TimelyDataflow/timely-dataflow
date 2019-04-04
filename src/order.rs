@@ -29,8 +29,8 @@ macro_rules! implement_partial {
     ($($index_type:ty,)*) => (
         $(
             impl PartialOrder for $index_type {
-                #[inline(always)] fn less_than(&self, other: &Self) -> bool { self < other }
-                #[inline(always)] fn less_equal(&self, other: &Self) -> bool { self <= other }
+                #[inline] fn less_than(&self, other: &Self) -> bool { self < other }
+                #[inline] fn less_equal(&self, other: &Self) -> bool { self <= other }
             }
         )*
     )
@@ -95,7 +95,7 @@ impl<TOuter: Debug, TInner: Debug> Debug for Product<TOuter, TInner> {
 }
 
 impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for Product<TOuter, TInner> {
-    #[inline(always)]
+    #[inline]
     fn less_equal(&self, other: &Self) -> bool {
         self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
     }

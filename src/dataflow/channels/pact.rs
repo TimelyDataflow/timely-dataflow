@@ -116,7 +116,7 @@ impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
 }
 
 impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
-    #[inline(always)]
+    #[inline]
     fn push(&mut self, pair: &mut Option<Bundle<T, D>>) {
         if let Some(bundle) = pair {
             self.counter += 1;
@@ -162,7 +162,7 @@ impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
 }
 
 impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
-    #[inline(always)]
+    #[inline]
     fn pull(&mut self) -> &mut Option<Bundle<T,D>> {
         let result = self.puller.pull();
         if let Some(bundle) = result {

@@ -27,7 +27,7 @@ impl<T> SWCBuffer<T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn slice(&self, byte: usize) -> &[T] {
         unsafe {
             slice::from_raw_parts(
@@ -37,17 +37,17 @@ impl<T> SWCBuffer<T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn full(&self, byte: usize) -> bool {
         unsafe { (*self.counts.get_unchecked(byte) as usize) == per_cache_line!(T) }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn count(&self, byte: usize) -> usize {
         unsafe { *self.counts.get_unchecked(byte) as usize }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn push(&mut self, element: T, byte: usize) {
         unsafe {
             let offset = per_cache_line!(T) as isize * byte as isize + *self.counts.get_unchecked(byte as usize) as isize;
@@ -56,7 +56,7 @@ impl<T> SWCBuffer<T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn drain_into<'a>(&mut self, byte: usize, batch: &mut BatchedVecRef<'a, T>, stash: &mut Stash<T>) where T: 'a {
         unsafe {
             if *self.counts.get_unchecked(byte) > 0 {
@@ -66,7 +66,7 @@ impl<T> SWCBuffer<T> {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn drain_into_vec(&mut self, byte: usize, batch: &mut Vec<T>, _stash: &mut Stash<T>) {
         unsafe {
             for i in 0 .. *self.counts.get_unchecked(byte) {
