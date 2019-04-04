@@ -108,7 +108,7 @@ pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
 /// Result contains connections [my_index + 1, addresses.len() - 1].
 pub fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..(addresses.len() - my_index - 1)).map(|_| None).collect();
-    let listener = try!(TcpListener::bind(&addresses[my_index][..]));
+    let listener = TcpListener::bind(&addresses[my_index][..])?;
 
     for _ in (my_index + 1) .. addresses.len() {
         let mut stream = listener.accept()?.0;

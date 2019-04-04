@@ -26,7 +26,7 @@ pub struct MessageEvent {
     /// true for send event, false for receive event
     pub is_send: bool,
     /// associated message header.
-    pub header: ::networking::MessageHeader,
+    pub header: crate::networking::MessageHeader,
 }
 
 /// Starting or stopping communication threads.

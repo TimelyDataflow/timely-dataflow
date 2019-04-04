@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use bytes::arc::Bytes;
 use abomonation;
-use ::Data;
+use crate::Data;
 
 /// Either an immutable or mutable reference.
 pub enum RefOrMut<'a, T> where T: 'a {

@@ -3,14 +3,14 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
 
-use networking::MessageHeader;
+use crate::networking::MessageHeader;
 
 use super::bytes_slab::BytesSlab;
 use super::bytes_exchange::{MergeQueue, Signal};
 
 use logging_core::Logger;
 
-use ::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, StateEvent};
+use crate::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, StateEvent};
 
 /// Repeatedly reads from a TcpStream and carves out messages.
 ///
@@ -95,7 +95,7 @@ pub fn recv_loop(
         // Pass bytes along to targets.
         for (index, staged) in stageds.iter_mut().enumerate() {
             // FIXME: try to merge `staged` before handing it to BytesPush::extend
-            use allocator::zero_copy::bytes_exchange::BytesPush;
+            use crate::allocator::zero_copy::bytes_exchange::BytesPush;
             targets[index].extend(staged.drain(..));
         }
     }
@@ -128,7 +128,7 @@ pub fn send_loop(
 
         // TODO: Round-robin better, to release resources fairly when overloaded.
         for source in sources.iter_mut() {
-            use allocator::zero_copy::bytes_exchange::BytesPull;
+            use crate::allocator::zero_copy::bytes_exchange::BytesPull;
             source.drain_into(&mut stash);
         }
 

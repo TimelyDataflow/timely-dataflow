@@ -1,8 +1,3 @@
-extern crate timely;
-
-extern crate rdkafka;
-extern crate kafkaesque;
-
 use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::capture::Replay;
 use timely::dataflow::operators::Accumulate;

@@ -7,9 +7,9 @@ use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std::collections::{HashMap, VecDeque};
 
-use allocator::thread::{ThreadBuilder};
-use allocator::{Allocate, AllocateBuilder, Event, Thread};
-use {Push, Pull, Message};
+use crate::allocator::thread::{ThreadBuilder};
+use crate::allocator::{Allocate, AllocateBuilder, Event, Thread};
+use crate::{Push, Pull, Message};
 
 /// An allocator for inter-thread, intra-process communication
 pub struct ProcessBuilder {
@@ -95,7 +95,7 @@ impl Allocate for Process {
         let (sends, recv, empty) = {
 
             // we may need to alloc a new channel ...
-            let mut entry = channels.entry(identifier).or_insert_with(|| {
+            let entry = channels.entry(identifier).or_insert_with(|| {
 
                 let mut pushers = Vec::new();
                 let mut pullers = Vec::new();
@@ -133,8 +133,8 @@ impl Allocate for Process {
 
         if empty { channels.remove(&identifier); }
 
-        use allocator::counters::ArcPusher as CountPusher;
-        use allocator::counters::Puller as CountPuller;
+        use crate::allocator::counters::ArcPusher as CountPusher;
+        use crate::allocator::counters::Puller as CountPuller;
 
         let sends =
         sends.into_iter()

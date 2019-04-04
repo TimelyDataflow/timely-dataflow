@@ -2,6 +2,7 @@
 name = "timely_sort"
 version = "0.1.7"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
+edition = "2018"
 
 description = "Sorting infrastructure for timely dataflow"
 
@@ -12,15 +13,12 @@ repository = "https://github.com/frankmcsherry/timely-dataflow.git"
 keywords = ["timely", "dataflow", "radix", "sort"]
 license = "MIT"
 
+[[bench]]
+name = "benches"
+harness = false
+
 [dependencies]
 rand="*"
 
 [dev-dependencies]
-rand="0.4"
-
-[profile.release]
-opt-level = 3
-debug = true
-rpath = false
-lto = false
-debug-assertions = false
+bencher = "0.1.5"

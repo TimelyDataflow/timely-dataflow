@@ -1,7 +1,3 @@
-extern crate timely;
-extern crate rdkafka;
-extern crate kafkaesque;
-
 use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::capture::Capture;
 

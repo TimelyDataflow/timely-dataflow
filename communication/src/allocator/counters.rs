@@ -4,8 +4,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use {Push, Pull};
-use allocator::Event;
+use crate::{Push, Pull};
+use crate::allocator::Event;
 
 /// The push half of an intra-thread channel.
 pub struct Pusher<T, P: Push<T>> {

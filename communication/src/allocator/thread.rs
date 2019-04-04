@@ -4,10 +4,10 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use allocator::{Allocate, AllocateBuilder, Event};
-use allocator::counters::Pusher as CountPusher;
-use allocator::counters::Puller as CountPuller;
-use {Push, Pull, Message};
+use crate::allocator::{Allocate, AllocateBuilder, Event};
+use crate::allocator::counters::Pusher as CountPusher;
+use crate::allocator::counters::Puller as CountPuller;
+use crate::{Push, Pull, Message};
 
 /// Builder for single-threaded allocator.
 pub struct ThreadBuilder;

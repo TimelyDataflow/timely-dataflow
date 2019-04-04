@@ -13,13 +13,13 @@
 //! (i.e. 256) overhead for each invocation. Once we have less than some fixed amount of work (e.g. one
 //! buffer's full of elements) we should fall into the final sort.
 
-use ::std::mem::replace;
+use std::mem::replace;
 // use ::std::collections::VecDeque;
 
-use ::{Unsigned, RadixSorter, RadixSorterBase};
-use stash::Stash;
-use batched_vec::{BatchedVec, BatchedVecX256};
-use swc_buffer::SWCBuffer;
+use crate::{Unsigned, RadixSorter, RadixSorterBase};
+use crate::stash::Stash;
+use crate::batched_vec::{BatchedVec, BatchedVecX256};
+use crate::swc_buffer::SWCBuffer;
 
 macro_rules! per_cache_line {
     ($t:ty) => {{ ::std::cmp::max(64 / ::std::mem::size_of::<$t>(), 4) }}
@@ -251,7 +251,7 @@ mod test {
         }
         vector.push(replace(&mut batch, Vec::with_capacity(1 << 10)));
 
-        use {RadixSorter, RadixSorterBase};
+        use crate::{RadixSorter, RadixSorterBase};
         let mut sorter = super::Sorter::new();
 
         sorter.sort(&mut vector, &|&x| x);

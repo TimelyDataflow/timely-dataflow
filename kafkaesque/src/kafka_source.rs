@@ -20,10 +20,8 @@ use rdkafka::consumer::{ConsumerContext, BaseConsumer};
 ///
 /// # Examples
 /// ```rust,no_run
-/// extern crate timely;
 /// use timely::dataflow::operators::Inspect;
 ///
-/// extern crate rdkafka;
 /// use rdkafka::Message;
 /// use rdkafka::config::ClientConfig;
 /// use rdkafka::consumer::{Consumer, BaseConsumer, DefaultConsumerContext};

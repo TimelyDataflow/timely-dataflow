@@ -1,7 +1,3 @@
-extern crate rdkafka;
-extern crate timely;
-extern crate abomonation;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, Ordering};
 

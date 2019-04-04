@@ -1,7 +1,9 @@
 extern crate rand;
 extern crate timely_sort as haeoua;
 
-use rand::{SeedableRng, StdRng, Rand};
+use rand::{Rng, SeedableRng};
+use rand::distributions::{Distribution, Standard};
+use rand::rngs::StdRng;
 use haeoua::*;
 
 fn main() {
@@ -41,14 +43,16 @@ fn test_threads<L: Fn()+Send+Sync+'static>(threads: usize, logic: L) -> f64 {
     elapsed.as_secs() as f64 + (elapsed.subsec_nanos() as f64) / 1000000000.0
 }
 
-fn test_radix<T: Ord+Copy+Rand+Unsigned, R: RadixSorter<(T,T),T>>(size: usize, iters: usize) {
+fn test_radix<T: Ord+Copy+Unsigned, R: RadixSorter<(T,T),T>>(size: usize, iters: usize)
+    where Standard: Distribution<T>
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let seed = 1 << 24 + 2 << 16 + 3 << 8 + 4;
+    let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
 
     let mut sorter = R::new();
     for _ in 0..size {
-        sorter.push(<(T, T) as Rand>::rand(&mut rng), &|x| x.0);
+        sorter.push(rng.gen::<(T, T)>(), &|x| x.0);
     }
     let mut vector = sorter.finish(&|x| x.0);
     sorter.sort(&mut vector, &|x| x.1);
@@ -59,14 +63,16 @@ fn test_radix<T: Ord+Copy+Rand+Unsigned, R: RadixSorter<(T,T),T>>(size: usize, i
     }
 }
 
-fn test_sort_by<T: Ord+Rand>(size: usize, iters: usize) {
+fn test_sort_by<T: Ord>(size: usize, iters: usize)
+    where Standard: Distribution<T>
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let seed = 1 << 24 + 2 << 16 + 3 << 8 + 4;
+    let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
 
     let mut vector = Vec::<(T, T)>::with_capacity(size);
     for _ in 0..size {
-        vector.push(<(T, T) as Rand>::rand(&mut rng));
+        vector.push(rng.gen::<(T, T)>());
     }
 
     for _ in 0 .. iters {
@@ -75,14 +81,16 @@ fn test_sort_by<T: Ord+Rand>(size: usize, iters: usize) {
     }
 }
 
-fn test_sort_unstable_by<T: Ord+Rand>(size: usize, iters: usize) {
+fn test_sort_unstable_by<T: Ord>(size: usize, iters: usize)
+    where Standard: Distribution<T>
+{
 
-    let seed: &[_] = &[1, 2, 3, 4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let seed = 1 << 24 + 2 << 16 + 3 << 8 + 4;
+    let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
 
     let mut vector = Vec::<(T, T)>::with_capacity(size);
     for _ in 0..size {
-        vector.push(<(T, T) as Rand>::rand(&mut rng));
+        vector.push(rng.gen::<(T, T)>());
     }
 
     for _ in 0 .. iters {

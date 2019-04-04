@@ -3,6 +3,7 @@ name = "timely_communication"
 version = "0.9.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 description = "Communication layer for timely dataflow"
+edition = "2018"
 
 # These URLs point to more information about the repository
 documentation = "https://frankmcsherry.github.com/timely-dataflow"
@@ -20,13 +21,6 @@ bincode = { version = "1.0", optional = true }
 serde_derive = "1.0"
 serde = "1.0"
 abomonation = "0.7"
-abomonation_derive = "0.3"
+abomonation_derive = "0.4"
 timely_bytes = { path = "../bytes", version = "0.9" }
 timely_logging = { path = "../logging", version = "0.9" }
-
-[profile.release]
-opt-level = 3
-debug = true
-rpath = false
-lto = true
-debug-assertions = false
