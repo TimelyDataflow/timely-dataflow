@@ -106,11 +106,11 @@ impl Configuration {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             },
             Configuration::Cluster { threads, process, addresses, report, log_fn } => {
-                if let Ok((stuff, guard)) = initialize_networking(addresses, process, threads, report, log_fn) {
-                    Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
-                }
-                else {
-                    Err("failed to initialize networking".to_owned())
+                match initialize_networking(addresses, process, threads, report, log_fn) {
+                    Ok((stuff, guard)) => {
+                        Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
+                    },
+                    Err(err) => Err(format!("failed to initialize networking: {}", err))
                 }
             },
         }

@@ -1,5 +1,6 @@
 //! Networking code for sending and receiving fixed size `Vec<u8>` between machines.
 
+use std::io;
 use std::io::{Read, Result};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
@@ -8,6 +9,11 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use abomonation::{encode, decode};
+
+// This constant is sent along immediately after establishing a TCP stream, so
+// that it is easy to sniff out Timely traffic when it is multiplexed with
+// other traffic on the same port.
+const HANDSHAKE_MAGIC: u64 = 0xc2f1fb770118add9;
 
 /// Framing data for each `Vec<u8>` transmission, indicating a typed channel, the source and
 /// destination workers, and the length in bytes.
@@ -78,17 +84,15 @@ pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> R
 
 /// Result contains connections [0, my_index - 1].
 pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
-    let mut results: Vec<_> = (0..my_index).map(|_| None).collect();
-    for index in 0..my_index {
-        let mut connected = false;
-        while !connected {
-            match TcpStream::connect(&addresses[index][..]) {
+    let results = addresses.iter().take(my_index).enumerate().map(|(index, address)| {
+        loop {
+            match TcpStream::connect(address) {
                 Ok(mut stream) => {
                     stream.set_nodelay(true).expect("set_nodelay call failed");
+                    unsafe { encode(&HANDSHAKE_MAGIC, &mut stream) }.expect("failed to encode/send handshake magic");
                     unsafe { encode(&(my_index as u64), &mut stream) }.expect("failed to encode/send worker index");
-                    results[index as usize] = Some(stream);
                     if noisy { println!("worker {}:\tconnection to worker {}", my_index, index); }
-                    connected = true;
+                    break Some(stream);
                 },
                 Err(error) => {
                     println!("worker {}:\terror connecting to worker {}: {}; retrying", my_index, index, error);
@@ -96,7 +100,7 @@ pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
                 },
             }
         }
-    }
+    }).collect();
 
     Ok(results)
 }
@@ -109,8 +113,13 @@ pub fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
     for _ in (my_index + 1) .. addresses.len() {
         let mut stream = listener.accept()?.0;
         stream.set_nodelay(true).expect("set_nodelay call failed");
-        let mut buffer = [0u8;8];
-        stream.read_exact(&mut buffer).expect("failed to read worker index");
+        let mut buffer = [0u8;16];
+        stream.read_exact(&mut buffer)?;
+        let (magic, mut buffer) = unsafe { decode::<u64>(&mut buffer) }.expect("failed to decode magic");
+        if magic != &HANDSHAKE_MAGIC {
+            return Err(io::Error::new(io::ErrorKind::InvalidData,
+                "received incorrect timely handshake"));
+        }
         let identifier = unsafe { decode::<u64>(&mut buffer) }.expect("failed to decode worker index").0.clone() as usize;
         results[identifier - my_index - 1] = Some(stream);
         if noisy { println!("worker {}:\tconnection from worker {}", my_index, identifier); }
