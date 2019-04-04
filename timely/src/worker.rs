@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
 use std::any::Any;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
@@ -119,6 +119,7 @@ impl<A: Allocate> Worker<A> {
         }
     }
 
+
     /// Performs one step of the computation.
     ///
     /// A step gives each dataflow operator a chance to run, and is the
@@ -141,6 +142,32 @@ impl<A: Allocate> Worker<A> {
     /// });
     /// ```
     pub fn step(&mut self) -> bool {
+        self.step_or_park(Duration::from_secs(0))
+    }
+
+    /// Performs one step of the computation.
+    ///
+    /// A step gives each dataflow operator a chance to run, and is the
+    /// main way to ensure that a computation proceeds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// timely::execute_from_args(::std::env::args(), |worker| {
+    ///
+    ///     use std::time::Duration;
+    ///     use timely::dataflow::operators::{ToStream, Inspect};
+    ///
+    ///     worker.dataflow::<usize,_,_>(|scope| {
+    ///         (0 .. 10)
+    ///             .to_stream(scope)
+    ///             .inspect(|x| println!("{:?}", x));
+    ///     });
+    ///
+    ///     worker.step_or_park(Duration::from_secs(1));
+    /// });
+    /// ```
+    pub fn step_or_park(&mut self, duration: Duration) -> bool {
 
         {   // Process channel events. Activate responders.
             let mut allocator = self.allocator.borrow_mut();
@@ -168,7 +195,12 @@ impl<A: Allocate> Worker<A> {
             .borrow_mut()
             .advance();
 
-        {   // Schedule active dataflows.
+        if self.activations.borrow().is_empty() {
+            self.allocator
+                .borrow()
+                .await_events(duration);
+        }
+        else {   // Schedule active dataflows.
 
             let active_dataflows = &mut self.active_dataflows;
             self.activations

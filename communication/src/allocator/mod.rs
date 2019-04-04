@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::time::Duration;
 use std::collections::VecDeque;
 
 pub use self::thread::Thread;
@@ -50,6 +51,14 @@ pub trait Allocate {
     /// fail to do so the event queue may become quite large, and turn
     /// into a performance problem.
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>>;
+
+    /// Awaits communication events.
+    ///
+    /// This method may park the current thread, for at most `duration`,
+    /// until new events arrive.
+    /// The method is not guaranteed to wait for any amount of time, but
+    /// good implementations should use this as a hint to park the thread.
+    fn await_events(&self, _duration: Duration) { }
 
     /// Ensure that received messages are surfaced in each channel.
     ///
