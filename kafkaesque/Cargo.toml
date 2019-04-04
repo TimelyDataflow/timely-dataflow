@@ -9,4 +9,4 @@ abomonation="0.7"
 timely = { path = "../" }
 
 [dependencies.rdkafka]
-version = "0.14.0"
+version = "0.20.0"
