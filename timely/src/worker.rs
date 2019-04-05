@@ -165,7 +165,7 @@ impl<A: Allocate> Worker<A> {
     ///             .inspect(|x| println!("{:?}", x));
     ///     });
     ///
-    ///     worker.step_or_park(Duration::from_secs(1));
+    ///     worker.step_or_park(Some(Duration::from_secs(1)));
     /// });
     /// ```
     pub fn step_or_park(&mut self, duration: Option<Duration>) -> bool {
