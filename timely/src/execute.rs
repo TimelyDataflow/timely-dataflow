@@ -84,7 +84,7 @@ where
     let alloc = crate::communication::allocator::thread::Thread::new();
     let mut worker = crate::worker::Worker::new(alloc);
     let result = func(&mut worker);
-    while worker.step_or_park() { }
+    while worker.step_or_park(None) { }
     result
 }
 
