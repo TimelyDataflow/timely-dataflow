@@ -119,7 +119,6 @@ impl<A: Allocate> Worker<A> {
         }
     }
 
-
     /// Performs one step of the computation.
     ///
     /// A step gives each dataflow operator a chance to run, and is the
@@ -142,13 +141,15 @@ impl<A: Allocate> Worker<A> {
     /// });
     /// ```
     pub fn step(&mut self) -> bool {
-        self.step_or_park(Duration::from_secs(0))
+        self.step_or_park(Some(Duration::from_secs(0)))
     }
 
     /// Performs one step of the computation.
     ///
     /// A step gives each dataflow operator a chance to run, and is the
-    /// main way to ensure that a computation proceeds.
+    /// main way to ensure that a computation proceeds. This method may
+    /// park the thread until there is work to perform, with an optional
+    /// timeout.
     ///
     /// # Examples
     ///
@@ -167,7 +168,7 @@ impl<A: Allocate> Worker<A> {
     ///     worker.step_or_park(Duration::from_secs(1));
     /// });
     /// ```
-    pub fn step_or_park(&mut self, duration: Duration) -> bool {
+    pub fn step_or_park(&mut self, duration: Option<Duration>) -> bool {
 
         {   // Process channel events. Activate responders.
             let mut allocator = self.allocator.borrow_mut();

@@ -58,7 +58,7 @@ pub trait Allocate {
     /// until new events arrive.
     /// The method is not guaranteed to wait for any amount of time, but
     /// good implementations should use this as a hint to park the thread.
-    fn await_events(&self, _duration: Duration) { }
+    fn await_events(&self, _duration: Option<Duration>) { }
 
     /// Ensure that received messages are surfaced in each channel.
     ///

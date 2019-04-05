@@ -35,9 +35,14 @@ impl Allocate for Thread {
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
         &self.events
     }
-    fn await_events(&self, duration: Duration) {
+    fn await_events(&self, duration: Option<Duration>) {
         if self.events.borrow().is_empty() {
-            std::thread::park_timeout(duration);
+            if let Some(duration) = duration {
+                std::thread::park_timeout(duration);
+            }
+            else {
+                std::thread::park();
+            }
         }
     }
 }
