@@ -1,5 +1,6 @@
 
 /// Information about the operator being constructed
+#[derive(Clone)]
 pub struct OperatorInfo {
     /// Scope-local index assigned to the operator being constructed.
     pub local_id: usize,
