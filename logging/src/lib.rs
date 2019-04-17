@@ -15,16 +15,6 @@ pub struct Registry<Id> {
 }
 
 impl<Id: Clone+'static> Registry<Id> {
-    /// Binds a log name to an action on log event batches. See
-    /// `insert_closure`.
-    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, Id, T)>)+'static>(
-        &mut self,
-        name: &str,
-        action: F) -> Option<Box<Any>>
-    {
-        self.insert_closure(name, action)
-    }
-
     /// Binds a log name to an action on log event batches.
     ///
     /// This method also returns any pre-installed action, rather than overwriting it
@@ -36,7 +26,7 @@ impl<Id: Clone+'static> Registry<Id> {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
-    pub fn insert_closure<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, Id, T)>)+'static>(
+    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, Id, T)>)+'static>(
         &mut self,
         name: &str,
         action: F) -> Option<Box<Any>>
