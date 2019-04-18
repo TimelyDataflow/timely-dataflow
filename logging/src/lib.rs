@@ -32,6 +32,15 @@ impl<Id: Clone+'static> Registry<Id> {
         action: F) -> Option<Box<Any>>
     {
         let logger = Logger::<T, Id>::new(self.time.clone(), self.id.clone(), action);
+        self.insert_logger(name, logger)
+    }
+
+    /// Binds a log name to a logger.
+    pub fn insert_logger<T: 'static>(
+        &mut self,
+        name: &str,
+        logger: Logger<T, Id>) -> Option<Box<Any>>
+    {
         self.map.insert(name.to_owned(), (Box::new(logger.clone()), Box::new(logger))).map(|x| x.0)
     }
 
