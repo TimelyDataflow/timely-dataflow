@@ -24,6 +24,11 @@ impl Activations {
         }
     }
 
+    /// Indicates if there no pending activations.
+    pub fn is_empty(&self) -> bool {
+        self.bounds.is_empty()
+    }
+
     /// Unparks task addressed by `path`.
     pub fn activate(&mut self, path: &[usize]) {
         self.bounds.push((self.slices.len(), path.len()));
