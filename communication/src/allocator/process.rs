@@ -5,11 +5,13 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::sync::mpsc::{Sender, Receiver, channel};
+use std::time::Duration;
 use std::collections::{HashMap, VecDeque};
 
 use crate::allocator::thread::{ThreadBuilder};
 use crate::allocator::{Allocate, AllocateBuilder, Event, Thread};
 use crate::{Push, Pull, Message};
+use crate::allocator::buzzer::Buzzer;
 
 /// An allocator for inter-thread, intra-process communication
 pub struct ProcessBuilder {
@@ -19,6 +21,10 @@ pub struct ProcessBuilder {
     // below: `Box<Any+Send>` is a `Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>`
     channels: Arc<Mutex<HashMap<usize, Box<Any+Send>>>>,
 
+    // Buzzers for waking other local workers.
+    buzzers_send: Vec<Sender<Buzzer>>,
+    buzzers_recv: Vec<Receiver<Buzzer>>,
+
     counters_send: Vec<Sender<(usize, Event)>>,
     counters_recv: Receiver<(usize, Event)>,
 }
@@ -26,11 +32,23 @@ pub struct ProcessBuilder {
 impl AllocateBuilder for ProcessBuilder {
     type Allocator = Process;
     fn build(self) -> Self::Allocator {
+
+        // Initialize buzzers; send first, then recv.
+        for worker in self.buzzers_send.iter() {
+            let buzzer = Buzzer::new();
+            worker.send(buzzer).expect("Failed to send buzzer");
+        }
+        let mut buzzers = Vec::new();
+        for worker in self.buzzers_recv.iter() {
+            buzzers.push(worker.recv().expect("Failed to recv buzzer"));
+        }
+
         Process {
             inner: self.inner.build(),
             index: self.index,
             peers: self.peers,
             channels: self.channels,
+            buzzers,
             counters_send: self.counters_send,
             counters_recv: self.counters_recv,
         }
@@ -44,6 +62,7 @@ pub struct Process {
     peers: usize,
     // below: `Box<Any+Send>` is a `Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>`
     channels: Arc<Mutex<HashMap</* channel id */ usize, Box<Any+Send>>>>,
+    buzzers: Vec<Buzzer>,
     counters_send: Vec<Sender<(usize, Event)>>,
     counters_recv: Receiver<(usize, Event)>,
 }
@@ -64,14 +83,30 @@ impl Process {
 
         let channels = Arc::new(Mutex::new(HashMap::new()));
 
+        // each pair of workers has a sender and a receiver.
+        let mut buzzers_send = Vec::new(); for _ in 0 .. peers { buzzers_send.push(Vec::with_capacity(peers)); }
+        let mut buzzers_recv = Vec::new(); for _ in 0 .. peers { buzzers_recv.push(Vec::with_capacity(peers)); }
+
+        for sender in 0 .. peers {
+            for recver in 0 .. peers {
+                let (send, recv) = channel();
+                buzzers_send[sender].push(send);
+                buzzers_recv[recver].push(recv);
+            }
+        }
+
         counters_recv
             .into_iter()
+            .zip(buzzers_send.into_iter())
+            .zip(buzzers_recv.into_iter())
             .enumerate()
-            .map(|(index, recv)| {
+            .map(|(index, ((recv, bsend), brecv))| {
                 ProcessBuilder {
                     inner: ThreadBuilder,
                     index,
                     peers,
+                    buzzers_send: bsend,
+                    buzzers_recv: brecv,
                     channels: channels.clone(),
                     counters_send: counters_send.clone(),
                     counters_recv: recv,
@@ -99,10 +134,10 @@ impl Allocate for Process {
 
                 let mut pushers = Vec::new();
                 let mut pullers = Vec::new();
-                for _ in 0..self.peers {
+                for index in 0 .. self.peers {
 
                     let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = channel();
-                    pushers.push(Pusher { target: s });
+                    pushers.push(Pusher { target: s, buzzer: self.buzzers[index].clone() });
                     pullers.push(Puller { source: r, current: None });
                 }
 
@@ -152,6 +187,14 @@ impl Allocate for Process {
         self.inner.events()
     }
 
+    fn await_events(&self, duration: Option<Duration>) {
+        let mut events = self.inner.events().borrow_mut();
+        while let Ok((index, event)) = self.counters_recv.try_recv() {
+            events.push_back((index, event));
+        }
+        self.inner.await_events(duration);
+    }
+
     fn receive(&mut self) {
         let mut events = self.inner.events().borrow_mut();
         while let Ok((index, event)) = self.counters_recv.try_recv() {
@@ -163,11 +206,15 @@ impl Allocate for Process {
 /// The push half of an intra-process channel.
 struct Pusher<T> {
     target: Sender<T>,
+    buzzer: Buzzer,
 }
 
 impl<T> Clone for Pusher<T> {
     fn clone(&self) -> Self {
-        Pusher { target: self.target.clone() }
+        Self {
+            target: self.target.clone(),
+            buzzer: self.buzzer.clone()
+        }
     }
 }
 
@@ -175,6 +222,7 @@ impl<T> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(element) = element.take() {
             self.target.send(element).unwrap();
+            self.buzzer.buzz();
         }
     }
 }

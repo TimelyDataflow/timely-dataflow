@@ -13,6 +13,7 @@ pub mod thread;
 pub mod process;
 pub mod generic;
 
+pub mod buzzer;
 pub mod canary;
 pub mod counters;
 
