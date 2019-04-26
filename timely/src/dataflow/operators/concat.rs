@@ -47,11 +47,26 @@ pub trait Concatenate<G: Scope, D: Data> {
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate(&self, _: impl IntoIterator<Item=Stream<G, D>>) -> Stream<G, D>;
+    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
+    where
+        I: IntoIterator<Item=Stream<G, D>>;
+}
+
+impl<G: Scope, D: Data> Concatenate<G, D> for Stream<G, D> {
+    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
+    where
+        I: IntoIterator<Item=Stream<G, D>>
+    {
+        let clone = self.clone();
+        self.scope().concatenate(Some(clone).into_iter().chain(sources))
+    }
 }
 
 impl<G: Scope, D: Data> Concatenate<G, D> for G {
-    fn concatenate(&self, sources: impl IntoIterator<Item=Stream<G, D>>) -> Stream<G, D> {
+    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
+    where
+        I: IntoIterator<Item=Stream<G, D>>
+    {
 
         // create an operator builder.
         use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
