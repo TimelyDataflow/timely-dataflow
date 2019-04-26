@@ -41,17 +41,24 @@ pub enum Configuration {
 #[cfg(feature = "getopts")]
 impl Configuration {
 
-    /// Constructs a new configuration by parsing supplied text arguments.
-    ///
-    /// Most commonly, this uses `std::env::Args()` as the supplied iterator.
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Configuration,String> {
-
+    /// Returns a `getopts::Options` struct that can be used to print
+    /// usage information in higher-level systems.
+    pub fn options() -> getopts::Options {
         let mut opts = getopts::Options::new();
         opts.optopt("w", "threads", "number of per-process worker threads", "NUM");
         opts.optopt("p", "process", "identity of this process", "IDX");
         opts.optopt("n", "processes", "number of processes", "NUM");
         opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
         opts.optflag("r", "report", "reports connection progress");
+
+        opts
+    }
+    
+    /// Constructs a new configuration by parsing supplied text arguments.
+    ///
+    /// Most commonly, this uses `std::env::Args()` as the supplied iterator.
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Configuration,String> {
+        let opts = Configuration::options();
 
         opts.parse(args)
             .map_err(|e| format!("{:?}", e))
