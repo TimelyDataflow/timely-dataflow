@@ -196,7 +196,7 @@ impl<A: Allocate> Worker<A> {
             .borrow_mut()
             .advance();
 
-        if self.activations.borrow().is_empty() {
+        if self.activations.borrow().is_empty() && !self.dataflows.borrow().is_empty() {
             self.allocator
                 .borrow()
                 .await_events(duration);
