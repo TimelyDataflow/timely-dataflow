@@ -94,6 +94,14 @@ impl Allocate for Generic {
     fn receive(&mut self) { self.receive(); }
     fn release(&mut self) { self.release(); }
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> { self.events() }
+    fn await_events(&self, _duration: Option<std::time::Duration>) {
+        match self {
+            &Generic::Thread(ref t) => t.await_events(_duration),
+            &Generic::Process(ref p) => p.await_events(_duration),
+            &Generic::ProcessBinary(ref pb) => pb.await_events(_duration),
+            &Generic::ZeroCopy(ref z) => z.await_events(_duration),
+        }
+    }
 }
 
 

@@ -188,10 +188,6 @@ impl Allocate for Process {
     }
 
     fn await_events(&self, duration: Option<Duration>) {
-        let mut events = self.inner.events().borrow_mut();
-        while let Ok((index, event)) = self.counters_recv.try_recv() {
-            events.push_back((index, event));
-        }
         self.inner.await_events(duration);
     }
 
