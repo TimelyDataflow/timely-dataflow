@@ -11,7 +11,7 @@ use std::collections::{HashMap, VecDeque};
 use crate::allocator::thread::{ThreadBuilder};
 use crate::allocator::{Allocate, AllocateBuilder, Event, Thread};
 use crate::{Push, Pull, Message};
-use crate::allocator::buzzer::Buzzer;
+use crate::buzzer::Buzzer;
 
 /// An allocator for inter-thread, intra-process communication
 pub struct ProcessBuilder {
@@ -83,17 +83,8 @@ impl Process {
 
         let channels = Arc::new(Mutex::new(HashMap::new()));
 
-        // each pair of workers has a sender and a receiver.
-        let mut buzzers_send = Vec::new(); for _ in 0 .. peers { buzzers_send.push(Vec::with_capacity(peers)); }
-        let mut buzzers_recv = Vec::new(); for _ in 0 .. peers { buzzers_recv.push(Vec::with_capacity(peers)); }
-
-        for sender in 0 .. peers {
-            for recver in 0 .. peers {
-                let (send, recv) = channel();
-                buzzers_send[sender].push(send);
-                buzzers_recv[recver].push(recv);
-            }
-        }
+        // Allocate matrix of buzzer send and recv endpoints.
+        let (buzzers_send, buzzers_recv) = crate::promise_futures(peers, peers);
 
         counters_recv
             .into_iter()
