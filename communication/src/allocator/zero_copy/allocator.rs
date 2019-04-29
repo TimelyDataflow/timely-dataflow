@@ -2,7 +2,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::{VecDeque, HashMap};
-// use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{Sender, Receiver};
 
 use bytes::arc::Bytes;
 
@@ -10,11 +10,10 @@ use crate::networking::MessageHeader;
 
 use crate::{Allocate, Message, Data, Push, Pull};
 use crate::allocator::AllocateBuilder;
-use crate::allocator::{Event, Process};
-use crate::allocator::process::ProcessBuilder;
+use crate::allocator::Event;
 use crate::allocator::canary::Canary;
 
-use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
+use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 use super::push_pull::{Pusher, PullerInner};
 
 /// Builds an instance of a TcpAllocator.
@@ -24,12 +23,11 @@ use super::push_pull::{Pusher, PullerInner};
 /// shared between threads here, and then provide a method that will instantiate the non-movable
 /// members once in the destination thread.
 pub struct TcpBuilder<A: AllocateBuilder> {
-    inner:      A,
-    index:      usize,              // number out of peers
-    peers:      usize,              // number of peer allocators.
-    sends:      Vec<MergeQueue>,    // for pushing bytes at remote processes.
-    recvs:      Vec<MergeQueue>,    // for pulling bytes from remote processes.
-    signal:     Signal,
+    inner:  A,
+    index:  usize,                      // number out of peers
+    peers:  usize,                      // number of peer allocators.
+    futures:   Vec<Receiver<MergeQueue>>,  // to receive queues to each network thread.
+    promises:   Vec<Sender<MergeQueue>>,    // to send queues from each network thread.
 }
 
 /// Creates a vector of builders, sharing appropriate state.
@@ -44,58 +42,37 @@ pub struct TcpBuilder<A: AllocateBuilder> {
 ///   info to spawn ingress comm thresds,
 /// )
 /// ```
-pub fn new_vector(
+pub fn new_vector<A: AllocateBuilder>(
+    allocators: Vec<A>,
     my_process: usize,
-    threads: usize,
     processes: usize)
--> (Vec<TcpBuilder<ProcessBuilder>>,
-    Vec<(Vec<MergeQueue>, Signal)>,
-    Vec<Vec<MergeQueue>>) {
+-> (Vec<TcpBuilder<A>>,
+    Vec<Vec<Sender<MergeQueue>>>,
+    Vec<Vec<Receiver<MergeQueue>>>)
+{
+    let threads = allocators.len();
 
-    // The results are a vector of builders, as well as the necessary shared state to build each
-    // of the send and receive communication threads, respectively.
-
-    // One signal per local destination worker thread
-    let worker_signals: Vec<Signal> = (0 .. threads).map(|_| Signal::new()).collect();
-
-    // One signal per destination egress communication thread
-    let network_signals: Vec<Signal> = (0 .. processes-1).map(|_| Signal::new()).collect();
-
-    let worker_to_network: Vec<Vec<_>> = (0 .. threads).map(|_| (0 .. processes-1).map(|p| MergeQueue::new(network_signals[p].clone())).collect()).collect();
-    let network_to_worker: Vec<Vec<_>> = (0 .. processes-1).map(|_| (0 .. threads).map(|t| MergeQueue::new(worker_signals[t].clone())).collect()).collect();
-
-    let worker_from_network: Vec<Vec<_>> = (0 .. threads).map(|t| (0 .. processes-1).map(|p| network_to_worker[p][t].clone()).collect()).collect();
-    let network_from_worker: Vec<Vec<_>> = (0 .. processes-1).map(|p| (0 .. threads).map(|t| worker_to_network[t][p].clone()).collect()).collect();
+    // For queues from worker threads to network threads, and vice versa.
+    let (network_promises, worker_futures) = crate::promise_futures(processes-1, threads);
+    let (worker_promises, network_futures) = crate::promise_futures(threads, processes-1);
 
     let builders =
-    Process::new_vector(threads) // Vec<Process> (Process is Allocate)
+    allocators
         .into_iter()
-        .zip(worker_signals)
-        .zip(worker_to_network)
-        .zip(worker_from_network)
+        .zip(worker_promises)
+        .zip(network_futures)
         .enumerate()
-        .map(|(index, (((inner, signal), sends), recvs))| {
-            // sends are handles to MergeQueues to remote processes
-            // (one per remote process)
-            // recvs are handles to MergeQueues from remote processes
-            // (one per remote process)
+        .map(|(index, ((inner, promises), futures))| {
             TcpBuilder {
                 inner,
                 index: my_process * threads + index,
                 peers: threads * processes,
-                sends,
-                recvs,
-                signal,
+                promises,
+                futures,
             }})
         .collect();
 
-    // for each egress communicaton thread, construct the tuple (MergeQueues from local
-    // threads, corresponding signal)
-    let sends = network_from_worker.into_iter().zip(network_signals).collect();
-
-    (/* AllocateBuilder for local threads */  builders,
-     /* info to spawn egress comm threads */  sends,
-     /* info to spawn ingress comm thresds */ network_to_worker)
+    (builders, network_promises, worker_futures)
 }
 
 impl<A: AllocateBuilder> TcpBuilder<A> {
@@ -103,18 +80,34 @@ impl<A: AllocateBuilder> TcpBuilder<A> {
     /// Builds a `TcpAllocator`, instantiating `Rc<RefCell<_>>` elements.
     pub fn build(self) -> TcpAllocator<A::Allocator> {
 
-        let sends: Vec<_> = self.sends.into_iter().map(
-            |send| Rc::new(RefCell::new(SendEndpoint::new(send)))).collect();
+        // Fulfill puller obligations.
+        let mut recvs = Vec::with_capacity(self.peers);
+        for promise in self.promises.into_iter() {
+            let buzzer = crate::buzzer::Buzzer::new();
+            let queue = MergeQueue::new(buzzer);
+            promise.send(queue.clone()).expect("Failed to send MergeQueue");
+            recvs.push(queue.clone());
+        }
+
+        // Extract pusher commitments.
+        let mut sends = Vec::with_capacity(self.peers);
+        for pusher in self.futures.into_iter() {
+            let queue = pusher.recv().expect("Failed to receive push queue");
+            let sendpoint = SendEndpoint::new(queue);
+            sends.push(Rc::new(RefCell::new(sendpoint)));
+        }
+
+        // let sends: Vec<_> = self.sends.into_iter().map(
+        //     |send| Rc::new(RefCell::new(SendEndpoint::new(send)))).collect();
 
         TcpAllocator {
             inner: self.inner.build(),
             index: self.index,
             peers: self.peers,
-            _signal: self.signal,
             canaries: Rc::new(RefCell::new(Vec::new())),
             staged: Vec::new(),
             sends,
-            recvs: self.recvs,
+            recvs,
             to_local: HashMap::new(),
         }
     }
@@ -127,8 +120,6 @@ pub struct TcpAllocator<A: Allocate> {
 
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
-
-    _signal:     Signal,
 
     staged:     Vec<Bytes>,                         // staging area for incoming Bytes
     canaries:   Rc<RefCell<Vec<usize>>>,
@@ -259,5 +250,8 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
     }
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
         self.inner.events()
+    }
+    fn await_events(&self, duration: Option<std::time::Duration>) {
+        self.inner.await_events(duration);
     }
 }
