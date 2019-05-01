@@ -60,7 +60,7 @@ pub fn new_vector<A: AllocateBuilder>(
     allocators
         .into_iter()
         .zip(worker_promises)
-        .zip(network_futures)
+        .zip(worker_futures)
         .enumerate()
         .map(|(index, ((inner, promises), futures))| {
             TcpBuilder {
@@ -72,7 +72,7 @@ pub fn new_vector<A: AllocateBuilder>(
             }})
         .collect();
 
-    (builders, network_promises, worker_futures)
+    (builders, network_promises, network_futures)
 }
 
 impl<A: AllocateBuilder> TcpBuilder<A> {
