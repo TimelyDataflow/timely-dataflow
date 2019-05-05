@@ -1,7 +1,6 @@
 //! Types and traits for sharing `Bytes`.
 
-use std::thread::Thread;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 
 use bytes::arc::Bytes;
@@ -22,41 +21,6 @@ pub trait BytesPull {
     fn drain_into(&mut self, vec: &mut Vec<Bytes>);
 }
 
-/// A signal appropriate to wake a single thread.
-///
-/// Internally this type uses thread parking and unparking, where the first thread to call
-/// `wait` is registered as the thread to wake. Other threads that call `wait` will just be
-/// parked without registering themselves, which would probably be a bug (of theirs).
-#[derive(Clone)]
-pub struct Signal {
-    thread: Arc<RwLock<Option<Thread>>>,
-}
-
-impl Signal {
-    /// Creates a new signal.
-    pub fn new() -> Self {
-        Signal { thread: Arc::new(RwLock::new(None)) }
-    }
-    /// Blocks unless or until ping is called.
-    pub fn wait(&self) {
-        // It is important not to block on the first call; doing so would fail to unblock
-        // from pings before the first call to wait. This may appear as a spurious wake-up,
-        // and ideally the caller is prepared for that.
-        if self.thread.read().expect("failed to read thread").is_none() {
-            *self.thread.write().expect("failed to set thread") = Some(::std::thread::current())
-        }
-        else {
-            ::std::thread::park();
-        }
-    }
-    /// Unblocks the current or next call to wait.
-    pub fn ping(&self) {
-        if let Some(thread) = self.thread.read().expect("failed to read thread").as_ref() {
-            thread.unpark();
-        }
-    }
-}
-
 use std::sync::atomic::{AtomicBool, Ordering};
 /// An unbounded queue of bytes intended for point-to-point communication
 /// between threads. Cloning returns another handle to the same queue.
@@ -65,16 +29,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Clone)]
 pub struct MergeQueue {
     queue: Arc<Mutex<VecDeque<Bytes>>>, // queue of bytes.
-    dirty: Signal,                      // indicates whether there may be data present.
+    buzzer: crate::buzzer::Buzzer,  // awakens receiver thread.
     panic: Arc<AtomicBool>,
 }
 
 impl MergeQueue {
     /// Allocates a new queue with an associated signal.
-    pub fn new(signal: Signal) -> Self {
+    pub fn new(buzzer: crate::buzzer::Buzzer) -> Self {
         MergeQueue {
             queue: Arc::new(Mutex::new(VecDeque::new())),
-            dirty: signal,
+            buzzer,
             panic: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -122,7 +86,7 @@ impl BytesPush for MergeQueue {
         // Wakeup corresponding thread *after* releasing the lock
         ::std::mem::drop(queue);
         if should_ping {
-            self.dirty.ping();  // only signal from empty to non-empty.
+            self.buzzer.buzz();  // only signal from empty to non-empty.
         }
     }
 }
@@ -156,7 +120,7 @@ impl Drop for MergeQueue {
         }
         // Drop the queue before pinging.
         self.queue = Arc::new(Mutex::new(VecDeque::new()));
-        self.dirty.ping();
+        self.buzzer.buzz();
     }
 }
 

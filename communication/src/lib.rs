@@ -93,6 +93,7 @@ pub mod networking;
 pub mod initialize;
 pub mod logging;
 pub mod message;
+pub mod buzzer;
 
 use std::any::Any;
 
@@ -163,4 +164,28 @@ pub trait Pull<T> {
 impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     #[inline]
     fn pull(&mut self) -> &mut Option<T> { (**self).pull() }
+}
+
+
+use std::sync::mpsc::{Sender, Receiver, channel};
+
+/// Allocate a matrix of send and receive changes to exchange items.
+///
+/// This method constructs channels for `sends` threads to create and send
+/// items of type `T` to `recvs` receiver threads.
+fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<Vec<Receiver<T>>>) {
+
+    // each pair of workers has a sender and a receiver.
+    let mut senders: Vec<_> = (0 .. sends).map(|_| Vec::with_capacity(recvs)).collect();
+    let mut recvers: Vec<_> = (0 .. recvs).map(|_| Vec::with_capacity(sends)).collect();
+
+    for sender in 0 .. sends {
+        for recver in 0 .. recvs {
+            let (send, recv) = channel();
+            senders[sender].push(send);
+            recvers[recver].push(recv);
+        }
+    }
+
+    (senders, recvers)
 }

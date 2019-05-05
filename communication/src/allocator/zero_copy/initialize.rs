@@ -48,11 +48,11 @@ pub fn initialize_networking(
     let mut results: Vec<Option<::std::net::TcpStream>> =
         create_sockets(addresses, my_index, noisy)?;
 
-    let (builders, remote_recvs, remote_sends) = new_vector(my_index, threads, processes);
-    // egress queues
-    let mut remote_recv_iter = remote_recvs.into_iter();
-    // ingress queues
-    let mut remote_send_iter = remote_sends.into_iter();
+    let process_allocators = crate::allocator::process::Process::new_vector(threads);
+    let (builders, promises, futures) = new_vector(process_allocators, my_index, processes);
+
+    let mut promises_iter = promises.into_iter();
+    let mut futures_iter = futures.into_iter();
 
     let mut send_guards = Vec::new();
     let mut recv_guards = Vec::new();
@@ -63,7 +63,7 @@ pub fn initialize_networking(
         if let Some(stream) = results[index].take() {
             // remote process
 
-            let (remote_recv, signal) = remote_recv_iter.next().unwrap();
+            let remote_recv = promises_iter.next().unwrap();
 
             {
                 let log_sender = log_sender.clone();
@@ -79,13 +79,13 @@ pub fn initialize_networking(
                             remote: Some(index),
                         });
 
-                        send_loop(stream, remote_recv, signal, my_index, index, logger);
+                        send_loop(stream, remote_recv, my_index, index, logger);
                     })?;
 
                 send_guards.push(join_guard);
             }
 
-            let remote_send = remote_send_iter.next().unwrap();
+            let remote_send = futures_iter.next().unwrap();
 
             {
                 // let remote_sends = remote_sends.clone();

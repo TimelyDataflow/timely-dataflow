@@ -2,11 +2,12 @@
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use std::sync::mpsc::{Sender, Receiver};
 
 use crate::networking::MessageHeader;
 
 use super::bytes_slab::BytesSlab;
-use super::bytes_exchange::{MergeQueue, Signal};
+use super::bytes_exchange::MergeQueue;
 
 use logging_core::Logger;
 
@@ -20,7 +21,7 @@ use crate::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, State
 /// take down the computation and cause the failures to cascade.
 pub fn recv_loop(
     mut reader: TcpStream,
-    mut targets: Vec<MergeQueue>,
+    targets: Vec<Receiver<MergeQueue>>,
     worker_offset: usize,
     process: usize,
     remote: usize,
@@ -28,6 +29,8 @@ pub fn recv_loop(
 {
     // Log the receive thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: true }));
+
+    let mut targets: Vec<MergeQueue> = targets.into_iter().map(|x| x.recv().expect("Failed to receive MergeQueue")).collect();
 
     let mut buffer = BytesSlab::new(20);
 
@@ -111,8 +114,7 @@ pub fn recv_loop(
 pub fn send_loop(
     // TODO: Maybe we don't need BufWriter with consolidation in writes.
     writer: TcpStream,
-    mut sources: Vec<MergeQueue>,
-    signal: Signal,
+    sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
     mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
@@ -120,6 +122,13 @@ pub fn send_loop(
 
     // Log the receive thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
+
+    let mut sources: Vec<MergeQueue> = sources.into_iter().map(|x| {
+        let buzzer = crate::buzzer::Buzzer::new();
+        let queue = MergeQueue::new(buzzer);
+        x.send(queue.clone()).expect("failed to send MergeQueue");
+        queue
+    }).collect();
 
     let mut writer = ::std::io::BufWriter::with_capacity(1 << 16, writer);
     let mut stash = Vec::new();
@@ -142,7 +151,7 @@ pub fn send_loop(
             writer.flush().expect("Failed to flush writer.");
             sources.retain(|source| !source.is_complete());
             if !sources.is_empty() {
-                signal.wait();
+                std::thread::park();
             }
         }
         else {

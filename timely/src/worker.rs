@@ -147,9 +147,12 @@ impl<A: Allocate> Worker<A> {
     /// Performs one step of the computation.
     ///
     /// A step gives each dataflow operator a chance to run, and is the
-    /// main way to ensure that a computation proceeds. This method may
-    /// park the thread until there is work to perform, with an optional
-    /// timeout.
+    /// main way to ensure that a computation proceeds.
+    ///
+    /// This method takes an optional timeout and may park the thread until
+    /// there is work to perform or until this timeout expires. A value of
+    /// `None` allows the worker to park indefinitely, whereas a value of
+    /// `Some(Duration::new(0, 0))` will return without parking the thread.
     ///
     /// # Examples
     ///
@@ -196,10 +199,19 @@ impl<A: Allocate> Worker<A> {
             .borrow_mut()
             .advance();
 
-        if self.activations.borrow().is_empty() {
+        // Consider parking only if we have no pending events, some dataflows, and a non-zero duration.
+        if self.activations.borrow().is_empty() && !self.dataflows.borrow().is_empty() && duration != Some(Duration::new(0,0)) {
+
+            // Log parking and flush log.
+            self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::park(duration)));
+            self.logging.borrow_mut().flush();
+
             self.allocator
                 .borrow()
                 .await_events(duration);
+
+            // Log return from unpark.
+            self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));
         }
         else {   // Schedule active dataflows.
 

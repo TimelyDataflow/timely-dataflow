@@ -3,6 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::{VecDeque, HashMap};
+use std::sync::mpsc::{Sender, Receiver};
 
 use bytes::arc::Bytes;
 
@@ -12,7 +13,7 @@ use crate::{Allocate, Message, Data, Push, Pull};
 use crate::allocator::{AllocateBuilder, Event};
 use crate::allocator::canary::Canary;
 
-use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue, Signal};
+use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 
 use super::push_pull::{Pusher, Puller};
 
@@ -23,11 +24,11 @@ use super::push_pull::{Pusher, Puller};
 /// shared between threads here, and then provide a method that will instantiate the non-movable
 /// members once in the destination thread.
 pub struct ProcessBuilder {
-    index:      usize,              // number out of peers
-    peers:      usize,              // number of peer allocators.
-    sends:      Vec<MergeQueue>,    // for pushing bytes at remote processes.
-    recvs:      Vec<MergeQueue>,    // for pulling bytes from remote processes.
-    signal:     Signal,
+    index:  usize,                      // number out of peers
+    peers:  usize,                      // number of peer allocators.
+    pushers: Vec<Receiver<MergeQueue>>, // for pushing bytes at other workers.
+    pullers: Vec<Sender<MergeQueue>>,   // for pulling bytes from other workers.
+    // signal:  Signal,
 }
 
 impl ProcessBuilder {
@@ -36,44 +37,41 @@ impl ProcessBuilder {
     /// This method requires access to a byte exchanger, from which it mints channels.
     pub fn new_vector(count: usize) -> Vec<ProcessBuilder> {
 
-        let signals: Vec<Signal> = (0 .. count).map(|_| Signal::new()).collect();
+        // Channels for the exchange of `MergeQueue` endpoints.
+        let (pullers_vec, pushers_vec) = crate::promise_futures(count, count);
 
-        let mut sends = Vec::new();
-        let mut recvs = Vec::new();
-        for _ in 0 .. count { sends.push(Vec::new()); }
-        for _ in 0 .. count { recvs.push(Vec::new()); }
-
-        for source in 0 .. count {
-            for target in 0 .. count {
-                let send = MergeQueue::new(signals[target].clone());
-                let recv = send.clone();
-                sends[source].push(send);
-                recvs[target].push(recv);
-            }
-        }
-
-        sends.into_iter()
-             .zip(recvs)
-             .zip(signals)
-             .enumerate()
-             .map(|(index, ((sends, recvs), signal))|
+        pushers_vec
+            .into_iter()
+            .zip(pullers_vec)
+            .enumerate()
+            .map(|(index, (pushers, pullers))|
                 ProcessBuilder {
                     index,
                     peers: count,
-                    sends,
-                    recvs,
-                    signal,
+                    pushers,
+                    pullers,
                 }
-             )
-             .collect()
+            )
+            .collect()
     }
 
     /// Builds a `ProcessAllocator`, instantiating `Rc<RefCell<_>>` elements.
     pub fn build(self) -> ProcessAllocator {
 
-        let mut sends = Vec::new();
-        for send in self.sends.into_iter() {
-            let sendpoint = SendEndpoint::new(send);
+        // Fulfill puller obligations.
+        let mut recvs = Vec::with_capacity(self.peers);
+        for puller in self.pullers.into_iter() {
+            let buzzer = crate::buzzer::Buzzer::new();
+            let queue = MergeQueue::new(buzzer);
+            puller.send(queue.clone()).expect("Failed to send MergeQueue");
+            recvs.push(queue.clone());
+        }
+
+        // Extract pusher commitments.
+        let mut sends = Vec::with_capacity(self.peers);
+        for pusher in self.pushers.into_iter() {
+            let queue = pusher.recv().expect("Failed to receive MergeQueue");
+            let sendpoint = SendEndpoint::new(queue);
             sends.push(Rc::new(RefCell::new(sendpoint)));
         }
 
@@ -84,9 +82,9 @@ impl ProcessBuilder {
             canaries: Rc::new(RefCell::new(Vec::new())),
             staged: Vec::new(),
             sends,
-            recvs: self.recvs,
+            recvs,
             to_local: HashMap::new(),
-            _signal: self.signal,
+            // _signal: self.signal,
         }
     }
 }
@@ -110,7 +108,7 @@ pub struct ProcessAllocator {
 
     canaries: Rc<RefCell<Vec<usize>>>,
 
-    _signal:     Signal,
+    // _signal:     Signal,
     // sending, receiving, and responding to binary buffers.
     staged:     Vec<Bytes>,
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to thread x.
@@ -223,5 +221,15 @@ impl Allocate for ProcessAllocator {
 
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
         &self.events
+    }
+    fn await_events(&self, duration: Option<std::time::Duration>) {
+        if self.events.borrow().is_empty() {
+            if let Some(duration) = duration {
+                std::thread::park_timeout(duration);
+            }
+            else {
+                std::thread::park();
+            }
+        }
     }
 }
