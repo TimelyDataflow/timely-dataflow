@@ -6,14 +6,14 @@ use crate::dataflow::channels::{Bundle, Message};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, D, P: Push<Bundle<T, D>>, H: Fn(&T, &D) -> u64> {
+pub struct Exchange<T, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<Vec<D>>,
     current: Option<T>,
     hash_func: H,
 }
 
-impl<T: Clone, D, P: Push<Bundle<T, D>>, H: Fn(&T, &D)->u64>  Exchange<T, D, P, H> {
+impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
         let mut buffers = vec![];
@@ -37,7 +37,7 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: Fn(&T, &D)->u64>  Exchange<T, D, P, 
     }
 }
 
-impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: Fn(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
+impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
     #[inline(never)]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         // if only one pusher, no exchange
