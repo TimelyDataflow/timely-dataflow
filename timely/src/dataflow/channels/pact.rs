@@ -43,8 +43,8 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
 }
 
 /// An exchange between multiple observers by data
-pub struct Exchange<D, F: Fn(&D)->u64+'static> { hash_func: F, phantom: PhantomData<D>, }
-impl<D, F: Fn(&D)->u64> Exchange<D, F> {
+pub struct Exchange<D, F: FnMut(&D)->u64+'static> { hash_func: F, phantom: PhantomData<D>, }
+impl<D, F: FnMut(&D)->u64> Exchange<D, F> {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new(func: F) -> Exchange<D, F> {
         Exchange {
@@ -55,12 +55,12 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Eq+Data+Clone, D: Data+Clone, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
+impl<T: Eq+Data+Clone, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
     // TODO: The closure in the type prevents us from naming it.
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<Push<Bundle<T, D>>>;
     type Puller = Box<Pull<Bundle<T, D>>>;
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: AsWorker>(mut self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, D>>(identifier, address);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
         (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, logging.clone())))

@@ -198,27 +198,20 @@ pub struct InputEvent {
     pub start_stop: StartStop,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-/// Input logic start/stop
-pub struct ParkEvent {
-    /// True when activity begins, false when it stops
-    pub event: ParkUnpark
-}
-
-impl ParkEvent {
-    /// Creates a new park event from the supplied duration.
-    pub fn park(duration: Option<Duration>) -> Self { ParkEvent { event: ParkUnpark::Park(duration) } }
-    /// Creates a new unpark event.
-    pub fn unpark() -> Self { ParkEvent { event: ParkUnpark::Unpark } }
-}
-
 /// Records the starting and stopping of an operator.
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
-pub enum ParkUnpark {
+pub enum ParkEvent {
     /// Worker parks.
     Park(Option<Duration>),
     /// Worker unparks.
     Unpark,
+}
+
+impl ParkEvent {
+    /// Creates a new park event from the supplied duration.
+    pub fn park(duration: Option<Duration>) -> Self { ParkEvent::Park(duration) }
+    /// Creates a new unpark event.
+    pub fn unpark() -> Self { ParkEvent::Unpark }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Abomonation, Hash, Eq, PartialEq, Ord, PartialOrd)]
