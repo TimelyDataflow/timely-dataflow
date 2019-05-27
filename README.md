@@ -15,7 +15,7 @@ To use timely dataflow, add the following to the dependencies section of your pr
 timely="*"
 ```
 
-This will bring in the [`timely` crate](https://crates.io/crates/timely) from [crates.io](http://crates.io), which should allow you to start writing timely dataflow programs like this one (also available in [examples/simple.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/examples/simple.rs)):
+This will bring in the [`timely` crate](https://crates.io/crates/timely) from [crates.io](http://crates.io), which should allow you to start writing timely dataflow programs like this one (also available in [timely/examples/simple.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/timely/examples/simple.rs)):
 
 ```rust
 extern crate timely;
