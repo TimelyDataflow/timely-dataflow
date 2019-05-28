@@ -28,6 +28,7 @@ fn main() {
             .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
             .inspect(|x| println!("{:?}", x))
             .filter(|x| *x != 1)
+            .branch_when(|t| t < &100).1
             .connect_loop(handle);
     });
 }
