@@ -283,7 +283,6 @@ pub mod arc {
         /// shared4.try_merge(shared2).ok().expect("Failed to merge 4 and 231");
         /// ```
         pub fn try_merge(&mut self, other: Bytes) -> Result<(), Bytes> {
-            use ::std::sync::Arc;
             if Arc::ptr_eq(&self.sequestered, &other.sequestered) && ::std::ptr::eq(unsafe { self.ptr.offset(self.len as isize) }, other.ptr) {
                 self.len += other.len;
                 Ok(())
