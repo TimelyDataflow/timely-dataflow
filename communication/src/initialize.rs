@@ -53,7 +53,7 @@ impl Configuration {
 
         opts
     }
-    
+
     /// Constructs a new configuration by parsing supplied text arguments.
     ///
     /// Most commonly, this uses `std::env::Args()` as the supplied iterator.
@@ -281,11 +281,21 @@ pub struct WorkerGuards<T:Send+'static> {
 }
 
 impl<T:Send+'static> WorkerGuards<T> {
+
+    /// Returns the number of guards.
+    pub fn len(&self) -> usize { self.guards.len() }
+
+    /// Returns a reference to the indexed guard.
+    pub fn guard(&self, index: usize) -> &std::thread::JoinHandle<T> {
+        &self.guards[index]
+    }
+
     /// Waits on the worker threads and returns the results they produce.
     pub fn join(mut self) -> Vec<Result<T, String>> {
-        self.guards.drain(..)
-                   .map(|guard| guard.join().map_err(|e| format!("{:?}", e)))
-                   .collect()
+        self.guards
+            .drain(..)
+            .map(|guard| guard.join().map_err(|e| format!("{:?}", e)))
+            .collect()
     }
 }
 
