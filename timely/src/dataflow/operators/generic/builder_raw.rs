@@ -13,7 +13,6 @@ use crate::Data;
 use crate::scheduling::{Schedule, Activations};
 
 use crate::progress::{Source, Target};
-use crate::progress::ChangeBatch;
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
 use crate::dataflow::{Stream, Scope};
@@ -156,12 +155,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Creates an operator implementation from supplied logic constructor.
     pub fn build<L>(mut self, logic: L)
     where
-        L: FnMut(
-            &mut [ChangeBatch<G::Timestamp>],
-            &mut [ChangeBatch<G::Timestamp>],
-            &mut [ChangeBatch<G::Timestamp>],
-            &mut [ChangeBatch<G::Timestamp>],
-        )->bool+'static
+        L: FnMut(&mut SharedProgress<G::Timestamp>)->bool+'static
     {
         let inputs = self.shape.inputs;
         let outputs = self.shape.outputs;
@@ -187,12 +181,7 @@ impl<G: Scope> OperatorBuilder<G> {
 struct OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-    )->bool+'static
+    L: FnMut(&mut SharedProgress<T>)->bool+'static,
 {
     shape: OperatorShape,
     address: Vec<usize>,
@@ -205,37 +194,20 @@ where
 impl<T, L> Schedule for OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-    )->bool+'static
+    L: FnMut(&mut SharedProgress<T>)->bool+'static,
 {
     fn name(&self) -> &str { &self.shape.name }
     fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
-
         let shared_progress = &mut *self.shared_progress.borrow_mut();
-
-        let frontier = &mut shared_progress.frontiers[..];
-        let consumed = &mut shared_progress.consumeds[..];
-        let internal = &mut shared_progress.internals[..];
-        let produced = &mut shared_progress.produceds[..];
-
-        (self.logic)(frontier, consumed, internal, produced)
+        (self.logic)(shared_progress)
     }
 }
 
 impl<T, L> Operate<T> for OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-        &mut [ChangeBatch<T>],
-    )->bool+'static
+    L: FnMut(&mut SharedProgress<T>)->bool+'static,
 {
     fn inputs(&self) -> usize { self.shape.inputs }
     fn outputs(&self) -> usize { self.shape.outputs }

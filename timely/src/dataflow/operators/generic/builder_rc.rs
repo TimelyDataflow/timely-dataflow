@@ -7,6 +7,7 @@ use std::default::Default;
 use crate::Data;
 
 use crate::progress::{ChangeBatch, Timestamp};
+use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
 use crate::dataflow::{Stream, Scope};
@@ -120,34 +121,31 @@ impl<G: Scope> OperatorBuilder<G> {
         let self_produced = self.produced;
 
         let raw_logic = 
-        move |frontier: &mut [ChangeBatch<G::Timestamp>],
-              consumed: &mut [ChangeBatch<G::Timestamp>],
-              internal: &mut [ChangeBatch<G::Timestamp>],
-              produced: &mut [ChangeBatch<G::Timestamp>]| {
+        move |progress: &mut SharedProgress<G::Timestamp>| {
 
             // drain frontier changes
-            for index in 0 .. frontier.len() {
-                self_frontier[index].update_iter(frontier[index].drain());
+            for index in 0 .. progress.frontiers.len() {
+                self_frontier[index].update_iter(progress.frontiers[index].drain());
             }
 
             // invoke supplied logic
             logic(&self_frontier[..]);
 
             // move batches of consumed changes.
-            for index in 0 .. consumed.len() {
-                self_consumed[index].borrow_mut().drain_into(&mut consumed[index]);
+            for index in 0 .. progress.consumeds.len() {
+                self_consumed[index].borrow_mut().drain_into(&mut progress.consumeds[index]);
             }
 
             // move batches of internal changes.
             let self_internal_borrow = self_internal.borrow_mut();
             for index in 0 .. self_internal_borrow.len() {
                 let mut borrow = self_internal_borrow[index].borrow_mut();
-                internal[index].extend(borrow.drain());
+                progress.internals[index].extend(borrow.drain());
             }
 
             // move batches of produced changes.
-            for index in 0 .. produced.len() {
-                self_produced[index].borrow_mut().drain_into(&mut produced[index]);
+            for index in 0 .. progress.produceds.len() {
+                self_produced[index].borrow_mut().drain_into(&mut progress.produceds[index]);
             }
 
             false

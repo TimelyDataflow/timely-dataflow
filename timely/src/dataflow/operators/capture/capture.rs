@@ -121,16 +121,16 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
         let mut started = false;
 
         builder.build(
-            move |frontier, consumed, _internal, _external| {
+            move |progress| {
 
                 if !started {
                     // discard initial capability.
-                    frontier[0].update(Default::default(), -1);
+                    progress.frontiers[0].update(Default::default(), -1);
                     started = true;
                 }
-                if !frontier[0].is_empty() {
+                if !progress.frontiers[0].is_empty() {
                     // transmit any frontier progress.
-                    let to_send = ::std::mem::replace(&mut frontier[0], ChangeBatch::new());
+                    let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
                     event_pusher.push(Event::Progress(to_send.into_inner()));
                 }
 
@@ -145,7 +145,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
                     let vector = data.replace(Vec::new());
                     event_pusher.push(Event::Messages(time.clone(), vector));
                 }
-                input.consumed().borrow_mut().drain_into(&mut consumed[0]);
+                input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false
             }
         );
