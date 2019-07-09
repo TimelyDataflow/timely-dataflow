@@ -11,7 +11,7 @@ use crate::communication::Push;
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct Tee<T: 'static, D: 'static> {
     buffer: Vec<D>,
-    shared: Rc<RefCell<Vec<Box<Push<Bundle<T, D>>>>>>,
+    shared: Rc<RefCell<Vec<Box<dyn Push<Bundle<T, D>>>>>>,
 }
 
 impl<T: Data, D: Data> Push<Bundle<T, D>> for Tee<T, D> {
@@ -60,7 +60,7 @@ impl<T, D> Clone for Tee<T, D> {
 
 /// A shared list of `Box<Push>` used to add `Push` implementors.
 pub struct TeeHelper<T, D> {
-    shared: Rc<RefCell<Vec<Box<Push<Bundle<T, D>>>>>>
+    shared: Rc<RefCell<Vec<Box<dyn Push<Bundle<T, D>>>>>>
 }
 
 impl<T, D> TeeHelper<T, D> {

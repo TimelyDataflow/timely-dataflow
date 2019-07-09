@@ -55,7 +55,7 @@ pub mod rc {
         /// Importantly, this is unavailable for as long as the struct exists, which may
         /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
         /// enough to make a strong statement about this.
-        sequestered: Rc<Box<Any>>,
+        sequestered: Rc<Box<dyn Any>>,
     }
 
     impl Bytes {
@@ -63,7 +63,7 @@ pub mod rc {
         /// Create a new instance from a byte allocation.
         pub fn from<B>(bytes: B) -> Bytes where B: DerefMut<Target=[u8]>+'static {
 
-            let mut boxed = Box::new(bytes) as Box<Any>;
+            let mut boxed = Box::new(bytes) as Box<dyn Any>;
 
             let ptr = boxed.downcast_mut::<B>().unwrap().as_mut_ptr();
             let len = boxed.downcast_ref::<B>().unwrap().len();
@@ -146,7 +146,7 @@ pub mod arc {
         /// Importantly, this is unavailable for as long as the struct exists, which may
         /// prevent shared access to ptr[0 .. len]. I'm not sure I understand Rust's rules
         /// enough to make a strong statement about this.
-        sequestered: Arc<Box<Any>>,
+        sequestered: Arc<Box<dyn Any>>,
     }
 
     unsafe impl Send for Bytes { }
@@ -156,7 +156,7 @@ pub mod arc {
         /// Create a new instance from a byte allocation.
         pub fn from<B>(bytes: B) -> Bytes where B : DerefMut<Target=[u8]>+'static {
 
-            let mut boxed = Box::new(bytes) as Box<Any>;
+            let mut boxed = Box::new(bytes) as Box<dyn Any>;
 
             let ptr = boxed.downcast_mut::<B>().unwrap().as_mut_ptr();
             let len = boxed.downcast_ref::<B>().unwrap().len();

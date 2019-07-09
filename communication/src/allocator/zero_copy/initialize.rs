@@ -38,7 +38,7 @@ pub fn initialize_networking(
     my_index: usize,
     threads: usize,
     noisy: bool,
-    log_sender: Box<Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
+    log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
     let log_sender = Arc::new(log_sender);

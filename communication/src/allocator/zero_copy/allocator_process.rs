@@ -119,9 +119,9 @@ pub struct ProcessAllocator {
 impl Allocate for ProcessAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
 
-        let mut pushes = Vec::<Box<Push<Message<T>>>>::new();
+        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::new();
 
         for target_index in 0 .. self.peers() {
 

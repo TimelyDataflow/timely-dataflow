@@ -38,7 +38,7 @@ pub trait Scope: ScopeParent {
     fn add_edge(&self, source: Source, target: Target);
 
     /// Adds a child `Operate` to the builder's scope. Returns the new child's index.
-    fn add_operator(&mut self, operator: Box<Operate<Self::Timestamp>>) -> usize {
+    fn add_operator(&mut self, operator: Box<dyn Operate<Self::Timestamp>>) -> usize {
         let index = self.allocate_operator_index();
         let global = self.new_identifier();
         self.add_operator_with_indices(operator, index, global);
@@ -56,7 +56,7 @@ pub trait Scope: ScopeParent {
     ///
     /// This is used internally when there is a gap between allocate a child identifier and adding the
     /// child, as happens in subgraph creation.
-    fn add_operator_with_index(&mut self, operator: Box<Operate<Self::Timestamp>>, index: usize) {
+    fn add_operator_with_index(&mut self, operator: Box<dyn Operate<Self::Timestamp>>, index: usize) {
         let global = self.new_identifier();
         self.add_operator_with_indices(operator, index, global);
     }
@@ -64,7 +64,7 @@ pub trait Scope: ScopeParent {
     /// Adds a child `Operate` to the builder's scope using supplied indices.
     ///
     /// The two indices are the scope-local operator index, and a worker-unique index used for e.g. logging.
-    fn add_operator_with_indices(&mut self, operator: Box<Operate<Self::Timestamp>>, local: usize, global: usize);
+    fn add_operator_with_indices(&mut self, operator: Box<dyn Operate<Self::Timestamp>>, local: usize, global: usize);
 
     /// Creates a dataflow subgraph.
     ///
