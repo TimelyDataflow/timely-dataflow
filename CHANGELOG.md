@@ -2,11 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 0.10.0
 
 ### Added
 
-A `Worker` now has a `step_or_park(Option<Duration>)` method, which instructs the worker to take a step and gives it permission to part the worker thread for at most the supplied timeout if there is no work to perform. A value of `None` implies no timeout (unboundedly parked) whereas a value of `Some(0)` should return immediately. The communication layers are implemented to awaken workers if they receive new communications, and workers should hand out copies of their `Thread` if they want other threads to wake them for other reasons (e.g. queues from threads external to timely).
+A `Worker` now has a `step_or_park(Option<Duration>)` method, which instructs the worker to take a step and gives it permission to park the worker thread for at most the supplied timeout if there is no work to perform. A value of `None` implies no timeout (unboundedly parked) whereas a value of `Some(0)` should return immediately. The communication layers are implemented to awaken workers if they receive new communications, and workers should hand out copies of their `Thread` if they want other threads to wake them for other reasons (e.g. queues from threads external to timely).
+
+Communication `WorkerGuards` expose their underlying join handles to allow the main thread or others to unpark worker threads that may be parked (for example, after pushing new data into a queue shared with the worker).
 
 ## 0.9.0
 
