@@ -71,8 +71,7 @@ where I : IntoIterator,
         let mut started = false;
 
         builder.build(
-            move |_frontier| { },
-            move |_consumed, internal, produced| {
+            move |_frontier, _consumed, internal, produced| {
 
                 if !started {
                     // The first thing we do is modify our capabilities to match the number of streams we manage.

@@ -154,10 +154,10 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Creates an operator implementation from supplied logic constructor.
-    pub fn build<PEP, PIP>(mut self, push_external: PEP, pull_internal: PIP)
+    pub fn build<L>(mut self, logic: L)
     where
-        PEP: FnMut(&mut [ChangeBatch<G::Timestamp>])+'static,
-        PIP: FnMut(
+        L: FnMut(
+            &mut [ChangeBatch<G::Timestamp>],
             &mut [ChangeBatch<G::Timestamp>],
             &mut [ChangeBatch<G::Timestamp>],
             &mut [ChangeBatch<G::Timestamp>],
@@ -170,8 +170,7 @@ impl<G: Scope> OperatorBuilder<G> {
             shape: self.shape,
             address: self.address,
             activations: self.scope.activations().clone(),
-            push_external,
-            pull_internal,
+            logic,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             summary: self.summary,
         };
@@ -185,24 +184,33 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 }
 
-struct OperatorCore<T, PEP, PIP>
-    where
-        T: Timestamp,
+struct OperatorCore<T, L>
+where
+    T: Timestamp,
+    L: FnMut(
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+    )->bool+'static
 {
     shape: OperatorShape,
     address: Vec<usize>,
-    push_external: PEP,
-    pull_internal: PIP,
+    logic: L,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     activations: Rc<RefCell<Activations>>,
     summary: Vec<Vec<Antichain<T::Summary>>>,
 }
 
-impl<T, PEP, PIP> Schedule for OperatorCore<T, PEP, PIP>
+impl<T, L> Schedule for OperatorCore<T, L>
 where
     T: Timestamp,
-    PEP: FnMut(&mut [ChangeBatch<T>])+'static,
-    PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
+    L: FnMut(
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+    )->bool+'static
 {
     fn name(&self) -> &str { &self.shape.name }
     fn path(&self) -> &[usize] { &self.address[..] }
@@ -215,16 +223,19 @@ where
         let internal = &mut shared_progress.internals[..];
         let produced = &mut shared_progress.produceds[..];
 
-        (self.push_external)(frontier);
-        (self.pull_internal)(consumed, internal, produced)
+        (self.logic)(frontier, consumed, internal, produced)
     }
 }
 
-impl<T, PEP, PIP> Operate<T> for OperatorCore<T, PEP, PIP>
+impl<T, L> Operate<T> for OperatorCore<T, L>
 where
     T: Timestamp,
-    PEP: FnMut(&mut [ChangeBatch<T>])+'static,
-    PIP: FnMut(&mut [ChangeBatch<T>], &mut [ChangeBatch<T>], &mut [ChangeBatch<T>])->bool+'static
+    L: FnMut(
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+        &mut [ChangeBatch<T>],
+    )->bool+'static
 {
     fn inputs(&self) -> usize { self.shape.inputs }
     fn outputs(&self) -> usize { self.shape.outputs }
@@ -247,8 +258,10 @@ where
 
     // initialize self.frontier antichains as indicated by hosting scope.
     fn set_external_summary(&mut self) {
-        (self.push_external)(&mut self.shared_progress.borrow_mut().frontiers[..]);
+        // should we schedule the operator here, or just await the first invocation?
+        self.schedule();
     }
 
     fn notify_me(&self) -> bool { self.shape.notify }
 }
+

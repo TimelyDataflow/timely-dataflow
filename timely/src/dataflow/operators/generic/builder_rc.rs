@@ -114,26 +114,24 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let mut logic = constructor(capabilities);
 
-        let self_frontier1 = Rc::new(RefCell::new(self.frontier));
-        let self_frontier2 = self_frontier1.clone();
+        let mut self_frontier = self.frontier;
         let self_consumed = self.consumed;
         let self_internal = self.internal;
         let self_produced = self.produced;
 
-        let pep = move |changes: &mut [ChangeBatch<G::Timestamp>]| {
-            let mut borrow = self_frontier1.borrow_mut();
-            for index in 0 .. changes.len() {
-                borrow[index].update_iter(changes[index].drain());
-            }
-        };
+        let raw_logic = 
+        move |frontier: &mut [ChangeBatch<G::Timestamp>],
+              consumed: &mut [ChangeBatch<G::Timestamp>],
+              internal: &mut [ChangeBatch<G::Timestamp>],
+              produced: &mut [ChangeBatch<G::Timestamp>]| {
 
-        let pip = move |consumed: &mut [ChangeBatch<G::Timestamp>],
-                        internal: &mut [ChangeBatch<G::Timestamp>],
-                        produced: &mut [ChangeBatch<G::Timestamp>]| {
+            // drain frontier changes
+            for index in 0 .. frontier.len() {
+                self_frontier[index].update_iter(frontier[index].drain());
+            }
 
             // invoke supplied logic
-            let borrow = self_frontier2.borrow();
-            logic(&*borrow);
+            logic(&self_frontier[..]);
 
             // move batches of consumed changes.
             for index in 0 .. consumed.len() {
@@ -155,7 +153,7 @@ impl<G: Scope> OperatorBuilder<G> {
             false
         };
 
-        self.builder.build(pep, pip);
+        self.builder.build(raw_logic);
     }
 
     /// Get the identifier assigned to the operator being constructed
