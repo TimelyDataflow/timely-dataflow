@@ -276,7 +276,7 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 ///     })
 /// }).unwrap();
 /// ```
-pub fn execute_from<A, T, F>(builders: Vec<A>, others: Box<::std::any::Any>, func: F) -> Result<WorkerGuards<T>,String>
+pub fn execute_from<A, T, F>(builders: Vec<A>, others: Box<dyn (::std::any::Any)>, func: F) -> Result<WorkerGuards<T>,String>
 where
     A: AllocateBuilder+'static,
     T: Send+'static,

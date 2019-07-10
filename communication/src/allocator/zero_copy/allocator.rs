@@ -133,10 +133,10 @@ pub struct TcpAllocator<A: Allocate> {
 impl<A: Allocate> Allocate for TcpAllocator<A> {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
 
         // Result list of boxed pushers.
-        let mut pushes = Vec::<Box<Push<Message<T>>>>::new();
+        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::new();
 
         // Inner exchange allocations.
         let inner_peers = self.inner.peers();

@@ -54,7 +54,7 @@ where
 {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<Push<Message<D>>>>, Box<Pull<Message<D>>>) {
+    fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
         self.parent.allocate(identifier, address)
     }
     fn pipeline<D: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
@@ -97,7 +97,7 @@ where
         self.subgraph.borrow_mut().connect(source, target);
     }
 
-    fn add_operator_with_indices(&mut self, operator: Box<Operate<Self::Timestamp>>, local: usize, global: usize) {
+    fn add_operator_with_indices(&mut self, operator: Box<dyn Operate<Self::Timestamp>>, local: usize, global: usize) {
         self.subgraph.borrow_mut().add_child(operator, local, global);
     }
 

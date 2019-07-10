@@ -9,7 +9,7 @@ pub struct Registry<Id> {
     /// A worker-specific identifier.
     id: Id,
     /// A map from names to typed loggers.
-    map: HashMap<String, (Box<Any>, Box<Flush>)>,
+    map: HashMap<String, (Box<dyn Any>, Box<dyn Flush>)>,
     /// An instant common to all logging statements.
     time: Instant,
 }
@@ -29,7 +29,7 @@ impl<Id: Clone+'static> Registry<Id> {
     pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, Id, T)>)+'static>(
         &mut self,
         name: &str,
-        action: F) -> Option<Box<Any>>
+        action: F) -> Option<Box<dyn Any>>
     {
         let logger = Logger::<T, Id>::new(self.time.clone(), self.id.clone(), action);
         self.insert_logger(name, logger)
@@ -39,7 +39,7 @@ impl<Id: Clone+'static> Registry<Id> {
     pub fn insert_logger<T: 'static>(
         &mut self,
         name: &str,
-        logger: Logger<T, Id>) -> Option<Box<Any>>
+        logger: Logger<T, Id>) -> Option<Box<dyn Any>>
     {
         self.map.insert(name.to_owned(), (Box::new(logger.clone()), Box::new(logger))).map(|x| x.0)
     }
@@ -50,7 +50,7 @@ impl<Id: Clone+'static> Registry<Id> {
     /// communicate that the stream is closed to any consumers. If a binding is not removed,
     /// then the stream cannot be complete as in principle anyone could acquire a handle to
     /// the logger and start further logging.
-    pub fn remove(&mut self, name: &str) -> Option<Box<Any>> {
+    pub fn remove(&mut self, name: &str) -> Option<Box<dyn Any>> {
         self.map.remove(name).map(|x| x.0)
     }
 
@@ -89,7 +89,7 @@ impl<Id> Flush for Registry<Id> {
 pub struct Logger<T, E> {
     id:     E,
     time:   Instant,                                                    // common instant used for all loggers.
-    action: Rc<RefCell<FnMut(&Duration, &mut Vec<(Duration, E, T)>)>>,  // action to take on full log buffers.
+    action: Rc<RefCell<dyn FnMut(&Duration, &mut Vec<(Duration, E, T)>)>>,  // action to take on full log buffers.
     buffer: Rc<RefCell<Vec<(Duration, E, T)>>>,                         // shared buffer; not obviously best design.
 }
 

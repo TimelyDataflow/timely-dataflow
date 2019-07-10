@@ -43,7 +43,7 @@ pub trait Allocate {
     /// The number of workers in the communication group.
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<Push<Message<T>>>>, Box<Pull<Message<T>>>);
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>);
     /// A shared queue of communication events with channel identifier.
     ///
     /// It is expected that users of the channel allocator will regularly

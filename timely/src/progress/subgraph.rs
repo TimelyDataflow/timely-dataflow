@@ -122,7 +122,7 @@ where
     }
 
     /// Adds a new child to the subgraph.
-    pub fn add_child(&mut self, child: Box<Operate<TInner>>, index: usize, identifier: usize) {
+    pub fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize) {
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
@@ -557,7 +557,7 @@ struct PerOperatorState<T: Timestamp> {
     inputs: usize,      // number of inputs to the operator
     outputs: usize,     // number of outputs from the operator
 
-    operator: Option<Box<Operate<T>>>,
+    operator: Option<Box<dyn Operate<T>>>,
 
     edges: Vec<Vec<Target>>,    // edges from the outputs of the operator
 
@@ -591,7 +591,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
     pub fn new(
-        mut scope: Box<Operate<T>>,
+        mut scope: Box<dyn Operate<T>>,
         index: usize,
         mut _path: Vec<usize>,
         identifier: usize,
