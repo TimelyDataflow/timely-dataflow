@@ -80,7 +80,7 @@ macro_rules! implement_timestamp_add {
     )
 }
 
-implement_timestamp_add!(usize, u64, u32, u16, u8, i32, ::std::time::Duration,);
+implement_timestamp_add!(usize, u128, u64, u32, u16, u8, isize, i128, i64, i32, i16, i8, ::std::time::Duration,);
 
 pub use self::refines::Refines;
 mod refines {
@@ -131,5 +131,5 @@ mod refines {
         )
     }
 
-    implement_refines_empty!(usize, u64, u32, u16, u8, i32, ::std::time::Duration,);
+    implement_refines_empty!(usize, u128, u64, u32, u16, u8, isize, i128, i64, i32, i16, i8, ::std::time::Duration,);
 }
