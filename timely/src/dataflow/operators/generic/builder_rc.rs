@@ -7,6 +7,7 @@ use std::default::Default;
 use crate::Data;
 
 use crate::progress::{ChangeBatch, Timestamp};
+use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
 use crate::dataflow::{Stream, Scope};
@@ -114,48 +115,43 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let mut logic = constructor(capabilities);
 
-        let self_frontier1 = Rc::new(RefCell::new(self.frontier));
-        let self_frontier2 = self_frontier1.clone();
+        let mut self_frontier = self.frontier;
         let self_consumed = self.consumed;
         let self_internal = self.internal;
         let self_produced = self.produced;
 
-        let pep = move |changes: &mut [ChangeBatch<G::Timestamp>]| {
-            let mut borrow = self_frontier1.borrow_mut();
-            for index in 0 .. changes.len() {
-                borrow[index].update_iter(changes[index].drain());
-            }
-        };
+        let raw_logic = 
+        move |progress: &mut SharedProgress<G::Timestamp>| {
 
-        let pip = move |consumed: &mut [ChangeBatch<G::Timestamp>],
-                        internal: &mut [ChangeBatch<G::Timestamp>],
-                        produced: &mut [ChangeBatch<G::Timestamp>]| {
+            // drain frontier changes
+            for index in 0 .. progress.frontiers.len() {
+                self_frontier[index].update_iter(progress.frontiers[index].drain());
+            }
 
             // invoke supplied logic
-            let borrow = self_frontier2.borrow();
-            logic(&*borrow);
+            logic(&self_frontier[..]);
 
             // move batches of consumed changes.
-            for index in 0 .. consumed.len() {
-                self_consumed[index].borrow_mut().drain_into(&mut consumed[index]);
+            for index in 0 .. progress.consumeds.len() {
+                self_consumed[index].borrow_mut().drain_into(&mut progress.consumeds[index]);
             }
 
             // move batches of internal changes.
             let self_internal_borrow = self_internal.borrow_mut();
             for index in 0 .. self_internal_borrow.len() {
                 let mut borrow = self_internal_borrow[index].borrow_mut();
-                internal[index].extend(borrow.drain());
+                progress.internals[index].extend(borrow.drain());
             }
 
             // move batches of produced changes.
-            for index in 0 .. produced.len() {
-                self_produced[index].borrow_mut().drain_into(&mut produced[index]);
+            for index in 0 .. progress.produceds.len() {
+                self_produced[index].borrow_mut().drain_into(&mut progress.produceds[index]);
             }
 
             false
         };
 
-        self.builder.build(pep, pip);
+        self.builder.build(raw_logic);
     }
 
     /// Get the identifier assigned to the operator being constructed

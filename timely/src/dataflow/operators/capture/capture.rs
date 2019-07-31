@@ -5,9 +5,6 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use crate::Data;
 use crate::dataflow::{Scope, Stream};
 use crate::dataflow::channels::pact::Pipeline;
@@ -117,42 +114,38 @@ pub trait Capture<T: Timestamp, D: Data> {
 }
 
 impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
-    fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, event_pusher: P) {
+    fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let mut started = false;
 
-        let event_pusher1 = Rc::new(RefCell::new(event_pusher));
-        let event_pusher2 = event_pusher1.clone();
-
         builder.build(
-            move |frontier| {
+            move |progress| {
 
                 if !started {
-                    frontier[0].update(Default::default(), -1);
+                    // discard initial capability.
+                    progress.frontiers[0].update(Default::default(), -1);
                     started = true;
                 }
-                if !frontier[0].is_empty() {
-                    let to_send = ::std::mem::replace(&mut frontier[0], ChangeBatch::new());
-                    event_pusher1.borrow_mut().push(Event::Progress(to_send.into_inner()));
+                if !progress.frontiers[0].is_empty() {
+                    // transmit any frontier progress.
+                    let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
+                    event_pusher.push(Event::Progress(to_send.into_inner()));
                 }
-            },
-            move |consumed, _internal, _external| {
 
                 use crate::communication::message::RefOrMut;
 
                 // turn each received message into an event.
-                let mut borrow = event_pusher2.borrow_mut();
                 while let Some(message) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {
                         RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
                     let vector = data.replace(Vec::new());
-                    borrow.push(Event::Messages(time.clone(), vector));
+                    event_pusher.push(Event::Messages(time.clone(), vector));
                 }
-                input.consumed().borrow_mut().drain_into(&mut consumed[0]);
+                input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false
             }
         );

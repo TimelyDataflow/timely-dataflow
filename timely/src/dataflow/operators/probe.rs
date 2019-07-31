@@ -94,20 +94,21 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
         let (tee, stream) = builder.new_output();
         let mut output = PushBuffer::new(PushCounter::new(tee));
 
-        let frontier = handle.frontier.clone();
+        let shared_frontier = handle.frontier.clone();
         let mut started = false;
 
         let mut vector = Vec::new();
 
         builder.build(
-            move |changes| {
-                let mut borrow = frontier.borrow_mut();
-                borrow.update_iter(changes[0].drain());
-            },
-            move |consumed, internal, produced| {
+            move |progress| {
+
+                // surface all frontier changes to the shared frontier.
+                let mut borrow = shared_frontier.borrow_mut();
+                borrow.update_iter(progress.frontiers[0].drain());
 
                 if !started {
-                    internal[0].update(Default::default(), -1);
+                    // discard initial capability.
+                    progress.internals[0].update(Default::default(), -1);
                     started = true;
                 }
 
@@ -124,8 +125,8 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
                 output.cease();
 
                 // extract what we know about progress from the input and output adapters.
-                input.consumed().borrow_mut().drain_into(&mut consumed[0]);
-                output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
+                input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
+                output.inner().produced().borrow_mut().drain_into(&mut progress.produceds[0]);
 
                 false
             },
