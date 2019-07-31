@@ -136,4 +136,3 @@ impl Empty for () { }
 impl<T1: Empty, T2: Empty> Empty for Product<T1, T2> { }
 
 impl<T1, T2> TotalOrder for Product<T1, T2> where T1: Empty, T2: TotalOrder { }
-
