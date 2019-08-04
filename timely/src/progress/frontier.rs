@@ -39,6 +39,26 @@ impl<T: PartialOrder> Antichain<T> {
         }
     }
 
+    /// Performs a sequence of insertion and return true iff any insertion does.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::new();
+    /// assert!(frontier.extend(Some(3)));
+    /// assert!(frontier.extend(vec![2, 5]));
+    /// assert!(!frontier.extend(vec![3, 4]));
+    ///```
+    pub fn extend<I: IntoIterator<Item=T>>(&mut self, iterator: I) -> bool {
+        let mut added = false;
+        for element in iterator {
+            added = self.insert(element) || added;
+        }
+        added
+    }
+
     /// Creates a new empty `Antichain`.
     ///
     /// # Examples
