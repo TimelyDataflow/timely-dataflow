@@ -167,7 +167,7 @@ There are a few classes of work that are helpful for us, and may be interesting 
 
     * There is an open issue on [integrating Rust ownership idioms into timely dataflow](https://github.com/timelydataflow/timely-dataflow/issues/77). Right now, timely streams are of cloneable objects, and when a stream is re-used, items will be cloned. We could make that more explicit, and require calling a `.cloned()` method to get owned objects in the same way that iterators require it. At the same time, using a reference to a stream without taking ownership should get you the chance to look at the records that go past without taking ownership (and without requiring a clone, as is currently done). This is often plenty for exchange channels which may need to serialize the data and can't take much advantage of ownership anyhow.
 
-    * There is a bunch of interesting work in scheduling timely dataflow operators, where when given the chance to schedule many operators, we might think for a moment and realize that several of them have to work to do and can be skipped. Better, we might maintain the list of operators with anything to do, and do nothing for those without work to do.
+    * There is a bunch of interesting work in scheduling timely dataflow operators, where when given the chance to schedule many operators, we might think for a moment and realize that several of them have no work to do and can be skipped. Better, we might maintain the list of operators with anything to do, and do nothing for those without work to do.
 
 There are also some larger themes of work, whose solutions are not immediately obvious and each with the potential to sort out various performance issues:
 
