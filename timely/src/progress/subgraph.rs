@@ -740,3 +740,10 @@ impl<T: Timestamp> PerOperatorState<T> {
         }
     }
 }
+
+// Explicitly shut down the operator to get logged information.
+impl<T: Timestamp> Drop for PerOperatorState<T> {
+    fn drop(&mut self) {
+        self.shut_down();
+    }
+}
