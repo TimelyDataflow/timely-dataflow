@@ -38,8 +38,8 @@ impl<S: Scope, D> Stream<S, D> {
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
             id: identifier,
             scope_addr: self.scope.addr(),
-            source: (self.name.index, self.name.port),
-            target: (target.index, target.port),
+            source: (self.name.node, self.name.port),
+            target: (target.node, target.port),
         }));
 
         self.scope.add_edge(self.name, target);

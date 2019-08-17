@@ -127,7 +127,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
             copies,
         }), index);
 
-        Stream::new(Source { index, port: 0 }, registrar, self.clone())
+        Stream::new(Source::new(index, 0), registrar, self.clone())
     }
 }
 
@@ -169,6 +169,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
+
 pub struct Handle<T: Timestamp, D: Data> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,

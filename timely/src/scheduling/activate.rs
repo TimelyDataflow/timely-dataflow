@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 /// Allocation-free activation tracker.
+#[derive(Default)]
 pub struct Activations {
     clean: usize,
     /// `(offset, length)`
@@ -15,6 +16,7 @@ pub struct Activations {
 impl Activations {
 
     /// Creates a new activation tracker.
+    #[deprecated(since="0.10",note="Type implements Default")]
     pub fn new() -> Self {
         Self {
             clean: 0,
@@ -24,12 +26,12 @@ impl Activations {
         }
     }
 
-    /// Indicates if there no pending activations.
+    /// Indicates if there are no pending activations.
     pub fn is_empty(&self) -> bool {
         self.bounds.is_empty()
     }
 
-    /// Unparks task addressed by `path`.
+    /// Unparks the task addressed by `path`.
     pub fn activate(&mut self, path: &[usize]) {
         self.bounds.push((self.slices.len(), path.len()));
         self.slices.extend(path);
@@ -57,7 +59,7 @@ impl Activations {
         self.clean = self.bounds.len();
     }
 
-    ///
+    /// Maps a function across activated paths.
     pub fn map_active(&self, logic: impl Fn(&[usize])) {
         for (offset, length) in self.bounds.iter() {
             logic(&self.slices[*offset .. (*offset + *length)]);

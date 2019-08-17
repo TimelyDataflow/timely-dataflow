@@ -18,9 +18,9 @@ pub mod subgraph;
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Abomonation, Serialize, Deserialize)]
 pub struct Location {
     /// A scope-local operator identifier.
-    node: usize,
+    pub node: usize,
     /// An operator port identifier.`
-    port: Port,
+    pub port: Port,
 }
 
 impl Location {
@@ -41,7 +41,7 @@ impl Location {
 impl From<Target> for Location {
     fn from(target: Target) -> Self {
         Location {
-            node: target.index,
+            node: target.node,
             port: Port::Target(target.port),
         }
     }
@@ -50,7 +50,7 @@ impl From<Target> for Location {
 impl From<Source> for Location {
     fn from(source: Source) -> Self {
         Location {
-            node: source.index,
+            node: source.node,
             port: Port::Source(source.port),
         }
     }
@@ -72,9 +72,16 @@ pub enum Port {
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub struct Source {
     /// Index of the source operator.
-    pub index: usize,
+    pub node: usize,
     /// Number of the output port from the operator.
     pub port: usize,
+}
+
+impl Source {
+    /// Creates a new source from node and port identifiers.
+    pub fn new(node: usize, port: usize) -> Self {
+        Self { node, port }
+    }
 }
 
 /// Names a target of a data stream.
@@ -84,7 +91,14 @@ pub struct Source {
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub struct Target {
     /// Index of the target operator.
-    pub index: usize,
+    pub node: usize,
     /// Number of the input port to the operator.
     pub port: usize,
+}
+
+impl Target {
+    /// Creates a new target from node and port identifiers.
+    pub fn new(node: usize, port: usize) -> Self {
+        Self { node, port }
+    }
 }

@@ -107,15 +107,15 @@ impl<A: Allocate> Worker<A> {
         let index = c.index();
         Worker {
             timer: now.clone(),
-            paths: Rc::new(RefCell::new(HashMap::new())),
+            paths:  Default::default(),
             allocator: Rc::new(RefCell::new(c)),
-            identifiers: Rc::new(RefCell::new(0)),
-            dataflows: Rc::new(RefCell::new(HashMap::new())),
-            dataflow_counter: Rc::new(RefCell::new(0)),
+            identifiers:  Default::default(),
+            dataflows: Default::default(),
+            dataflow_counter:  Default::default(),
             logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now, index))),
-            activations: Rc::new(RefCell::new(Activations::new())),
-            active_dataflows: Vec::new(),
-            temp_channel_ids: Rc::new(RefCell::new(Vec::new())),
+            activations: Default::default(),
+            active_dataflows: Default::default(),
+            temp_channel_ids:  Default::default(),
         }
     }
 

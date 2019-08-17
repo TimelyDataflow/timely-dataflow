@@ -71,13 +71,13 @@ where
     /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
     pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<TInner>>>) -> Target {
         self.input_messages.push(shared_counts);
-        Target { index: self.index, port: self.input_messages.len() - 1 }
+        Target::new(self.index, self.input_messages.len() - 1)
     }
 
     /// Allocates a new output from the subgraph and returns the source of that output in the outer graph.
     pub fn new_output(&mut self) -> Source {
         self.output_capabilities.push(MutableAntichain::new());
-        Source { index: self.index, port: self.output_capabilities.len() - 1 }
+        Source::new(self.index, self.output_capabilities.len() - 1)
     }
 
     /// Introduces a dependence from the source to the target.
@@ -161,7 +161,7 @@ where
         }
 
         for (source, target) in self.edge_stash {
-            self.children[source.index].edges[source.port].push(target);
+            self.children[source.node].edges[source.port].push(target);
             builder.add_edge(source, target);
         }
 
@@ -364,7 +364,7 @@ where
     /// Move frontier changes from parent into progress statements.
     fn accept_frontier(&mut self) {
         for (port, changes) in self.shared_progress.borrow_mut().frontiers.iter_mut().enumerate() {
-            let source = Source { index: 0, port };
+            let source = Source::new(0, port);
             for (time, value) in changes.drain() {
                 self.pointstamp_tracker.update_source(
                     source,
@@ -699,7 +699,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             for (time, delta) in produced.drain() {
                 for target in &self.edges[output] {
                     pointstamps.update((Location::from(*target), time.clone()), delta);
-                    temp_active.push(Reverse(target.index));
+                    temp_active.push(Reverse(target.node));
                 }
             }
         }
