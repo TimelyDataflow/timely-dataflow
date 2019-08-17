@@ -22,15 +22,15 @@
 //! builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)]]);
 //!
 //! // Connect nodes in sequence, looping around to the first from the last.
-//! builder.add_edge(Source { index: 0, port: 0}, Target { index: 1, port: 0} );
-//! builder.add_edge(Source { index: 1, port: 0}, Target { index: 2, port: 0} );
-//! builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
+//! builder.add_edge(Source::new(0, 0), Target::new(1, 0));
+//! builder.add_edge(Source::new(1, 0), Target::new(2, 0));
+//! builder.add_edge(Source::new(2, 0), Target::new(0, 0));
 //!
 //! // Construct a reachability tracker.
 //! let (mut tracker, _) = builder.build();
 //!
 //! // Introduce a pointstamp at the output of the first node.
-//! tracker.update_source(Source { index: 0, port: 0}, 17, 1);
+//! tracker.update_source(Source::new(0, 0), 17, 1);
 //!
 //! // Propagate changes; until this call updates are simply buffered.
 //! tracker.propagate_all();
@@ -52,7 +52,7 @@
 //! assert_eq!(results[2], ((Location::new_target(2, 0), 17), 1));
 //!
 //! // Introduce a pointstamp at the output of the first node.
-//! tracker.update_source(Source { index: 0, port: 0}, 17, -1);
+//! tracker.update_source(Source::new(0, 0), 17, -1);
 //!
 //! // Propagate changes; until this call updates are simply buffered.
 //! tracker.propagate_all();
@@ -118,14 +118,13 @@ use crate::progress::timestamp::PathSummary;
 /// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)]]);
 ///
 /// // Connect nodes in sequence, looping around to the first from the last.
-/// builder.add_edge(Source { index: 0, port: 0}, Target { index: 1, port: 0} );
-/// builder.add_edge(Source { index: 1, port: 0}, Target { index: 2, port: 0} );
-/// builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
+/// builder.add_edge(Source::new(0, 0), Target::new(1, 0));
+/// builder.add_edge(Source::new(1, 0), Target::new(2, 0));
+/// builder.add_edge(Source::new(2, 0), Target::new(0, 0));
 ///
 /// // Summarize reachability information.
 /// let (tracker, _) = builder.build();
 /// ```
-
 #[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
     /// Internal connections within hosted operators.
@@ -183,10 +182,10 @@ impl<T: Timestamp> Builder<T> {
     pub fn add_edge(&mut self, source: Source, target: Target) {
 
         // Assert that the edge is between existing ports.
-        debug_assert!(source.port < self.shape[source.index].1);
-        debug_assert!(target.port < self.shape[target.index].0);
+        debug_assert!(source.port < self.shape[source.node].1);
+        debug_assert!(target.port < self.shape[target.node].0);
 
-        self.edges[source.index][source.port].push(target);
+        self.edges[source.node][source.port].push(target);
     }
 
     /// Compiles the current nodes and edges into immutable path summaries.
@@ -228,12 +227,12 @@ impl<T: Timestamp> Builder<T> {
     /// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(0)]]);
     ///
     /// // Connect nodes in sequence, looping around to the first from the last.
-    /// builder.add_edge(Source { index: 0, port: 0}, Target { index: 1, port: 0} );
-    /// builder.add_edge(Source { index: 1, port: 0}, Target { index: 2, port: 0} );
+    /// builder.add_edge(Source::new(0, 0), Target::new(1, 0));
+    /// builder.add_edge(Source::new(1, 0), Target::new(2, 0));
     ///
     /// assert!(builder.is_acyclic());
     ///
-    /// builder.add_edge(Source { index: 2, port: 0}, Target { index: 0, port: 0} );
+    /// builder.add_edge(Source::new(2, 0), Target::new(0, 0));
     ///
     /// assert!(!builder.is_acyclic());
     /// ```
@@ -257,8 +256,8 @@ impl<T: Timestamp> Builder<T> {
     /// ]);
     ///
     /// // Connect each output to the opposite input.
-    /// builder.add_edge(Source { index: 0, port: 0}, Target { index: 0, port: 1} );
-    /// builder.add_edge(Source { index: 0, port: 1}, Target { index: 0, port: 0} );
+    /// builder.add_edge(Source::new(0, 0), Target::new(0, 1));
+    /// builder.add_edge(Source::new(0, 1), Target::new(0, 0));
     ///
     /// assert!(builder.is_acyclic());
     /// ```
@@ -328,7 +327,6 @@ impl<T: Timestamp> Builder<T> {
 /// A `Tracker` tracks, for a fixed graph topology, the implications of
 /// pointstamp changes at various node input and output ports. These changes may
 /// alter the potential pointstamps that could arrive at downstream input ports.
-
 pub struct Tracker<T:Timestamp> {
 
     /// Internal connections within hosted operators.
@@ -354,7 +352,6 @@ pub struct Tracker<T:Timestamp> {
     /// Each source and target has a mutable antichain to ensure that we track their discrete frontiers,
     /// rather than their multiplicities. We separately track the frontiers resulting from propagated
     /// frontiers, to protect them from transient negativity in inbound target updates.
-
     per_operator: Vec<PerOperator<T>>,
 
     /// Source and target changes are buffered, which allows us to delay processing until propagation,
@@ -380,16 +377,17 @@ pub struct Tracker<T:Timestamp> {
     total_counts: i64,
 }
 
-///
+/// Target and source information for each operator.
 pub struct PerOperator<T: Timestamp> {
-    ///
+    /// Port information for each target.
     pub targets: Vec<PortInformation<T>>,
-    ///
+    /// Port information for each source.
     pub sources: Vec<PortInformation<T>>,
 }
 
 impl<T: Timestamp> PerOperator<T> {
-    fn new(inputs: usize, outputs: usize) -> Self {
+    /// A new PerOperator bundle from numbers of input and output ports.
+    pub fn new(inputs: usize, outputs: usize) -> Self {
         PerOperator {
             targets: vec![PortInformation::new(); inputs],
             sources: vec![PortInformation::new(); outputs],
@@ -409,7 +407,8 @@ pub struct PortInformation<T: Timestamp> {
 }
 
 impl<T: Timestamp> PortInformation<T> {
-    fn new() -> Self {
+    /// Creates empty port information.
+    pub fn new() -> Self {
         PortInformation {
             pointstamps: MutableAntichain::new(),
             implications: MutableAntichain::new(),
@@ -425,7 +424,7 @@ impl<T: Timestamp> PortInformation<T> {
     /// are outstanding pointstamp updates that are strictly less than
     /// this pointstamp.
     #[inline]
-    fn is_global(&self, time: &T) -> bool {
+    pub fn is_global(&self, time: &T) -> bool {
         let dominated = self.implications.frontier().iter().any(|t| t.less_than(time));
         let redundant = self.implications.count_for(time) > 1;
         !dominated && !redundant
@@ -438,8 +437,8 @@ impl<T:Timestamp> Tracker<T> {
     #[inline]
     pub fn update(&mut self, location: Location, time: T, value: i64) {
         match location.port {
-            Port::Target(port) => self.update_target(Target { index: location.node, port }, time, value),
-            Port::Source(port) => self.update_source(Source { index: location.node, port }, time, value),
+            Port::Target(port) => self.update_target(Target::new(location.node, port), time, value),
+            Port::Source(port) => self.update_source(Source::new(location.node, port), time, value),
         };
     }
 
@@ -536,7 +535,7 @@ impl<T:Timestamp> Tracker<T> {
         // witness that frontier.
         for ((target, time), diff) in self.target_changes.drain() {
 
-            let operator = &mut self.per_operator[target.index].targets[target.port];
+            let operator = &mut self.per_operator[target.node].targets[target.port];
             let changes = operator.pointstamps.update_iter(Some((time, diff)));
 
             for (time, diff) in changes {
@@ -555,7 +554,7 @@ impl<T:Timestamp> Tracker<T> {
 
         for ((source, time), diff) in self.source_changes.drain() {
 
-            let operator = &mut self.per_operator[source.index].sources[source.port];
+            let operator = &mut self.per_operator[source.node].sources[source.port];
             let changes = operator.pointstamps.update_iter(Some((time, diff)));
 
             for (time, diff) in changes {
@@ -700,7 +699,7 @@ fn summarize_outputs<T: Timestamp>(
         .iter()
         .flat_map(|x| x.iter())
         .flat_map(|x| x.iter())
-        .filter(|target| target.index == 0);
+        .filter(|target| target.node == 0);
 
     // The scope may have no outputs, in which case we can do no work.
     for output_target in outputs {

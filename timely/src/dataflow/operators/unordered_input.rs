@@ -107,7 +107,7 @@ impl<G: Scope> UnorderedInput<G> for G {
             peers,
         }), index);
 
-        ((helper, cap), Stream::new(Source { index, port: 0 }, registrar, self.clone()))
+        ((helper, cap), Stream::new(Source::new(index, 0), registrar, self.clone()))
     }
 }
 

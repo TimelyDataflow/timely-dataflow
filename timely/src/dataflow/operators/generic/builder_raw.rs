@@ -119,7 +119,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
         let (sender, receiver) = pact.connect(&mut self.scope, channel_id, &self.address[..], logging);
-        let target = Target { index: self.index, port: self.shape.inputs };
+        let target = Target::new(self.index, self.shape.inputs);
         stream.connect_to(target, sender, channel_id);
 
         self.shape.inputs += 1;
@@ -140,7 +140,7 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (Tee<G::Timestamp, D>, Stream<G, D>) {
 
         let (targets, registrar) = Tee::<G::Timestamp,D>::new();
-        let source = Source { index: self.index, port: self.shape.outputs };
+        let source = Source::new(self.index, self.shape.outputs);
         let stream = Stream::new(source, registrar, self.scope.clone());
 
         self.shape.outputs += 1;
@@ -236,4 +236,3 @@ where
 
     fn notify_me(&self) -> bool { self.shape.notify }
 }
-

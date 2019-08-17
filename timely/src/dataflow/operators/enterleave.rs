@@ -95,7 +95,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> Enter<G, T, D> for S
 
         let channel_id = scope.clone().new_identifier();
         self.connect_to(input, ingress, channel_id);
-        Stream::new(Source { index: 0, port: input.port }, registrar, scope.clone())
+        Stream::new(Source::new(0, input.port), registrar, scope.clone())
     }
 }
 
@@ -126,7 +126,7 @@ impl<'a, G: Scope, D: Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for 
         let output = scope.subgraph.borrow_mut().new_output();
         let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         let channel_id = scope.clone().new_identifier();
-        self.connect_to(Target { index: 0, port: output.port }, EgressNub { targets, phantom: PhantomData }, channel_id);
+        self.connect_to(Target::new(0, output.port), EgressNub { targets, phantom: PhantomData }, channel_id);
 
         Stream::new(
             output,
