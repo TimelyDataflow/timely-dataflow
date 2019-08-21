@@ -2,15 +2,18 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::mpsc::{Sender, Receiver};
+use std::thread::Thread;
 
 /// Allocation-free activation tracker.
-#[derive(Default)]
 pub struct Activations {
     clean: usize,
     /// `(offset, length)`
     bounds: Vec<(usize, usize)>,
     slices: Vec<usize>,
     buffer: Vec<usize>,
+    tx: Sender<Vec<usize>>,
+    rx: Receiver<Vec<usize>>,
 }
 
 impl Activations {
@@ -18,12 +21,7 @@ impl Activations {
     /// Creates a new activation tracker.
     #[deprecated(since="0.10",note="Type implements Default")]
     pub fn new() -> Self {
-        Self {
-            clean: 0,
-            bounds: Vec::new(),
-            slices: Vec::new(),
-            buffer: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Indicates if there are no pending activations.
@@ -39,6 +37,10 @@ impl Activations {
 
     /// Discards the current active set and presents the next active set.
     pub fn advance(&mut self) {
+
+        while let Ok(path) = self.rx.try_recv() {
+            self.activate(&path)
+        }
 
         self.bounds.drain(.. self.clean);
 
@@ -94,6 +96,58 @@ impl Activations {
                 }
             });
     }
+
+    /// Constructs a thread-safe `SyncActivations` handle to this activator.
+    pub fn sync(&self) -> SyncActivations {
+        SyncActivations {
+            tx: self.tx.clone(),
+            thread: std::thread::current(),
+        }
+    }
+}
+
+impl Default for Activations {
+    fn default() -> Self {
+        let (tx, rx) = std::sync::mpsc::channel();
+        Self {
+            clean: 0,
+            bounds: Vec::new(),
+            slices: Vec::new(),
+            buffer: Vec::new(),
+            tx,
+            rx,
+        }
+    }
+}
+
+/// A thread-safe handle to an `Activations`.
+pub struct SyncActivations {
+    tx: Sender<Vec<usize>>,
+    thread: Thread,
+}
+
+impl SyncActivations {
+    /// Unparks the task addressed by `path` and unparks the associated worker
+    /// thread.
+    pub fn activate(&self, path: Vec<usize>) -> Result<(), SyncActivationError> {
+        self.activate_batch(std::iter::once(path))
+    }
+
+    /// Unparks the tasks addressed by `paths` and unparks the associated worker
+    /// thread.
+    ///
+    /// This method can be more efficient than calling `activate` repeatedly, as
+    /// it only unparks the worker thread after sending all of the activations.
+    pub fn activate_batch<I>(&self, paths: I) -> Result<(), SyncActivationError>
+    where
+        I: IntoIterator<Item = Vec<usize>>
+    {
+        for path in paths.into_iter() {
+            self.tx.send(path).map_err(|_| SyncActivationError)?;
+        }
+        self.thread.unpark();
+        Ok(())
+    }
 }
 
 /// A capability to activate a specific path.
@@ -115,6 +169,44 @@ impl Activator {
         self.queue
             .borrow_mut()
             .activate(&self.path[..]);
+    }
+}
+
+/// A thread-safe version of `Activator`.
+pub struct SyncActivator {
+    path: Vec<usize>,
+    queue: SyncActivations,
+}
+
+impl SyncActivator {
+    /// Creates a new thread-safe activation handle.
+    pub fn new(path: &[usize], queue: SyncActivations) -> Self {
+        Self {
+            path: path.to_vec(),
+            queue,
+        }
+    }
+
+    /// Activates the associated path and unparks the associated worker thread.
+    pub fn activate(&self) -> Result<(), SyncActivationError> {
+        self.queue.activate(self.path.clone())
+    }
+}
+
+/// The error returned when activation fails across thread boundaries because
+/// the receiving end has hung up.
+#[derive(Debug)]
+pub struct SyncActivationError;
+
+impl std::fmt::Display for SyncActivationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("sync activation error in timely")
+    }
+}
+
+impl std::error::Error for SyncActivationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
     }
 }
 
