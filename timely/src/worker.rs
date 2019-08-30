@@ -112,8 +112,8 @@ impl<A: Allocate> Worker<A> {
             identifiers:  Default::default(),
             dataflows: Default::default(),
             dataflow_counter:  Default::default(),
-            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now, index))),
-            activations: Default::default(),
+            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now.clone(), index))),
+            activations: Rc::new(RefCell::new(Activations::new(now.clone()))),
             active_dataflows: Default::default(),
             temp_channel_ids:  Default::default(),
         }
@@ -200,15 +200,22 @@ impl<A: Allocate> Worker<A> {
             .advance();
 
         // Consider parking only if we have no pending events, some dataflows, and a non-zero duration.
-        if self.activations.borrow().is_empty() && !self.dataflows.borrow().is_empty() && duration != Some(Duration::new(0,0)) {
+        let empty_for = self.activations.borrow().empty_for();
+        // Determine the minimum park duration, where `None` are an absence of a constraint.
+        let delay = match (duration, empty_for) {
+            (Some(x), Some(y)) => Some(std::cmp::min(x,y)),
+            (x, y) => x.or(y),
+        };
+
+        if !self.dataflows.borrow().is_empty() && delay != Some(Duration::new(0,0)) {
 
             // Log parking and flush log.
-            self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::park(duration)));
+            self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::park(delay)));
             self.logging.borrow_mut().flush();
 
             self.allocator
                 .borrow()
-                .await_events(duration);
+                .await_events(delay);
 
             // Log return from unpark.
             self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));

@@ -49,15 +49,23 @@ use super::Event;
 use super::event::EventIterator;
 
 /// Replay a capture stream into a scope with the same timestamp.
-pub trait Replay<T: Timestamp, D: Data> {
+pub trait Replay<T: Timestamp, D: Data> : Sized {
     /// Replays `self` into the provided scope, as a `Stream<S, D>`.
-    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>;
+    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D> {
+        self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
+    }
+    /// Replays `self` into the provided scope, as a `Stream<S, D>'.
+    ///
+    /// The `period` argument allows the specification of a re-activation period, where the operator
+    /// will re-activate itself every so often. The `None` argument instructs the operator not to
+    /// re-activate itself.us
+    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, D>;
 }
 
 impl<T: Timestamp, D: Data, I> Replay<T, D> for I
 where I : IntoIterator,
       <I as IntoIterator>::Item: EventIterator<T, D>+'static {
-    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>{
+    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, D>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
 
@@ -94,8 +102,10 @@ where I : IntoIterator,
                     }
                 }
 
-                // Always reschedule `replay`.
-                activator.activate();
+                // A `None` period indicates that we do not re-activate here.
+                if let Some(delay) = period {
+                    activator.activate_after(delay);
+                }
 
                 output.cease();
                 output.inner().produced().borrow_mut().drain_into(&mut progress.produceds[0]);
