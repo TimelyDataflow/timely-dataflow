@@ -4,6 +4,9 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::mpsc::{Sender, Receiver};
 use std::thread::Thread;
+use std::collections::BinaryHeap;
+use std::time::{Duration, Instant};
+use std::cmp::Reverse;
 
 /// Allocation-free activation tracker.
 pub struct Activations {
@@ -12,34 +15,64 @@ pub struct Activations {
     bounds: Vec<(usize, usize)>,
     slices: Vec<usize>,
     buffer: Vec<usize>,
+
+    // Inter-thread activations.
     tx: Sender<Vec<usize>>,
     rx: Receiver<Vec<usize>>,
+
+    // Delayed activations.
+    timer: Instant,
+    queue: BinaryHeap<Reverse<(Duration, Vec<usize>)>>,
 }
 
 impl Activations {
 
     /// Creates a new activation tracker.
-    #[deprecated(since="0.10",note="Type implements Default")]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(timer: Instant) -> Self {
+        let (tx, rx) = std::sync::mpsc::channel();
+        Self {
+            clean: 0,
+            bounds: Vec::new(),
+            slices: Vec::new(),
+            buffer: Vec::new(),
+            tx,
+            rx,
+            timer,
+            queue: BinaryHeap::new(),
+        }
     }
 
-    /// Indicates if there are no pending activations.
-    pub fn is_empty(&self) -> bool {
-        self.bounds.is_empty()
-    }
-
-    /// Unparks the task addressed by `path`.
+    /// Activates the task addressed by `path`.
     pub fn activate(&mut self, path: &[usize]) {
         self.bounds.push((self.slices.len(), path.len()));
         self.slices.extend(path);
     }
 
+    /// Schedules a future activation for the task addressed by `path`.
+    pub fn activate_after(&mut self, path: &[usize], delay: Duration) {
+        // TODO: We could have a minimum delay and immediately schedule anything less than that delay.
+        if delay == Duration::new(0, 0) {
+            self.activate(path);
+        }
+        else {
+            let moment = self.timer.elapsed() + delay;
+            self.queue.push(Reverse((moment, path.to_vec())));
+        }
+    }
+
     /// Discards the current active set and presents the next active set.
     pub fn advance(&mut self) {
 
+        // Drain inter-thread activations.
         while let Ok(path) = self.rx.try_recv() {
-            self.activate(&path)
+            self.activate(&path[..])
+        }
+
+        // Drain timer-based activations.
+        let now = self.timer.elapsed();
+        while self.queue.peek().map(|Reverse((t,_))| t <= &now) == Some(true) {
+            let Reverse((_time, path)) = self.queue.pop().unwrap();
+            self.activate(&path[..]);
         }
 
         self.bounds.drain(.. self.clean);
@@ -104,18 +137,18 @@ impl Activations {
             thread: std::thread::current(),
         }
     }
-}
 
-impl Default for Activations {
-    fn default() -> Self {
-        let (tx, rx) = std::sync::mpsc::channel();
-        Self {
-            clean: 0,
-            bounds: Vec::new(),
-            slices: Vec::new(),
-            buffer: Vec::new(),
-            tx,
-            rx,
+    /// Time until next scheduled event.
+    ///
+    /// This method should be used before putting a worker thread to sleep, as it
+    /// indicates the amount of time before the thread should be unparked for the
+    /// next scheduled activation.
+    pub fn empty_for(&self) -> Option<Duration> {
+        if !self.bounds.is_empty() {
+            Some(Duration::new(0,0))
+        }
+        else {
+            self.queue.peek().map(|Reverse((t,_a))| *t - self.timer.elapsed())
         }
     }
 }
@@ -169,6 +202,18 @@ impl Activator {
         self.queue
             .borrow_mut()
             .activate(&self.path[..]);
+    }
+
+    /// Activates the associated path after a specified duration.
+    pub fn activate_after(&self, delay: Duration) {
+        if delay == Duration::new(0, 0) {
+            self.activate();
+        }
+        else {
+            self.queue
+                .borrow_mut()
+                .activate_after(&self.path[..], delay);
+        }
     }
 }
 
