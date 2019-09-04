@@ -148,7 +148,11 @@ impl Activations {
             Some(Duration::new(0,0))
         }
         else {
-            self.queue.peek().map(|Reverse((t,_a))| *t - self.timer.elapsed())
+            self.queue.peek().map(|Reverse((t,_a))| {
+                let elapsed = self.timer.elapsed();
+                if t < &elapsed { Duration::new(0,0) }
+                else { *t - elapsed }
+            })
         }
     }
 }
