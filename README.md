@@ -91,7 +91,7 @@ fn main() {
 
 This example does a fair bit more, to show off more of what timely can do for you.
 
-We first build a dataflow graph creating an input stream (with `new_input`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that each worker can see when the all of a given round of data has been processed.
+We first build a dataflow graph creating an input stream (with `input_from`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that each worker can see when all of a given round of data has been processed.
 
 We then drive the computation by repeatedly introducing rounds of data, where the `round` itself is used as the data. In each round, each worker introduces the same data, and then repeatedly takes dataflow steps until the `probe` reveals that all workers have processed all work for that epoch, at which point the computation proceeds.
 
@@ -143,7 +143,7 @@ Timely dataflow is intended to support multiple levels of abstraction, from the 
 
 There are currently a few options for writing timely dataflow programs. Ideally this set will expand with time, as interested people write their own layers (or build on those of others).
 
-* [**Timely dataflow**](https://docs.rs/timely/0.6.0/timely/dataflow/operators/index.html): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also including more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
+* [**Timely dataflow**](https://docs.rs/timely/0.6.0/timely/dataflow/operators/index.html): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also includes more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
 
 * [**Differential dataflow**](https://github.com/timelydataflow/differential-dataflow): A higher-level language built on timely dataflow, differential dataflow includes operators like `group`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
 
