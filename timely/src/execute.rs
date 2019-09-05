@@ -94,9 +94,13 @@ where
 /// workers threads, each of which execute the supplied closure to construct
 /// and run a timely dataflow computation.
 ///
-/// The closure may return a `T: Send+'static`, and `execute` returns a result
+/// The closure may return a `T: Send+'static`.  The `execute` method returns
+/// immediately after initializing the timely computation with a result
 /// containing a `WorkerGuards<T>` (or error information), which can be joined
 /// to recover the result `T` values from the local workers.
+///
+/// *Note*: if the caller drops the result of `execute`, the drop code will
+/// block awaiting the completion of the timely computation.
 ///
 /// # Examples
 /// ```rust
@@ -210,11 +214,15 @@ where
 /// workers threads, each of which execute the supplied closure to construct and run a timely
 /// dataflow computation.
 ///
-/// The closure may return a `T: Send+'static`, and `execute` returns a result
+/// The closure may return a `T: Send+'static`.  The `execute_from_args` method
+/// returns immediately after initializing the timely computation with a result
 /// containing a `WorkerGuards<T>` (or error information), which can be joined
 /// to recover the result `T` values from the local workers.
 ///
-/// The arguments `execute` currently understands are:
+/// *Note*: if the caller drops the result of `execute_from_args`, the drop code
+/// will block awaiting the completion of the timely computation.
+///
+/// The arguments `execute_from_args` currently understands are:
 ///
 /// `-w, --workers`: number of per-process worker threads.
 ///
