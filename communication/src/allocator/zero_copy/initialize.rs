@@ -41,12 +41,33 @@ pub fn initialize_networking(
     log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
-    let log_sender = Arc::new(log_sender);
-    let processes = addresses.len();
+    let sockets = create_sockets(addresses, my_index, noisy)?;
+    initialize_networking_from_sockets(sockets, my_index, threads, log_sender)
+}
 
-    // one per process (including local, which would be None)
-    let mut results: Vec<Option<::std::net::TcpStream>> =
-        create_sockets(addresses, my_index, noisy)?;
+/// Initialize send and recv threads from sockets.
+///
+/// This method is available for users who have already connected sockets and simply wish to construct
+/// a vector of process-local allocators connected to instantiated send and recv threads.
+///
+/// It is important that the `sockets` argument contain sockets for each remote process, in order, and
+/// with position `my_index` set to `None`.
+pub fn initialize_networking_from_sockets(
+    mut sockets: Vec<Option<std::net::TcpStream>>,
+    my_index: usize,
+    threads: usize,
+    log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
+-> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
+{
+    // Sockets are expected to be blocking,
+    for socket in sockets.iter_mut() {
+        if let Some(socket) = socket {
+            socket.set_nonblocking(false).expect("failed to set socket to blocking");
+        }
+    }
+
+    let log_sender = Arc::new(log_sender);
+    let processes = sockets.len();
 
     let process_allocators = crate::allocator::process::Process::new_vector(threads);
     let (builders, promises, futures) = new_vector(process_allocators, my_index, processes);
@@ -58,9 +79,9 @@ pub fn initialize_networking(
     let mut recv_guards = Vec::new();
 
     // for each process, if a stream exists (i.e. not local) ...
-    for index in 0..results.len() {
+    for index in 0..sockets.len() {
 
-        if let Some(stream) = results[index].take() {
+        if let Some(stream) = sockets[index].take() {
             // remote process
 
             let remote_recv = promises_iter.next().unwrap();
