@@ -59,6 +59,13 @@ pub fn initialize_networking_from_sockets(
     log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
+    // Sockets are expected to be blocking,
+    for socket in sockets.iter_mut() {
+        if let Some(socket) = socket {
+            socket.set_nonblocking(false).expect("failed to set socket to blocking");
+        }
+    }
+
     let log_sender = Arc::new(log_sender);
     let processes = sockets.len();
 
