@@ -128,15 +128,39 @@ impl<T, E: Clone> Logger<T, E> {
     /// that the `action` only sees one stream of events with increasing timestamps. This may
     /// have a cost that we don't entirely understand.
     pub fn log<S: Into<T>>(&self, event: S) {
+        self.log_many(Some(event));
+    }
+
+    /// Logs multiple events.
+    ///
+    /// The event has its timestamp recorded at the moment of logging, but it may be delayed
+    /// due to buffering. It will be written when the logger is next flushed, either due to
+    /// the buffer reaching capacity or a direct call to flush.
+    ///
+    /// All events in this call will have the same timestamp. This can be more performant due
+    /// to fewer `time.elapsed()` calls, but it also allows some logged events to appear to be
+    /// "transactional", occurring at the same moment.
+    ///
+    /// This implementation borrows a shared (but thread-local) buffer of log events, to ensure
+    /// that the `action` only sees one stream of events with increasing timestamps. This may
+    /// have a cost that we don't entirely understand.
+    pub fn log_many<I>(&self, events: I)
+    where I: IntoIterator, I::Item: Into<T>
+    {
         let mut buffer = self.buffer.borrow_mut();
-        buffer.push((self.time.elapsed(), self.id.clone(), event.into()));
-        if buffer.len() == buffer.capacity() {
-            // Would call `self.flush()`, but for `RefCell` panic.
-            let mut action = self.action.borrow_mut();
-            let action = &mut *action;
-            (*action)(&self.time.elapsed(), &mut *buffer);
-            buffer.clear();
-            buffer.reserve(1024);
+        let elapsed = self.time.elapsed();
+        for event in events {
+            buffer.push((elapsed.clone(), self.id.clone(), event.into()));
+            if buffer.len() == buffer.capacity() {
+                // Would call `self.flush()`, but for `RefCell` panic.
+                let mut action = self.action.borrow_mut();
+                let action = &mut *action;
+                (*action)(&elapsed, &mut *buffer);
+                // The buffer clear could plausibly be removed, changing the semantics but allowing users
+                // to do in-place updates without forcing them to take ownership.
+                buffer.clear();
+                buffer.reserve(1024);
+            }
         }
     }
 
