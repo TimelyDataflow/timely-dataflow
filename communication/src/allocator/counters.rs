@@ -91,13 +91,13 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
         // else {
         //     self.count += 1;
         // }
+        self.pusher.push(element);
+
         let _ =
         self.events
             .send((self.index, Event::Pushed(1)));
             // TODO : Perhaps this shouldn't be a fatal error (e.g. in shutdown).
             // .expect("Failed to send message count");
-
-        self.pusher.push(element)
     }
 }
 
