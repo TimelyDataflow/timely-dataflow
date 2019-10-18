@@ -22,6 +22,6 @@ bincode = { version = "1.0", optional = true }
 serde_derive = "1.0"
 serde = "1.0"
 abomonation = "0.7"
-abomonation_derive = "0.4"
+abomonation_derive = "0.5"
 timely_bytes = { path = "../bytes", version = "0.10" }
 timely_logging = { path = "../logging", version = "0.10" }
