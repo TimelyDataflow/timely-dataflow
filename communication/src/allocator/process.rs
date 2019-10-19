@@ -128,7 +128,7 @@ impl Allocate for Process {
                 for index in 0 .. self.peers {
                     let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = channel();
                     // TODO: the buzzer in the pusher may be redundant, because we need to buzz post-counter.
-                    pushers.push((Pusher { target: s, buzzer: self.buzzers[index].clone() }, self.buzzers[index].clone()));
+                    pushers.push((Pusher { target: s }, self.buzzers[index].clone()));
                     pullers.push(Puller { source: r, current: None });
                 }
 
@@ -193,14 +193,12 @@ impl Allocate for Process {
 /// The push half of an intra-process channel.
 struct Pusher<T> {
     target: Sender<T>,
-    buzzer: Buzzer,
 }
 
 impl<T> Clone for Pusher<T> {
     fn clone(&self) -> Self {
         Self {
             target: self.target.clone(),
-            buzzer: self.buzzer.clone()
         }
     }
 }
@@ -209,7 +207,6 @@ impl<T> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(element) = element.take() {
             self.target.send(element).unwrap();
-            self.buzzer.buzz();
         }
     }
 }

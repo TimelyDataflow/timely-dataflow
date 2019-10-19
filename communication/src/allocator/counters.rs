@@ -93,12 +93,16 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
         // else {
         //     self.count += 1;
         // }
-        self.pusher.push(element);
 
+        // These three calls should happen in this order, to ensure that
+        // we first enqueue data, second enqueue interest in the channel,
+        // and finally awaken the thread. Other orders are defective when
+        // multiple threads are involved.
+        self.pusher.push(element);
         let _ = self.events.send((self.index, Event::Pushed(1)));
-        self.buzzer.buzz();
             // TODO : Perhaps this shouldn't be a fatal error (e.g. in shutdown).
             // .expect("Failed to send message count");
+        self.buzzer.buzz();
     }
 }
 
