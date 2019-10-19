@@ -126,9 +126,9 @@ impl Allocate for Process {
                 let mut pushers = Vec::new();
                 let mut pullers = Vec::new();
                 for index in 0 .. self.peers {
-
                     let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = channel();
-                    pushers.push(Pusher { target: s, buzzer: self.buzzers[index].clone() });
+                    // TODO: the buzzer in the pusher may be redundant, because we need to buzz post-counter.
+                    pushers.push((Pusher { target: s }, self.buzzers[index].clone()));
                     pullers.push(Puller { source: r, current: None });
                 }
 
@@ -142,7 +142,7 @@ impl Allocate for Process {
 
             let vector =
             entry
-                .downcast_mut::<(Vec<Option<(Vec<Pusher<Message<T>>>, Puller<Message<T>>)>>)>()
+                .downcast_mut::<(Vec<Option<(Vec<(Pusher<Message<T>>, Buzzer)>, Puller<Message<T>>)>>)>()
                 .expect("failed to correctly cast channel");
 
             let (sends, recv) =
@@ -165,7 +165,7 @@ impl Allocate for Process {
         let sends =
         sends.into_iter()
              .enumerate()
-             .map(|(i,s)| CountPusher::new(s, identifier, self.counters_send[i].clone()))
+             .map(|(i,(s,b))| CountPusher::new(s, identifier, self.counters_send[i].clone(), b))
              .map(|s| Box::new(s) as Box<dyn Push<super::Message<T>>>)
              .collect::<Vec<_>>();
 
@@ -193,14 +193,12 @@ impl Allocate for Process {
 /// The push half of an intra-process channel.
 struct Pusher<T> {
     target: Sender<T>,
-    buzzer: Buzzer,
 }
 
 impl<T> Clone for Pusher<T> {
     fn clone(&self) -> Self {
         Self {
             target: self.target.clone(),
-            buzzer: self.buzzer.clone()
         }
     }
 }
@@ -209,7 +207,6 @@ impl<T> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(element) = element.take() {
             self.target.send(element).unwrap();
-            self.buzzer.buzz();
         }
     }
 }

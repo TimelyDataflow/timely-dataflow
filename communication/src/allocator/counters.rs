@@ -62,17 +62,19 @@ pub struct ArcPusher<T, P: Push<T>> {
     events: Sender<(usize, Event)>,
     pusher: P,
     phantom: ::std::marker::PhantomData<T>,
+    buzzer: crate::buzzer::Buzzer,
 }
 
 impl<T, P: Push<T>>  ArcPusher<T, P> {
     /// Wraps a pusher with a message counter.
-    pub fn new(pusher: P, index: usize, events: Sender<(usize, Event)>) -> Self {
+    pub fn new(pusher: P, index: usize, events: Sender<(usize, Event)>, buzzer: crate::buzzer::Buzzer) -> Self {
         ArcPusher {
             index,
             // count: 0,
             events,
             pusher,
             phantom: ::std::marker::PhantomData,
+            buzzer,
         }
     }
 }
@@ -91,13 +93,16 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
         // else {
         //     self.count += 1;
         // }
-        let _ =
-        self.events
-            .send((self.index, Event::Pushed(1)));
+
+        // These three calls should happen in this order, to ensure that
+        // we first enqueue data, second enqueue interest in the channel,
+        // and finally awaken the thread. Other orders are defective when
+        // multiple threads are involved.
+        self.pusher.push(element);
+        let _ = self.events.send((self.index, Event::Pushed(1)));
             // TODO : Perhaps this shouldn't be a fatal error (e.g. in shutdown).
             // .expect("Failed to send message count");
-
-        self.pusher.push(element)
+        self.buzzer.buzz();
     }
 }
 
