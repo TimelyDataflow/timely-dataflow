@@ -36,7 +36,7 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Self;
+    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self;
 
     /// Advances the timestamp of records using a supplied function.
     ///
@@ -63,7 +63,7 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay_total(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Self
+    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self
     where G::Timestamp: TotalOrder;
 
     /// Advances the timestamp of batches of records using a supplied function.
@@ -91,11 +91,11 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay_batch(&self, func: impl Fn(&G::Timestamp)->G::Timestamp+'static) -> Self;
+    fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self;
 }
 
 impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
-    fn delay(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Stream<G, D> {
+    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         let mut vector = Vec::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
@@ -119,14 +119,13 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
         })
     }
 
-    fn delay_total(&self, func: impl Fn(&D, &G::Timestamp)->G::Timestamp+'static) -> Self
-    where
-        G::Timestamp: TotalOrder
+    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self
+    where G::Timestamp: TotalOrder
     {
         self.delay(func)
     }
 
-    fn delay_batch(&self, func: impl Fn(&G::Timestamp)->G::Timestamp+'static) -> Stream<G, D> {
+    fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {

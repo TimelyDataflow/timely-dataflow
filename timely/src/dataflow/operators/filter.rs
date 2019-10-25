@@ -19,11 +19,11 @@ pub trait Filter<D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn filter(&self, predicate: impl Fn(&D)->bool+'static) -> Self;
+    fn filter<P: FnMut(&D)->bool+'static>(&self, predicate: P) -> Self;
 }
 
 impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
-    fn filter(&self, predicate: impl Fn(&D)->bool+'static) -> Stream<G, D> {
+    fn filter<P: FnMut(&D)->bool+'static>(&self, mut predicate: P) -> Stream<G, D> {
         let mut vector = Vec::new();
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each(|time, data| {
