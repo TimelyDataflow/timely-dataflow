@@ -159,7 +159,10 @@ impl<T, E: Clone> Logger<T, E> {
                 // The buffer clear could plausibly be removed, changing the semantics but allowing users
                 // to do in-place updates without forcing them to take ownership.
                 buffer.clear();
-                buffer.reserve(1024);
+                let buffer_capacity = buffer.capacity();
+                if buffer_capacity < 1024 {
+                    buffer.reserve((buffer_capacity+1).next_power_of_two());
+                }
             }
         }
     }
@@ -172,7 +175,12 @@ impl<T, E: Clone> Logger<T, E> {
 
 /// Bit weird, because we only have to flush on the *last* drop, but this should be ok.
 impl<T, E> Drop for Logger<T, E> {
-    fn drop(&mut self) { self.flush(); }
+    fn drop(&mut self) {
+        // Avoid sending out empty buffers just because of drops.
+        if !self.buffer.borrow().is_empty() {
+            self.flush();
+        }
+    }
 }
 
 /// Types that can be flushed.
@@ -186,8 +194,17 @@ impl<T, E> Flush for Logger<T, E> {
         let mut buffer = self.buffer.borrow_mut();
         let mut action = self.action.borrow_mut();
         let action = &mut *action;
-        (*action)(&self.time.elapsed(), &mut *buffer);
-        buffer.clear();
-        buffer.reserve(1024);
+        if !buffer.is_empty() {
+            (*action)(&self.time.elapsed(), &mut *buffer);
+            buffer.clear();
+            // NB: This does not re-allocate any specific size if the buffer has been
+            // taken. The intent is that the geometric growth in `log_many` should be
+            // enough to ensure that we do not send too many small buffers, nor do we
+            // allocate too large buffers when they are not needed.
+        }
+        else {
+            // Avoid swapping resources for empty buffers.
+            (*action)(&self.time.elapsed(), &mut Vec::new());
+        }
     }
 }
