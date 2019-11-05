@@ -172,7 +172,12 @@ impl<T, E: Clone> Logger<T, E> {
 
 /// Bit weird, because we only have to flush on the *last* drop, but this should be ok.
 impl<T, E> Drop for Logger<T, E> {
-    fn drop(&mut self) { self.flush(); }
+    fn drop(&mut self) {
+        // Avoid sending out empty buffers just because of drops.
+        if !self.buffer.borrow().is_empty() {
+            self.flush();
+        }
+    }
 }
 
 /// Types that can be flushed.
@@ -186,8 +191,14 @@ impl<T, E> Flush for Logger<T, E> {
         let mut buffer = self.buffer.borrow_mut();
         let mut action = self.action.borrow_mut();
         let action = &mut *action;
-        (*action)(&self.time.elapsed(), &mut *buffer);
-        buffer.clear();
-        buffer.reserve(1024);
+        if !buffer.is_empty() {
+            (*action)(&self.time.elapsed(), &mut *buffer);
+            buffer.clear();
+            buffer.reserve(1024);
+        }
+        else {
+            // Avoid swapping resources for empty buffers.
+            (*action)(&self.time.elapsed(), &mut Vec::new());
+        }
     }
 }
