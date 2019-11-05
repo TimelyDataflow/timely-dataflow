@@ -159,7 +159,10 @@ impl<T, E: Clone> Logger<T, E> {
                 // The buffer clear could plausibly be removed, changing the semantics but allowing users
                 // to do in-place updates without forcing them to take ownership.
                 buffer.clear();
-                buffer.reserve(1024);
+                let buffer_capacity = buffer.capacity();
+                if buffer_capacity < 1024 {
+                    buffer.reserve((buffer_capacity+1).next_power_of_two());
+                }
             }
         }
     }
@@ -194,7 +197,10 @@ impl<T, E> Flush for Logger<T, E> {
         if !buffer.is_empty() {
             (*action)(&self.time.elapsed(), &mut *buffer);
             buffer.clear();
-            buffer.reserve(1024);
+            // NB: This does not re-allocate any specific size if the buffer has been
+            // taken. The intent is that the geometric growth in `log_many` should be
+            // enough to ensure that we do not send too many small buffers, nor do we
+            // allocate too large buffers when they are not needed.
         }
         else {
             // Avoid swapping resources for empty buffers.
