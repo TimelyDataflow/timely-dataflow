@@ -65,6 +65,13 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input with connection information to a generic operator builder, returning the `Pull` implementor to use.
+    ///
+    /// The `connection` parameter contains promises made by the operator for each of the existing *outputs*, that any timestamp
+    /// appearing at the input, any output timestamp will be greater than or equal to the input timestamp subjected to a `Summary`
+    /// greater or equal to some element of the corresponding antichain in `connection`.
+    ///
+    /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
+    /// antichain indicating that there is no connection from the input to the output.
     pub fn new_input_connection<D: Data, P>(&mut self, stream: &Stream<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandle<G::Timestamp, D, P::Puller>
         where
             P: ParallelizationContract<G::Timestamp, D> {
@@ -85,6 +92,13 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output with connection information to a generic operator builder, returning the `Pull` implementor to use.
+    ///
+    /// The `connection` parameter contains promises made by the operator for each of the existing *inputs*, that any timestamp
+    /// appearing at the input, any output timestamp will be greater than or equal to the input timestamp subjected to a `Summary`
+    /// greater or equal to some element of the corresponding antichain in `connection`.
+    ///
+    /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
+    /// antichain indicating that there is no connection from the input to the output.
     pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
 
         let (tee, stream) = self.builder.new_output_connection(connection);
@@ -120,7 +134,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let self_internal = self.internal;
         let self_produced = self.produced;
 
-        let raw_logic = 
+        let raw_logic =
         move |progress: &mut SharedProgress<G::Timestamp>| {
 
             // drain frontier changes
