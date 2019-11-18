@@ -100,7 +100,11 @@ where
 /// to recover the result `T` values from the local workers.
 ///
 /// *Note*: if the caller drops the result of `execute`, the drop code will
-/// block awaiting the completion of the timely computation.
+/// block awaiting the completion of the timely computation. If the result
+/// of the method is not captured it will be dropped, which gives the experience
+/// of `execute` blocking; to regain control after `execute` be sure to
+/// capture the results and drop them only when the calling thread has no
+/// other work to perform.
 ///
 /// # Examples
 /// ```rust
