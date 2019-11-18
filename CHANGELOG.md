@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.0
+
+Reduce the amount of log flushing, and increase the batching of log messages.
+
 ## 0.10.0
 
 ### Added
