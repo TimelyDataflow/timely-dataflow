@@ -104,7 +104,7 @@ impl Configuration {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any>), String> {
+    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
         match self {
             Configuration::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
@@ -250,7 +250,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 /// ```
 pub fn initialize_from<A, T, F>(
     builders: Vec<A>,
-    _others: Box<dyn Any>,
+    others: Box<dyn Any+Send>,
     func: F,
 ) -> Result<WorkerGuards<T>,String>
 where
@@ -271,13 +271,13 @@ where
                             .map_err(|e| format!("{:?}", e))?);
     }
 
-    Ok(WorkerGuards { guards, _others })
+    Ok(WorkerGuards { guards, others })
 }
 
 /// Maintains `JoinHandle`s for worker threads.
 pub struct WorkerGuards<T:Send+'static> {
     guards: Vec<::std::thread::JoinHandle<T>>,
-    _others: Box<dyn Any>,
+    others: Box<dyn Any+Send>,
 }
 
 impl<T:Send+'static> WorkerGuards<T> {
@@ -285,6 +285,11 @@ impl<T:Send+'static> WorkerGuards<T> {
     /// Returns a reference to the indexed guard.
     pub fn guards(&self) -> &[std::thread::JoinHandle<T>] {
         &self.guards[..]
+    }
+
+    /// Provides access to handles that are not worker threads.
+    pub fn others(&self) -> &Box<dyn Any+Send> {
+        &self.others
     }
 
     /// Waits on the worker threads and returns the results they produce.
