@@ -9,7 +9,7 @@
 /// until they are required. This means that several seemingly simple operations may be expensive, in
 /// that they may provoke a compaction. I've tried to prevent exposing methods that allow surprisingly
 /// expensive operations; all operations should take an amortized constant or logarithmic time.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Abomonation, Serialize, Deserialize)]
 pub struct ChangeBatch<T> {
     // A list of updates to which we append.
     updates: Vec<(T, i64)>,

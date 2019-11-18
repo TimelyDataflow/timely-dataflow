@@ -67,29 +67,6 @@ impl<T: Eq+Data+Clone, D: Data+Clone, F: FnMut(&D)->u64+'static> Parallelization
     }
 }
 
-// /// An exchange between multiple observers by time and data
-// pub struct TimeExchange<D, T, F: Fn(&T, &D)->u64+'static> { hash_func: F, phantom: PhantomData<(T, D)>, }
-// impl<D, T, F: Fn(&T, &D)->u64> TimeExchange<D, T, F> {
-//     /// Allocates a new `TimeExchange` pact from a distribution function.
-//     pub fn new(func: F) -> TimeExchange<D, T, F> {
-//         TimeExchange {
-//             hash_func:  func,
-//             phantom:    PhantomData,
-//         }
-//     }
-// }
-
-// impl<T: Eq+Data+Clone, D: Data+Clone, F: Fn(&T, &D)->u64+'static> ParallelizationContract<T, D> for TimeExchange<D, T, F> {
-//     type Pusher = ExchangePusher<T, D, Pusher<T, D, Box<Push<CommMessage<Message<T, D>>>>>, F>;
-//     type Puller = Puller<T, D, Box<Pull<CommMessage<Message<T, D>>>>>;
-//     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, logging: Logger) -> (Self::Pusher, Self::Puller) {
-//         let (senders, receiver, channel_id) = allocator.allocate::<Message<T, D>>();
-//         let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, channel_id, logging.clone())).collect::<Vec<_>>();
-//         (ExchangePusher::new(senders, self.hash_func), Puller::new(receiver, allocator.index(), identifier, channel_id, logging.clone()))
-//     }
-// }
-
-
 /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
 pub struct LogPusher<T, D, P: Push<Bundle<T, D>>> {
     pusher: P,

@@ -199,7 +199,7 @@ As before, I'm just going to show you the new code, which now lives just after `
                 .unary_frontier(
                     Exchange::new(|x: &(String, i64)| (x.0).len() as u64),
                     "WordCount",
-                    |capability, operator_info| {
+                    |_capability, operator_info| {
 
                     // allocate operator-local storage.
                     let mut queues = HashMap::new();

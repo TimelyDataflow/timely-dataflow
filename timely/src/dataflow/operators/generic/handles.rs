@@ -76,11 +76,21 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
     /// ```
     #[inline]
     pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<Vec<D>>)>(&mut self, mut logic: F) {
-        let mut logging = self.logging.clone();
-        while let Some((cap, data)) = self.next() {
-            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
+        // We inline `next()` so that we can use `self.logging` without cloning (and dropping) the logger.
+        let internal = &self.internal;
+        while let Some((cap, data)) = self.pull_counter.next().map(|bundle| {
+            match bundle.as_ref_or_mut() {
+                RefOrMut::Ref(bundle) => {
+                    (mint_capability_ref(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data))
+                },
+                RefOrMut::Mut(bundle) => {
+                    (mint_capability_ref(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data))
+                },
+            }
+        }) {
+            self.logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
+            self.logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
         }
     }
 
