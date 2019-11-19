@@ -263,17 +263,17 @@ impl<T: Timestamp> Builder<T> {
     /// ```
     pub fn is_acyclic(&self) -> bool {
 
-        let mut in_degree = HashMap::new();
-        let mut out_edges = HashMap::new();
+        let locations = self.shape.iter().map(|(targets, sources)| targets + sources).sum();
+        let mut in_degree = HashMap::with_capacity(locations);
 
         // Load edges as default summaries.
         for (index, ports) in self.edges.iter().enumerate() {
             for (output, targets) in ports.iter().enumerate() {
                 let source = Location::new_source(index, output);
+                in_degree.entry(source).or_insert(0);
                 for &target in targets.iter() {
                     let target = Location::from(target);
                     *in_degree.entry(target).or_insert(0) += 1;
-                    out_edges.entry(source).or_insert(Vec::new()).push(target);
                 }
             }
         }
@@ -282,43 +282,62 @@ impl<T: Timestamp> Builder<T> {
         for (index, summary) in self.nodes.iter().enumerate() {
             for (input, outputs) in summary.iter().enumerate() {
                 let target = Location::new_target(index, input);
+                in_degree.entry(target).or_insert(0);
                 for (output, summaries) in outputs.iter().enumerate() {
                     let source = Location::new_source(index, output);
                     for summary in summaries.elements().iter() {
                         if summary == &Default::default() {
                             *in_degree.entry(source).or_insert(0) += 1;
-                            out_edges.entry(target).or_insert(Vec::new()).push(source);
                         }
                     }
                 }
             }
         }
 
-        // A list of nodes with out-edges but without in-edges.
+        // A worklist of nodes that cannot be reached from the whole graph.
+        // Initially this list contains observed locations with no incoming
+        // edges, but as the algorithm develops we add to it any locations
+        // that can only be reached by nodes that have been on this list.
         let mut worklist = Vec::new();
-
-        for (key, _) in out_edges.iter() {
-            if !in_degree.contains_key(key) {
+        for (key, val) in in_degree.iter() {
+            if *val == 0 {
                 worklist.push(*key);
             }
         }
+        in_degree.retain(|_key, val| val != &0);
 
         // Repeatedly remove nodes and update adjacent in-edges.
-        while let Some(node) = worklist.pop() {
-            if let Some(edges) = out_edges.remove(&node) {
-                for dest in edges.into_iter() {
-                    *in_degree.get_mut(&dest).unwrap() -= 1;
-                    if in_degree[&dest] == 0 {
-                        in_degree.remove(&dest);
-                        worklist.push(dest);
+        while let Some(Location { node, port }) = worklist.pop() {
+            match port {
+                Port::Source(port) => {
+                    for target in self.edges[node][port].iter() {
+                        let target = Location::from(*target);
+                        *in_degree.get_mut(&target).unwrap() -= 1;
+                        if in_degree[&target] == 0 {
+                            in_degree.remove(&target);
+                            worklist.push(target);
+                        }
                     }
-                }
+                },
+                Port::Target(port) => {
+                    for (output, summaries) in self.nodes[node][port].iter().enumerate() {
+                        let source = Location::new_source(node, output);
+                        for summary in summaries.elements().iter() {
+                            if summary == &Default::default() {
+                                *in_degree.get_mut(&source).unwrap() -= 1;
+                                if in_degree[&source] == 0 {
+                                    in_degree.remove(&source);
+                                    worklist.push(source);
+                                }
+                            }
+                        }
+                    }
+                },
             }
         }
 
         // Acyclic graphs should reduce to empty collections.
-        in_degree.is_empty() && out_edges.is_empty()
-
+        in_degree.is_empty()
     }
 }
 
