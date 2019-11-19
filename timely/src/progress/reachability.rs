@@ -263,7 +263,8 @@ impl<T: Timestamp> Builder<T> {
     /// ```
     pub fn is_acyclic(&self) -> bool {
 
-        let mut in_degree = HashMap::new();
+        let locations = self.shape.iter().map(|(targets, sources)| targets + sources).sum();
+        let mut in_degree = HashMap::with_capacity(locations);
 
         // Load edges as default summaries.
         for (index, ports) in self.edges.iter().enumerate() {
