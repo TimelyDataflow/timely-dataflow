@@ -14,7 +14,7 @@
 //! use timely::progress::reachability::{Builder, Tracker};
 //!
 //! // allocate a new empty topology builder.
-//! let mut builder = Builder::<usize>::new();
+//! let mut builder = Builder::<usize>::new(vec![]);
 //!
 //! // Each node with one input connected to one output.
 //! builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -110,7 +110,7 @@ use crate::progress::timestamp::PathSummary;
 /// use timely::progress::reachability::Builder;
 ///
 /// // allocate a new empty topology builder.
-/// let mut builder = Builder::<usize>::new();
+/// let mut builder = Builder::<usize>::new(vec![]);
 ///
 /// // Each node with one input connected to one output.
 /// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -127,6 +127,8 @@ use crate::progress::timestamp::PathSummary;
 /// ```
 #[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
+    /// Path of identifiers from the root.
+    path: Vec<usize>,
     /// Internal connections within hosted operators.
     ///
     /// Indexed by operator index, then input port, then output port. This is the
@@ -145,8 +147,9 @@ pub struct Builder<T: Timestamp> {
 impl<T: Timestamp> Builder<T> {
 
     /// Create a new empty topology builder.
-    pub fn new() -> Self {
+    pub fn new(path: Vec<usize>) -> Self {
         Builder {
+            path: path,
             nodes: Vec::new(),
             edges: Vec::new(),
             shape: Vec::new(),
@@ -200,7 +203,7 @@ impl<T: Timestamp> Builder<T> {
             println!("{:?}", self);
         }
 
-        Tracker::allocate_from(self)
+        Tracker::allocate_from(self, self.path.clone())
     }
 
     /// Tests whether the graph a cycle of default path summaries.
@@ -219,7 +222,7 @@ impl<T: Timestamp> Builder<T> {
     /// use timely::progress::reachability::Builder;
     ///
     /// // allocate a new empty topology builder.
-    /// let mut builder = Builder::<usize>::new();
+    /// let mut builder = Builder::<usize>::new(vec![]);
     ///
     /// // Each node with one input connected to one output.
     /// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
@@ -247,7 +250,7 @@ impl<T: Timestamp> Builder<T> {
     /// use timely::progress::reachability::Builder;
     ///
     /// // allocate a new empty topology builder.
-    /// let mut builder = Builder::<usize>::new();
+    /// let mut builder = Builder::<usize>::new(vec![]);
     ///
     /// // Two inputs and outputs, only one of which advances.
     /// builder.add_node(0, 2, 2, vec![
@@ -347,6 +350,8 @@ impl<T: Timestamp> Builder<T> {
 /// pointstamp changes at various node input and output ports. These changes may
 /// alter the potential pointstamps that could arrive at downstream input ports.
 pub struct Tracker<T:Timestamp> {
+    /// Path of identifiers from the root.
+    pub path: Vec<usize>,
 
     /// Internal connections within hosted operators.
     ///
@@ -394,6 +399,17 @@ pub struct Tracker<T:Timestamp> {
     /// always be exactly equal to the sum across all operators of the frontier sizes
     /// of the target and source `pointstamps` member.
     total_counts: i64,
+
+    /// A timely logging handle for progress tracking events such as updating source and
+    /// target capabilities and propagation of implication frontiers between sources and targets.
+    pub tracker_logger: Option<crate::logging::Logger<TrackerEvent>>,
+
+    /// A timely logging handle for the state of progress tracking computation.
+    ///
+    /// Debug events include pointstamps and implications at every location and
+    /// self.worklist. If tracker_logger is enabled, there is exactly one TrackerEvent
+    /// for every DebugEvent.
+    pub debug_logger: Option<crate::logging::Logger<DebugEvent>>,
 }
 
 /// Target and source information for each operator.
@@ -464,11 +480,37 @@ impl<T:Timestamp> Tracker<T> {
     /// Updates the count for a time at a target (operator input, scope output).
     #[inline]
     pub fn update_target(&mut self, target: Target, time: T, value: i64) {
+        if let Some(logger) = self.tracker_logger.as_ref() {
+            logger.log(UpdateTargetEvent {
+                worker_id: logger.id(),
+                scope_addr: self.path.clone(),
+                operator: target.node,
+                port: target.port,
+                timestamp: format!("{:?}", time.clone()),
+                delta: value,
+            });
+        }
+        if let Some(logger) = self.debug_logger.as_ref() {
+            self.print_trace(logger);
+        }
         self.target_changes.update((target, time), value);
     }
     /// Updates the count for a time at a source (operator output, scope input).
     #[inline]
     pub fn update_source(&mut self, source: Source, time: T, value: i64) {
+        if let Some(logger) = self.tracker_logger.as_ref() {
+            logger.log(UpdateSourceEvent {
+                worker_id: logger.id(),
+                scope_addr: self.path.clone(),
+                operator: source.node,
+                port: source.port,
+                timestamp: format!("{:?}", time.clone()),
+                delta: value,
+            });
+        }
+        if let Some(logger) = self.debug_logger.as_ref() {
+            self.print_trace(logger);
+        }
         self.source_changes.update((source, time), value);
     }
 
@@ -483,7 +525,7 @@ impl<T:Timestamp> Tracker<T> {
     ///
     /// The result is a pair of tracker, and the summaries from each input port to each
     /// output port.
-    pub fn allocate_from(builder: &Builder<T>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn allocate_from(builder: &Builder<T>, path: Vec<usize>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
 
         // Allocate buffer space for each input and input port.
         let mut per_operator =
@@ -526,6 +568,7 @@ impl<T:Timestamp> Tracker<T> {
 
         let tracker =
         Tracker {
+            path: path.clone(),
             nodes: builder.nodes.clone(),
             edges: builder.edges.clone(),
             per_operator,
@@ -535,10 +578,83 @@ impl<T:Timestamp> Tracker<T> {
             pushed_changes: ChangeBatch::new(),
             output_changes,
             total_counts: 0,
+            tracker_logger: None,
+            debug_logger: None,
         };
 
         (tracker, builder_summary)
     }
+
+    #[inline(always)]
+    fn print_trace(&self, logger: &crate::logging::Logger<DebugEvent>) {
+        let ports = self.per_operator.iter().enumerate().flat_map(|(op_n, per_op)| {
+            let mut ports = per_op.targets.iter().enumerate().map(|(tg_n, target)| {
+                DebugEventPort {
+                    location: Location {
+                        node: op_n,
+                        port: Port::Target(tg_n),
+                    },
+                    pointstamps: target.pointstamps.updates().iter().map(|(t, d)| (format!("{:?}", t), *d)).collect(),
+                    implications: target.implications.updates().iter().map(|(t, d)| (format!("{:?}", t), *d)).collect(),
+                    worklist: self.worklist.iter()
+                        .filter(|Reverse((_,loc,_))| loc.node == op_n && loc.port == Port::Target(tg_n))
+                        .map(|Reverse((t,_,d))| (format!("{:?}", t), *d)).collect()
+                }
+            }).collect::<Vec<_>>();
+            ports.extend(per_op.sources.iter().enumerate().map(|(sc_n, source)| {
+                DebugEventPort {
+                    location: Location {
+                        node: op_n,
+                        port: Port::Source(sc_n),
+                    },
+                    pointstamps: source.pointstamps.updates().iter().map(|(t, d)| (format!("{:?}", t), *d)).collect(),
+                    implications: source.implications.updates().iter().map(|(t, d)| (format!("{:?}", t), *d)).collect(),
+                    worklist: self.worklist.iter()
+                        .filter(|Reverse((_,loc,_))| loc.node == op_n && loc.port == Port::Source(sc_n))
+                        .map(|Reverse((t,_,d))| (format!("{:?}", t), *d)).collect()
+                }
+            }));
+            ports.into_iter()
+        }).collect::<Vec<_>>();
+        logger.log(DebugEvent {
+            worker_id: logger.id(),
+            scope_addr: self.path.clone(),
+            ports,
+        });
+    }
+
+    #[inline(always)]
+    fn log_propagate_target(&self, op: usize, port: usize, time: T) {
+        if let Some(logger) = self.tracker_logger.as_ref() {
+            logger.log(PropagateInternalEvent {
+                worker_id: logger.id(),
+                scope_addr: self.path.clone(),
+                operator: op,
+                port: port,
+                timestamp: format!("{:?}", time),
+            });
+        }
+        if let Some(logger) = self.debug_logger.as_ref() {
+            self.print_trace(logger);
+        }
+    }
+
+    #[inline(always)]
+    fn log_propagate_source(&self, op: usize, port: usize, time: T) {
+        if let Some(logger) = self.tracker_logger.as_ref() {
+            logger.log(PropagateEdgeEvent {
+                worker_id: logger.id(),
+                scope_addr: self.path.clone(),
+                operator: op,
+                port: port,
+                timestamp: format!("{:?}", time),
+            });
+        }
+        if let Some(logger) = self.debug_logger.as_ref() {
+            self.print_trace(logger);
+        }
+    }
+
 
     /// Propagates all pending updates.
     ///
@@ -597,7 +713,6 @@ impl<T:Timestamp> Tracker<T> {
         //       will discover zero-change times when we first visit them, as no further
         //       changes can be made to them once we complete them.
         while let Some(Reverse((time, location, mut diff))) = self.worklist.pop() {
-
             // Drain and accumulate all updates that have the same time and location.
             while self.worklist.peek().map(|x| ((x.0).0 == time) && ((x.0).1 == location)).unwrap_or(false) {
                 diff += (self.worklist.pop().unwrap().0).2;
@@ -615,7 +730,7 @@ impl<T:Timestamp> Tracker<T> {
                         self.per_operator[location.node]
                             .targets[port_index]
                             .implications
-                            .update_iter(Some((time, diff)));
+                            .update_iter(Some((time.clone(), diff)));
 
                         for (time, diff) in changes {
                             let nodes = &self.nodes[location.node][port_index];
@@ -629,6 +744,7 @@ impl<T:Timestamp> Tracker<T> {
                             }
                             self.pushed_changes.update((location, time), diff);
                         }
+                        self.log_propagate_target(location.node, port_index, time);
                     }
                     // Update to an operator output.
                     // Propagate any changes forward along outgoing edges.
@@ -638,7 +754,7 @@ impl<T:Timestamp> Tracker<T> {
                         self.per_operator[location.node]
                             .sources[port_index]
                             .implications
-                            .update_iter(Some((time, diff)));
+                            .update_iter(Some((time.clone(), diff)));
 
                         for (time, diff) in changes {
                             for new_target in self.edges[location.node][port_index].iter() {
@@ -650,10 +766,12 @@ impl<T:Timestamp> Tracker<T> {
                             }
                             self.pushed_changes.update((location, time), diff);
                         }
+                        self.log_propagate_source(location.node, port_index, time);
                     },
                 };
             }
         }
+
     }
 
     /// Implications of maintained capabilities projected to each output.
@@ -774,4 +892,92 @@ fn summarize_outputs<T: Timestamp>(
     }
 
     results
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// Port information in a tracker log event
+pub struct DebugEventPort {
+    location: Location,
+    pointstamps: Vec<(String, i64)>,
+    implications: Vec<(String, i64)>,
+    worklist: Vec<(String, i64)>,
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// Log event
+pub struct DebugEvent {
+    worker_id: usize,
+    scope_addr: Vec<usize>,
+    ports: Vec<DebugEventPort>,
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// Log event
+pub struct UpdateSourceEvent {
+    worker_id: usize,
+    scope_addr: Vec<usize>,
+    operator: usize,
+    port: usize,
+    timestamp: String,
+    delta: i64,
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// Log event
+pub struct UpdateTargetEvent {
+    worker_id: usize,
+    scope_addr: Vec<usize>,
+    operator: usize,
+    port: usize,
+    timestamp: String,
+    delta: i64,
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// Log event
+pub struct PropagateEdgeEvent {
+    worker_id: usize,
+    scope_addr: Vec<usize>,
+    operator: usize,
+    port: usize,
+    timestamp: String,
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// Log event
+pub struct PropagateInternalEvent {
+    worker_id: usize,
+    scope_addr: Vec<usize>,
+    operator: usize,
+    port: usize,
+    timestamp: String
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
+/// An event to track progress propagation in timely.Antichain
+pub enum TrackerEvent {
+    /// Change pointstamp multiplicity at source.
+    UpdateSource(UpdateSourceEvent),
+    /// Change pointstamp multiplicity at target.
+    UpdateTarget(UpdateTargetEvent),
+    /// Propagation along en extrenal edge, i.e. from source to connected target.
+    PropagateEdge(PropagateEdgeEvent),
+    /// Propagation of implications inside an oeprator, from taregt to connected sources.
+    PropagateInternal(PropagateInternalEvent),
+}
+
+impl From<UpdateSourceEvent> for TrackerEvent {
+    fn from(v: UpdateSourceEvent) -> TrackerEvent { TrackerEvent::UpdateSource(v) }
+}
+
+impl From<UpdateTargetEvent> for TrackerEvent {
+    fn from(v: UpdateTargetEvent) -> TrackerEvent { TrackerEvent::UpdateTarget(v) }
+}
+
+impl From<PropagateEdgeEvent> for TrackerEvent {
+    fn from(v: PropagateEdgeEvent) -> TrackerEvent { TrackerEvent::PropagateEdge(v) }
+}
+
+impl From<PropagateInternalEvent> for TrackerEvent {
+    fn from(v: PropagateInternalEvent) -> TrackerEvent { TrackerEvent::PropagateInternal(v) }
 }

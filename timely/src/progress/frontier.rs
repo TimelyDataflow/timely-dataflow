@@ -317,6 +317,13 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         self.frontier().less_equal(time)
     }
 
+    /// Clones the vector of updates.
+    /// Only used for debugging purposes.
+    #[inline]
+    pub fn updates(&self) -> Vec<(T, i64)> {
+        self.updates.clone()
+    }
+
     /// Allows a single-element push, but dirties the antichain and prevents inspection until cleaned.
     ///
     /// At the moment inspection is prevented via panic, so best be careful (this should probably be fixed).

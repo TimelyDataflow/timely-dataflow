@@ -53,6 +53,8 @@ pub struct OperatesEvent {
     pub id: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
     pub addr: Vec<usize>,
+    /// Internal summary for every combination of input and output port.
+    pub internal_summaries: Vec<Vec<String>>,
     /// A helpful name.
     pub name: String,
 }

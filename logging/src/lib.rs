@@ -118,6 +118,11 @@ impl<T, E: Clone> Logger<T, E> {
         }
     }
 
+    // Returns Logger.id
+    pub fn id(&self) -> E {
+        self.id.clone()
+    }
+
     /// Logs an event.
     ///
     /// The event has its timestamp recorded at the moment of logging, but it may be delayed

@@ -419,15 +419,18 @@ impl<A: Allocate> Worker<A> {
 
         let mut operator = subscope.into_inner().build(self);
 
+        let (internal_summary, _) = operator.get_internal_summary();
+
         logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
             id: identifier,
             addr: operator.path().to_vec(),
+            internal_summaries: internal_summary
+                .iter().map(|x| x.iter().map(|x| format!("{:?}", x.elements())).collect()).collect(),
             name: operator.name().to_string(),
         }));
 
         logging.as_mut().map(|l| l.flush());
 
-        operator.get_internal_summary();
         operator.set_external_summary();
 
         let mut temp_channel_ids = self.temp_channel_ids.borrow_mut();

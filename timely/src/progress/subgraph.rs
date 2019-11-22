@@ -123,16 +123,20 @@ where
 
     /// Adds a new child to the subgraph.
     pub fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize) {
+        let child_name = child.name().to_owned();
+        let per_op_state = PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone());
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
             self.logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
-                name: child.name().to_owned(),
+                internal_summaries: per_op_state.internal_summary.iter()
+                    .map(|x| x.iter().map(|x| format!("{:?}", x.elements())).collect()).collect(),
+                name: child_name,
             }));
         }
-        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
+        self.children.push(per_op_state)
     }
 
     /// Now that initialization is complete, actually build a subgraph.
@@ -152,7 +156,7 @@ where
         // Create empty child zero represenative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
-        let mut builder = reachability::Builder::new();
+        let mut builder = reachability::Builder::new(self.path.clone());
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
         builder.add_node(0, outputs, inputs, vec![vec![Antichain::new(); inputs]; outputs]);
@@ -165,7 +169,9 @@ where
             builder.add_edge(source, target);
         }
 
-        let (tracker, scope_summary) = builder.build();
+        let (mut tracker, scope_summary) = builder.build();
+        tracker.tracker_logger = worker.log_register().get("timely/tracker");
+        tracker.debug_logger = worker.log_register().get("timely/debug");
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 
@@ -510,11 +516,6 @@ where
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
-
-        // double-check that child 0 (the outside world) is correctly shaped.
-        assert_eq!(self.children[0].outputs, self.inputs());
-        assert_eq!(self.children[0].inputs, self.outputs());
-
         let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
         for input in 0 .. self.scope_summary.len() {
             for output in 0 .. self.scope_summary[input].len() {
@@ -523,6 +524,10 @@ where
                 }
             }
         }
+
+        // double-check that child 0 (the outside world) is correctly shaped.
+        assert_eq!(self.children[0].outputs, self.inputs());
+        assert_eq!(self.children[0].inputs, self.outputs());
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
         // We introduce these into the progress tracker to determine the scope's initial
