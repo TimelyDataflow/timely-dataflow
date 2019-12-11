@@ -223,7 +223,7 @@ where
             .borrow_mut()
             .internals
             .iter_mut()
-            .for_each(|output| output.update(Default::default(), self.shape.peers as i64));
+            .for_each(|output| output.update(T::minimum(), self.shape.peers as i64));
 
         (self.summary.clone(), self.shared_progress.clone())
     }

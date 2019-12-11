@@ -55,7 +55,7 @@ use crate::progress::timestamp::Refines;
 
 impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, TInner> {
     fn to_inner(other: TOuter) -> Self {
-        Product::new(other, Default::default())
+        Product::new(other, TInner::minimum())
     }
     fn to_outer(self: Product<TOuter, TInner>) -> TOuter {
         self.outer
@@ -103,6 +103,7 @@ impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for Product<TOuter
 
 impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner> {
     type Summary = Product<TOuter::Summary, TInner::Summary>;
+    fn minimum() -> Self { Product { outer: TOuter::minimum(), inner: TInner::minimum() }}
 }
 
 use crate::progress::timestamp::PathSummary;

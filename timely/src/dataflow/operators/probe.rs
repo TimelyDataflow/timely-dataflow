@@ -108,7 +108,7 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
 
                 if !started {
                     // discard initial capability.
-                    progress.internals[0].update(Default::default(), -1);
+                    progress.internals[0].update(G::Timestamp::minimum(), -1);
                     started = true;
                 }
 

@@ -9,9 +9,11 @@ use crate::communication::Data;
 use crate::order::PartialOrder;
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
-pub trait Timestamp: Clone+Eq+PartialOrder+Default+Debug+Send+Any+Data+Hash+Ord {
+pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
+    /// A minimum value suitable as a default.
+    fn minimum() -> Self;
 }
 
 /// A summary of how a timestamp advances along a timely dataflow path.
@@ -59,7 +61,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     fn followed_by(&self, other: &Self) -> Option<Self>;
 }
 
-impl Timestamp for () { type Summary = (); }
+impl Timestamp for () { type Summary = (); fn minimum() -> Self { () }}
 impl PathSummary<()> for () {
     #[inline] fn results_in(&self, _src: &()) -> Option<()> { Some(()) }
     #[inline] fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
@@ -69,7 +71,10 @@ impl PathSummary<()> for () {
 macro_rules! implement_timestamp_add {
     ($($index_type:ty,)*) => (
         $(
-            impl Timestamp for $index_type { type Summary = $index_type; }
+            impl Timestamp for $index_type {
+                type Summary = $index_type;
+                fn minimum() -> Self { Self::min_value() }
+            }
             impl PathSummary<$index_type> for $index_type {
                 #[inline]
                 fn results_in(&self, src: &$index_type) -> Option<$index_type> { self.checked_add(*src) }
@@ -80,7 +85,18 @@ macro_rules! implement_timestamp_add {
     )
 }
 
-implement_timestamp_add!(usize, u128, u64, u32, u16, u8, isize, i128, i64, i32, i16, i8, ::std::time::Duration,);
+implement_timestamp_add!(usize, u128, u64, u32, u16, u8, isize, i128, i64, i32, i16, i8,);
+
+impl Timestamp for ::std::time::Duration {
+    type Summary = ::std::time::Duration;
+    fn minimum() -> Self { ::std::time::Duration::new(0, 0) }
+}
+impl PathSummary<::std::time::Duration> for ::std::time::Duration {
+    #[inline]
+    fn results_in(&self, src: &::std::time::Duration) -> Option<::std::time::Duration> { self.checked_add(*src) }
+    #[inline]
+    fn followed_by(&self, other: &::std::time::Duration) -> Option<::std::time::Duration> { self.checked_add(*other) }
+}
 
 pub use self::refines::Refines;
 mod refines {

@@ -379,37 +379,6 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
         self.changes.drain()
     }
 
-    /// Applies updates to the antichain and applies `action` to each frontier change.
-    ///
-    /// This method applies a batch of updates and if any affects the frontier it is rebuilt.
-    /// Once rebuilt, `action` is called with the corresponding changes to the frontier, which
-    /// should be various times and `{ +1, -1 }` differences.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
-    ///
-    /// let mut frontier = MutableAntichain::new_bottom(1u64);
-    /// let mut changes = Vec::new();
-    /// frontier.update_iter_and(vec![(1, -1), (2, 1)], |time, diff| {
-    ///     changes.push((time.clone(), diff));
-    /// });
-    /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
-    /// changes.sort();
-    /// assert_eq!(&changes[..], &[(1, -1), (2, 1)]);
-    ///```
-    #[inline]
-    #[deprecated(since="0.8.0", note="`update_iter` now provides an iterator as output")]
-    pub fn update_iter_and<I, A>(&mut self, updates: I, mut action: A)
-    where
-        I: IntoIterator<Item = (T, i64)>,
-        A: FnMut(&T, i64)
-    {
-        self.update_iter(updates)
-            .for_each(|(time, diff)| action(&time, diff));
-    }
-
     /// Sorts and consolidates `self.updates` and applies `action` to any frontier changes.
     ///
     /// This method is meant to be used for bulk updates to the frontier, and does more work than one might do
