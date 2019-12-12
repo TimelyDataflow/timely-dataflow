@@ -2,6 +2,7 @@
 
 use crate::Data;
 use crate::order::{PartialOrder, TotalOrder};
+use crate::progress::timestamp::Timestamp;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::probe::Handle;
 use crate::dataflow::{Stream, Scope};
@@ -83,7 +84,7 @@ pub fn iterator_source<
         probe: Handle<G::Timestamp>,
         ) -> Stream<G, D> where G::Timestamp: TotalOrder {
 
-    let mut target = Default::default();
+    let mut target = G::Timestamp::minimum();
     source(scope, name, |cap, info| {
         let mut cap = Some(cap);
         let activator = scope.activator_for(&info.address[..]);

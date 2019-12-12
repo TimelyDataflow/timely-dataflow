@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+The `Timestamp` trait has a new method `minimim()` that replaces Timely's use of `Default::default()` for default capabilities. The most pressing reason for this is the use of signed integers for timestamps, where Timely would effectively prevent the use of negative numbers by providing the default value of zero for capabilities. This should not have reduced any functionality, but might provide surprising output for programs that use integer timestamps and do not first advance timestamps (the tidy `0` will be replaced with `_::min_value()`).
+
+### Removed
+
+Removed all deprecated methods and traits.
+
 ## 0.11.0
 
 Reduce the amount of log flushing, and increase the batching of log messages.

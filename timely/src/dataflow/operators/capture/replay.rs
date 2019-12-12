@@ -85,7 +85,7 @@ where I : IntoIterator,
                     // The first thing we do is modify our capabilities to match the number of streams we manage.
                     // This should be a simple change of `self.event_streams.len() - 1`. We only do this once, as
                     // our very first action.
-                    progress.internals[0].update(Default::default(), (event_streams.len() as i64) - 1);
+                    progress.internals[0].update(S::Timestamp::minimum(), (event_streams.len() as i64) - 1);
                     started = true;
                 }
 

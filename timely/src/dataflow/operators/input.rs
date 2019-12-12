@@ -2,7 +2,6 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::default::Default;
 
 use crate::scheduling::{Schedule, Activator};
 
@@ -160,7 +159,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     fn outputs(&self) -> usize { 1 }
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
-        self.shared_progress.borrow_mut().internals[0].update(Default::default(), self.copies as i64);
+        self.shared_progress.borrow_mut().internals[0].update(T::minimum(), self.copies as i64);
         (Vec::new(), self.shared_progress.clone())
     }
 
@@ -214,7 +213,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
             pushers: Vec::new(),
             buffer1: Vec::with_capacity(Message::<T, D>::default_length()),
             buffer2: Vec::with_capacity(Message::<T, D>::default_length()),
-            now_at: Default::default(),
+            now_at: T::minimum(),
         }
     }
 
@@ -262,7 +261,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
         // we need to produce an appropriate update to the capabilities for `progress`, in case a
         // user has decided to drive the handle around a bit before registering it.
-        progress.borrow_mut().update(Default::default(), -1);
+        progress.borrow_mut().update(T::minimum(), -1);
         progress.borrow_mut().update(self.now_at.clone(), 1);
 
         self.progress.push(progress);

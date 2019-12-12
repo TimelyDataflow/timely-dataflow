@@ -201,14 +201,6 @@ impl<T:Ord> ChangeBatch<T> {
         }
     }
 
-    /// Compact and sort data, so that two instances can be compared without false negatives.
-    #[deprecated(since="0.9.0", note="please use `compact` instead")]
-    pub fn canonicalize(&mut self) {
-        self.compact();
-        self.updates.sort_by(|x,y| x.0.cmp(&y.0));
-    }
-
-
     /// Drains `self` into `other`.
     ///
     /// This method has similar a effect to calling `other.extend(self.drain())`, but has the

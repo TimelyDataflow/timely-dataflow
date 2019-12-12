@@ -122,7 +122,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let mut capabilities = Vec::new();
         for output_index in 0  .. self.internal.borrow().len() {
             let borrow = &self.internal.borrow()[output_index];
-            capabilities.push(mint_capability(Default::default(), borrow.clone()));
+            capabilities.push(mint_capability(G::Timestamp::minimum(), borrow.clone()));
             // Discard evidence of creation, as we are assumed to start with one.
             borrow.borrow_mut().clear();
         }

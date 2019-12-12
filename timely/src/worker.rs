@@ -446,6 +446,29 @@ impl<A: Allocate> Worker<A> {
 
     }
 
+    /// Drops an identified dataflow.
+    ///
+    /// This method removes the identified dataflow, which will no longer be scheduled.
+    /// Various other resources will be cleaned up, though the method is currently in
+    /// public beta rather than expected to work. Please report all crashes and unmet
+    /// expectations!
+    pub fn drop_dataflow(&mut self, dataflow_identifier: usize) {
+        self.dataflows.borrow_mut().remove(&dataflow_identifier);
+    }
+
+    /// Returns the next index to be used for dataflow construction.
+    ///
+    /// This identifier will appear in the address of contained operators, and can
+    /// be used to drop the dataflow using `self.drop_dataflow()`.
+    pub fn next_dataflow_index(&self) -> usize {
+        *self.dataflow_counter.borrow()
+    }
+
+    /// List the current dataflow indices.
+    pub fn installed_dataflows(&self) -> Vec<usize> {
+        self.dataflows.borrow().keys().cloned().collect()
+    }
+
     // Acquire a new distinct dataflow identifier.
     fn allocate_dataflow_index(&mut self) -> usize {
         *self.dataflow_counter.borrow_mut() += 1;

@@ -125,7 +125,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
 
                 if !started {
                     // discard initial capability.
-                    progress.frontiers[0].update(Default::default(), -1);
+                    progress.frontiers[0].update(S::Timestamp::minimum(), -1);
                     started = true;
                 }
                 if !progress.frontiers[0].is_empty() {
