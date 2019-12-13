@@ -19,8 +19,6 @@
 //! });
 //! ```
 
-// use std::default::Default;
-
 use std::marker::PhantomData;
 
 use crate::progress::Timestamp;

@@ -6,10 +6,10 @@
 //! care, as there is a protocol the replayer follows that must be respected if the
 //! computation is to make sense.
 //!
-//! #Protocol
+//! # Protocol
 //!
 //! The stream of events produced by each `EventIterator` implementation must satisfy,
-//! starting from a default timestamp of `Default::default()` with count 1,
+//! starting from a default timestamp of `Timestamp::minimum()` with count 1,
 //!
 //! 1. The progress messages may only increment the count for a timestamp if
 //!    the cumulative count for some prior or equal timestamp is positive.
@@ -30,7 +30,7 @@
 //! records exactly what data is presented at the operator, both in terms of progress
 //! messages and data received.
 //!
-//! #Notes
+//! # Notes
 //!
 //! Provided no stream of events reports the consumption of capabilities it does not hold,
 //! any interleaving of the streams of events will still maintain the invariants above.
