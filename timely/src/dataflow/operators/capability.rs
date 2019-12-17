@@ -266,6 +266,13 @@ pub struct ActivateCapability<T: Timestamp> {
     pub(crate) activations: Rc<RefCell<Activations>>,
 }
 
+impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
+    fn time(&self) -> &T { self.capability.time() }
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
+        self.capability.valid_for_output(query_buffer)
+    }
+}
+
 impl<T: Timestamp> ActivateCapability<T> {
     /// Creates a new activating capability.
     pub fn new(capability: Capability<T>, address: &[usize], activations: Rc<RefCell<Activations>>) -> Self {
