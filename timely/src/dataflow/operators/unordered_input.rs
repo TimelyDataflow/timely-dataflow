@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::scheduling::{Schedule, Activations, ActivateOnDrop};
+use crate::scheduling::{Schedule, ActivateOnDrop};
 
 use crate::progress::frontier::Antichain;
 use crate::progress::{Operate, operate::SharedProgress, Timestamp};
@@ -14,7 +14,7 @@ use crate::Data;
 use crate::dataflow::channels::pushers::{Tee, Counter as PushCounter};
 use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
 
-use crate::dataflow::operators::Capability;
+use crate::dataflow::operators::ActivateCapability;
 use crate::dataflow::operators::capability::mint as mint_capability;
 
 use crate::dataflow::{Stream, Scope};
@@ -160,47 +160,5 @@ impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
     /// Allocates a new automatically flushing session based on the supplied capability.
     pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
-    }
-}
-
-/// Capability that activates on drop.
-#[derive(Clone)]
-pub struct ActivateCapability<T: Timestamp> {
-    capability: Capability<T>,
-    address: Rc<Vec<usize>>,
-    activations: Rc<RefCell<Activations>>,
-}
-
-impl<T: Timestamp> ActivateCapability<T> {
-    /// Creates a new activating capability.
-    pub fn new(capability: Capability<T>, address: &[usize], activations: Rc<RefCell<Activations>>) -> Self {
-        Self {
-            capability,
-            address: Rc::new(address.to_vec()),
-            activations,
-        }
-    }
-    /// The timestamp associated with this capability.
-    pub fn time(&self) -> &T {
-        self.capability.time()
-    }
-    /// Creates a new delayed capability.
-    pub fn delayed(&self, time: &T) -> Self {
-        ActivateCapability {
-            capability: self.capability.delayed(time),
-            address: self.address.clone(),
-            activations: self.activations.clone(),
-        }
-    }
-    /// Downgrades this capability.
-    pub fn downgrade(&mut self, time: &T) {
-        self.capability.downgrade(time);
-        self.activations.borrow_mut().activate(&self.address[..]);
-    }
-}
-
-impl<T: Timestamp> Drop for ActivateCapability<T> {
-    fn drop(&mut self) {
-        self.activations.borrow_mut().activate(&self.address[..]);
     }
 }
