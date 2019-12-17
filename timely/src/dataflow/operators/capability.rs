@@ -29,6 +29,7 @@ use std::fmt::{self, Debug};
 use crate::order::PartialOrder;
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
+use crate::scheduling::Activations;
 
 /// An internal trait expressing the capability to send messages with a given timestamp.
 pub trait CapabilityTrait<T: Timestamp> {
@@ -254,6 +255,55 @@ pub fn mint_ref<'cap, T: Timestamp>(time: &'cap T, internal: Rc<RefCell<Vec<Rc<R
     CapabilityRef {
         time,
         internal,
+    }
+}
+
+/// Capability that activates on drop.
+#[derive(Clone)]
+pub struct ActivateCapability<T: Timestamp> {
+    pub(crate) capability: Capability<T>,
+    pub(crate) address: Rc<Vec<usize>>,
+    pub(crate) activations: Rc<RefCell<Activations>>,
+}
+
+impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
+    fn time(&self) -> &T { self.capability.time() }
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
+        self.capability.valid_for_output(query_buffer)
+    }
+}
+
+impl<T: Timestamp> ActivateCapability<T> {
+    /// Creates a new activating capability.
+    pub fn new(capability: Capability<T>, address: &[usize], activations: Rc<RefCell<Activations>>) -> Self {
+        Self {
+            capability,
+            address: Rc::new(address.to_vec()),
+            activations,
+        }
+    }
+    /// The timestamp associated with this capability.
+    pub fn time(&self) -> &T {
+        self.capability.time()
+    }
+    /// Creates a new delayed capability.
+    pub fn delayed(&self, time: &T) -> Self {
+        ActivateCapability {
+            capability: self.capability.delayed(time),
+            address: self.address.clone(),
+            activations: self.activations.clone(),
+        }
+    }
+    /// Downgrades this capability.
+    pub fn downgrade(&mut self, time: &T) {
+        self.capability.downgrade(time);
+        self.activations.borrow_mut().activate(&self.address[..]);
+    }
+}
+
+impl<T: Timestamp> Drop for ActivateCapability<T> {
+    fn drop(&mut self) {
+        self.activations.borrow_mut().activate(&self.address[..]);
     }
 }
 
