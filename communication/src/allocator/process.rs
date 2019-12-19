@@ -206,7 +206,9 @@ impl<T> Clone for Pusher<T> {
 impl<T> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: &mut Option<T>) {
         if let Some(element) = element.take() {
-            self.target.send(element).unwrap();
+            // The remote endpoint could be shut down, and so
+            // it is not fundamentally an error to fail to send.
+            let _ = self.target.send(element);
         }
     }
 }
