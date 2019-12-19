@@ -308,6 +308,7 @@ impl<T: Timestamp> Drop for ActivateCapability<T> {
 }
 
 /// A set of capabilities, for possibly incomparable times.
+#[derive(Clone, Debug)]
 pub struct CapabilitySet<T: Timestamp> {
     elements: Vec<Capability<T>>,
 }
