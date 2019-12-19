@@ -319,6 +319,39 @@ impl<T: Timestamp> CapabilitySet<T> {
         CapabilitySet { elements: Vec::new() }
     }
 
+    /// Allocates a capability set containing a single capability.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::collections::HashMap;
+    /// use timely::dataflow::{
+    ///     operators::{ToStream, generic::Operator},
+    ///     channels::pact::Pipeline,
+    /// };
+    /// use timely::dataflow::operators::CapabilitySet;
+    ///
+    /// timely::example(|scope| {
+    ///     vec![()].into_iter().to_stream(scope)
+    ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
+    ///             let mut cap = CapabilitySet::from_elem(default_cap);
+    ///             let mut vector = Vec::new();
+    ///             move |input, output| {
+    ///                 cap.downgrade(&input.frontier().frontier());
+    ///                 while let Some((time, data)) = input.next() {
+    ///                     data.swap(&mut vector);
+    ///                 }
+    ///                 let a_cap = cap.first();
+    ///                 if let Some(a_cap) = a_cap.as_ref() {
+    ///                     output.session(a_cap).give(());
+    ///                 }
+    ///             }
+    ///         });
+    /// });
+    /// ```
+    pub fn from_elem(cap: Capability<T>) -> Self {
+        CapabilitySet { elements: vec![cap] }
+    }
+
     /// Inserts `capability` into the set, discarding redundant capabilities.
     pub fn insert(&mut self, capability: Capability<T>) {
         if !self.elements.iter().any(|c| c.less_equal(&capability)) {
@@ -344,5 +377,13 @@ impl<T: Timestamp> CapabilitySet<T> {
             self.elements.push(capability);
         }
         self.elements.drain(..count);
+    }
+}
+
+impl<T: Timestamp> Deref for CapabilitySet<T> {
+    type Target=[Capability<T>];
+
+    fn deref(&self) -> &[Capability<T>] {
+        &self.elements[..]
     }
 }
