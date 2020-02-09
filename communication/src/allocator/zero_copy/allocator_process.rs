@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::{VecDeque, HashMap};
+use std::collections::{VecDeque, HashMap, hash_map::Entry};
 use std::sync::mpsc::{Sender, Receiver};
 
 use bytes::arc::Bytes;
@@ -28,7 +28,6 @@ pub struct ProcessBuilder {
     peers:  usize,                      // number of peer allocators.
     pushers: Vec<Receiver<MergeQueue>>, // for pushing bytes at other workers.
     pullers: Vec<Sender<MergeQueue>>,   // for pulling bytes from other workers.
-    // signal:  Signal,
 }
 
 impl ProcessBuilder {
@@ -80,11 +79,11 @@ impl ProcessBuilder {
             peers: self.peers,
             events: Rc::new(RefCell::new(VecDeque::new())),
             canaries: Rc::new(RefCell::new(Vec::new())),
+            channel_id_bound: None,
             staged: Vec::new(),
             sends,
             recvs,
             to_local: HashMap::new(),
-            // _signal: self.signal,
         }
     }
 }
@@ -108,7 +107,8 @@ pub struct ProcessAllocator {
 
     canaries: Rc<RefCell<Vec<usize>>>,
 
-    // _signal:     Signal,
+    channel_id_bound: Option<usize>,
+
     // sending, receiving, and responding to binary buffers.
     staged:     Vec<Bytes>,
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to thread x.
@@ -120,6 +120,12 @@ impl Allocate for ProcessAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
     fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+
+        // Assume and enforce in-order identifier allocation.
+        if let Some(bound) = self.channel_id_bound {
+            assert!(bound < identifier);
+        }
+        self.channel_id_bound = Some(identifier);
 
         let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::new();
 
@@ -158,11 +164,15 @@ impl Allocate for ProcessAllocator {
         // Check for channels whose `Puller` has been dropped.
         let mut canaries = self.canaries.borrow_mut();
         for dropped_channel in canaries.drain(..) {
-            let dropped =
+            let _dropped =
             self.to_local
                 .remove(&dropped_channel)
                 .expect("non-existent channel dropped");
-            assert!(dropped.borrow().is_empty());
+            // Borrowed channels may be non-empty, if the dataflow was forcibly
+            // dropped. The contract is that if a dataflow is dropped, all other
+            // workers will drop the dataflow too, without blocking indefinitely
+            // on events from it.
+            // assert!(dropped.borrow().is_empty());
         }
         std::mem::drop(canaries);
 
@@ -185,15 +195,23 @@ impl Allocate for ProcessAllocator {
                     let _ = peel.extract_to(40);
 
                     // Increment message count for channel.
+                    // Safe to do this even if the channel has been dropped.
                     events.push_back((header.channel, Event::Pushed(1)));
 
                     // Ensure that a queue exists.
-                    // We may receive data before allocating, and shouldn't block.
-                    self.to_local
-                        .entry(header.channel)
-                        .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
-                        .borrow_mut()
-                        .push_back(peel);
+                    match self.to_local.entry(header.channel) {
+                        Entry::Vacant(entry) => {
+                            // We may receive data before allocating, and shouldn't block.
+                            if self.channel_id_bound.map(|b| b < header.channel).unwrap_or(true) {
+                                entry.insert(Rc::new(RefCell::new(VecDeque::new())))
+                                    .borrow_mut()
+                                    .push_back(peel);
+                            }
+                        }
+                        Entry::Occupied(mut entry) => {
+                            entry.get_mut().borrow_mut().push_back(peel);
+                        }
+                    }
                 }
                 else {
                     println!("failed to read full header!");
