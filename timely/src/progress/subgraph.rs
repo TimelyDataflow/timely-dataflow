@@ -292,6 +292,7 @@ where
         while let Some(Reverse(index)) = self.temp_active.pop() {
             // De-duplicate, and don't revisit.
             if index > previous {
+                // TODO: This is a moment where a scheduling decision happens.
                 self.activate_child(index);
                 previous = index;
             }
@@ -709,6 +710,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     ///
     /// The validity of shared progress information depends on both the external frontiers and the
     /// internal capabilities, as events can occur that cannot be explained locally otherwise.
+    #[allow(dead_code)]
     fn validate_progress(&mut self, child_state: &reachability::PerOperator<T>) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();

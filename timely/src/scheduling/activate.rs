@@ -8,6 +8,32 @@ use std::collections::BinaryHeap;
 use std::time::{Duration, Instant};
 use std::cmp::Reverse;
 
+/// Methods required to act as a timely scheduler.
+///
+/// The core methods are the activation of "paths", sequences of integers, and
+/// the enumeration of active paths by prefix. A scheduler may delay the report
+/// of a path indefinitely, but it should report at least one extension for the
+/// empty path `&[]` or risk parking the worker thread without a certain unpark.
+///
+/// There is no known harm to "spurious wake-ups" where a not-active path is
+/// returned through `extensions()`.
+pub trait Scheduler {
+    /// Mark a path as immediately scheduleable.
+    fn activate(&mut self, path: &[usize]);
+    /// Populates `dest` with next identifiers on active extensions of `path`.
+    ///
+    /// This method is where a scheduler is allowed to exercise some discretion,
+    /// in that it does not need to present *all* extensions, but it can instead
+    /// present only those that the runtime should schedule.
+    fn extensions(&mut self, path: &[usize], dest: &mut Vec<usize>);
+}
+
+// Trait objects can be schedulers too.
+impl Scheduler for Box<dyn Scheduler> {
+    fn activate(&mut self, path: &[usize]) { (**self).activate(path) }
+    fn extensions(&mut self, path: &[usize], dest: &mut Vec<usize>) { (**self).extensions(path, dest) }
+}
+
 /// Allocation-free activation tracker.
 pub struct Activations {
     clean: usize,

@@ -231,6 +231,7 @@ impl<A: Allocate> Worker<A> {
             for index in active_dataflows.drain(..) {
                 // Step dataflow if it exists, remove if not incomplete.
                 if let Entry::Occupied(mut entry) = dataflows.entry(index) {
+                    // TODO: This is a moment at which a scheduling decision is being made.
                     let incomplete = entry.get_mut().step();
                     if !incomplete {
                         let mut paths = self.paths.borrow_mut();
@@ -453,7 +454,13 @@ impl<A: Allocate> Worker<A> {
     /// public beta rather than expected to work. Please report all crashes and unmet
     /// expectations!
     pub fn drop_dataflow(&mut self, dataflow_identifier: usize) {
-        self.dataflows.borrow_mut().remove(&dataflow_identifier);
+        if let Some(mut entry) = self.dataflows.borrow_mut().remove(&dataflow_identifier) {
+            // Garbage collect channel_id to path information.
+            let mut paths = self.paths.borrow_mut();
+            for channel in entry.channel_ids.drain(..) {
+                paths.remove(&channel);
+            }
+        }
     }
 
     /// Returns the next index to be used for dataflow construction.
