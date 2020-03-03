@@ -152,7 +152,39 @@ pub trait Scope: ScopeParent {
     where
         F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
     {
-        self.scoped::<<Self as ScopeParent>::Timestamp,R,F>("Region", func)
+        self.region_named("Region", func)
+    }
+
+    /// Creates a dataflow region with the same timestamp.
+    ///
+    /// This method is a specialization of `scoped` which uses the same timestamp as the
+    /// containing scope. It is used mainly to group regions of a dataflow computation, and
+    /// provides some computational benefits by abstracting the specifics of the region.
+    ///
+    /// This variant allows you to specify a name for the region, which can be read out in
+    /// the timely logging streams.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Enter, Leave};
+    ///
+    /// timely::execute_from_args(std::env::args(), |worker| {
+    ///     // must specify types as nothing else drives inference.
+    ///     let input = worker.dataflow::<u64,_,_>(|child1| {
+    ///         let (input, stream) = child1.new_input::<String>();
+    ///         let output = child1.region_named("region", |child2| {
+    ///             stream.enter(child2).leave()
+    ///         });
+    ///         input
+    ///     });
+    /// });
+    /// ```
+    fn region_named<R, F>(&mut self, name: &str, func: F) -> R
+    where
+        F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
+    {
+        self.scoped::<<Self as ScopeParent>::Timestamp,R,F>(name, func)
     }
 
 }
