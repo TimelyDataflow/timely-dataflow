@@ -156,6 +156,12 @@ impl<T: PartialOrder> Antichain<T> {
     #[inline] pub fn elements(&self) -> &[T] { &self.elements[..] }
 }
 
+impl<T: PartialOrder> PartialOrder for Antichain<T> {
+    fn less_equal(&self, other: &Self) -> bool {
+        other.elements().iter().all(|t2| self.elements().iter().any(|t1| t1.less_equal(t2)))
+    }
+}
+
 /// An antichain based on a multiset whose elements frequencies can be updated.
 ///
 /// The `MutableAntichain` maintains frequencies for many elements of type `T`, and exposes the set
@@ -539,6 +545,12 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
     /// Copies `self` into a new `Vec`.
     pub fn to_vec(&self) -> Vec<T> where T: Clone {
         self.frontier.to_vec()
+    }
+}
+
+impl<'a, T: PartialOrder> PartialOrder for AntichainRef<'a, T> {
+    fn less_equal(&self, other: &Self) -> bool {
+        other.iter().all(|t2| self.iter().any(|t1| t1.less_equal(t2)))
     }
 }
 
