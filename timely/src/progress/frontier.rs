@@ -161,7 +161,7 @@ impl<T> Antichain<T> {
     /// let mut frontier = Antichain::from_elem(2);
     /// assert_eq!(frontier.elements(), &[2]);
     ///```
-    #[inline] pub fn elements(&self) -> &[T] { &self.elements[..] }
+    #[inline] pub fn elements(&self) -> AntichainRef<T> { AntichainRef::new(&self.elements[..]) }
 }
 
 impl<T: PartialEq> PartialEq for Antichain<T> {
@@ -180,6 +180,15 @@ impl<T: Eq> Eq for Antichain<T> { }
 impl<T: PartialOrder> PartialOrder for Antichain<T> {
     fn less_equal(&self, other: &Self) -> bool {
         other.elements().iter().all(|t2| self.elements().iter().any(|t1| t1.less_equal(t2)))
+    }
+}
+
+impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
+    fn from(vec: Vec<T>) -> Self {
+        // TODO: We could re-use `vec` with some care.
+        let mut temp = Antichain::new();
+        for elem in vec.into_iter() { temp.insert(elem); }
+        temp
     }
 }
 
@@ -479,50 +488,24 @@ impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainF
 }
 
 /// A wrapper for elements of an antichain.
-#[derive(PartialEq, Eq)]
-pub struct AntichainRef<'a, T: 'a+PartialOrder> {
+pub struct AntichainRef<'a, T: 'a> {
     /// Elements contained in the antichain.
     frontier: &'a [T],
 }
 
-impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
+impl<'a, T: 'a> AntichainRef<'a, T> {
     /// Create a new `AntichainRef` from a reference to a slice of elements forming the frontier.
+    ///
+    /// This method does not check that this antichain has any particular properties, for example
+    /// that there are no elements strictly less than other elements.
     pub fn new(frontier: &'a [T]) -> Self {
         Self {
             frontier,
         }
     }
+}
 
-    /// Returns true if there are no elements in the `AntichainRef`.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::AntichainRef;
-    ///
-    /// let frontier = AntichainRef::<usize>::new(&[]);
-    /// assert!(frontier.is_empty());
-    ///```
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.frontier.is_empty()
-    }
-
-    /// Create an iterator over the elements in this `AntichainRef`.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::AntichainRef;
-    ///
-    /// let frontier = AntichainRef::new(&[1u64]);
-    /// let mut iter = frontier.iter();
-    /// assert_eq!(iter.next(), Some(&1u64));
-    /// assert_eq!(iter.next(), None);
-    ///```
-    pub fn iter(&self) -> ::std::slice::Iter<T> {
-        self.frontier.iter()
-    }
+impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
 
     /// Returns true if any item in the `AntichainRef` is strictly less than the argument.
     ///
@@ -557,17 +540,20 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
     pub fn less_equal(&self, time: &T) -> bool {
         self.iter().any(|x| x.less_equal(time))
     }
+}
 
-    /// Returns the number of elements in this `AntichainRef`.
-    pub fn len(&self) -> usize {
-        self.frontier.len()
-    }
-
-    /// Copies `self` into a new `Vec`.
-    pub fn to_vec(&self) -> Vec<T> where T: Clone {
-        self.frontier.to_vec()
+impl<'a, T: PartialEq> PartialEq for AntichainRef<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        // Lengths should be the same, with the option for fast acceptance if identical.
+        self.len() == other.len() &&
+        (
+            self.iter().zip(other.iter()).all(|(t1,t2)| t1 == t2) ||
+            self.iter().all(|t1| other.iter().any(|t2| t1.eq(t2)))
+        )
     }
 }
+
+impl<'a, T: Eq> Eq for AntichainRef<'a, T> { }
 
 impl<'a, T: PartialOrder> PartialOrder for AntichainRef<'a, T> {
     fn less_equal(&self, other: &Self) -> bool {
@@ -575,14 +561,14 @@ impl<'a, T: PartialOrder> PartialOrder for AntichainRef<'a, T> {
     }
 }
 
-impl<'a, T: PartialOrder> ::std::ops::Deref for AntichainRef<'a, T> {
+impl<'a, T> ::std::ops::Deref for AntichainRef<'a, T> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {
         self.frontier
     }
 }
 
-impl<'a, T: 'a+PartialOrder> ::std::iter::IntoIterator for &'a AntichainRef<'a, T> {
+impl<'a, T: 'a> ::std::iter::IntoIterator for &'a AntichainRef<'a, T> {
     type Item = &'a T;
     type IntoIter = ::std::slice::Iter<'a, T>;
     fn into_iter(self) -> Self::IntoIter {
