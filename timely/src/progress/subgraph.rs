@@ -156,7 +156,7 @@ where
         // Create empty child zero represenative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
-        let mut builder = reachability::Builder::new(self.path.clone());
+        let mut builder = reachability::Builder::new();
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
         builder.add_node(0, outputs, inputs, vec![vec![Antichain::new(); inputs]; outputs]);
@@ -170,8 +170,9 @@ where
         }
 
         let (mut tracker, scope_summary) = builder.build();
-        tracker.tracker_logger = worker.log_register().get("timely/tracker");
-        tracker.debug_logger = worker.log_register().get("timely/debug");
+
+        let path = self.path.clone();
+        tracker.tracker_logger = worker.log_register().get("timely/tracker").map(|logger| (path, logger));
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 
