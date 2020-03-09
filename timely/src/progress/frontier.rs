@@ -488,10 +488,20 @@ impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainF
 }
 
 /// A wrapper for elements of an antichain.
+#[derive(Debug)]
 pub struct AntichainRef<'a, T: 'a> {
     /// Elements contained in the antichain.
     frontier: &'a [T],
 }
+
+impl<'a, T: 'a> Clone for AntichainRef<'a, T> {
+    fn clone(&self) -> Self {
+        Self {
+            frontier: self.frontier.clone(),
+        }
+    }
+}
+impl<'a, T: 'a> Copy for AntichainRef<'a, T> { }
 
 impl<'a, T: 'a> AntichainRef<'a, T> {
     /// Create a new `AntichainRef` from a reference to a slice of elements forming the frontier.
@@ -501,6 +511,22 @@ impl<'a, T: 'a> AntichainRef<'a, T> {
     pub fn new(frontier: &'a [T]) -> Self {
         Self {
             frontier,
+        }
+    }
+
+    /// Constructs an owned antichain from the antichain reference.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::{Antichain, frontier::AntichainRef};
+    ///
+    /// let frontier = AntichainRef::new(&[1u64]);
+    /// assert_eq!(frontier.to_owned(), Antichain::from_elem(1u64));
+    ///```
+    pub fn to_owned(&self) -> Antichain<T> where T: Clone {
+        Antichain {
+            elements: self.frontier.to_vec()
         }
     }
 }
