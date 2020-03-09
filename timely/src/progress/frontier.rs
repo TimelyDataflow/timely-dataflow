@@ -9,7 +9,11 @@ use crate::order::PartialOrder;
 /// This antichain implementation allows you to repeatedly introduce elements to the antichain, and
 /// which will evict larger elements to maintain the *minimal* antichain, those incomparable elements
 /// no greater than any other element.
-#[derive(Clone, Debug, Default, Eq, PartialEq, Abomonation, Serialize, Deserialize)]
+///
+/// Two antichains are equal if the contain the same set of elements, even if in different orders.
+/// This can make equality testing quadratic, though linear in the common case that the sequences
+/// are identical.
+#[derive(Clone, Debug, Default, Abomonation, Serialize, Deserialize)]
 pub struct Antichain<T> {
     elements: Vec<T>
 }
@@ -59,44 +63,6 @@ impl<T: PartialOrder> Antichain<T> {
         added
     }
 
-    /// Creates a new empty `Antichain`.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::Antichain;
-    ///
-    /// let mut frontier = Antichain::<u32>::new();
-    ///```
-    pub fn new() -> Antichain<T> { Antichain { elements: Vec::new() } }
-
-    /// Creates a new singleton `Antichain`.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::Antichain;
-    ///
-    /// let mut frontier = Antichain::from_elem(2);
-    ///```
-    pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
-
-    /// Clears the contents of the antichain.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::Antichain;
-    ///
-    /// let mut frontier = Antichain::from_elem(2);
-    /// frontier.clear();
-    /// assert!(frontier.elements().is_empty());
-    ///```
-    pub fn clear(&mut self) { self.elements.clear() }
-
-    /// Sorts the elements so that comparisons between antichains can be made.
-    pub fn sort(&mut self) where T: Ord { self.elements.sort() }
-
     /// Returns true if any item in the antichain is strictly less than the argument.
     ///
     /// # Examples
@@ -138,10 +104,52 @@ impl<T: PartialOrder> Antichain<T> {
     }
 
     /// Returns true if every element of `other` is greater or equal to some element of `self`.
+    #[deprecated(since="0.12.0", note="please use `PartialOrder::less_equal` instead")]
     #[inline]
     pub fn dominates(&self, other: &Antichain<T>) -> bool {
-        other.elements().iter().all(|t2| self.elements().iter().any(|t1| t1.less_equal(t2)))
+        <Self as PartialOrder>::less_equal(self, other)
     }
+}
+
+impl<T> Antichain<T> {
+
+    /// Creates a new empty `Antichain`.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::<u32>::new();
+    ///```
+    pub fn new() -> Antichain<T> { Antichain { elements: Vec::new() } }
+
+    /// Creates a new singleton `Antichain`.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::from_elem(2);
+    ///```
+    pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
+
+    /// Clears the contents of the antichain.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::from_elem(2);
+    /// frontier.clear();
+    /// assert!(frontier.elements().is_empty());
+    ///```
+    pub fn clear(&mut self) { self.elements.clear() }
+
+    /// Sorts the elements so that comparisons between antichains can be made.
+    pub fn sort(&mut self) where T: Ord { self.elements.sort() }
 
     /// Reveals the elements in the antichain.
     ///
@@ -151,9 +159,37 @@ impl<T: PartialOrder> Antichain<T> {
     /// use timely::progress::frontier::Antichain;
     ///
     /// let mut frontier = Antichain::from_elem(2);
-    /// assert_eq!(frontier.elements(), &[2]);
+    /// assert_eq!(&*frontier.elements(), &[2]);
     ///```
-    #[inline] pub fn elements(&self) -> &[T] { &self.elements[..] }
+    #[inline] pub fn elements(&self) -> AntichainRef<T> { AntichainRef::new(&self.elements[..]) }
+}
+
+impl<T: PartialEq> PartialEq for Antichain<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // Lengths should be the same, with the option for fast acceptance if identical.
+        self.elements().len() == other.elements().len() &&
+        (
+            self.elements().iter().zip(other.elements().iter()).all(|(t1,t2)| t1 == t2) ||
+            self.elements().iter().all(|t1| other.elements().iter().any(|t2| t1.eq(t2)))
+        )
+    }
+}
+
+impl<T: Eq> Eq for Antichain<T> { }
+
+impl<T: PartialOrder> PartialOrder for Antichain<T> {
+    fn less_equal(&self, other: &Self) -> bool {
+        other.elements().iter().all(|t2| self.elements().iter().any(|t1| t1.less_equal(t2)))
+    }
+}
+
+impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
+    fn from(vec: Vec<T>) -> Self {
+        // TODO: We could re-use `vec` with some care.
+        let mut temp = Antichain::new();
+        for elem in vec.into_iter() { temp.insert(elem); }
+        temp
+    }
 }
 
 /// An antichain based on a multiset whose elements frequencies can be updated.
@@ -452,50 +488,50 @@ impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainF
 }
 
 /// A wrapper for elements of an antichain.
-#[derive(PartialEq, Eq)]
-pub struct AntichainRef<'a, T: 'a+PartialOrder> {
+#[derive(Debug)]
+pub struct AntichainRef<'a, T: 'a> {
     /// Elements contained in the antichain.
     frontier: &'a [T],
 }
 
-impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
+impl<'a, T: 'a> Clone for AntichainRef<'a, T> {
+    fn clone(&self) -> Self {
+        Self {
+            frontier: self.frontier.clone(),
+        }
+    }
+}
+impl<'a, T: 'a> Copy for AntichainRef<'a, T> { }
+
+impl<'a, T: 'a> AntichainRef<'a, T> {
     /// Create a new `AntichainRef` from a reference to a slice of elements forming the frontier.
+    ///
+    /// This method does not check that this antichain has any particular properties, for example
+    /// that there are no elements strictly less than other elements.
     pub fn new(frontier: &'a [T]) -> Self {
         Self {
             frontier,
         }
     }
 
-    /// Returns true if there are no elements in the `AntichainRef`.
+    /// Constructs an owned antichain from the antichain reference.
     ///
     /// # Examples
     ///
     ///```
-    /// use timely::progress::frontier::AntichainRef;
-    ///
-    /// let frontier = AntichainRef::<usize>::new(&[]);
-    /// assert!(frontier.is_empty());
-    ///```
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.frontier.is_empty()
-    }
-
-    /// Create an iterator over the elements in this `AntichainRef`.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::AntichainRef;
+    /// use timely::progress::{Antichain, frontier::AntichainRef};
     ///
     /// let frontier = AntichainRef::new(&[1u64]);
-    /// let mut iter = frontier.iter();
-    /// assert_eq!(iter.next(), Some(&1u64));
-    /// assert_eq!(iter.next(), None);
+    /// assert_eq!(frontier.to_owned(), Antichain::from_elem(1u64));
     ///```
-    pub fn iter(&self) -> ::std::slice::Iter<T> {
-        self.frontier.iter()
+    pub fn to_owned(&self) -> Antichain<T> where T: Clone {
+        Antichain {
+            elements: self.frontier.to_vec()
+        }
     }
+}
+
+impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
 
     /// Returns true if any item in the `AntichainRef` is strictly less than the argument.
     ///
@@ -530,26 +566,35 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
     pub fn less_equal(&self, time: &T) -> bool {
         self.iter().any(|x| x.less_equal(time))
     }
+}
 
-    /// Returns the number of elements in this `AntichainRef`.
-    pub fn len(&self) -> usize {
-        self.frontier.len()
-    }
-
-    /// Copies `self` into a new `Vec`.
-    pub fn to_vec(&self) -> Vec<T> where T: Clone {
-        self.frontier.to_vec()
+impl<'a, T: PartialEq> PartialEq for AntichainRef<'a, T> {
+    fn eq(&self, other: &Self) -> bool {
+        // Lengths should be the same, with the option for fast acceptance if identical.
+        self.len() == other.len() &&
+        (
+            self.iter().zip(other.iter()).all(|(t1,t2)| t1 == t2) ||
+            self.iter().all(|t1| other.iter().any(|t2| t1.eq(t2)))
+        )
     }
 }
 
-impl<'a, T: PartialOrder> ::std::ops::Deref for AntichainRef<'a, T> {
+impl<'a, T: Eq> Eq for AntichainRef<'a, T> { }
+
+impl<'a, T: PartialOrder> PartialOrder for AntichainRef<'a, T> {
+    fn less_equal(&self, other: &Self) -> bool {
+        other.iter().all(|t2| self.iter().any(|t1| t1.less_equal(t2)))
+    }
+}
+
+impl<'a, T> ::std::ops::Deref for AntichainRef<'a, T> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {
         self.frontier
     }
 }
 
-impl<'a, T: 'a+PartialOrder> ::std::iter::IntoIterator for &'a AntichainRef<'a, T> {
+impl<'a, T: 'a> ::std::iter::IntoIterator for &'a AntichainRef<'a, T> {
     type Item = &'a T;
     type IntoIter = ::std::slice::Iter<'a, T>;
     fn into_iter(self) -> Self::IntoIter {
