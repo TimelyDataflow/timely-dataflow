@@ -138,9 +138,10 @@ impl<T: PartialOrder> Antichain<T> {
     }
 
     /// Returns true if every element of `other` is greater or equal to some element of `self`.
+    #[deprecated(since="0.12.0", note="please use `PartialOrder::less_equal` instead")]
     #[inline]
     pub fn dominates(&self, other: &Antichain<T>) -> bool {
-        other.elements().iter().all(|t2| self.elements().iter().any(|t1| t1.less_equal(t2)))
+        <Self as PartialOrder>::less_equal(self, other)
     }
 
     /// Reveals the elements in the antichain.
