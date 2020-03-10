@@ -159,10 +159,21 @@ impl<T> Antichain<T> {
     /// use timely::progress::frontier::Antichain;
     ///
     /// let mut frontier = Antichain::from_elem(2);
-    /// assert_eq!(&*frontier.elements(), &[2]);
+    /// assert_eq!(frontier.elements(), &[2]);
     ///```
-    #[inline] pub fn elements(&self) -> AntichainRef<T> { AntichainRef::new(&self.elements[..]) }
-}
+    #[inline] pub fn elements(&self) -> &[T] { &self.elements[..] }
+
+    /// Reveals the elements in the antichain.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::from_elem(2);
+    /// assert_eq!(&*frontier.borrow(), &[2]);
+    ///```
+    #[inline] pub fn borrow(&self) -> AntichainRef<T> { AntichainRef::new(&self.elements[..]) }}
 
 impl<T: PartialEq> PartialEq for Antichain<T> {
     fn eq(&self, other: &Self) -> bool {
