@@ -811,30 +811,44 @@ fn summarize_outputs<T: Timestamp>(
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct UpdateSourceEvent {
-    worker_id: usize,
-    scope_addr: Vec<usize>,
-    operator: usize,
-    port: usize,
-    timestamp: String,
-    delta: i64,
+    /// Worker index.
+    pub worker_id: usize,
+    /// Sequence of nested scope identifiers indicating the path from the root to this scope.
+    pub scope_addr: Vec<usize>,
+    /// Operator index.
+    pub operator: usize,
+    /// Port index.
+    pub port: usize,
+    /// Timestamp for which capability was added or removed.
+    pub timestamp: String,
+    /// Multiplicity of the capability to added or removed.
+    pub delta: i64,
 }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct UpdateTargetEvent {
-    worker_id: usize,
-    scope_addr: Vec<usize>,
-    operator: usize,
-    port: usize,
-    timestamp: String,
-    delta: i64,
+    /// Worker index.
+    pub worker_id: usize,
+    /// Sequence of nested scope identifiers indicating the path from the root to this scope.
+    pub scope_addr: Vec<usize>,
+    /// Operator index.
+    pub operator: usize,
+    /// Port index.
+    pub port: usize,
+    /// Timestamp for which capability was added or removed.
+    pub timestamp: String,
+    /// Multiplicity of the capability to be added or removed.
+    pub delta: i64,
 }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
 /// Log event
 pub struct StartPropagateEvent {
-    worker_id: usize,
-    scope_addr: Vec<usize>,
+    /// Worker index.
+    pub worker_id: usize,
+    /// Sequence of nested scope identifiers indicating the path from the root to this scope.
+    pub scope_addr: Vec<usize>,
 }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone)]
