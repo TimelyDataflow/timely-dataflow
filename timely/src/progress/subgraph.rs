@@ -172,7 +172,16 @@ where
         let (mut tracker, scope_summary) = builder.build();
 
         let path = self.path.clone();
-        tracker.tracker_logger = worker.log_register().get("timely/tracker").map(|logger| (path, logger));
+        tracker.tracker_logger = worker.log_register().get("timely/tracker").map(|logger| (path.clone(), logger));
+
+        // Perhaps log information about the creation of subgraph.
+        if let Some(l) = self.logging.as_mut() {
+            l.log(crate::logging::SubgraphEvent{
+                id: worker.index(),
+                addr: path.clone(),
+                timestamp_type: std::any::type_name::<TInner>().to_string(),
+            });
+        }
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
 

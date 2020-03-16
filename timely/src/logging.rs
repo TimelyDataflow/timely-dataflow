@@ -47,6 +47,17 @@ impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, (Dura
 }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+/// The creation of a `Subgraph`.
+pub struct SubgraphEvent {
+    /// Worker-unique identifier for the operator.
+    pub id: usize,
+    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
+    pub addr: Vec<usize>,
+    /// Type of the subscope Timestamp.
+    pub timestamp_type: String,
+}
+
+#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// The creation of an `Operate` implementor.
 pub struct OperatesEvent {
     /// Worker-unique identifier for the operator.
@@ -223,6 +234,8 @@ impl ParkEvent {
 #[derive(Serialize, Deserialize, Debug, Clone, Abomonation, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// An event in a timely worker
 pub enum TimelyEvent {
+    /// Subgraph creation.
+    Subgraph(SubgraphEvent),
     /// Operator creation.
     Operates(OperatesEvent),
     /// Channel creation.
@@ -251,6 +264,10 @@ pub enum TimelyEvent {
     Park(ParkEvent),
     /// Unstructured event.
     Text(String),
+}
+
+impl From<SubgraphEvent> for TimelyEvent {
+    fn from(v: SubgraphEvent) -> TimelyEvent { TimelyEvent::Subgraph(v) }
 }
 
 impl From<OperatesEvent> for TimelyEvent {
