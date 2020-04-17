@@ -85,13 +85,13 @@ impl<G: Scope> OperatorBuilder<G> {
         new_input_handle(input, self.internal.clone(), self.logging.clone())
     }
 
-    /// Adds a new output to a generic operator builder, returning the `Pull` implementor to use.
+    /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output<D: Data>(&mut self) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, Stream<G, D>) {
         let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().inputs()];
         self.new_output_connection(connection)
     }
 
-    /// Adds a new output with connection information to a generic operator builder, returning the `Pull` implementor to use.
+    /// Adds a new output with connection information to a generic operator builder, returning the `Push` implementor to use.
     ///
     /// The `connection` parameter contains promises made by the operator for each of the existing *inputs*, that any timestamp
     /// appearing at the input, any output timestamp will be greater than or equal to the input timestamp subjected to a `Summary`
