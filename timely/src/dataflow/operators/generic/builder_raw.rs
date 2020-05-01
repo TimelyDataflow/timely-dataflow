@@ -129,14 +129,14 @@ impl<G: Scope> OperatorBuilder<G> {
         receiver
     }
 
-    /// Adds a new input to a generic operator builder, returning the `Push` implementor to use.
+    /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output<D: Data>(&mut self) -> (Tee<G::Timestamp, D>, Stream<G, D>) {
 
         let connection = vec![Antichain::from_elem(Default::default()); self.shape.inputs];
         self.new_output_connection(connection)
     }
 
-    /// Adds a new input to a generic operator builder, returning the `Push` implementor to use.
+    /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output_connection<D: Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (Tee<G::Timestamp, D>, Stream<G, D>) {
 
         let (targets, registrar) = Tee::<G::Timestamp,D>::new();
