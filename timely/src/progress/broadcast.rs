@@ -131,7 +131,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 let mut internal = Vec::with_capacity(changes.len());
 
                 // TODO: Reconsider `String` type or perhaps re-use allocation.
-                for ((location, time), diff) in changes.iter() {
+                for ((location, time), diff) in recv_changes.iter() {
                     match location.port {
                         Port::Target(port) => {
                             messages.push((location.node, port, format!("{:?}", time), *diff))
