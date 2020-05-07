@@ -1,7 +1,7 @@
 //! Broadcasts progress information among workers.
 
 use crate::progress::{ChangeBatch, Timestamp};
-use crate::progress::Location;
+use crate::progress::{Location, Port};
 use crate::communication::{Message, Push, Pull};
 use crate::logging::TimelyLogger as Logger;
 
@@ -58,16 +58,33 @@ impl<T:Timestamp+Send> Progcaster<T> {
         changes.compact();
         if !changes.is_empty() {
 
-            self.logging.as_ref().map(|l| l.log(crate::logging::ProgressEvent {
-                is_send: true,
-                source: self.source,
-                channel: self.channel_identifier,
-                seq_no: self.counter,
-                addr: self.addr.clone(),
-                // TODO: fill with additional data
-                messages: Vec::new(),
-                internal: Vec::new(),
-            }));
+            self.logging.as_ref().map(|l| {
+
+                let mut messages = Vec::with_capacity(changes.len());
+                let mut internal = Vec::with_capacity(changes.len());
+
+                // TODO: Reconsider `String` type or perhaps re-use allocation.
+                for ((location, time), diff) in changes.iter() {
+                    match location.port {
+                        Port::Target(port) => {
+                            messages.push((location.node, port, format!("{:?}", time), *diff))
+                        },
+                        Port::Source(port) => {
+                            internal.push((location.node, port, format!("{:?}", time), *diff))
+                        }
+                    }
+                }
+
+                l.log(crate::logging::ProgressEvent {
+                    is_send: true,
+                    source: self.source,
+                    channel: self.channel_identifier,
+                    seq_no: self.counter,
+                    addr: self.addr.clone(),
+                    messages,
+                    internal,
+                });
+            });
 
             for pusher in self.pushers.iter_mut() {
 
@@ -108,16 +125,33 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
             let addr = &mut self.addr;
             let channel = self.channel_identifier;
-            self.logging.as_ref().map(|l| l.log(crate::logging::ProgressEvent {
-                is_send: false,
-                source: source,
-                seq_no: counter,
-                channel,
-                addr: addr.clone(),
-                // TODO: fill with additional data
-                messages: Vec::new(),
-                internal: Vec::new(),
-            }));
+            self.logging.as_ref().map(|l| {
+
+                let mut messages = Vec::with_capacity(changes.len());
+                let mut internal = Vec::with_capacity(changes.len());
+
+                // TODO: Reconsider `String` type or perhaps re-use allocation.
+                for ((location, time), diff) in changes.iter() {
+                    match location.port {
+                        Port::Target(port) => {
+                            messages.push((location.node, port, format!("{:?}", time), *diff))
+                        },
+                        Port::Source(port) => {
+                            internal.push((location.node, port, format!("{:?}", time), *diff))
+                        }
+                    }
+                }
+
+                l.log(crate::logging::ProgressEvent {
+                    is_send: false,
+                    source: source,
+                    seq_no: counter,
+                    channel,
+                    addr: addr.clone(),
+                    messages,
+                    internal,
+                });
+            });
 
             // We clone rather than drain to avoid deserialization.
             for &(ref update, delta) in recv_changes.iter() {

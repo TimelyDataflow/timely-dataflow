@@ -201,6 +201,27 @@ impl<T:Ord> ChangeBatch<T> {
         }
     }
 
+    /// Number of compacted updates.
+    ///
+    /// This method requires mutable access to `self` because it may need to compact the
+    /// representation to determine the number of actual updates.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::ChangeBatch;
+    ///
+    /// let mut batch = ChangeBatch::<usize>::new_from(17, 1);
+    /// batch.update(17, -1);
+    /// batch.update(14, -1);
+    /// assert_eq!(batch.len(), 1);
+    ///```
+    #[inline]
+    pub fn len(&mut self) -> usize {
+        self.compact();
+        self.updates.len()
+    }
+
     /// Drains `self` into `other`.
     ///
     /// This method has similar a effect to calling `other.extend(self.drain())`, but has the
@@ -251,7 +272,7 @@ impl<T:Ord> ChangeBatch<T> {
     }
 
     /// Expose the internal vector of updates.
-    pub fn unstable_internal_updates(&self) -> &Vec<(T, i64)> { &self.updates }
+    pub fn unstable_internal_updates(&self) -> &[(T, i64)] { &self.updates[..] }
 
     /// Expose the internal value of `clean`.
     pub fn unstable_internal_clean(&self) -> usize { self.clean }
