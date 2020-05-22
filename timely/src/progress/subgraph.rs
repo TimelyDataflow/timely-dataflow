@@ -721,8 +721,7 @@ impl<T: Timestamp> PerOperatorState<T> {
                 if *diff > 0 {
                     let consumed = shared_progress.consumeds.iter_mut().any(|x| x.iter().any(|(t,d)| *d > 0 && t.less_equal(time)));
                     let internal = child_state.sources[output].pointstamps.less_equal(time);
-                    let external = child_state.targets.iter().any(|x| x.implications.less_equal(time));
-                    if !consumed && !internal && !external {
+                    if !consumed && !internal {
                         panic!("Progress error; internal {:?}", self.name);
                     }
                 }
@@ -733,8 +732,7 @@ impl<T: Timestamp> PerOperatorState<T> {
                 if *diff > 0 {
                     let consumed = shared_progress.consumeds.iter_mut().any(|x| x.iter().any(|(t,d)| *d > 0 && t.less_equal(time)));
                     let internal = child_state.sources[output].pointstamps.less_equal(time);
-                    let external = child_state.targets.iter().any(|x| x.implications.less_equal(time));
-                    if !consumed && !internal && !external {
+                    if !consumed && !internal {
                         panic!("Progress error; produced {:?}", self.name);
                     }
                 }
