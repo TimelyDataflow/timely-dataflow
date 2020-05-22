@@ -25,6 +25,7 @@ pub use self::probe::Probe;
 pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
+pub use self::ok_err::OkErr;
 
 pub use self::generic::Operator;
 pub use self::generic::{Notificator, FrontierNotificator};
@@ -49,6 +50,7 @@ pub mod probe;
 pub mod to_stream;
 pub mod capture;
 pub mod branch;
+pub mod ok_err;
 
 pub mod aggregation;
 pub mod generic;
