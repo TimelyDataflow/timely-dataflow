@@ -350,7 +350,7 @@ We then proceed through each of the batches we enqueue, and through each of the 
 
 ## The finished product
 
-You can check out the result in [`examples/wordcount.rs`](https://github.com/frankmcsherry/timely-dataflow/blob/master/examples/wordcount.rs). If you run it as written, you'll see output that looks like:
+You can check out the result in [`examples/wordcount.rs`](https://github.com/TimelyDataflow/timely-dataflow/blob/master/timely/examples/wordcount.rs). If you run it as written, you'll see output that looks like:
 
 ```ignore
     Echidnatron% cargo run --example wordcount
