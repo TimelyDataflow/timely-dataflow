@@ -8,9 +8,10 @@ use crate::Data;
 /// Extension trait for `Stream`.
 pub trait OkErr<S: Scope, D: Data> {
     /// Takes one input stream and splits it into two output streams.
-    /// For each record, the supplied closure is called with a reference to
-    /// the data and its time. If it returns true, the record will be sent
-    /// to the second returned stream, otherwise it will be sent to the first.
+    /// For each record, the supplied closure is called with the data.
+    /// If it returns `Ok(x)`, then `x` will be sent
+    /// to the first returned stream; otherwise, if it returns `Err(e)`,
+    /// then `e` will be sent to the second.
     ///
     /// If the result of the closure only depends on the time, not the data,
     /// `branch_when` should be used instead.
