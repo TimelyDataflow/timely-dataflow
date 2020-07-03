@@ -263,7 +263,7 @@ where
     for (index, builder) in builders.into_iter().enumerate() {
         let clone = logic.clone();
         guards.push(thread::Builder::new()
-                            .name(format!("worker thread {}", index))
+                            .name(format!("timely:worker-{}", index))
                             .spawn(move || {
                                 let communicator = builder.build();
                                 (*clone)(communicator)
