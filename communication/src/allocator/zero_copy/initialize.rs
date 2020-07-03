@@ -91,7 +91,7 @@ pub fn initialize_networking_from_sockets(
                 let stream = stream.try_clone()?;
                 let join_guard =
                 ::std::thread::Builder::new()
-                    .name(format!("send thread {}", index))
+                    .name(format!("timely:send-{}", index))
                     .spawn(move || {
 
                         let logger = log_sender(CommunicationSetup {
@@ -114,7 +114,7 @@ pub fn initialize_networking_from_sockets(
                 let stream = stream.try_clone()?;
                 let join_guard =
                 ::std::thread::Builder::new()
-                    .name(format!("recv thread {}", index))
+                    .name(format!("timely:recv-{}", index))
                     .spawn(move || {
                         let logger = log_sender(CommunicationSetup {
                             process: my_index,
