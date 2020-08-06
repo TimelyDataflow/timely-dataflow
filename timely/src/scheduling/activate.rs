@@ -2,11 +2,11 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::sync::mpsc::{Sender, Receiver};
 use std::thread::Thread;
 use std::collections::BinaryHeap;
 use std::time::{Duration, Instant};
 use std::cmp::Reverse;
+use crossbeam_channel::{Sender, Receiver};
 
 /// Methods required to act as a timely scheduler.
 ///
@@ -55,7 +55,7 @@ impl Activations {
 
     /// Creates a new activation tracker.
     pub fn new(timer: Instant) -> Self {
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = crossbeam_channel::unbounded();
         Self {
             clean: 0,
             bounds: Vec::new(),

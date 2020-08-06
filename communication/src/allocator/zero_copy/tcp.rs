@@ -2,7 +2,7 @@
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::mpsc::{Sender, Receiver};
+use crossbeam_channel::{Sender, Receiver};
 
 use crate::networking::MessageHeader;
 
