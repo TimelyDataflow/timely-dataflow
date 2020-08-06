@@ -167,7 +167,7 @@ impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
 }
 
 
-use std::sync::mpsc::{Sender, Receiver, channel};
+use crossbeam_channel::{Sender, Receiver};
 
 /// Allocate a matrix of send and receive changes to exchange items.
 ///
@@ -181,7 +181,7 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
 
     for sender in 0 .. sends {
         for recver in 0 .. recvs {
-            let (send, recv) = channel();
+            let (send, recv) = crossbeam_channel::unbounded();
             senders[sender].push(send);
             recvers[recver].push(recv);
         }

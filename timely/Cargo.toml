@@ -26,6 +26,7 @@ abomonation_derive = "0.5"
 timely_bytes = { path = "../bytes", version = "0.11" }
 timely_logging = { path = "../logging", version = "0.11" }
 timely_communication = { path = "../communication", version = "0.11" }
+crossbeam-channel = "0.4.3"
 
 [dev-dependencies]
 timely_sort="0.1.6"

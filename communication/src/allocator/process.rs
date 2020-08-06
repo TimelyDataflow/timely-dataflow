@@ -4,9 +4,9 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::any::Any;
-use std::sync::mpsc::{Sender, Receiver, channel};
 use std::time::Duration;
 use std::collections::{HashMap, VecDeque};
+use crossbeam_channel::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
 use crate::allocator::{Allocate, AllocateBuilder, Event, Thread};
@@ -76,7 +76,7 @@ impl Process {
         let mut counters_send = Vec::new();
         let mut counters_recv = Vec::new();
         for _ in 0 .. peers {
-            let (send, recv) = channel();
+            let (send, recv) = crossbeam_channel::unbounded();
             counters_send.push(send);
             counters_recv.push(recv);
         }
@@ -126,7 +126,7 @@ impl Allocate for Process {
                 let mut pushers = Vec::new();
                 let mut pullers = Vec::new();
                 for index in 0 .. self.peers {
-                    let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = channel();
+                    let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = crossbeam_channel::unbounded();
                     // TODO: the buzzer in the pusher may be redundant, because we need to buzz post-counter.
                     pushers.push((Pusher { target: s }, self.buzzers[index].clone()));
                     pullers.push(Puller { source: r, current: None });
