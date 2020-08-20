@@ -31,7 +31,7 @@ impl<Id: Clone+'static> Registry<Id> {
         name: &str,
         action: F) -> Option<Box<dyn Any>>
     {
-        let logger = Logger::<T, Id>::new(self.time.clone(), self.id.clone(), action);
+        let logger = Logger::<T, Id>::new(self.time.clone(), Duration::default(), self.id.clone(), action);
         self.insert_logger(name, logger)
     }
 
@@ -89,6 +89,7 @@ impl<Id> Flush for Registry<Id> {
 pub struct Logger<T, E> {
     id:     E,
     time:   Instant,                                                    // common instant used for all loggers.
+    offset: Duration,                                                   // offset to allow re-calibration.
     action: Rc<RefCell<dyn FnMut(&Duration, &mut Vec<(Duration, E, T)>)>>,  // action to take on full log buffers.
     buffer: Rc<RefCell<Vec<(Duration, E, T)>>>,                         // shared buffer; not obviously best design.
 }
@@ -98,6 +99,7 @@ impl<T, E: Clone> Clone for Logger<T, E> {
         Logger {
             id: self.id.clone(),
             time: self.time,
+            offset: self.offset.clone(),
             action: self.action.clone(),
             buffer: self.buffer.clone(),
         }
@@ -106,13 +108,14 @@ impl<T, E: Clone> Clone for Logger<T, E> {
 
 impl<T, E: Clone> Logger<T, E> {
     /// Allocates a new shareable logger bound to a write destination.
-    pub fn new<F>(time: Instant, id: E, action: F) -> Self
+    pub fn new<F>(time: Instant, offset: Duration, id: E, action: F) -> Self
     where
         F: FnMut(&Duration, &mut Vec<(Duration, E, T)>)+'static
     {
         Logger {
             id,
             time,
+            offset,
             action: Rc::new(RefCell::new(action)),
             buffer: Rc::new(RefCell::new(Vec::with_capacity(1024))),
         }
@@ -148,7 +151,7 @@ impl<T, E: Clone> Logger<T, E> {
     where I: IntoIterator, I::Item: Into<T>
     {
         let mut buffer = self.buffer.borrow_mut();
-        let elapsed = self.time.elapsed();
+        let elapsed = self.time.elapsed() + self.offset;
         for event in events {
             buffer.push((elapsed.clone(), self.id.clone(), event.into()));
             if buffer.len() == buffer.capacity() {
