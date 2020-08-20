@@ -197,8 +197,9 @@ impl<T, E> Flush for Logger<T, E> {
         let mut buffer = self.buffer.borrow_mut();
         let mut action = self.action.borrow_mut();
         let action = &mut *action;
+        let elapsed = self.time.elapsed() + self.offset;
         if !buffer.is_empty() {
-            (*action)(&self.time.elapsed(), &mut *buffer);
+            (*action)(&elapsed, &mut *buffer);
             buffer.clear();
             // NB: This does not re-allocate any specific size if the buffer has been
             // taken. The intent is that the geometric growth in `log_many` should be
@@ -207,7 +208,7 @@ impl<T, E> Flush for Logger<T, E> {
         }
         else {
             // Avoid swapping resources for empty buffers.
-            (*action)(&self.time.elapsed(), &mut Vec::new());
+            (*action)(&elapsed, &mut Vec::new());
         }
     }
 }
