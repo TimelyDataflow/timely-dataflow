@@ -210,7 +210,7 @@ As before, I'm just going to show you the new code, which now lives just after `
 
                         // for each input batch, stash it at `time`.
                         while let Some((time, data)) = input.next() {
-                            queues.entry(time.retain())
+                            queues.entry((time as CapabilityRef<u64>).retain())
                                   .or_insert(Vec::new())
                                   .extend(data.replace(Vec::new()));
                         }
