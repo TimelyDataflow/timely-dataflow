@@ -213,7 +213,7 @@ impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
 /// The type `T` must implement `PartialOrder` as well as `Ord`. The implementation of the `Ord` trait
 /// is used to efficiently organize the updates for cancellation, and to efficiently determine the lower
 /// bounds, and only needs to not contradict the `PartialOrder` implementation (that is, if `PartialOrder`
-/// orders two elements, the so does the `Ord` implementation).
+/// orders two elements, then so does the `Ord` implementation).
 ///
 /// The `MutableAntichain` implementation is done with the intent that updates to it are done in batches,
 /// and it is acceptable to rebuild the frontier from scratch when a batch of updates change it. This means
