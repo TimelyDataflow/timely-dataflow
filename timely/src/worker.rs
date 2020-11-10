@@ -371,6 +371,30 @@ impl<A: Allocate> Worker<A> {
         self.dataflow_core("Dataflow", logging, Box::new(()), |_, child| func(child))
     }
 
+    /// Construct a new dataflow with a (purely cosmetic) name.
+    ///
+    /// # Examples
+    /// ```
+    /// timely::execute_from_args(::std::env::args(), |worker| {
+    ///
+    ///     // We must supply the timestamp type here, although
+    ///     // it would generally be determined by type inference.
+    ///     worker.dataflow_named::<usize,_,_>("Some Dataflow", |scope| {
+    ///
+    ///         // uses of `scope` to build dataflow
+    ///
+    ///     });
+    /// });
+    /// ```
+    pub fn dataflow_named<T, R, F>(&mut self, name: &str, func: F) -> R
+    where
+        T: Refines<()>,
+        F: FnOnce(&mut Child<Self, T>)->R,
+    {
+        let logging = self.logging.borrow_mut().get("timely");
+        self.dataflow_core(name, logging, Box::new(()), |_, child| func(child))
+    }
+
     /// Construct a new dataflow with specific configurations.
     ///
     /// This method constructs a new dataflow, using a name, logger, and additional
