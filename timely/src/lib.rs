@@ -2,10 +2,10 @@
 //!
 //! The code is organized in crates and modules that are meant to depend as little as possible on each other.
 //!
-//! **Serialization**: The [`abomonation`](/abomonation/) crate contains simple and highly unsafe
+//! **Serialization**: The [`abomonation`] crate contains simple and highly unsafe
 //! serialization routines.
 //!
-//! **Communication**: The [`timely_communication`](/timely_communication/) crate defines several primitives for
+//! **Communication**: The [`timely_communication`] crate defines several primitives for
 //! communicating between dataflow workers, and across machine boundaries.
 //!
 //! **Progress tracking**: The [`timely::progress`](progress) module defines core dataflow structures for
