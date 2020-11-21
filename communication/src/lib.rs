@@ -8,9 +8,8 @@
 //! receive endpoint. Messages sent into a send endpoint will eventually be received by the corresponding worker,
 //! if it receives often enough. The point-to-point channels are each FIFO, but with no fairness guarantees.
 //!
-//! To be communicated, a type must implement the [`Serialize`](./trait.Serialize.html) trait. A default implementation of `Serialize` is
-//! provided for any type implementing [`Abomonation`](../abomonation/trait.Abomonation.html). To implement other serialization strategies, wrap your type
-//! and implement `Serialize` for your wrapper.
+//! To be communicated, a type must implement the [`Serialize`](serde::Serialize) trait when using the
+//! `bincode` feature or the [`Abomonation`](abomonation::Abomonation) trait when not.
 //!
 //! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`](Push) and [`Pull`](Pull)
 //! traits), which is used for more precise control of resources.
