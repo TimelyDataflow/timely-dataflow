@@ -3,7 +3,8 @@
 //! This crate is part of the timely dataflow system, used primarily for its inter-worker communication.
 //! It may be independently useful, but it is separated out mostly to make clear boundaries in the project.
 //!
-//! Threads are spawned with an [`allocator::Generic`](./allocator/generic/enum.Generic.html), whose `allocate` method returns a pair of several send endpoints and one
+//! Threads are spawned with an [`allocator::Generic`](allocator::generic::Generic), whose
+//! [`allocate`](allocator::generic::Generic::allocate) method returns a pair of several send endpoints and one
 //! receive endpoint. Messages sent into a send endpoint will eventually be received by the corresponding worker,
 //! if it receives often enough. The point-to-point channels are each FIFO, but with no fairness guarantees.
 //!
@@ -11,7 +12,7 @@
 //! provided for any type implementing [`Abomonation`](../abomonation/trait.Abomonation.html). To implement other serialization strategies, wrap your type
 //! and implement `Serialize` for your wrapper.
 //!
-//! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`](./trait.Push.html) and [`Pull`](./trait.Pull.html)
+//! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`](Push) and [`Pull`](Pull)
 //! traits), which is used for more precise control of resources.
 //!
 //! # Examples

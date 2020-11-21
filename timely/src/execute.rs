@@ -275,7 +275,7 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 
 /// Executes a timely dataflow from supplied allocators and logging.
 ///
-/// Refer to [`execute`](fn.execute.html) for more details.
+/// Refer to [`execute`](execute()) for more details.
 ///
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
