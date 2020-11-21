@@ -106,7 +106,7 @@ The type of `self` here is actually something that allows us to enumerate a sequ
 
 If we have multiple streams, we'll now have multiple capabilities. If we have no stream, we will just drop the capability. This change is important because each source stream believes it has such a capability, and we will eventually see this many drops of the capability in the event stream (though perhaps not immediately; the initial deletion we inserted in `capture_into` likely cancels with the initial capabilities expressed by the outside world; we will likely need to wait until the captured stream is informed about the completion of messages with the default time).
 
-Having done the initial adjustment, we literally just play out the streams (note the plural) as they are available. The `next` method is expected not to block, but rather to returns `None` when there are no more events currently available. It is a bit of a head-scratcher, but any interleaving of these streams is itself a valid stream (messages are sent and capabilities claimed only when we hold appropriate capabilities).
+Having done the initial adjustment, we literally just play out the streams (note the plural) as they are available. The `next` method is expected not to block, but rather to return `None` when there are no more events currently available. It is a bit of a head-scratcher, but any interleaving of these streams is itself a valid stream (messages are sent and capabilities claimed only when we hold appropriate capabilities).
 
 ## An Example
 

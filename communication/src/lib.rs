@@ -25,7 +25,7 @@
 //! let guards = timely_communication::initialize(config, |mut allocator| {
 //!     println!("worker {} started", allocator.index());
 //!
-//!     // allocates pair of senders list and one receiver.
+//!     // allocates a pair of senders list and one receiver.
 //!     let (mut senders, mut receiver) = allocator.allocate(0);
 //!
 //!     // send typed data along each channel

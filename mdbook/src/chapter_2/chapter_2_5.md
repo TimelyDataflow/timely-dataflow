@@ -369,7 +369,7 @@ You can check out the result in [`examples/wordcount.rs`](https://github.com/Tim
     Echidnatron%
 ```
 
-We kept sending the same word over and over, so its count goes up. Neat. If you'd like to run it with two workers, you just need to put `-- -w2` at the end of the command, like so:
+We kept sending the same word over and over, so its count went up. Neat. If you'd like to run it with two workers, you just need to put `-- -w2` at the end of the command, like so:
 
 ```ignore
     Echidnatron% cargo run --example wordcount -- -w2

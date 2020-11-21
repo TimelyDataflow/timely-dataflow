@@ -30,7 +30,7 @@ fn main() {
 }
 ```
 
-There will be more to do to get data in to `input`, and we aren't going to worry about that at the moment. But, now you know two of the places you can get data from!
+There will be more to do to get data into `input`, and we aren't going to worry about that at the moment. But, now you know two of the places you can get data from!
 
 ## Other sources
 

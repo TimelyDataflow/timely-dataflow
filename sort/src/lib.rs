@@ -41,7 +41,7 @@ impl Unsigned for usize { #[inline]fn bytes() -> usize { ::std::mem::size_of::<u
 /// need to take some care and not abuse this.
 ///
 /// Internally the sorters manage data using blocks `Vec<T>`, and are delighted to consume data
-/// in block form (they will re-use the blocks), and will return results as a sequence of blocks
+/// in block form (they will reuse the blocks), and will return results as a sequence of blocks
 /// such that if they are traversed in-order they are appropriately sorted.
 ///
 /// Most of the sorters manage a stash of buffers (ideally: 256) that they use when sorting the

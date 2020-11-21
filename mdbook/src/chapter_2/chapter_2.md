@@ -2,7 +2,7 @@
 
 Let's talk about how to create timely dataflows.
 
-This section will be a bit of a tour through the dataflow construction process, ignoring for the moment details about the interesting ways in which you can get data in to and out of your dataflow; those will show up in the "Running Timely Dataflows" section. For now we are going to work with examples with fixed input data and no interactivity to speak of, focusing on what we can cause to happen to that data.
+This section will be a bit of a tour through the dataflow construction process, ignoring for the moment details about the interesting ways in which you can get data into and out of your dataflow; those will show up in the "Running Timely Dataflows" section. For now we are going to work with examples with fixed input data and no interactivity to speak of, focusing on what we can cause to happen to that data.
 
 Here is a relatively simple example, taken from `timely/examples/simple.rs`, that turns the numbers zero through nine into a stream, and then feeds them through an `inspect` operator printing them to the screen.
 
