@@ -109,7 +109,7 @@ impl<'a, T, D, P: Push<Bundle<T, D>>+'a> Session<'a, T, D, P>  where T: Eq+Clone
     /// Provides a fully formed `Content<D>` message for senders which can use this type.
     ///
     /// The `Content` type is the backing memory for communication in timely, and it can
-    /// often be more efficient to re-use this memory rather than have timely allocate
+    /// often be more efficient to reuse this memory rather than have timely allocate
     /// new backing memory.
     #[inline]
     pub fn give_vec(&mut self, message: &mut Vec<D>) {

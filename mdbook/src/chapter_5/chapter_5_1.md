@@ -17,7 +17,7 @@ fn main() {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());
 
-        // allocates pair of senders list and one receiver.
+        // allocates a pair of senders list and one receiver.
         let (mut senders, mut receiver) = allocator.allocate();
 
         // send typed data along each channel
@@ -129,7 +129,7 @@ Now, we didn't need a mutable reference to do that; we could have just had the a
 
 This framing allows for fairly natural and *stable* zero-copy communication. When you want to send a buffer of records, you wrap it up as `Some(buffer)` and call `push`. Once `push` returns, the channel has probably taken your buffer, but it has the opportunity to leave something behind for you. This is a very easy way for the communication infrastructure to *return* resources to you. In fact, even if you have finished sending messages, it may make sense to repeatedly send mutable references to `None` for as long as the channel has memory to hand you.
 
-Although not used by timely at the moment, this is also designed to support zero copy networking where the communication layer below (e.g. something like RDMA) operates more efficiently if it allocates the buffers for you (e.g. in dedicated memory pinned by the hardware). In this case, `push` is a great way to *request* resources from the channel. Similarly, it can serve as a decent back-channel to return owned resources for the underlying typed data (e.g., you `push`ed a list of `String` elements, and once used they could be returned to you to be re-used).
+Although not used by timely at the moment, this is also designed to support zero copy networking where the communication layer below (e.g. something like RDMA) operates more efficiently if it allocates the buffers for you (e.g. in dedicated memory pinned by the hardware). In this case, `push` is a great way to *request* resources from the channel. Similarly, it can serve as a decent back-channel to return owned resources for the underlying typed data (e.g., you `push`ed a list of `String` elements, and once used they could be returned to you to be reused).
 
 ### Pull
 

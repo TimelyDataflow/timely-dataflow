@@ -2,7 +2,7 @@
 
 **IN PROGRESS**
 
-Data flow along dataflow graphs. It is what they do. It says it in the name. But some times we want to control how the data in the dataflow flow. Not *where* the data flow, we already have controls for doing that (`exchange`, `partition`), but rather *when* the data flow.
+Data flow along dataflow graphs. It is what they do. It says it in the name. But sometimes we want to control how the data in the dataflow flow. Not *where* the data flow, we already have controls for doing that (`exchange`, `partition`), but rather *when* the data flow.
 
 Let's consider a simple example, where we take an input stream of numbers, and produce all numbers less than each input.
 
@@ -29,7 +29,7 @@ This dataflow can greatly increase the amount of data moving around. We might ha
 
 In most systems this is mitigated by *flow control*, mechanisms that push back when it seems like operators are producing more data than can be consumed in the same amount of time.
 
-Timely dataflow doesn't have a built in notion of flow control. Some times you want it, some times you don't, so we didn't make you have it. Also, it is hard to get right, for similar reasons. Instead, timely dataflow scopes can be used for application-level flow control.
+Timely dataflow doesn't have a built in notion of flow control. Sometimes you want it, sometimes you don't, so we didn't make you have it. Also, it is hard to get right, for similar reasons. Instead, timely dataflow scopes can be used for application-level flow control.
 
 Let's take a simple example, where we have a stream of timestamped numbers coming at us, performing the `flat_map` up above. Our goal is to process all of the data, but to do so in a controlled manner where we never overwhelm the computation. For example, we might want to do approximately this:
 
@@ -52,9 +52,9 @@ fn main() {
 
 but without actually producing the 4,999,950,000 intermediate records all at once.
 
-One way to do this is to build a self-regulating dataflow, into which we can immediately dump all the records, but which will buffer records until it is certain that the work for prior records has drained. We will write this out in all the gorey detail, but these operators are certainly things that could be packaged up and re-used.
+One way to do this is to build a self-regulating dataflow, into which we can immediately dump all the records, but which will buffer records until it is certain that the work for prior records has drained. We will write this out in all the gory details, but these operators are certainly things that could be packaged up and reused.
 
-The idea here is to take our stream of work, and to use the `delay` operator to assign new timestamps to the records. We will spread the work out so that each timestamp has at most (in this case) 100 numbers. We can write a `unary` operator that will buffer received records until their timestamp is "next", meaning all strictly prior work has drained from the dataflow fragment. How do we do this? We put a `probe` just after the `flat_map`, and re-use the probe handle in the operator itself.
+The idea here is to take our stream of work, and to use the `delay` operator to assign new timestamps to the records. We will spread the work out so that each timestamp has at most (in this case) 100 numbers. We can write a `unary` operator that will buffer received records until their timestamp is "next", meaning all strictly prior work has drained from the dataflow fragment. How do we do this? We put a `probe` just after the `flat_map`, and reuse the probe handle in the operator itself.
 
 ```rust,no_run
 extern crate timely;

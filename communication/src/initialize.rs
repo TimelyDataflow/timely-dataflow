@@ -143,7 +143,7 @@ impl Configuration {
 /// let guards = timely_communication::initialize(config, |mut allocator| {
 ///     println!("worker {} started", allocator.index());
 ///
-///     // allocates pair of senders list and one receiver.
+///     // allocates a pair of senders list and one receiver.
 ///     let (mut senders, mut receiver) = allocator.allocate(0);
 ///
 ///     // send typed data along each channel
@@ -215,7 +215,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 /// let guards = timely_communication::initialize_from(builders, Box::new(()), |mut allocator| {
 ///     println!("worker {} started", allocator.index());
 ///
-///     // allocates pair of senders list and one receiver.
+///     // allocates a pair of senders list and one receiver.
 ///     let (mut senders, mut receiver) = allocator.allocate(0);
 ///
 ///     // send typed data along each channel

@@ -71,7 +71,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
             for pusher in self.pushers.iter_mut() {
 
-                // Attempt to re-use allocations, if possible.
+                // Attempt to reuse allocations, if possible.
                 if let Some(tuple) = &mut self.to_push {
                     let tuple = tuple.as_mut();
                     tuple.0 = self.source;

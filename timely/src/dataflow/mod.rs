@@ -1,7 +1,7 @@
 //! Abstractions for timely dataflow programming.
 //!
-//! Timely dataflow programs are constructed by manipulating [`Stream`](./stream/index.html) objects,
-//! most often using pre-defined [operators](./operators/index.html) that implement known patterns.
+//! Timely dataflow programs are constructed by manipulating [`Stream`](stream) objects,
+//! most often using pre-defined [operators] that implement known patterns.
 //!
 //! # Examples
 //! ```

@@ -4,9 +4,9 @@ In between introducing streams of data and inspecting or capturing the output, w
 
 ## Mapping
 
-One of the simplest thing one can do with a stream of data is to transform each record into a new record. In database terminology this would be called "projection", where you extract some fields from a larger record, but as we are in a more rich programming language we can perform arbitrary transformations.
+One of the simplest things one can do with a stream of data is to transform each record into a new record. In database terminology this would be called "projection", where you extract some fields from a larger record, but as we are in a more rich programming language we can perform arbitrary transformations.
 
-The `map` operator takes as argument a closure from the input data type to an output data type that you get to define. The result is the stream of records corresponding to the application of your closure to each record in the input stream.
+The `map` operator takes as an argument a closure from the input data type to an output data type that you get to define. The result is the stream of records corresponding to the application of your closure to each record in the input stream.
 
 The following program should print out the numbers one through ten.
 
@@ -115,7 +115,7 @@ Unlike `map`, the predicate passed to the `filter` operator does not receive *ow
 
 ## Logical Partitioning
 
-There are two operators for spliting and combining streams, `partition` and `concat` respectively.
+There are two operators for splitting and combining streams, `partition` and `concat` respectively.
 
 The `partition` operator takes two arguments, a number of resulting streams to produce, and a closure which takes each record to a pair of the target partition identifier and the output record. The output of `partition` is a list of streams, where each stream contains those elements mapped to the stream under the closure.
 

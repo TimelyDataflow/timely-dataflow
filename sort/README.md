@@ -3,7 +3,7 @@ An cache-aware implementation of radix sort in Rust.
 
 Timely sort is a least-significant bit radix sort written in Rust. It is designed to be cache aware, and in particular to minimize the amount of data moved from the L1 cache up the memory hierarchy. Conventional wisdom is that these exchanges are what limit the scaling of sorting on modern multiprocessors.
 
-There are currently two flavors of radix sorter: A vanilla `LSBRadixSorter` and a version which performs software write-combining, `LSBSWCRadixSorter`. Each maintain internal buffers of the elements `push`ed so far, initially partitioned by the least significant byte, and finish the sorting when you call `finish`. For examples, check out `benches/benches.rs`. At the moment, the documentation is not stellar.
+There are currently two flavors of radix sorter: A vanilla `LSBRadixSorter` and a version which performs software write-combining, `LSBSWCRadixSorter`. Each maintains internal buffers of the elements `push`ed so far, initially partitioned by the least significant byte, and finishes the sorting when you call `finish`. For examples, check out `benches/benches.rs`. At the moment, the documentation is not stellar.
 
 For performance, consider sorting increasing numbers of random `u32` data. Here we go from `2 << 20` to `2 << 25` elements, using Rust's default `sort()`. You should see numbers like these when you run `cargo bench`:
 
@@ -16,7 +16,7 @@ For performance, consider sorting increasing numbers of random `u32` data. Here 
 
 The throughput drops, which makes sense because `msort` is an n log n algorithm.
 
-Radix sort doesn't have the same issue, and apparently actually accelerates (don't ask; probably some buffer re-use I'm not getting right):
+Radix sort doesn't have the same issue, and apparently actually accelerates (don't ask; probably some buffer reuse I'm not getting right):
 
     test rsort_u32_20    ... bench:  19,704,006 ns/iter (+/- 1,643,605) = 212 MB/s
     test rsort_u32_21    ... bench:  34,972,698 ns/iter (+/- 1,925,898) = 239 MB/s

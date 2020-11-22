@@ -196,7 +196,7 @@ impl<T: PartialOrder> PartialOrder for Antichain<T> {
 
 impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
     fn from(vec: Vec<T>) -> Self {
-        // TODO: We could re-use `vec` with some care.
+        // TODO: We could reuse `vec` with some care.
         let mut temp = Antichain::new();
         for elem in vec.into_iter() { temp.insert(elem); }
         temp

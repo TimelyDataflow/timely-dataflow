@@ -4,7 +4,7 @@
 //! objects as output. Many of the operators provide simple, composable functionality. Some of the
 //! operators are more complicated, for use with advanced timely dataflow features.
 //!
-//! The [`Operator`](./generic/operator/index.html) trait provides general
+//! The [`Operator`](generic::operator) trait provides general
 //! operators whose behavior can be supplied using closures accepting input and output handles.
 //! Most of the operators in this module are defined using these two general operators.
 

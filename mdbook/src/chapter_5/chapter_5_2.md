@@ -12,7 +12,7 @@ Timely dataflow imposes a few constraints, we think they are natural, on the str
 
 Timely dataflow computations are structured so that to send a timestamped message, an operator must hold a capability for that timestamp. Timely dataflow's progress tracking can be viewed as (i) workers collectively maintaining a view of outstanding timestamp capabilities at each location in the dataflow graph, and (ii) each worker independently determines and communicates the implications of changes in its view of capabilities to other locations in its instance of the dataflow graph.
 
-Before we get in to these two aspects, we will first need to be able to name parts of our dataflow graph.
+Before we get into these two aspects, we will first need to be able to name parts of our dataflow graph.
 
 ## Dataflow structure
 
