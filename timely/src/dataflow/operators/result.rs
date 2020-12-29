@@ -1,8 +1,6 @@
 //! Extension methods for `Stream` containing `Result`s.
 
 use crate::Data;
-use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::operators::generic::Operator;
 use crate::dataflow::operators::Map;
 use crate::dataflow::{Scope, Stream};
 
@@ -99,34 +97,11 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
 
 impl<S: Scope, T: Data, E: Data> ResultStream<S, T, E> for Stream<S, Result<T, E>> {
     fn ok(&self) -> Stream<S, T> {
-        let mut buffer = vec![];
-        self.unary(Pipeline, "Result::ok", move |_, _| move |input, output| {
-            input.for_each(|time, data| {
-                data.swap(&mut buffer);
-                buffer.retain(Result::is_ok);
-                if !buffer.is_empty() {
-                    output
-                        .session(&time)
-                        .give_iterator(buffer.drain(..).map(|e| e.ok().unwrap()),
-                        );
-                }
-            })
-        })
+        self.flat_map(Result::ok)
     }
 
     fn err(&self) -> Stream<S, E> {
-        let mut buffer = vec![];
-        self.unary(Pipeline, "Result::err", move |_, _| move |input, output| {
-            input.for_each(|time, data| {
-                data.swap(&mut buffer);
-                buffer.retain(Result::is_err);
-                if !buffer.is_empty() {
-                    output
-                        .session(&time)
-                        .give_iterator(buffer.drain(..).map(|r| r.err().unwrap()));
-                }
-            })
-        })
+        self.flat_map(Result::err)
     }
 
     fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(&self, mut logic: L) -> Stream<S, Result<T2, E>> {
