@@ -18,12 +18,49 @@ use crate::progress::operate::Operate;
 use crate::dataflow::scopes::Child;
 use crate::logging::TimelyLogger;
 
-/// Progress mode. (???)
+/// Different ways in which timely's progress tracking can work.
+///
+/// These options drive some buffering and accumulation that timely
+/// can do to try and trade volume of progress traffic against latency.
+/// By accumulating updates longer, a smaller total volume of mesasges
+/// are sent.
+///
+/// The `ProgressMode::Demand` variant is the most robust, and least
+/// likely to lead to catatsrophic performance. The `Eager` variant
+/// is useful for getting the smallest latencies on systems with few
+/// workers, but does risk saturating the system with progress messages
+/// and should be used with care, or not at all.
+///
+/// If you are not certain which option to use, prefer `Demand`, and
+/// perhaps monitor the progress messages through timely's logging
+/// infrastructure to see if their volume is surprisingly high.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ProgressMode {
-    /// ???
+    /// Eagerly transmit all progress updates produced by a worker.
+    ///
+    /// Prograss messages are transmitted without consideration for the
+    /// possibility that they may unblock other workers. This can result
+    /// in a substantial volume of messages that do not result in a
+    /// change to the lower bound of outstanding work.
     Eager,
-    /// ???
+    /// Delay transmission of progress updates until any could advance
+    /// the global frontier of timestamps.
+    ///
+    /// As timely executes, the progress messages inform each worker of
+    /// the outstanding work remaining in the system. As workers work,
+    /// they produce changes to this outstanding work. This option
+    /// delays the communication of those changes until they might
+    /// possibly cause a change in the lower bound of all outstanding
+    /// work.
+    ///
+    /// The most common case this remedies is when one worker transmits
+    /// messages to other workers, that worker holds a capability for the
+    /// operator and timestamp. Other workers will receive messages, and
+    /// with this option will not immediately acknowledge receiving the
+    /// messages, because the held capability is strictly prior to what
+    /// the messages can affect. Once the capability is released, the
+    /// progress messages are unblocked and transmitted, in accumulated
+    /// form.
     Demand,
 }
 
