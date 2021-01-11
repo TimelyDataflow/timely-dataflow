@@ -2,7 +2,7 @@ extern crate timely;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Inspect, Probe};
-use timely::worker::WorkerConfig;
+use timely::WorkerConfig;
 
 fn main() {
 

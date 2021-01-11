@@ -24,7 +24,7 @@
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventLink, Replay};
 //!
-//! timely::execute(timely::ExecuteConfig::thread(), |worker| {
+//! timely::execute(timely::Config::thread(), |worker| {
 //!     let handle1 = Rc::new(EventLink::new());
 //!     let handle2 = Some(handle1.clone());
 //!
@@ -52,7 +52,7 @@
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay};
 //!
-//! timely::execute(timely::ExecuteConfig::thread(), |worker| {
+//! timely::execute(timely::Config::thread(), |worker| {
 //!     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
 //!     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
 //!     let recv = list.incoming().next().unwrap().unwrap();

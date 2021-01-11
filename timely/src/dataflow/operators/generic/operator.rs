@@ -147,7 +147,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
-    /// timely::execute(timely::ExecuteConfig::thread(), |worker| {
+    /// timely::execute(timely::Config::thread(), |worker| {
     ///    let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
@@ -208,7 +208,7 @@ pub trait Operator<G: Scope, D1: Data> {
     /// use timely::dataflow::operators::generic::operator::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
-    /// timely::execute(timely::ExecuteConfig::thread(), |worker| {
+    /// timely::execute(timely::Config::thread(), |worker| {
     ///    let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();

@@ -47,14 +47,44 @@ impl FromStr for ProgressMode {
 
 /// Worker configuration.
 #[derive(Debug, Default, Clone)]
-pub struct WorkerConfig {
+pub struct Config {
     /// The progress mode to use.
     pub(crate) progress_mode: ProgressMode,
     /// A map from parameter name to typed parameter values.
     registry: HashMap<String, Arc<dyn Any + Send + Sync>>,
 }
 
-impl WorkerConfig {
+impl Config {
+    /// Installs options into a [`getopts::Options`] struct that correspond
+    /// to the parameters in the configuration.
+    ///
+    /// It is the caller's responsibility to ensure that the installed options
+    /// do not conflict with any other options that may exist in `opts`, or
+    /// that may be installed into `opts` in the future.
+    ///
+    /// This method is only available if the `getopts` feature is enabled, which
+    /// it is by default.
+    #[cfg(feature = "getopts")]
+    pub fn install_options(opts: &mut getopts_dep::Options) {
+        opts.optopt("", "progress-mode", "progress tracking mode (eager or demand)", "MODE");
+    }
+
+    /// Instantiates a configuration based upon the parsed options in `matches`.
+    ///
+    /// The `matches` object must have been constructed from a
+    /// [`getopts::Options`] which contained at least the options installed by
+    /// [`Self::install_options`].
+    ///
+    /// This method is only available if the `getopts` feature is enabled, which
+    /// it is by default.
+    #[cfg(feature = "getopts")]
+    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config, String> {
+        let progress_mode = matches
+            .opt_get_default("progress-mode", ProgressMode::Eager)
+            .map_err(|e| e.to_string())?;
+        Ok(Config::default().progress_mode(progress_mode))
+    }
+
     /// Sets the progress mode to `progress_mode`.
     pub fn progress_mode(mut self, progress_mode: ProgressMode) -> Self {
         self.progress_mode = progress_mode;
@@ -90,7 +120,7 @@ impl WorkerConfig {
 /// These methods are often proxied by child scopes, and this trait provides access.
 pub trait AsWorker : Scheduler {
     /// Returns the worker configuration parameters.
-    fn config(&self) -> &WorkerConfig;
+    fn config(&self) -> &Config;
     /// Index of the worker among its peers.
     fn index(&self) -> usize;
     /// Number of peer workers.
@@ -123,7 +153,7 @@ pub trait AsWorker : Scheduler {
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a list of dataflows that it manages.
 pub struct Worker<A: Allocate> {
-    config: WorkerConfig,
+    config: Config,
     timer: Instant,
     paths: Rc<RefCell<HashMap<usize, Vec<usize>>>>,
     allocator: Rc<RefCell<A>>,
@@ -142,7 +172,7 @@ pub struct Worker<A: Allocate> {
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
-    fn config(&self) -> &WorkerConfig { &self.config }
+    fn config(&self) -> &Config { &self.config }
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
     fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
@@ -174,7 +204,7 @@ impl<A: Allocate> Scheduler for Worker<A> {
 
 impl<A: Allocate> Worker<A> {
     /// Allocates a new `Worker` bound to a channel allocator.
-    pub fn new(config: WorkerConfig, c: A) -> Worker<A> {
+    pub fn new(config: Config, c: A) -> Worker<A> {
         let now = Instant::now();
         let index = c.index();
         Worker {

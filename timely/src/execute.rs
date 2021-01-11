@@ -1,33 +1,74 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use std::io::BufRead;
-
-use crate::communication::{initialize_from, CommunicationConfig, Allocator, allocator::AllocateBuilder, WorkerGuards};
+use crate::communication::{initialize_from, Allocator, allocator::AllocateBuilder, WorkerGuards};
 use crate::dataflow::scopes::Child;
-use crate::worker::{ProgressMode, Worker, WorkerConfig};
+use crate::worker::Worker;
+use crate::{CommunicationConfig, WorkerConfig};
 
 /// Configures the execution of a timely dataflow computation.
-pub struct ExecuteConfig {
+pub struct Config {
     /// Configuration for the communication infrastructure.
     pub communication: CommunicationConfig,
     /// Configuration for the worker threads.
     pub worker: WorkerConfig,
 }
 
-impl ExecuteConfig {
-    /// Constructs an `ExecuteConfig` that uses one worker thread and the
+impl Config {
+    /// Installs options into a [`getopts::Options`] struct that correspond
+    /// to the parameters in the configuration.
+    ///
+    /// It is the caller's responsibility to ensure that the installed options
+    /// do not conflict with any other options that may exist in `opts`, or
+    /// that may be installed into `opts` in the future.
+    ///
+    /// This method is only available if the `getopts` feature is enabled, which
+    /// it is by default.
+    #[cfg(feature = "getopts")]
+    pub fn install_options(opts: &mut getopts_dep::Options) {
+        CommunicationConfig::install_options(opts);
+        WorkerConfig::install_options(opts);
+    }
+
+    /// Instantiates a configuration based upon the parsed options in `matches`.
+    ///
+    /// The `matches` object must have been constructed from a
+    /// [`getopts::Options`] which contained at least the options installed by
+    /// [`Self::install_options`].
+    ///
+    /// This method is only available if the `getopts` feature is enabled, which
+    /// it is by default.
+    #[cfg(feature = "getopts")]
+    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config, String> {
+        Ok(Config {
+            communication: CommunicationConfig::from_matches(matches)?,
+            worker: WorkerConfig::from_matches(matches)?,
+        })
+    }
+
+    /// Constructs a new configuration by parsing the supplied text arguments.
+    ///
+    /// Most commonly, callers supply `std::env::args()` as the iterator.
+    #[cfg(feature = "getopts")]
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config, String> {
+        let mut opts = getopts_dep::Options::new();
+        Config::install_options(&mut opts);
+        let matches = opts.parse(args).map_err(|e| e.to_string())?;
+        Config::from_matches(&matches)
+    }
+
+    /// Constructs a `Config` that uses one worker thread and the
     /// defaults for all other parameters.
-    pub fn thread() -> ExecuteConfig {
-        ExecuteConfig {
+    pub fn thread() -> Config {
+        Config {
             communication: CommunicationConfig::Thread,
             worker: WorkerConfig::default(),
         }
     }
 
-    /// Constructs an `ExecuteConfig` that uses `n` worker threads and the
+    /// Constructs an `Config` that uses `n` worker threads and the
     /// defaults for all other parameters.
-    pub fn process(n: usize) -> ExecuteConfig {
-        ExecuteConfig {
+    pub fn process(n: usize) -> Config {
+        Config {
             communication: CommunicationConfig::Process(n),
             worker: WorkerConfig::default(),
         }
@@ -141,7 +182,7 @@ where
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
-/// timely::execute(timely::ExecuteConfig::process(3), |worker| {
+/// timely::execute(timely::Config::process(3), |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
@@ -163,7 +204,7 @@ where
 /// let send = Arc::new(Mutex::new(send));
 ///
 /// // execute a timely dataflow using three worker threads.
-/// timely::execute(timely::ExecuteConfig::process(3), move |worker| {
+/// timely::execute(timely::Config::process(3), move |worker| {
 ///     let send = send.lock().unwrap().clone();
 ///     worker.dataflow::<(),_,_>(move |scope| {
 ///         (0..10).to_stream(scope)
@@ -176,7 +217,7 @@ where
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
 pub fn execute<T, F>(
-    mut config: ExecuteConfig,
+    mut config: Config,
     func: F
 ) -> Result<WorkerGuards<T>,String>
 where
@@ -272,6 +313,9 @@ where
 /// If not specified, `localhost` will be used, with port numbers increasing from 2101 (chosen
 /// arbitrarily).
 ///
+/// This method is only available if the `getopts` feature is enabled, which
+/// it is by default.
+///
 /// # Examples
 ///
 /// ```rust
@@ -298,68 +342,12 @@ where
 /// host2:port
 /// host3:port
 /// ```
+#[cfg(feature = "getopts")]
 pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String>
     where I: Iterator<Item=String>,
           T:Send+'static,
           F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static, {
-    let mut opts = getopts::Options::new();
-    opts.optopt("w", "threads", "number of per-process worker threads", "NUM");
-    opts.optopt("p", "process", "identity of this process", "IDX");
-    opts.optopt("n", "processes", "number of processes", "NUM");
-    opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
-    opts.optflag("r", "report", "reports connection progress");
-    opts.optopt("", "progress-mode", "progress tracking mode (eager or demand)", "MODE");
-
-    let matches = opts.parse(iter).map_err(|e| e.to_string())?;
-
-    let threads = matches.opt_get_default("w", 1_usize).map_err(|e| e.to_string())?;
-    let process = matches.opt_get_default("p", 0_usize).map_err(|e| e.to_string())?;
-    let processes = matches.opt_get_default("n", 1_usize).map_err(|e| e.to_string())?;
-    let report = matches.opt_present("report");
-
-    assert!(process < processes);
-
-    let comm_config = if processes > 1 {
-        let mut addresses = Vec::new();
-        if let Some(hosts) = matches.opt_str("h") {
-            let file = ::std::fs::File::open(hosts.clone()).map_err(|e| e.to_string())?;
-            let reader = ::std::io::BufReader::new(file);
-            for line in reader.lines().take(processes) {
-                addresses.push(line.map_err(|e| e.to_string())?);
-            }
-            if addresses.len() < processes {
-                panic!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes);
-            }
-        }
-        else {
-            for index in 0..processes {
-                addresses.push(format!("localhost:{}", 2101 + index));
-            }
-        }
-
-        assert!(processes == addresses.len());
-        CommunicationConfig::Cluster {
-            threads,
-            process,
-            addresses,
-            report,
-            log_fn: Box::new( | _ | None),
-        }
-    } else if threads > 1 {
-        CommunicationConfig::Process(threads)
-    } else {
-        CommunicationConfig::Thread
-    };
-
-    let progress_mode = matches
-        .opt_get_default("progress-mode", ProgressMode::Eager)
-        .map_err(|e| e.to_string())?;
-
-    let config = ExecuteConfig {
-        communication: comm_config,
-        worker: WorkerConfig::default().progress_mode(progress_mode),
-    };
-
+    let config = Config::from_args(iter)?;
     execute(config, func)
 }
 
@@ -369,7 +357,7 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 ///
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
-/// use timely::worker::WorkerConfig;
+/// use timely::WorkerConfig;
 ///
 /// // execute a timely dataflow using command line parameters
 /// let (builders, other) = timely::CommunicationConfig::Process(3).try_build().unwrap();

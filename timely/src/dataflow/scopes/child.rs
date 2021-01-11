@@ -12,7 +12,7 @@ use crate::progress::{Source, Target};
 use crate::progress::timestamp::Refines;
 use crate::order::Product;
 use crate::logging::TimelyLogger as Logger;
-use crate::worker::{AsWorker, WorkerConfig};
+use crate::worker::{AsWorker, Config};
 
 use super::{ScopeParent, Scope};
 
@@ -52,7 +52,7 @@ where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>
 {
-    fn config(&self) -> &WorkerConfig { self.parent.config() }
+    fn config(&self) -> &Config { self.parent.config() }
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
     fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {

@@ -1,11 +1,9 @@
 extern crate timely;
 
-use timely::CommunicationConfig;
-use timely::execute::ExecuteConfig;
+use timely::{Config, CommunicationConfig, WorkerConfig};
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::{Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
-use timely::worker::WorkerConfig;
 
 #[test] fn barrier_sync_1w() { barrier_sync_helper(CommunicationConfig::Thread); }
 #[test] fn barrier_sync_2w() { barrier_sync_helper(CommunicationConfig::Process(2)); }
@@ -13,7 +11,7 @@ use timely::worker::WorkerConfig;
 
 // This method asserts that each round of execution is notified of at most one time.
 fn barrier_sync_helper(comm_config: ::timely::CommunicationConfig) {
-    let config = ExecuteConfig {
+    let config = Config {
         communication: comm_config,
         worker: WorkerConfig::default(),
     };
