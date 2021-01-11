@@ -24,6 +24,8 @@ use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
 use crate::progress::timestamp::Refines;
 
+use crate::worker::ProgressMode;
+
 // IMPORTANT : by convention, a child identifier of zero is used to indicate inputs and outputs of
 // the Subgraph itself. An identifier greater than zero corresponds to an actual child, which can
 // be found at position (id - 1) in the `children` field of the Subgraph.
@@ -198,7 +200,7 @@ where
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             scope_summary,
 
-            eager_progress_send: ::std::env::var("DEFAULT_PROGRESS_MODE") != Ok("DEMAND".to_owned()),
+            progress_mode: worker.config().progress_mode,
         }
     }
 }
@@ -249,7 +251,7 @@ where
     shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
     scope_summary: Vec<Vec<Antichain<TInner::Summary>>>,
 
-    eager_progress_send: bool,
+    progress_mode: ProgressMode,
 }
 
 impl<TOuter, TInner> Schedule for Subgraph<TOuter, TInner>
@@ -482,7 +484,7 @@ where
 
         // If we are requested to eagerly send progress updates, or if there are
         // updates visible in the scope-wide frontier, we must send all updates.
-        let must_send = self.eager_progress_send || {
+        let must_send = self.progress_mode == ProgressMode::Eager || {
             let tracker = &mut self.pointstamp_tracker;
             self.local_pointstamp
                 .iter()

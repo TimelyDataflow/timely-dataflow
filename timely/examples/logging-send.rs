@@ -9,8 +9,7 @@ use timely::logging::TimelyEvent;
 
 fn main() {
     // initializes and runs a timely dataflow.
-    let config = timely::Configuration::from_args(::std::env::args()).unwrap();
-    timely::execute(config, |worker| {
+    timely::execute_from_args(std::env::args(), |worker| {
 
         let batch = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
         let rounds = std::env::args().nth(2).unwrap().parse::<usize>().unwrap();

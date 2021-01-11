@@ -65,10 +65,10 @@ impl<T: ExchangeData> Sequencer<T> {
     /// ```rust
     /// use std::time::{Instant, Duration};
     ///
-    /// use timely::Configuration;
+    /// use timely::ExecuteConfig;
     /// use timely::synchronization::Sequencer;
     ///
-    /// timely::execute(Configuration::Process(4), |worker| {
+    /// timely::execute(ExecuteConfig::process(4), |worker| {
     ///     let timer = Instant::now();
     ///     let mut sequencer = Sequencer::new(worker, timer);
     ///

@@ -1,8 +1,38 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
-use crate::communication::{initialize_from, Configuration, Allocator, allocator::AllocateBuilder, WorkerGuards};
+use std::io::BufRead;
+
+use crate::communication::{initialize_from, CommunicationConfig, Allocator, allocator::AllocateBuilder, WorkerGuards};
 use crate::dataflow::scopes::Child;
-use crate::worker::Worker;
+use crate::worker::{ProgressMode, Worker, WorkerConfig};
+
+/// Configures the execution of a timely dataflow computation.
+pub struct ExecuteConfig {
+    /// Configuration for the communication infrastructure.
+    pub communication: CommunicationConfig,
+    /// Configuration for the worker threads.
+    pub worker: WorkerConfig,
+}
+
+impl ExecuteConfig {
+    /// Constructs an `ExecuteConfig` that uses one worker thread and the
+    /// defaults for all other parameters.
+    pub fn thread() -> ExecuteConfig {
+        ExecuteConfig {
+            communication: CommunicationConfig::Thread,
+            worker: WorkerConfig::default(),
+        }
+    }
+
+    /// Constructs an `ExecuteConfig` that uses `n` worker threads and the
+    /// defaults for all other parameters.
+    pub fn process(n: usize) -> ExecuteConfig {
+        ExecuteConfig {
+            communication: CommunicationConfig::Process(n),
+            worker: WorkerConfig::default(),
+        }
+    }
+}
 
 /// Executes a single-threaded timely dataflow computation.
 ///
@@ -82,7 +112,7 @@ where
     F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
 {
     let alloc = crate::communication::allocator::thread::Thread::new();
-    let mut worker = crate::worker::Worker::new(alloc);
+    let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc);
     let result = func(&mut worker);
     while worker.step_or_park(None) { }
     result
@@ -111,7 +141,7 @@ where
 /// use timely::dataflow::operators::{ToStream, Inspect};
 ///
 /// // execute a timely dataflow using three worker threads.
-/// timely::execute(timely::Configuration::Process(3), |worker| {
+/// timely::execute(timely::ExecuteConfig::process(3), |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
@@ -133,7 +163,7 @@ where
 /// let send = Arc::new(Mutex::new(send));
 ///
 /// // execute a timely dataflow using three worker threads.
-/// timely::execute(timely::Configuration::Process(3), move |worker| {
+/// timely::execute(timely::ExecuteConfig::process(3), move |worker| {
 ///     let send = send.lock().unwrap().clone();
 ///     worker.dataflow::<(),_,_>(move |scope| {
 ///         (0..10).to_stream(scope)
@@ -145,12 +175,15 @@ where
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
-pub fn execute<T, F>(mut config: Configuration, func: F) -> Result<WorkerGuards<T>,String>
+pub fn execute<T, F>(
+    mut config: ExecuteConfig,
+    func: F
+) -> Result<WorkerGuards<T>,String>
 where
     T:Send+'static,
     F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static {
 
-    if let Configuration::Cluster { ref mut log_fn, .. } = config {
+    if let CommunicationConfig::Cluster { ref mut log_fn, .. } = config.communication {
 
         *log_fn = Box::new(|events_setup| {
 
@@ -181,11 +214,11 @@ where
         });
     }
 
-    let (allocators, other) = config.try_build()?;
+    let (allocators, other) = config.communication.try_build()?;
 
     initialize_from(allocators, other, move |allocator| {
 
-        let mut worker = Worker::new(allocator);
+        let mut worker = Worker::new(WorkerConfig::default(), allocator);
 
         // If an environment variable is set, use it as the default timely logging.
         if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
@@ -269,8 +302,65 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
     where I: Iterator<Item=String>,
           T:Send+'static,
           F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static, {
-    let configuration = Configuration::from_args(iter)?;
-    execute(configuration, func)
+    let mut opts = getopts::Options::new();
+    opts.optopt("w", "threads", "number of per-process worker threads", "NUM");
+    opts.optopt("p", "process", "identity of this process", "IDX");
+    opts.optopt("n", "processes", "number of processes", "NUM");
+    opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
+    opts.optflag("r", "report", "reports connection progress");
+    opts.optopt("", "progress-mode", "progress tracking mode (eager or demand)", "MODE");
+
+    let matches = opts.parse(iter).map_err(|e| e.to_string())?;
+
+    let threads = matches.opt_get_default("w", 1_usize).map_err(|e| e.to_string())?;
+    let process = matches.opt_get_default("p", 0_usize).map_err(|e| e.to_string())?;
+    let processes = matches.opt_get_default("n", 1_usize).map_err(|e| e.to_string())?;
+    let report = matches.opt_present("report");
+
+    assert!(process < processes);
+
+    let comm_config = if processes > 1 {
+        let mut addresses = Vec::new();
+        if let Some(hosts) = matches.opt_str("h") {
+            let file = ::std::fs::File::open(hosts.clone()).map_err(|e| e.to_string())?;
+            let reader = ::std::io::BufReader::new(file);
+            for line in reader.lines().take(processes) {
+                addresses.push(line.map_err(|e| e.to_string())?);
+            }
+            if addresses.len() < processes {
+                panic!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes);
+            }
+        }
+        else {
+            for index in 0..processes {
+                addresses.push(format!("localhost:{}", 2101 + index));
+            }
+        }
+
+        assert!(processes == addresses.len());
+        CommunicationConfig::Cluster {
+            threads,
+            process,
+            addresses,
+            report,
+            log_fn: Box::new( | _ | None),
+        }
+    } else if threads > 1 {
+        CommunicationConfig::Process(threads)
+    } else {
+        CommunicationConfig::Thread
+    };
+
+    let progress_mode = matches
+        .opt_get_default("progress-mode", ProgressMode::Eager)
+        .map_err(|e| e.to_string())?;
+
+    let config = ExecuteConfig {
+        communication: comm_config,
+        worker: WorkerConfig::default().progress_mode(progress_mode),
+    };
+
+    execute(config, func)
 }
 
 /// Executes a timely dataflow from supplied allocators and logging.
@@ -279,23 +369,29 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 ///
 /// ```rust
 /// use timely::dataflow::operators::{ToStream, Inspect};
+/// use timely::worker::WorkerConfig;
 ///
 /// // execute a timely dataflow using command line parameters
-/// let (builders, other) = timely::Configuration::Process(3).try_build().unwrap();
-/// timely::execute::execute_from(builders, other, |worker| {
+/// let (builders, other) = timely::CommunicationConfig::Process(3).try_build().unwrap();
+/// timely::execute::execute_from(builders, other, WorkerConfig::default(), |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
 /// }).unwrap();
 /// ```
-pub fn execute_from<A, T, F>(builders: Vec<A>, others: Box<dyn ::std::any::Any+Send>, func: F) -> Result<WorkerGuards<T>,String>
+pub fn execute_from<A, T, F>(
+    builders: Vec<A>,
+    others: Box<dyn ::std::any::Any+Send>,
+    worker_config: WorkerConfig,
+    func: F,
+) -> Result<WorkerGuards<T>, String>
 where
     A: AllocateBuilder+'static,
     T: Send+'static,
     F: Fn(&mut Worker<<A as AllocateBuilder>::Allocator>)->T+Send+Sync+'static {
     initialize_from(builders, others, move |allocator| {
-        let mut worker = Worker::new(allocator);
+        let mut worker = Worker::new(worker_config.clone(), allocator);
         let result = func(&mut worker);
         while worker.step_or_park(None) { }
         result

@@ -1,16 +1,22 @@
 extern crate timely;
 
-use timely::Configuration;
+use timely::CommunicationConfig;
+use timely::execute::ExecuteConfig;
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::{Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
+use timely::worker::WorkerConfig;
 
-#[test] fn barrier_sync_1w() { barrier_sync_helper(Configuration::Thread); }
-#[test] fn barrier_sync_2w() { barrier_sync_helper(Configuration::Process(2)); }
-#[test] fn barrier_sync_3w() { barrier_sync_helper(Configuration::Process(3)); }
+#[test] fn barrier_sync_1w() { barrier_sync_helper(CommunicationConfig::Thread); }
+#[test] fn barrier_sync_2w() { barrier_sync_helper(CommunicationConfig::Process(2)); }
+#[test] fn barrier_sync_3w() { barrier_sync_helper(CommunicationConfig::Process(3)); }
 
 // This method asserts that each round of execution is notified of at most one time.
-fn barrier_sync_helper(config: ::timely::Configuration) {
+fn barrier_sync_helper(comm_config: ::timely::CommunicationConfig) {
+    let config = ExecuteConfig {
+        communication: comm_config,
+        worker: WorkerConfig::default(),
+    };
     timely::execute(config, move |worker| {
         worker.dataflow(move |scope| {
             let (handle, stream) = scope.feedback::<u64>(1);

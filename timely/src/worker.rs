@@ -3,9 +3,11 @@
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
 use std::any::Any;
+use std::str::FromStr;
 use std::time::{Instant, Duration};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::sync::Arc;
 
 use crate::communication::{Allocate, Data, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
@@ -16,11 +18,79 @@ use crate::progress::operate::Operate;
 use crate::dataflow::scopes::Child;
 use crate::logging::TimelyLogger;
 
+/// Progress mode. (???)
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ProgressMode {
+    /// ???
+    Eager,
+    /// ???
+    Demand,
+}
+
+impl Default for ProgressMode {
+    fn default() -> ProgressMode {
+        ProgressMode::Eager
+    }
+}
+
+impl FromStr for ProgressMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<ProgressMode, String> {
+        match s {
+            "eager" => Ok(ProgressMode::Eager),
+            "demand" => Ok(ProgressMode::Demand),
+            _ => Err(format!("unknown progress mode: {}", s)),
+        }
+    }
+}
+
+/// Worker configuration.
+#[derive(Debug, Default, Clone)]
+pub struct WorkerConfig {
+    /// The progress mode to use.
+    pub(crate) progress_mode: ProgressMode,
+    /// A map from parameter name to typed parameter values.
+    registry: HashMap<String, Arc<dyn Any + Send + Sync>>,
+}
+
+impl WorkerConfig {
+    /// Sets the progress mode to `progress_mode`.
+    pub fn progress_mode(mut self, progress_mode: ProgressMode) -> Self {
+        self.progress_mode = progress_mode;
+        self
+    }
+
+    /// Sets a typed configuration parameter for the given `key`.
+    ///
+    /// It is recommended to install a single configuration struct using a key
+    /// that uniquely identifies your project, to avoid clashes. For example,
+    /// differential dataflow registers a configuration struct under the key
+    /// "differential".
+    pub fn set<T>(&mut self, key: String, val: T) -> &mut Self
+    where
+        T: Send + Sync + 'static,
+    {
+        self.registry.insert(key, Arc::new(val));
+        self
+    }
+
+    /// Gets the value for configured parameter `key`.
+    ///
+    /// Returns `None` if `key` has not previously been set with
+    /// [`WorkerConfig::set`], or if the specified `T` does not match the `T`
+    /// from the call to `set`.
+    pub fn get<T: 'static>(&self, key: &str) -> Option<&T> {
+        self.registry.get(key).and_then(|val| val.downcast_ref())
+    }
+}
+
 /// Methods provided by the root Worker.
 ///
 /// These methods are often proxied by child scopes, and this trait provides access.
 pub trait AsWorker : Scheduler {
-
+    /// Returns the worker configuration parameters.
+    fn config(&self) -> &WorkerConfig;
     /// Index of the worker among its peers.
     fn index(&self) -> usize;
     /// Number of peer workers.
@@ -53,6 +123,7 @@ pub trait AsWorker : Scheduler {
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a list of dataflows that it manages.
 pub struct Worker<A: Allocate> {
+    config: WorkerConfig,
     timer: Instant,
     paths: Rc<RefCell<HashMap<usize, Vec<usize>>>>,
     allocator: Rc<RefCell<A>>,
@@ -71,6 +142,7 @@ pub struct Worker<A: Allocate> {
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
+    fn config(&self) -> &WorkerConfig { &self.config }
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
     fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
@@ -102,10 +174,11 @@ impl<A: Allocate> Scheduler for Worker<A> {
 
 impl<A: Allocate> Worker<A> {
     /// Allocates a new `Worker` bound to a channel allocator.
-    pub fn new(c: A) -> Worker<A> {
+    pub fn new(config: WorkerConfig, c: A) -> Worker<A> {
         let now = Instant::now();
         let index = c.index();
         Worker {
+            config,
             timer: now.clone(),
             paths:  Default::default(),
             allocator: Rc::new(RefCell::new(c)),
@@ -512,6 +585,7 @@ use crate::communication::Message;
 impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {
         Worker {
+            config: self.config.clone(),
             timer: self.timer,
             paths: self.paths.clone(),
             allocator: self.allocator.clone(),

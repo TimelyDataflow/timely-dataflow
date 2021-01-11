@@ -5,8 +5,14 @@ use timely_communication::{Message, Allocate};
 
 fn main() {
 
-    // extract the configuration from user-supplied arguments, initialize the computation.
-    let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
+    // use a hardcoded configuration
+    let config = timely_communication::CommunicationConfig::Cluster {
+        threads: 4,
+        process: 0,
+        addresses: vec!["localhost:2101".into()],
+        report: false,
+        log_fn: Box::new(|_| None),
+    };
     let guards = timely_communication::initialize(config, |mut allocator| {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());

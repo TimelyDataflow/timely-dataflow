@@ -2,11 +2,11 @@ extern crate timely;
 extern crate timely_communication;
 
 use timely::dataflow::operators::*;
-use timely_communication::Configuration;
+use timely::execute::ExecuteConfig;
 // use timely::progress::timestamp::RootTimestamp;
 
 fn main() {
-    timely::execute(Configuration::Thread, |worker| {
+    timely::execute(ExecuteConfig::thread(), |worker| {
         let (mut input, mut cap) = worker.dataflow::<usize,_,_>(|scope| {
             let (input, stream) = scope.new_unordered_input();
             stream.inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));

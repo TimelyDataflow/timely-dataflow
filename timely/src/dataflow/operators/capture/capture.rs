@@ -36,7 +36,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// let (send, recv) = ::std::sync::mpsc::channel();
     /// let send = Arc::new(Mutex::new(send));
     ///
-    /// timely::execute(timely::Configuration::Thread, move |worker| {
+    /// timely::execute(timely::ExecuteConfig::thread(), move |worker| {
     ///
     ///     // this is only to validate the output.
     ///     let send = send.lock().unwrap().clone();
@@ -76,7 +76,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// let (send0, recv0) = ::std::sync::mpsc::channel();
     /// let send0 = Arc::new(Mutex::new(send0));
     ///
-    /// timely::execute(timely::Configuration::Thread, move |worker| {
+    /// timely::execute(timely::ExecuteConfig::thread(), move |worker| {
     ///
     ///     // this is only to validate the output.
     ///     let send0 = send0.lock().unwrap().clone();

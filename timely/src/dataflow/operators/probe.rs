@@ -26,7 +26,7 @@ pub trait Probe<G: Scope, D: Data> {
     /// use timely::dataflow::operators::{Input, Probe, Inspect};
     ///
     /// // construct and execute a timely dataflow
-    /// timely::execute(Configuration::Thread, |worker| {
+    /// timely::execute(ExecuteConfig::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let (mut input, probe) = worker.dataflow(|scope| {
@@ -56,7 +56,7 @@ pub trait Probe<G: Scope, D: Data> {
     /// use timely::dataflow::operators::probe::Handle;
     ///
     /// // construct and execute a timely dataflow
-    /// timely::execute(Configuration::Thread, |worker| {
+    /// timely::execute(ExecuteConfig::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let mut probe = Handle::new();
@@ -181,14 +181,14 @@ impl<T: Timestamp> Clone for Handle<T> {
 #[cfg(test)]
 mod tests {
 
-    use crate::communication::Configuration;
+    use crate::execute::ExecuteConfig;
     use crate::dataflow::operators::{Input, Probe};
 
     #[test]
     fn probe() {
 
         // initializes and runs a timely dataflow computation
-        crate::execute(Configuration::Thread, |worker| {
+        crate::execute(ExecuteConfig::thread(), |worker| {
 
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {

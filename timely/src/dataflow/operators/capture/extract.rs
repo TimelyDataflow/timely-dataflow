@@ -22,7 +22,7 @@ pub trait Extract<T: Ord, D: Ord> {
     /// let (send, recv) = ::std::sync::mpsc::channel();
     /// let send = Arc::new(Mutex::new(send));
     ///
-    /// timely::execute(timely::Configuration::Thread, move |worker| {
+    /// timely::execute(timely::ExecuteConfig::thread(), move |worker| {
     ///
     ///     // this is only to validate the output.
     ///     let send = send.lock().unwrap().clone();

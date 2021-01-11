@@ -18,7 +18,7 @@ use logging_core::Logger;
 
 
 /// Possible configurations for the communication infrastructure.
-pub enum Configuration {
+pub enum CommunicationConfig {
     /// Use one thread.
     Thread,
     /// Use one process with an indicated number of threads.
@@ -38,81 +38,17 @@ pub enum Configuration {
     }
 }
 
-#[cfg(feature = "getopts")]
-impl Configuration {
-
-    /// Returns a `getopts::Options` struct that can be used to print
-    /// usage information in higher-level systems.
-    pub fn options() -> getopts::Options {
-        let mut opts = getopts::Options::new();
-        opts.optopt("w", "threads", "number of per-process worker threads", "NUM");
-        opts.optopt("p", "process", "identity of this process", "IDX");
-        opts.optopt("n", "processes", "number of processes", "NUM");
-        opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
-        opts.optflag("r", "report", "reports connection progress");
-
-        opts
-    }
-
-    /// Constructs a new configuration by parsing supplied text arguments.
-    ///
-    /// Most commonly, this uses `std::env::Args()` as the supplied iterator.
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Configuration,String> {
-        let opts = Configuration::options();
-
-        opts.parse(args)
-            .map_err(|e| format!("{:?}", e))
-            .map(|matches| {
-
-            // let mut config = Configuration::new(1, 0, Vec::new());
-            let threads = matches.opt_str("w").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
-            let process = matches.opt_str("p").map(|x| x.parse().unwrap_or(0)).unwrap_or(0);
-            let processes = matches.opt_str("n").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
-            let report = matches.opt_present("report");
-
-            assert!(process < processes);
-
-            if processes > 1 {
-                let mut addresses = Vec::new();
-                if let Some(hosts) = matches.opt_str("h") {
-                    let reader = ::std::io::BufReader::new(::std::fs::File::open(hosts.clone()).unwrap());
-                    for x in reader.lines().take(processes) {
-                        addresses.push(x.unwrap());
-                    }
-                    if addresses.len() < processes {
-                        panic!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes);
-                    }
-                }
-                else {
-                    for index in 0..processes {
-                        addresses.push(format!("localhost:{}", 2101 + index));
-                    }
-                }
-
-                assert!(processes == addresses.len());
-                Configuration::Cluster {
-                    threads,
-                    process,
-                    addresses,
-                    report,
-                    log_fn: Box::new( | _ | None),
-                }
-            }
-            else if threads > 1 { Configuration::Process(threads) }
-            else { Configuration::Thread }
-        })
-    }
-
+impl CommunicationConfig {
     /// Attempts to assemble the described communication infrastructure.
     pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
         match self {
-            Configuration::Thread => {
+            CommunicationConfig::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
             },
-            Configuration::Process(threads) => {
+            CommunicationConfig::Process(threads) => {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             },
-            Configuration::Cluster { threads, process, addresses, report, log_fn } => {
+            CommunicationConfig::Cluster { threads, process, addresses, report, log_fn } => {
                 match initialize_networking(addresses, process, threads, report, log_fn) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
@@ -137,7 +73,7 @@ impl Configuration {
 /// use timely_communication::Allocate;
 ///
 /// // configure for two threads, just one process.
-/// let config = timely_communication::Configuration::Process(2);
+/// let config = timely_communication::CommunicationConfig::Process(2);
 ///
 /// // initializes communication, spawns workers
 /// let guards = timely_communication::initialize(config, |mut allocator| {
@@ -190,7 +126,7 @@ impl Configuration {
 /// result: Ok(1)
 /// ```
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
-    config: Configuration,
+    config: CommunicationConfig,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
     let (allocators, others) = config.try_build()?;

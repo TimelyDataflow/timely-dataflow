@@ -49,7 +49,7 @@ pub trait UnorderedInput<G: Scope> {
     /// let (send, recv) = ::std::sync::mpsc::channel();
     /// let send = Arc::new(Mutex::new(send));
     ///
-    /// timely::execute(Configuration::Thread, move |worker| {
+    /// timely::execute(ExecuteConfig::thread(), move |worker| {
     ///
     ///     // this is only to validate the output.
     ///     let send = send.lock().unwrap().clone();
