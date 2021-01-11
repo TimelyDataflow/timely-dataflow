@@ -67,10 +67,14 @@ extern crate timely_communication;
 extern crate timely_bytes;
 extern crate timely_logging;
 
-pub use execute::{execute, execute_directly, execute_from_args, example};
+pub use execute::{execute, execute_directly, example};
+#[cfg(feature = "getopts")]
+pub use execute::execute_from_args;
 pub use order::PartialOrder;
 
-pub use timely_communication::Configuration;
+pub use timely_communication::Config as CommunicationConfig;
+pub use worker::Config as WorkerConfig;
+pub use execute::Config as Config;
 
 /// Re-export of the `timely_communication` crate.
 pub mod communication {

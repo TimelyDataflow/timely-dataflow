@@ -39,7 +39,7 @@ pub trait Input : Scope {
     /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
-    /// timely::execute(Configuration::Thread, |worker| {
+    /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
@@ -71,7 +71,7 @@ pub trait Input : Scope {
     /// use timely::dataflow::operators::input::Handle;
     ///
     /// // construct and execute a timely dataflow
-    /// timely::execute(Configuration::Thread, |worker| {
+    /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = Handle::new();
@@ -189,7 +189,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// use timely::dataflow::operators::input::Handle;
     ///
     /// // construct and execute a timely dataflow
-    /// timely::execute(Configuration::Thread, |worker| {
+    /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = Handle::new();
@@ -226,7 +226,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     /// use timely::dataflow::operators::input::Handle;
     ///
     /// // construct and execute a timely dataflow
-    /// timely::execute(Configuration::Thread, |worker| {
+    /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = Handle::new();

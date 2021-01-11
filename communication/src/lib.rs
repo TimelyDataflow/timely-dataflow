@@ -19,7 +19,7 @@
 //! use timely_communication::Allocate;
 //!
 //! // configure for two threads, just one process.
-//! let config = timely_communication::Configuration::Process(2);
+//! let config = timely_communication::Config::Process(2);
 //!
 //! // initializes communication, spawns workers
 //! let guards = timely_communication::initialize(config, |mut allocator| {
@@ -104,7 +104,7 @@ use abomonation::Abomonation;
 
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
-pub use initialize::{initialize, initialize_from, Configuration, WorkerGuards};
+pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
 pub use message::Message;
 
 /// A composite trait for types that may be used with channels.

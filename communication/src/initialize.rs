@@ -18,7 +18,7 @@ use logging_core::Logger;
 
 
 /// Possible configurations for the communication infrastructure.
-pub enum Configuration {
+pub enum Config {
     /// Use one thread.
     Thread,
     /// Use one process with an indicated number of threads.
@@ -38,81 +38,97 @@ pub enum Configuration {
     }
 }
 
-#[cfg(feature = "getopts")]
-impl Configuration {
-
-    /// Returns a `getopts::Options` struct that can be used to print
-    /// usage information in higher-level systems.
-    pub fn options() -> getopts::Options {
-        let mut opts = getopts::Options::new();
+impl Config {
+    /// Installs options into a [`getopts::Options`] struct that corresponds
+    /// to the parameters in the configuration.
+    ///
+    /// It is the caller's responsibility to ensure that the installed options
+    /// do not conflict with any other options that may exist in `opts`, or
+    /// that may be installed into `opts` in the future.
+    ///
+    /// This method is only available if the `getopts` feature is enabled, which
+    /// it is by default.
+    #[cfg(feature = "getopts")]
+    pub fn install_options(opts: &mut getopts::Options) {
         opts.optopt("w", "threads", "number of per-process worker threads", "NUM");
         opts.optopt("p", "process", "identity of this process", "IDX");
         opts.optopt("n", "processes", "number of processes", "NUM");
         opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
         opts.optflag("r", "report", "reports connection progress");
-
-        opts
     }
 
-    /// Constructs a new configuration by parsing supplied text arguments.
+    /// Instantiates a configuration based upon the parsed options in `matches`.
     ///
-    /// Most commonly, this uses `std::env::Args()` as the supplied iterator.
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Configuration,String> {
-        let opts = Configuration::options();
+    /// The `matches` object must have been constructed from a
+    /// [`getopts::Options`] which contained at least the options installed by
+    /// [`Self::install_options`].
+    ///
+    /// This method is only available if the `getopts` feature is enabled, which
+    /// it is by default.
+    #[cfg(feature = "getopts")]
+    pub fn from_matches(matches: &getopts::Matches) -> Result<Config, String> {
+        let threads = matches.opt_get_default("w", 1_usize).map_err(|e| e.to_string())?;
+        let process = matches.opt_get_default("p", 0_usize).map_err(|e| e.to_string())?;
+        let processes = matches.opt_get_default("n", 1_usize).map_err(|e| e.to_string())?;
+        let report = matches.opt_present("report");
 
-        opts.parse(args)
-            .map_err(|e| format!("{:?}", e))
-            .map(|matches| {
-
-            // let mut config = Configuration::new(1, 0, Vec::new());
-            let threads = matches.opt_str("w").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
-            let process = matches.opt_str("p").map(|x| x.parse().unwrap_or(0)).unwrap_or(0);
-            let processes = matches.opt_str("n").map(|x| x.parse().unwrap_or(1)).unwrap_or(1);
-            let report = matches.opt_present("report");
-
-            assert!(process < processes);
-
-            if processes > 1 {
-                let mut addresses = Vec::new();
-                if let Some(hosts) = matches.opt_str("h") {
-                    let reader = ::std::io::BufReader::new(::std::fs::File::open(hosts.clone()).unwrap());
-                    for x in reader.lines().take(processes) {
-                        addresses.push(x.unwrap());
-                    }
-                    if addresses.len() < processes {
-                        panic!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes);
-                    }
+        if processes > 1 {
+            let mut addresses = Vec::new();
+            if let Some(hosts) = matches.opt_str("h") {
+                let file = ::std::fs::File::open(hosts.clone()).map_err(|e| e.to_string())?;
+                let reader = ::std::io::BufReader::new(file);
+                for line in reader.lines().take(processes) {
+                    addresses.push(line.map_err(|e| e.to_string())?);
                 }
-                else {
-                    for index in 0..processes {
-                        addresses.push(format!("localhost:{}", 2101 + index));
-                    }
-                }
-
-                assert!(processes == addresses.len());
-                Configuration::Cluster {
-                    threads,
-                    process,
-                    addresses,
-                    report,
-                    log_fn: Box::new( | _ | None),
+                if addresses.len() < processes {
+                    return Err(format!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes));
                 }
             }
-            else if threads > 1 { Configuration::Process(threads) }
-            else { Configuration::Thread }
-        })
+            else {
+                for index in 0..processes {
+                    addresses.push(format!("localhost:{}", 2101 + index));
+                }
+            }
+
+            assert!(processes == addresses.len());
+            Ok(Config::Cluster {
+                threads,
+                process,
+                addresses,
+                report,
+                log_fn: Box::new( | _ | None),
+            })
+        } else if threads > 1 {
+            Ok(Config::Process(threads))
+        } else {
+            Ok(Config::Thread)
+        }
+    }
+
+    /// Constructs a new configuration by parsing the supplied text arguments.
+    ///
+    /// Most commonly, callers supply `std::env::args()` as the iterator.
+    ///
+    /// This method is only available if the `getopts` feature is enabled, which
+    /// it is by default.
+    #[cfg(feature = "getopts")]
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config, String> {
+        let mut opts = getopts::Options::new();
+        Config::install_options(&mut opts);
+        let matches = opts.parse(args).map_err(|e| e.to_string())?;
+        Config::from_matches(&matches)
     }
 
     /// Attempts to assemble the described communication infrastructure.
     pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
         match self {
-            Configuration::Thread => {
+            Config::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
             },
-            Configuration::Process(threads) => {
+            Config::Process(threads) => {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
             },
-            Configuration::Cluster { threads, process, addresses, report, log_fn } => {
+            Config::Cluster { threads, process, addresses, report, log_fn } => {
                 match initialize_networking(addresses, process, threads, report, log_fn) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
@@ -137,7 +153,7 @@ impl Configuration {
 /// use timely_communication::Allocate;
 ///
 /// // configure for two threads, just one process.
-/// let config = timely_communication::Configuration::Process(2);
+/// let config = timely_communication::Config::Process(2);
 ///
 /// // initializes communication, spawns workers
 /// let guards = timely_communication::initialize(config, |mut allocator| {
@@ -190,7 +206,7 @@ impl Configuration {
 /// result: Ok(1)
 /// ```
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
-    config: Configuration,
+    config: Config,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
     let (allocators, others) = config.try_build()?;

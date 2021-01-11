@@ -189,7 +189,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 /// use timely::dataflow::operators::generic::operator::Operator;
 /// use timely::dataflow::channels::pact::Pipeline;
 ///
-/// timely::execute(timely::Configuration::Thread, |worker| {
+/// timely::execute(timely::Config::thread(), |worker| {
 ///     let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
 ///         let (in1_handle, in1) = scope.new_input();
 ///         let (in2_handle, in2) = scope.new_input();

@@ -2,11 +2,11 @@ extern crate timely;
 
 use std::time::{Instant, Duration};
 
-use timely::Configuration;
+use timely::Config;
 use timely::synchronization::Sequencer;
 
 fn main() {
-    timely::execute(Configuration::Process(4), |worker| {
+    timely::execute(Config::process(4), |worker| {
 
         let timer = Instant::now();
         let mut sequencer = Sequencer::new(worker, Instant::now());
@@ -21,6 +21,6 @@ fn main() {
             }
             worker.step();
         }
-        
+
     }).unwrap(); // asserts error-free execution;
 }
