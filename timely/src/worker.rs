@@ -22,11 +22,11 @@ use crate::logging::TimelyLogger;
 ///
 /// These options drive some buffering and accumulation that timely
 /// can do to try and trade volume of progress traffic against latency.
-/// By accumulating updates longer, a smaller total volume of mesasges
+/// By accumulating updates longer, a smaller total volume of messages
 /// are sent.
 ///
 /// The `ProgressMode::Demand` variant is the most robust, and least
-/// likely to lead to catatsrophic performance. The `Eager` variant
+/// likely to lead to catastrophic performance. The `Eager` variant
 /// is useful for getting the smallest latencies on systems with few
 /// workers, but does risk saturating the system with progress messages
 /// and should be used with care, or not at all.
@@ -38,7 +38,7 @@ use crate::logging::TimelyLogger;
 pub enum ProgressMode {
     /// Eagerly transmit all progress updates produced by a worker.
     ///
-    /// Prograss messages are transmitted without consideration for the
+    /// Progress messages are transmitted without consideration for the
     /// possibility that they may unblock other workers. This can result
     /// in a substantial volume of messages that do not result in a
     /// change to the lower bound of outstanding work.
@@ -66,7 +66,7 @@ pub enum ProgressMode {
 
 impl Default for ProgressMode {
     fn default() -> ProgressMode {
-        ProgressMode::Eager
+        ProgressMode::Demand
     }
 }
 
