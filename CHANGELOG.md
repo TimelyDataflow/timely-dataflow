@@ -6,9 +6,21 @@ All notable changes to this project will be documented in this file.
 
 The `Timestamp` trait has a new method `minimim()` that replaces Timely's use of `Default::default()` for default capabilities. The most pressing reason for this is the use of signed integers for timestamps, where Timely would effectively prevent the use of negative numbers by providing the default value of zero for capabilities. This should not have reduced any functionality, but might provide surprising output for programs that use integer timestamps and do not first advance timestamps (the tidy `0` will be replaced with `_::min_value()`).
 
+### Added
+
+Timely configuration can now be done with the `worker::Config` type, which supports user-defined configuration options.
+The `get` and `set` methods allow binding arbitrary strings to arbitrary types `T: Send + Sync + 'static`.
+For example, differential dataflow uses this mechanism to configure its background compaction rates.
+
 ### Removed
 
 Removed all deprecated methods and traits.
+
+Timely no longer responds to the `DEFAULT_PROGRESS_MODE` environment variable. Instead, it uses the newly added `worker::Config`.
+
+### Changed
+
+The default progress mode changed from "eager" to "demand driven", which causes progress updates to be accumulated for longer before transmission. The eager default had the potential to produce catastrophically large volumes of progress update messages, for the benefit of a reduced critical path latency. The demand-driven default removes the potential for catastrophic failure at the expense of an increase minimal latency. This should give a better default experience as one scales up the to large numbers of workers.
 
 ## 0.11.0
 
