@@ -58,18 +58,6 @@ impl<T:Timestamp+Send> Progcaster<T> {
         changes.compact();
         if !changes.is_empty() {
 
-            // self.logging.as_ref().map(|l| l.log(crate::logging::ProgressEvent {
-            //     is_send: true,
-            //     source: self.source,
-            //     channel: self.channel_identifier,
-            //     seq_no: self.counter,
-            //     addr: self.addr.clone(),
-            //     // TODO: fill with additional data
-            //     messages: Vec::new(),
-            //     internal: Vec::new(),
-            // }));
-
-
             // This logging is relatively more expensive than other logging, as we
             // have formatting and string allocations on the main path. We do have
             // local type information about the timestamp, and we could log *that*
@@ -148,18 +136,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
             let addr = &mut self.addr;
             let channel = self.channel_identifier;
 
-
-            // self.logging.as_ref().map(|l| l.log(crate::logging::ProgressEvent {
-            //     is_send: false,
-            //     source: source,
-            //     seq_no: counter,
-            //     channel,
-            //     addr: addr.clone(),
-            //     // TODO: fill with additional data
-            //     messages: Vec::new(),
-            //     internal: Vec::new(),
-            // }));
-
+            // See comments above about the relatively high cost of this logging, and our
+            // options for improving it if performance limits users who want other logging.
             self.logging.as_ref().map(|l| {
 
                 let mut messages = Vec::with_capacity(changes.len());
