@@ -5,7 +5,7 @@ use timely::dataflow::operators::{Input, Exchange, Probe};
 
 // use timely::dataflow::operators::capture::EventWriter;
 // use timely::dataflow::ScopeParent;
-use timely::logging::TimelyEvent;
+use timely::logging::{TimelyEvent, TimelyProgressEvent};
 
 fn main() {
     // initializes and runs a timely dataflow.
@@ -19,6 +19,11 @@ fn main() {
         // Register timely worker logging.
         worker.log_register().insert::<TimelyEvent,_>("timely", |_time, data|
             data.iter().for_each(|x| println!("LOG1: {:?}", x))
+        );
+
+        // Register timely progress logging.
+        worker.log_register().insert::<TimelyProgressEvent,_>("timely/progress", |_time, data|
+            data.iter().for_each(|x| println!("PROGRESS: {:?}", x))
         );
 
         // create a new input, exchange data, and inspect its output
