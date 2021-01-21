@@ -107,6 +107,11 @@ impl<T: crate::Data + std::fmt::Debug + std::any::Any> ProgressEventTimestamp fo
 }
 
 /// A vector of progress updates in logs
+///
+/// This exists to support upcasting of the concrecte progress update vectors to
+/// `dyn ProgressEventTimestamp`. Doing so at the vector granularity allows us to
+/// use a single allocation for the entire vector (as opposed to a `Box` allocation
+/// for each dynamically typed element).
 pub trait ProgressEventTimestampVec: std::fmt::Debug + std::any::Any {
     /// Iterate over the contents of the vector
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a>;
