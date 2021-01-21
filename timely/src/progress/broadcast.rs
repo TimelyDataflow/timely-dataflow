@@ -59,13 +59,6 @@ impl<T:Timestamp+Send> Progcaster<T> {
         changes.compact();
         if !changes.is_empty() {
 
-            // This logging is relatively more expensive than other logging, as we
-            // have formatting and string allocations on the main path. We do have
-            // local type information about the timestamp, and we could log *that*
-            // explicitly, but the consumer would have to know what to look for and
-            // interpret appropriately. That's a big ask, so let's start with this,
-            // and as folks need more performant logging think about allowing users
-            // to select the more efficient variant.
             self.progress_logging.as_ref().map(|l| {
 
                 // Pre-allocate enough space; we transfer ownership, so there is not
@@ -74,14 +67,13 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 let mut messages = Box::new(Vec::with_capacity(changes.len()));
                 let mut internal = Box::new(Vec::with_capacity(changes.len()));
 
-                // TODO: Reconsider `String` type or perhaps re-use allocation.
                 for ((location, time), diff) in changes.iter() {
                     match location.port {
                         Port::Target(port) => {
-                            messages.push((location.node, port, format!("{:?}", time), *diff))
+                            messages.push((location.node, port, time.clone(), *diff))
                         },
                         Port::Source(port) => {
-                            internal.push((location.node, port, format!("{:?}", time), *diff))
+                            internal.push((location.node, port, time.clone(), *diff))
                         }
                     }
                 }
@@ -144,15 +136,14 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 let mut messages = Vec::with_capacity(changes.len());
                 let mut internal = Vec::with_capacity(changes.len());
 
-                // TODO: Reconsider `String` type or perhaps re-use allocation.
                 for ((location, time), diff) in recv_changes.iter() {
 
                     match location.port {
                         Port::Target(port) => {
-                            messages.push((location.node, port, format!("{:?}", time), *diff))
+                            messages.push((location.node, port, time.clone(), *diff))
                         },
                         Port::Source(port) => {
-                            internal.push((location.node, port, format!("{:?}", time), *diff))
+                            internal.push((location.node, port, time.clone(), *diff))
                         }
                     }
                 }

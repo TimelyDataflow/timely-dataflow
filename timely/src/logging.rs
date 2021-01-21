@@ -72,28 +72,32 @@ pub struct ChannelsEvent {
     pub target: (usize, usize),
 }
 
-#[cfg(not(feature = "bincode"))]
-/// Encapsulates (de)serialization, Debug, Display, for dynamically typed timestamps in logs
-pub trait ProgressEventTimestamp: std::fmt::Debug + std::fmt::Display + std::any::Any {
-    /// Encodes a typed reference into a binary buffer.
+/// Encapsulates Any and Debug for dynamically typed timestamps in logs
+pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
+    /// Upcasts this `ProgressEventTimestamp` to `Any`.
     ///
-    /// # Safety
-    ///
-    /// This method is unsafe because it is unsafe to transmute typed allocations to binary.
-    /// Furthermore, Rust currently indicates that it is undefined behavior to observe padding
-    /// bytes, which will happen when we `memmcpy` structs which contain padding bytes.
-    unsafe fn encode(&self, write: &mut dyn std::io::Write) -> std::io::Result<()>;
-}
+    /// NOTE: This is required until https://github.com/rust-lang/rfcs/issues/2765 is fixed
+    fn as_any(&self) -> &dyn std::any::Any;
 
-#[cfg(not(feature = "bincode"))]
-impl<T: crate::communication::Data + std::fmt::Debug + std::fmt::Display + std::any::Any> ProgressEventTimestamp for T {
-    unsafe fn encode(&self, mut write: &mut dyn std::io::Write) -> std::io::Result<()> {
-        abomonation::encode(self, &mut write)
-    }
+    /// Returns the name of the concrete type of this object.
+    ///
+    /// # Note
+    ///
+    /// This is intended for diagnostic use. The exact contents and format of the
+    /// string returned are not specified, other than being a best-effort
+    /// description of the type. For example, amongst the strings
+    /// that `type_name::<Option<String>>()` might return are `"Option<String>"` and
+    /// `"std::option::Option<std::string::String>"`.
+    fn type_name(&self) -> &'static str;
+}
+impl<T: crate::Data + std::fmt::Debug + std::any::Any> ProgressEventTimestamp for T {
+    fn as_any(&self) -> &dyn std::any::Any { self }
+
+    fn type_name(&self) -> &'static str { std::any::type_name::<T>() }
 }
 
 /// A vector of progress updates in logs
-pub trait ProgressEventTimestampVec: std::fmt::Debug + std::any::Any{
+pub trait ProgressEventTimestampVec: std::fmt::Debug + std::any::Any {
     /// Iterate over the contents of the vector
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a>;
 }

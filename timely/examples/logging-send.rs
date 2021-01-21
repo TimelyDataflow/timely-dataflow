@@ -22,8 +22,23 @@ fn main() {
         );
 
         // Register timely progress logging.
+        // Less generally useful: intended for debugging advanced custom operators or timely
+        // internals.
         worker.log_register().insert::<TimelyProgressEvent,_>("timely/progress", |_time, data|
-            data.iter().for_each(|x| println!("PROGRESS: {:?}", x))
+            data.iter().for_each(|x| {
+                println!("PROGRESS: {:?}", x);
+                let (_, _, ev) = x;
+                print!("PROGRESS: TYPED MESSAGES: ");
+                for (n, p, t, d) in ev.messages.iter() {
+                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                }
+                println!();
+                print!("PROGRESS: TYPED INTERNAL: ");
+                for (n, p, t, d) in ev.internal.iter() {
+                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                }
+                println!();
+            })
         );
 
         // create a new input, exchange data, and inspect its output
