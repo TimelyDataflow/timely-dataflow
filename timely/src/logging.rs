@@ -77,6 +77,16 @@ pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
     /// Upcasts this `ProgressEventTimestamp` to `Any`.
     ///
     /// NOTE: This is required until https://github.com/rust-lang/rfcs/issues/2765 is fixed
+    ///
+    /// # Example
+    /// ```rust
+    /// let ts = vec![(0usize, 0usize, (23u64, 10u64), -4i64), (0usize, 0usize, (23u64, 11u64), 1i64)];
+    /// let ts: &timely::logging::ProgressEventTimestampVec = &ts;
+    /// for (n, p, t, d) in ts.iter() {
+    ///     print!("{:?}, ", (n, p, t.as_any().downcast_ref::<(u64, u64)>(), d));
+    /// }
+    /// println!();
+    /// ```
     fn as_any(&self) -> &dyn std::any::Any;
 
     /// Returns the name of the concrete type of this object.
