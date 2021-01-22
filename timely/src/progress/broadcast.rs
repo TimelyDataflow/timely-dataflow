@@ -4,6 +4,7 @@ use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::{Location, Port};
 use crate::communication::{Message, Push, Pull};
 use crate::logging::TimelyLogger as Logger;
+use crate::logging::TimelyProgressLogger as ProgressLogger;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
@@ -25,12 +26,12 @@ pub struct Progcaster<T:Timestamp> {
     /// Communication channel identifier
     channel_identifier: usize,
 
-    logging: Option<Logger>,
+    progress_logging: Option<ProgressLogger>,
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>) -> Progcaster<T> {
+    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         let (pushers, puller) = worker.allocate(channel_identifier, &path[..]);
@@ -48,7 +49,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
             counter: 0,
             addr,
             channel_identifier,
-            logging,
+            progress_logging,
         }
     }
 
@@ -58,34 +59,26 @@ impl<T:Timestamp+Send> Progcaster<T> {
         changes.compact();
         if !changes.is_empty() {
 
-            // This logging is relatively more expensive than other logging, as we
-            // have formatting and string allocations on the main path. We do have
-            // local type information about the timestamp, and we could log *that*
-            // explicitly, but the consumer would have to know what to look for and
-            // interpret appropriately. That's a big ask, so let's start with this,
-            // and as folks need more performant logging think about allowing users
-            // to select the more efficient variant.
-            self.logging.as_ref().map(|l| {
+            self.progress_logging.as_ref().map(|l| {
 
                 // Pre-allocate enough space; we transfer ownership, so there is not
                 // an apportunity to re-use allocations (w/o changing the logging
                 // interface to accept references).
-                let mut messages = Vec::with_capacity(changes.len());
-                let mut internal = Vec::with_capacity(changes.len());
+                let mut messages = Box::new(Vec::with_capacity(changes.len()));
+                let mut internal = Box::new(Vec::with_capacity(changes.len()));
 
-                // TODO: Reconsider `String` type or perhaps re-use allocation.
                 for ((location, time), diff) in changes.iter() {
                     match location.port {
                         Port::Target(port) => {
-                            messages.push((location.node, port, format!("{:?}", time), *diff))
+                            messages.push((location.node, port, time.clone(), *diff))
                         },
                         Port::Source(port) => {
-                            internal.push((location.node, port, format!("{:?}", time), *diff))
+                            internal.push((location.node, port, time.clone(), *diff))
                         }
                     }
                 }
 
-                l.log(crate::logging::ProgressEvent {
+                l.log(crate::logging::TimelyProgressEvent {
                     is_send: true,
                     source: self.source,
                     channel: self.channel_identifier,
@@ -138,32 +131,31 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
             // See comments above about the relatively high cost of this logging, and our
             // options for improving it if performance limits users who want other logging.
-            self.logging.as_ref().map(|l| {
+            self.progress_logging.as_ref().map(|l| {
 
-                let mut messages = Vec::with_capacity(changes.len());
-                let mut internal = Vec::with_capacity(changes.len());
+                let mut messages = Box::new(Vec::with_capacity(changes.len()));
+                let mut internal = Box::new(Vec::with_capacity(changes.len()));
 
-                // TODO: Reconsider `String` type or perhaps re-use allocation.
                 for ((location, time), diff) in recv_changes.iter() {
 
                     match location.port {
                         Port::Target(port) => {
-                            messages.push((location.node, port, format!("{:?}", time), *diff))
+                            messages.push((location.node, port, time.clone(), *diff))
                         },
                         Port::Source(port) => {
-                            internal.push((location.node, port, format!("{:?}", time), *diff))
+                            internal.push((location.node, port, time.clone(), *diff))
                         }
                     }
                 }
 
-                l.log(crate::logging::ProgressEvent {
+                l.log(crate::logging::TimelyProgressEvent {
                     is_send: false,
                     source: source,
                     seq_no: counter,
                     channel,
                     addr: addr.clone(),
-                    messages,
-                    internal,
+                    messages: messages,
+                    internal: internal,
                 });
             });
 
