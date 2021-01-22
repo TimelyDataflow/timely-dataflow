@@ -12,6 +12,7 @@ use crate::progress::{Source, Target};
 use crate::progress::timestamp::Refines;
 use crate::order::Product;
 use crate::logging::TimelyLogger as Logger;
+use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::worker::{AsWorker, Config};
 
 use super::{ScopeParent, Scope};
@@ -32,6 +33,8 @@ where
     pub parent:   G,
     /// The log writer for this scope.
     pub logging:  Option<Logger>,
+    /// The progress log writer for this scope.
+    pub progress_logging:  Option<ProgressLogger>,
 }
 
 impl<'a, G, T> Child<'a, G, T>
@@ -115,12 +118,13 @@ where
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.subgraph.borrow().path.clone();
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging().clone(), name));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging().clone(), self.progress_logging.clone(), name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
                 parent: self.clone(),
                 logging: self.logging.clone(),
+                progress_logging: self.progress_logging.clone(),
             };
             func(&mut builder)
         };
@@ -143,7 +147,8 @@ where
         Child {
             subgraph: self.subgraph,
             parent: self.parent.clone(),
-            logging: self.logging.clone()
+            logging: self.logging.clone(),
+            progress_logging: self.progress_logging.clone(),
         }
     }
 }

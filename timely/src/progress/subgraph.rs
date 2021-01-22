@@ -11,6 +11,7 @@ use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
 use crate::logging::TimelyLogger as Logger;
+use crate::logging::TimelyProgressLogger as ProgressLogger;
 
 use crate::scheduling::Schedule;
 use crate::scheduling::activate::Activations;
@@ -63,6 +64,9 @@ where
 
     /// Logging handle
     logging: Option<Logger>,
+
+    /// Progress logging handle
+    progress_logging: Option<ProgressLogger>,
 }
 
 impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
@@ -95,6 +99,7 @@ where
         index: usize,
         mut path: Vec<usize>,
         logging: Option<Logger>,
+        progress_logging: Option<ProgressLogger>,
         name: &str,
     )
         -> SubgraphBuilder<TOuter, TInner>
@@ -114,6 +119,7 @@ where
             input_messages: Vec::new(),
             output_capabilities: Vec::new(),
             logging,
+            progress_logging,
         }
     }
 
@@ -169,7 +175,7 @@ where
 
         let (tracker, scope_summary) = builder.build();
 
-        let progcaster = Progcaster::new(worker, &self.path, self.logging.clone());
+        let progcaster = Progcaster::new(worker, &self.path, self.logging.clone(), self.progress_logging.clone());
 
         let mut incomplete = vec![true; self.children.len()];
         incomplete[0] = false;

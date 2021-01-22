@@ -1,9 +1,10 @@
 //! Broadcasts progress information among workers.
 
 use crate::progress::{ChangeBatch, Timestamp};
-use crate::progress::Location;
+use crate::progress::{Location, Port};
 use crate::communication::{Message, Push, Pull};
 use crate::logging::TimelyLogger as Logger;
+use crate::logging::TimelyProgressLogger as ProgressLogger;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
@@ -25,12 +26,12 @@ pub struct Progcaster<T:Timestamp> {
     /// Communication channel identifier
     channel_identifier: usize,
 
-    logging: Option<Logger>,
+    progress_logging: Option<ProgressLogger>,
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>) -> Progcaster<T> {
+    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         let (pushers, puller) = worker.allocate(channel_identifier, &path[..]);
@@ -48,7 +49,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
             counter: 0,
             addr,
             channel_identifier,
-            logging,
+            progress_logging,
         }
     }
 
@@ -58,16 +59,35 @@ impl<T:Timestamp+Send> Progcaster<T> {
         changes.compact();
         if !changes.is_empty() {
 
-            self.logging.as_ref().map(|l| l.log(crate::logging::ProgressEvent {
-                is_send: true,
-                source: self.source,
-                channel: self.channel_identifier,
-                seq_no: self.counter,
-                addr: self.addr.clone(),
-                // TODO: fill with additional data
-                messages: Vec::new(),
-                internal: Vec::new(),
-            }));
+            self.progress_logging.as_ref().map(|l| {
+
+                // Pre-allocate enough space; we transfer ownership, so there is not
+                // an apportunity to re-use allocations (w/o changing the logging
+                // interface to accept references).
+                let mut messages = Box::new(Vec::with_capacity(changes.len()));
+                let mut internal = Box::new(Vec::with_capacity(changes.len()));
+
+                for ((location, time), diff) in changes.iter() {
+                    match location.port {
+                        Port::Target(port) => {
+                            messages.push((location.node, port, time.clone(), *diff))
+                        },
+                        Port::Source(port) => {
+                            internal.push((location.node, port, time.clone(), *diff))
+                        }
+                    }
+                }
+
+                l.log(crate::logging::TimelyProgressEvent {
+                    is_send: true,
+                    source: self.source,
+                    channel: self.channel_identifier,
+                    seq_no: self.counter,
+                    addr: self.addr.clone(),
+                    messages,
+                    internal,
+                });
+            });
 
             for pusher in self.pushers.iter_mut() {
 
@@ -108,16 +128,36 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
             let addr = &mut self.addr;
             let channel = self.channel_identifier;
-            self.logging.as_ref().map(|l| l.log(crate::logging::ProgressEvent {
-                is_send: false,
-                source: source,
-                seq_no: counter,
-                channel,
-                addr: addr.clone(),
-                // TODO: fill with additional data
-                messages: Vec::new(),
-                internal: Vec::new(),
-            }));
+
+            // See comments above about the relatively high cost of this logging, and our
+            // options for improving it if performance limits users who want other logging.
+            self.progress_logging.as_ref().map(|l| {
+
+                let mut messages = Box::new(Vec::with_capacity(changes.len()));
+                let mut internal = Box::new(Vec::with_capacity(changes.len()));
+
+                for ((location, time), diff) in recv_changes.iter() {
+
+                    match location.port {
+                        Port::Target(port) => {
+                            messages.push((location.node, port, time.clone(), *diff))
+                        },
+                        Port::Source(port) => {
+                            internal.push((location.node, port, time.clone(), *diff))
+                        }
+                    }
+                }
+
+                l.log(crate::logging::TimelyProgressEvent {
+                    is_send: false,
+                    source: source,
+                    seq_no: counter,
+                    channel,
+                    addr: addr.clone(),
+                    messages: messages,
+                    internal: internal,
+                });
+            });
 
             // We clone rather than drain to avoid deserialization.
             for &(ref update, delta) in recv_changes.iter() {

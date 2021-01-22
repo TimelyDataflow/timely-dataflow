@@ -570,7 +570,8 @@ impl<A: Allocate> Worker<A> {
         let dataflow_index = self.allocate_dataflow_index();
         let identifier = self.new_identifier();
 
-        let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone(), name);
+        let progress_logging = self.logging.borrow_mut().get("timely/progress");
+        let subscope = SubgraphBuilder::new_from(dataflow_index, addr, logging.clone(), progress_logging.clone(), name);
         let subscope = RefCell::new(subscope);
 
         let result = {
@@ -578,6 +579,7 @@ impl<A: Allocate> Worker<A> {
                 subgraph: &subscope,
                 parent: self.clone(),
                 logging: logging.clone(),
+                progress_logging: progress_logging.clone(),
             };
             func(&mut resources, &mut builder)
         };
