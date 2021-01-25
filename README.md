@@ -143,7 +143,7 @@ Timely dataflow is intended to support multiple levels of abstraction, from the 
 
 There are currently a few options for writing timely dataflow programs. Ideally this set will expand with time, as interested people write their own layers (or build on those of others).
 
-* [**Timely dataflow**](https://docs.rs/timely/0.6.0/timely/dataflow/operators/index.html): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also includes more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
+* [**Timely dataflow**](https://docs.rs/timely/latest/timely/dataflow/operators/index.html): Timely dataflow includes several primitive operators, including standard operators like `map`, `filter`, and `concat`. It also includes more exotic operators for tasks like entering and exiting loops (`enter` and `leave`), as well as generic operators whose implementations can be supplied using closures (`unary` and `binary`).
 
 * [**Differential dataflow**](https://github.com/timelydataflow/differential-dataflow): A higher-level language built on timely dataflow, differential dataflow includes operators like `group`, `join`, and `iterate`. Its implementation is fully incrementalized, and the details are pretty cool (if mysterious).
 
