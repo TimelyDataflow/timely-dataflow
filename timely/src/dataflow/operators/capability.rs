@@ -371,10 +371,14 @@ impl<T: Timestamp> CapabilitySet<T> {
     /// Downgrades the set of capabilities to correspond with the times in `frontier`.
     ///
     /// This method panics if any element of `frontier` is not greater or equal to some element of `self.elements`.
-    pub fn downgrade(&mut self, frontier: &[T]) {
+    pub fn downgrade<B, F>(&mut self, frontier: F)
+    where
+        B: std::borrow::Borrow<T>,
+        F: IntoIterator<Item=B>,
+    {
         let count = self.elements.len();
-        for time in frontier.iter() {
-            let capability = self.delayed(time);
+        for time in frontier.into_iter() {
+            let capability = self.delayed(time.borrow());
             self.elements.push(capability);
         }
         self.elements.drain(..count);
