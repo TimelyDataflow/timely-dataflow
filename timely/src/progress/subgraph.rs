@@ -547,6 +547,7 @@ where
     }
 
     fn set_external_summary(&mut self) {
+        self.accept_frontier();
         self.propagate_pointstamps();  // ensure propagation of input frontiers.
         self.children
             .iter_mut()
