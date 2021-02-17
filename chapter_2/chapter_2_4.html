@@ -1,0 +1,461 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Creating Operators</title>
+        
+        
+
+
+        <!-- Custom HTML head -->
+        
+
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        
+        <link rel="icon" href="../favicon.svg">
+        
+        
+        <link rel="shortcut icon" href="../favicon.png">
+        
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        
+        <link rel="stylesheet" href="../css/print.css" media="print">
+        
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        
+        <link rel="stylesheet" href="../fonts/fonts.css">
+        
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../introduction.html">Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0.html"><strong aria-hidden="true">1.</strong> Motivation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_0.html"><strong aria-hidden="true">1.1.</strong> A Simplest Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_1.html"><strong aria-hidden="true">1.2.</strong> A Simple Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_2.html"><strong aria-hidden="true">1.3.</strong> When to use Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_3.html"><strong aria-hidden="true">1.4.</strong> When not to use Timely Dataflow</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1.html"><strong aria-hidden="true">2.</strong> Core Concepts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_1.html"><strong aria-hidden="true">2.1.</strong> Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_2.html"><strong aria-hidden="true">2.2.</strong> Timestamps</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_3.html"><strong aria-hidden="true">2.3.</strong> Progress</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2.html"><strong aria-hidden="true">3.</strong> Building Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_1.html"><strong aria-hidden="true">3.1.</strong> Creating Inputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_2.html"><strong aria-hidden="true">3.2.</strong> Observing Outputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_3.html"><strong aria-hidden="true">3.3.</strong> Adding Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_4.html" class="active"><strong aria-hidden="true">3.4.</strong> Creating Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_5.html"><strong aria-hidden="true">3.5.</strong> A Worked Example</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3.html"><strong aria-hidden="true">4.</strong> Running Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_1.html"><strong aria-hidden="true">4.1.</strong> Providing Input</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_2.html"><strong aria-hidden="true">4.2.</strong> Monitoring Probes</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_3.html"><strong aria-hidden="true">4.3.</strong> Operator Execution</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_4.html"><strong aria-hidden="true">4.4.</strong> Extending Dataflows</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4.html"><strong aria-hidden="true">5.</strong> Advanced Timely Dataflow</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_1.html"><strong aria-hidden="true">5.1.</strong> Scopes</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_2.html"><strong aria-hidden="true">5.2.</strong> Iteration</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_3.html"><strong aria-hidden="true">5.3.</strong> Flow Control</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_4.html"><strong aria-hidden="true">5.4.</strong> Capture and Replay</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_5.html"><strong aria-hidden="true">5.5.</strong> Custom Datatypes</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5.html"><strong aria-hidden="true">6.</strong> Internals</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_1.html"><strong aria-hidden="true">6.1.</strong> Communication</a></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_2.html"><strong aria-hidden="true">6.2.</strong> Progress Tracking</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        
+                        
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1><a class="header" href="#creating-operators" id="creating-operators">Creating Operators</a></h1>
+<p>What if there isn't an operator that does what you want to do? What if what you want to do is better written as imperative code rather than a tangle of dataflow operators? Not a problem! Timely dataflow has you covered.</p>
+<p>Timely has several &quot;generic&quot; dataflow operators that are pretty much ready to run, except someone (you) needs to supply their implementation. This isn't as scary as it sounds; you just need to write a closure that says &quot;given a handle to my inputs and outputs, what do I do when timely asks me to run?&quot;.</p>
+<p>Let's look at an example</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use timely::dataflow::operators::ToStream;
+use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::channels::pact::Pipeline;
+
+fn main() {
+    timely::example(|scope| {
+        (0u64..10)
+            .to_stream(scope)
+            .unary(Pipeline, &quot;increment&quot;, |capability, info| {
+
+                let mut vector = Vec::new();
+                move |input, output| {
+                    while let Some((time, data)) = input.next() {
+                        data.swap(&amp;mut vector);
+                        let mut session = output.session(&amp;time);
+                        for datum in vector.drain(..) {
+                            session.give(datum + 1);
+                        }
+                    }
+                }
+            });
+    });
+}
+</code></pre></pre>
+<p>What is going on here? The heart of the mess is the dataflow operator <code>unary</code>, which is a ready-to-assemble dataflow operator with one input and one output. The <code>unary</code> operator takes three arguments (it looks like so many more!): (i) instructions about how it should distribute its inputs, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.</p>
+<p>Most of what is interesting lies in the closure, so let's first tidy up some loose ends before we dive in there. There are a few ways to request how input data should be distributed and <code>Pipeline</code> is the one that says &quot;don't move anything&quot;. The string &quot;increment&quot; is utterly arbitrary; this happens to be what the operator does, but you could change it to be your name, or a naughty word, or whatever you like. The <code>|capability|</code> stuff should be ignored for the moment; we'll explain in just a moment (it has to do with whether you would like the ability to send data before you receive any).</p>
+<p>The heart of the logic lies in the closure that binds <code>input</code> and <code>output</code>. These two are handles respectively to the operator's input (from which it can read records) and the operator's output (to which it can send records).</p>
+<p>The input handle <code>input</code> has one primary method, <code>next</code>, which may return a pair consisting of a <code>CapabilityRef&lt;Timestamp&gt;</code> and a batch of data. Rust really likes you to demonstrate a commitment to only looking at valid data, and our <code>while</code> loop does what is called deconstruction: we acknowledge the optional structure and only execute in the case the <code>Option</code> variant is <code>Some</code>, containing data. The <code>next</code> method could also return <code>None</code>, indicating that there is no more data available at the moment. It is strongly recommended that you take the hint and stop trying to read inputs at that point; timely gives you the courtesy of executing whatever code you want in this closure, but if you never release control back to the system you'll break things (timely employs <a href="https://en.wikipedia.org/wiki/Cooperative_multitasking">&quot;cooperative multitasking&quot;</a>).</p>
+<p>The output handle <code>output</code> has one primary method, <code>session</code>, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) element at a time with <code>give</code>, (ii) iterator at a time with <code>give_iterator</code>, and (iii) vector at a time with <code>give_content</code>. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the <code>while</code> loop.</p>
+<h3><a class="header" href="#other-shapes" id="other-shapes">Other shapes</a></h3>
+<p>The <code>unary</code> method is handy if you have one input and one output. What if you want something with two inputs? Or what about zero inputs? We've still got you covered.</p>
+<p>There is a <code>binary</code> method which looks a lot like unary, except that it has twice as many inputs (and ways to distribute the inputs), and requires a closure accepting two inputs and one output. You still get to write arbitrary code to drive the operator around as you like.</p>
+<p>There is also a method <code>operators::source</code> which .. has no inputs. You can't call it on a stream, for obvious reasons, but you call it with a scope as an argument. It looks just like the other methods, except you supply a closure that just takes an output as an argument and sends whatever it wants each time it gets called. This is great for reading from external sources and moving data along as you like.</p>
+<h3><a class="header" href="#capabilities" id="capabilities">Capabilities</a></h3>
+<p>We skipped a discussion of the <code>capability</code> argument, and we need to dig into that now.</p>
+<p>One of timely dataflow's main features is its ability to track whether an operator may or may not in the future receive more records bearing a certain timestamp. The way that timely does this is by requiring that its operators, like the ones we have written, hold <em>capabilities</em> for sending data at any timestamp. A capability is an instance of the <code>Capability&lt;Time&gt;</code> type, which looks to the outside world like an instance of <code>Time</code>, but which <code>output</code> will demand to see before it allows you to create a session.</p>
+<p>Remember up where we got things we called <code>time</code> and from which we created a session with <code>session(&amp;time)</code>? That type was actually a capability.</p>
+<p>Likewise, the <code>capability</code> argument that we basically ignored is also a capability. It is a capability for the default value of <code>Time</code>, from which one can send data at any timestamp. All operators get one of these to start out with, and until they downgrade or discard them, they retain the ability to send records at any time. The flip side of this is that the system doesn't make any progress <em>until</em> the operator downgrades or discards the capability.</p>
+<p>The <code>capability</code> argument exists so that we can construct operators with the ability to send data before they receive any data. This is occasionally important for <code>unary</code> and <code>binary</code> operators, but it is <em>crucially important</em> for operators with no inputs. If we want to create an operator that reads from an external source and sends data, we'll need to keep hold of some capability.</p>
+<p>Here is an example <code>source</code> implementation that produces all numbers up to some limit, each at a distinct time.</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use timely::dataflow::operators::Inspect;
+use timely::dataflow::operators::generic::operator::source;
+
+fn main() {
+    timely::example(|scope| {
+
+        source(scope, &quot;Source&quot;, |capability, info| {
+
+            // Acquire a re-activator for this operator.
+            use timely::scheduling::Scheduler;
+            let activator = scope.activator_for(&amp;info.address[..]);
+
+            let mut cap = Some(capability);
+            move |output| {
+
+                let mut done = false;
+                if let Some(cap) = cap.as_mut() {
+
+                    // get some data and send it.
+                    let time = cap.time().clone();
+                    output.session(&amp;cap)
+                          .give(*cap.time());
+
+                    // downgrade capability.
+                    cap.downgrade(&amp;(time + 1));
+                    done = time &gt; 20;
+                }
+
+                if done { cap = None; }
+                else    { activator.activate(); }
+            }
+        })
+        .inspect(|x| println!(&quot;number: {:?}&quot;, x));
+    });
+}
+</code></pre></pre>
+<p>The details seem a bit tedious, but let's talk them out. The first thing we do is capture <code>capability</code> in the variable <code>cap</code>, whose type is <code>Option&lt;Capability&lt;Time&gt;&gt;</code>. This type is important because it will allow us to eventually discard the capability, replacing it with <code>None</code>. If we always held a <code>Capability&lt;Time&gt;</code>, the best we could do would be to continually downgrade it. Another option is <code>Vec&lt;Capability&lt;Time&gt;&gt;</code>, which we could eventually clear.</p>
+<p>Our next step is to define and return a closure that takes <code>output</code> as a parameter. The <code>move</code> keyword is part of Rust and is an important part of making sure that <code>cap</code> makes its way into the closure, rather than just evaporating from the local scope when we return.</p>
+<p>The closure does a bit of a dance to capture the current time (not a capability, in this case), create a session with this time and send whatever the time happens to be as data, then downgrade the capability to be one timestep in the future. If it turns out that this is greater than twenty we discard the capability.</p>
+<p>The system is smart enough to notice when you downgrade and discard capabilities, and it understands that these actions represent irreversible actions on your part that can now be communicated to others in the dataflow. As this closure is repeatedly executed, the timestamp of the capability will advance and the system will be able to indicate this to downstream operators.</p>
+<h3><a class="header" href="#stateful-operators" id="stateful-operators">Stateful operators</a></h3>
+<p>It may seem that we have only considered stateless operators, those that are only able to read from their inputs and immediately write to their outputs. But, you can have whatever state that you like, using the magic of Rust's closures. When we write a closure, it can capture (&quot;close over&quot;) any state that is currently in scope, taking ownership of it. This is actually what we did up above with the capability. If that sounds too abstract, let's look at an example.</p>
+<p>Our <code>unary</code> example from way back just incremented the value and passed it along. What if we wanted to only pass values larger than any value we have seen so far? We just define a variable <code>max</code> which we check and update as we would normally. Importantly, we should define it <em>outside</em> the closure we return, so that it persists across calls, and we need to use the <code>move</code> keyword so that the closure knows it is supposed to take ownership of the variable.</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use timely::dataflow::operators::ToStream;
+use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::channels::pact::Pipeline;
+
+fn main() {
+    timely::example(|scope| {
+        (0u64..10)
+            .to_stream(scope)
+            .unary(Pipeline, &quot;increment&quot;, |capability, info| {
+
+                let mut maximum = 0;    // define this here; use in the closure
+                let mut vector = Vec::new();
+
+                move |input, output| {
+                    while let Some((time, data)) = input.next() {
+                        data.swap(&amp;mut vector);
+                        let mut session = output.session(&amp;time);
+                        for datum in vector.drain(..) {
+                            if datum &gt; maximum {
+                                session.give(datum + 1);
+                                maximum = datum;
+                            }
+                        }
+                    }
+                }
+            });
+    });
+}
+</code></pre></pre>
+<p>This example just captures an integer, but you could just as easily define and capture ownership of a <code>HashMap</code>, or whatever complicated state you would like repeated access to.</p>
+<p>Bear in mind that this example is probably a bit wrong, in that we update <code>max</code> without paying any attention to the times of the data that come past, and so we may report a sequence of values that doesn't seem to correspond with the sequence when sorted by time. Writing sane operators in the presence of batches of data at shuffled times requires more thought. Specifically, for an operator to put its input back in order it needs to understand which times it might see in the future, which was the reason we were so careful about those capabilities and is the subject of the next subsection.</p>
+<h3><a class="header" href="#frontiered-operators" id="frontiered-operators">Frontiered operators</a></h3>
+<p>Timely dataflow is constantly tracking the capabilities of operators throughout the dataflow graph, and it reports this information to operators through what are called &quot;frontiers&quot;. Each input has an associated frontier, which is a description of the timestamps that might arrive on that input in the future.</p>
+<p>Specifically, each input has a <code>frontier</code> method which returns a <code>&amp;[Timestamp]</code>, indicating a list of times such that any future time must be greater or equal to some element of the list. Often this list will just have a single element, indicating the &quot;current&quot; time, but as we get to more complicated forms of time (&quot;partially ordered&quot; time, if that means anything to you yet) we may need to report multiple incomparable timestamps.</p>
+<p>This frontier information is invaluable for operators that must be sure that their output is correct and final before they send it as output. For our <code>max</code> example, we will want to wait to apply the new maximum until we are sure that we will not see any more elements at earlier times. That isn't to say we can't do anything with data we receive &quot;early&quot;; in the case of the maximum, each batch at a given time can be reduced down to just its maximum value, as all received values would be applied simultaneously.</p>
+<p>To make life easier for you, we've written a helper type called <code>Notificator</code> whose job in life is to help you keep track of times that you would like to send outputs, and to tell you when (according to your input frontiers) it is now safe to send the data. In fact, notificators do more by holding on to the <em>capabilities</em> for you, so that you can be sure that, even if you <em>don't</em> receive any more messages but just an indication that there will be none, you will still retain the ability to send your messages.</p>
+<p>Here is a worked example where we use a binary operator that implements the behavior of <code>concat</code>, but it puts its inputs in order, buffering its inputs until their associated timestamp is complete, and then sending all data at that time. The operator defines and captures a <code>HashMap&lt;Time, Vec&lt;Data&gt;&gt;</code> named <code>stash</code> which it uses to buffer received input data that are not yet ready to send.</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use std::collections::HashMap;
+use timely::dataflow::operators::{ToStream, FrontierNotificator};
+use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::channels::pact::Pipeline;
+
+fn main() {
+    timely::example(|scope| {
+
+        let in1 = (0 .. 10).to_stream(scope);
+        let in2 = (0 .. 10).to_stream(scope);
+
+        in1.binary_frontier(&amp;in2, Pipeline, Pipeline, &quot;concat_buffer&quot;, |capability, info| {
+
+            let mut notificator = FrontierNotificator::new();
+            let mut stash = HashMap::new();
+
+            move |input1, input2, output| {
+                while let Some((time, data)) = input1.next() {
+                    stash.entry(time.time().clone())
+                         .or_insert(Vec::new())
+                         .push(data.replace(Vec::new()));
+                    notificator.notify_at(time.retain());
+                }
+                while let Some((time, data)) = input2.next() {
+                    stash.entry(time.time().clone())
+                         .or_insert(Vec::new())
+                         .push(data.replace(Vec::new()));
+                    notificator.notify_at(time.retain());
+                }
+
+                notificator.for_each(&amp;[input1.frontier(), input2.frontier()], |time, notificator| {
+                    let mut session = output.session(&amp;time);
+                    if let Some(list) = stash.remove(time.time()) {
+                        for mut vector in list.into_iter() {
+                            session.give_vec(&amp;mut vector);
+                        }
+                    }
+                });
+            }
+        });
+    });
+}
+</code></pre></pre>
+<p>As an exercise, this example could be improved in a few ways. How might you change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.</p>
+<p>Before ending the section, let's rewrite this example without the <code>notificator</code>, in an attempt to demystify how it works. Whether you use a notificator or not is up to you; they are mostly about staying sane in what can be a confusing setting, and you can totally skip them once you have internalized how capabilities and frontiers work.</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use std::collections::HashMap;
+use timely::dataflow::operators::{ToStream, FrontierNotificator};
+use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::channels::pact::Pipeline;
+
+fn main() {
+    timely::example(|scope| {
+
+        let in1 = (0 .. 10).to_stream(scope);
+        let in2 = (0 .. 10).to_stream(scope);
+
+        in1.binary_frontier(&amp;in2, Pipeline, Pipeline, &quot;concat_buffer&quot;, |capability, info| {
+
+            let mut stash = HashMap::new();
+
+            move |input1, input2, output| {
+
+                while let Some((time, data)) = input1.next() {
+                    stash.entry(time.retain())
+                         .or_insert(Vec::new())
+                         .push(data.replace(Vec::new()));
+                }
+                while let Some((time, data)) = input2.next() {
+                    stash.entry(time.retain())
+                         .or_insert(Vec::new())
+                         .push(data.replace(Vec::new()));
+                }
+
+                // consider sending everything in `stash`.
+                let frontiers = &amp;[input1.frontier(), input2.frontier()];
+                for (time, list) in stash.iter_mut() {
+                    // if neither input can produce data at `time`, ship `list`.
+                    if frontiers.iter().all(|f| !f.less_equal(time.time())) {
+                        let mut session = output.session(&amp;time);
+                        for mut vector in list.drain(..) {
+                            session.give_vec(&amp;mut vector);
+                        }
+                    }
+                }
+
+                // discard `time` entries with empty `list`.
+                stash.retain(|time, list| list.len() &gt; 0);
+            }
+        });
+    });
+}
+</code></pre></pre>
+<p>Take a moment and check out the differences. Mainly, <code>stash</code> is now the one source of truth about <code>time</code> and <code>data</code>, but we now have to do our own checking of <code>time</code> against the input frontiers, and <em>very importantly</em> we need to make sure to discard <code>time</code> from the <code>stash</code> when we are finished with it (otherwise we retain the ability to send at <code>time</code>, and the system will not make progress).</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="../chapter_2/chapter_2_3.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+                            <a rel="next" href="../chapter_2/chapter_2_5.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a rel="prev" href="../chapter_2/chapter_2_3.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+                    <a rel="next" href="../chapter_2/chapter_2_5.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+
+        
+
+        
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+
+    </body>
+</html>

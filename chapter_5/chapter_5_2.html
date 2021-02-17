@@ -1,0 +1,327 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Progress Tracking</title>
+        
+        
+
+
+        <!-- Custom HTML head -->
+        
+
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        
+        <link rel="icon" href="../favicon.svg">
+        
+        
+        <link rel="shortcut icon" href="../favicon.png">
+        
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        
+        <link rel="stylesheet" href="../css/print.css" media="print">
+        
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        
+        <link rel="stylesheet" href="../fonts/fonts.css">
+        
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../introduction.html">Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0.html"><strong aria-hidden="true">1.</strong> Motivation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_0.html"><strong aria-hidden="true">1.1.</strong> A Simplest Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_1.html"><strong aria-hidden="true">1.2.</strong> A Simple Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_2.html"><strong aria-hidden="true">1.3.</strong> When to use Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_3.html"><strong aria-hidden="true">1.4.</strong> When not to use Timely Dataflow</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1.html"><strong aria-hidden="true">2.</strong> Core Concepts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_1.html"><strong aria-hidden="true">2.1.</strong> Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_2.html"><strong aria-hidden="true">2.2.</strong> Timestamps</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_3.html"><strong aria-hidden="true">2.3.</strong> Progress</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2.html"><strong aria-hidden="true">3.</strong> Building Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_1.html"><strong aria-hidden="true">3.1.</strong> Creating Inputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_2.html"><strong aria-hidden="true">3.2.</strong> Observing Outputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_3.html"><strong aria-hidden="true">3.3.</strong> Adding Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_4.html"><strong aria-hidden="true">3.4.</strong> Creating Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_5.html"><strong aria-hidden="true">3.5.</strong> A Worked Example</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3.html"><strong aria-hidden="true">4.</strong> Running Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_1.html"><strong aria-hidden="true">4.1.</strong> Providing Input</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_2.html"><strong aria-hidden="true">4.2.</strong> Monitoring Probes</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_3.html"><strong aria-hidden="true">4.3.</strong> Operator Execution</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_4.html"><strong aria-hidden="true">4.4.</strong> Extending Dataflows</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4.html"><strong aria-hidden="true">5.</strong> Advanced Timely Dataflow</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_1.html"><strong aria-hidden="true">5.1.</strong> Scopes</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_2.html"><strong aria-hidden="true">5.2.</strong> Iteration</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_3.html"><strong aria-hidden="true">5.3.</strong> Flow Control</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_4.html"><strong aria-hidden="true">5.4.</strong> Capture and Replay</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_5.html"><strong aria-hidden="true">5.5.</strong> Custom Datatypes</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5.html"><strong aria-hidden="true">6.</strong> Internals</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_1.html"><strong aria-hidden="true">6.1.</strong> Communication</a></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_2.html" class="active"><strong aria-hidden="true">6.2.</strong> Progress Tracking</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        
+                        
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1><a class="header" href="#progress-tracking" id="progress-tracking">Progress Tracking</a></h1>
+<p>Progress tracking is a fundamental component of timely dataflow, and it is important to understand how it works to have a complete understanding of what timely dataflow does for you.</p>
+<p>Let's start with a statement about what progress tracking means to accomplish.</p>
+<p>The setting is that there are multiple workers, each of whom move data through a common dataflow graph. The data may move between workers, and as the data are processed by operators we have relatively few guarantees about their consequences: a worker may receive a record and do nothing, or it could send one thousand output records some of which are now destined for us. Nonetheless, we need to be able to make meaningful statements about the possibility of receiving more data.</p>
+<p>Timely dataflow's approach is that data bear a logical <em>timestamp</em>, indicating some moment in the computation at which they should be thought to exist. This is not necessarily a physical timestamp, like the worker's clock when the record was created, but could be any type satisfying a few constraints. A common example is sequence numbers, counting up from zero.</p>
+<p>Timely dataflow imposes a few constraints, we think they are natural, on the structure of the dataflow graph, from which it is able to make restrictive statements at each location in the dataflow graph of the form &quot;you will only ever see timestamps greater or equal to these times&quot;. This provides each dataflow operator with an understanding of <em>progress</em> in the computation. Eventually, we may even learn that the set of future timestamps is empty, indicating completion of the stream of data.</p>
+<p>Timely dataflow computations are structured so that to send a timestamped message, an operator must hold a capability for that timestamp. Timely dataflow's progress tracking can be viewed as (i) workers collectively maintaining a view of outstanding timestamp capabilities at each location in the dataflow graph, and (ii) each worker independently determines and communicates the implications of changes in its view of capabilities to other locations in its instance of the dataflow graph.</p>
+<p>Before we get into these two aspects, we will first need to be able to name parts of our dataflow graph.</p>
+<h2><a class="header" href="#dataflow-structure" id="dataflow-structure">Dataflow structure</a></h2>
+<p>A dataflow graph hosts some number of operators. For progress tracking, these operators are simply identified by their index. Each operator has some number of <em>input ports</em>, and some number of <em>output ports</em>. The dataflow operators are connected by connecting each input port to a single output port (typically of another operator). Each output port may be connected to multiple distinct input ports (a message produced at an output port is to be delivered to all attached input ports).</p>
+<p>In timely dataflow progress tracking, we identify output ports by the type <code>Source</code> and input ports by the type <code>Target</code>, as from the progress coordinator's point of view, an operator's output port is a <em>source</em> of timestamped data, and an operator's input port is a <em>target</em> of timestamped data. Each source and target can be described by their operator index and then an operator-local index of the corresponding port. The use of distinct types helps us avoid mistaking input and output ports.</p>
+<pre><code class="language-rust ignore">pub struct Source {
+    /// Index of the source operator.
+    pub index: usize,
+    /// Number of the output port from the operator.
+    pub port: usize,
+}
+
+pub struct Target {
+    /// Index of the target operator.
+    pub index: usize,
+    /// Nmuber of the input port to the operator.
+    pub port: usize,
+}
+</code></pre>
+<p>The structure of the dataflow graph can be described by a list of all of the connections in the graph, a <code>Vec&lt;(Source, Target)&gt;</code>. From this, we could infer the number of operators and their numbers of input and output ports, as well as enumerate all of the connections themselves.</p>
+<p>At this point we have the structure of a dataflow graph. We can draw a circle for each operator, a stub for each input and output port, and edges connecting the output ports to their destination input ports. Importantly, we have names for every location in the dataflow graph, which will either be a <code>Source</code> or a <code>Target</code>.</p>
+<h2><a class="header" href="#maintaining-capabilities" id="maintaining-capabilities">Maintaining Capabilities</a></h2>
+<p>Our first goal is for the workers to collectively track the number of outstanding timestamp capabilities in the system, for each timestamp and at each location, as dataflow operators run and messages are sent and received. Capabilities can exist in two places in timely dataflow: an operator can explicitly hold capabilities to send timestamped messages on each of its outputs, and each timestamped message bears a capability for its timestamp.</p>
+<p>When tracking capabilities, we will track their <em>multiplicity</em>: how <em>many</em> capabilities for time <code>t</code> are there at location <code>l</code>? For most locations and times this number will be zero. Unless the computation has completed, for some locations and times this number must be positive. Numbers can also be transiently negative, as reports of changes may arrive out of order.</p>
+<p>When a timely dataflow computation starts, there are no messages in flight. Rather, each operator starts with the capabilities to send any timestamped message on any of its outputs. As this is common knowledge among the workers, each initializes its counts with <code>#workers</code> for capabilities at each operator output. Each worker understands that it will need to hear <code>#workers</code> reports of such capabilities being dropped before they are actually out of the system.</p>
+<p>As a computation proceeds, operators may perform three classes of action:</p>
+<ol>
+<li>They may consume input messages, acquiring the associated capability.</li>
+<li>They may clone, downgrade, or drop any capability they hold.</li>
+<li>They may send output messages at any timestamp for which they hold the capability.</li>
+</ol>
+<p>The results of these actions are a stream of changes to the occurrences of capabilities at each location in the dataflow graph. As input messages are consumed, capabilities located at the corresponding <code>Target</code> input port are decremented, and capabilities at the operators <code>Source</code> output ports are incremented. Cloning, downgrading, and dropping capabilities changes the counts at each of the operators corresponding <code>Source</code> output ports. Sending messages results in increments to the counts at the <code>Target</code> ports of each <code>Target</code> connected to the <code>Source</code> from which the message is sent.</p>
+<p>Concretely, a batch of changes has the form <code>(Vec&lt;(Source, Time, i64)&gt;, Vec&lt;(Target, Time, i64)&gt;)</code>, indicating the increments and decrements for each time, at each dataflow location. Importantly we must keep these batches intact; the safety of the progress tracking protocol relies on not communicating half-formed progress messages (for example, consuming an input message but forgetting to indicate the acquisition of its capability).</p>
+<p>Each worker broadcasts the stream of progress change batches to all workers in the system (including itself) along point-to-point FIFO channels. At any point in time, each worker has seen an arbitrary prefix of the sequence of progress change batches produced by each other worker, and it is expected that as time proceeds each worker eventually sees every prefix of each sequence.</p>
+<p>At any point in time, each worker's view of the capabilities in the system is defined by the accumulation of all received progress change batches, plus initial capabilities at each output (with starting multiplicity equal to the number of workers). This view may be surprising and messy (there may be negative counts), but at all times it satisfies an important safety condition, related to the communicated implications of these capabilities, which we now develop.</p>
+<h2><a class="header" href="#communicating-implications" id="communicating-implications">Communicating Implications</a></h2>
+<p>Each worker maintains an accumulation of progress update batches, which explains where capabilities may exist in the dataflow graph. This information is useful, but it is not yet sufficient to make strong statements about the possibility of timestamped messages arriving at <em>other</em> locations in the dataflow graph. Even though a capability for timestamp <code>t</code> may exist, this does not mean that the time may arrive at any location in the dataflow graph. To be precise, we must discuss the paths through the dataflow graph which the timestamp capability could follow.</p>
+<h3><a class="header" href="#path-summaries" id="path-summaries">Path Summaries</a></h3>
+<p>Progress tracking occurs in the context of a dataflow graph of operators all with a common timestamp type <code>T: Timestamp</code>. The <code>Timestamp</code> trait requires the <code>PartialOrder</code> trait, meaning two timestamps may be ordered but need not be. Each type implementing <code>Timestamp</code> must also specify an associated type <code>Summary</code> implementing <code>PathSummary&lt;Self&gt;</code>.</p>
+<pre><code class="language-rust ignore">pub trait Timestamp: PartialOrder {
+    type Summary : PathSummary&lt;Self&gt;;
+}
+</code></pre>
+<p>A path summary is informally meant to summarize what <em>must</em> happen to a timestamp as it travels along a path in a timely dataflow. Most paths that you might draw have trivial summaries (&quot;no change guaranteed&quot;), but some paths do force changes on timestamps. For example, a path that goes from the end of a loop back to its head <em>must</em> increment the loop counter coordinate of any timestamp capability passed along it.</p>
+<pre><code class="language-rust ignore">pub trait PathSummary&lt;T&gt; : PartialOrder {
+    fn results_in(&amp;self, src: &amp;T) -&gt; Option&lt;T&gt;;
+    fn followed_by(&amp;self, other: &amp;Self) -&gt; Option&lt;Self&gt;;
+}
+</code></pre>
+<p>The types implementing <code>PathSummary</code> must be partially ordered, and implement two methods:</p>
+<ol>
+<li>The <code>results_in</code> method explains what must happen to a timestamp moving along a path. Note the possibility of <code>None</code>; a timestamp could <em>not</em> move along a path. For example, a path summary <code>path</code> could increment a timestamp by one, for which</li>
+</ol>
+<pre><code class="language-rust ignore">path.results_in(&amp;4) == Some(5);
+path.results_in(&amp;u64::max_value()) == None;
+</code></pre>
+<p>It is important that <code>results_in</code> only advance timestamps: for all path summaries <code>p</code> we require that</p>
+<pre><code class="language-rust ignore">if let Some(time) = p.results_in(&amp;x) {
+    assert!(x.less_equal(&amp;time));
+}
+</code></pre>
+<ol start="2">
+<li>The <code>followed_by</code> method explains how two path summaries combine. When we build the summaries we will start with paths corresponding to single edges, and build out more complex paths by combining the effects of multiple paths (and their summaries). As with <code>results_in</code>, it may be that two paths combined result in something that will never pass a timestamp, and the summary may be <code>None</code> (for example, two paths that each increment a loop counter by half of its maximum value).</li>
+</ol>
+<p>Two path summaries are ordered if for all timestamps the two results of the path summaries applied to the timestamp are also ordered.</p>
+<p>Path summaries are only partially ordered, and when summarizing what must happen to a timestamp when going from one location to another, along one of many paths, we will quickly find ourselves speaking about <em>collections</em> of path summaries. There may be several summaries corresponding to different paths we might take. We can discard summaries from this collection that are strictly greater than other elements of the collection, but we may still have multiple incomparable path summaries.</p>
+<p>The second part of progress tracking, communicating the implications of current capabilities, is fundamentally about determining and locking in the minimal collections of path summaries between any two locations (<code>Source</code> or <code>Target</code>) in the dataflow graph. This is the &quot;compiled&quot; representation of the dataflow graph, from which we can derive statements about the possibility of messages at one point in the graph leading to messages at another point.</p>
+<h3><a class="header" href="#operator-summaries" id="operator-summaries">Operator summaries</a></h3>
+<p>Where do path summaries come from?</p>
+<p>Each operator in timely dataflow must implement the <code>Operate</code> trait. Among other things, that we will get to, the <code>Operate</code> trait requires that the operator summarize <em>itself</em>, providing a collection of path summaries for each of its internal paths, from each of its inputs to each of its outputs. The operator must describe what timestamps could possibly result at each of its output as a function of a timestamped message arriving at each of its inputs.</p>
+<p>For most operators, this summary is simply: &quot;timestamped data at each of my inputs could result in equivalently timestamped data at each of my outputs&quot;. This is a fairly simple summary, and while it isn't very helpful in making progress, it is the only guarantee the operator can provide.</p>
+<p>The <code>Feedback</code> operator is where most of our interesting path summaries start: it is the operator found in feedback loops that ensures that a specific coordinate of the timestamp is incremented. All cycles in a timely dataflow graph must pass through such an operator, and in cyclic dataflow we see non-trivial summaries from the outputs of downstream operators to the inputs of upstream operators.</p>
+<p>Another useful summary is the absence of a summary. Sometimes there is no path between two points in a dataflow graph. Perhaps you do some computation on your dataflow inputs, and then introduce them into an iterative computation; there is no path that returns that data to the computation you do on the inputs. Records in-flight in the iterative subcomputation will not block the computation you do on your inputs, because we know that there is no path back from the iteration to the inputs.</p>
+<p>For example, an operator could plausibly have two inputs, a data input and a diagnostic input, and corresponding data and diagnostic outputs. The operator's internal summary could reveal that diagnostic input cannot result in data output, which allows us to issue diagnostic queries (as data for that input) without blocking downstream consumers of the data output. Timely dataflow can see that even though there are messages in flight, they cannot reach the data output and need not be on the critical path of data computation.</p>
+<h3><a class="header" href="#a-compiled-representation" id="a-compiled-representation">A Compiled Representation</a></h3>
+<p>From the operator summaries we build path summaries, and from the path summaries we determine, for every pair of either <code>Source</code> or <code>Target</code> a collection of path summaries between the two. How could a timestamped message at one location lead to timestamped messages at the other?</p>
+<p>The only constraint we require is that there should be no cycles that do not strictly advance a timestamp.</p>
+<h2><a class="header" href="#a-safety-property" id="a-safety-property">A Safety Property</a></h2>
+<p>Each operator maintains a collection of counts of timestamp capabilities at each location (<code>Source</code> or <code>Target</code>) in the dataflow graph. At the same time, there is a statically defined set of path summaries from each location to any other location in the dataflow graph.</p>
+<p>The safety property is: for any collection of counts resulting from the accumulation of arbitrary prefixes of progress update batches from participating workers, if for any location <code>l1</code> in the dataflow graph and timestamp <code>t1</code> there is not another location <code>l2</code> and timestamp <code>t2</code> with strictly positive accumulated count such that there is a path summary <code>p</code> from <code>l2</code> to <code>l1</code> with <code>p(t2) &lt;= t1</code>, then no message will ever arrive at location <code>l1</code> bearing timestamp <code>t1</code>.</p>
+<p>This property has <a href="https://www.microsoft.com/en-us/research/publication/the-naiad-clock-protocol-specification-model-checking-and-correctness-proof/">a formalization in TLA</a> courtesy of Tom Rodeheffer, but let's try to develop the intuition for its correctness.</p>
+<p>Actually, let's first develop some <em>counter</em>-intuition for its correctness. This property holds, but we've said almost nothing about the communication of messages between workers. The only property we use about message delivery in proving the safety property is that it is &quot;at most once&quot;; messages should not be multiplied in flight. Does it matter in which order messages are delivered? No. Does it matter that messages are <em>ever</em> delivered? No (this is only a safety property). Can operators consume, digest, and send messages that their local progress protocol doesn't even know exist yet? Yes.</p>
+<p>There is almost no coordination between the data plane, on which messages get sent, and the control plane, along which progress update batches get sent. The only requirement is that you do not send a progress update batch for some action that you have not performed.</p>
+<p>So where do we find intuition for the correctness of the protocol?</p>
+<p>Although we may have only seen prefixes of the progress update batches from other workers, we can nonetheless reason about what future progress update batches from each worker will need to look like. In the main, we will use the property that if updates correspond to things that actually happen:</p>
+<ol>
+<li>Any message consumed must have a corresponding message produced, even if we haven't heard about it yet.</li>
+<li>Any message produced must involve a capability held, even if we haven't heard about it yet.</li>
+<li>Any capability held must involve either another capability held, or a message consumed.</li>
+</ol>
+<p>We'll argue that for any sequence of progress updates some prefix of which accumulates as assumed in the statement of the safety property, then no extension of these prefixes could possibly include an update acknowledging a message received at <code>l1</code> with timestamp <code>t1</code>.</p>
+<p>First, we define an order on the pairs <code>(li, ti)</code> of locations and timestamps, in the Naiad paper called <em>pointstamps</em>. Pointstamps are partially ordered by the <em>could-result-in</em> relation: <code>(li, ti)</code> <em>could-result-in</em> <code>(lj, tj)</code> if there is a path summary <code>p</code> from <code>li</code> to <code>lj</code> where <code>p(ti) &lt;= tj</code>. This is an order because it is (i) reflexive by definition, (ii) antisymmetric because two distinct pointstamps that <em>could-result-in</em> each other would imply a cycle that does not strictly advance the timestamp, and (iii) transitive by the assumed correctness of path summary construction.</p>
+<p>Next, each progress update batch has a property, one that is easier to state if we imagine operators cannot clone capabilities, and must consume a capability to send a message: each atomic progress update batch decrements a pointstamp and optionally increments pointstamps strictly greater than it. Alternately, each progress update batch that increments a pointstamp must decrement a pointstamp strictly less than it. Inductively, any collection of progress update batches whose net effect increments a pointstamp must have a net effect decrementing some pointstamp strictly less than it.</p>
+<p>Now, just before a worker might hypothetically receive a message at <code>(l1, t1)</code>, we freeze the system. We stop performing new actions, and instead resolve all progress updates for actions actually performed. Let these progress update batches circulate, so that the worker in question now has a complete and current view of the frozen state of the system. All pointstamp counts should now be non-negative.</p>
+<p>The additional progress updated batches received as part of stabilizing the system can only have a net positive effect on <code>(l1, t1)</code> if they have a net negative effect on some poinstamp strictly less than it. However, as the final accumulation is non-negative, this can only happen if the strictly prior pointstamp had a positive accumulation before stabilization. If no such pointstamp has a positive accumulation before stabilization, it is not possible for <code>(l1, t1)</code> to have a positive accumulation at stabilization, and consequently there cannot be a message waiting to be received.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="../chapter_5/chapter_5_1.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a rel="prev" href="../chapter_5/chapter_5_1.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+
+        
+
+        
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+
+    </body>
+</html>
