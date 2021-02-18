@@ -392,6 +392,11 @@ impl<A: Allocate> Worker<A> {
 
     /// Calls `self.step()` as long as `func` evaluates to true.
     ///
+    /// This method will continually execute even if there is not work
+    /// for the worker to perform. Consider using the similar method
+    /// `Self::step_or_park_while(duration)` to allow the worker to yield
+    /// control if that is appropriate.
+    ///
     /// # Examples
     ///
     /// ```
@@ -412,6 +417,35 @@ impl<A: Allocate> Worker<A> {
     /// ```
     pub fn step_while<F: FnMut()->bool>(&mut self, mut func: F) {
         while func() { self.step(); }
+    }
+
+    /// Calls `self.step_or_park(duration)` as long as `func` evaluates to true.
+    ///
+    /// This method may yield whenever there is no work to perform, as performed
+    /// by `Self::step_or_park()`. Please consult the documentation for further
+    /// information about that method and its behavior. In particular, the method
+    /// can park the worker indefinitely, if no new work re-awakens the worker.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// timely::execute_from_args(::std::env::args(), |worker| {
+    ///
+    ///     use timely::dataflow::operators::{ToStream, Inspect, Probe};
+    ///
+    ///     let probe =
+    ///     worker.dataflow::<usize,_,_>(|scope| {
+    ///         (0 .. 10)
+    ///             .to_stream(scope)
+    ///             .inspect(|x| println!("{:?}", x))
+    ///             .probe()
+    ///     });
+    ///
+    ///     worker.step_or_park_while(None, || probe.less_than(&0));
+    /// });
+    /// ```
+    pub fn step_or_park_while<F: FnMut()->bool>(&mut self, duration: Option<Duration>, mut func: F) {
+        while func() { self.step_or_park(duration); }
     }
 
     /// The index of the worker out of its peers.
