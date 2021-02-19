@@ -9,6 +9,7 @@ jobs:
   deploy:
     runs-on: ubuntu-20.04
     steps:
+      - uses: actions/checkout@v2
       - run: cargo install mdbook --version 0.4.6
       - run: cd mdbook && mdbook build
       - uses: JamesIves/github-pages-deploy-action@4.0.0
