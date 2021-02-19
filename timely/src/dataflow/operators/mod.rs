@@ -22,7 +22,7 @@ pub use self::delay::Delay;
 pub use self::exchange::Exchange;
 pub use self::broadcast::Broadcast;
 pub use self::probe::Probe;
-pub use self::to_stream::ToStream;
+pub use self::to_stream::{ToStream, ToStreamAsync, Event};
 pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
 pub use self::ok_err::OkErr;
