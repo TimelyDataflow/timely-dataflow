@@ -14,7 +14,7 @@ Timely dataflow computations are structured so that to send a timestamped messag
 
 Before we get into these two aspects, we will first need to be able to name parts of our dataflow graph.
 
-## Dataflow structure
+## Dataflow Structure
 
 A dataflow graph hosts some number of operators. For progress tracking, these operators are simply identified by their index. Each operator has some number of *input ports*, and some number of *output ports*. The dataflow operators are connected by connecting each input port to a single output port (typically of another operator). Each output port may be connected to multiple distinct input ports (a message produced at an output port is to be delivered to all attached input ports).
 
