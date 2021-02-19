@@ -1,0 +1,338 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Scopes</title>
+        
+        
+
+
+        <!-- Custom HTML head -->
+        
+
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        
+        <link rel="icon" href="../favicon.svg">
+        
+        
+        <link rel="shortcut icon" href="../favicon.png">
+        
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        
+        <link rel="stylesheet" href="../css/print.css" media="print">
+        
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        
+        <link rel="stylesheet" href="../fonts/fonts.css">
+        
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../introduction.html">Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0.html"><strong aria-hidden="true">1.</strong> Motivation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_0.html"><strong aria-hidden="true">1.1.</strong> A Simplest Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_1.html"><strong aria-hidden="true">1.2.</strong> A Simple Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_2.html"><strong aria-hidden="true">1.3.</strong> When to use Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_3.html"><strong aria-hidden="true">1.4.</strong> When not to use Timely Dataflow</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1.html"><strong aria-hidden="true">2.</strong> Core Concepts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_1.html"><strong aria-hidden="true">2.1.</strong> Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_2.html"><strong aria-hidden="true">2.2.</strong> Timestamps</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_3.html"><strong aria-hidden="true">2.3.</strong> Progress</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2.html"><strong aria-hidden="true">3.</strong> Building Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_1.html"><strong aria-hidden="true">3.1.</strong> Creating Inputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_2.html"><strong aria-hidden="true">3.2.</strong> Observing Outputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_3.html"><strong aria-hidden="true">3.3.</strong> Adding Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_4.html"><strong aria-hidden="true">3.4.</strong> Creating Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_5.html"><strong aria-hidden="true">3.5.</strong> A Worked Example</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3.html"><strong aria-hidden="true">4.</strong> Running Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_1.html"><strong aria-hidden="true">4.1.</strong> Providing Input</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_2.html"><strong aria-hidden="true">4.2.</strong> Monitoring Probes</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_3.html"><strong aria-hidden="true">4.3.</strong> Operator Execution</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_4.html"><strong aria-hidden="true">4.4.</strong> Extending Dataflows</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4.html"><strong aria-hidden="true">5.</strong> Advanced Timely Dataflow</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_1.html" class="active"><strong aria-hidden="true">5.1.</strong> Scopes</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_2.html"><strong aria-hidden="true">5.2.</strong> Iteration</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_3.html"><strong aria-hidden="true">5.3.</strong> Flow Control</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_4.html"><strong aria-hidden="true">5.4.</strong> Capture and Replay</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_5.html"><strong aria-hidden="true">5.5.</strong> Custom Datatypes</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5.html"><strong aria-hidden="true">6.</strong> Internals</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_1.html"><strong aria-hidden="true">6.1.</strong> Communication</a></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_2.html"><strong aria-hidden="true">6.2.</strong> Progress Tracking</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        
+                        
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1><a class="header" href="#scopes" id="scopes">Scopes</a></h1>
+<p>The first bit of complexity we will introduce is the timely dataflow <em>scope</em>. A scope is a region of dataflow, much like how curly braces provide scopes in imperative languages:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>{
+    // this is an outer scope
+
+    {
+        // this is an inner scope
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>You can create a new scope in any other scope by invoking the <code>scoped</code> method:</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use timely::dataflow::Scope;
+
+fn main() {
+    timely::example(|scope| {
+
+        // Create a new scope with the same (u64) timestamp.
+        scope.scoped::&lt;u64,_,_&gt;(&quot;SubScope&quot;, |subscope| {
+            // probably want something here
+        })
+
+    });
+}
+</code></pre></pre>
+<p>The main thing that a scope does for you is allow you to enrich the timestamp of all streams that are brought into it. For example, perhaps the timestamp type in your base dataflow scope is <code>usize</code>, your nested scope could augment this to <code>(usize, u32)</code>, or whatever additional timestamp type you might want. In the example above, we choose to keep the same timestamp, <code>u64</code>.</p>
+<p>Why are additional timestamps useful? They allow operators in the nested scope to change their behavior based on the enriched timestamp, without worrying the streams and operators outside the scope about this detail. We will soon see the example of <em>iterative</em> dataflow, where a scope allows cycles within it, but does not bother operators outside the scope with that detail.</p>
+<h2><a class="header" href="#entering-and-exiting-scopes" id="entering-and-exiting-scopes">Entering and exiting scopes</a></h2>
+<p>In addition to <em>creating</em> scopes, we will also need to get streams of data into and out of scopes.</p>
+<p>There are two simple methods, <code>enter</code> and <code>leave</code>, that allow streams of data into and out of scopes. It is important that you use them! If you try to use a stream in a nested scope, Rust will be confused because it can't get the timestamps of your streams to typecheck.</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use timely::dataflow::Scope;
+use timely::dataflow::operators::*;
+
+fn main() {
+    timely::example(|scope| {
+
+        let stream = (0 .. 10).to_stream(scope);
+
+        // Create a new scope with the same (u64) timestamp.
+        let result = scope.scoped::&lt;u64,_,_&gt;(&quot;SubScope&quot;, |subscope| {
+            stream.enter(subscope)
+                  .inspect_batch(|t, xs| println!(&quot;{:?}, {:?}&quot;, t, xs))
+                  .leave()
+        });
+
+    });
+}
+</code></pre></pre>
+<p>Notice how we can both <code>enter</code> a stream and <code>leave</code> in a single sequence of operations.</p>
+<p>The <code>enter</code> operator introduces each batch of records as a batch with an enriched timestamp, which usually means &quot;the same&quot; or &quot;with a new zero coordinate&quot;. The <code>leave</code> just de-enriches the timestamp, correspondingly &quot;the same&quot; or &quot;without that new coordinate&quot;. The <code>leave</code> operator results in a stream fit for consumption in the containing scope.</p>
+<h2><a class="header" href="#regions" id="regions">Regions</a></h2>
+<p>There is a handy shortcut for scopes that do not change the timestamp type, a <code>region</code>.</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use timely::dataflow::Scope;
+use timely::dataflow::operators::*;
+
+fn main() {
+    timely::example(|scope| {
+
+        let stream = (0 .. 10).to_stream(scope);
+
+        // Create a new scope with the same (u64) timestamp.
+        let result = scope.region(|subscope| {
+            stream.enter(subscope)
+                  .inspect_batch(|t, xs| println!(&quot;{:?}, {:?}&quot;, t, xs))
+                  .leave()
+        });
+
+    });
+}
+</code></pre></pre>
+<p>Regions are mostly here to help you organize your dataflow. A region presents itself to its surrounding dataflow as a single operator, and that can make it easier for you or others to reason about the logical structure of your dataflow.</p>
+<p><strong>IMPORTANT</strong> Although you can probably write a program that uses <code>region()</code> but then skips the calls to <code>enter</code> and <code>leave</code>, because the timestamp types are the same, this is very naughty and please do not do this.</p>
+<h2><a class="header" href="#iteration" id="iteration">Iteration</a></h2>
+<p>Iteration is a particularly neat form of nested scope in which all timestamps are enriched with an iteration counter. This counter starts at zero for streams that <code>enter</code> the scope, may increment in the context of the loop (next section gives examples of this), and is removed when the <code>leave</code> method is called.</p>
+<p>The enriched timestamp type is <code>timely::order::Product&lt;TOuter, TInner&gt;</code>, for an outer timestamp type <code>TOuter</code> and an iteration counter type <code>TInner</code>. However, there is a convenience method that can allow you to skip thinking too hard about this.</p>
+<pre><pre class="playground"><code class="language-rust">extern crate timely;
+
+use timely::dataflow::Scope;
+use timely::dataflow::operators::*;
+
+fn main() {
+    timely::example(|scope| {
+
+        let stream = (0 .. 10).to_stream(scope);
+
+        // Create a new scope with a (u64, u32) timestamp.
+        let result = scope.iterative::&lt;u32,_,_&gt;(|subscope| {
+            stream.enter(subscope)
+                  .inspect_batch(|t, xs| println!(&quot;{:?}, {:?}&quot;, t, xs))
+                  .leave()
+        });
+
+    });
+}
+</code></pre></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="../chapter_4/chapter_4.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+                            <a rel="next" href="../chapter_4/chapter_4_2.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a rel="prev" href="../chapter_4/chapter_4.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+                    <a rel="next" href="../chapter_4/chapter_4_2.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+
+        
+
+        
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+
+    </body>
+</html>

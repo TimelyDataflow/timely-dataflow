@@ -1,0 +1,404 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Capture and Replay</title>
+        
+        
+
+
+        <!-- Custom HTML head -->
+        
+
+
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        
+        <link rel="icon" href="../favicon.svg">
+        
+        
+        <link rel="shortcut icon" href="../favicon.png">
+        
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        
+        <link rel="stylesheet" href="../css/print.css" media="print">
+        
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        
+        <link rel="stylesheet" href="../fonts/fonts.css">
+        
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../introduction.html">Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0.html"><strong aria-hidden="true">1.</strong> Motivation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_0.html"><strong aria-hidden="true">1.1.</strong> A Simplest Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_1.html"><strong aria-hidden="true">1.2.</strong> A Simple Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_2.html"><strong aria-hidden="true">1.3.</strong> When to use Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_3.html"><strong aria-hidden="true">1.4.</strong> When not to use Timely Dataflow</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1.html"><strong aria-hidden="true">2.</strong> Core Concepts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_1.html"><strong aria-hidden="true">2.1.</strong> Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_2.html"><strong aria-hidden="true">2.2.</strong> Timestamps</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_3.html"><strong aria-hidden="true">2.3.</strong> Progress</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2.html"><strong aria-hidden="true">3.</strong> Building Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_1.html"><strong aria-hidden="true">3.1.</strong> Creating Inputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_2.html"><strong aria-hidden="true">3.2.</strong> Observing Outputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_3.html"><strong aria-hidden="true">3.3.</strong> Adding Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_4.html"><strong aria-hidden="true">3.4.</strong> Creating Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_5.html"><strong aria-hidden="true">3.5.</strong> A Worked Example</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3.html"><strong aria-hidden="true">4.</strong> Running Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_1.html"><strong aria-hidden="true">4.1.</strong> Providing Input</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_2.html"><strong aria-hidden="true">4.2.</strong> Monitoring Probes</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_3.html"><strong aria-hidden="true">4.3.</strong> Operator Execution</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_4.html"><strong aria-hidden="true">4.4.</strong> Extending Dataflows</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4.html"><strong aria-hidden="true">5.</strong> Advanced Timely Dataflow</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_1.html"><strong aria-hidden="true">5.1.</strong> Scopes</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_2.html"><strong aria-hidden="true">5.2.</strong> Iteration</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_3.html"><strong aria-hidden="true">5.3.</strong> Flow Control</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_4.html" class="active"><strong aria-hidden="true">5.4.</strong> Capture and Replay</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_5.html"><strong aria-hidden="true">5.5.</strong> Custom Datatypes</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5.html"><strong aria-hidden="true">6.</strong> Internals</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_1.html"><strong aria-hidden="true">6.1.</strong> Communication</a></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_2.html"><strong aria-hidden="true">6.2.</strong> Progress Tracking</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        
+                        
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1><a class="header" href="#capture-and-replay" id="capture-and-replay">Capture and Replay</a></h1>
+<p>Timely dataflow has two fairly handy operators, <code>capture_into</code> and <code>replay_from</code>, that are great for transporting a timely dataflow stream from its native representation into data, and then back again. They are also a fine way to think about interoperating with other systems for streaming data.</p>
+<h2><a class="header" href="#capturing-streams" id="capturing-streams">Capturing Streams</a></h2>
+<p>At its core, <code>capture_into</code> records everything it sees about the stream it is attached to. If some data arrive, it records that. If there is a change in the possibility that timestamps might arrive on its input, it records that.</p>
+<p>The <code>capture_into</code> method is relative simple, and we can just look at it:</p>
+<pre><code class="language-rust ignore">    fn capture_into&lt;P: EventPusher&lt;S::Timestamp, D&gt;+'static&gt;(&amp;self, event_pusher: P) {
+
+        let mut builder = OperatorBuilder::new(&quot;Capture&quot;.to_owned(), self.scope());
+        let mut input = PullCounter::new(builder.new_input(self, Pipeline));
+        let mut started = false;
+
+        let event_pusher1 = Rc::new(RefCell::new(event_pusher));
+        let event_pusher2 = event_pusher1.clone();
+
+        builder.build(
+            move |frontier| {
+                if !started {
+                    frontier[0].update(Default::default(), -1);
+                    started = true;
+                }
+                if !frontier[0].is_empty() {
+                    let to_send = ::std::mem::replace(&amp;mut frontier[0], ChangeBatch::new());
+                    event_pusher1.borrow_mut().push(Event::Progress(to_send.into_inner()));
+                }
+            },
+            move |consumed, _internal, _external| {
+                let mut borrow = event_pusher2.borrow_mut();
+                while let Some((time, data)) = input.next() {
+                    borrow.push(Event::Messages(time.clone(), data.deref_mut().clone()));
+                }
+                input.consumed().borrow_mut().drain_into(&amp;mut consumed[0]);
+                false
+            }
+        );
+    }
+</code></pre>
+<p>The method is generic with respect to some implementor <code>P</code> of the trait <code>EventPusher</code> which defines a method <code>push</code> that accepts <code>Event&lt;T, D&gt;</code> items (we will see a few implementations in just a moment). After a bit of set-up, <code>capture_into</code> builds a new operator with one input and zero outputs, and sets the logic for (i) what to do when the input frontier changes, and (ii) what to do when presented with the opportunity to do a bit of computation. In both cases, we just create new events based on what we see (progress changes and data messages, respectively).</p>
+<p>There is a mysterious subtraction of <code>Default::default()</code>, which has to do with the contract that the replaying operators assume the stream starts with such a capability. This prevents the need for the replayers to block on the stream in their operator construction (any operator must state any initial capabilities as part of its construction; it cannot defer that until later).</p>
+<p>One nice aspect of <code>capture_into</code> is that it really does reveal everything that an operator sees about a stream. If you got your hands on the resulting sequence of events, you would be able to review the full history of the stream. In principle, this could be a fine place to persist the data, capturing both data and progress information.</p>
+<h2><a class="header" href="#replaying-streams" id="replaying-streams">Replaying Streams</a></h2>
+<p>At <em>its</em> core, <code>replay_into</code> takes some sequence of <code>Event&lt;T, D&gt;</code> items and reproduces the stream, as it was recorded. It is also fairly simple, and we can just look at its implementation as well:</p>
+<pre><code class="language-rust ignore">    fn replay_into&lt;S: Scope&lt;Timestamp=T&gt;&gt;(self, scope: &amp;mut S) -&gt; Stream&lt;S, D&gt;{
+
+        let mut builder = OperatorBuilder::new(&quot;Replay&quot;.to_owned(), scope.clone());
+        let (targets, stream) = builder.new_output();
+
+        let mut output = PushBuffer::new(PushCounter::new(targets));
+        let mut event_streams = self.into_iter().collect::&lt;Vec&lt;_&gt;&gt;();
+        let mut started = false;
+
+        builder.build(
+            move |_frontier| { },
+            move |_consumed, internal, produced| {
+
+                if !started {
+                    internal[0].update(Default::default(), (event_streams.len() as i64) - 1);
+                    started = true;
+                }
+
+                for event_stream in event_streams.iter_mut() {
+                    while let Some(event) = event_stream.next() {
+                        match *event {
+                            Event::Start =&gt; { },
+                            Event::Progress(ref vec) =&gt; {
+                                internal[0].extend(vec.iter().cloned());
+                            },
+                            Event::Messages(ref time, ref data) =&gt; {
+                                output.session(time).give_iterator(data.iter().cloned());
+                            }
+                        }
+                    }
+                }
+
+                output.cease();
+                output.inner().produced().borrow_mut().drain_into(&amp;mut produced[0]);
+
+                false
+            }
+        );
+
+        stream
+   }
+</code></pre>
+<p>The type of <code>self</code> here is actually something that allows us to enumerate a sequence of event streams, so each replayer is actually replaying some variable number of streams. As part of this, our very first action is to amend our initial <code>Default::default()</code> capability to have multiplicity equal to the number of streams we are replaying:</p>
+<pre><code class="language-rust ignore">                if !started {
+                    internal[0].update(Default::default(), (event_streams.len() as i64) - 1);
+                    started = true;
+                }
+</code></pre>
+<p>If we have multiple streams, we'll now have multiple capabilities. If we have no stream, we will just drop the capability. This change is important because each source stream believes it has such a capability, and we will eventually see this many drops of the capability in the event stream (though perhaps not immediately; the initial deletion we inserted in <code>capture_into</code> likely cancels with the initial capabilities expressed by the outside world; we will likely need to wait until the captured stream is informed about the completion of messages with the default time).</p>
+<p>Having done the initial adjustment, we literally just play out the streams (note the plural) as they are available. The <code>next</code> method is expected not to block, but rather to return <code>None</code> when there are no more events currently available. It is a bit of a head-scratcher, but any interleaving of these streams is itself a valid stream (messages are sent and capabilities claimed only when we hold appropriate capabilities).</p>
+<h2><a class="header" href="#an-example" id="an-example">An Example</a></h2>
+<p>We can check out the examples <code>examples/capture_send.rs</code> and <code>examples/capture_recv.rs</code> to see a paired use of capture and receive demonstrating the generality.</p>
+<p>The <code>capture_send</code> example creates a new TCP connection for each worker, which it wraps and uses as an <code>EventPusher</code>. Timely dataflow takes care of all the serialization and stuff like that (warning: it uses abomonation, so this is not great for long-term storage).</p>
+<pre><code class="language-rust ignore">extern crate timely;
+
+use std::net::TcpStream;
+use timely::dataflow::operators::ToStream;
+use timely::dataflow::operators::capture::{Capture, EventWriter};
+
+fn main() {
+    timely::execute_from_args(std::env::args(), |worker| {
+
+        let addr = format!(&quot;127.0.0.1:{}&quot;, 8000 + worker.index());
+        let send = TcpStream::connect(addr).unwrap();
+
+        worker.dataflow::&lt;u64,_,_&gt;(|scope|
+            (0..10u64)
+                .to_stream(scope)
+                .capture_into(EventWriter::new(send))
+        );
+    }).unwrap();
+}
+</code></pre>
+<p>The <code>capture_recv</code> example is more complicated, because we may have a different number of workers replaying the stream than initially captured it.</p>
+<pre><code class="language-rust ignore">extern crate timely;
+
+use std::net::TcpListener;
+use timely::dataflow::operators::Inspect;
+use timely::dataflow::operators::capture::{EventReader, Replay};
+
+fn main() {
+    timely::execute_from_args(std::env::args(), |worker| {
+
+        let source_peers = std::env::args().nth(1).unwrap().parse::&lt;usize&gt;().unwrap();
+
+        // create replayers from disjoint partition of source worker identifiers.
+        let replayers =
+        (0 .. source_peers)
+            .filter(|i| i % worker.peers() == worker.index())
+            .map(|i| TcpListener::bind(format!(&quot;127.0.0.1:{}&quot;, 8000 + i)).unwrap())
+            .collect::&lt;Vec&lt;_&gt;&gt;()
+            .into_iter()
+            .map(|l| l.incoming().next().unwrap().unwrap())
+            .map(|r| EventReader::&lt;_,u64,_&gt;::new(r))
+            .collect::&lt;Vec&lt;_&gt;&gt;();
+
+        worker.dataflow::&lt;u64,_,_&gt;(|scope| {
+            replayers
+                .replay_into(scope)
+                .inspect(|x| println!(&quot;replayed: {:?}&quot;, x));
+        })
+    }).unwrap(); // asserts error-free execution
+}
+</code></pre>
+<p>Almost all of the code up above is assigning responsibility for the replaying between the workers we have (from <code>worker.peers()</code>). We partition responsibility for <code>0 .. source_peers</code> among the workers, create <code>TcpListener</code>s to handle the connection requests, wrap them in <code>EventReader</code>s, and then collect them up as a vector. The workers have collectively partitioned the incoming captured streams between themselves.</p>
+<p>Finally, each worker just uses the list of <code>EventReader</code>s as the argument to <code>replay_into</code>, and we get the stream magically transported into a new dataflow, in a different process, with a potentially different number of workers.</p>
+<p>If you want to try it out, make sure to start up the <code>capture_recv</code> example first (otherwise the connections will be refused for <code>capture_send</code>) and specify the expected number of source workers, modifying the number of received workers if you like. Here we are expecting five source workers, and distributing them among three receive workers (to make life complicated):</p>
+<pre><code class="language-ignore">    shell1% cargo run --example capture_recv -- 5 -w3
+</code></pre>
+<p>Nothing happens yet, so head over to another shell and run <code>capture_send</code> with the specified number of workers (five, in this case):</p>
+<pre><code class="language-ignore">    shell2% cargo run --example capture_send -- -w5
+</code></pre>
+<p>Now, back in your other shell you should see something like</p>
+<pre><code class="language-ignore">    shell1% cargo run --example capture_recv -- 5 -w3
+    replayed: 0
+    replayed: 1
+    replayed: 2
+    replayed: 3
+    replayed: 4
+    replayed: 5
+    replayed: 0
+    replayed: 6
+    replayed: 1
+    ...
+</code></pre>
+<p>which just goes on and on, but which should produce 50 lines of text, with five copies of <code>0 .. 10</code> interleaved variously.</p>
+<h2><a class="header" href="#capture-types" id="capture-types">Capture types</a></h2>
+<p>There are several sorts of things you could capture into and replay from. In the <code>capture::events</code> module you will find two examples, a linked list and a binary serializer / deserializer (wrapper around <code>Write</code> and <code>Read</code> traits). The binary serializer is fairly general; we used it up above to wrap TCP streams. You could also write to files, or write to shared memory. However, be mindful that the serialization format (abomonation) is essentially the in-memory representation, and Rust makes no guarantees about the stability of such a representation across builds.</p>
+<p>There is also <a href="https://github.com/frankmcsherry/timely-dataflow/tree/master/kafkaesque">an in-progress Kafka adapter</a> available in the repository, which uses Kafka topics to store the binary representation of captured streams, which can then be replayed by any timely computation that can read them. This may be a while before it is sorted out, because Kafka seems to have a few quirks, but if you would like to help get in touch.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="../chapter_4/chapter_4_3.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+                            <a rel="next" href="../chapter_4/chapter_4_5.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a rel="prev" href="../chapter_4/chapter_4_3.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+                    <a rel="next" href="../chapter_4/chapter_4_5.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+        
+
+        
+
+        
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+
+    </body>
+</html>
