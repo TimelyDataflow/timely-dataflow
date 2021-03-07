@@ -4,21 +4,18 @@
 //! they require some sophistication to use correctly. I recommend checking out `builder_rc.rs` for
 //! an interface that is intentionally harder to mis-use.
 
+use std::cell::RefCell;
 use std::default::Default;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 use crate::Data;
-
-use crate::scheduling::{Schedule, Activations};
-
-use crate::progress::{Source, Target};
-use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
-
-use crate::dataflow::{Stream, Scope};
-use crate::dataflow::channels::pushers::Tee;
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::channels::pact::ParallelizationContract;
+use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
+use crate::progress::{Source, Target};
+use crate::progress::{Antichain, Operate, operate::SharedProgress, Timestamp};
+use crate::scheduling::{Activations, Schedule};
 
 /// Contains type-free information about the operator properties.
 pub struct OperatorShape {
@@ -153,9 +150,17 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Creates an operator implementation from supplied logic constructor.
-    pub fn build<L>(mut self, logic: L)
+    pub fn build<L>(self, logic: L)
     where
         L: FnMut(&mut SharedProgress<G::Timestamp>)->bool+'static
+    {
+        self.build_core(logic)
+    }
+
+    /// Creates an operator implementation from supplied logic.
+    pub fn build_core<L>(mut self, logic: L)
+    where
+        L: OperatorCoreLogic<G::Timestamp>+'static
     {
         let inputs = self.shape.inputs;
         let outputs = self.shape.outputs;
@@ -178,10 +183,23 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 }
 
+/// The basic interface to an operator
+pub trait OperatorCoreLogic<T: Timestamp> {
+    /// Inform an operator about a change of its inputs
+    fn update(&mut self, progress: &mut SharedProgress<T>) -> bool;
+}
+
+impl<T, F> OperatorCoreLogic<T> for F
+    where T: Timestamp, F: FnMut(&mut SharedProgress<T>) -> bool + 'static {
+    fn update(&mut self, progress: &mut SharedProgress<T>) -> bool {
+        (self)(progress)
+    }
+}
+
 struct OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(&mut SharedProgress<T>)->bool+'static,
+    L: OperatorCoreLogic<T>,
 {
     shape: OperatorShape,
     address: Vec<usize>,
@@ -194,20 +212,20 @@ where
 impl<T, L> Schedule for OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(&mut SharedProgress<T>)->bool+'static,
+    L: OperatorCoreLogic<T>,
 {
     fn name(&self) -> &str { &self.shape.name }
     fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
         let shared_progress = &mut *self.shared_progress.borrow_mut();
-        (self.logic)(shared_progress)
+        self.logic.update(shared_progress)
     }
 }
 
 impl<T, L> Operate<T> for OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(&mut SharedProgress<T>)->bool+'static,
+    L: OperatorCoreLogic<T>,
 {
     fn inputs(&self) -> usize { self.shape.inputs }
     fn outputs(&self) -> usize { self.shape.outputs }
