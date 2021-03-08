@@ -10,6 +10,7 @@ use crate::communication::Push;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::Bundle;
+use std::fmt;
 
 // use dataflow::scopes::root::loggers::CHANNELS_Q;
 
@@ -53,4 +54,16 @@ impl<S: Scope, D> Stream<S, D> {
     pub fn name(&self) -> &Source { &self.name }
     /// The scope immediately containing the stream.
     pub fn scope(&self) -> S { self.scope.clone() }
+}
+
+impl<S, D> fmt::Debug for Stream<S, D>
+where
+    S: Scope,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Stream")
+            .field("source", &self.name)
+            // TODO: Use `.finish_non_exhaustive()` after rust/#67364 lands
+            .finish()
+    }
 }
