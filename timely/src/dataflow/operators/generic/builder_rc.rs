@@ -136,7 +136,7 @@ impl<G: Scope> OperatorBuilder<G> {
         L: FnMut(&[MutableAntichain<G::Timestamp>])->bool+'static
     {
         // create capabilities, discard references to their creation.
-        let mut capabilities = Vec::new();
+        let mut capabilities = Vec::with_capacity(self.internal.borrow().len());
         for output_index in 0  .. self.internal.borrow().len() {
             let borrow = &self.internal.borrow()[output_index];
             capabilities.push(mint_capability(G::Timestamp::minimum(), borrow.clone()));

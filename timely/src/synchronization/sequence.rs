@@ -179,6 +179,8 @@ impl<T: ExchangeData> Sequencer<T> {
                     // grab each command and queue it up
                     input.for_each(|time, data| {
                         data.swap(&mut vector);
+
+                        recvd.reserve(vector.len());
                         for (worker, counter, element) in vector.drain(..) {
                             recvd.push(((time.time().clone(), worker, counter), element));
                         }

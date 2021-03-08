@@ -38,7 +38,7 @@ impl AllocateBuilder for ProcessBuilder {
             let buzzer = Buzzer::new();
             worker.send(buzzer).expect("Failed to send buzzer");
         }
-        let mut buzzers = Vec::new();
+        let mut buzzers = Vec::with_capacity(self.buzzers_recv.len());
         for worker in self.buzzers_recv.iter() {
             buzzers.push(worker.recv().expect("Failed to recv buzzer"));
         }
@@ -69,19 +69,19 @@ pub struct Process {
 
 impl Process {
     /// Access the wrapped inner allocator.
-    pub fn inner<'a>(&'a mut self) -> &'a mut Thread { &mut self.inner }
+    pub fn inner(&mut self) -> &mut Thread { &mut self.inner }
     /// Allocate a list of connected intra-process allocators.
     pub fn new_vector(peers: usize) -> Vec<ProcessBuilder> {
 
-        let mut counters_send = Vec::new();
-        let mut counters_recv = Vec::new();
-        for _ in 0 .. peers {
+        let mut counters_send = Vec::with_capacity(peers);
+        let mut counters_recv = Vec::with_capacity(peers);
+        for _ in 0..peers {
             let (send, recv) = crossbeam_channel::unbounded();
             counters_send.push(send);
             counters_recv.push(recv);
         }
 
-        let channels = Arc::new(Mutex::new(HashMap::new()));
+        let channels = Arc::new(Mutex::new(HashMap::with_capacity(peers)));
 
         // Allocate matrix of buzzer send and recv endpoints.
         let (buzzers_send, buzzers_recv) = crate::promise_futures(peers, peers);
@@ -116,23 +116,23 @@ impl Allocate for Process {
         // first worker that enters this critical section
 
         // ensure exclusive access to shared list of channels
-        let mut channels = self.channels.lock().ok().expect("mutex error?");
+        let mut channels = self.channels.lock().expect("mutex error?");
 
         let (sends, recv, empty) = {
 
             // we may need to alloc a new channel ...
             let entry = channels.entry(identifier).or_insert_with(|| {
 
-                let mut pushers = Vec::new();
-                let mut pullers = Vec::new();
-                for index in 0 .. self.peers {
+                let mut pushers = Vec::with_capacity(self.peers);
+                let mut pullers = Vec::with_capacity(self.peers);
+                for buzzer in self.buzzers.iter() {
                     let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = crossbeam_channel::unbounded();
                     // TODO: the buzzer in the pusher may be redundant, because we need to buzz post-counter.
-                    pushers.push((Pusher { target: s }, self.buzzers[index].clone()));
+                    pushers.push((Pusher { target: s }, buzzer.clone()));
                     pullers.push(Puller { source: r, current: None });
                 }
 
-                let mut to_box = Vec::new();
+                let mut to_box = Vec::with_capacity(pullers.len());
                 for recv in pullers.into_iter() {
                     to_box.push(Some((pushers.clone(), recv)));
                 }
@@ -164,8 +164,8 @@ impl Allocate for Process {
 
         let sends =
         sends.into_iter()
-             .enumerate()
-             .map(|(i,(s,b))| CountPusher::new(s, identifier, self.counters_send[i].clone(), b))
+             .zip(self.counters_send.iter())
+             .map(|((s,b), sender)| CountPusher::new(s, identifier, sender.clone(), b))
              .map(|s| Box::new(s) as Box<dyn Push<super::Message<T>>>)
              .collect::<Vec<_>>();
 

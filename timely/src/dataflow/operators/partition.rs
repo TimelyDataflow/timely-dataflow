@@ -6,7 +6,7 @@ use crate::dataflow::{Scope, Stream};
 use crate::Data;
 
 /// Partition a stream of records into multiple streams.
-pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
+pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2)> {
     /// Produces `parts` output streams, containing records produced and assigned by `route`.
     ///
     /// # Examples
@@ -25,16 +25,17 @@ pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)> {
     fn partition(&self, parts: u64, route: F) -> Vec<Stream<G, D2>>;
 }
 
-impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D2, F> for Stream<G, D> {
+impl<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2) + 'static> Partition<G, D, D2, F>
+    for Stream<G, D>
+{
     fn partition(&self, parts: u64, route: F) -> Vec<Stream<G, D2>> {
-
         let mut builder = OperatorBuilder::new("Partition".to_owned(), self.scope());
 
         let mut input = builder.new_input(self, Pipeline);
-        let mut outputs = Vec::new();
-        let mut streams = Vec::new();
+        let mut outputs = Vec::with_capacity(parts as usize);
+        let mut streams = Vec::with_capacity(parts as usize);
 
-        for _ in 0 .. parts {
+        for _ in 0..parts {
             let (output, stream) = builder.new_output();
             outputs.push(output);
             streams.push(stream);
@@ -46,7 +47,10 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
                 let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
                 input.for_each(|time, data| {
                     data.swap(&mut vector);
-                    let mut sessions = handles.iter_mut().map(|h| h.session(&time)).collect::<Vec<_>>();
+                    let mut sessions = handles
+                        .iter_mut()
+                        .map(|h| h.session(&time))
+                        .collect::<Vec<_>>();
                     for datum in vector.drain(..) {
                         let (part, datum2) = route(datum);
                         sessions[part as usize].give(datum2);

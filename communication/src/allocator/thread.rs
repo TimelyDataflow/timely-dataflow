@@ -68,7 +68,7 @@ impl Thread {
         let pusher = Pusher { target: shared.clone() };
         let pusher = CountPusher::new(pusher, identifier, events.clone());
         let puller = Puller { source: shared, current: None };
-        let puller = CountPuller::new(puller, identifier, events.clone());
+        let puller = CountPuller::new(puller, identifier, events);
         (pusher, puller)
     }
 }
