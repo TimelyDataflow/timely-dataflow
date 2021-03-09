@@ -134,6 +134,16 @@ impl Config {
     /// that uniquely identifies your project, to avoid clashes. For example,
     /// differential dataflow registers a configuration struct under the key
     /// "differential".
+    ///
+    /// # Examples
+    /// ```rust
+    /// let mut config = timely::Config::process(3);
+    /// config.worker.set("example".to_string(), 7u64);
+    /// timely::execute(config, |worker| {
+    ///    use crate::timely::worker::AsWorker;
+    ///    assert_eq!(worker.config().get::<u64>("example"), Some(&7));
+    /// }).unwrap();
+    /// ```
     pub fn set<T>(&mut self, key: String, val: T) -> &mut Self
     where
         T: Send + Sync + 'static,
@@ -147,6 +157,16 @@ impl Config {
     /// Returns `None` if `key` has not previously been set with
     /// [`WorkerConfig::set`], or if the specified `T` does not match the `T`
     /// from the call to `set`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// let mut config = timely::Config::process(3);
+    /// config.worker.set("example".to_string(), 7u64);
+    /// timely::execute(config, |worker| {
+    ///    use crate::timely::worker::AsWorker;
+    ///    assert_eq!(worker.config().get::<u64>("example"), Some(&7));
+    /// }).unwrap();
+    /// ```
     pub fn get<T: 'static>(&self, key: &str) -> Option<&T> {
         self.registry.get(key).and_then(|val| val.downcast_ref())
     }
