@@ -257,9 +257,10 @@ where
 
     let (allocators, other) = config.communication.try_build()?;
 
+    let worker_config = config.worker;
     initialize_from(allocators, other, move |allocator| {
 
-        let mut worker = Worker::new(WorkerConfig::default(), allocator);
+        let mut worker = Worker::new(worker_config.clone(), allocator);
 
         // If an environment variable is set, use it as the default timely logging.
         if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
