@@ -10,13 +10,12 @@ fn main() {
             let mut probe_handle = probe::Handle::new();
             let probe_handle_2 = probe_handle.clone();
 
-            let mut next_t: u64 = 0;
             iterator_source(
                 scope,
                 "Source",
                 move |prev_t| {
                     if let Some(first_x) = input.peek().cloned() {
-                        next_t = first_x / 100 * 100;
+                        let next_t = first_x / 100 * 100;
                         Some(IteratorSourceInput {
                             lower_bound: Default::default(),
                             data: vec![
