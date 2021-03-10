@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 0.12.0
 
 The `Timestamp` trait has a new method `minimim()` that replaces Timely's use of `Default::default()` for default capabilities. The most pressing reason for this is the use of signed integers for timestamps, where Timely would effectively prevent the use of negative numbers by providing the default value of zero for capabilities. This should not have reduced any functionality, but might provide surprising output for programs that use integer timestamps and do not first advance timestamps (the tidy `0` will be replaced with `_::min_value()`).
 
@@ -17,6 +17,8 @@ For example, differential dataflow uses this mechanism to configure its backgrou
 Removed all deprecated methods and traits.
 
 Timely no longer responds to the `DEFAULT_PROGRESS_MODE` environment variable. Instead, it uses the newly added `worker::Config`.
+
+Removed the `sort` crate, whose sorting methods are interesting but not currently a core part of timely dataflow.
 
 ### Changed
 

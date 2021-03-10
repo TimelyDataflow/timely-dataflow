@@ -1,12 +1,9 @@
 extern crate rand;
 extern crate timely;
-extern crate timely_sort;
 
 use std::collections::HashMap;
 
 use rand::{Rng, SeedableRng, StdRng};
-use timely_sort::{RadixSorter, RadixSorterBase};
-use timely_sort::LSBRadixSorter as Sorter;
 
 use timely::dataflow::operators::{ToStream, Concat, Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
@@ -26,7 +23,6 @@ fn main() {
 
         let seed: &[_] = &[1, 2, 3, index];
         let mut rng: StdRng = SeedableRng::from_seed(seed);
-        let mut sorter = Sorter::new();
 
         // pending edges and node updates.
         let mut edge_list = Vec::new();
@@ -84,8 +80,8 @@ fn main() {
                             // print some diagnostic timing information
                             if index == 0 { println!("{:?}:\tsorting", start.elapsed()); }
 
-                            // sort the edges
-                            sorter.sort(&mut edge_list, &|x| x.0);
+                            // sort the edges (previously: radix sorted).
+                            edge_list.sort();
 
                             let mut count = 0;
                             for buffer in &edge_list { count += buffer.len(); }
@@ -118,8 +114,8 @@ fn main() {
                         if let Some(mut todo) = node_lists.remove(&time) {
                             let mut session = output.session(&time);
 
-                            // we could sort these, or not. try it out!
-                            // sorter.sort(&mut todo, &|x| x.0);
+                            // we could sort these, or not (previously: radix sorted).
+                            // todo.sort();
 
                             for buffer in todo.drain(..) {
                                 for (node, prev) in buffer {
