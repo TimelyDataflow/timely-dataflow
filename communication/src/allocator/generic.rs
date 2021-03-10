@@ -32,54 +32,54 @@ impl Generic {
     /// The index of the worker out of `(0..self.peers())`.
     pub fn index(&self) -> usize {
         match self {
-            &Generic::Thread(ref t) => t.index(),
-            &Generic::Process(ref p) => p.index(),
-            &Generic::ProcessBinary(ref pb) => pb.index(),
-            &Generic::ZeroCopy(ref z) => z.index(),
+            Generic::Thread(t) => t.index(),
+            Generic::Process(p) => p.index(),
+            Generic::ProcessBinary(pb) => pb.index(),
+            Generic::ZeroCopy(z) => z.index(),
         }
     }
     /// The number of workers.
     pub fn peers(&self) -> usize {
         match self {
-            &Generic::Thread(ref t) => t.peers(),
-            &Generic::Process(ref p) => p.peers(),
-            &Generic::ProcessBinary(ref pb) => pb.peers(),
-            &Generic::ZeroCopy(ref z) => z.peers(),
+            Generic::Thread(t) => t.peers(),
+            Generic::Process(p) => p.peers(),
+            Generic::ProcessBinary(pb) => pb.peers(),
+            Generic::ZeroCopy(z) => z.peers(),
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
     fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
         match self {
-            &mut Generic::Thread(ref mut t) => t.allocate(identifier),
-            &mut Generic::Process(ref mut p) => p.allocate(identifier),
-            &mut Generic::ProcessBinary(ref mut pb) => pb.allocate(identifier),
-            &mut Generic::ZeroCopy(ref mut z) => z.allocate(identifier),
+            Generic::Thread(t) => t.allocate(identifier),
+            Generic::Process(p) => p.allocate(identifier),
+            Generic::ProcessBinary(pb) => pb.allocate(identifier),
+            Generic::ZeroCopy(z) => z.allocate(identifier),
         }
     }
     /// Perform work before scheduling operators.
     fn receive(&mut self) {
         match self {
-            &mut Generic::Thread(ref mut t) => t.receive(),
-            &mut Generic::Process(ref mut p) => p.receive(),
-            &mut Generic::ProcessBinary(ref mut pb) => pb.receive(),
-            &mut Generic::ZeroCopy(ref mut z) => z.receive(),
+            Generic::Thread(t) => t.receive(),
+            Generic::Process(p) => p.receive(),
+            Generic::ProcessBinary(pb) => pb.receive(),
+            Generic::ZeroCopy(z) => z.receive(),
         }
     }
     /// Perform work after scheduling operators.
     pub fn release(&mut self) {
         match self {
-            &mut Generic::Thread(ref mut t) => t.release(),
-            &mut Generic::Process(ref mut p) => p.release(),
-            &mut Generic::ProcessBinary(ref mut pb) => pb.release(),
-            &mut Generic::ZeroCopy(ref mut z) => z.release(),
+            Generic::Thread(t) => t.release(),
+            Generic::Process(p) => p.release(),
+            Generic::ProcessBinary(pb) => pb.release(),
+            Generic::ZeroCopy(z) => z.release(),
         }
     }
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
         match self {
-            &Generic::Thread(ref t) => t.events(),
-            &Generic::Process(ref p) => p.events(),
-            &Generic::ProcessBinary(ref pb) => pb.events(),
-            &Generic::ZeroCopy(ref z) => z.events(),
+            Generic::Thread(ref t) => t.events(),
+            Generic::Process(ref p) => p.events(),
+            Generic::ProcessBinary(ref pb) => pb.events(),
+            Generic::ZeroCopy(ref z) => z.events(),
         }
     }
 }
@@ -96,10 +96,10 @@ impl Allocate for Generic {
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> { self.events() }
     fn await_events(&self, _duration: Option<std::time::Duration>) {
         match self {
-            &Generic::Thread(ref t) => t.await_events(_duration),
-            &Generic::Process(ref p) => p.await_events(_duration),
-            &Generic::ProcessBinary(ref pb) => pb.await_events(_duration),
-            &Generic::ZeroCopy(ref z) => z.await_events(_duration),
+            Generic::Thread(t) => t.await_events(_duration),
+            Generic::Process(p) => p.await_events(_duration),
+            Generic::ProcessBinary(pb) => pb.await_events(_duration),
+            Generic::ZeroCopy(z) => z.await_events(_duration),
         }
     }
 }

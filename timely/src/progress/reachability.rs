@@ -298,7 +298,7 @@ impl<T: Timestamp> Builder<T> {
         // Initially this list contains observed locations with no incoming
         // edges, but as the algorithm develops we add to it any locations
         // that can only be reached by nodes that have been on this list.
-        let mut worklist = Vec::new();
+        let mut worklist = Vec::with_capacity(in_degree.len());
         for (key, val) in in_degree.iter() {
             if *val == 0 {
                 worklist.push(*key);

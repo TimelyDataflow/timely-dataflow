@@ -75,58 +75,52 @@ pub fn initialize_networking_from_sockets(
     let mut promises_iter = promises.into_iter();
     let mut futures_iter = futures.into_iter();
 
-    let mut send_guards = Vec::new();
-    let mut recv_guards = Vec::new();
+    let mut send_guards = Vec::with_capacity(sockets.len());
+    let mut recv_guards = Vec::with_capacity(sockets.len());
 
     // for each process, if a stream exists (i.e. not local) ...
-    for index in 0..sockets.len() {
+    for (index, stream) in sockets.into_iter().enumerate().filter_map(|(i, s)| s.map(|s| (i, s))) {
+        let remote_recv = promises_iter.next().unwrap();
 
-        if let Some(stream) = sockets[index].take() {
-            // remote process
+        {
+            let log_sender = log_sender.clone();
+            let stream = stream.try_clone()?;
+            let join_guard =
+            ::std::thread::Builder::new()
+                .name(format!("timely:send-{}", index))
+                .spawn(move || {
 
-            let remote_recv = promises_iter.next().unwrap();
+                    let logger = log_sender(CommunicationSetup {
+                        process: my_index,
+                        sender: true,
+                        remote: Some(index),
+                    });
 
-            {
-                let log_sender = log_sender.clone();
-                let stream = stream.try_clone()?;
-                let join_guard =
-                ::std::thread::Builder::new()
-                    .name(format!("timely:send-{}", index))
-                    .spawn(move || {
+                    send_loop(stream, remote_recv, my_index, index, logger);
+                })?;
 
-                        let logger = log_sender(CommunicationSetup {
-                            process: my_index,
-                            sender: true,
-                            remote: Some(index),
-                        });
+            send_guards.push(join_guard);
+        }
 
-                        send_loop(stream, remote_recv, my_index, index, logger);
-                    })?;
+        let remote_send = futures_iter.next().unwrap();
 
-                send_guards.push(join_guard);
-            }
+        {
+            // let remote_sends = remote_sends.clone();
+            let log_sender = log_sender.clone();
+            let stream = stream.try_clone()?;
+            let join_guard =
+            ::std::thread::Builder::new()
+                .name(format!("timely:recv-{}", index))
+                .spawn(move || {
+                    let logger = log_sender(CommunicationSetup {
+                        process: my_index,
+                        sender: false,
+                        remote: Some(index),
+                    });
+                    recv_loop(stream, remote_send, threads * my_index, my_index, index, logger);
+                })?;
 
-            let remote_send = futures_iter.next().unwrap();
-
-            {
-                // let remote_sends = remote_sends.clone();
-                let log_sender = log_sender.clone();
-                let stream = stream.try_clone()?;
-                let join_guard =
-                ::std::thread::Builder::new()
-                    .name(format!("timely:recv-{}", index))
-                    .spawn(move || {
-                        let logger = log_sender(CommunicationSetup {
-                            process: my_index,
-                            sender: false,
-                            remote: Some(index),
-                        });
-                        recv_loop(stream, remote_send, threads * my_index, my_index, index, logger);
-                    })?;
-
-                recv_guards.push(join_guard);
-            }
-
+            recv_guards.push(join_guard);
         }
     }
 

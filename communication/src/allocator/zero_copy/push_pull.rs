@@ -28,8 +28,8 @@ impl<T, P: BytesPush> Pusher<T, P> {
     /// Creates a new `Pusher` from a header and shared byte buffer.
     pub fn new(header: MessageHeader, sender: Rc<RefCell<SendEndpoint<P>>>) -> Pusher<T, P> {
         Pusher {
-            header:     header,
-            sender:     sender,
+            header,
+            sender,
             phantom:    ::std::marker::PhantomData,
         }
     }

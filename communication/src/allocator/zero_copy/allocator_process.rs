@@ -127,7 +127,7 @@ impl Allocate for ProcessAllocator {
         }
         self.channel_id_bound = Some(identifier);
 
-        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::new();
+        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::with_capacity(self.peers());
 
         for target_index in 0 .. self.peers() {
 
