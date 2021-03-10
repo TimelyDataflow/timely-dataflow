@@ -75,7 +75,7 @@ impl Process {
 
         let mut counters_send = Vec::with_capacity(peers);
         let mut counters_recv = Vec::with_capacity(peers);
-        for _ in 0..peers {
+        for _ in 0 .. peers {
             let (send, recv) = crossbeam_channel::unbounded();
             counters_send.push(send);
             counters_recv.push(recv);
