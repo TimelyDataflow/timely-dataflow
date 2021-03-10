@@ -25,9 +25,7 @@ pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2)> {
     fn partition(&self, parts: u64, route: F) -> Vec<Stream<G, D2>>;
 }
 
-impl<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2) + 'static> Partition<G, D, D2, F>
-    for Stream<G, D>
-{
+impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D2, F> for Stream<G, D> {
     fn partition(&self, parts: u64, route: F) -> Vec<Stream<G, D2>> {
         let mut builder = OperatorBuilder::new("Partition".to_owned(), self.scope());
 
@@ -35,7 +33,7 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2) + 'static> Partition<G, 
         let mut outputs = Vec::with_capacity(parts as usize);
         let mut streams = Vec::with_capacity(parts as usize);
 
-        for _ in 0..parts {
+        for _ in 0 .. parts {
             let (output, stream) = builder.new_output();
             outputs.push(output);
             streams.push(stream);
