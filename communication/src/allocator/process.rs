@@ -142,7 +142,7 @@ impl Allocate for Process {
 
             let vector =
             entry
-                .downcast_mut::<(Vec<Option<(Vec<Pusher<Message<T>>>, Puller<Message<T>>)>>)>()
+                .downcast_mut::<Vec<Option<(Vec<Pusher<Message<T>>>, Puller<Message<T>>)>>>()
                 .expect("failed to correctly cast channel");
 
             let (sends, recv) =
