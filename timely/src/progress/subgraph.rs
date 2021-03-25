@@ -683,7 +683,6 @@ impl<T: Timestamp> PerOperatorState<T> {
                 l.log(crate::logging::ShutdownEvent{ id: self.id });
             }
             self.operator = None;
-            self.name = format!("{}(tombstone)", self.name);
         }
     }
 
