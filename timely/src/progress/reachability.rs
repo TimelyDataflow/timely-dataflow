@@ -125,7 +125,7 @@ use crate::progress::timestamp::PathSummary;
 /// // Summarize reachability information.
 /// let (tracker, _) = builder.build();
 /// ```
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Builder<T: Timestamp> {
     /// Internal connections within hosted operators.
     ///
