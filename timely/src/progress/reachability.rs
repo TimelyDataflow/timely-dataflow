@@ -125,7 +125,7 @@ use crate::progress::timestamp::PathSummary;
 /// // Summarize reachability information.
 /// let (tracker, _) = builder.build();
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Builder<T: Timestamp> {
     /// Internal connections within hosted operators.
     ///
@@ -193,7 +193,7 @@ impl<T: Timestamp> Builder<T> {
     /// This method has the opportunity to perform some error checking that the path summaries
     /// are valid, including references to undefined nodes and ports, as well as self-loops with
     /// default summaries (a serious liveness issue).
-    pub fn build(&self) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn build(self) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
 
         if !self.is_acyclic() {
             println!("Cycle detected without timestamp increment");
@@ -483,7 +483,7 @@ impl<T:Timestamp> Tracker<T> {
     ///
     /// The result is a pair of tracker, and the summaries from each input port to each
     /// output port.
-    pub fn allocate_from(builder: &Builder<T>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn allocate_from(builder: Builder<T>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
 
         // Allocate buffer space for each input and input port.
         let mut per_operator =
@@ -526,8 +526,8 @@ impl<T:Timestamp> Tracker<T> {
 
         let tracker =
         Tracker {
-            nodes: builder.nodes.clone(),
-            edges: builder.edges.clone(),
+            nodes: builder.nodes,
+            edges: builder.edges,
             per_operator,
             target_changes: ChangeBatch::new(),
             source_changes: ChangeBatch::new(),
