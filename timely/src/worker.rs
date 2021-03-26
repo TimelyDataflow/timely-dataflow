@@ -435,8 +435,8 @@ impl<A: Allocate> Worker<A> {
     ///     worker.step_while(|| probe.less_than(&0));
     /// });
     /// ```
-    pub fn step_while<F: FnMut()->bool>(&mut self, mut func: F) {
-        while func() { self.step(); }
+    pub fn step_while<F: FnMut()->bool>(&mut self, func: F) {
+        self.step_or_park_while(Some(Duration::from_secs(0)), func)
     }
 
     /// Calls `self.step_or_park(duration)` as long as `func` evaluates to true.
