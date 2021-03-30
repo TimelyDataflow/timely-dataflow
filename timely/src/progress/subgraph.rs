@@ -173,7 +173,13 @@ where
             builder.add_edge(source, target);
         }
 
-        let (tracker, scope_summary) = builder.build();
+        // The `None` argument is optional logging infrastructure.
+        let path = self.path.clone();
+        let reachability_logging =
+        worker.log_register()
+            .get::<reachability::logging::TrackerEvent>("timely/reachability")
+            .map(|logger| reachability::logging::TrackerLogger::new(path, logger));
+        let (tracker, scope_summary) = builder.build(reachability_logging);
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone(), self.progress_logging.clone());
 
