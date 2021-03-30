@@ -178,7 +178,7 @@ where
         let reachability_logging =
         worker.log_register()
             .get::<reachability::logging::TrackerEvent>("timely/reachability")
-            .map(|logger| (path, logger));
+            .map(|logger| reachability::logging::TrackerLogger::new(path, logger));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
         let progcaster = Progcaster::new(worker, &self.path, self.logging.clone(), self.progress_logging.clone());
