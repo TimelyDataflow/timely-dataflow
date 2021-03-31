@@ -225,7 +225,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
                     // Get the header and payload, ditch the header.
                     let mut peel = bytes.extract_to(header.required_bytes());
-                    let _ = peel.extract_to(40);
+                    let _ = peel.extract_to(::std::mem::size_of::<MessageHeader>());
 
                     // Increment message count for channel.
                     // Safe to do this even if the channel has been dropped.
