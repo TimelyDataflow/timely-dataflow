@@ -103,7 +103,7 @@ pub fn recv_loop(
         }
     }
 
-    // Log the receive thread's start.
+    // Log the receive thread's end.
     logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: false, }));
 }
 
@@ -120,7 +120,7 @@ pub fn send_loop(
     mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
 {
 
-    // Log the receive thread's start.
+    // Log the send thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
 
     let mut sources: Vec<MergeQueue> = sources.into_iter().map(|x| {
@@ -187,6 +187,6 @@ pub fn send_loop(
     writer.get_mut().shutdown(::std::net::Shutdown::Write).expect("Write shutdown failed");
     logger.as_mut().map(|logger| logger.log(MessageEvent { is_send: true, header }));
 
-    // Log the receive thread's start.
+    // Log the send thread's end.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: false, }));
 }
