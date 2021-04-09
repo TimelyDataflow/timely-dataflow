@@ -85,8 +85,15 @@ impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Ti
 impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> Enter<G, T, D> for Stream<G, D> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D> {
 
+        use crate::scheduling::Scheduler;
+
         let (targets, registrar) = Tee::<T, D>::new();
-        let ingress = IngressNub { targets: Counter::new(targets), phantom: ::std::marker::PhantomData };
+        let ingress = IngressNub {
+            targets: Counter::new(targets),
+            phantom: ::std::marker::PhantomData,
+            activator: scope.activator_for(&scope.addr()),
+            active: false,
+        };
         let produced = ingress.targets.produced().clone();
 
         let input = scope.subgraph.borrow_mut().new_input(produced);
@@ -138,6 +145,8 @@ impl<'a, G: Scope, D: Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> {
     targets: Counter<TInner, TData, Tee<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
+    activator: crate::scheduling::Activator,
+    active: bool,
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> Push<Bundle<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
@@ -152,8 +161,15 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> Push<Bun
                     outer_message.data = inner_message.data;
                 }
             }
+            self.active = true;
         }
-        else { self.targets.done(); }
+        else {
+            if self.active {
+                self.activator.activate();
+                self.active = false;
+            }
+            self.targets.done();
+        }
     }
 }
 
@@ -179,4 +195,54 @@ where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
         }
         else { self.targets.done(); }
     }
+}
+
+#[cfg(test)]
+mod test {
+    /// Test that nested scopes with pass-through edges (no operators) correctly communicate progress.
+    ///
+    /// This is for issue: https://github.com/TimelyDataflow/timely-dataflow/issues/377
+    #[test]
+    fn test_nested() {
+
+        use crate::dataflow::{InputHandle, ProbeHandle};
+        use crate::dataflow::operators::{Input, Exchange, Inspect, Probe};
+
+        use crate::dataflow::Scope;
+        use crate::dataflow::operators::{Enter, Leave};
+
+        // initializes and runs a timely dataflow.
+        crate::execute_from_args(std::env::args(), |worker| {
+
+            let index = worker.index();
+            let mut input = InputHandle::new();
+            let mut probe = ProbeHandle::new();
+
+            // create a new input, exchange data, and inspect its output
+            worker.dataflow(|scope| {
+                let data = scope.input_from(&mut input);
+
+                scope.region(|inner| {
+
+                    let data = data.enter(inner);
+                    inner.region(|inner2| data.enter(inner2).leave()).leave()
+                })
+                    .inspect(move |x| println!("worker {}:\thello {}", index, x))
+                    .probe_with(&mut probe);
+            });
+
+            // introduce data and watch!
+            input.advance_to(0);
+            for round in 0..10 {
+                if index == 0 {
+                    input.send(round);
+                }
+                input.advance_to(round + 1);
+                while probe.less_than(input.time()) {
+                    worker.step_or_park(None);
+                }
+            }
+        }).unwrap();
+    }
+
 }
