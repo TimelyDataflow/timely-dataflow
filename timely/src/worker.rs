@@ -117,8 +117,7 @@ impl Config {
     #[cfg(feature = "getopts")]
     pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config, String> {
         let progress_mode = matches
-            .opt_get_default("progress-mode", ProgressMode::Eager)
-            .map_err(|e| e.to_string())?;
+            .opt_get_default("progress-mode", ProgressMode::Eager)?;
         Ok(Config::default().progress_mode(progress_mode))
     }
 
@@ -233,14 +232,14 @@ impl<A: Allocate> AsWorker for Worker<A> {
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
     fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
-        if address.len() == 0 { panic!("Unacceptable address: Length zero"); }
+        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address.to_vec());
         self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().allocate(identifier)
     }
     fn pipeline<T: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
-        if address.len() == 0 { panic!("Unacceptable address: Length zero"); }
+        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address.to_vec());
         self.temp_channel_ids.borrow_mut().push(identifier);
@@ -266,14 +265,14 @@ impl<A: Allocate> Worker<A> {
         let index = c.index();
         Worker {
             config,
-            timer: now.clone(),
+            timer: now,
             paths:  Default::default(),
             allocator: Rc::new(RefCell::new(c)),
             identifiers:  Default::default(),
             dataflows: Default::default(),
             dataflow_counter:  Default::default(),
-            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now.clone(), index))),
-            activations: Rc::new(RefCell::new(Activations::new(now.clone()))),
+            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now, index))),
+            activations: Rc::new(RefCell::new(Activations::new(now))),
             active_dataflows: Default::default(),
             temp_channel_ids:  Default::default(),
         }
@@ -370,8 +369,10 @@ impl<A: Allocate> Worker<A> {
         if !self.dataflows.borrow().is_empty() && delay != Some(Duration::new(0,0)) {
 
             // Log parking and flush log.
-            self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::park(delay)));
-            self.logging.borrow_mut().flush();
+            if let Some(l) = self.logging().as_mut() {
+                l.log(crate::logging::ParkEvent::park(delay));
+                l.flush();
+            }
 
             self.allocator
                 .borrow()
@@ -633,20 +634,21 @@ impl<A: Allocate> Worker<A> {
                 subgraph: &subscope,
                 parent: self.clone(),
                 logging: logging.clone(),
-                progress_logging: progress_logging.clone(),
+                progress_logging,
             };
             func(&mut resources, &mut builder)
         };
 
         let mut operator = subscope.into_inner().build(self);
 
-        logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
-            id: identifier,
-            addr: operator.path().to_vec(),
-            name: operator.name().to_string(),
-        }));
-
-        logging.as_mut().map(|l| l.flush());
+        if let Some(l) = logging.as_mut() {
+            l.log(crate::logging::OperatesEvent {
+                id: identifier,
+                addr: operator.path().to_vec(),
+                name: operator.name().to_string(),
+            });
+            l.flush();
+        }
 
         operator.get_internal_summary();
         operator.set_external_summary();

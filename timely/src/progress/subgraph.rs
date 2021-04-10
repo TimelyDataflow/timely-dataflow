@@ -187,7 +187,7 @@ where
         incomplete[0] = false;
         let incomplete_count = incomplete.len() - 1;
 
-        let activations = worker.activations().clone();
+        let activations = worker.activations();
 
         activations.borrow_mut().activate(&self.path[..]);
 
@@ -530,13 +530,24 @@ where
         assert_eq!(self.children[0].outputs, self.inputs());
         assert_eq!(self.children[0].inputs, self.outputs());
 
-        let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
-        for input in 0 .. self.scope_summary.len() {
-            for output in 0 .. self.scope_summary[input].len() {
-                for path_summary in self.scope_summary[input][output].elements().iter() {
-                    internal_summary[input][output].insert(TInner::summarize(path_summary.clone()));
-                }
-            }
+        let mut internal_summary = Vec::with_capacity(self.inputs());
+        for summary in self.scope_summary.iter() {
+            let scope_summary = summary.iter()
+                .map(|output| {
+                    output.elements()
+                        .iter()
+                        .cloned()
+                        .fold(
+                            Antichain::with_capacity(output.elements().len()),
+                            |mut antichain, path_summary| {
+                                antichain.insert(TInner::summarize(path_summary));
+                                antichain
+                            },
+                        )
+                })
+                .collect();
+
+            internal_summary.push(scope_summary);
         }
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).

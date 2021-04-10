@@ -17,7 +17,7 @@ pub struct ChangeBatch<T> {
     clean: usize,
 }
 
-impl<T:Ord> ChangeBatch<T> {
+impl<T> ChangeBatch<T> {
 
     /// Allocates a new empty `ChangeBatch`.
     ///
@@ -32,10 +32,61 @@ impl<T:Ord> ChangeBatch<T> {
     pub fn new() -> ChangeBatch<T> {
         ChangeBatch {
             updates: Vec::new(),
-            clean: 0
+            clean: 0,
         }
     }
 
+    /// Allocates a new empty `ChangeBatch` with space for `capacity` updates.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::ChangeBatch;
+    ///
+    /// let mut batch = ChangeBatch::<usize>::with_capacity(10);
+    /// assert!(batch.is_empty());
+    ///```
+    pub fn with_capacity(capacity: usize) -> ChangeBatch<T> {
+        ChangeBatch {
+            updates: Vec::with_capacity(capacity),
+            clean: 0,
+        }
+    }
+
+    /// Returns true if the change batch is not guaranteed compact.
+    pub fn is_dirty(&self) -> bool {
+        self.updates.len() > self.clean
+    }
+
+    /// Expose the internal vector of updates.
+    pub fn unstable_internal_updates(&self) -> &Vec<(T, i64)> { &self.updates }
+
+    /// Expose the internal value of `clean`.
+    pub fn unstable_internal_clean(&self) -> usize { self.clean }
+
+    /// Clears the map.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::ChangeBatch;
+    ///
+    /// let mut batch = ChangeBatch::<usize>::new_from(17, 1);
+    /// batch.clear();
+    /// assert!(batch.is_empty());
+    ///```
+    #[inline]
+    pub fn clear(&mut self) {
+        self.updates.clear();
+        self.clean = 0;
+    }
+}
+
+impl<T> ChangeBatch<T>
+where
+    T: Ord,
+{
+    
     /// Allocates a new `ChangeBatch` with a single entry.
     ///
     /// # Examples
@@ -50,11 +101,6 @@ impl<T:Ord> ChangeBatch<T> {
         let mut result = ChangeBatch::new();
         result.update(key, val);
         result
-    }
-
-    /// Returns true if the change batch is not guaranteed compact.
-    pub fn is_dirty(&self) -> bool {
-        self.updates.len() > self.clean
     }
 
     /// Adds a new update, for `item` with `value`.
@@ -157,23 +203,6 @@ impl<T:Ord> ChangeBatch<T> {
         self.updates.drain(..)
     }
 
-    /// Clears the map.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::ChangeBatch;
-    ///
-    /// let mut batch = ChangeBatch::<usize>::new_from(17, 1);
-    /// batch.clear();
-    /// assert!(batch.is_empty());
-    ///```
-    #[inline]
-    pub fn clear(&mut self) {
-        self.updates.clear();
-        self.clean = 0;
-    }
-
     /// True iff all keys have value zero.
     ///
     /// This method requires mutable access to `self` because it may need to compact the representation
@@ -266,16 +295,11 @@ impl<T:Ord> ChangeBatch<T> {
                     self.updates[i].1 = 0;
                 }
             }
+
             self.updates.retain(|x| x.1 != 0);
         }
         self.clean = self.updates.len();
     }
-
-    /// Expose the internal vector of updates.
-    pub fn unstable_internal_updates(&self) -> &Vec<(T, i64)> { &self.updates }
-
-    /// Expose the internal value of `clean`.
-    pub fn unstable_internal_clean(&self) -> usize { self.clean }
 
     /// Maintain the bounds of pending (non-compacted) updates versus clean (compacted) data.
     /// This function tries to minimize work by only compacting if enough work has accumulated.
@@ -284,5 +308,11 @@ impl<T:Ord> ChangeBatch<T> {
         if self.updates.len() > 32 && self.updates.len() >> 1 >= self.clean {
             self.compact()
         }
+    }
+}
+
+impl<T> Default for ChangeBatch<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }

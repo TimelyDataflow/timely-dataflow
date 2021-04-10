@@ -38,7 +38,7 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
         // // ignore `&mut A` and use thread allocator
         // let (pusher, puller) = Thread::new::<Bundle<T, D>>();
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
-         LogPuller::new(puller, allocator.index(), identifier, logging.clone()))
+         LogPuller::new(puller, allocator.index(), identifier, logging))
     }
 }
 

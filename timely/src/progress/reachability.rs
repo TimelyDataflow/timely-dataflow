@@ -343,6 +343,12 @@ impl<T: Timestamp> Builder<T> {
     }
 }
 
+impl<T: Timestamp> Default for Builder<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// An interactive tracker of propagated reachability information.
 ///
 /// A `Tracker` tracks, for a fixed graph topology, the implications of
@@ -439,6 +445,7 @@ impl<T: Timestamp> PortInformation<T> {
             output_summaries: Vec::new(),
         }
     }
+
     /// True if updates at this pointstamp uniquely block progress.
     ///
     /// This method returns true if the currently maintained pointstamp
@@ -452,6 +459,12 @@ impl<T: Timestamp> PortInformation<T> {
         let dominated = self.implications.frontier().iter().any(|t| t.less_than(time));
         let redundant = self.implications.count_for(time) > 1;
         !dominated && !redundant
+    }
+}
+
+impl<T: Timestamp> Default for PortInformation<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -742,7 +755,7 @@ fn summarize_outputs<T: Timestamp>(
         }
     }
 
-    let mut results = HashMap::new();
+    let mut results: HashMap<Location, Vec<Antichain<T::Summary>>> = HashMap::new();
     let mut worklist = VecDeque::<(Location, usize, T::Summary)>::new();
 
     let outputs =
@@ -771,7 +784,11 @@ fn summarize_outputs<T: Timestamp>(
 
                     // Determine the current path summaries from the input port.
                     let location = Location { node: location.node, port: Port::Target(input_port) };
-                    let antichains = results.entry(location).or_insert(Vec::new());
+                    let antichains = results
+                        .entry(location)
+                        .and_modify(|antichains| antichains.reserve(output))
+                        .or_insert_with(|| Vec::with_capacity(output));
+
                     while antichains.len() <= output { antichains.push(Antichain::new()); }
 
                     // Combine each operator-internal summary to the output with `summary`.
@@ -791,12 +808,16 @@ fn summarize_outputs<T: Timestamp>(
             Port::Target(_port) => {
 
                 // Each target should have (at most) one source.
-                if let Some(source) = reverse.get(&location) {
-                    let antichains = results.entry(*source).or_insert(Vec::new());
+                if let Some(&source) = reverse.get(&location) {
+                    let antichains = results
+                        .entry(source)
+                        .and_modify(|antichains| antichains.reserve(output))
+                        .or_insert_with(|| Vec::with_capacity(output));
+
                     while antichains.len() <= output { antichains.push(Antichain::new()); }
 
                     if antichains[output].insert(summary.clone()) {
-                        worklist.push_back((*source, output, summary.clone()));
+                        worklist.push_back((source, output, summary.clone()));
                     }
                 }
 

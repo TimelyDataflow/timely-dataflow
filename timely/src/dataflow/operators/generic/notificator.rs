@@ -282,7 +282,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// });
     /// ```
     #[inline]
-    pub fn notify_at<'a>(&mut self, cap: Capability<T>) {
+    pub fn notify_at(&mut self, cap: Capability<T>) {
         self.pending.push((cap,1));
     }
 
@@ -398,7 +398,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///            });
     /// });
     /// ```
-    pub fn pending<'a>(&'a self) -> ::std::slice::Iter<'a, (Capability<T>, u64)> {
+    pub fn pending(&self) -> ::std::slice::Iter<'_, (Capability<T>, u64)> {
         self.pending.iter()
     }
 }

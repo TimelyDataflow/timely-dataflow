@@ -124,6 +124,21 @@ impl<T> Antichain<T> {
     ///```
     pub fn new() -> Antichain<T> { Antichain { elements: Vec::new() } }
 
+    /// Creates a new empty `Antichain` with space for `capacity` elements.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::<u32>::with_capacity(10);
+    ///```
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            elements: Vec::with_capacity(capacity),
+        }
+    }
+
     /// Creates a new singleton `Antichain`.
     ///
     /// # Examples
@@ -161,7 +176,7 @@ impl<T> Antichain<T> {
     /// let mut frontier = Antichain::from_elem(2);
     /// assert_eq!(frontier.elements(), &[2]);
     ///```
-    #[inline] pub fn elements(&self) -> &[T] { &self.elements[..] }
+    #[inline] pub fn elements(&self) -> &[T] { &self.elements }
 
     /// Reveals the elements in the antichain.
     ///
@@ -173,7 +188,7 @@ impl<T> Antichain<T> {
     /// let mut frontier = Antichain::from_elem(2);
     /// assert_eq!(&*frontier.borrow(), &[2]);
     ///```
-    #[inline] pub fn borrow(&self) -> AntichainRef<T> { AntichainRef::new(&self.elements[..]) }}
+    #[inline] pub fn borrow(&self) -> AntichainRef<T> { AntichainRef::new(&self.elements) }}
 
 impl<T: PartialEq> PartialEq for Antichain<T> {
     fn eq(&self, other: &Self) -> bool {
@@ -223,14 +238,14 @@ impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
 /// but I strongly recommend against using them unless you must (on part of timely progress tracking seems
 /// to be greatly simplified by access to this)
 #[derive(Clone, Debug, Abomonation, Serialize, Deserialize)]
-pub struct MutableAntichain<T: PartialOrder+Ord> {
+pub struct MutableAntichain<T> {
     dirty: usize,
     updates: Vec<(T, i64)>,
     frontier: Vec<T>,
     changes: ChangeBatch<T>,
 }
 
-impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
+impl<T> MutableAntichain<T> {
     /// Creates a new empty `MutableAntichain`.
     ///
     /// # Examples
@@ -272,7 +287,10 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
 
     /// This method deletes the contents. Unlike `clear` it records doing so.
     pub fn empty(&mut self) {
-        for index in 0 .. self.updates.len() { self.updates[index].1 = 0; }
+        for (_, diff) in self.updates.iter_mut() {
+            *diff = 0;
+        }
+
         self.dirty = self.updates.len();
     }
 
@@ -287,7 +305,7 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// assert!(frontier.frontier().len() == 0);
     ///```
     #[inline]
-    pub fn frontier(&self) -> AntichainRef<T> {
+    pub fn frontier(&self) -> AntichainRef<'_, T> {
         debug_assert_eq!(self.dirty, 0);
         AntichainRef::new(&self.frontier)
     }
@@ -303,7 +321,10 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// assert!(frontier.frontier() == AntichainRef::new(&[0u64]));
     ///```
     #[inline]
-    pub fn new_bottom(bottom: T) -> MutableAntichain<T> {
+    pub fn new_bottom(bottom: T) -> MutableAntichain<T>
+    where
+        T: Clone,
+    {
         MutableAntichain {
             dirty: 0,
             updates: vec![(bottom.clone(), 1)],
@@ -341,7 +362,10 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// assert!(frontier.less_than(&2));
     ///```
     #[inline]
-    pub fn less_than(&self, time: &T) -> bool {
+    pub fn less_than(&self, time: &T) -> bool
+    where
+        T: PartialOrder,
+    {
         debug_assert_eq!(self.dirty, 0);
         self.frontier().less_than(time)
     }
@@ -359,7 +383,10 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// assert!(frontier.less_equal(&2));
     ///```
     #[inline]
-    pub fn less_equal(&self, time: &T) -> bool {
+    pub fn less_equal(&self, time: &T) -> bool
+    where
+        T: PartialOrder,
+    {
         debug_assert_eq!(self.dirty, 0);
         self.frontier().less_equal(time)
     }
@@ -393,10 +420,17 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// assert!(changes == vec![(1, -1), (2, 1)]);
     ///```
     #[inline]
-    pub fn update_iter<'a, I>(&'a mut self, updates: I) -> ::std::vec::Drain<'a, (T, i64)>
+    pub fn update_iter<I>(&mut self, updates: I) -> ::std::vec::Drain<'_, (T, i64)>
     where
+        T: Clone + PartialOrder + Ord,
         I: IntoIterator<Item = (T, i64)>,
     {
+        let updates = updates.into_iter();
+
+        // Attempt to pre-allocate for the new updates
+        let (min, max) = updates.size_hint();
+        self.updates.reserve(max.unwrap_or(min));
+
         for (time, delta) in updates {
             self.updates.push((time, delta));
             self.dirty += 1;
@@ -431,7 +465,10 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     /// This method is meant to be used for bulk updates to the frontier, and does more work than one might do
     /// for single updates, but is meant to be an efficient way to process multiple updates together. This is
     /// especially true when we want to apply very large numbers of updates.
-    fn rebuild(&mut self) {
+    fn rebuild(&mut self)
+    where
+        T: Clone + PartialOrder + Ord,
+    {
 
         // sort and consolidate updates; retain non-zero accumulations.
         if !self.updates.is_empty() {
@@ -463,12 +500,21 @@ impl<T: PartialOrder+Ord+Clone> MutableAntichain<T> {
     }
 
     /// Reports the count for a queried time.
-    pub fn count_for(&self, query_time: &T) -> i64 {
+    pub fn count_for(&self, query_time: &T) -> i64
+    where
+        T: Ord,
+    {
         self.updates
             .iter()
             .filter(|td| td.0.eq(query_time))
             .map(|td| td.1)
             .sum()
+    }
+}
+
+impl<T> Default for MutableAntichain<T> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -478,7 +524,7 @@ pub trait MutableAntichainFilter<T: PartialOrder+Ord+Clone> {
     ///
     /// # Examples
     ///
-    ///```
+    /// ```
     /// use timely::progress::frontier::{MutableAntichain, MutableAntichainFilter};
     ///
     /// let mut frontier = MutableAntichain::new_bottom(1u64);
@@ -488,7 +534,7 @@ pub trait MutableAntichainFilter<T: PartialOrder+Ord+Clone> {
     ///     .collect::<Vec<_>>();
     ///
     /// assert!(changes == vec![(1, -1), (2, 1)]);
-    ///```
+    /// ```
     fn filter_through(self, antichain: &mut MutableAntichain<T>) -> ::std::vec::Drain<(T,i64)>;
 }
 
@@ -508,10 +554,11 @@ pub struct AntichainRef<'a, T: 'a> {
 impl<'a, T: 'a> Clone for AntichainRef<'a, T> {
     fn clone(&self) -> Self {
         Self {
-            frontier: self.frontier.clone(),
+            frontier: self.frontier,
         }
     }
 }
+
 impl<'a, T: 'a> Copy for AntichainRef<'a, T> { }
 
 impl<'a, T: 'a> AntichainRef<'a, T> {
