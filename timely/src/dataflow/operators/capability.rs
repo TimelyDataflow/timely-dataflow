@@ -385,10 +385,16 @@ impl<T: Timestamp> CapabilitySet<T> {
     }
 }
 
+impl<T: Timestamp> Default for CapabilitySet<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Timestamp> Deref for CapabilitySet<T> {
     type Target=[Capability<T>];
 
     fn deref(&self) -> &[Capability<T>] {
-        &self.elements[..]
+        &self.elements
     }
 }

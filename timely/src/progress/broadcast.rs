@@ -154,8 +154,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     seq_no: counter,
                     channel,
                     addr: addr.clone(),
-                    messages: messages,
-                    internal: internal,
+                    messages,
+                    internal,
                 });
             });
 

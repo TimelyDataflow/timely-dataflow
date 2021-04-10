@@ -33,9 +33,9 @@ impl Location {
         Location { node, port: Port::Source(port) }
     }
     /// If the location is a target.
-    pub fn is_target(&self) -> bool { if let Port::Target(_) = self.port { true } else { false } }
+    pub fn is_target(&self) -> bool { matches!(self.port, Port::Target(_)) }
     /// If the location is a source.
-    pub fn is_source(&self) -> bool { if let Port::Source(_) = self.port { true } else { false } }
+    pub fn is_source(&self) -> bool { matches!(self.port, Port::Source(_)) }
 }
 
 impl From<Target> for Location {

@@ -137,11 +137,10 @@ impl<G: Scope> OperatorBuilder<G> {
     {
         // create capabilities, discard references to their creation.
         let mut capabilities = Vec::with_capacity(self.internal.borrow().len());
-        for output_index in 0  .. self.internal.borrow().len() {
-            let borrow = &self.internal.borrow()[output_index];
-            capabilities.push(mint_capability(G::Timestamp::minimum(), borrow.clone()));
+        for batch in self.internal.borrow().iter() {
+            capabilities.push(mint_capability(G::Timestamp::minimum(), batch.clone()));
             // Discard evidence of creation, as we are assumed to start with one.
-            borrow.borrow_mut().clear();
+            batch.borrow_mut().clear();
         }
 
         let mut logic = constructor(capabilities);
@@ -155,16 +154,16 @@ impl<G: Scope> OperatorBuilder<G> {
         move |progress: &mut SharedProgress<G::Timestamp>| {
 
             // drain frontier changes
-            for index in 0 .. progress.frontiers.len() {
-                self_frontier[index].update_iter(progress.frontiers[index].drain());
+            for (progress, frontier) in progress.frontiers.iter_mut().zip(self_frontier.iter_mut()) {
+                frontier.update_iter(progress.drain());
             }
 
             // invoke supplied logic
             let result = logic(&self_frontier[..]);
 
             // move batches of consumed changes.
-            for index in 0 .. progress.consumeds.len() {
-                self_consumed[index].borrow_mut().drain_into(&mut progress.consumeds[index]);
+            for (progress, consumed) in progress.consumeds.iter_mut().zip(self_consumed.iter()) {
+                consumed.borrow_mut().drain_into(progress);
             }
 
             // move batches of internal changes.
@@ -175,8 +174,8 @@ impl<G: Scope> OperatorBuilder<G> {
             }
 
             // move batches of produced changes.
-            for index in 0 .. progress.produceds.len() {
-                self_produced[index].borrow_mut().drain_into(&mut progress.produceds[index]);
+            for (progress, produced) in progress.produceds.iter_mut().zip(self_produced.iter()) {
+                produced.borrow_mut().drain_into(progress);
             }
 
             result

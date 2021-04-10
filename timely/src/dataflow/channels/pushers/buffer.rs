@@ -113,7 +113,7 @@ impl<'a, T, D, P: Push<Bundle<T, D>>+'a> Session<'a, T, D, P>  where T: Eq+Clone
     /// new backing memory.
     #[inline]
     pub fn give_vec(&mut self, message: &mut Vec<D>) {
-        if message.len() > 0 {
+        if !message.is_empty() {
             self.buffer.give_vec(message);
         }
     }
@@ -144,7 +144,7 @@ impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>+'a> AutoflushSession<'a, T, D, P
     /// Transmits a pre-packed batch of data.
     #[inline]
     pub fn give_content(&mut self, message: &mut Vec<D>) {
-        if message.len() > 0 {
+        if !message.is_empty() {
             self.buffer.give_vec(message);
         }
     }

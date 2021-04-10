@@ -29,7 +29,7 @@ impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
                 vector.retain(|x| predicate(x));
-                if vector.len() > 0 {
+                if !vector.is_empty() {
                     output.session(&time).give_vec(&mut vector);
                 }
             });

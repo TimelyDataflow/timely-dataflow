@@ -136,7 +136,7 @@ impl<'a, G: Scope, D: Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for 
         Stream::new(
             output,
             registrar,
-            scope.parent.clone()
+            scope.parent,
         )
     }
 }
@@ -206,7 +206,7 @@ mod test {
     fn test_nested() {
 
         use crate::dataflow::{InputHandle, ProbeHandle};
-        use crate::dataflow::operators::{Input, Exchange, Inspect, Probe};
+        use crate::dataflow::operators::{Input, Inspect, Probe};
 
         use crate::dataflow::Scope;
         use crate::dataflow::operators::{Enter, Leave};

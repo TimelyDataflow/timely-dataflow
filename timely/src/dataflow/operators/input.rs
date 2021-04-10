@@ -369,6 +369,12 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     }
 }
 
+impl<T: Timestamp, D: Data> Default for Handle<T, D> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T:Timestamp, D: Data> Drop for Handle<T, D> {
     fn drop(&mut self) {
         self.close_epoch();

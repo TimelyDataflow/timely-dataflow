@@ -163,7 +163,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let operator = OperatorCore {
             shape: self.shape,
             address: self.address,
-            activations: self.scope.activations().clone(),
+            activations: self.scope.activations(),
             logic,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             summary: self.summary,
