@@ -548,6 +548,16 @@ where
             }
         }
 
+        debug_assert_eq!(
+            internal_summary.len(),
+            self.inputs(),
+            "the internal summary should have as many elements as there are inputs",
+        );
+        debug_assert!(
+            internal_summary.iter().all(|summary| summary.len() == self.outputs()),
+            "each element of the internal summary should have as many elements as there are outputs",
+        );
+
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
         // We introduce these into the progress tracker to determine the scope's initial
         // internal capabilities.
