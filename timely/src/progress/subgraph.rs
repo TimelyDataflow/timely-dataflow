@@ -530,6 +530,9 @@ where
         assert_eq!(self.children[0].outputs, self.inputs());
         assert_eq!(self.children[0].inputs, self.outputs());
 
+        // Note that we need to have `self.inputs()` elements in the summary
+        // with each element containing `self.outputs()` antichains regardless
+        // of how long `self.scope_summary` is
         let mut internal_summary: Vec<Vec<_>> = (0..self.inputs())
             .map(|_| (0..self.outputs()).map(|_| Antichain::new()).collect())
             .collect();
