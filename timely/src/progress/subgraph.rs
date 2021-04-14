@@ -530,24 +530,22 @@ where
         assert_eq!(self.children[0].outputs, self.inputs());
         assert_eq!(self.children[0].inputs, self.outputs());
 
-        let mut internal_summary = Vec::with_capacity(self.inputs());
-        for summary in self.scope_summary.iter() {
-            let scope_summary = summary.iter()
-                .map(|output| {
-                    output.elements()
-                        .iter()
-                        .cloned()
-                        .fold(
-                            Antichain::with_capacity(output.elements().len()),
-                            |mut antichain, path_summary| {
-                                antichain.insert(TInner::summarize(path_summary));
-                                antichain
-                            },
-                        )
-                })
-                .collect();
+        let mut internal_summary: Vec<Vec<_>> = (0..self.inputs())
+            .map(|_| (0..self.outputs()).map(|_| Antichain::new()).collect())
+            .collect();
 
-            internal_summary.push(scope_summary);
+        for (summary, internal_summary) in
+            self.scope_summary.iter().zip(internal_summary.iter_mut())
+        {
+            internal_summary.reserve(summary.len());
+
+            for (output, antichain) in summary.iter().zip(internal_summary) {
+                antichain.reserve(output.elements().len());
+
+                for path_summary in output.elements() {
+                    antichain.insert(TInner::summarize(path_summary.clone()));
+                }
+            }
         }
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
