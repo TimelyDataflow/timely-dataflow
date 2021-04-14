@@ -533,10 +533,7 @@ where
         // Note that we need to have `self.inputs()` elements in the summary
         // with each element containing `self.outputs()` antichains regardless
         // of how long `self.scope_summary` is
-        let mut internal_summary: Vec<Vec<_>> = (0..self.inputs())
-            .map(|_| (0..self.outputs()).map(|_| Antichain::new()).collect())
-            .collect();
-
+        let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
         for (input_idx, input) in self.scope_summary.iter().enumerate() {
             for (output_idx, output) in input.iter().enumerate() {
                 let antichain = &mut internal_summary[input_idx][output_idx];
