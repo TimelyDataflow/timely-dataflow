@@ -637,8 +637,17 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let (internal_summary, shared_progress) = scope.get_internal_summary();
 
-        assert_eq!(internal_summary.len(), inputs);
-        assert!(!internal_summary.iter().any(|x| x.len() != outputs));
+        assert_eq!(
+            internal_summary.len(),
+            inputs,
+            "operator summary has {} inputs when {} were expected",
+            internal_summary.len(),
+            inputs,
+        );
+        assert!(
+            !internal_summary.iter().any(|x| x.len() != outputs),
+            "operator summary had too few outputs",
+        );
 
         PerOperatorState {
             name:               scope.name().to_owned(),
