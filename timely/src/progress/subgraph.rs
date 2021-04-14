@@ -537,17 +537,11 @@ where
             .map(|_| (0..self.outputs()).map(|_| Antichain::new()).collect())
             .collect();
 
-        for (summary, internal_summary) in
-            self.scope_summary.iter().zip(internal_summary.iter_mut())
-        {
-            internal_summary.reserve(summary.len());
-
-            for (output, antichain) in summary.iter().zip(internal_summary) {
+        for (input_idx, input) in self.scope_summary.iter().enumerate() {
+            for (output_idx, output) in input.iter().enumerate() {
+                let antichain = &mut internal_summary[input_idx][output_idx];
                 antichain.reserve(output.elements().len());
-
-                for path_summary in output.elements() {
-                    antichain.insert(TInner::summarize(path_summary.clone()));
-                }
+                antichain.extend(output.elements().iter().cloned().map(TInner::summarize));
             }
         }
 
