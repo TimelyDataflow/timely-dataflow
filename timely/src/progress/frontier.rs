@@ -43,6 +43,11 @@ impl<T: PartialOrder> Antichain<T> {
         }
     }
 
+    /// Reserves capacity for at least additional more elements to be inserted in the given `Antichain`
+    pub fn reserve(&mut self, additional: usize) {
+        self.elements.reserve(additional);
+    }
+
     /// Performs a sequence of insertion and return true iff any insertion does.
     ///
     /// # Examples

@@ -530,25 +530,27 @@ where
         assert_eq!(self.children[0].outputs, self.inputs());
         assert_eq!(self.children[0].inputs, self.outputs());
 
-        let mut internal_summary = Vec::with_capacity(self.inputs());
-        for summary in self.scope_summary.iter() {
-            let scope_summary = summary.iter()
-                .map(|output| {
-                    output.elements()
-                        .iter()
-                        .cloned()
-                        .fold(
-                            Antichain::with_capacity(output.elements().len()),
-                            |mut antichain, path_summary| {
-                                antichain.insert(TInner::summarize(path_summary));
-                                antichain
-                            },
-                        )
-                })
-                .collect();
-
-            internal_summary.push(scope_summary);
+        // Note that we need to have `self.inputs()` elements in the summary
+        // with each element containing `self.outputs()` antichains regardless
+        // of how long `self.scope_summary` is
+        let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
+        for (input_idx, input) in self.scope_summary.iter().enumerate() {
+            for (output_idx, output) in input.iter().enumerate() {
+                let antichain = &mut internal_summary[input_idx][output_idx];
+                antichain.reserve(output.elements().len());
+                antichain.extend(output.elements().iter().cloned().map(TInner::summarize));
+            }
         }
+
+        debug_assert_eq!(
+            internal_summary.len(),
+            self.inputs(),
+            "the internal summary should have as many elements as there are inputs",
+        );
+        debug_assert!(
+            internal_summary.iter().all(|summary| summary.len() == self.outputs()),
+            "each element of the internal summary should have as many elements as there are outputs",
+        );
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
         // We introduce these into the progress tracker to determine the scope's initial
@@ -632,8 +634,17 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let (internal_summary, shared_progress) = scope.get_internal_summary();
 
-        assert_eq!(internal_summary.len(), inputs);
-        assert!(!internal_summary.iter().any(|x| x.len() != outputs));
+        assert_eq!(
+            internal_summary.len(),
+            inputs,
+            "operator summary has {} inputs when {} were expected",
+            internal_summary.len(),
+            inputs,
+        );
+        assert!(
+            !internal_summary.iter().any(|x| x.len() != outputs),
+            "operator summary had too few outputs",
+        );
 
         PerOperatorState {
             name:               scope.name().to_owned(),
