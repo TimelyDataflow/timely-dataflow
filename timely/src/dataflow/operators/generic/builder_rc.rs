@@ -17,7 +17,6 @@ use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::capability::Capability;
-use crate::dataflow::operators::capability::mint as mint_capability;
 use crate::dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 
@@ -138,7 +137,7 @@ impl<G: Scope> OperatorBuilder<G> {
         // create capabilities, discard references to their creation.
         let mut capabilities = Vec::with_capacity(self.internal.borrow().len());
         for batch in self.internal.borrow().iter() {
-            capabilities.push(mint_capability(G::Timestamp::minimum(), batch.clone()));
+            capabilities.push(Capability::new(G::Timestamp::minimum(), batch.clone()));
             // Discard evidence of creation, as we are assumed to start with one.
             batch.borrow_mut().clear();
         }

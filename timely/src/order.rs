@@ -29,8 +29,8 @@ macro_rules! implement_partial {
     ($($index_type:ty,)*) => (
         $(
             impl PartialOrder for $index_type {
-                #[inline] fn less_than(&self, other: &Self) -> bool { self < other }
-                #[inline] fn less_equal(&self, other: &Self) -> bool { self <= other }
+                fn less_than(&self, other: &Self) -> bool { self < other }
+                fn less_equal(&self, other: &Self) -> bool { self <= other }
             }
         )*
     )
