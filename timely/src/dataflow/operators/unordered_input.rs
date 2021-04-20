@@ -14,8 +14,7 @@ use crate::Data;
 use crate::dataflow::channels::pushers::{Tee, Counter as PushCounter};
 use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
 
-use crate::dataflow::operators::ActivateCapability;
-use crate::dataflow::operators::capability::mint as mint_capability;
+use crate::dataflow::operators::{ActivateCapability, Capability};
 
 use crate::dataflow::{Stream, Scope};
 
@@ -84,7 +83,7 @@ impl<G: Scope> UnorderedInput<G> for G {
         let (output, registrar) = Tee::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
-        let cap = mint_capability(G::Timestamp::minimum(), internal.clone());
+        let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
         let counter = PushCounter::new(output);
         let produced = counter.produced().clone();
         let peers = self.peers();
@@ -93,7 +92,7 @@ impl<G: Scope> UnorderedInput<G> for G {
         let mut address = self.addr();
         address.push(index);
 
-        let cap = ActivateCapability::new(cap, &address[..], self.activations().clone());
+        let cap = ActivateCapability::new(cap, &address, self.activations());
 
         let helper = UnorderedHandle::new(counter);
 

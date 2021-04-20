@@ -37,6 +37,7 @@ impl Scheduler for Box<dyn Scheduler> {
 }
 
 /// Allocation-free activation tracker.
+#[derive(Debug)]
 pub struct Activations {
     clean: usize,
     /// `(offset, length)`

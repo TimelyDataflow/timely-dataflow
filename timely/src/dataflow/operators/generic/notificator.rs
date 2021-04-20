@@ -109,11 +109,11 @@ fn notificator_delivers_notifications_in_topo_order() {
     use crate::progress::ChangeBatch;
     use crate::progress::frontier::MutableAntichain;
     use crate::order::Product;
-    use crate::dataflow::operators::capability::mint as mint_capability;
+    use crate::dataflow::operators::capability::Capability;
 
     let mut frontier = MutableAntichain::new_bottom(Product::new(0, 0));
 
-    let root_capability = mint_capability(Product::new(0,0), Rc::new(RefCell::new(ChangeBatch::new())));
+    let root_capability = Capability::new(Product::new(0,0), Rc::new(RefCell::new(ChangeBatch::new())));
 
     let logging = None;//::logging::new_inactive_logger();
 

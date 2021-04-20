@@ -18,7 +18,6 @@ use crate::communication::{Push, Pull, message::RefOrMut};
 use crate::logging::TimelyLogger as Logger;
 
 use crate::dataflow::operators::CapabilityRef;
-use crate::dataflow::operators::capability::mint_ref as mint_capability_ref;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
 /// Handle to an operator's input stream.
@@ -47,10 +46,10 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
         self.pull_counter.next().map(|bundle| {
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
-                    (mint_capability_ref(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data))
+                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data))
                 },
                 RefOrMut::Mut(bundle) => {
-                    (mint_capability_ref(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data))
+                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data))
                 },
             }
         })
@@ -81,10 +80,10 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
         while let Some((cap, data)) = self.pull_counter.next().map(|bundle| {
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
-                    (mint_capability_ref(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data))
+                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data))
                 },
                 RefOrMut::Mut(bundle) => {
-                    (mint_capability_ref(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data))
+                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data))
                 },
             }
         }) {
