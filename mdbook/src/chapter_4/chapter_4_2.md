@@ -34,7 +34,7 @@ fn main() {
 }
 ```
 
-This program first creates a loop variable, using the `loop_variable` method on scopes. This method comes from the `Feedback` extension trait in `dataflow::operators`, in case you can't find it. When we create a new loop variable, we have to tell timely dataflow two things, as arguments: (i) what is the upper bound on the number of iterations, and by how much should we increment the timestamp each time around the loop.
+This program first creates a loop variable, using the `feedback` method on scopes. This method comes from the `Feedback` extension trait in `dataflow::operators`, in case you can't find it. When we create a new loop variable, we have to tell timely dataflow by how much we should increment the timestamp each time around the loop. To be more specific, we have to give a path summary which often is just a number that tells us by how much to increment the timestamp. When we later connect the output of an operation back to this loop variable we can specify an upper bound on the number of iterations by using the `branch_when` method.
 
 We start with a stream of the numbers from one through nine, because we have to start somewhere. Our plan is to repeatedly apply the Collatz step, and then discard any numbers equal to one, but we want to apply this not only to our input but also to whatever comes back around our loop variable. So, the very first step is to `concat` our input stream with the feedback stream. Then we can apply the Collatz step, filter out the ones, and then connect the resulting stream as the definition of the feedback stream.
 
