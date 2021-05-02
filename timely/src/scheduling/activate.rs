@@ -187,6 +187,7 @@ impl Activations {
 }
 
 /// A thread-safe handle to an `Activations`.
+#[derive(Debug)]
 pub struct SyncActivations {
     tx: Sender<Vec<usize>>,
     thread: Thread,
@@ -217,6 +218,7 @@ impl SyncActivations {
 }
 
 /// A capability to activate a specific path.
+#[derive(Debug)]
 pub struct Activator {
     path: Vec<usize>,
     queue: Rc<RefCell<Activations>>,
@@ -251,6 +253,7 @@ impl Activator {
 }
 
 /// A thread-safe version of `Activator`.
+#[derive(Debug)]
 pub struct SyncActivator {
     path: Vec<usize>,
     queue: SyncActivations,
@@ -295,6 +298,7 @@ impl std::error::Error for SyncActivationError {
 }
 
 /// A wrapper that unparks on drop.
+#[derive(Debug)]
 pub struct ActivateOnDrop<T>  {
     wrapped: T,
     address: Rc<Vec<usize>>,

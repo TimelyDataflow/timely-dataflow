@@ -21,6 +21,7 @@ use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 
 /// Contains type-free information about the operator properties.
+#[derive(Debug)]
 pub struct OperatorShape {
     name: String,   // A meaningful name for the operator.
     notify: bool,   // Does the operator require progress notifications.
@@ -53,6 +54,7 @@ impl OperatorShape {
 }
 
 /// Builds operators with generic shape.
+#[derive(Debug)]
 pub struct OperatorBuilder<G: Scope> {
     scope: G,
     index: usize,

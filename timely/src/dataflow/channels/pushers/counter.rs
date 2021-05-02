@@ -1,5 +1,6 @@
 //! A wrapper which counts the number of records pushed past and updates a shared count map.
 
+use std::marker::PhantomData;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -8,10 +9,11 @@ use crate::dataflow::channels::Bundle;
 use crate::communication::Push;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
+#[derive(Debug)]
 pub struct Counter<T: Ord, D, P: Push<Bundle<T, D>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
-    phantom: ::std::marker::PhantomData<D>,
+    phantom: PhantomData<D>,
 }
 
 impl<T, D, P> Push<Bundle<T, D>> for Counter<T, D, P> where T : Ord+Clone+'static, P: Push<Bundle<T, D>> {
@@ -34,7 +36,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Counter<T, D, P> where T : Ord+Clone+'static {
         Counter {
             pushee,
             produced: Rc::new(RefCell::new(ChangeBatch::new())),
-            phantom: ::std::marker::PhantomData,
+            phantom: PhantomData,
         }
     }
     /// A references to shared changes in counts, for cloning or draining.

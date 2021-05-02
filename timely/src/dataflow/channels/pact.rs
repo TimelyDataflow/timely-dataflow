@@ -7,7 +7,7 @@
 //! The only requirement of a pact is that it not alter the number of `D` records at each time `T`.
 //! The progress tracking logic assumes that this number is independent of the pact used.
 
-use std::marker::PhantomData;
+use std::{fmt::{self, Debug}, marker::PhantomData};
 
 use crate::communication::{Push, Pull, Data};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
@@ -16,7 +16,7 @@ use crate::worker::AsWorker;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{Bundle, Message};
 
-use crate::logging::TimelyLogger as Logger;
+use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T: 'static, D: 'static> {
@@ -29,7 +29,9 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
 }
 
 /// A direct connection
+#[derive(Debug)]
 pub struct Pipeline;
+
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     type Pusher = LogPusher<T, D, ThreadPusher<Bundle<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<Bundle<T, D>>>;
@@ -43,8 +45,9 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
 }
 
 /// An exchange between multiple observers by data
-pub struct Exchange<D, F: FnMut(&D)->u64+'static> { hash_func: F, phantom: PhantomData<D>, }
-impl<D, F: FnMut(&D)->u64> Exchange<D, F> {
+pub struct Exchange<D, F> { hash_func: F, phantom: PhantomData<D> }
+
+impl<D, F: FnMut(&D)->u64+'static> Exchange<D, F> {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new(func: F) -> Exchange<D, F> {
         Exchange {
@@ -67,16 +70,24 @@ impl<T: Eq+Data+Clone, D: Data+Clone, F: FnMut(&D)->u64+'static> Parallelization
     }
 }
 
+impl<D, F> Debug for Exchange<D, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Exchange").finish()
+    }
+}
+
 /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
+#[derive(Debug)]
 pub struct LogPusher<T, D, P: Push<Bundle<T, D>>> {
     pusher: P,
     channel: usize,
     counter: usize,
     source: usize,
     target: usize,
-    phantom: ::std::marker::PhantomData<(T, D)>,
+    phantom: PhantomData<(T, D)>,
     logging: Option<Logger>,
 }
+
 impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
     /// Allocates a new pusher.
     pub fn new(pusher: P, source: usize, target: usize, channel: usize, logging: Option<Logger>) -> Self {
@@ -86,7 +97,7 @@ impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
             counter: 0,
             source,
             target,
-            phantom: ::std::marker::PhantomData,
+            phantom: PhantomData,
             logging,
         }
     }
@@ -97,34 +108,40 @@ impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
     fn push(&mut self, pair: &mut Option<Bundle<T, D>>) {
         if let Some(bundle) = pair {
             self.counter += 1;
+
             // Stamp the sequence number and source.
             // FIXME: Awkward moment/logic.
             if let Some(message) = bundle.if_mut() {
-                message.seq = self.counter-1;
+                message.seq = self.counter - 1;
                 message.from = self.source;
             }
 
-            self.logging.as_ref().map(|l| l.log(crate::logging::MessagesEvent {
-                is_send: true,
-                channel: self.channel,
-                source: self.source,
-                target: self.target,
-                seq_no: self.counter-1,
-                length: bundle.data.len(),
-            }));
+            if let Some(logger) = self.logging.as_ref() {
+                logger.log(MessagesEvent {
+                    is_send: true,
+                    channel: self.channel,
+                    source: self.source,
+                    target: self.target,
+                    seq_no: self.counter - 1,
+                    length: bundle.data.len(),
+                })
+            }
         }
+
         self.pusher.push(pair);
     }
 }
 
 /// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
+#[derive(Debug)]
 pub struct LogPuller<T, D, P: Pull<Bundle<T, D>>> {
     puller: P,
     channel: usize,
     index: usize,
-    phantom: ::std::marker::PhantomData<(T, D)>,
+    phantom: PhantomData<(T, D)>,
     logging: Option<Logger>,
 }
+
 impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
     /// Allocates a new `Puller`.
     pub fn new(puller: P, index: usize, channel: usize, logging: Option<Logger>) -> Self {
@@ -132,7 +149,7 @@ impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
             puller,
             channel,
             index,
-            phantom: ::std::marker::PhantomData,
+            phantom: PhantomData,
             logging,
         }
     }
@@ -145,15 +162,19 @@ impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
         if let Some(bundle) = result {
             let channel = self.channel;
             let target = self.index;
-            self.logging.as_ref().map(|l| l.log(crate::logging::MessagesEvent {
-                is_send: false,
-                channel,
-                source: bundle.from,
-                target,
-                seq_no: bundle.seq,
-                length: bundle.data.len(),
-            }));
+
+            if let Some(logger) = self.logging.as_ref() {
+                logger.log(MessagesEvent {
+                    is_send: false,
+                    channel,
+                    source: bundle.from,
+                    target,
+                    seq_no: bundle.seq,
+                    length: bundle.data.len(),
+                });
+            }
         }
+
         result
     }
 }

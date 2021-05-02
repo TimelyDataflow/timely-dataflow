@@ -14,6 +14,7 @@ use crate::logging::TimelyLogger as Logger;
 /// Notification requests persist across uses of `Notificator`, and it may help to think of `Notificator`
 /// as a notification *session*. However, idiomatically it seems you mostly want to restrict your usage
 /// to such sessions, which is why this is the main notificator type.
+#[derive(Debug)]
 pub struct Notificator<'a, T: Timestamp> {
     frontiers: &'a [&'a MutableAntichain<T>],
     inner: &'a mut FrontierNotificator<T>,
@@ -230,6 +231,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///     in2.close();
 /// }).unwrap();
 /// ```
+#[derive(Debug)]
 pub struct FrontierNotificator<T: Timestamp> {
     pending: Vec<(Capability<T>, u64)>,
     available: ::std::collections::BinaryHeap<OrderReversed<T>>,
@@ -403,7 +405,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 struct OrderReversed<T: Timestamp> {
     element: Capability<T>,
 }

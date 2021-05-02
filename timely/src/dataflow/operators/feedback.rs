@@ -131,6 +131,7 @@ impl<G: Scope, D: Data> ConnectLoop<G, D> for Stream<G, D> {
 }
 
 /// A handle used to bind the source of a loop variable.
+#[derive(Debug)]
 pub struct Handle<G: Scope, D: Data> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
