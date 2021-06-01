@@ -183,6 +183,17 @@ impl<T> Antichain<T> {
     ///```
     #[inline] pub fn elements(&self) -> &[T] { &self.elements }
 
+    /// Consumes the antichain and reveals its elements.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    /// let frontier = Antichain::from_elem(2);
+    /// assert_eq!(frontier.into_elements(), vec![2]);
+    ///```
+    #[inline] pub fn into_elements(self) -> Vec<T> { self.elements }
+
     /// Reveals the elements in the antichain.
     ///
     /// # Examples
