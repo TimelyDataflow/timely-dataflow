@@ -173,6 +173,10 @@ impl<T> Antichain<T> {
 
     /// Reveals the elements in the antichain.
     ///
+    /// This method is redundant with `<Antichain<T> as Deref>`, but the method
+    /// is in such broad use that we probably don't want to deprecate it without
+    /// some time to fix all things.
+    ///
     /// # Examples
     ///
     ///```
@@ -181,18 +185,7 @@ impl<T> Antichain<T> {
     /// let mut frontier = Antichain::from_elem(2);
     /// assert_eq!(frontier.elements(), &[2]);
     ///```
-    #[inline] pub fn elements(&self) -> &[T] { &self.elements }
-
-    /// Consumes the antichain and reveals its elements.
-    ///
-    /// # Examples
-    ///
-    ///```
-    /// use timely::progress::frontier::Antichain;
-    /// let frontier = Antichain::from_elem(2);
-    /// assert_eq!(frontier.into_elements(), vec![2]);
-    ///```
-    #[inline] pub fn into_elements(self) -> Vec<T> { self.elements }
+    #[inline] pub fn elements(&self) -> &[T] { &self[..] }
 
     /// Reveals the elements in the antichain.
     ///
@@ -231,6 +224,27 @@ impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
         let mut temp = Antichain::new();
         for elem in vec.into_iter() { temp.insert(elem); }
         temp
+    }
+}
+
+impl<T> Into<Vec<T>> for Antichain<T> {
+    fn into(self) -> Vec<T> {
+        self.elements
+    }
+}
+
+impl<T> ::std::ops::Deref for Antichain<T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        &self.elements
+    }
+}
+
+impl<T> ::std::iter::IntoIterator for Antichain<T> {
+    type Item = T;
+    type IntoIter = ::std::vec::IntoIter<T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements.into_iter()
     }
 }
 
