@@ -1,17 +1,20 @@
 //! A `Push` implementor with a list of `Box<Push>` to forward pushes to.
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::fmt::{self, Debug};
+use std::rc::Rc;
 
-use crate::Data;
 use crate::dataflow::channels::{Bundle, Message};
+use crate::Data;
 
 use crate::communication::Push;
+
+type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<Bundle<T, D>>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct Tee<T: 'static, D: 'static> {
     buffer: Vec<D>,
-    shared: Rc<RefCell<Vec<Box<dyn Push<Bundle<T, D>>>>>>,
+    shared: PushList<T, D>,
 }
 
 impl<T: Data, D: Data> Push<Bundle<T, D>> for Tee<T, D> {
@@ -58,9 +61,27 @@ impl<T, D> Clone for Tee<T, D> {
     }
 }
 
+impl<T, D> Debug for Tee<T, D>
+where
+    D: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_struct("Tee");
+        debug.field("buffer", &self.buffer);
+
+        if let Ok(shared) = self.shared.try_borrow() {
+            debug.field("shared", &format!("{} pushers", shared.len()));
+        } else {
+            debug.field("shared", &"...");
+        }
+
+        debug.finish()
+    }
+}
+
 /// A shared list of `Box<Push>` used to add `Push` implementors.
 pub struct TeeHelper<T, D> {
-    shared: Rc<RefCell<Vec<Box<dyn Push<Bundle<T, D>>>>>>
+    shared: PushList<T, D>,
 }
 
 impl<T, D> TeeHelper<T, D> {
@@ -73,7 +94,21 @@ impl<T, D> TeeHelper<T, D> {
 impl<T, D> Clone for TeeHelper<T, D> {
     fn clone(&self) -> Self {
         TeeHelper {
-            shared: self.shared.clone()
+            shared: self.shared.clone(),
         }
+    }
+}
+
+impl<T, D> Debug for TeeHelper<T, D> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_struct("TeeHelper");
+
+        if let Ok(shared) = self.shared.try_borrow() {
+            debug.field("shared", &format!("{} pushers", shared.len()));
+        } else {
+            debug.field("shared", &"...");
+        }
+
+        debug.finish()
     }
 }

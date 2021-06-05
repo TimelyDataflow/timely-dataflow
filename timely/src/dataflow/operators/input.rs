@@ -130,6 +130,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
     }
 }
 
+#[derive(Debug)]
 struct Operator<T:Timestamp> {
     name: String,
     address: Vec<usize>,
@@ -168,7 +169,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-
+#[derive(Debug)]
 pub struct Handle<T: Timestamp, D: Data> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,

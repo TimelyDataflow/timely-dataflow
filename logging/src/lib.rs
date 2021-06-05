@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::any::Any;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
+use std::fmt::{self, Debug};
 
 pub struct Registry<Id> {
     /// A worker-specific identifier.
@@ -31,7 +32,7 @@ impl<Id: Clone+'static> Registry<Id> {
         name: &str,
         action: F) -> Option<Box<dyn Any>>
     {
-        let logger = Logger::<T, Id>::new(self.time.clone(), Duration::default(), self.id.clone(), action);
+        let logger = Logger::<T, Id>::new(self.time, Duration::default(), self.id.clone(), action);
         self.insert_logger(name, logger)
     }
 
@@ -99,7 +100,7 @@ impl<T, E: Clone> Clone for Logger<T, E> {
         Logger {
             id: self.id.clone(),
             time: self.time,
-            offset: self.offset.clone(),
+            offset: self.offset,
             action: self.action.clone(),
             buffer: self.buffer.clone(),
         }
@@ -153,7 +154,7 @@ impl<T, E: Clone> Logger<T, E> {
         let mut buffer = self.buffer.borrow_mut();
         let elapsed = self.time.elapsed() + self.offset;
         for event in events {
-            buffer.push((elapsed.clone(), self.id.clone(), event.into()));
+            buffer.push((elapsed, self.id.clone(), event.into()));
             if buffer.len() == buffer.capacity() {
                 // Would call `self.flush()`, but for `RefCell` panic.
                 let mut action = self.action.borrow_mut();
@@ -183,6 +184,22 @@ impl<T, E> Drop for Logger<T, E> {
         if !self.buffer.borrow().is_empty() {
             self.flush();
         }
+    }
+}
+
+impl<T, E> Debug for Logger<T, E>
+where
+    E: Debug,
+    T: Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Logger")
+            .field("id", &self.id)
+            .field("time", &self.time)
+            .field("offset", &self.offset)
+            .field("action", &Rc::as_ptr(&self.action))
+            .field("buffer", &self.buffer)
+            .finish()
     }
 }
 

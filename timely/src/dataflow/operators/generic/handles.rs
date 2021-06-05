@@ -161,6 +161,7 @@ pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: Pu
 /// An `OutputWrapper` exists to prevent anyone from using the wrapped buffer in any way other
 /// than with an `OutputHandle`, whose methods ensure that capabilities are used and that the
 /// pusher is flushed (via the `cease` method) once it is no longer used.
+#[derive(Debug)]
 pub struct OutputWrapper<T: Timestamp, D, P: Push<Bundle<T, D>>> {
     push_buffer: Buffer<T, D, PushCounter<T, D, P>>,
     internal_buffer: Rc<RefCell<ChangeBatch<T>>>,

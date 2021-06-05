@@ -10,7 +10,7 @@ use crate::communication::Push;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::Bundle;
-use std::fmt;
+use std::fmt::{self, Debug};
 
 // use dataflow::scopes::root::loggers::CHANNELS_Q;
 
@@ -56,7 +56,7 @@ impl<S: Scope, D> Stream<S, D> {
     pub fn scope(&self) -> S { self.scope.clone() }
 }
 
-impl<S, D> fmt::Debug for Stream<S, D>
+impl<S, D> Debug for Stream<S, D>
 where
     S: Scope,
 {

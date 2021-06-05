@@ -137,6 +137,7 @@ impl<G: Scope, D: Data> Probe<G, D> for Stream<G, D> {
 }
 
 /// Reports information about progress at the probe.
+#[derive(Debug)]
 pub struct Handle<T:Timestamp> {
     frontier: Rc<RefCell<MutableAntichain<T>>>
 }
@@ -175,6 +176,15 @@ impl<T: Timestamp> Clone for Handle<T> {
         Handle {
             frontier: self.frontier.clone()
         }
+    }
+}
+
+impl<T> Default for Handle<T>
+where
+    T: Timestamp,
+{
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -101,6 +101,12 @@ pub mod link {
         }
     }
 
+    impl<T, D> Default for EventLink<T, D> {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     #[test]
     fn avoid_stack_overflow_in_drop() {
         let mut event1 = Rc::new(EventLink::<(),()>::new());

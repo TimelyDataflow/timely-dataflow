@@ -10,6 +10,7 @@ use crate::communication::Push;
 ///
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
 /// data must be flushed and creates a `Session` object which allows sending at the given time.
+#[derive(Debug)]
 pub struct Buffer<T, D, P: Push<Bundle<T, D>>> {
     time: Option<T>,  // the currently open time, if it is open
     buffer: Vec<D>,   // a buffer for records, to send at self.time

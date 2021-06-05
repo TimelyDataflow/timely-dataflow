@@ -145,6 +145,7 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 }
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
+#[derive(Debug)]
 pub struct UnorderedHandle<T: Timestamp, D: Data> {
     buffer: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
