@@ -19,6 +19,7 @@ use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::capability::Capability;
 use crate::dataflow::operators::generic::handles::{InputHandle, new_input_handle, OutputWrapper};
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
+use crate::dataflow::operators::generic::builder_raw::OperatorShape;
 
 use crate::logging::TimelyLogger as Logger;
 
@@ -191,6 +192,11 @@ impl<G: Scope> OperatorBuilder<G> {
     /// The operator's worker-unique identifier.
     pub fn global(&self) -> usize {
         self.builder.global()
+    }
+
+    /// Return a reference to the operator's shape
+    pub fn shape(&self) -> &OperatorShape {
+        self.builder.shape()
     }
 
     /// Creates operator info for the operator.
