@@ -1,5 +1,6 @@
 //! Hierarchical organization of timely dataflow graphs.
 
+use std::panic::Location;
 use crate::progress::{Timestamp, Operate, Source, Target};
 use crate::order::Product;
 use crate::progress::timestamp::Refines;
@@ -7,8 +8,10 @@ use crate::communication::Allocate;
 use crate::worker::AsWorker;
 
 pub mod child;
+pub mod region;
 
 pub use self::child::Child;
+pub use region::Region;
 
 /// The information a child scope needs from its parent.
 pub trait ScopeParent: AsWorker+Clone {
@@ -187,4 +190,73 @@ pub trait Scope: ScopeParent {
         self.scoped::<<Self as ScopeParent>::Timestamp,R,F>(name, func)
     }
 
+    /// Creates an optional dataflow region with the same timestamp as the outer scope.
+    ///
+    /// If `enabled` is true then this acts like [`Scope::region()`] and if `enabled`
+    /// is false it's a no-op and produces no change in the dataflow graph.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Enter, Leave};
+    ///
+    /// timely::execute_from_args(std::env::args(), |worker| {
+    ///     // must specify types as nothing else drives inference.
+    ///     let input = worker.dataflow::<u64,_,_>(|child1| {
+    ///         let (input, stream) = child1.new_input::<String>();
+    ///         let output = child1.optional_region(true, |child2| {
+    ///             stream.enter(child2).leave()
+    ///         });
+    ///
+    ///         input
+    ///     });
+    /// });
+    /// ```
+    ///
+    #[track_caller]
+    fn optional_region<R, F>(&mut self, enabled: bool, func: F) -> R
+    where
+        F: FnOnce(&mut Region<Self, Self::Timestamp>) -> R,
+    {
+        let caller = Location::caller();
+        let name = format!(
+            "OptionalRegion @ {}:{}:{}",
+            caller.file(),
+            caller.line(),
+            caller.column(),
+        );
+
+        self.optional_region_named(&name, enabled, func)
+    }
+
+    /// Creates an optional dataflow region with the same timestamp as the outer scope.
+    ///
+    /// If `enabled` is true then this acts like [`Scope::region()`] and if `enabled`
+    /// is false it's a no-op and produces no change in the dataflow graph.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use timely::dataflow::Scope;
+    /// use timely::dataflow::operators::{Input, Enter, Leave};
+    ///
+    /// timely::execute_from_args(std::env::args(), |worker| {
+    ///     // must specify types as nothing else drives inference.
+    ///     let input = worker.dataflow::<u64,_,_>(|child1| {
+    ///         let (input, stream) = child1.new_input::<String>();
+    ///         let output = child1.optional_region_named(
+    ///             "This is my region",
+    ///             false,
+    ///             |child2| stream.enter(child2).leave(),
+    ///         );
+    ///
+    ///         input
+    ///     });
+    /// });
+    /// ```
+    ///
+    fn optional_region_named<R, F>(&mut self, name: &str, enabled: bool, func: F) -> R
+    where
+        F: FnOnce(&mut Region<Self, Self::Timestamp>) -> R;
 }

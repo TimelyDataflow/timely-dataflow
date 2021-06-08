@@ -215,6 +215,11 @@ where
             progress_mode: worker.config().progress_mode,
         }
     }
+
+    /// Get the subgraph builder's index.
+    pub fn index(&self) -> usize {
+        self.index
+    }
 }
 
 

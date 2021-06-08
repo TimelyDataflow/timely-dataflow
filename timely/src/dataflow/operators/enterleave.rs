@@ -21,6 +21,7 @@
 
 use std::marker::PhantomData;
 
+use crate::dataflow::scopes::Region;
 use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
@@ -51,7 +52,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D>;
+    fn enter<'a>(&self, child: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D>;
 }
 
 use crate::dataflow::scopes::child::Iterative;
