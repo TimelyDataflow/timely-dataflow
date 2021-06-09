@@ -199,14 +199,14 @@ pub trait Scope: ScopeParent {
     ///
     /// ```
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{Input, Enter, Leave};
+    /// use timely::dataflow::operators::{Input, enterleave::{EnterRegion, LeaveRegion}};
     ///
     /// timely::execute_from_args(std::env::args(), |worker| {
     ///     // must specify types as nothing else drives inference.
-    ///     let input = worker.dataflow::<u64,_,_>(|child1| {
-    ///         let (input, stream) = child1.new_input::<String>();
-    ///         let output = child1.optional_region(true, |child2| {
-    ///             stream.enter(child2).leave()
+    ///     let input = worker.dataflow::<u64,_,_>(|scope| {
+    ///         let (input, stream) = scope.new_input::<String>();
+    ///         let output = scope.optional_region(true, |region| {
+    ///             stream.enter_region(region).leave_region()
     ///         });
     ///
     ///         input
@@ -217,7 +217,7 @@ pub trait Scope: ScopeParent {
     #[track_caller]
     fn optional_region<R, F>(&mut self, enabled: bool, func: F) -> R
     where
-        F: FnOnce(&mut Region<Self, Self::Timestamp>) -> R,
+        F: FnOnce(&mut Region<Self>) -> R,
     {
         let caller = Location::caller();
         let name = format!(
@@ -239,16 +239,16 @@ pub trait Scope: ScopeParent {
     ///
     /// ```
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{Input, Enter, Leave};
+    /// use timely::dataflow::operators::{Input, enterleave::{EnterRegion, LeaveRegion}};
     ///
     /// timely::execute_from_args(std::env::args(), |worker| {
     ///     // must specify types as nothing else drives inference.
-    ///     let input = worker.dataflow::<u64,_,_>(|child1| {
-    ///         let (input, stream) = child1.new_input::<String>();
-    ///         let output = child1.optional_region_named(
+    ///     let input = worker.dataflow::<u64,_,_>(|scope| {
+    ///         let (input, stream) = scope.new_input::<String>();
+    ///         let output = scope.optional_region_named(
     ///             "This is my region",
     ///             false,
-    ///             |child2| stream.enter(child2).leave(),
+    ///             |region| stream.enter_region(region).leave_region(),
     ///         );
     ///
     ///         input
@@ -258,5 +258,5 @@ pub trait Scope: ScopeParent {
     ///
     fn optional_region_named<R, F>(&mut self, name: &str, enabled: bool, func: F) -> R
     where
-        F: FnOnce(&mut Region<Self, Self::Timestamp>) -> R;
+        F: FnOnce(&mut Region<Self>) -> R;
 }

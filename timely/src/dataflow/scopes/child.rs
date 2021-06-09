@@ -139,7 +139,7 @@ where
 
     fn optional_region_named<R, F>(&mut self, name: &str, enabled: bool, func: F) -> R
     where
-        F: FnOnce(&mut Region<Self, T>) -> R,
+        F: FnOnce(&mut Region<Self>) -> R,
     {
         // If the region is enabled then build the child dataflow graph, otherwise
         // create a passthrough region

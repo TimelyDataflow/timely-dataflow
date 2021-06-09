@@ -22,13 +22,12 @@ type AllocatedChannels<D> = (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Messag
 
 /// A nested dataflow region, can either be a subgraph equivalent to [`Scope::region()`]
 /// or a no-op that has no affect on the dataflow graph
-pub struct Region<'a, G, T>
+pub struct Region<'a, G>
 where
-    G: Scope<Timestamp = T>,
-    T: Timestamp,
+    G: Scope,
 {
     /// The subgraph under construction
-    pub subgraph: RegionSubgraph<'a, G, T>,
+    pub subgraph: RegionSubgraph<'a, G>,
     /// A copy of the child's parent scope.
     pub parent: G,
     /// The log writer for this scope.
@@ -37,22 +36,28 @@ where
     pub progress_logging: Option<ProgressLogger>,
 }
 
-impl<'a, G, T> Region<'a, G, T>
+impl<'a, G> Region<'a, G>
 where
-    G: Scope<Timestamp = T>,
-    T: Timestamp,
+    G: Scope,
 {
+    pub(crate) fn new(
+        subgraph: RegionSubgraph<'a, G>,
+        parent: G,
+        logging: Option<Logger>,
+        progress_logging: Option<ProgressLogger>,
+    ) -> Self {
+        Self {
+            subgraph,
+            parent,
+            logging,
+            progress_logging,
+        }
+    }
+
     fn allocate_child_id(&mut self) -> usize {
         match self.subgraph {
             RegionSubgraph::Subgraph { subgraph, .. } => subgraph.borrow_mut().allocate_child_id(),
             RegionSubgraph::Passthrough => self.parent.allocate_operator_index(),
-        }
-    }
-
-    fn path(&self) -> Vec<usize> {
-        match self.subgraph {
-            RegionSubgraph::Subgraph { subgraph, .. } => subgraph.borrow().path.clone(),
-            RegionSubgraph::Passthrough => self.parent.addr(),
         }
     }
 
@@ -65,7 +70,7 @@ where
         TInner: Timestamp + Refines<TOuter>,
     {
         let index = self.allocate_child_id();
-        let path = self.path();
+        let path = self.addr();
 
         RefCell::new(SubgraphBuilder::new_from(
             index,
@@ -77,10 +82,9 @@ where
     }
 }
 
-impl<'a, G, T> AsWorker for Region<'a, G, T>
+impl<'a, G> AsWorker for Region<'a, G>
 where
-    G: Scope<Timestamp = T>,
-    T: Timestamp,
+    G: Scope,
 {
     fn config(&self) -> &Config {
         self.parent.config()
@@ -115,35 +119,38 @@ where
     }
 }
 
-impl<'a, G, T> Scheduler for Region<'a, G, T>
+impl<'a, G> Scheduler for Region<'a, G>
 where
-    G: Scope<Timestamp = T>,
-    T: Timestamp,
+    G: Scope,
 {
     fn activations(&self) -> Rc<RefCell<Activations>> {
         self.parent.activations()
     }
 }
 
-impl<'a, G, T> ScopeParent for Region<'a, G, T>
+impl<'a, G> ScopeParent for Region<'a, G>
 where
-    G: Scope<Timestamp = T>,
-    T: Timestamp,
+    G: Scope,
 {
-    type Timestamp = T;
+    type Timestamp = G::Timestamp;
 }
 
-impl<'a, G, T> Scope for Region<'a, G, T>
+impl<'a, G> Scope for Region<'a, G>
 where
-    G: Scope<Timestamp = T>,
-    T: Timestamp + Refines<G::Timestamp>,
+    G: Scope,
 {
     fn name(&self) -> String {
-        todo!()
+        match self.subgraph {
+            RegionSubgraph::Subgraph { subgraph, .. } => subgraph.borrow_mut().name.clone(),
+            RegionSubgraph::Passthrough => self.parent.name(),
+        }
     }
 
     fn addr(&self) -> Vec<usize> {
-        todo!()
+        match self.subgraph {
+            RegionSubgraph::Subgraph { subgraph, .. } => subgraph.borrow_mut().path.clone(),
+            RegionSubgraph::Passthrough => self.parent.addr(),
+        }
     }
 
     fn add_edge(&self, source: Source, target: Target) {
@@ -156,10 +163,7 @@ where
     }
 
     fn allocate_operator_index(&mut self) -> usize {
-        match self.subgraph {
-            RegionSubgraph::Subgraph { subgraph, .. } => subgraph.borrow_mut().allocate_child_id(),
-            RegionSubgraph::Passthrough => self.parent.allocate_operator_index(),
-        }
+        self.allocate_child_id()
     }
 
     fn add_operator_with_indices(
@@ -204,7 +208,7 @@ where
 
     fn optional_region_named<R, F>(&mut self, name: &str, enabled: bool, func: F) -> R
     where
-        F: FnOnce(&mut Region<Self, Self::Timestamp>) -> R,
+        F: FnOnce(&mut Region<Self>) -> R,
     {
         // If the region is enabled then build the child dataflow graph, otherwise
         // create a passthrough region
@@ -222,12 +226,12 @@ where
                     RegionSubgraph::subgraph(subscope, index)
                 });
 
-            let mut builder = Region {
-                subgraph: region,
-                parent: self.clone(),
-                logging: self.logging.clone(),
-                progress_logging: self.progress_logging.clone(),
-            };
+            let mut builder = Region::new(
+                region,
+                self.clone(),
+                self.logging.clone(),
+                self.progress_logging.clone(),
+            );
             func(&mut builder)
         };
 
@@ -243,10 +247,9 @@ where
     }
 }
 
-impl<'a, G, T> Clone for Region<'a, G, T>
+impl<'a, G> Clone for Region<'a, G>
 where
-    G: Scope<Timestamp = T>,
-    T: Timestamp,
+    G: Scope,
 {
     fn clone(&self) -> Self {
         Self {
@@ -260,15 +263,14 @@ where
 
 /// The kind of region to build, can either be a subgraph equivalent to [`Scope::region()`]
 /// or a no-op that has no affect on the dataflow graph
-pub enum RegionSubgraph<'a, G, T>
+pub enum RegionSubgraph<'a, G>
 where
     G: ScopeParent,
-    T: Timestamp,
 {
     /// A region that will be rendered as a nested dataflow scope
     Subgraph {
         /// The inner dataflow scope
-        subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
+        subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, G::Timestamp>>,
         /// The subgraph's operator index
         index: usize,
     },
@@ -276,24 +278,22 @@ where
     Passthrough,
 }
 
-impl<'a, G, T> RegionSubgraph<'a, G, T>
+impl<'a, G> RegionSubgraph<'a, G>
 where
     G: ScopeParent,
-    T: Timestamp,
 {
     /// Create a new region subgraph
     pub(crate) fn subgraph(
-        subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
+        subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, G::Timestamp>>,
         index: usize,
     ) -> Self {
         Self::Subgraph { subgraph, index }
     }
 }
 
-impl<'a, G, T> Clone for RegionSubgraph<'a, G, T>
+impl<'a, G> Clone for RegionSubgraph<'a, G>
 where
     G: ScopeParent,
-    T: Timestamp,
 {
     fn clone(&self) -> Self {
         match *self {
@@ -303,9 +303,4 @@ where
     }
 }
 
-impl<'a, G, T> Copy for RegionSubgraph<'a, G, T>
-where
-    G: ScopeParent,
-    T: Timestamp,
-{
-}
+impl<'a, G> Copy for RegionSubgraph<'a, G> where G: ScopeParent {}
