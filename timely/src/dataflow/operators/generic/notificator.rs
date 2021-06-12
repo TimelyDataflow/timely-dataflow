@@ -298,7 +298,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     #[inline]
     pub fn notify_at_frontiered<'a>(&mut self, cap: Capability<T>, frontiers: &'a [&'a MutableAntichain<T>]) {
         if frontiers.iter().all(|f| !f.less_equal(cap.time())) {
-            self.available.push(OrderReversed::new(cap));
+            self.available.push(OrderReversed::new(cap, 1));
         }
         else {
             self.pending.push((cap,1));
@@ -326,7 +326,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
             for i in 0 .. self.pending.len() {
                 if frontiers.iter().all(|f| !f.less_equal(&self.pending[i].0)) {
                     // TODO : This clones a capability, whereas we could move it instead.
-                    self.available.push(OrderReversed::new(self.pending[i].0.clone()));
+                    self.available.push(OrderReversed::new(self.pending[i].0.clone(), self.pending[i].1));
                     self.pending[i].1 = 0;
                 }
             }
@@ -346,10 +346,9 @@ impl<T: Timestamp> FrontierNotificator<T> {
             self.make_available(frontiers);
         }
         self.available.pop().map(|front| {
-            let mut count = 1;
+            let mut count = front.value;
             while self.available.peek() == Some(&front) {
-                self.available.pop();
-                count += 1;
+                count += self.available.pop().unwrap().value;
             }
             (front.element, count)
         })
@@ -424,10 +423,11 @@ impl<T: Timestamp> FrontierNotificator<T> {
 #[derive(Debug, PartialEq, Eq)]
 struct OrderReversed<T: Timestamp> {
     element: Capability<T>,
+    value: u64,
 }
 
 impl<T: Timestamp> OrderReversed<T> {
-    fn new(element: Capability<T>) -> Self { OrderReversed { element } }
+    fn new(element: Capability<T>, value: u64) -> Self { OrderReversed { element, value} }
 }
 
 impl<T: Timestamp> PartialOrd for OrderReversed<T> {
