@@ -57,14 +57,15 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .unary_notify(Pipeline, "example", Vec::new(), |input, output, notificator| {
+    ///            .unary_notify(Pipeline, "example", Some(0), |input, output, notificator| {
     ///                input.for_each(|cap, data| {
     ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
     ///                    let time = cap.time().clone() + 1;
     ///                    notificator.notify_at(cap.delayed(&time));
     ///                });
-    ///                notificator.for_each(|cap,_,_| {
-    ///                    println!("done with time: {:?}", cap.time());
+    ///                notificator.for_each(|cap, count, _| {
+    ///                    println!("done with time: {:?}, requested {} times", cap.time(), count);
+    ///                    assert!(*cap.time() == 0 && count == 2 || count == 1);
     ///                });
     ///            });
     /// });
@@ -99,7 +100,7 @@ impl<'a, T: Timestamp> Iterator for Notificator<'a, T> {
     /// timestamp.
     #[inline]
     fn next(&mut self) -> Option<(Capability<T>, u64)> {
-        self.inner.next(self.frontiers).map(|x| (x,1))
+        self.inner.next_count(self.frontiers)
     }
 }
 
@@ -333,20 +334,35 @@ impl<T: Timestamp> FrontierNotificator<T> {
         }
     }
 
-    /// Returns the next available capability with respect to the supplied frontiers, if one exists.
+    /// Returns the next available capability with respect to the supplied frontiers, if one exists,
+    /// and the count of how many instances are found.
     ///
     /// In the interest of efficiency, this method may yield capabilities in decreasing order, in certain
     /// circumstances. If you want to iterate through capabilities with an in-order guarantee, either (i)
-    /// use `for_each`
+    /// use `for_each`, or (ii) call `make_available` first.
     #[inline]
-    pub fn next<'a>(&mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> Option<Capability<T>> {
+    pub fn next_count<'a>(&mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> Option<(Capability<T>, u64)> {
         if self.available.is_empty() {
             self.make_available(frontiers);
         }
         self.available.pop().map(|front| {
-            while self.available.peek() == Some(&front) { self.available.pop(); }
-            front.element
+            let mut count = 1;
+            while self.available.peek() == Some(&front) {
+                self.available.pop();
+                count += 1;
+            }
+            (front.element, count)
         })
+    }
+
+    /// Returns the next available capability with respect to the supplied frontiers, if one exists.
+    ///
+    /// In the interest of efficiency, this method may yield capabilities in decreasing order, in certain
+    /// circumstances. If you want to iterate through capabilities with an in-order guarantee, either (i)
+    /// use `for_each`, or (ii) call `make_available` first.
+    #[inline]
+    pub fn next<'a>(&mut self, frontiers: &'a [&'a MutableAntichain<T>]) -> Option<Capability<T>> {
+        self.next_count(frontiers).map(|(cap, _)| cap)
     }
 
     /// Repeatedly calls `logic` till exhaustion of the notifications made available by inspecting
