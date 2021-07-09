@@ -11,6 +11,7 @@ use std::any::Any;
 
 use crate::allocator::thread::ThreadBuilder;
 use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
+use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
 use crate::allocator::zero_copy::initialize::initialize_networking;
 
 use crate::logging::{CommunicationSetup, CommunicationEvent};
@@ -23,6 +24,8 @@ pub enum Config {
     Thread,
     /// Use one process with an indicated number of threads.
     Process(usize),
+    /// Use one process with an indicated number of threads. Use zero-copy exchange channels.
+    ProcessBinary(usize),
     /// Expect multiple processes.
     Cluster {
         /// Number of per-process worker threads
@@ -127,6 +130,9 @@ impl Config {
             },
             Config::Process(threads) => {
                 Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
+            },
+            Config::ProcessBinary(threads) => {
+                Ok((ProcessBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect(), Box::new(())))
             },
             Config::Cluster { threads, process, addresses, report, log_fn } => {
                 match initialize_networking(addresses, process, threads, report, log_fn) {
