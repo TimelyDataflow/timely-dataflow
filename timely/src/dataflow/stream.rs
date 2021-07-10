@@ -25,7 +25,7 @@ pub struct Stream<S: Scope, D> {
     /// The `Scope` containing the stream.
     scope: S,
     /// Maintains a list of Push<Bundle<T, D>> interested in the stream's output.
-    ports: TeeHelper<S::Timestamp, D>,
+    pub(crate) ports: TeeHelper<S::Timestamp, D>,
 }
 
 impl<S: Scope, D> Stream<S, D> {
