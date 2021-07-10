@@ -52,9 +52,4 @@ impl<T, D> Message<T, D> {
                 buffer.clear();
             }
         }
-
-        // TODO: Unclear we always want this here.
-        if buffer.capacity() != Self::default_length() {
-            *buffer = Vec::with_capacity(Self::default_length());
-        }
     }}

@@ -23,7 +23,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
     pub fn new(pusher: P) -> Buffer<T, D, P> {
         Buffer {
             time: None,
-            buffer: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer: Vec::new(),
             pusher,
         }
     }
@@ -53,6 +53,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
     pub fn cease(&mut self) {
         self.flush();
         self.pusher.push(&mut None);
+        self.buffer = Vec::new();
     }
 
     /// moves the contents of
@@ -65,6 +66,9 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
 
     // internal method for use by `Session`.
     fn give(&mut self, data: D) {
+        if self.buffer.capacity() == 0 {
+            self.buffer = Vec::with_capacity(Message::<T, D>::default_length());
+        }
         self.buffer.push(data);
         // assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
         if self.buffer.len() == self.buffer.capacity() {

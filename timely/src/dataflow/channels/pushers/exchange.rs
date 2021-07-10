@@ -18,7 +18,7 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
-            buffers.push(Vec::with_capacity(Message::<T, D>::default_length()));
+            buffers.push(Vec::new());
         }
         Exchange {
             pushers,
@@ -64,6 +64,9 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) & mask) as usize;
 
+                    if self.buffers[index].capacity() == 0 {
+                        self.buffers[index] = Vec::with_capacity(Message::<T, D>::default_length());
+                    }
                     self.buffers[index].push(datum);
                     if self.buffers[index].len() == self.buffers[index].capacity() {
                         self.flush(index);
@@ -82,6 +85,9 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             else {
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
+                    if self.buffers[index].capacity() == 0 {
+                        self.buffers[index] = Vec::with_capacity(Message::<T, D>::default_length());
+                    }
                     self.buffers[index].push(datum);
                     if self.buffers[index].len() == self.buffers[index].capacity() {
                         self.flush(index);
@@ -95,6 +101,8 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             for index in 0..self.pushers.len() {
                 self.flush(index);
                 self.pushers[index].push(&mut None);
+                // Free up buffer space.
+                self.buffers[index] = Vec::new();
             }
         }
     }
