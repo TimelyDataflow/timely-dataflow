@@ -1,7 +1,7 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
-use crate::Data;
 use crate::communication::Push;
+use crate::Data;
 use crate::dataflow::channels::{Bundle, Message};
 
 // TODO : Software write combining
@@ -9,6 +9,7 @@ use crate::dataflow::channels::{Bundle, Message};
 pub struct Exchange<T, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<Vec<D>>,
+    max_len: Vec<usize>,
     current: Option<T>,
     hash_func: H,
 }
@@ -23,18 +24,26 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
         Exchange {
             pushers,
             hash_func: key,
+            max_len: vec![0; buffers.len()],
             buffers,
             current: None,
         }
     }
     #[inline]
-    fn flush(&mut self, index: usize) {
+    fn flush(&mut self, index: usize, maybe_shrink: bool) {
         if !self.buffers[index].is_empty() {
+            let old_len = self.buffers[index].len();
             if let Some(ref time) = self.current {
                 Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
             }
-            if self.buffers[index].capacity() > Message::<T, D>::minimal_length() {
-                self.buffers[index] = Vec::with_capacity(Message::<T, D>::minimal_length());
+            if maybe_shrink {
+                if self.buffers[index].capacity() > 2 * self.max_len[index] &&
+                    self.buffers[index].capacity() > Message::<T, D>::minimal_length() {
+                    self.buffers[index] = Vec::with_capacity(Message::<T, D>::minimal_length());
+                }
+                self.max_len[index] = 0;
+            } else {
+                self.max_len[index] = std::cmp::max(self.max_len[index], old_len);
             }
         }
     }
@@ -45,7 +54,7 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
         let push_at = |this: &mut Exchange<_, _, _, _>, index: usize, datum| {
             this.buffers[index].push(datum);
             if this.buffers[index].len() == this.buffers[index].capacity() {
-                this.flush(index);
+                this.flush(index, false);
                 if this.buffers[index].len() < Message::<T, D>::default_length() {
                     let len = this.buffers[index].len();
                     this.buffers[index].reserve(len);
@@ -63,7 +72,7 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             // if the time isn't right, flush everything.
             if self.current.as_ref().map_or(false, |x| x != time) {
                 for index in 0..self.pushers.len() {
-                    self.flush(index);
+                    self.flush(index, false);
                 }
             }
             self.current = Some(time.clone());
@@ -85,7 +94,7 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
         } else {
             // flush
             for index in 0..self.pushers.len() {
-                self.flush(index);
+                self.flush(index, true);
                 self.pushers[index].push(&mut None);
             }
         }
