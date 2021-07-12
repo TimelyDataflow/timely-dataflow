@@ -31,6 +31,11 @@ impl<T, D> Message<T, D> {
         1024
     }
 
+    /// Minimal buffer size, >= 1
+    pub fn minimal_length() -> usize {
+        8
+    }
+
     /// Creates a new message instance from arguments.
     pub fn new(time: T, data: Vec<D>, from: usize, seq: usize) -> Self {
         Message { time, data, from, seq }

@@ -18,7 +18,7 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
-            buffers.push(Vec::with_capacity(Message::<T, D>::default_length()));
+            buffers.push(Vec::with_capacity(Message::<T, D>::minimal_length()));
         }
         Exchange {
             pushers,
@@ -33,19 +33,29 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
             if let Some(ref time) = self.current {
                 Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
             }
+            if self.buffers[index].capacity() > Message::<T, D>::minimal_length() {
+                self.buffers[index] = Vec::with_capacity(Message::<T, D>::minimal_length());
+            }
         }
     }
 }
 
 impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
-    #[inline(never)]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
+        let push_at = |this: &mut Exchange<_, _, _, _>, index: usize, datum| {
+            this.buffers[index].push(datum);
+            if this.buffers[index].len() == this.buffers[index].capacity() {
+                this.flush(index);
+                if this.buffers[index].len() < Message::<T, D>::default_length() {
+                    let len = this.buffers[index].len();
+                    this.buffers[index].reserve(len);
+                }
+            }
+        };
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);
-        }
-        else if let Some(message) = message {
-
+        } else if let Some(message) = message {
             let message = message.as_mut();
             let time = &message.time;
             let data = &mut message.data;
@@ -63,34 +73,16 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
                 let mask = (self.pushers.len() - 1) as u64;
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) & mask) as usize;
-
-                    self.buffers[index].push(datum);
-                    if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
-                    }
-
-                    // unsafe {
-                    //     self.buffers.get_unchecked_mut(index).push(datum);
-                    //     if self.buffers.get_unchecked(index).len() == self.buffers.get_unchecked(index).capacity() {
-                    //         self.flush(index);
-                    //     }
-                    // }
-
+                    push_at(self, index, datum);
                 }
-            }
-            // as a last resort, use mod (%)
-            else {
+            } else {
+                // as a last resort, use mod (%)
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
-                    self.buffers[index].push(datum);
-                    if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
-                    }
+                    push_at(self, index, datum);
                 }
             }
-
-        }
-        else {
+        } else {
             // flush
             for index in 0..self.pushers.len() {
                 self.flush(index);
