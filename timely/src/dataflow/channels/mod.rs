@@ -31,17 +31,13 @@ impl<T, D> Message<T, D> {
         1024
     }
 
-    /// Minimal buffer size, >= 1
-    pub fn minimal_length() -> usize {
-        8
-    }
-
     /// Creates a new message instance from arguments.
     pub fn new(time: T, data: Vec<D>, from: usize, seq: usize) -> Self {
         Message { time, data, from, seq }
     }
 
-    /// Forms a message, and pushes contents at `pusher`.
+    /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
+    /// leaves in place, or a new empty `Vec`.
     #[inline]
     pub fn push_at<P: Push<Bundle<T, D>>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
 
@@ -57,9 +53,5 @@ impl<T, D> Message<T, D> {
                 buffer.clear();
             }
         }
-
-        // TODO: Unclear we always want this here.
-        if buffer.capacity() != Self::default_length() {
-            *buffer = Vec::with_capacity(Self::default_length());
-        }
-    }}
+    }
+}

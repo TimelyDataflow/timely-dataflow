@@ -212,8 +212,8 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
             activate: Vec::new(),
             progress: Vec::new(),
             pushers: Vec::new(),
-            buffer1: Vec::with_capacity(Message::<T, D>::default_length()),
-            buffer2: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer1: Vec::new(),
+            buffer2: Vec::new(),
             now_at: T::minimum(),
         }
     }
@@ -304,7 +304,9 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     #[inline]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     pub fn send(&mut self, data: D) {
-        // assert!(self.buffer1.capacity() == Message::<T, D>::default_length());
+        if self.buffer1.capacity() < Message::<T, D>::default_length() {
+            self.buffer1.reserve(Message::<T, D>::default_length());
+        }
         self.buffer1.push(data);
         if self.buffer1.len() == self.buffer1.capacity() {
             self.flush();
