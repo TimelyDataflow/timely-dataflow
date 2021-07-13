@@ -30,13 +30,13 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
 
     /// Returns a `Session`, which accepts data to send at the associated time
     pub fn session(&mut self, time: &T) -> Session<T, D, P> {
-        if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
+        if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(true); }
         self.time = Some(time.clone());
         Session { buffer: self }
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
     pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, D, P> where T: Timestamp {
-        if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
+        if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(true); }
         self.time = Some(cap.time().clone());
         AutoflushSession {
             buffer: self,
@@ -51,27 +51,32 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
 
     /// Flushes all data and pushes a `None` to `self.pusher`, indicating a flush.
     pub fn cease(&mut self) {
-        self.flush();
+        self.flush(false);
         self.pusher.push(&mut None);
     }
 
     /// moves the contents of
-    fn flush(&mut self) {
+    fn flush(&mut self, reserve: bool) {
         if !self.buffer.is_empty() {
             let time = self.time.as_ref().unwrap().clone();
             Message::push_at(&mut self.buffer, time, &mut self.pusher);
+            if reserve && self.buffer.capacity() < Message::<T, D>::default_length() {
+                let to_reserve =  Message::<T, D>::default_length() - self.buffer.capacity();
+                self.buffer.reserve(to_reserve);
+            }
         }
     }
 
     // internal method for use by `Session`.
     fn give(&mut self, data: D) {
-        if self.buffer.capacity() < Message::<T, D>::default_length() {
-            self.buffer.reserve(Message::<T, D>::default_length());
-        }
         self.buffer.push(data);
         // assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
         if self.buffer.len() == self.buffer.capacity() {
-            self.flush();
+            if self.buffer.capacity() < Message::<T, D>::default_length() {
+                self.buffer.reserve(Message::<T, D>::default_length());
+            } else {
+                self.flush(true);
+            }
         }
     }
 
@@ -79,7 +84,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
     fn give_vec(&mut self, vector: &mut Vec<D>) {
         // flush to ensure fifo-ness
         if !self.buffer.is_empty() {
-            self.flush();
+            self.flush(false);
         }
 
         let time = self.time.as_ref().expect("Buffer::give_vec(): time is None.").clone();

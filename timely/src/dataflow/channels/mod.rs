@@ -53,5 +53,10 @@ impl<T, D> Message<T, D> {
                 buffer.clear();
             }
         }
+
+        // Avoid memory leaks by buffers growing out of bounds
+        if buffer.capacity() > Self::default_length() {
+            *buffer = Vec::with_capacity(Self::default_length());
+        }
     }
 }

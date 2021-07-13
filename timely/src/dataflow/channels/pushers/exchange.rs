@@ -25,10 +25,14 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
         }
     }
     #[inline]
-    fn flush(&mut self, index: usize) {
+    fn flush(&mut self, index: usize, reserve: bool) {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
                 Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
+                if reserve && self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                    let to_reserve =  Message::<T, D>::default_length() - self.buffers[index].capacity();
+                    self.buffers.reserve(to_reserve);
+                }
             }
         }
     }
@@ -47,7 +51,7 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             // if the time isn't right, flush everything.
             if self.current.as_ref().map_or(false, |x| x != time) {
                 for index in 0..self.pushers.len() {
-                    self.flush(index);
+                    self.flush(index, false);
                 }
             }
             self.current = Some(time.clone());
@@ -57,31 +61,35 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
                 let mask = (self.pushers.len() - 1) as u64;
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) & mask) as usize;
-                    if self.buffers[index].capacity() == 0 {
-                        self.buffers[index].reserve(Message::<T, D>::default_length());
-                    }
                     self.buffers[index].push(datum);
                     if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
+                        if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                            let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
+                            self.buffers[index].reserve(to_reserve);
+                        } else {
+                            self.flush(index, true);
+                        }
                     }
                 }
             } else {
                 // as a last resort, use mod (%)
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
-                    if self.buffers[index].capacity() == 0 {
-                        self.buffers[index].reserve(Message::<T, D>::default_length());
-                    }
                     self.buffers[index].push(datum);
                     if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
+                        if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                            let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
+                            self.buffers[index].reserve(to_reserve);
+                        } else {
+                            self.flush(index, true);
+                        }
                     }
                 }
             }
         } else {
             // flush
             for index in 0..self.pushers.len() {
-                self.flush(index);
+                self.flush(index, false);
                 self.pushers[index].push(&mut None);
             }
         }
