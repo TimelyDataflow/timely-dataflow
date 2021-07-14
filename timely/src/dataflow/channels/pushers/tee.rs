@@ -44,7 +44,7 @@ impl<T, D> Tee<T, D> {
     pub fn new() -> (Tee<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = Tee {
-            buffer: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer: Vec::new(),
             shared: shared.clone(),
         };
 
@@ -55,7 +55,7 @@ impl<T, D> Tee<T, D> {
 impl<T, D> Clone for Tee<T, D> {
     fn clone(&self) -> Tee<T, D> {
         Tee {
-            buffer: Vec::with_capacity(self.buffer.capacity()),
+            buffer: Vec::new(),
             shared: self.shared.clone(),
         }
     }

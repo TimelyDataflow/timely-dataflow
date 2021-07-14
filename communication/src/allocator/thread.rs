@@ -64,7 +64,7 @@ impl Thread {
     pub fn new_from<T: 'static>(identifier: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>)
         -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>)
     {
-        let shared = Rc::new(RefCell::new((VecDeque::<Message<T>>::new(), VecDeque::<Message<T>>::new())));
+        let shared = Rc::new(RefCell::new(VecDeque::<Message<T>>::new()));
         let pusher = Pusher { target: shared.clone() };
         let pusher = CountPusher::new(pusher, identifier, events.clone());
         let puller = Puller { source: shared, current: None };
@@ -76,7 +76,7 @@ impl Thread {
 
 /// The push half of an intra-thread channel.
 pub struct Pusher<T> {
-    target: Rc<RefCell<(VecDeque<T>, VecDeque<T>)>>,
+    target: Rc<RefCell<VecDeque<T>>>,
 }
 
 impl<T> Push<T> for Pusher<T> {
@@ -84,29 +84,22 @@ impl<T> Push<T> for Pusher<T> {
     fn push(&mut self, element: &mut Option<T>) {
         let mut borrow = self.target.borrow_mut();
         if let Some(element) = element.take() {
-            borrow.0.push_back(element);
+            borrow.push_back(element);
         }
-        *element = borrow.1.pop_front();
     }
 }
 
 /// The pull half of an intra-thread channel.
 pub struct Puller<T> {
     current: Option<T>,
-    source: Rc<RefCell<(VecDeque<T>, VecDeque<T>)>>,
+    source: Rc<RefCell<VecDeque<T>>>,
 }
 
 impl<T> Pull<T> for Puller<T> {
     #[inline]
     fn pull(&mut self) -> &mut Option<T> {
         let mut borrow = self.source.borrow_mut();
-        // if let Some(element) = self.current.take() {
-        //     // TODO : Arbitrary constant.
-        //     if borrow.1.len() < 16 {
-        //         borrow.1.push_back(element);
-        //     }
-        // }
-        self.current = borrow.0.pop_front();
+        self.current = borrow.pop_front();
         &mut self.current
     }
 }

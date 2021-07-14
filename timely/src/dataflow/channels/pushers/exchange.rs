@@ -1,7 +1,7 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
-use crate::Data;
 use crate::communication::Push;
+use crate::Data;
 use crate::dataflow::channels::{Bundle, Message};
 
 // TODO : Software write combining
@@ -16,10 +16,7 @@ pub struct Exchange<T, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
 impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
-        let mut buffers = vec![];
-        for _ in 0..pushers.len() {
-            buffers.push(Vec::with_capacity(Message::<T, D>::default_length()));
-        }
+        let buffers = (0..pushers.len()).map(|_| vec![]).collect();
         Exchange {
             pushers,
             hash_func: key,
@@ -38,14 +35,11 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
 }
 
 impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
-    #[inline(never)]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);
-        }
-        else if let Some(message) = message {
-
+        } else if let Some(message) = message {
             let message = message.as_mut();
             let time = &message.time;
             let data = &mut message.data;
@@ -63,34 +57,40 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
                 let mask = (self.pushers.len() - 1) as u64;
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) & mask) as usize;
-
                     self.buffers[index].push(datum);
                     if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
+                        if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                            let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
+                            self.buffers[index].reserve(to_reserve);
+                        } else {
+                            self.flush(index);
+                            if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                                let to_reserve =  Message::<T, D>::default_length() - self.buffers[index].capacity();
+                                self.buffers.reserve(to_reserve);
+                            }
+                        }
                     }
-
-                    // unsafe {
-                    //     self.buffers.get_unchecked_mut(index).push(datum);
-                    //     if self.buffers.get_unchecked(index).len() == self.buffers.get_unchecked(index).capacity() {
-                    //         self.flush(index);
-                    //     }
-                    // }
-
                 }
-            }
-            // as a last resort, use mod (%)
-            else {
+            } else {
+                // as a last resort, use mod (%)
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
                     self.buffers[index].push(datum);
                     if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
+                        if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                            let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
+                            self.buffers[index].reserve(to_reserve);
+                        } else {
+                            self.flush(index);
+                            if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                                let to_reserve =  Message::<T, D>::default_length() - self.buffers[index].capacity();
+                                self.buffers.reserve(to_reserve);
+                            }
+                        }
                     }
                 }
             }
-
-        }
-        else {
+        } else {
             // flush
             for index in 0..self.pushers.len() {
                 self.flush(index);

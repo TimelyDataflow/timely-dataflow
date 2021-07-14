@@ -23,7 +23,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
     pub fn new(pusher: P) -> Buffer<T, D, P> {
         Buffer {
             time: None,
-            buffer: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer: Vec::new(),
             pusher,
         }
     }
@@ -68,7 +68,15 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
         self.buffer.push(data);
         // assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
         if self.buffer.len() == self.buffer.capacity() {
-            self.flush();
+            if self.buffer.capacity() < Message::<T, D>::default_length() {
+                self.buffer.reserve(Message::<T, D>::default_length());
+            } else {
+                self.flush();
+                if self.buffer.capacity() < Message::<T, D>::default_length() {
+                    let to_reserve =  Message::<T, D>::default_length() - self.buffer.capacity();
+                    self.buffer.reserve(to_reserve);
+                }
+            }
         }
     }
 
