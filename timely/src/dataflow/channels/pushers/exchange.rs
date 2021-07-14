@@ -25,14 +25,10 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
         }
     }
     #[inline]
-    fn flush(&mut self, index: usize, reserve: bool) {
+    fn flush(&mut self, index: usize) {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
                 Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
-                if reserve && self.buffers[index].capacity() < Message::<T, D>::default_length() {
-                    let to_reserve =  Message::<T, D>::default_length() - self.buffers[index].capacity();
-                    self.buffers.reserve(to_reserve);
-                }
             }
         }
     }
@@ -51,7 +47,7 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             // if the time isn't right, flush everything.
             if self.current.as_ref().map_or(false, |x| x != time) {
                 for index in 0..self.pushers.len() {
-                    self.flush(index, false);
+                    self.flush(index);
                 }
             }
             self.current = Some(time.clone());
@@ -67,7 +63,11 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
                             let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
                             self.buffers[index].reserve(to_reserve);
                         } else {
-                            self.flush(index, true);
+                            self.flush(index);
+                            if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                                let to_reserve =  Message::<T, D>::default_length() - self.buffers[index].capacity();
+                                self.buffers.reserve(to_reserve);
+                            }
                         }
                     }
                 }
@@ -81,7 +81,11 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
                             let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
                             self.buffers[index].reserve(to_reserve);
                         } else {
-                            self.flush(index, true);
+                            self.flush(index);
+                            if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                                let to_reserve =  Message::<T, D>::default_length() - self.buffers[index].capacity();
+                                self.buffers.reserve(to_reserve);
+                            }
                         }
                     }
                 }
@@ -89,7 +93,7 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
         } else {
             // flush
             for index in 0..self.pushers.len() {
-                self.flush(index, false);
+                self.flush(index);
                 self.pushers[index].push(&mut None);
             }
         }

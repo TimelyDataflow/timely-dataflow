@@ -258,7 +258,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.
-        if !self.buffer1.is_empty() { self.flush(false); }
+        if !self.buffer1.is_empty() { self.flush(); }
 
         // we need to produce an appropriate update to the capabilities for `progress`, in case a
         // user has decided to drive the handle around a bit before registering it.
@@ -271,7 +271,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
     // flushes our buffer at each of the destinations. there can be more than one; clone if needed.
     #[inline(never)]
-    fn flush(&mut self, reserve: bool) {
+    fn flush(&mut self) {
         for index in 0 .. self.pushers.len() {
             if index < self.pushers.len() - 1 {
                 self.buffer2.extend_from_slice(&self.buffer1[..]);
@@ -284,15 +284,11 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
             }
         }
         self.buffer1.clear();
-        if reserve && self.buffer1.capacity() < Message::<T, D>::default_length() {
-            let to_reserve =  Message::<T, D>::default_length() - self.buffer1.capacity();
-            self.buffer1.reserve(to_reserve);
-        }
     }
 
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
     fn close_epoch(&mut self) {
-        if !self.buffer1.is_empty() { self.flush(false); }
+        if !self.buffer1.is_empty() { self.flush(); }
         for pusher in self.pushers.iter_mut() {
             pusher.done();
         }
@@ -314,7 +310,11 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
                 let to_reserve = Message::<T, D>::default_length() - self.buffer1.capacity();
                 self.buffer1.reserve(to_reserve);
             } else {
-                self.flush(true);
+                self.flush();
+                if self.buffer1.capacity() < Message::<T, D>::default_length() {
+                    let to_reserve =  Message::<T, D>::default_length() - self.buffer1.capacity();
+                    self.buffer1.reserve(to_reserve);
+                }
             }
         }
     }
@@ -326,7 +326,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
         if !buffer.is_empty() {
             // flush buffered elements to ensure local fifo.
-            if !self.buffer1.is_empty() { self.flush(false); }
+            if !self.buffer1.is_empty() { self.flush(); }
 
             // push buffer (or clone of buffer) at each destination.
             for index in 0 .. self.pushers.len() {
