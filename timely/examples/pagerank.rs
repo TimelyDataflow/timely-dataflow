@@ -137,9 +137,7 @@ fn main() {
 
                                     // 4. compact down and send cumulative changes.
                                     compact(&mut delta);
-                                    for (dst, diff) in delta.drain(..) {
-                                        session.give((dst, diff));
-                                    }
+                                    session.give_iterator(delta.drain(..))
                                 }
 
                                 println!("{:?}:\t{:?}\t{}\t{}\t{}", timer.elapsed(), time.time(), cnt, sum, max);

@@ -24,9 +24,7 @@ fn main() {
 
         for round in 0 .. rounds {
 
-            for i in 0 .. batch {
-                input.send(i);
-            }
+            input.send_iter(0..batch);
             input.advance_to(round);
 
             while probe.less_than(input.time()) {

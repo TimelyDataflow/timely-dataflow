@@ -51,9 +51,10 @@ fn main() {
                             let mut session = output.session(&time);
                             for (key, val1) in vector1.drain(..) {
                                 if let Some(values) = map2.get(&key) {
-                                    for val2 in values.iter() {
-                                        session.give((val1.clone(), val2.clone()));
-                                    }
+                                    session.give_iterator(
+                                        values
+                                            .iter()
+                                            .map(|val2| (val1.clone(), val2.clone())));
                                 }
 
                                 map1.entry(key).or_insert(Vec::new()).push(val1);
@@ -66,9 +67,10 @@ fn main() {
                             let mut session = output.session(&time);
                             for (key, val2) in vector2.drain(..) {
                                 if let Some(values) = map1.get(&key) {
-                                    for val1 in values.iter() {
-                                        session.give((val1.clone(), val2.clone()));
-                                    }
+                                    session.give_iterator(
+                                        values
+                                            .iter()
+                                            .map(|val1| (val1.clone(), val2.clone())));
                                 }
 
                                 map2.entry(key).or_insert(Vec::new()).push(val2);
