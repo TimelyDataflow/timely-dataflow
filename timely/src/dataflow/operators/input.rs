@@ -311,6 +311,25 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         }
     }
 
+    /// Send an iterator into the corresponding timely dataflow [Stream], at the current epoch.
+    pub fn send_iter<I: IntoIterator<Item=D>>(&mut self, into_iter: I) {
+        let mut iter = into_iter.into_iter().fuse().peekable();
+        self.flush();
+        while iter.peek().is_some() {
+            let take = std::cmp::max(
+                Message::<T, D>::default_length() as isize - self.buffer1.len() as isize, 0);
+            let chunk = (&mut iter).take(take as usize);
+            self.buffer1.extend(chunk);
+            if self.buffer1.len() >= Message::<T, D>::default_length()  {
+                self.flush();
+                if self.buffer1.capacity() < Message::<T, D>::default_length() && iter.peek().is_some() {
+                    let to_reserve =  Message::<T, D>::default_length() - self.buffer1.capacity();
+                    self.buffer1.reserve(to_reserve);
+                }
+            }
+        }
+    }
+
     /// Sends a batch of records into the corresponding timely dataflow `Stream`, at the current epoch.
     ///
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.

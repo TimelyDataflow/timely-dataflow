@@ -72,6 +72,24 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
         }
     }
 
+    /// Send an iterator into the corresponding timely dataflow [Stream], at the current epoch.
+    pub fn give_iter<I: IntoIterator<Item=D>>(&mut self, into_iter: I) {
+        let mut iter = into_iter.into_iter().fuse().peekable();
+        while iter.peek().is_some() {
+            let take = std::cmp::max(
+                Message::<T, D>::default_length() as isize - self.buffer.len() as isize, 0);
+            let chunk = (&mut iter).take(take as usize);
+            self.buffer.extend(chunk);
+            if self.buffer.len() >= Message::<T, D>::default_length()  {
+                self.flush();
+                if self.buffer.capacity() < Message::<T, D>::default_length() && iter.peek().is_some() {
+                    let to_reserve =  Message::<T, D>::default_length() - self.buffer.capacity();
+                    self.buffer.reserve(to_reserve);
+                }
+            }
+        }
+    }
+
     // Gives an entire message at a specific time.
     fn give_vec(&mut self, vector: &mut Vec<D>) {
         // flush to ensure fifo-ness
@@ -103,9 +121,7 @@ impl<'a, T, D, P: Push<Bundle<T, D>>+'a> Session<'a, T, D, P>  where T: Eq+Clone
     /// Provides an iterator of records at the time specified by the `Session`.
     #[inline]
     pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
-        for item in iter {
-            self.give(item);
-        }
+        self.buffer.give_iter(iter);
     }
     /// Provides a fully formed `Content<D>` message for senders which can use this type.
     ///

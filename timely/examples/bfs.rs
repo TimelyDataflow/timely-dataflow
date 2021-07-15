@@ -124,9 +124,7 @@ fn main() {
                                         done[temp] = prev;
                                         let lower = offsets[temp] as usize;
                                         let upper = offsets[temp + 1] as usize;
-                                        for &target in &targets[lower..upper] {
-                                            session.give((target, node));
-                                        }
+                                        session.give_iterator(targets[lower..upper].iter().map(|target| (*target, node)));
                                     }
                                 }
                             }
