@@ -20,13 +20,15 @@
 //!
 //! ```rust
 //! use std::rc::Rc;
+//! use futures_util::stream;
 //! use timely::dataflow::Scope;
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventLink, Replay};
+//! use timely::dataflow::operators::capture::event::EventIterator;
 //!
 //! timely::execute(timely::Config::thread(), |worker| {
 //!     let handle1 = Rc::new(EventLink::new());
-//!     let handle2 = Some(handle1.clone());
+//!     let handle2 = Some(stream::iter(handle1.clone().cloned()));
 //!
 //!     worker.dataflow::<u64,_,_>(|scope1|
 //!         (0..10).to_stream(scope1)
@@ -48,9 +50,11 @@
 //! ```
 //! use std::rc::Rc;
 //! use std::net::{TcpListener, TcpStream};
+//! use futures_util::stream;
 //! use timely::dataflow::Scope;
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay};
+//! use timely::dataflow::operators::capture::event::EventIterator;
 //!
 //! timely::execute(timely::Config::thread(), |worker| {
 //!     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
@@ -66,7 +70,7 @@
 //!     );
 //!
 //!     worker.dataflow::<u64,_,_>(|scope2| {
-//!         Some(EventReader::<_,u64,_>::new(recv))
+//!         Some(stream::iter(EventReader::<_,u64,_>::new(recv).cloned()))
 //!             .replay_into(scope2)
 //!             .inspect(|x| println!("replayed: {:?}", x));
 //!     })

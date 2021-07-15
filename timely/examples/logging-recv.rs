@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::capture::{EventReader, Replay};
+use timely::dataflow::operators::capture::event::EventIterator;
 use timely::logging::{TimelySetup, TimelyEvent};
 
 fn main() {
@@ -21,6 +22,7 @@ fn main() {
             .into_iter()
             .map(|l| l.incoming().next().unwrap().unwrap())
             .map(|r| EventReader::<Duration,(Duration,TimelySetup,TimelyEvent),_>::new(r))
+            .map(|e| futures_util::stream::iter(e.cloned()))
             .collect::<Vec<_>>();
 
         worker.dataflow(|scope| {

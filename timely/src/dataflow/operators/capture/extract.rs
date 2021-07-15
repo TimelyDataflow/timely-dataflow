@@ -14,9 +14,11 @@ pub trait Extract<T: Ord, D: Ord> {
     /// ```rust
     /// use std::rc::Rc;
     /// use std::sync::{Arc, Mutex};
+    /// use futures_util::stream;
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
     /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
+    /// use timely::dataflow::operators::capture::event::EventIterator;
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
@@ -29,7 +31,7 @@ pub trait Extract<T: Ord, D: Ord> {
     ///
     ///     // these are to capture/replay the stream.
     ///     let handle1 = Rc::new(EventLink::new());
-    ///     let handle2 = Some(handle1.clone());
+    ///     let handle2 = Some(stream::iter(handle1.clone().cloned()));
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10).to_stream(scope1)

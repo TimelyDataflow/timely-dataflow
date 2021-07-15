@@ -38,6 +38,12 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::{Context, Poll};
+
+use futures_util::stream::Stream as RustStream;
+
 use crate::Data;
 use crate::dataflow::{Scope, Stream};
 use crate::dataflow::channels::pushers::Counter as PushCounter;
@@ -46,7 +52,6 @@ use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;
 
 use super::Event;
-use super::event::EventIterator;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, D: Data> : Sized {
@@ -63,14 +68,15 @@ pub trait Replay<T: Timestamp, D: Data> : Sized {
 }
 
 impl<T: Timestamp, D: Data, I> Replay<T, D> for I
-where I : IntoIterator,
-      <I as IntoIterator>::Item: EventIterator<T, D>+'static {
+where I: IntoIterator,
+      <I as IntoIterator>::Item: RustStream<Item=Event<T, D>> + Unpin + 'static {
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, D>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
 
         let address = builder.operator_info().address;
         let activator = scope.activator_for(&address[..]);
+        let sync_activator = Arc::new(scope.sync_activator_for(&address[..]));
 
         let (targets, stream) = builder.new_output();
 
@@ -80,29 +86,32 @@ where I : IntoIterator,
 
         builder.build(
             move |progress| {
+                let waker = futures_util::task::waker_ref(&sync_activator);
+                let mut context = Context::from_waker(&waker);
 
                 if !started {
                     // The first thing we do is modify our capabilities to match the number of streams we manage.
-                    // This should be a simple change of `self.event_streams.len() - 1`. We only do this once, as
+                    // This should be a simple change of `event_streams.len() - 1`. We only do this once, as
                     // our very first action.
                     progress.internals[0].update(S::Timestamp::minimum(), (event_streams.len() as i64) - 1);
                     started = true;
                 }
 
                 for event_stream in event_streams.iter_mut() {
-                    while let Some(event) = event_stream.next() {
-                        match *event {
-                            Event::Progress(ref vec) => {
-                                progress.internals[0].extend(vec.iter().cloned());
+                    while let Poll::Ready(Some(event)) = Pin::new(&mut *event_stream).poll_next(&mut context) {
+                        match event {
+                            Event::Progress(vec) => {
+                                progress.internals[0].extend(vec.into_iter());
                             },
-                            Event::Messages(ref time, ref data) => {
-                                output.session(time).give_iterator(data.iter().cloned());
+                            Event::Messages(time, data) => {
+                                output.session(&time).give_iterator(data.into_iter());
                             }
                         }
                     }
                 }
 
-                // A `None` period indicates that we do not re-activate here.
+                // A `None` period indicates that we do not re-activate here. If the stream used
+                // the waker then it will be woken up automatically
                 if let Some(delay) = period {
                     activator.activate_after(delay);
                 }
