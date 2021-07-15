@@ -22,6 +22,28 @@ pub enum Event<T, D> {
 pub trait EventIterator<T, D> {
     /// Iterates over references to `Event<T, D>` elements.
     fn next(&mut self) -> Option<&Event<T, D>>;
+
+    /// Transforms an EventIterator into an Iterator by cloning all of its elements.
+    fn cloned(self) -> Cloned<T, D, Self> where Self: Sized {
+        Cloned {
+            iter: self,
+            marker: std::marker::PhantomData,
+        }
+    }
+}
+
+/// An iterator that clones the elements of an underlying event iterator.
+pub struct Cloned<T, D, I: EventIterator<T, D>> {
+    iter: I,
+    marker: std::marker::PhantomData<(T, D)>,
+}
+
+impl<T: Clone, D: Clone, I: EventIterator<T, D>> Iterator for Cloned<T, D, I> {
+    type Item = Event<T, D>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().cloned()
+    }
 }
 
 

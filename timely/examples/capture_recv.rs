@@ -3,6 +3,7 @@ extern crate timely;
 use std::net::TcpListener;
 use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::capture::{EventReader, Replay};
+use timely::dataflow::operators::capture::event::EventIterator;
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -18,6 +19,7 @@ fn main() {
             .into_iter()
             .map(|l| l.incoming().next().unwrap().unwrap())
             .map(|r| EventReader::<_,u64,_>::new(r))
+            .map(|e| futures_util::stream::iter(e.cloned()))
             .collect::<Vec<_>>();
 
         worker.dataflow::<u64,_,_>(|scope| {

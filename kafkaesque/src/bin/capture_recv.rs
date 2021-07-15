@@ -1,6 +1,7 @@
 use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::capture::Replay;
 use timely::dataflow::operators::Accumulate;
+use timely::dataflow::operators::capture::event::EventIterator;
 
 use rdkafka::config::ClientConfig;
 
@@ -33,6 +34,7 @@ fn main() {
                 let topic = format!("{}-{:?}", topic, i);
                 EventConsumer::<_,u64>::new(consumer_config.clone(), topic)
             })
+            .map(|e| futures::stream::iter(e.cloned()))
             .collect::<Vec<_>>();
 
         worker.dataflow::<u64,_,_>(|scope| {

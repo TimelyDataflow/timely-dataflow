@@ -28,9 +28,11 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// ```rust
     /// use std::rc::Rc;
     /// use std::sync::{Arc, Mutex};
+    /// use futures_util::stream;
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
     /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
+    /// use timely::dataflow::operators::capture::event::EventIterator;
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
@@ -43,7 +45,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///
     ///     // these are to capture/replay the stream.
     ///     let handle1 = Rc::new(EventLink::new());
-    ///     let handle2 = Some(handle1.clone());
+    ///     let handle2 = Some(stream::iter(handle1.clone().cloned()));
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10).to_stream(scope1)
@@ -68,9 +70,11 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// use std::rc::Rc;
     /// use std::net::{TcpListener, TcpStream};
     /// use std::sync::{Arc, Mutex};
+    /// use futures_util::stream;
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
     /// use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay, Extract};
+    /// use timely::dataflow::operators::capture::event::EventIterator;
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send0, recv0) = ::std::sync::mpsc::channel();
@@ -95,7 +99,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///     );
     ///
     ///     worker.dataflow::<u64,_,_>(|scope2| {
-    ///         Some(EventReader::<_,u64,_>::new(recv))
+    ///         Some(stream::iter(EventReader::<_,u64,_>::new(recv).cloned()))
     ///             .replay_into(scope2)
     ///             .capture_into(send0)
     ///     });
