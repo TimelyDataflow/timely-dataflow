@@ -46,9 +46,26 @@ impl<T, D> Message<T, D> {
         Message { time, data, from, seq }
     }
 
-    /// Forms a message, and pushes contents at `pusher`.
+    /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
+    /// leaves in place, or a new `Vec`. Note that the returned vector is always initialized with
+    /// a capacity of [Self::default_length] elements.
     #[inline]
     pub fn push_at<P: Push<Bundle<T, D>>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
+
+        Self::push_at_no_allocation(buffer, time, pusher);
+
+        // TODO: Unclear we always want this here.
+        if buffer.capacity() != Self::default_length() {
+            *buffer = Vec::with_capacity(Self::default_length());
+        }
+    }
+
+    /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
+    /// leaves in place, or a new empty `Vec`. If the pusher leaves a vector with a capacity larger
+    /// than [Self::default_length], the vector is initialized with a new vector with
+    /// [Self::default_length] capacity.
+    #[inline]
+    pub fn push_at_no_allocation<P: Push<Bundle<T, D>>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
 
         let data = ::std::mem::replace(buffer, Vec::new());
         let message = Message::new(time, data, 0, 0);
@@ -63,8 +80,9 @@ impl<T, D> Message<T, D> {
             }
         }
 
-        // TODO: Unclear we always want this here.
-        if buffer.capacity() != Self::default_length() {
+        // Avoid memory leaks by buffers growing out of bounds
+        if buffer.capacity() > Self::default_length() {
             *buffer = Vec::with_capacity(Self::default_length());
         }
-    }}
+    }
+}
