@@ -9,14 +9,14 @@
 
 use std::{fmt::{self, Debug}, marker::PhantomData};
 
-use crate::communication::{Push, Pull, Data};
-use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-
-use crate::worker::AsWorker;
+use crate::communication::{Data, Pull, Push};
+use crate::communication::allocator::thread::{ThreadPuller, ThreadPusher};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
-use super::{Bundle, Message};
+use crate::dataflow::channels::pushers::LazyExchange as LazyExchangePusher;
+use crate::logging::{MessagesEvent, TimelyLogger as Logger};
+use crate::worker::AsWorker;
 
-use crate::logging::{TimelyLogger as Logger, MessagesEvent};
+use super::{Bundle, Message};
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T: 'static, D: 'static> {
@@ -73,6 +73,38 @@ impl<T: Eq+Data+Clone, D: Data+Clone, F: FnMut(&D)->u64+'static> Parallelization
 impl<D, F> Debug for Exchange<D, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Exchange").finish()
+    }
+}
+
+/// An exchange between multiple observers by data, backed by [LeanExchangePusher].
+pub struct LazyExchange<D, F> { hash_func: F, phantom: PhantomData<D> }
+
+impl<D, F: FnMut(&D)->u64+'static> LazyExchange<D, F> {
+    /// Allocates a new `LeanExchange` pact from a distribution function.
+    pub fn new(func: F) -> Self {
+        Self {
+            hash_func:  func,
+            phantom:    PhantomData,
+        }
+    }
+}
+
+// Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
+impl<T: Eq+Data+Clone, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContract<T, D> for LazyExchange<D, F> {
+    // TODO: The closure in the type prevents us from naming it.
+    //       Could specialize `ExchangePusher` to a time-free version.
+    type Pusher = Box<dyn Push<Bundle<T, D>>>;
+    type Puller = Box<dyn Pull<Bundle<T, D>>>;
+    fn connect<A: AsWorker>(mut self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+        let (senders, receiver) = allocator.allocate::<Message<T, D>>(identifier, address);
+        let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
+        (Box::new(LazyExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, logging.clone())))
+    }
+}
+
+impl<D, F> Debug for LazyExchange<D, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LeanExchange").finish()
     }
 }
 
