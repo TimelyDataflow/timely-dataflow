@@ -24,7 +24,7 @@ use crate::dataflow::operators::capability::CapabilityTrait;
 pub struct InputHandle<T: Timestamp, D, P: Pull<Bundle<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
-    logging: Option<Logger>,
+    logging: Option<Rc<RefCell<Logger>>>,
 }
 
 /// Handle to an operator's input stream and frontier.
@@ -87,9 +87,9 @@ impl<'a, T: Timestamp, D: Data, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
                 },
             }
         }) {
-            self.logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
+            self.logging.as_mut().map(|l| l.borrow().log(crate::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            self.logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
+            self.logging.as_mut().map(|l| l.borrow().log(crate::logging::GuardedMessageEvent { is_start: false }));
         }
     }
 
@@ -148,7 +148,7 @@ pub fn _access_pull_counter<T: Timestamp, D, P: Pull<Bundle<T, D>>>(input: &mut 
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, logging: Option<Logger>) -> InputHandle<T, D, P> {
+pub fn new_input_handle<T: Timestamp, D, P: Pull<Bundle<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, logging: Option<Rc<RefCell<Logger>>>) -> InputHandle<T, D, P> {
     InputHandle {
         pull_counter,
         internal,

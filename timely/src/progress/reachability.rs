@@ -832,23 +832,26 @@ fn summarize_outputs<T: Timestamp>(
 /// Logging types for reachability tracking events.
 pub mod logging {
 
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
     use crate::logging::{Logger, ProgressEventTimestampVec};
 
     /// A logger with additional identifying information about the tracker.
     pub struct TrackerLogger {
         path: Vec<usize>,
-        logger: Logger<TrackerEvent>,
+        logger: Rc<RefCell<Logger<TrackerEvent>>>,
     }
 
     impl TrackerLogger {
         /// Create a new tracker logger from its fields.
-        pub fn new(path: Vec<usize>, logger: Logger<TrackerEvent>) -> Self {
+        pub fn new(path: Vec<usize>, logger: Rc<RefCell<Logger<TrackerEvent>>>) -> Self {
             Self { path, logger }
         }
 
         /// Log source update events with additional identifying information.
         pub fn log_source_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
-            self.logger.log({
+            self.logger.borrow().log({
                 SourceUpdate {
                     tracker_id: self.path.clone(),
                     updates,
@@ -857,7 +860,7 @@ pub mod logging {
         }
         /// Log target update events with additional identifying information.
         pub fn log_target_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
-            self.logger.log({
+            self.logger.borrow().log({
                 TargetUpdate {
                     tracker_id: self.path.clone(),
                     updates,

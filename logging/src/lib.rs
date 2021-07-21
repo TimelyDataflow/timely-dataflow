@@ -42,7 +42,7 @@ impl<Id: Clone+'static> Registry<Id> {
         name: &str,
         logger: Logger<T, Id>) -> Option<Box<dyn Any>>
     {
-        self.map.insert(name.to_owned(), (Box::new(logger.clone()), Box::new(logger))).map(|x| x.0)
+        self.map.insert(name.to_owned(), (Box::new(Rc::new(RefCell::new(logger.clone()))), Box::new(Rc::new(RefCell::new(logger))))).map(|x| x.0)
     }
 
     /// Removes a bound logger.
@@ -56,11 +56,11 @@ impl<Id: Clone+'static> Registry<Id> {
     }
 
     /// Retrieves a shared logger, if one has been inserted.
-    pub fn get<T: 'static>(&self, name: &str) -> Option<Logger<T, Id>> {
+    pub fn get<T: 'static>(&self, name: &str) -> Option<Rc<RefCell<Logger<T, Id>>>> {
         self.map
             .get(name)
-            .and_then(|entry| entry.0.downcast_ref::<Logger<T, Id>>())
-            .map(|x| (*x).clone())
+            .and_then(|entry| entry.0.downcast_ref::<Rc<RefCell<Logger<T, Id>>>>())
+            .map(Rc::clone)
     }
 
     /// Creates a new logger registry.
@@ -227,5 +227,27 @@ impl<T, E> Flush for Logger<T, E> {
             // Avoid swapping resources for empty buffers.
             (*action)(&elapsed, &mut Vec::new());
         }
+    }
+}
+
+impl<T, E> Flush for Rc<RefCell<Logger<T, E>>> {
+    fn flush(&mut self) {
+        self.borrow_mut().flush()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{Registry, Logger};
+    use std::time::{Instant, Duration};
+
+    #[test]
+    fn test_logger_insert_get() {
+        let mut registry = Registry::new(Instant::now(), 0);
+        let action = |_: &Duration, _: &mut Vec<(Duration, i32, usize)>|{};
+        let logger = Logger::new(Instant::now(), Duration::default(), 0, action);
+        assert!(registry.get::<usize>("test").is_none());
+        registry.insert_logger("test", logger.clone());
+        assert!(registry.get::<usize>("test").is_some());
     }
 }

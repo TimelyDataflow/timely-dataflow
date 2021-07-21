@@ -33,7 +33,7 @@ pub struct OperatorBuilder<G: Scope> {
     consumed: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
-    logging: Option<Logger>,
+    logging: Option<Rc<RefCell<Logger>>>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {

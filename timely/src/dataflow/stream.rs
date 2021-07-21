@@ -36,7 +36,7 @@ impl<S: Scope, D> Stream<S, D> {
     pub fn connect_to<P: Push<Bundle<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         let mut logging = self.scope().logging();
-        logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
+        logging.as_mut().map(|l| l.borrow().log(crate::logging::ChannelsEvent {
             id: identifier,
             scope_addr: self.scope.addr(),
             source: (self.name.node, self.name.port),

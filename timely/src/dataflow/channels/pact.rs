@@ -17,6 +17,8 @@ use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{Bundle, Message};
 
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T: 'static, D: 'static> {
@@ -25,7 +27,7 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
     /// Type implementing `Pull` produced by this pact.
     type Puller: Pull<Bundle<T, D>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Rc<RefCell<Logger>>>) -> (Self::Pusher, Self::Puller);
 }
 
 /// A direct connection
@@ -35,7 +37,7 @@ pub struct Pipeline;
 impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
     type Pusher = LogPusher<T, D, ThreadPusher<Bundle<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<Bundle<T, D>>>;
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Rc<RefCell<Logger>>>) -> (Self::Pusher, Self::Puller) {
         let (pusher, puller) = allocator.pipeline::<Message<T, D>>(identifier, address);
         // // ignore `&mut A` and use thread allocator
         // let (pusher, puller) = Thread::new::<Bundle<T, D>>();
@@ -63,7 +65,7 @@ impl<T: Eq+Data+Clone, D: Data+Clone, F: FnMut(&D)->u64+'static> Parallelization
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<dyn Push<Bundle<T, D>>>;
     type Puller = Box<dyn Pull<Bundle<T, D>>>;
-    fn connect<A: AsWorker>(mut self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+    fn connect<A: AsWorker>(mut self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Rc<RefCell<Logger>>>) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, D>>(identifier, address);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
         (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, logging.clone())))
@@ -85,12 +87,12 @@ pub struct LogPusher<T, D, P: Push<Bundle<T, D>>> {
     source: usize,
     target: usize,
     phantom: PhantomData<(T, D)>,
-    logging: Option<Logger>,
+    logging: Option<Rc<RefCell<Logger>>>,
 }
 
 impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
     /// Allocates a new pusher.
-    pub fn new(pusher: P, source: usize, target: usize, channel: usize, logging: Option<Logger>) -> Self {
+    pub fn new(pusher: P, source: usize, target: usize, channel: usize, logging: Option<Rc<RefCell<Logger>>>) -> Self {
         LogPusher {
             pusher,
             channel,
@@ -117,7 +119,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
             }
 
             if let Some(logger) = self.logging.as_ref() {
-                logger.log(MessagesEvent {
+                logger.borrow().log(MessagesEvent {
                     is_send: true,
                     channel: self.channel,
                     source: self.source,
@@ -139,12 +141,12 @@ pub struct LogPuller<T, D, P: Pull<Bundle<T, D>>> {
     channel: usize,
     index: usize,
     phantom: PhantomData<(T, D)>,
-    logging: Option<Logger>,
+    logging: Option<Rc<RefCell<Logger>>>,
 }
 
 impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
     /// Allocates a new `Puller`.
-    pub fn new(puller: P, index: usize, channel: usize, logging: Option<Logger>) -> Self {
+    pub fn new(puller: P, index: usize, channel: usize, logging: Option<Rc<RefCell<Logger>>>) -> Self {
         LogPuller {
             puller,
             channel,
@@ -164,7 +166,7 @@ impl<T, D, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
             let target = self.index;
 
             if let Some(logger) = self.logging.as_ref() {
-                logger.log(MessagesEvent {
+                logger.borrow().log(MessagesEvent {
                     is_send: false,
                     channel,
                     source: bundle.from,

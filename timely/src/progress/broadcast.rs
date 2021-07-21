@@ -1,10 +1,13 @@
 //! Broadcasts progress information among workers.
 
-use crate::progress::{ChangeBatch, Timestamp};
-use crate::progress::{Location, Port};
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use crate::communication::{Message, Push, Pull};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
+use crate::progress::{ChangeBatch, Timestamp};
+use crate::progress::{Location, Port};
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
@@ -26,16 +29,16 @@ pub struct Progcaster<T:Timestamp> {
     /// Communication channel identifier
     channel_identifier: usize,
 
-    progress_logging: Option<ProgressLogger>,
+    progress_logging: Option<Rc<RefCell<ProgressLogger>>>,
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
+    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Rc<RefCell<Logger>>>, progress_logging: Option<Rc<RefCell<ProgressLogger>>>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         let (pushers, puller) = worker.allocate(channel_identifier, &path[..]);
-        logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
+        logging.as_mut().map(|l| l.borrow().log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: crate::logging::CommChannelKind::Progress,
         }));
@@ -78,7 +81,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     }
                 }
 
-                l.log(crate::logging::TimelyProgressEvent {
+                l.borrow().log(crate::logging::TimelyProgressEvent {
                     is_send: true,
                     source: self.source,
                     channel: self.channel_identifier,
@@ -148,7 +151,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     }
                 }
 
-                l.log(crate::logging::TimelyProgressEvent {
+                l.borrow().log(crate::logging::TimelyProgressEvent {
                     is_send: false,
                     source: source,
                     seq_no: counter,

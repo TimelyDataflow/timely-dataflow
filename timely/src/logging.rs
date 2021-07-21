@@ -1,5 +1,9 @@
 //! Traits, implementations, and macros related to logging timely events.
 
+use std::time::Duration;
+
+use crate::dataflow::operators::capture::{Event, EventPusher};
+
 /// Type alias for logging timely events.
 pub type WorkerIdentifier = usize;
 /// Logger type for worker-local logging.
@@ -8,9 +12,6 @@ pub type Logger<Event> = crate::logging_core::Logger<Event, WorkerIdentifier>;
 pub type TimelyLogger = Logger<TimelyEvent>;
 /// Logger for timely dataflow progress events (the "timely/progress" log stream).
 pub type TimelyProgressLogger = Logger<TimelyProgressEvent>;
-
-use std::time::Duration;
-use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
 pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {

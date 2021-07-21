@@ -79,7 +79,7 @@ fn main() {
                 input.send(i);
             }
             input.advance_to(round);
-            input_logger.log(());
+            input_logger.borrow().log(());
 
             while probe.less_than(input.time()) {
                 worker.step();

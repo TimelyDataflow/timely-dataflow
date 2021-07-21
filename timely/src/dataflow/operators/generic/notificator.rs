@@ -1,3 +1,6 @@
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use crate::progress::frontier::{AntichainRef, MutableAntichain};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
@@ -18,7 +21,7 @@ use crate::logging::TimelyLogger as Logger;
 pub struct Notificator<'a, T: Timestamp> {
     frontiers: &'a [&'a MutableAntichain<T>],
     inner: &'a mut FrontierNotificator<T>,
-    logging: &'a Option<Logger>,
+    logging: &'a Option<Rc<RefCell<Logger>>>,
 }
 
 impl<'a, T: Timestamp> Notificator<'a, T> {
@@ -28,7 +31,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     pub fn new(
         frontiers: &'a [&'a MutableAntichain<T>],
         inner: &'a mut FrontierNotificator<T>,
-        logging: &'a Option<Logger>) -> Self {
+        logging: &'a Option<Rc<RefCell<Logger>>>) -> Self {
 
         inner.make_available(frontiers);
 
@@ -82,9 +85,9 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
-            self.logging.as_ref().map(|l| l.log(crate::logging::GuardedProgressEvent { is_start: true }));
+            self.logging.as_ref().map(|l| l.borrow().log(crate::logging::GuardedProgressEvent { is_start: true }));
             logic(cap, count, self);
-            self.logging.as_ref().map(|l| l.log(crate::logging::GuardedProgressEvent { is_start: false }));
+            self.logging.as_ref().map(|l| l.borrow().log(crate::logging::GuardedProgressEvent { is_start: false }));
         }
     }
 }
@@ -381,7 +384,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// This implementation can be emulated with judicious use of `make_available` and `notify_at_frontiered`,
     /// in the event that `Notificator` provides too restrictive an interface.
     #[inline]
-    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Option<Logger>) -> Notificator<'a, T> {
+    pub fn monotonic<'a>(&'a mut self, frontiers: &'a [&'a MutableAntichain<T>], logging: &'a Option<Rc<RefCell<Logger>>>) -> Notificator<'a, T> {
         Notificator::new(frontiers, self, logging)
     }
 

@@ -63,10 +63,10 @@ where
     output_capabilities: Vec<MutableAntichain<TOuter>>,
 
     /// Logging handle
-    logging: Option<Logger>,
+    logging: Option<Rc<RefCell<Logger>>>,
 
     /// Progress logging handle
-    progress_logging: Option<ProgressLogger>,
+    progress_logging: Option<Rc<RefCell<ProgressLogger>>>,
 }
 
 impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
@@ -98,8 +98,8 @@ where
     pub fn new_from(
         index: usize,
         mut path: Vec<usize>,
-        logging: Option<Logger>,
-        progress_logging: Option<ProgressLogger>,
+        logging: Option<Rc<RefCell<Logger>>>,
+        progress_logging: Option<Rc<RefCell<ProgressLogger>>>,
         name: &str,
     )
         -> SubgraphBuilder<TOuter, TInner>
@@ -134,7 +134,7 @@ where
         {
             let mut child_path = self.path.clone();
             child_path.push(index);
-            self.logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
+            self.logging.as_mut().map(|l| l.borrow().log(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
@@ -594,7 +594,7 @@ struct PerOperatorState<T: Timestamp> {
 
     internal_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
 
-    logging: Option<Logger>,
+    logging: Option<Rc<RefCell<Logger>>>,
 }
 
 impl<T: Timestamp> PerOperatorState<T> {
@@ -624,7 +624,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         index: usize,
         mut _path: Vec<usize>,
         identifier: usize,
-        logging: Option<Logger>
+        logging: Option<Rc<RefCell<Logger>>>
     ) -> PerOperatorState<T>
     {
         let local = scope.local();
@@ -675,17 +675,17 @@ impl<T: Timestamp> PerOperatorState<T> {
                 // TODO:  Perhaps fold this in to `ScheduleEvent::start()` as a "reason"?
                 let frontiers = &mut self.shared_progress.borrow_mut().frontiers[..];
                 if frontiers.iter_mut().any(|buffer| !buffer.is_empty()) {
-                    l.log(crate::logging::PushProgressEvent { op_id: self.id })
+                    l.borrow().log(crate::logging::PushProgressEvent { op_id: self.id })
                 }
 
-                l.log(crate::logging::ScheduleEvent::start(self.id));
+                l.borrow().log(crate::logging::ScheduleEvent::start(self.id));
             }
 
             let incomplete = operator.schedule();
 
             // Perhaps log information about the stop of the schedule call.
             if let Some(l) = self.logging.as_mut() {
-                l.log(crate::logging::ScheduleEvent::stop(self.id));
+                l.borrow().log(crate::logging::ScheduleEvent::stop(self.id));
             }
 
             incomplete
@@ -708,7 +708,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     fn shut_down(&mut self) {
         if self.operator.is_some() {
             if let Some(l) = self.logging.as_mut() {
-                l.log(crate::logging::ShutdownEvent{ id: self.id });
+                l.borrow().log(crate::logging::ShutdownEvent{ id: self.id });
             }
             self.operator = None;
         }

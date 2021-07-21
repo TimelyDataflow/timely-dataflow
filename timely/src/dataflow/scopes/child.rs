@@ -32,9 +32,9 @@ where
     /// A copy of the child's parent scope.
     pub parent:   G,
     /// The log writer for this scope.
-    pub logging:  Option<Logger>,
+    pub logging:  Option<Rc<RefCell<Logger>>>,
     /// The progress log writer for this scope.
-    pub progress_logging:  Option<ProgressLogger>,
+    pub progress_logging:  Option<Rc<RefCell<ProgressLogger>>>,
 }
 
 impl<'a, G, T> Child<'a, G, T>
