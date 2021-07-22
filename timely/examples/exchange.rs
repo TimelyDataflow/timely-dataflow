@@ -1,7 +1,8 @@
 extern crate timely;
 
+use timely::dataflow::channels::pact::LazyExchange;
+use timely::dataflow::operators::{Exchange, Input, Probe};
 use timely::dataflow::InputHandle;
-use timely::dataflow::operators::{Input, Exchange, Probe};
 
 fn main() {
     // initializes and runs a timely dataflow.
@@ -15,7 +16,7 @@ fn main() {
         let probe = worker.dataflow(|scope|
             scope
                 .input_from(&mut input)
-                .exchange(|&x| x as u64)
+                .exchange_pact(LazyExchange::new(|&x| x as u64))
                 .probe()
         );
 
