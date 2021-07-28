@@ -122,8 +122,8 @@ impl<T, E: Clone> Logger<T, E> {
             id,
             time,
             offset,
-            action: action,
-            buffer: Vec::new(),
+            action,
+            buffer: Vec::with_capacity(LoggerInner::<T, E, F>::buffer_capacity()),
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
