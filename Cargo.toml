@@ -11,5 +11,6 @@ members = [
 opt-level = 3
 debug = true
 rpath = false
-lto = true
+# Disable LTO because it causes erratic behavior in Rust 1.53
+#lto = true
 debug-assertions = false
