@@ -1,0 +1,9 @@
+[package]
+name = "experiments"
+version = "0.1.0"
+edition = "2018"
+
+[workspace]
+
+[dependencies]
+timely = { path = "../timely" }
