@@ -56,8 +56,10 @@ impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a mut C {
 /// This trait is aimed at signaling others when noticeable capability behavior happens,
 /// allowing others to make note and take appropriate behavior.
 /// Examples include "do nothing" and "activate an operator".
-pub trait OnDowngradeDrop : Clone {
+pub trait OnDowngradeDrop {
+    /// Additional logic to invoke when a capability is downgraded.
     fn downgrade(&self) { }
+    /// Additional logic to invoke when a capability is dropped.
     fn drop(&self) { }
 }
 
@@ -67,7 +69,7 @@ pub struct DoNothing;
 
 impl OnDowngradeDrop for DoNothing { }
 
-impl<F: Fn()->() + Clone> OnDowngradeDrop for F {
+impl<F: Fn()->()> OnDowngradeDrop for F {
     fn downgrade(&self) { (*self)() }
     fn drop(&self) { (*self)() }
 }
@@ -118,13 +120,8 @@ impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
 impl<T: Timestamp> Capability<T, DoNothing> {
     /// Creates a new capability at `time` while incrementing (and keeping a reference to) the provided
     /// [`ChangeBatch`].
-    pub(crate) fn new(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T, DoNothing> {
-        internal.borrow_mut().update(time.clone(), 1);
-        Self {
-            time,
-            internal,
-            on_downgrade_drop: DoNothing,
-        }
+    pub(crate) fn new(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Self {
+        Self::from_parts(time, internal, DoNothing)
     }
 }
 
@@ -170,7 +167,7 @@ impl<T: Timestamp, D: OnDowngradeDrop> Capability<T, D> {
     /// the source capability (`self`).
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
-    pub fn delayed(&self, new_time: &T) -> Capability<T, D> {
+    pub fn delayed(&self, new_time: &T) -> Capability<T, D> where D: Clone {
         /// Makes the panic branch cold & outlined to decrease code bloat & give
         /// the inner function the best chance possible of being inlined with
         /// minimal code bloat
@@ -194,7 +191,7 @@ impl<T: Timestamp, D: OnDowngradeDrop> Capability<T, D> {
     /// greater or equal to the timestamp of the source capability (`self`).
     ///
     /// Returns [`None`] `self.time` is not less or equal to `new_time`.
-    pub fn try_delayed(&self, new_time: &T) -> Option<Capability<T, D>> {
+    pub fn try_delayed(&self, new_time: &T) -> Option<Capability<T, D>> where D: Clone {
         if self.time.less_equal(new_time) {
             Some(Self::from_parts(new_time.clone(), self.internal.clone(), self.on_downgrade_drop.clone()))
         } else {
@@ -231,9 +228,11 @@ impl<T: Timestamp, D: OnDowngradeDrop> Capability<T, D> {
     ///
     /// Returns a [`DowngradeError`] if `self.time` is not less or equal to `new_time`.
     pub fn try_downgrade(&mut self, new_time: &T) -> Result<(), DowngradeError> {
-        if let Some(new_capability) = self.try_delayed(new_time) {
-            *self = new_capability;
-            self.on_downgrade_drop.downgrade();
+        if self.time.less_equal(new_time) {
+            let mut borrow = self.internal.borrow_mut();
+            borrow.update(new_time.clone(), 1);
+            let old_time = std::mem::replace(&mut self.time, new_time.clone());
+            borrow.update(old_time, -1);
             Ok(())
         } else {
             Err(DowngradeError(()))
@@ -251,7 +250,7 @@ impl<T: Timestamp, D: OnDowngradeDrop> Drop for Capability<T, D> {
     }
 }
 
-impl<T: Timestamp, D: OnDowngradeDrop> Clone for Capability<T, D> {
+impl<T: Timestamp, D: OnDowngradeDrop> Clone for Capability<T, D> where D: Clone {
     fn clone(&self) -> Capability<T, D> {
         Self::from_parts(self.time.clone(), self.internal.clone(), self.on_downgrade_drop.clone())
     }
@@ -465,7 +464,7 @@ impl<T: Timestamp, D: OnDowngradeDrop> CapabilitySet<T, D> {
     /// Creates a new capability to send data at `time`.
     ///
     /// This method panics if there does not exist a capability in `self.elements` less or equal to `time`.
-    pub fn delayed(&self, time: &T) -> Capability<T, D> {
+    pub fn delayed(&self, time: &T) -> Capability<T, D> where D: Clone {
         /// Makes the panic branch cold & outlined to decrease code bloat & give
         /// the inner function the best chance possible of being inlined with
         /// minimal code bloat
@@ -488,7 +487,7 @@ impl<T: Timestamp, D: OnDowngradeDrop> CapabilitySet<T, D> {
     /// Attempts to create a new capability to send data at `time`.
     ///
     /// Returns [`None`] if there does not exist a capability in `self.elements` less or equal to `time`.
-    pub fn try_delayed(&self, time: &T) -> Option<Capability<T, D>> {
+    pub fn try_delayed(&self, time: &T) -> Option<Capability<T, D>> where D: Clone {
         self.elements
             .iter()
             .find(|capability| capability.time().less_equal(time))
@@ -502,6 +501,8 @@ impl<T: Timestamp, D: OnDowngradeDrop> CapabilitySet<T, D> {
     where
         B: borrow::Borrow<T>,
         F: IntoIterator<Item = B>,
+        // TODO: Remove the `Clone` requirement by using one `D` for the set.
+        D: Clone,
     {
         /// Makes the panic branch cold & outlined to decrease code bloat & give
         /// the inner function the best chance possible of being inlined with
@@ -527,11 +528,12 @@ impl<T: Timestamp, D: OnDowngradeDrop> CapabilitySet<T, D> {
     ///
     /// **Warning**: If an error is returned the capability set may be in an inconsistent state and can easily
     /// cause logic errors within the program if not properly handled.
-    ///
     pub fn try_downgrade<B, F>(&mut self, frontier: F) -> Result<(), DowngradeError>
     where
         B: borrow::Borrow<T>,
         F: IntoIterator<Item = B>,
+        // TODO: Remove the `Clone` requirement by using one `D` for the set.
+        D: Clone,
     {
         let count = self.elements.len();
         for time in frontier.into_iter() {
