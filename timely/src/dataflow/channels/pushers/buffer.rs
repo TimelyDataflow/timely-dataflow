@@ -2,8 +2,8 @@
 //! with the performance of batched sends.
 
 use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::operators::{Activate, Capability};
 use crate::progress::Timestamp;
-use crate::dataflow::operators::Capability;
 use crate::communication::Push;
 
 /// Buffers data sent at the same time, for efficient communication.
@@ -35,7 +35,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
         Session { buffer: self }
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
-    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, D, P> where T: Timestamp {
+    pub fn autoflush_session(&mut self, cap: Capability<T, Activate>) -> AutoflushSession<T, D, P> where T: Timestamp {
         if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
         self.time = Some(cap.time().clone());
         AutoflushSession {
@@ -121,12 +121,15 @@ impl<'a, T, D, P: Push<Bundle<T, D>>+'a> Session<'a, T, D, P>  where T: Eq+Clone
 }
 
 /// A session which will flush itself when dropped.
+///
+/// It also holds a capability, to be sure that it cannot be used without one existing.
+/// The capability will activate an address when dropped, to notify the timely scheduler.
 pub struct AutoflushSession<'a, T: Timestamp, D, P: Push<Bundle<T, D>>+'a> where
     T: Eq+Clone+'a, D: 'a {
     /// A reference to the underlying buffer.
     buffer: &'a mut Buffer<T, D, P>,
     /// The capability being used to send the data.
-    _capability: Capability<T>,
+    _capability: Capability<T, Activate>,
 }
 
 impl<'a, T: Timestamp, D, P: Push<Bundle<T, D>>+'a> AutoflushSession<'a, T, D, P> where T: Eq+Clone+'a, D: 'a {

@@ -51,15 +51,61 @@ impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a mut C {
     }
 }
 
+/// A type that specifies additional capability behavior on downgrades and drops.
+///
+/// This trait is aimed at signaling others when noticeable capability behavior happens,
+/// allowing others to make note and take appropriate behavior.
+/// Examples include "do nothing" and "activate an operator".
+pub trait OnDowngradeDrop : Clone {
+    fn downgrade(&self) { }
+    fn drop(&self) { }
+}
+
+/// A vacuous implementor of `OnDowngradeDrop`.
+#[derive(Clone)]
+pub struct DoNothing;
+
+impl OnDowngradeDrop for DoNothing { }
+
+impl<F: Fn()->() + Clone> OnDowngradeDrop for F {
+    fn downgrade(&self) { (*self)() }
+    fn drop(&self) { (*self)() }
+}
+
+/// An `OnDowngradeDrop` implementor that enqueues an activation.
+#[derive(Clone)]
+pub struct Activate {
+    pub(crate) address: Rc<Vec<usize>>,
+    pub(crate) activations: Rc<RefCell<Activations>>,
+}
+
+impl OnDowngradeDrop for Activate {
+    fn downgrade(&self) {
+        self.activations.borrow_mut().activate(&self.address);
+    }
+    fn drop(&self) {
+        self.activations.borrow_mut().activate(&self.address);
+    }
+}
+
+impl Activate {
+    /// Construct a new `Activate` instance from an `address` and `activations` queue.
+    pub fn new(address: Rc<Vec<usize>>, activations: Rc<RefCell<Activations>>) -> Self {
+        Self { address, activations }
+    }
+}
+
+
 /// The capability to send data with a certain timestamp on a dataflow edge.
 ///
 /// Capabilities are used by timely dataflow's progress tracking machinery to restrict and track
 /// when user code retains the ability to send messages on dataflow edges. All capabilities are
 /// constructed by the system, and should eventually be dropped by the user. Failure to drop
 /// a capability (for whatever reason) will cause timely dataflow's progress tracking to stall.
-pub struct Capability<T: Timestamp> {
+pub struct Capability<T: Timestamp, D: OnDowngradeDrop = DoNothing> {
     time: T,
     internal: Rc<RefCell<ChangeBatch<T>>>,
+    on_downgrade_drop: D,
 }
 
 impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
@@ -69,15 +115,27 @@ impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
     }
 }
 
-impl<T: Timestamp> Capability<T> {
+impl<T: Timestamp> Capability<T, DoNothing> {
     /// Creates a new capability at `time` while incrementing (and keeping a reference to) the provided
     /// [`ChangeBatch`].
-    pub(crate) fn new(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Self {
+    pub(crate) fn new(time: T, internal: Rc<RefCell<ChangeBatch<T>>>) -> Capability<T, DoNothing> {
         internal.borrow_mut().update(time.clone(), 1);
-
         Self {
             time,
             internal,
+            on_downgrade_drop: DoNothing,
+        }
+    }
+}
+
+impl<T: Timestamp, D: OnDowngradeDrop> Capability<T, D> {
+
+    pub(crate) fn from_parts(time: T, internal: Rc<RefCell<ChangeBatch<T>>>, on_downgrade_drop: D) -> Capability<T, D> {
+        internal.borrow_mut().update(time.clone(), 1);
+        Self {
+            time,
+            internal,
+            on_downgrade_drop,
         }
     }
 
@@ -86,11 +144,33 @@ impl<T: Timestamp> Capability<T> {
         &self.time
     }
 
+    /// Converts the capability to one with different additional behavior on downgrade and drop.
+    pub fn with_downgrade_drop<D2: OnDowngradeDrop>(mut self, on_downgrade_drop: D2) -> Capability<T, D2> {
+        // We want to steal the fields without calling the destructor.
+        // This is hard in Rust, because you cannot deconstruct things that have `Drop` implementations,
+        // even though `std::mem::forget` is safe. Perhaps there is a cleaner way to do this.
+        let time = std::mem::replace(&mut self.time, T::minimum());
+        let internal = std::mem::take(&mut self.internal);
+        std::mem::forget(self);
+        Capability { time, internal, on_downgrade_drop }
+    }
+
+    /// Converts a capability into one that will activate an address on each downgrade and drop.
+    ///
+    /// This is a convenience method for `self_with_downgrade_drop<Activate>()`.
+    pub fn into_activate(
+        self,
+        address: Rc<Vec<usize>>,
+        activations: Rc<RefCell<Activations>>
+    ) -> Capability<T, Activate> {
+        self.with_downgrade_drop(Activate::new(address, activations))
+    }
+
     /// Makes a new capability for a timestamp `new_time` greater or equal to the timestamp of
     /// the source capability (`self`).
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
-    pub fn delayed(&self, new_time: &T) -> Capability<T> {
+    pub fn delayed(&self, new_time: &T) -> Capability<T, D> {
         /// Makes the panic branch cold & outlined to decrease code bloat & give
         /// the inner function the best chance possible of being inlined with
         /// minimal code bloat
@@ -114,9 +194,9 @@ impl<T: Timestamp> Capability<T> {
     /// greater or equal to the timestamp of the source capability (`self`).
     ///
     /// Returns [`None`] `self.time` is not less or equal to `new_time`.
-    pub fn try_delayed(&self, new_time: &T) -> Option<Capability<T>> {
+    pub fn try_delayed(&self, new_time: &T) -> Option<Capability<T, D>> {
         if self.time.less_equal(new_time) {
-            Some(Self::new(new_time.clone(), self.internal.clone()))
+            Some(Self::from_parts(new_time.clone(), self.internal.clone(), self.on_downgrade_drop.clone()))
         } else {
             None
         }
@@ -142,7 +222,9 @@ impl<T: Timestamp> Capability<T> {
         }
 
         self.try_downgrade(new_time)
-            .unwrap_or_else(|_| downgrade_panic(self, new_time))
+            .unwrap_or_else(|_| downgrade_panic(self, new_time));
+
+        self.on_downgrade_drop.downgrade();
     }
 
     /// Attempts to downgrade the capability to one corresponding to `new_time`.
@@ -151,6 +233,7 @@ impl<T: Timestamp> Capability<T> {
     pub fn try_downgrade(&mut self, new_time: &T) -> Result<(), DowngradeError> {
         if let Some(new_capability) = self.try_delayed(new_time) {
             *self = new_capability;
+            self.on_downgrade_drop.downgrade();
             Ok(())
         } else {
             Err(DowngradeError(()))
@@ -161,19 +244,20 @@ impl<T: Timestamp> Capability<T> {
 // Necessary for correctness. When a capability is dropped, the "internal" `ChangeBatch` needs to be
 // updated accordingly to inform the rest of the system that the operator has released its permit
 // to send data and request notification at the associated timestamp.
-impl<T: Timestamp> Drop for Capability<T> {
+impl<T: Timestamp, D: OnDowngradeDrop> Drop for Capability<T, D> {
     fn drop(&mut self) {
         self.internal.borrow_mut().update(self.time.clone(), -1);
+        self.on_downgrade_drop.drop();
     }
 }
 
-impl<T: Timestamp> Clone for Capability<T> {
-    fn clone(&self) -> Capability<T> {
-        Self::new(self.time.clone(), self.internal.clone())
+impl<T: Timestamp, D: OnDowngradeDrop> Clone for Capability<T, D> {
+    fn clone(&self) -> Capability<T, D> {
+        Self::from_parts(self.time.clone(), self.internal.clone(), self.on_downgrade_drop.clone())
     }
 }
 
-impl<T: Timestamp> Deref for Capability<T> {
+impl<T: Timestamp, D: OnDowngradeDrop> Deref for Capability<T, D> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -181,7 +265,7 @@ impl<T: Timestamp> Deref for Capability<T> {
     }
 }
 
-impl<T: Timestamp> Debug for Capability<T> {
+impl<T: Timestamp, D: OnDowngradeDrop> Debug for Capability<T, D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Capability")
             .field("time", &self.time)
@@ -190,20 +274,20 @@ impl<T: Timestamp> Debug for Capability<T> {
     }
 }
 
-impl<T: Timestamp> PartialEq for Capability<T> {
+impl<T: Timestamp, D: OnDowngradeDrop> PartialEq for Capability<T, D> {
     fn eq(&self, other: &Self) -> bool {
         self.time() == other.time() && Rc::ptr_eq(&self.internal, &other.internal)
     }
 }
-impl<T: Timestamp> Eq for Capability<T> { }
+impl<T: Timestamp, D: OnDowngradeDrop> Eq for Capability<T, D> { }
 
-impl<T: Timestamp> PartialOrder for Capability<T> {
+impl<T: Timestamp, D: OnDowngradeDrop> PartialOrder for Capability<T, D> {
     fn less_equal(&self, other: &Self) -> bool {
         self.time().less_equal(other.time()) && Rc::ptr_eq(&self.internal, &other.internal)
     }
 }
 
-impl<T: Timestamp> ::std::hash::Hash for Capability<T> {
+impl<T: Timestamp, D: OnDowngradeDrop> ::std::hash::Hash for Capability<T, D> {
     fn hash<H: ::std::hash::Hasher>(&self, state: &mut H) {
         self.time.hash(state);
     }
@@ -316,65 +400,16 @@ impl<'cap, T: Timestamp> Debug for CapabilityRef<'cap, T> {
     }
 }
 
-/// Capability that activates on drop.
-#[derive(Clone, Debug)]
-pub struct ActivateCapability<T: Timestamp> {
-    pub(crate) capability: Capability<T>,
-    pub(crate) address: Rc<Vec<usize>>,
-    pub(crate) activations: Rc<RefCell<Activations>>,
-}
-
-impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
-    fn time(&self) -> &T { self.capability.time() }
-    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
-        self.capability.valid_for_output(query_buffer)
-    }
-}
-
-impl<T: Timestamp> ActivateCapability<T> {
-    /// Creates a new activating capability.
-    pub fn new(capability: Capability<T>, address: &[usize], activations: Rc<RefCell<Activations>>) -> Self {
-        Self {
-            capability,
-            address: Rc::new(address.to_vec()),
-            activations,
-        }
-    }
-
-    /// The timestamp associated with this capability.
-    pub fn time(&self) -> &T {
-        self.capability.time()
-    }
-
-    /// Creates a new delayed capability.
-    pub fn delayed(&self, time: &T) -> Self {
-        ActivateCapability {
-            capability: self.capability.delayed(time),
-            address: self.address.clone(),
-            activations: self.activations.clone(),
-        }
-    }
-
-    /// Downgrades this capability.
-    pub fn downgrade(&mut self, time: &T) {
-        self.capability.downgrade(time);
-        self.activations.borrow_mut().activate(&self.address);
-    }
-}
-
-impl<T: Timestamp> Drop for ActivateCapability<T> {
-    fn drop(&mut self) {
-        self.activations.borrow_mut().activate(&self.address);
-    }
-}
+/// A type alias to minimize breakage for prior users of the `ActivateCapability<T>` type.
+pub type ActivateCapability<T> = Capability<T, Activate>;
 
 /// A set of capabilities, for possibly incomparable times.
 #[derive(Clone, Debug)]
-pub struct CapabilitySet<T: Timestamp> {
-    elements: Vec<Capability<T>>,
+pub struct CapabilitySet<T: Timestamp, D: OnDowngradeDrop = DoNothing> {
+    elements: Vec<Capability<T, D>>,
 }
 
-impl<T: Timestamp> CapabilitySet<T> {
+impl<T: Timestamp, D: OnDowngradeDrop> CapabilitySet<T, D> {
 
     /// Allocates an empty capability set.
     pub fn new() -> Self {
@@ -415,12 +450,12 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///         });
     /// });
     /// ```
-    pub fn from_elem(cap: Capability<T>) -> Self {
+    pub fn from_elem(cap: Capability<T, D>) -> Self {
         Self { elements: vec![cap] }
     }
 
     /// Inserts `capability` into the set, discarding redundant capabilities.
-    pub fn insert(&mut self, capability: Capability<T>) {
+    pub fn insert(&mut self, capability: Capability<T, D>) {
         if !self.elements.iter().any(|c| c.less_equal(&capability)) {
             self.elements.retain(|c| !capability.less_equal(c));
             self.elements.push(capability);
@@ -430,7 +465,7 @@ impl<T: Timestamp> CapabilitySet<T> {
     /// Creates a new capability to send data at `time`.
     ///
     /// This method panics if there does not exist a capability in `self.elements` less or equal to `time`.
-    pub fn delayed(&self, time: &T) -> Capability<T> {
+    pub fn delayed(&self, time: &T) -> Capability<T, D> {
         /// Makes the panic branch cold & outlined to decrease code bloat & give
         /// the inner function the best chance possible of being inlined with
         /// minimal code bloat
@@ -453,7 +488,7 @@ impl<T: Timestamp> CapabilitySet<T> {
     /// Attempts to create a new capability to send data at `time`.
     ///
     /// Returns [`None`] if there does not exist a capability in `self.elements` less or equal to `time`.
-    pub fn try_delayed(&self, time: &T) -> Option<Capability<T>> {
+    pub fn try_delayed(&self, time: &T) -> Option<Capability<T, D>> {
         self.elements
             .iter()
             .find(|capability| capability.time().less_equal(time))
@@ -509,11 +544,11 @@ impl<T: Timestamp> CapabilitySet<T> {
     }
 }
 
-impl<T> From<Vec<Capability<T>>> for CapabilitySet<T>
+impl<T, D: OnDowngradeDrop> From<Vec<Capability<T, D>>> for CapabilitySet<T, D>
 where
     T: Timestamp,
 {
-    fn from(capabilities: Vec<Capability<T>>) -> Self {
+    fn from(capabilities: Vec<Capability<T, D>>) -> Self {
         let mut this = Self::with_capacity(capabilities.len());
         for capability in capabilities {
             this.insert(capability);
@@ -523,16 +558,16 @@ where
     }
 }
 
-impl<T: Timestamp> Default for CapabilitySet<T> {
+impl<T: Timestamp, D: OnDowngradeDrop> Default for CapabilitySet<T, D> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Timestamp> Deref for CapabilitySet<T> {
-    type Target=[Capability<T>];
+impl<T: Timestamp, D: OnDowngradeDrop> Deref for CapabilitySet<T, D> {
+    type Target=[Capability<T, D>];
 
-    fn deref(&self) -> &[Capability<T>] {
+    fn deref(&self) -> &[Capability<T, D>] {
         &self.elements
     }
 }

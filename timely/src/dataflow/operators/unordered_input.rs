@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::scheduling::{Schedule, ActivateOnDrop};
+use crate::scheduling::Schedule;
 
 use crate::progress::frontier::Antichain;
 use crate::progress::{Operate, operate::SharedProgress, Timestamp};
@@ -92,7 +92,7 @@ impl<G: Scope> UnorderedInput<G> for G {
         let mut address = self.addr();
         address.push(index);
 
-        let cap = ActivateCapability::new(cap, &address, self.activations());
+        let cap = cap.into_activate(Rc::new(address.to_vec()), self.activations());
 
         let helper = UnorderedHandle::new(counter);
 
@@ -158,7 +158,7 @@ impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
-        ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>> {
+        self.buffer.autoflush_session(cap)
     }
 }
