@@ -1,8 +1,8 @@
 //! Exchange records between workers.
 
-use crate::ExchangeData;
+use crate::{ExchangeData, ExchangeContainer, DrainContainer, Container};
 use crate::dataflow::channels::pact::Exchange as ExchangePact;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{CoreStream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Exchange records between workers.
@@ -26,13 +26,15 @@ pub trait Exchange<T, D: ExchangeData> {
 }
 
 // impl<T: Timestamp, G: Scope<Timestamp=T>, D: ExchangeData> Exchange<T, D> for Stream<G, D> {
-impl<G: Scope, D: ExchangeData> Exchange<G::Timestamp, D> for Stream<G, D> {
-    fn exchange(&self, route: impl Fn(&D)->u64+'static) -> Stream<G, D> {
-        let mut vector = Vec::new();
+impl<G: Scope, C: Container<Inner=D>+ExchangeContainer, D: ExchangeData> Exchange<G::Timestamp, D> for CoreStream<G, C>
+    where for<'a> &'a mut C: DrainContainer<Inner=D>,
+{
+    fn exchange(&self, route: impl Fn(&D)->u64+'static) -> CoreStream<G, C> {
+        let mut vector = C::empty();
         self.unary(ExchangePact::new(route), "Exchange", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                output.session(&time).give_vec(&mut vector);
+                output.session(&time).give_container(&mut vector);
             });
         })
     }

@@ -18,8 +18,7 @@ use std::fmt::{self, Debug};
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-#[derive(Clone)]
-pub struct Stream<S: Scope, D> {
+pub struct CoreStream<S: Scope, D> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
@@ -28,7 +27,20 @@ pub struct Stream<S: Scope, D> {
     ports: TeeHelper<S::Timestamp, D>,
 }
 
-impl<S: Scope, D> Stream<S, D> {
+/// A stream batching data in vectors.
+pub type Stream<S, D> = CoreStream<S, Vec<D>>;
+
+impl<S: Scope, D> Clone for CoreStream<S, D> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            scope: self.scope.clone(),
+            ports: self.ports.clone(),
+        }
+    }
+}
+
+impl<S: Scope, D> CoreStream<S, D> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
@@ -48,7 +60,7 @@ impl<S: Scope, D> Stream<S, D> {
     }
     /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
     pub fn new(source: Source, output: TeeHelper<S::Timestamp, D>, scope: S) -> Self {
-        Stream { name: source, ports: output, scope }
+        CoreStream { name: source, ports: output, scope }
     }
     /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }
@@ -56,14 +68,13 @@ impl<S: Scope, D> Stream<S, D> {
     pub fn scope(&self) -> S { self.scope.clone() }
 }
 
-impl<S, D> Debug for Stream<S, D>
+impl<S, D> Debug for CoreStream<S, D>
 where
     S: Scope,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Stream")
             .field("source", &self.name)
-            // TODO: Use `.finish_non_exhaustive()` after rust/#67364 lands
-            .finish()
+            .finish_non_exhaustive()
     }
 }

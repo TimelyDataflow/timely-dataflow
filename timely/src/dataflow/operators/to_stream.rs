@@ -4,12 +4,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use crate::dataflow::channels::Message;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::CapabilitySet;
 use crate::dataflow::{Scope, Stream};
 use crate::progress::Timestamp;
-use crate::Data;
+use crate::{Data, Container};
 
 /// Converts to a timely `Stream`.
 pub trait ToStream<T: Timestamp, D: Data> {
@@ -48,7 +47,7 @@ impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::
                 if let Some(element) = iterator.next() {
                     let mut session = output.session(capability.as_ref().unwrap());
                     session.give(element);
-                    for element in iterator.by_ref().take((256 * Message::<T, I::Item>::default_length()) - 1) {
+                    for element in iterator.by_ref().take((256 * <Vec<I::Item> as Container>::default_length()) - 1) {
                         session.give(element);
                     }
                     activator.activate();

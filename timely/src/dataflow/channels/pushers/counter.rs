@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use crate::progress::ChangeBatch;
 use crate::dataflow::channels::Bundle;
 use crate::communication::Push;
+use crate::Container;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
@@ -16,7 +17,7 @@ pub struct Counter<T: Ord, D, P: Push<Bundle<T, D>>> {
     phantom: PhantomData<D>,
 }
 
-impl<T, D, P> Push<Bundle<T, D>> for Counter<T, D, P> where T : Ord+Clone+'static, P: Push<Bundle<T, D>> {
+impl<T, D: Container, P> Push<Bundle<T, D>> for Counter<T, D, P> where T : Ord+Clone+'static, P: Push<Bundle<T, D>> {
     #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         if let Some(message) = message {

@@ -9,7 +9,7 @@ use crate::progress::frontier::Antichain;
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 
-use crate::Data;
+use crate::{Data, Container};
 use crate::communication::Push;
 use crate::dataflow::{Stream, ScopeParent, Scope};
 use crate::dataflow::channels::{Message, pushers::{Tee, Counter}};
@@ -101,7 +101,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 
     fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
 
-        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, D>::new();
+        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, Vec<D>>::new();
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
@@ -173,7 +173,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 pub struct Handle<T: Timestamp, D: Data> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
-    pushers: Vec<Counter<T, D, Tee<T, D>>>,
+    pushers: Vec<Counter<T, Vec<D>, Tee<T, Vec<D>>>>,
     buffer1: Vec<D>,
     buffer2: Vec<D>,
     now_at: T,
@@ -212,8 +212,8 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
             activate: Vec::new(),
             progress: Vec::new(),
             pushers: Vec::new(),
-            buffer1: Vec::with_capacity(Message::<T, D>::default_length()),
-            buffer2: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer1: Vec::with_capacity(<Vec<D> as Container>::default_length()),
+            buffer2: Vec::with_capacity(<Vec<D> as Container>::default_length()),
             now_at: T::minimum(),
         }
     }
@@ -254,7 +254,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
     fn register(
         &mut self,
-        pusher: Counter<T, D, Tee<T, D>>,
+        pusher: Counter<T, Vec<D>, Tee<T, Vec<D>>>,
         progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.

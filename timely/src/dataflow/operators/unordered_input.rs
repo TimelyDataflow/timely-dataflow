@@ -17,6 +17,8 @@ use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, Autoflush
 use crate::dataflow::operators::{ActivateCapability, Capability};
 
 use crate::dataflow::{Stream, Scope};
+use crate::Container;
+use std::fmt::Debug;
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
@@ -73,14 +75,14 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>);
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, Vec<D>>, ActivateCapability<G::Timestamp>), Stream<G, D>);
 }
 
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, Vec<D>>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
 
-        let (output, registrar) = Tee::<G::Timestamp, D>::new();
+        let (output, registrar) = Tee::<G::Timestamp, Vec<D>>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
@@ -145,12 +147,19 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 }
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-#[derive(Debug)]
-pub struct UnorderedHandle<T: Timestamp, D: Data> {
+pub struct UnorderedHandle<T: Timestamp, D: Container> {
     buffer: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
 
-impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
+impl<T: Timestamp, D: Container> Debug for UnorderedHandle<T, D> where D: Debug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("UnorderedHandle");
+        debug.field("buffer", &self.buffer);
+        debug.finish()
+    }
+}
+
+impl<T: Timestamp, D: Container> UnorderedHandle<T, D> {
     fn new(pusher: PushCounter<T, D, Tee<T, D>>) -> UnorderedHandle<T, D> {
         UnorderedHandle {
             buffer: PushBuffer::new(pusher),

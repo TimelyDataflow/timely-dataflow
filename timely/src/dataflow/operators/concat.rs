@@ -1,12 +1,12 @@
 //! Merges the contents of multiple streams.
 
 
-use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{CoreStream, Scope};
+use crate::Container;
 
 /// Merge the contents of two streams.
-pub trait Concat<G: Scope, D: Data> {
+pub trait Concat<G: Scope, D: Container> {
     /// Merge the contents of two streams.
     ///
     /// # Examples
@@ -20,17 +20,17 @@ pub trait Concat<G: Scope, D: Data> {
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concat(&self, _: &Stream<G, D>) -> Stream<G, D>;
+    fn concat(&self, _: &CoreStream<G, D>) -> CoreStream<G, D>;
 }
 
-impl<G: Scope, D: Data> Concat<G, D> for Stream<G, D> {
-    fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
-        self.scope().concatenate(vec![self.clone(), other.clone()])
+impl<G: Scope, D: Container> Concat<G, D> for CoreStream<G, D> {
+    fn concat(&self, other: &CoreStream<G, D>) -> CoreStream<G, D> {
+        self.scope().concatenate(vec![self, other].into_iter().cloned())
     }
 }
 
 /// Merge the contents of multiple streams.
-pub trait Concatenate<G: Scope, D: Data> {
+pub trait Concatenate<G: Scope, D: Container> {
     /// Merge the contents of multiple streams.
     ///
     /// # Examples
@@ -47,25 +47,25 @@ pub trait Concatenate<G: Scope, D: Data> {
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
+    fn concatenate<I>(&self, sources: I) -> CoreStream<G, D>
     where
-        I: IntoIterator<Item=Stream<G, D>>;
+        I: IntoIterator<Item=CoreStream<G, D>>;
 }
 
-impl<G: Scope, D: Data> Concatenate<G, D> for Stream<G, D> {
-    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
+impl<G: Scope, D: Container> Concatenate<G, D> for CoreStream<G, D> {
+    fn concatenate<I>(&self, sources: I) -> CoreStream<G, D>
     where
-        I: IntoIterator<Item=Stream<G, D>>
+        I: IntoIterator<Item=CoreStream<G, D>>
     {
         let clone = self.clone();
         self.scope().concatenate(Some(clone).into_iter().chain(sources))
     }
 }
 
-impl<G: Scope, D: Data> Concatenate<G, D> for G {
-    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
+impl<G: Scope, D: Container> Concatenate<G, D> for G {
+    fn concatenate<I>(&self, sources: I) -> CoreStream<G, D>
     where
-        I: IntoIterator<Item=Stream<G, D>>
+        I: IntoIterator<Item=CoreStream<G, D>>
     {
 
         // create an operator builder.
@@ -81,13 +81,13 @@ impl<G: Scope, D: Data> Concatenate<G, D> for G {
         // build an operator that plays out all input data.
         builder.build(move |_capability| {
 
-            let mut vector = Vec::new();
+            let mut vector = D::empty();
             move |_frontier| {
                 let mut output = output.activate();
                 for handle in handles.iter_mut() {
                     handle.for_each(|time, data| {
                         data.swap(&mut vector);
-                        output.session(&time).give_vec(&mut vector);
+                        output.session(&time).give_container(&mut vector);
                     })
                 }
             }

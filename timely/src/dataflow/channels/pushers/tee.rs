@@ -5,7 +5,7 @@ use std::fmt::{self, Debug};
 use std::rc::Rc;
 
 use crate::dataflow::channels::{Bundle, Message};
-use crate::Data;
+use crate::{Container, ContainerBuilder, Data};
 
 use crate::communication::Push;
 
@@ -13,17 +13,19 @@ type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<Bundle<T, D>>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct Tee<T: 'static, D: 'static> {
-    buffer: Vec<D>,
+    buffer: D,
     shared: PushList<T, D>,
 }
 
-impl<T: Data, D: Data> Push<Bundle<T, D>> for Tee<T, D> {
+impl<T: Data, D: Container> Push<Bundle<T, D>> for Tee<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = message {
             for index in 1..pushers.len() {
-                self.buffer.extend_from_slice(&message.data);
+                let mut builder = D::Builder::with_allocation_ref(&mut self.buffer);
+                builder.initialize_from(&message.data);
+                self.buffer = builder.build();
                 Message::push_at(&mut self.buffer, message.time.clone(), &mut pushers[index-1]);
             }
         }
@@ -39,25 +41,16 @@ impl<T: Data, D: Data> Push<Bundle<T, D>> for Tee<T, D> {
     }
 }
 
-impl<T, D> Tee<T, D> {
+impl<T, D: Container> Tee<T, D> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
     pub fn new() -> (Tee<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = Tee {
-            buffer: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer: D::Builder::with_capacity(D::default_length()).build(),
             shared: shared.clone(),
         };
 
         (port, TeeHelper { shared })
-    }
-}
-
-impl<T, D> Clone for Tee<T, D> {
-    fn clone(&self) -> Tee<T, D> {
-        Tee {
-            buffer: Vec::with_capacity(self.buffer.capacity()),
-            shared: self.shared.clone(),
-        }
     }
 }
 

@@ -3,6 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use crate::Container;
 use crate::dataflow::channels::Bundle;
 use crate::progress::ChangeBatch;
 use crate::communication::Pull;
@@ -14,7 +15,7 @@ pub struct Counter<T: Ord+Clone+'static, D, P: Pull<Bundle<T, D>>> {
     phantom: ::std::marker::PhantomData<D>,
 }
 
-impl<T:Ord+Clone+'static, D, P: Pull<Bundle<T, D>>> Counter<T, D, P> {
+impl<T:Ord+Clone+'static, D: Container, P: Pull<Bundle<T, D>>> Counter<T, D, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
     pub fn next(&mut self) -> Option<&mut Bundle<T, D>> {

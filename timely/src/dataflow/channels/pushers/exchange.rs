@@ -1,45 +1,53 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
-use crate::Data;
+use std::marker::PhantomData;
+
+use crate::{Container, ContainerBuilder, Data, DrainContainer};
 use crate::communication::Push;
 use crate::dataflow::channels::{Bundle, Message};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T, C: Container, D, P: Push<Bundle<T, C>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
-    buffers: Vec<Vec<D>>,
+    buffers: Vec<C::Builder>,
     current: Option<T>,
     hash_func: H,
+    _phantom_data: PhantomData<D>,
 }
 
-impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, P, H> {
+impl<T: Clone, C: Container, D, P: Push<Bundle<T, C>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
-    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
+    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
-            buffers.push(Vec::with_capacity(Message::<T, D>::default_length()));
+            buffers.push(C::Builder::with_capacity(C::default_length()));
         }
         Exchange {
             pushers,
             hash_func: key,
             buffers,
             current: None,
+            _phantom_data: PhantomData,
         }
     }
     #[inline]
     fn flush(&mut self, index: usize) {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
-                Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
+                let mut container = C::Builder::take_ref(&mut self.buffers[index]).build();
+                Message::push_at(&mut container, time.clone(), &mut self.pushers[index]);
+                self.buffers[index] = C::Builder::with_allocation(container);
             }
         }
     }
 }
 
-impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
+impl<T: Eq+Data, C: Container<Inner=D>, D: Data, P: Push<Bundle<T, C>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, C>> for Exchange<T, C, D, P, H>
+    where for<'b> &'b mut C: DrainContainer<Inner=D>,
+{
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
+    fn push(&mut self, message: &mut Option<Bundle<T, C>>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);
