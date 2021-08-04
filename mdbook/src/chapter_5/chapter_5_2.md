@@ -31,7 +31,7 @@ pub struct Source {
 pub struct Target {
     /// Index of the target operator.
     pub index: usize,
-    /// Nmuber of the input port to the operator.
+    /// Number of the input port to the operator.
     pub port: usize,
 }
 ```
