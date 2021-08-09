@@ -122,8 +122,8 @@ impl<T, E: Clone> Logger<T, E> {
             id,
             time,
             offset,
-            action: action,
-            buffer: Vec::with_capacity(1024),
+            action,
+            buffer: Vec::with_capacity(LoggerInner::<T, E, F>::buffer_capacity()),
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
@@ -168,6 +168,25 @@ impl<T, E: Clone> Logger<T, E> {
 }
 
 impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> LoggerInner<T, E, A> {
+
+    /// The upper limit for buffers to allocate, size in bytes. [Self::buffer_capacity] converts
+    /// this to size in elements.
+    const BUFFER_SIZE_BYTES: usize = 1 << 13;
+
+    /// The maximum buffer capacity in elements. Returns a number between [Self::BUFFER_SIZE_BYTES]
+    /// and 1, inclusively.
+    // TODO: This fn is not const because it cannot depend on non-Sized generic parameters
+    fn buffer_capacity() -> usize {
+        let size =  ::std::mem::size_of::<(Duration, E, T)>();
+        if size == 0 {
+            Self::BUFFER_SIZE_BYTES
+        } else if size <= Self::BUFFER_SIZE_BYTES {
+            Self::BUFFER_SIZE_BYTES / size
+        } else {
+            1
+        }
+    }
+
     pub fn log_many<I>(&mut self, events: I)
         where I: IntoIterator, I::Item: Into<T>
     {
@@ -181,7 +200,7 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Logg
                 // to do in-place updates without forcing them to take ownership.
                 self.buffer.clear();
                 let buffer_capacity = self.buffer.capacity();
-                if buffer_capacity < 1024 {
+                if buffer_capacity < Self::buffer_capacity() {
                     self.buffer.reserve((buffer_capacity+1).next_power_of_two());
                 }
             }
