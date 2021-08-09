@@ -29,12 +29,15 @@ impl<T, D> Message<T, D> {
     /// Default buffer size.
     pub fn default_length() -> usize {
         const MESSAGE_BUFFER_SIZE: usize = 1 << 13;
-        match std::mem::size_of::<D>() {
-            // We could use usize::MAX here, but to avoid overflows we limit the default length
-            // for zero-byte types.
-            0 => MESSAGE_BUFFER_SIZE,
-            size @ 1..=MESSAGE_BUFFER_SIZE => MESSAGE_BUFFER_SIZE / size,
-            _ => 1,
+        let size = std::mem::size_of::<D>();
+        if size == 0 {
+            // We could use usize::MAX here, but to avoid overflows we
+            // limit the default length for zero-byte types.
+            MESSAGE_BUFFER_SIZE
+        } else if size <= MESSAGE_BUFFER_SIZE {
+            MESSAGE_BUFFER_SIZE / size
+        } else {
+            1
         }
     }
 
