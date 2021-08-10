@@ -12,12 +12,15 @@ use crate::communication::Push;
 type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<Bundle<T, D>>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
-pub struct Tee<T: 'static, D: 'static> {
+pub struct TeeCore<T: 'static, D: 'static> {
     buffer: D,
     shared: PushList<T, D>,
 }
 
-impl<T: Data, D: Container> Push<Bundle<T, D>> for Tee<T, D> {
+/// [TeeCore] specialized to `Vec`-based container.
+pub type Tee<T, D> = TeeCore<T, Vec<D>>;
+
+impl<T: Data, D: Container> Push<Bundle<T, D>> for TeeCore<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         let mut pushers = self.shared.borrow_mut();
@@ -41,11 +44,11 @@ impl<T: Data, D: Container> Push<Bundle<T, D>> for Tee<T, D> {
     }
 }
 
-impl<T, D: Container> Tee<T, D> {
+impl<T, D: Container> TeeCore<T, D> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
-    pub fn new() -> (Tee<T, D>, TeeHelper<T, D>) {
+    pub fn new() -> (TeeCore<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
-        let port = Tee {
+        let port = TeeCore {
             buffer: D::Builder::with_capacity(D::default_length()).build(),
             shared: shared.clone(),
         };
@@ -54,7 +57,7 @@ impl<T, D: Container> Tee<T, D> {
     }
 }
 
-impl<T, D> Debug for Tee<T, D>
+impl<T, D> Debug for TeeCore<T, D>
 where
     D: Debug,
 {

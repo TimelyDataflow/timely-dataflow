@@ -101,7 +101,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 
     fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
 
-        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, Vec<D>>::new();
+        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, D>::new();
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
@@ -173,7 +173,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 pub struct Handle<T: Timestamp, D: Data> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
-    pushers: Vec<Counter<T, Vec<D>, Tee<T, Vec<D>>>>,
+    pushers: Vec<Counter<T, Vec<D>, Tee<T, D>>>,
     buffer1: Vec<D>,
     buffer2: Vec<D>,
     now_at: T,
@@ -254,7 +254,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
     fn register(
         &mut self,
-        pusher: Counter<T, Vec<D>, Tee<T, Vec<D>>>,
+        pusher: Counter<T, Vec<D>, Tee<T, D>>,
         progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.

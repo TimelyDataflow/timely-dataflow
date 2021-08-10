@@ -27,7 +27,8 @@ impl<T: ::std::fmt::Debug, C: Container, P: Push<Bundle<T, C>>+::std::fmt::Debug
         let mut debug = f.debug_struct("UnorderedHandle");
         debug.field("time", &self.time);
         debug.field("pusher", &self.pusher);
-        debug.finish_non_exhaustive()
+        debug.field("buffer", &"...");
+        debug.finish()
     }
 }
 

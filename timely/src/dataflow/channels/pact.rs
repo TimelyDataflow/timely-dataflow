@@ -19,8 +19,8 @@ use super::{Bundle, Message};
 
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 
-/// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
-pub trait ParallelizationContract<T: 'static, D: 'static> {
+/// A `ParallelizationContractCore` allocates paired `Push` and `Pull` implementors.
+pub trait ParallelizationContractCore<T: 'static, D: 'static> {
     /// Type implementing `Push` produced by this pact.
     type Pusher: Push<Bundle<T, D>>+'static;
     /// Type implementing `Pull` produced by this pact.
@@ -29,11 +29,15 @@ pub trait ParallelizationContract<T: 'static, D: 'static> {
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
 
+/// A `ParallelizationContractCore` specialized for `Vec` containers
+/// TODO: Use trait aliases once stable.
+pub trait ParallelizationContract<T: 'static, D: 'static>: ParallelizationContractCore<T, Vec<D>> { }
+
 /// A direct connection
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, D: Container+'static> ParallelizationContract<T, D> for Pipeline {
+impl<T: 'static, D: Container+'static> ParallelizationContractCore<T, D> for Pipeline {
     type Pusher = LogPusher<T, D, ThreadPusher<Bundle<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<Bundle<T, D>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -44,6 +48,8 @@ impl<T: 'static, D: Container+'static> ParallelizationContract<T, D> for Pipelin
          LogPuller::new(puller, allocator.index(), identifier, logging))
     }
 }
+
+impl<T: 'static, D: Clone+'static> ParallelizationContract<T, D> for Pipeline { }
 
 /// An exchange between multiple observers by data
 pub struct Exchange<C, D, F> { hash_func: F, phantom: PhantomData<(C, D)> }
@@ -59,7 +65,7 @@ impl<'a, C: Container, D: Data, F: FnMut(&D)->u64+'static> Exchange<C, D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<'a, T: Eq+Data+Clone, C: Container<Inner=D>+ExchangeContainer+'static, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContract<T, C> for Exchange<C, D, F>
+impl<'a, T: Eq+Data+Clone, C: Container<Inner=D>+ExchangeContainer+'static, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for Exchange<C, D, F>
     where for<'b> &'b mut C: DrainContainer<Inner=D>,
 {
     // TODO: The closure in the type prevents us from naming it.
@@ -72,6 +78,8 @@ impl<'a, T: Eq+Data+Clone, C: Container<Inner=D>+ExchangeContainer+'static, D: D
         (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, logging.clone())))
     }
 }
+
+impl<T: Eq+Data+Clone, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<Vec<D>, D, F> { }
 
 impl<C, D, F> Debug for Exchange<C, D, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

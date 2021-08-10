@@ -96,7 +96,7 @@ where
     D: Data,
     L: Fn(&[u8],
           &mut Capability<G::Timestamp>,
-          &mut OutputHandle<G::Timestamp, Vec<D>, Tee<G::Timestamp, Vec<D>>>) -> bool+'static,
+          &mut OutputHandle<G::Timestamp, D, Tee<G::Timestamp, D>>) -> bool+'static,
 {
     use timely::dataflow::operators::generic::source;
     source(scope, name, move |capability, info| {
