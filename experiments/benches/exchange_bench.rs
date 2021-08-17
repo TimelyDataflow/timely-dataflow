@@ -1,16 +1,15 @@
 extern crate timely;
 
 use std::fmt::{Display, Formatter};
-use std::iter::repeat;
 use std::time::{Duration, Instant};
 
 use criterion::black_box;
 use criterion::*;
 
-use timely::dataflow::channels::pact::LazyExchange;
+use timely::dataflow::channels::pact::{EagerExchange, LazyExchange};
 use timely::dataflow::operators::{Exchange, Input, Probe};
 use timely::dataflow::InputHandle;
-use timely::{WorkerConfig, CommunicationConfig, Config};
+use timely::{CommunicationConfig, Config, WorkerConfig};
 
 #[derive(Clone)]
 struct ExperimentConfig {
@@ -27,7 +26,7 @@ impl Display for ExperimentConfig {
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("exchange");
     for threads in [1, 2, 4, 8, 16] {
-        for shift in [0, 2, 4, 6, 8, 10, 12, 14, 16] {
+        for shift in [0, 4, 8, 14] {
             let params = ExperimentConfig {
                 threads,
                 batch: 1u64 << shift,
@@ -49,6 +48,16 @@ fn bench(c: &mut Criterion) {
                     b.iter_custom(|iters| {
                         let config = Config::process(params.threads);
                         black_box(experiment_lazy_exchange(config, params.batch, iters))
+                    })
+                },
+            );
+            group.bench_with_input(
+                BenchmarkId::new("Eager", params.clone()),
+                &params,
+                move |b, params| {
+                    b.iter_custom(|iters| {
+                        let config = Config::process(params.threads);
+                        black_box(experiment_eager_exchange(config, params.batch, iters))
                     })
                 },
             );
@@ -78,6 +87,19 @@ fn bench(c: &mut Criterion) {
                     })
                 },
             );
+            group.bench_with_input(
+                BenchmarkId::new("EagerZero", params.clone()),
+                &params,
+                move |b, params| {
+                    b.iter_custom(|iters| {
+                        let config = Config {
+                            communication: CommunicationConfig::ProcessBinary(params.threads),
+                            worker: WorkerConfig::default(),
+                        };
+                        black_box(experiment_eager_exchange(config, params.batch, iters))
+                    })
+                },
+            );
         }
     }
 }
@@ -87,6 +109,39 @@ fn experiment_exchange(config: Config, batch: u64, rounds: u64) -> Duration {
         let mut input = InputHandle::new();
         let probe =
             worker.dataflow(|scope| scope.input_from(&mut input).exchange(|&x| x as u64).probe());
+
+        let mut time = 0;
+        let timer = Instant::now();
+
+        for _round in 0..rounds {
+            for i in 0..batch {
+                input.send(i);
+            }
+            time += 1;
+            input.advance_to(time);
+            while probe.less_than(input.time()) {
+                worker.step();
+            }
+        }
+        timer.elapsed()
+    })
+    .unwrap()
+    .join()
+    .into_iter()
+    .next()
+    .unwrap()
+    .unwrap()
+}
+
+fn experiment_eager_exchange(config: Config, batch: u64, rounds: u64) -> Duration {
+    timely::execute(config, move |worker| {
+        let mut input = InputHandle::new();
+        let probe = worker.dataflow(|scope| {
+            scope
+                .input_from(&mut input)
+                .apply_pact(EagerExchange::new(|&x| x as u64))
+                .probe()
+        });
 
         let mut time = 0;
         let timer = Instant::now();
