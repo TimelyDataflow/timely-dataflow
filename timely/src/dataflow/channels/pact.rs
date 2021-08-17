@@ -20,6 +20,7 @@ use super::{Bundle, Message};
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 
 pub use super::pushers::lazy_exchange::LazyExchange;
+pub use super::pushers::eager_exchange::EagerExchange;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T: 'static, D: 'static> {
