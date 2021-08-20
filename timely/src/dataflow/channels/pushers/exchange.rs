@@ -4,11 +4,11 @@ use std::marker::PhantomData;
 
 use crate::{Container, ContainerBuilder, Data, DrainContainer};
 use crate::communication::Push;
-use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::channels::{BundleCore, Message};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, C: Container, D, P: Push<Bundle<T, C>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<C::Builder>,
     current: Option<T>,
@@ -16,7 +16,7 @@ pub struct Exchange<T, C: Container, D, P: Push<Bundle<T, C>>, H: FnMut(&T, &D) 
     _phantom_data: PhantomData<D>,
 }
 
-impl<T: Clone, C: Container, D, P: Push<Bundle<T, C>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
+impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
         let mut buffers = vec![];
@@ -43,11 +43,11 @@ impl<T: Clone, C: Container, D, P: Push<Bundle<T, C>>, H: FnMut(&T, &D)->u64>  E
     }
 }
 
-impl<T: Eq+Data, C: Container<Inner=D>, D: Data, P: Push<Bundle<T, C>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, C>> for Exchange<T, C, D, P, H>
+impl<T: Eq+Data, C: Container<Inner=D>, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64> Push<BundleCore<T, C>> for Exchange<T, C, D, P, H>
     where for<'b> &'b mut C: DrainContainer<Inner=D>,
 {
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<Bundle<T, C>>) {
+    fn push(&mut self, message: &mut Option<BundleCore<T, C>>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);

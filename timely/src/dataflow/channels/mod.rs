@@ -11,7 +11,10 @@ pub mod pullers;
 pub mod pact;
 
 /// The input to and output from timely dataflow communication channels.
-pub type Bundle<T, D> = crate::communication::Message<Message<T, D>>;
+pub type BundleCore<T, D> = crate::communication::Message<Message<T, D>>;
+
+/// The input to and output from timely dataflow communication channels specialized to vectors.
+pub type Bundle<T, D> = BundleCore<T, Vec<D>>;
 
 /// A serializable representation of timestamped data.
 #[derive(Clone, Abomonation, Serialize, Deserialize)]
@@ -34,13 +37,13 @@ impl<T, D> Message<T, D> {
 
     /// Forms a message, and pushes contents at `pusher`.
     #[inline]
-    pub fn push_at<P: Push<Bundle<T, D>>>(buffer: &mut D, time: T, pusher: &mut P)
+    pub fn push_at<P: Push<BundleCore<T, D>>>(buffer: &mut D, time: T, pusher: &mut P)
     where D: Container
     {
 
         let data = D::take(buffer);
         let message = Message::new(time, data, 0, 0);
-        let mut bundle = Some(Bundle::from_typed(message));
+        let mut bundle = Some(BundleCore::from_typed(message));
 
         pusher.push(&mut bundle);
 

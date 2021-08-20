@@ -1,24 +1,10 @@
 //! Create new `Streams` connected to external inputs.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
-use crate::scheduling::{Schedule, ActivateOnDrop};
-
-use crate::progress::frontier::Antichain;
-use crate::progress::{Operate, operate::SharedProgress, Timestamp};
-use crate::progress::Source;
-use crate::progress::ChangeBatch;
-
 use crate::Data;
-use crate::dataflow::channels::pushers::{Tee, TeeCore, Counter as PushCounter};
-use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
-
-use crate::dataflow::operators::{ActivateCapability, Capability};
+use crate::dataflow::operators::unordered_input_core::{UnorderedInputCore, UnorderedHandleCore};
 
 use crate::dataflow::{Stream, Scope};
-use crate::Container;
-use std::fmt::Debug;
+use crate::dataflow::operators::ActivateCapability;
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
@@ -75,99 +61,15 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, Vec<D>>, ActivateCapability<G::Timestamp>), Stream<G, D>);
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>);
 }
 
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, Vec<D>>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
-
-        let (output, registrar) = Tee::<G::Timestamp, D>::new();
-        let internal = Rc::new(RefCell::new(ChangeBatch::new()));
-        // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
-        let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
-        let counter = PushCounter::new(output);
-        let produced = counter.produced().clone();
-        let peers = self.peers();
-
-        let index = self.allocate_operator_index();
-        let mut address = self.addr();
-        address.push(index);
-
-        let cap = ActivateCapability::new(cap, &address, self.activations());
-
-        let helper = UnorderedHandle::new(counter);
-
-        self.add_operator_with_index(Box::new(UnorderedOperator {
-            name: "UnorderedInput".to_owned(),
-            address,
-            shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
-            internal,
-            produced,
-            peers,
-        }), index);
-
-        ((helper, cap), Stream::new(Source::new(index, 0), registrar, self.clone()))
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
+        self.new_unordered_input_core()
     }
 }
 
-struct UnorderedOperator<T:Timestamp> {
-    name: String,
-    address: Vec<usize>,
-    shared_progress: Rc<RefCell<SharedProgress<T>>>,
-    internal:   Rc<RefCell<ChangeBatch<T>>>,
-    produced:   Rc<RefCell<ChangeBatch<T>>>,
-    peers:     usize,
-}
-
-impl<T:Timestamp> Schedule for UnorderedOperator<T> {
-    fn name(&self) -> &str { &self.name }
-    fn path(&self) -> &[usize] { &self.address[..] }
-    fn schedule(&mut self) -> bool {
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
-        self.internal.borrow_mut().drain_into(&mut shared_progress.internals[0]);
-        self.produced.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
-        false
-    }
-}
-
-impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
-    fn inputs(&self) -> usize { 0 }
-    fn outputs(&self) -> usize { 1 }
-
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
-        let mut borrow = self.internal.borrow_mut();
-        for (time, count) in borrow.drain() {
-            self.shared_progress.borrow_mut().internals[0].update(time, count * (self.peers as i64));
-        }
-        (Vec::new(), self.shared_progress.clone())
-    }
-
-    fn notify_me(&self) -> bool { false }
-}
-
-/// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-pub struct UnorderedHandle<T: Timestamp, D: Container> {
-    buffer: PushBuffer<T, D, PushCounter<T, D, TeeCore<T, D>>>,
-}
-
-impl<T: Timestamp, D: Container> Debug for UnorderedHandle<T, D> where D: Debug {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut debug = f.debug_struct("UnorderedHandle");
-        debug.field("buffer", &self.buffer);
-        debug.finish()
-    }
-}
-
-impl<T: Timestamp, D: Container> UnorderedHandle<T, D> {
-    fn new(pusher: PushCounter<T, D, TeeCore<T, D>>) -> UnorderedHandle<T, D> {
-        UnorderedHandle {
-            buffer: PushBuffer::new(pusher),
-        }
-    }
-
-    /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, D, PushCounter<T, D, TeeCore<T, D>>>> {
-        ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
-    }
-}
+/// An unordered handle specialized to vectors.
+pub type UnorderedHandle<T, D> = UnorderedHandleCore<T, Vec<D>>;

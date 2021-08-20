@@ -5,21 +5,24 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::progress::ChangeBatch;
-use crate::dataflow::channels::Bundle;
+use crate::dataflow::channels::BundleCore;
 use crate::communication::Push;
 use crate::Container;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
-pub struct Counter<T: Ord, D, P: Push<Bundle<T, D>>> {
+pub struct CounterCore<T: Ord, D, P: Push<BundleCore<T, D>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
     phantom: PhantomData<D>,
 }
 
-impl<T, D: Container, P> Push<Bundle<T, D>> for Counter<T, D, P> where T : Ord+Clone+'static, P: Push<Bundle<T, D>> {
+/// A counter specialized to vector.
+pub type Counter<T, D, P> = CounterCore<T, Vec<D>, P>;
+
+impl<T, D: Container, P> Push<BundleCore<T, D>> for CounterCore<T, D, P> where T : Ord+Clone+'static, P: Push<BundleCore<T, D>> {
     #[inline]
-    fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
+    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) {
         if let Some(message) = message {
             self.produced.borrow_mut().update(message.time.clone(), message.data.len() as i64);
         }
@@ -31,10 +34,10 @@ impl<T, D: Container, P> Push<Bundle<T, D>> for Counter<T, D, P> where T : Ord+C
     }
 }
 
-impl<T, D, P: Push<Bundle<T, D>>> Counter<T, D, P> where T : Ord+Clone+'static {
+impl<T, D, P: Push<BundleCore<T, D>>> CounterCore<T, D, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
-    pub fn new(pushee: P) -> Counter<T, D, P> {
-        Counter {
+    pub fn new(pushee: P) -> CounterCore<T, D, P> {
+        CounterCore {
             pushee,
             produced: Rc::new(RefCell::new(ChangeBatch::new())),
             phantom: PhantomData,

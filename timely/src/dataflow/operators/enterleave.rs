@@ -27,8 +27,8 @@ use crate::progress::{Source, Target};
 use crate::order::Product;
 use crate::{Container, ContainerBuilder, Data};
 use crate::communication::Push;
-use crate::dataflow::channels::pushers::{Counter, TeeCore};
-use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
+use crate::dataflow::channels::{BundleCore, Message};
 
 use crate::worker::AsWorker;
 use crate::dataflow::{CoreStream, Scope, Stream};
@@ -89,7 +89,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container<Inner=D>, D> Ent
 
         let (targets, registrar) = TeeCore::<T, C>::new();
         let ingress = IngressNub {
-            targets: Counter::new(targets),
+            targets: CounterCore::new(targets),
             phantom: ::std::marker::PhantomData,
             activator: scope.activator_for(&scope.addr()),
             active: false,
@@ -143,18 +143,18 @@ impl<'a, G: Scope, D: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D>
 
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: Counter<TInner, TData, TeeCore<TInner, TData>>,
+    targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<Bundle<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
-    fn push(&mut self, message: &mut Option<Bundle<TOuter, TData>>) {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
+    fn push(&mut self, message: &mut Option<BundleCore<TOuter, TData>>) {
         if let Some(message) = message {
             let outer_message = message.as_mut();
             let data = ::std::mem::replace(&mut outer_message.data, TData::Builder::new().build());
-            let mut inner_message = Some(Bundle::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
+            let mut inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
                 if let Some(inner_message) = inner_message.if_typed() {
@@ -179,13 +179,13 @@ struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Co
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData: Container> Push<Bundle<TInner, TData>> for EgressNub<TOuter, TInner, TData>
+impl<TOuter, TInner, TData: Container> Push<BundleCore<TInner, TData>> for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container {
-    fn push(&mut self, message: &mut Option<Bundle<TInner, TData>>) {
+    fn push(&mut self, message: &mut Option<BundleCore<TInner, TData>>) {
         if let Some(message) = message {
             let inner_message = message.as_mut();
             let data = TData::take(&mut inner_message.data);
-            let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
+            let mut outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
                 if let Some(outer_message) = outer_message.if_typed() {

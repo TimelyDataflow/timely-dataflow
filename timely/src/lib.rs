@@ -197,8 +197,14 @@ pub trait ContainerBuilder: Extend<<<Self as ContainerBuilder>::Container as Con
     /// Initialize this container by copying all elements from `other` into self.
     fn initialize_from(&mut self, other: &Self::Container);
 
+    /// Initialize this container by copying all elements from `other` into self.
+    fn copy_from(&mut self, other: &Self);
+
     /// Push a single element into this builder
     fn push(&mut self, element: <<Self as ContainerBuilder>::Container as Container>::Inner);
+
+    /// Clear all contents, possibly leaving allocations behind
+    fn clear(&mut self);
 
     /// Build a container from elements in this builder.
     fn build(self) -> Self::Container;
@@ -258,8 +264,16 @@ impl<D: Data> ContainerBuilder for Vec<D> {
         self.extend_from_slice(&other);
     }
 
+    fn copy_from(&mut self, other: &Self) {
+        self.initialize_from(other)
+    }
+
     fn push(&mut self, element: <<Self as ContainerBuilder>::Container as Container>::Inner) {
         self.push(element)
+    }
+
+    fn clear(&mut self) {
+        Vec::clear(self)
     }
 
     fn build(self) -> Self::Container {
@@ -369,8 +383,16 @@ mod rc {
             self.inner.initialize_from(&other.inner)
         }
 
+        fn copy_from(&mut self, other: &Self) {
+            self.inner.copy_from(&other.inner)
+        }
+
         fn push(&mut self, element: <<Self as ContainerBuilder>::Container as Container>::Inner) {
             T::push(&mut self.inner, element)
+        }
+
+        fn clear(&mut self) {
+            self.inner.clear()
         }
 
         fn build(self) -> Self::Container {
