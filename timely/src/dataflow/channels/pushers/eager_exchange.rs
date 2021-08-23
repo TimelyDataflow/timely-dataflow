@@ -2,9 +2,10 @@
 
 use std::marker::PhantomData;
 
-use crate::{Data, ExchangeData};
+use crate::ExchangeData;
 use crate::communication::{Pull, Push};
 use crate::dataflow::channels::pact::{ParallelizationContract, LogPusher, LogPuller};
+use crate::dataflow::channels::pushers::exchange::{ExchangeBehavior, ExchangePusherGeneric};
 use crate::dataflow::channels::{Bundle, Message};
 use crate::logging::TimelyLogger as Logger;
 use crate::worker::AsWorker;
@@ -15,98 +16,37 @@ use crate::worker::AsWorker;
 /// leaves no allocations around. It does not preallocate a buffer for each pushee, but
 /// only allocates it once data is pushed. On flush, the allocation is passed to the pushee, and
 /// any returned allocation will be dropped.
-pub struct EagerExchangePusher<T, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
-    pushers: Vec<P>,
-    buffers: Vec<Vec<D>>,
-    current: Option<T>,
-    hash_func: H,
-}
+pub struct EagerExchangeBehavior {}
 
-impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> EagerExchangePusher<T, D, P, H> {
-    /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
-    pub fn new(pushers: Vec<P>, key: H) -> EagerExchangePusher<T, D, P, H> {
-        let buffers = (0..pushers.len()).map(|_| vec![]).collect();
-        EagerExchangePusher {
-            pushers,
-            hash_func: key,
-            buffers,
-            current: None,
+impl<T, D> ExchangeBehavior<T, D> for EagerExchangeBehavior {
+    fn allocate() -> Vec<D> {
+        Vec::new()
+    }
+
+    fn check(buffer: &mut Vec<D>) {
+        if buffer.capacity() < Message::<T, D>::default_length() {
+            let to_reserve = Message::<T, D>::default_length() - buffer.capacity();
+            buffer.reserve(to_reserve);
         }
     }
-    #[inline]
-    fn flush(&mut self, index: usize) {
-        if !self.buffers[index].is_empty() {
-            if let Some(ref time) = self.current {
-                Message::push_at_no_allocation(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
-            }
-        }
+
+    fn flush<P: Push<Bundle<T, D>>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
+        Message::push_at_no_allocation(buffer, time, pusher);
+    }
+
+    fn finalize(buffer: &mut Vec<D>) {
+        *buffer = Vec::new();
     }
 }
 
-impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for EagerExchangePusher<T, D, P, H> {
-    fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
-        // if only one pusher, no exchange
-        if self.pushers.len() == 1 {
-            self.pushers[0].push(message);
-        } else if let Some(message) = message {
-            let message = message.as_mut();
-            let time = &message.time;
-            let data = &mut message.data;
-
-            // if the time isn't right, flush everything.
-            if self.current.as_ref().map_or(false, |x| x != time) {
-                for index in 0..self.pushers.len() {
-                    self.flush(index);
-                }
-            }
-            self.current = Some(time.clone());
-
-            // if the number of pushers is a power of two, use a mask
-            if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
-                let mask = (self.pushers.len() - 1) as u64;
-                for datum in data.drain(..) {
-                    let index = (((self.hash_func)(time, &datum)) & mask) as usize;
-                    if self.buffers[index].capacity() < Message::<T, D>::default_length() {
-                        let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
-                        self.buffers[index].reserve(to_reserve);
-                    }
-                    self.buffers[index].push(datum);
-                    // We have reached the buffer's capacity
-                    if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
-                    }
-                }
-            } else {
-                // as a last resort, use mod (%)
-                for datum in data.drain(..) {
-                    let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
-                    if self.buffers[index].capacity() < Message::<T, D>::default_length() {
-                        let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
-                        self.buffers[index].reserve(to_reserve);
-                    }
-                    self.buffers[index].push(datum);
-                    // We have reached the buffer's capacity
-                    if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
-                    }
-                }
-            }
-        } else {
-            // flush
-            for index in 0..self.pushers.len() {
-                self.flush(index);
-                self.pushers[index].push(&mut None);
-                self.buffers[index] = Vec::new();
-            }
-        }
-    }
-}
+/// Eager exchange pusher definition
+pub type EagerExchangePusher<T, D, P, H> = ExchangePusherGeneric<T, D, P, H, EagerExchangeBehavior>;
 
 /// An exchange between multiple observers by data, backed by [EagerExchangePusher].
 pub struct EagerExchange<D, F> { hash_func: F, phantom: PhantomData<D> }
 
 impl<D, F: FnMut(&D)->u64+'static> EagerExchange<D, F> {
-    /// Allocates a new `LeanExchange` pact from a distribution function.
+    /// Allocates a new `LazyExchange` pact from a distribution function.
     pub fn new(func: F) -> Self {
         Self {
             hash_func:  func,
