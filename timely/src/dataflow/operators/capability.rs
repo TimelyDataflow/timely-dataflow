@@ -477,8 +477,8 @@ impl<T: Timestamp> CapabilitySet<T> {
             // Formatting & panic machinery is relatively expensive in terms of code bloat, so
             // we outline it
             panic!(
-                "Attempted to downgrade a CapabilitySet with a frontier containing elements \
-                which where were not beyond all elements within the set"
+                "Attempted to downgrade a CapabilitySet with a frontier containing an element \
+                that was not beyond an element within the set"
             )
         }
 
