@@ -100,7 +100,7 @@ impl<T: Timestamp> Capability<T> {
             // Formatting & panic machinery is relatively expensive in terms of code bloat, so
             // we outline it
             panic!(
-                "Attempted to delay {:?} to {:?}, which is not `less_equal` the capability's time.",
+                "Attempted to delay {:?} to {:?}, which is not beyond the capability's time.",
                 capability,
                 invalid_time,
             )
@@ -135,7 +135,7 @@ impl<T: Timestamp> Capability<T> {
             // Formatting & panic machinery is relatively expensive in terms of code bloat, so
             // we outline it
             panic!(
-                "Attempted to downgrade {:?} to {:?}, which is not `less_equal` the capability's time.",
+                "Attempted to downgrade {:?} to {:?}, which is not beyond the capability's time.",
                 capability,
                 invalid_time,
             )
@@ -268,7 +268,7 @@ impl<'cap, T: Timestamp + 'cap> CapabilityRef<'cap, T> {
     pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
         // TODO : Test operator summary?
         if !self.time.less_equal(new_time) {
-            panic!("Attempted to delay {:?} to {:?}, which is not `less_equal` the capability's time.", self, new_time);
+            panic!("Attempted to delay {:?} to {:?}, which is not beyond the capability's time.", self, new_time);
         }
         if output_port < self.internal.borrow().len() {
             Capability::new(new_time.clone(), self.internal.borrow()[output_port].clone())
@@ -477,8 +477,8 @@ impl<T: Timestamp> CapabilitySet<T> {
             // Formatting & panic machinery is relatively expensive in terms of code bloat, so
             // we outline it
             panic!(
-                "Attempted to downgrade a CapabilitySet with a frontier containing elements \
-                which where were not not `less_equal` than all elements within the set"
+                "Attempted to downgrade a CapabilitySet with a frontier containing an element \
+                that was not beyond an element within the set"
             )
         }
 
