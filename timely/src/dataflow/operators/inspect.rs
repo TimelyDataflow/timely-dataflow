@@ -64,7 +64,8 @@ pub trait Inspect<G: Scope, D: Data> {
 
     /// Runs a supplied closure on each observed data batch, and each frontier advancement.
     ///
-    /// Rust's `Result` type is used to distinguish the events, with `Ok` for data and `Err` for frontiers.
+    /// Rust's `Result` type is used to distinguish the events, with `Ok` for time and data,
+    /// and `Err` for frontiers. Frontiers are only presented when they change.
     ///
     /// # Examples
     /// ```
@@ -74,7 +75,7 @@ pub trait Inspect<G: Scope, D: Data> {
     ///     (0..10).to_stream(scope)
     ///            .inspect_core(|event| {
     ///                match event {
-    ///                    Ok((time, data)) => println!("seen at: {:?}\t{:?} records", t, xs.len()),
+    ///                    Ok((time, data)) => println!("seen at: {:?}\t{:?} records", time, data.len()),
     ///                    Err(frontier) => println!("frontier advanced to {:?}", frontier),
     ///                }
     ///             });
