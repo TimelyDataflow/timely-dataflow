@@ -54,17 +54,52 @@ pub trait Inspect<G: Scope, D: Data> {
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch(&self, func: impl FnMut(&G::Timestamp, &[D])+'static) -> Stream<G, D>;
+    fn inspect_batch(&self, mut func: impl FnMut(&G::Timestamp, &[D])+'static) -> Stream<G, D> {
+        self.inspect_core(move |event| {
+            if let Ok((time, data)) = event {
+                func(time, data);
+            }
+        })
+    }
+
+    /// Runs a supplied closure on each observed data batch, and each frontier advancement.
+    ///
+    /// Rust's `Result` type is used to distinguish the events, with `Ok` for data and `Err` for frontiers.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .inspect_core(|event| {
+    ///                match event {
+    ///                    Ok((time, data)) => println!("seen at: {:?}\t{:?} records", t, xs.len()),
+    ///                    Err(frontier) => println!("frontier advanced to {:?}", frontier),
+    ///                }
+    ///             });
+    /// });
+    /// ```
+    fn inspect_core<F>(&self, func: F) -> Stream<G, D> where F: FnMut(Result<(&G::Timestamp, &[D]), &[G::Timestamp]>)+'static;
 }
 
 impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
 
-    fn inspect_batch(&self, mut func: impl FnMut(&G::Timestamp, &[D])+'static) -> Stream<G, D> {
+    fn inspect_core<F>(&self, mut func: F) -> Stream<G, D>
+    where F: FnMut(Result<(&G::Timestamp, &[D]), &[G::Timestamp]>)+'static
+    {
+        use crate::progress::timestamp::Timestamp;
         let mut vector = Vec::new();
-        self.unary(Pipeline, "InspectBatch", move |_,_| move |input, output| {
+        let mut frontier = crate::progress::Antichain::from_elem(G::Timestamp::minimum());
+        self.unary_frontier(Pipeline, "InspectBatch", move |_,_| move |input, output| {
+            if input.frontier.frontier() != frontier.borrow() {
+                frontier.clear();
+                frontier.extend(input.frontier.frontier().iter().cloned());
+                func(Err(frontier.elements()));
+            }
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                func(&time, &vector[..]);
+                func(Ok((&time, &vector[..])));
                 output.session(&time).give_vec(&mut vector);
             });
         })
