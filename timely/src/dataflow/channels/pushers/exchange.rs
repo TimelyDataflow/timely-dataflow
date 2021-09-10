@@ -33,10 +33,10 @@ pub trait ExchangeBehavior<T, D> {
     fn finalize(buffer: &mut Vec<D>);
 }
 
-/// Default exchange behavior
-pub struct DefaultExchangeBehavior {}
+/// Exchange behavior that always has push buffers fully allocated.
+pub struct FullyAllocatedExchangeBehavior {}
 
-impl<T, D> ExchangeBehavior<T, D> for DefaultExchangeBehavior {
+impl<T, D> ExchangeBehavior<T, D> for FullyAllocatedExchangeBehavior {
     fn allocate() -> Vec<D> {
         Vec::with_capacity(Message::<T, D>::default_length())
     }
@@ -55,8 +55,8 @@ impl<T, D> ExchangeBehavior<T, D> for DefaultExchangeBehavior {
     }
 }
 
-/// Default exchange type
-pub type Exchange<T, D, P, H> = ExchangePusherGeneric<T, D, P, H, DefaultExchangeBehavior>;
+/// Default exchange type is to fully allocate exchange buffers
+pub type Exchange<T, D, P, H> = ExchangePusherGeneric<T, D, P, H, FullyAllocatedExchangeBehavior>;
 
 impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64, B: ExchangeBehavior<T, D>>  ExchangePusherGeneric<T, D, P, H, B> {
     /// Allocates a new `ExchangeGeneric` from a supplied set of pushers and a distribution function.
