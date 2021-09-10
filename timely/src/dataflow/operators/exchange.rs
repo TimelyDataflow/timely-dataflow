@@ -29,11 +29,11 @@ pub trait Exchange<T, D: ExchangeData> {
     /// # Examples
     /// ```
     /// use timely::dataflow::operators::{ToStream, Exchange, Inspect};
-    /// use timely::dataflow::channels::pact::LazyExchange;
+    /// use timely::dataflow::channels::pact::NonRetainingExchange;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
-    ///            .apply_pact(LazyExchange::new(|x| *x))
+    ///            .apply_pact(NonRetainingExchange::new(|x| *x))
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```

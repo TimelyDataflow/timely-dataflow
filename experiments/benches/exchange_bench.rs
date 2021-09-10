@@ -6,7 +6,9 @@ use std::time::{Duration, Instant};
 use criterion::black_box;
 use criterion::*;
 
-use timely::dataflow::channels::pact::{EagerExchange, LazyExchange};
+use timely::dataflow::channels::pact::{
+    Exchange as ExchangePact, NonRetainingExchange, ParallelizationContract,
+};
 use timely::dataflow::operators::{Exchange, Input, Probe};
 use timely::dataflow::InputHandle;
 use timely::{CommunicationConfig, Config, WorkerConfig};
@@ -37,27 +39,27 @@ fn bench(c: &mut Criterion) {
                 move |b, params| {
                     b.iter_custom(|iters| {
                         let config = Config::process(params.threads);
-                        black_box(experiment_exchange(config, params.batch, iters))
+                        black_box(experiment_exchange(
+                            config,
+                            params.batch,
+                            iters,
+                            || ExchangePact::new(|&x| x as u64),
+                        ))
                     })
                 },
             );
             group.bench_with_input(
-                BenchmarkId::new("Lazy", params.clone()),
+                BenchmarkId::new("NonRetaining", params.clone()),
                 &params,
                 move |b, params| {
                     b.iter_custom(|iters| {
                         let config = Config::process(params.threads);
-                        black_box(experiment_lazy_exchange(config, params.batch, iters))
-                    })
-                },
-            );
-            group.bench_with_input(
-                BenchmarkId::new("Eager", params.clone()),
-                &params,
-                move |b, params| {
-                    b.iter_custom(|iters| {
-                        let config = Config::process(params.threads);
-                        black_box(experiment_eager_exchange(config, params.batch, iters))
+                        black_box(experiment_exchange(
+                            config,
+                            params.batch,
+                            iters,
+                            || NonRetainingExchange::new(|&x| x as u64),
+                        ))
                     })
                 },
             );
@@ -70,12 +72,17 @@ fn bench(c: &mut Criterion) {
                             communication: CommunicationConfig::ProcessBinary(params.threads),
                             worker: WorkerConfig::default(),
                         };
-                        black_box(experiment_exchange(config, params.batch, iters))
+                        black_box(experiment_exchange(
+                            config,
+                            params.batch,
+                            iters,
+                            ||ExchangePact::new(|&x| x as u64),
+                        ))
                     })
                 },
             );
             group.bench_with_input(
-                BenchmarkId::new("LazyZero", params.clone()),
+                BenchmarkId::new("NonRetainingZero", params.clone()),
                 &params,
                 move |b, params| {
                     b.iter_custom(|iters| {
@@ -83,20 +90,12 @@ fn bench(c: &mut Criterion) {
                             communication: CommunicationConfig::ProcessBinary(params.threads),
                             worker: WorkerConfig::default(),
                         };
-                        black_box(experiment_lazy_exchange(config, params.batch, iters))
-                    })
-                },
-            );
-            group.bench_with_input(
-                BenchmarkId::new("EagerZero", params.clone()),
-                &params,
-                move |b, params| {
-                    b.iter_custom(|iters| {
-                        let config = Config {
-                            communication: CommunicationConfig::ProcessBinary(params.threads),
-                            worker: WorkerConfig::default(),
-                        };
-                        black_box(experiment_eager_exchange(config, params.batch, iters))
+                        black_box(experiment_exchange(
+                            config,
+                            params.batch,
+                            iters,
+                            ||NonRetainingExchange::new(|&x| x as u64),
+                        ))
                     })
                 },
             );
@@ -104,77 +103,15 @@ fn bench(c: &mut Criterion) {
     }
 }
 
-fn experiment_exchange(config: Config, batch: u64, rounds: u64) -> Duration {
+fn experiment_exchange<F: Fn() -> P + Sync + Send + 'static, P: ParallelizationContract<i32, u64>>(
+    config: Config,
+    batch: u64,
+    rounds: u64,
+    pact: F,
+) -> Duration {
     timely::execute(config, move |worker| {
         let mut input = InputHandle::new();
-        let probe =
-            worker.dataflow(|scope| scope.input_from(&mut input).exchange(|&x| x as u64).probe());
-
-        let mut time = 0;
-        let timer = Instant::now();
-
-        for _round in 0..rounds {
-            for i in 0..batch {
-                input.send(i);
-            }
-            time += 1;
-            input.advance_to(time);
-            while probe.less_than(input.time()) {
-                worker.step();
-            }
-        }
-        timer.elapsed()
-    })
-    .unwrap()
-    .join()
-    .into_iter()
-    .next()
-    .unwrap()
-    .unwrap()
-}
-
-fn experiment_eager_exchange(config: Config, batch: u64, rounds: u64) -> Duration {
-    timely::execute(config, move |worker| {
-        let mut input = InputHandle::new();
-        let probe = worker.dataflow(|scope| {
-            scope
-                .input_from(&mut input)
-                .apply_pact(EagerExchange::new(|&x| x as u64))
-                .probe()
-        });
-
-        let mut time = 0;
-        let timer = Instant::now();
-
-        for _round in 0..rounds {
-            for i in 0..batch {
-                input.send(i);
-            }
-            time += 1;
-            input.advance_to(time);
-            while probe.less_than(input.time()) {
-                worker.step();
-            }
-        }
-        timer.elapsed()
-    })
-    .unwrap()
-    .join()
-    .into_iter()
-    .next()
-    .unwrap()
-    .unwrap()
-}
-
-fn experiment_lazy_exchange(config: Config, batch: u64, rounds: u64) -> Duration {
-    timely::execute(config, move |worker| {
-        let mut input = InputHandle::new();
-        let probe = worker.dataflow(|scope| {
-            scope
-                .input_from(&mut input)
-                .apply_pact(LazyExchange::new(|&x| x as u64))
-                .probe()
-        });
+        let probe = worker.dataflow(|scope| scope.input_from(&mut input).apply_pact(pact()).probe());
 
         let mut time = 0;
         let timer = Instant::now();
