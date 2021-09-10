@@ -153,7 +153,7 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Pus
     fn push(&mut self, message: &mut Option<BundleCore<TOuter, TData>>) {
         if let Some(message) = message {
             let outer_message = message.as_mut();
-            let data = ::std::mem::replace(&mut outer_message.data, TData::Builder::new().build());
+            let data = TData::take(&mut outer_message.data);
             let mut inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {

@@ -49,7 +49,7 @@ impl<T, D> Message<T, D> {
 
         if let Some(message) = bundle {
             if let Some(message) = message.if_typed() {
-                *buffer = D::Builder::with_allocation(message.data).build();
+                *buffer = message.data;
             }
         }
 

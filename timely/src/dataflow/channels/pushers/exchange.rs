@@ -10,7 +10,7 @@ use crate::dataflow::channels::{BundleCore, Message};
 /// Distributes records among target pushees according to a distribution function.
 pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
-    buffers: Vec<C::Builder>,
+    buffers: Vec<Option<C::Builder>>,
     current: Option<T>,
     hash_func: H,
     _phantom_data: PhantomData<D>,
@@ -21,7 +21,7 @@ impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
-            buffers.push(C::Builder::with_capacity(C::default_length()));
+            buffers.push(None);
         }
         Exchange {
             pushers,
@@ -33,11 +33,11 @@ impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64
     }
     #[inline]
     fn flush(&mut self, index: usize) {
-        if !self.buffers[index].is_empty() {
+        if !self.buffers[index].as_ref().map_or(true, C::Builder::is_empty) {
             if let Some(ref time) = self.current {
-                let mut container = C::Builder::take_ref(&mut self.buffers[index]).build();
+                let mut container = self.buffers[index].take().unwrap().build();
                 Message::push_at(&mut container, time.clone(), &mut self.pushers[index]);
-                self.buffers[index] = C::Builder::with_allocation(container);
+                self.buffers[index] = Some(C::Builder::with_allocation(container));
             }
         }
     }

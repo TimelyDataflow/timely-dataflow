@@ -13,7 +13,7 @@ type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct TeeCore<T: 'static, D: 'static> {
-    buffer: D,
+    buffer: Option<D>,
     shared: PushList<T, D>,
 }
 
@@ -26,10 +26,11 @@ impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = message {
             for index in 1..pushers.len() {
-                let mut builder = D::Builder::with_allocation_ref(&mut self.buffer);
+                let mut builder = D::Builder::with_optional_allocation(&mut self.buffer);
                 builder.initialize_from(&message.data);
-                self.buffer = builder.build();
-                Message::push_at(&mut self.buffer, message.time.clone(), &mut pushers[index-1]);
+                let mut buffer = builder.build();
+                Message::push_at(&mut buffer, message.time.clone(), &mut pushers[index-1]);
+                self.buffer = Some(buffer);
             }
         }
         else {
@@ -49,7 +50,7 @@ impl<T, D: Container> TeeCore<T, D> {
     pub fn new() -> (TeeCore<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = TeeCore {
-            buffer: D::Builder::with_capacity(D::default_length()).build(),
+            buffer: None,
             shared: shared.clone(),
         };
 

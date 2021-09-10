@@ -126,9 +126,7 @@ pub trait Container: Data {
     type Builder: ContainerBuilder<Container=Self>;
 
     /// Construct an empty container
-    fn empty() -> Self {
-       Self::Builder::new().build()
-    }
+    fn empty() -> Self;
 
     /// Get the capacity of this container.
     fn capacity(&self) -> usize;
@@ -171,16 +169,20 @@ pub trait ContainerBuilder: Extend<<<Self as ContainerBuilder>::Container as Con
     /// Create an empty builder, reusing the allocation in `container`.
     fn with_allocation(container: Self::Container) -> Self;
 
-    /// Create en empty builder, reusing the allocation in `container` and leaving an empty
-    /// container behind.
-    fn with_allocation_ref(container: &mut Self::Container) -> Self where Self: Sized {
-        Self::with_allocation(::std::mem::replace(container, Self::Container::empty()))
+    fn with_optional_allocation(container: &mut Option<Self::Container>) -> Self where Self: Sized {
+        container.take().map_or_else(Self::new, Self::with_allocation)
     }
 
-    /// Take this builder, leaving an empty builder behind.
-    fn take_ref(builder: &mut Self) -> Self where Self: Sized {
-        ::std::mem::replace(builder, Self::new())
-    }
+    // /// Create en empty builder, reusing the allocation in `container` and leaving an empty
+    // /// container behind.
+    // fn with_allocation_ref(container: &mut Option<Self::Container>) -> Self where Self: Sized {
+    //     Self::with_allocation(::std::mem::replace(container, Self::Container::empty()))
+    // }
+
+    // /// Take this builder, leaving an empty builder behind.
+    // fn take_ref(builder: &mut Self) -> Self where Self: Sized {
+    //     ::std::mem::replace(builder, Self::new())
+    // }
 
     /// Create a new container and reserve space for at least `capacity` elements.
     fn with_capacity(capacity: usize) -> Self;
@@ -216,6 +218,10 @@ pub trait ExchangeContainer: Container+ExchangeData {}
 impl<D: Data> Container for Vec<D> {
     type Inner = D;
     type Builder = Vec<D>;
+
+    fn empty() -> Self {
+        Vec::new()
+    }
 
     fn capacity(&self) -> usize {
         Vec::capacity(self)
@@ -265,7 +271,7 @@ impl<D: Data> ContainerBuilder for Vec<D> {
     }
 
     fn copy_from(&mut self, other: &Self) {
-        self.initialize_from(other)
+        self.extend_from_slice(other)
     }
 
     fn push(&mut self, element: <<Self as ContainerBuilder>::Container as Container>::Inner) {
@@ -321,6 +327,10 @@ mod rc {
     impl<T: Container> Container for RcContainer<T> {
         type Inner = T::Inner;
         type Builder = RcContainerBuilder<T::Builder>;
+
+        fn empty() -> Self {
+            Self { inner: Rc::new(T::empty()) }
+        }
 
         fn capacity(&self) -> usize {
             T::capacity(&self.inner)

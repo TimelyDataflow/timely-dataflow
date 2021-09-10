@@ -56,7 +56,8 @@ pub trait InputCore : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, CoreStream<Self, D>);
+    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, CoreStream<Self, D>)
+        where <D as Container>::Builder: ContainerBuilder<Container=D>;
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -88,20 +89,25 @@ pub trait InputCore : Scope {
     ///     }
     /// });
     /// ```
-    fn input_core_from<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> CoreStream<Self, D>;
+    fn input_core_from<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> CoreStream<Self, D>
+        where <D as Container>::Builder: ContainerBuilder<Container=D>;
 }
 
 use crate::order::TotalOrder;
 use crate::dataflow::channels::pushers::TeeCore;
 
 impl<G: Scope> InputCore for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, CoreStream<G, D>) {
+    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, CoreStream<G, D>)
+        where <D as Container>::Builder: ContainerBuilder<Container=D>
+    {
         let mut handle = HandleCore::new();
         let stream = self.input_core_from(&mut handle);
         (handle, stream)
     }
 
-    fn input_core_from<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> CoreStream<G, D> {
+    fn input_core_from<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> CoreStream<G, D>
+        where <D as Container>::Builder: ContainerBuilder<Container=D>
+    {
 
         let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D>::new();
         let counter = CounterCore::new(output);
@@ -171,16 +177,20 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct HandleCore<T: Timestamp, C: Container> {
+pub struct HandleCore<T: Timestamp, C: Container>
+where <C as Container>::Builder: ContainerBuilder<Container=C>
+{
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     pushers: Vec<CounterCore<T, C, TeeCore<T, C>>>,
-    buffer1: C::Builder,
-    buffer2: C::Builder,
+    buffer1: Option<C::Builder>,
+    buffer2: Option<C>,
     now_at: T,
 }
 
-impl<T:Timestamp, D: Container> HandleCore<T, D> {
+impl<T:Timestamp, D: Container> HandleCore<T, D>
+    where <D as Container>::Builder: ContainerBuilder<Container=D>
+{
 
     /// Allocates a new input handle, from which one can create timely streams.
     ///
@@ -213,8 +223,8 @@ impl<T:Timestamp, D: Container> HandleCore<T, D> {
             activate: Vec::new(),
             progress: Vec::new(),
             pushers: Vec::new(),
-            buffer1: D::Builder::with_capacity(D::default_length()),
-            buffer2: D::Builder::with_capacity(D::default_length()),
+            buffer1: None,
+            buffer2: None,
             now_at: T::minimum(),
         }
     }
@@ -259,7 +269,7 @@ impl<T:Timestamp, D: Container> HandleCore<T, D> {
         progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.
-        if !self.buffer1.is_empty() { self.flush(); }
+        if !self.buffer1.as_ref().map_or(false, D::Builder::is_empty) { self.flush(); }
 
         // we need to produce an appropriate update to the capabilities for `progress`, in case a
         // user has decided to drive the handle around a bit before registering it.
@@ -273,27 +283,29 @@ impl<T:Timestamp, D: Container> HandleCore<T, D> {
     // flushes our buffer at each of the destinations. there can be more than one; clone if needed.
     #[inline(never)]
     fn flush(&mut self) {
-        for index in 0 .. self.pushers.len() {
-            if index < self.pushers.len() - 1 {
-                self.buffer2.copy_from(&self.buffer1);
-                let mut buffer = D::Builder::take_ref(&mut self.buffer2).build();
-                Message::push_at(&mut buffer, self.now_at.clone(), &mut self.pushers[index]);
-                self.buffer2 = D::Builder::with_allocation(buffer);
-                debug_assert!(self.buffer2.is_empty());
+        if let Some(builder1) = self.buffer1.take() {
+            let mut buffer1 = builder1.build();
+            for index in 0..self.pushers.len() {
+                if index < self.pushers.len() - 1 {
+                    let builder = D::Builder::with_optional_allocation(&mut self.buffer2);
+                    builder.initialize_from(&buffer1);
+                    let buffer = builder.build();
+                    Message::push_at(&mut buffer, self.now_at.clone(), &mut self.pushers[index]);
+                    debug_assert!(buffer.is_empty());
+                    self.buffer2 = Some(buffer);
+                } else {
+                    Message::push_at(&mut buffer1, self.now_at.clone(), &mut self.pushers[index]);
+                    debug_assert!(buffer1.is_empty());
+                }
             }
-            else {
-                let mut buffer = D::Builder::take_ref(&mut self.buffer1).build();
-                Message::push_at(&mut buffer, self.now_at.clone(), &mut self.pushers[index]);
-                self.buffer1 = D::Builder::with_allocation(buffer);
-                debug_assert!(self.buffer1.is_empty());
-            }
+            let builder = D::Builder::with_allocation(buffer1);
+            self.buffer1 = Some(builder);
         }
-        self.buffer1.clear();
     }
 
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
     fn close_epoch(&mut self) {
-        if !self.buffer1.is_empty() { self.flush(); }
+        if !self.buffer1.as_ref().map_or(true, D::Builder::is_empty) { self.flush(); }
         for pusher in self.pushers.iter_mut() {
             pusher.done();
         }
@@ -310,8 +322,12 @@ impl<T:Timestamp, D: Container> HandleCore<T, D> {
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     pub fn send(&mut self, data: D::Inner) {
         // assert!(self.buffer1.capacity() == Message::<T, D>::default_length());
-        self.buffer1.push(data);
-        if self.buffer1.len() == self.buffer1.capacity() {
+        if self.buffer1.is_none() {
+            self.buffer1 = Some(D::Builder::new());
+        }
+        let buffer1 = self.buffer1.as_mut().unwrap();
+        buffer1.push(data);
+        if buffer1.len() == buffer1.capacity() {
             self.flush();
         }
     }
@@ -323,16 +339,17 @@ impl<T:Timestamp, D: Container> HandleCore<T, D> {
 
         if !buffer.is_empty() {
             // flush buffered elements to ensure local fifo.
-            if !self.buffer1.is_empty() { self.flush(); }
+            if !self.buffer1.as_ref().map_or(true, D::Builder::is_empty) { self.flush(); }
 
             // push buffer (or clone of buffer) at each destination.
             for index in 0 .. self.pushers.len() {
                 if index < self.pushers.len() - 1 {
-                    self.buffer2.initialize_from(&buffer);
-                    let mut buffer = D::Builder::take_ref(&mut self.buffer2).build();
+                    let builder = D::Builder::with_optional_allocation(&mut self.buffer2);
+                    builder.initialize_from(&buffer);
+                    let mut buffer = builder.build();
                     Message::push_at(&mut buffer, self.now_at.clone(), &mut self.pushers[index]);
-                    self.buffer2 = D::Builder::with_allocation(buffer);
-                    assert!(self.buffer2.is_empty());
+                    assert!(buffer.is_empty());
+                    self.buffer2 = Some(buffer);
                 }
                 else {
                     Message::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
@@ -378,13 +395,17 @@ impl<T:Timestamp, D: Container> HandleCore<T, D> {
     }
 }
 
-impl<T: Timestamp, D: Container> Default for HandleCore<T, D> {
+impl<T: Timestamp, D: Container> Default for HandleCore<T, D>
+    where <D as Container>::Builder: ContainerBuilder<Container=D>
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T:Timestamp, D: Container> Drop for HandleCore<T, D> {
+impl<T:Timestamp, D: Container> Drop for HandleCore<T, D>
+    where <D as Container>::Builder: ContainerBuilder<Container=D>
+{
     fn drop(&mut self) {
         self.close_epoch();
     }
