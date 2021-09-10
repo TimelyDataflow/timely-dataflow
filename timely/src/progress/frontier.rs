@@ -13,7 +13,7 @@ use crate::order::PartialOrder;
 /// Two antichains are equal if the contain the same set of elements, even if in different orders.
 /// This can make equality testing quadratic, though linear in the common case that the sequences
 /// are identical.
-#[derive(Clone, Debug, Default, Abomonation, Serialize, Deserialize)]
+#[derive(Debug, Default, Abomonation, Serialize, Deserialize)]
 pub struct Antichain<T> {
     elements: Vec<T>
 }
@@ -215,6 +215,15 @@ impl<T: Eq> Eq for Antichain<T> { }
 impl<T: PartialOrder> PartialOrder for Antichain<T> {
     fn less_equal(&self, other: &Self) -> bool {
         other.elements().iter().all(|t2| self.elements().iter().any(|t1| t1.less_equal(t2)))
+    }
+}
+
+impl<T: Clone> Clone for Antichain<T> {
+    fn clone(&self) -> Self {
+        Antichain { elements: self.elements.clone() }
+    }
+    fn clone_from(&mut self, source: &Self) {
+        self.elements.clone_from(&source.elements)
     }
 }
 
