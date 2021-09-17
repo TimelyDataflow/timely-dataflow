@@ -4,13 +4,12 @@ use std::cell::RefCell;
 use std::fmt::{self, Debug};
 use std::rc::Rc;
 
-use crate::dataflow::channels::{BundleCore, Message};
+use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
 use crate::{Container, ContainerBuilder, Data};
 
 use crate::communication::Push;
-use crate::communication::Message as CommMessage;
 
-type PushList<T, D, A> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>, CommMessage<A>>>>>>;
+type PushList<T, D, A> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>, A>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct TeeCore<T: 'static, D: 'static, A: 'static> {
@@ -20,9 +19,9 @@ pub struct TeeCore<T: 'static, D: 'static, A: 'static> {
 /// [TeeCore] specialized to `Vec`-based container.
 pub type Tee<T, D> = TeeCore<T, Vec<D>, Vec<D>>;
 
-impl<T: Data, D: Container> Push<BundleCore<T, D>, CommMessage<D::Allocation>> for TeeCore<T, D, D::Allocation> {
+impl<T: Data, D: Container> Push<BundleCore<T, D>, MessageAllocation<D::Allocation>> for TeeCore<T, D, MessageAllocation<D::Allocation>> {
     #[inline]
-    fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<CommMessage<D::Allocation>>) {
+    fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<MessageAllocation<D::Allocation>>) {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = &message {
             let mut allocation = None;
@@ -47,9 +46,9 @@ impl<T: Data, D: Container> Push<BundleCore<T, D>, CommMessage<D::Allocation>> f
     }
 }
 
-impl<T, D: Container> TeeCore<T, D, D::Allocation> {
+impl<T, D: Container> TeeCore<T, D, MessageAllocation<D::Allocation>> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
-    pub fn new() -> (TeeCore<T, D, D::Allocation>, TeeHelper<T, D, D::Allocation>) {
+    pub fn new() -> (TeeCore<T, D, MessageAllocation<D::Allocation>>, TeeHelper<T, D, MessageAllocation<D::Allocation>>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = TeeCore {
             shared: shared.clone(),
@@ -83,7 +82,7 @@ pub struct TeeHelper<T, D, A> {
 
 impl<T, D, A> TeeHelper<T, D, A> {
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
-    pub fn add_pusher<P: Push<BundleCore<T, D>, CommMessage<A>>+'static>(&self, pusher: P) {
+    pub fn add_pusher<P: Push<BundleCore<T, D>, A>+'static>(&self, pusher: P) {
         self.shared.borrow_mut().push(Box::new(pusher));
     }
 }

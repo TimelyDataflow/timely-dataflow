@@ -58,10 +58,10 @@ where
     fn config(&self) -> &Config { self.parent.config() }
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data, A: Data+From<D>>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>, Message<A>>>>, Box<dyn Pull<Message<D>, Message<A>>>) {
+    fn allocate<D: Data, A: Data+From<D>>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>, A>>>, Box<dyn Pull<Message<D>, A>>) {
         self.parent.allocate(identifier, address)
     }
-    fn pipeline<D: 'static, A: 'static+From<D>>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<D>, Message<A>>, ThreadPuller<Message<D>, Message<A>>) {
+    fn pipeline<D: 'static, A: 'static+From<D>>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<D>, A>, ThreadPuller<Message<D>, A>) {
         self.parent.pipeline(identifier, address)
     }
     fn new_identifier(&mut self) -> usize {

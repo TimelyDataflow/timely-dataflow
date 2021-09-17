@@ -36,9 +36,9 @@ impl<T, A, P: BytesPush> Pusher<T, A, P> {
     }
 }
 
-impl<T:Data, A: From<T>, P: BytesPush> Push<Message<T>, Message<A>> for Pusher<T, A, P> {
+impl<T:Data, A: From<T>, P: BytesPush> Push<Message<T>, A> for Pusher<T, A, P> {
     #[inline]
-    fn push(&mut self, element: Option<Message<T>>, allocation: &mut Option<Message<A>>) {
+    fn push(&mut self, element: Option<Message<T>>, allocation: &mut Option<A>) {
         if let Some(element) = element {
 
             // determine byte lengths and build header.
@@ -57,7 +57,7 @@ impl<T:Data, A: From<T>, P: BytesPush> Push<Message<T>, Message<A>> for Pusher<T
                 element.into_bytes(writer);
             }
             borrow.make_valid(header.required_bytes());
-            *allocation = element.hollow().map(Message::from_typed);
+            *allocation = element.hollow();
         }
     }
 }
@@ -70,7 +70,7 @@ impl<T:Data, A: From<T>, P: BytesPush> Push<Message<T>, Message<A>> for Pusher<T
 /// allocation.
 pub struct Puller<T, A> {
     _canary: Canary,
-    current: (Option<Message<T>>, Option<Message<A>>),
+    current: (Option<Message<T>>, Option<A>),
     receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
 }
 
@@ -85,9 +85,9 @@ impl<T:Data, A: Data> Puller<T, A> {
     }
 }
 
-impl<T:Data, A: Data> Pull<Message<T>, Message<A>> for Puller<T, A> {
+impl<T:Data, A: Data> Pull<Message<T>, A> for Puller<T, A> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<Message<T>>, Option<Message<A>>) {
+    fn pull(&mut self) -> &mut (Option<Message<T>>, Option<A>) {
         self.current.0 =
         self.receiver
             .borrow_mut()

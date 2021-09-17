@@ -28,7 +28,7 @@ pub struct Thread {
 impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
-    fn allocate<T: 'static, A: 'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, Message<A>>>>, Box<dyn Pull<Message<T>, Message<A>>>) {
+    fn allocate<T: 'static, A: 'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>) {
         let (pusher, puller) = Thread::new_from(identifier, self.events.clone());
         (vec![Box::new(pusher)], Box::new(puller))
     }

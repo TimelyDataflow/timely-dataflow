@@ -12,7 +12,7 @@ use crate::progress::Source;
 use crate::{Container, ContainerBuilder};
 use crate::communication::Push;
 use crate::dataflow::{ScopeParent, Scope, CoreStream};
-use crate::dataflow::channels::{Message, pushers::CounterCore};
+use crate::dataflow::channels::{Message, pushers::CounterCore, MessageAllocation};
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
@@ -109,7 +109,7 @@ impl<G: Scope> InputCore for G where <G as ScopeParent>::Timestamp: TotalOrder {
         where <D as Container>::Builder: ContainerBuilder<Container=D>
     {
 
-        let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D, D::Allocation>::new();
+        let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D, MessageAllocation<D::Allocation>>::new();
         let counter = CounterCore::new(output);
         let produced = counter.produced().clone();
 
@@ -182,7 +182,7 @@ where <C as Container>::Builder: ContainerBuilder<Container=C>
 {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
-    pushers: Vec<CounterCore<T, C, C::Allocation, TeeCore<T, C, C::Allocation>>>,
+    pushers: Vec<CounterCore<T, C, C::Allocation, TeeCore<T, C, MessageAllocation<C::Allocation>>>>,
     buffer1: Option<C::Builder>,
     buffer2: Option<C>,
     now_at: T,
@@ -265,7 +265,7 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
 
     fn register(
         &mut self,
-        pusher: CounterCore<T, D, D::Allocation, TeeCore<T, D, D::Allocation>>,
+        pusher: CounterCore<T, D, D::Allocation, TeeCore<T, D, MessageAllocation<D::Allocation>>>,
         progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.

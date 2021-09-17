@@ -15,9 +15,9 @@ pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
     to_push: Option<ProgressMsg<T>>,
-    allocation: Option<ProgressMsg<T>>,
-    pushers: Vec<Box<dyn Push<ProgressMsg<T>, ProgressMsg<T>>>>,
-    puller: Box<dyn Pull<ProgressMsg<T>, ProgressMsg<T>>>,
+    allocation: Option<(usize, usize, ProgressVec<T>)>,
+    pushers: Vec<Box<dyn Push<ProgressMsg<T>, (usize, usize, ProgressVec<T>)>>>,
+    puller: Box<dyn Pull<ProgressMsg<T>, (usize, usize, ProgressVec<T>)>>,
     /// Source worker index
     source: usize,
     /// Sequence number counter
@@ -35,7 +35,7 @@ impl<T:Timestamp> Progcaster<T> {
     pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
-        let (pushers, puller) = worker.allocate(channel_identifier, &path[..]);
+        let (pushers, puller) = worker.allocate::<_, _>(channel_identifier, &path[..]);
         logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: crate::logging::CommChannelKind::Progress,

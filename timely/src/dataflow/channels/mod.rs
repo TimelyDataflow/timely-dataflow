@@ -2,7 +2,7 @@
 
 use crate::{Container, ContainerBuilder};
 use crate::communication::Push;
-use crate::communication::Message as CommMessage;
+use crate::communication::message::FromAllocated;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -38,7 +38,7 @@ impl<T, D> Message<T, D> {
 
     /// Forms a message, and pushes contents at `pusher`.
     #[inline]
-    pub fn push_at<P: Push<BundleCore<T, D>, CommMessage<D::Allocation>>>(data: Option<D>, time: T, pusher: &mut P, allocation: &mut Option<D::Allocation>)
+    pub fn push_at<P: Push<BundleCore<T, D>, MessageAllocation<D::Allocation>>>(data: Option<D>, time: T, pusher: &mut P, allocation: &mut Option<D::Allocation>)
     where D: Container
     {
         if let Some(data) = data {
@@ -47,7 +47,7 @@ impl<T, D> Message<T, D> {
             let mut bundle_allocation = None;
             pusher.push(bundle, &mut bundle_allocation);
 
-            if let Some(message) = bundle_allocation.and_then(CommMessage::if_typed) {
+            if let Some(message) = bundle_allocation {
                 *allocation = Some(message);
             }
 
@@ -56,5 +56,15 @@ impl<T, D> Message<T, D> {
             //     *buffer = D::Builder::with_capacity(D::default_length()).build();
             // }
         }
+    }
+}
+
+pub struct MessageAllocation<C> {
+    pub data: Option<C>,
+}
+
+impl<T, C: Container+FromAllocated<C::Allocation>> From<Message<T, C>> for MessageAllocation<C::Allocation> {
+    fn from(message: Message<T, C>) -> Self {
+        MessageAllocation { data: message.data.hollow() }
     }
 }

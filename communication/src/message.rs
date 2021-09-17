@@ -249,6 +249,13 @@ impl<T, A: From<T>> FromAllocated<A> for Message<T> {
     }
 }
 
+impl<T> FromAllocated<Vec<T>> for Vec<T> {
+    fn hollow(mut self) -> Option<Vec<T>> {
+        self.clear();
+        Some(self)
+    }
+}
+
 /// TODO
 pub trait IntoAllocated<T> {
     /// TODO

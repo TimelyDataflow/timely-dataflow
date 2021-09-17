@@ -5,14 +5,13 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::progress::ChangeBatch;
-use crate::dataflow::channels::BundleCore;
+use crate::dataflow::channels::{BundleCore, MessageAllocation};
 use crate::communication::Push;
-use crate::communication::Message as CommMessage;
 use crate::Container;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
-pub struct CounterCore<T: Ord, D, A, P: Push<BundleCore<T, D>, CommMessage<A>>> {
+pub struct CounterCore<T: Ord, D, A, P: Push<BundleCore<T, D>, MessageAllocation<A>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
     phantom: PhantomData<(D, A)>,
@@ -21,9 +20,9 @@ pub struct CounterCore<T: Ord, D, A, P: Push<BundleCore<T, D>, CommMessage<A>>> 
 /// A counter specialized to vector.
 pub type Counter<T, D, P> = CounterCore<T, Vec<D>, Vec<D>, P>;
 
-impl<T, D: Container, P> Push<BundleCore<T, D>, CommMessage<D::Allocation>> for CounterCore<T, D, D::Allocation, P> where T : Ord+Clone+'static, P: Push<BundleCore<T, D>, CommMessage<D::Allocation>> {
+impl<T, D: Container, P> Push<BundleCore<T, D>, MessageAllocation<D::Allocation>> for CounterCore<T, D, D::Allocation, P> where T : Ord+Clone+'static, P: Push<BundleCore<T, D>, MessageAllocation<D::Allocation>> {
     #[inline]
-    fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<CommMessage<D::Allocation>>) {
+    fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<MessageAllocation<D::Allocation>>) {
         if let Some(message) = &message {
             self.produced.borrow_mut().update(message.time.clone(), message.data.len() as i64);
         }
@@ -35,7 +34,7 @@ impl<T, D: Container, P> Push<BundleCore<T, D>, CommMessage<D::Allocation>> for 
     }
 }
 
-impl<T, D, A, P: Push<BundleCore<T, D>, CommMessage<A>>> CounterCore<T, D, A, P> where T : Ord+Clone+'static {
+impl<T, D, A, P: Push<BundleCore<T, D>, MessageAllocation<A>>> CounterCore<T, D, A, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
     pub fn new(pushee: P) -> CounterCore<T, D, A, P> {
         CounterCore {

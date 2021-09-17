@@ -11,6 +11,7 @@ use crate::dataflow::scopes::child::Iterative;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OutputWrapper;
 use crate::{Container, Data};
+use crate::dataflow::channels::MessageAllocation;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait Feedback<G: Scope> {
@@ -161,7 +162,7 @@ impl<G: Scope, D: Container> ConnectLoop<G, D> for CoreStream<G, D> {
 pub struct HandleCore<G: Scope, D: Container> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
-    output: OutputWrapper<G::Timestamp, D, TeeCore<G::Timestamp, D, D::Allocation>>,
+    output: OutputWrapper<G::Timestamp, D, TeeCore<G::Timestamp, D, MessageAllocation<D::Allocation>>>,
 }
 
 /// A `HandleCore` specialized for using `Vec` as container

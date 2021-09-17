@@ -77,7 +77,7 @@ pub use worker::Config as WorkerConfig;
 pub use execute::Config as Config;
 use std::ops::RangeBounds;
 use std::convert::TryFrom;
-use crate::communication::message::IntoAllocated;
+use crate::communication::message::{IntoAllocated, FromAllocated};
 
 /// Re-export of the `timely_communication` crate.
 pub mod communication {
@@ -120,7 +120,7 @@ pub trait ExchangeData: Data + communication::Data { }
 impl<T: Data + communication::Data> ExchangeData for T { }
 
 /// A container of data passing on a dataflow edge
-pub trait Container: Data {
+pub trait Container: Data + FromAllocated<Self::Allocation> {
     /// The type of elements contained by this collection
     type Inner;
 
@@ -338,7 +338,7 @@ impl<'a, D: Data> DrainContainer for &'a mut Vec<D> {
 mod rc {
     use crate::{Container, ContainerBuilder};
     use std::rc::Rc;
-    use crate::communication::message::{IntoAllocated, RefOrMut};
+    use crate::communication::message::{IntoAllocated, RefOrMut, FromAllocated};
 
     #[derive(Clone)]
     struct RcContainer<T: Container> {
@@ -378,6 +378,12 @@ mod rc {
     impl<T: Container> From<RcContainer<T>> for () {
         fn from(_: RcContainer<T>) -> Self {
             ()
+        }
+    }
+
+    impl<T: Container> FromAllocated<()> for RcContainer<T> {
+        fn hollow(self) -> Option<()> {
+            Some(())
         }
     }
 
