@@ -13,7 +13,7 @@ use crate::progress::frontier::MutableAntichain;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{BufferCore, Session};
-use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
+use crate::dataflow::channels::{BundleCore, MessageAllocation};
 use crate::communication::{Push, Pull, message::RefOrMut};
 use crate::logging::TimelyLogger as Logger;
 
@@ -47,7 +47,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>, MessageAllocation
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<D::Allocation>)> {
+    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<MessageAllocation<D::Allocation>>)> {
         let internal = &self.internal;
         self.pull_counter.next().map(|(mut bundle, allocation)| {
             match bundle.as_ref_or_mut() {
@@ -114,7 +114,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>, MessageAllocation
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<D::Allocation>)> {
+    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<MessageAllocation<D::Allocation>>)> {
         self.handle.next()
     }
 

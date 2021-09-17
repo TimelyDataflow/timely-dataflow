@@ -119,7 +119,7 @@ pub struct ProcessAllocator {
 impl Allocate for ProcessAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data, A: Data+From<T>>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>) {
+    fn allocate<T: Data, A: Send+Sync+From<T>+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>) {
 
         // Assume and enforce in-order identifier allocation.
         if let Some(bound) = self.channel_id_bound {

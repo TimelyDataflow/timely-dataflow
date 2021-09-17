@@ -18,9 +18,9 @@ pub struct Counter<T: Ord+Clone+'static, D, A, P: Pull<BundleCore<T, D>, Message
 impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>, MessageAllocation<D::Allocation>>> Counter<T, D, D::Allocation, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
-    pub fn next(&mut self) -> Option<(BundleCore<T, D>, &mut Option<D::Allocation>)> {
+    pub fn next(&mut self) -> Option<(&mut BundleCore<T, D>, &mut Option<MessageAllocation<D::Allocation>>)> {
         if let (message, allocation) = self.pullable.pull() {
-            if let Some(message) = message.take() {
+            if let Some(message) = message {
                 if message.data.len() > 0 {
                     self.consumed.borrow_mut().update(message.time.clone(), message.data.len() as i64);
                     Some((message, allocation))

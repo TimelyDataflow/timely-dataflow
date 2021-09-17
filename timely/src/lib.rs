@@ -127,8 +127,10 @@ pub trait Container: Data + FromAllocated<Self::Allocation> {
     /// The builder for this container
     type Builder: ContainerBuilder<Container=Self>;
 
+    /// The allocation type for this container
     type Allocation: Data + TryFrom<Self> + IntoAllocated<Self>;
 
+    /// Clone this container while reusing the provided allocation
     fn clone_into(&self, allocation: Self::Allocation) -> Self;
 
     /// Construct an empty container
@@ -183,9 +185,9 @@ pub trait ContainerBuilder: Extend<<<Self as ContainerBuilder>::Container as Con
     /// Create an empty builder, reusing the allocation in `container`.
     fn with_allocation(container: Self::Container) -> Self;
 
-    fn with_optional_allocation(container: &mut Option<Self::Container>) -> Self where Self: Sized {
-        container.take().map_or_else(Self::new, Self::with_allocation)
-    }
+    // fn with_optional_allocation(container: &mut Option<Self::Container>) -> Self where Self: Sized {
+    //     container.take().map_or_else(Self::new, Self::with_allocation)
+    // }
 
     // /// Create en empty builder, reusing the allocation in `container` and leaving an empty
     // /// container behind.
@@ -193,10 +195,10 @@ pub trait ContainerBuilder: Extend<<<Self as ContainerBuilder>::Container as Con
     //     Self::with_allocation(::std::mem::replace(container, Self::Container::empty()))
     // }
 
-    // /// Take this builder, leaving an empty builder behind.
-    // fn take_ref(builder: &mut Self) -> Self where Self: Sized {
-    //     ::std::mem::replace(builder, Self::new())
-    // }
+    /// Take this builder, leaving an empty builder behind.
+    fn take_ref(builder: &mut Self) -> Self where Self: Sized {
+        ::std::mem::replace(builder, Self::new())
+    }
 
     /// Create a new container and reserve space for at least `capacity` elements.
     fn with_capacity(capacity: usize) -> Self;
@@ -388,10 +390,6 @@ mod rc {
     }
 
     impl<T: Container> IntoAllocated<RcContainer<T>> for () {
-        fn assemble(self, ref_or_mut: RefOrMut<RcContainer<T>>) -> RcContainer<T> {
-            Self::assemble_new(ref_or_mut)
-        }
-
         fn assemble_new(ref_or_mut: RefOrMut<RcContainer<T>>) -> RcContainer<T> {
             RcContainer { inner: Rc::clone(&ref_or_mut.inner) }
         }

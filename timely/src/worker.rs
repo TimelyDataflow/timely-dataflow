@@ -191,7 +191,7 @@ pub trait AsWorker : Scheduler {
     /// scheduled in response to the receipt of records on the channel.
     /// Most commonly, this would be the address of the *target* of the
     /// channel.
-    fn allocate<T: Data, A: Data+From<T>>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>);
+    fn allocate<T: Data, A: Send+Sync+From<T>+'static>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>);
     /// Constructs a pipeline channel from the worker to itself.
     ///
     /// By default this method uses the native channel allocation mechanism, but the expectation is
@@ -231,7 +231,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
     fn config(&self) -> &Config { &self.config }
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data, Al: Data+From<D>>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>, Al>>>, Box<dyn Pull<Message<D>, Al>>) {
+    fn allocate<D: Data, Al: Send+Sync+From<D>+'static>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>, Al>>>, Box<dyn Pull<Message<D>, Al>>) {
         if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address.to_vec());

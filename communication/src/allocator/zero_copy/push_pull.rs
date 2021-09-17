@@ -74,7 +74,7 @@ pub struct Puller<T, A> {
     receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
 }
 
-impl<T:Data, A: Data> Puller<T, A> {
+impl<T:Data, A: Send+Sync+'static> Puller<T, A> {
     /// Creates a new `Puller` instance from a shared queue.
     pub fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
         Self {
@@ -85,7 +85,7 @@ impl<T:Data, A: Data> Puller<T, A> {
     }
 }
 
-impl<T:Data, A: Data> Pull<Message<T>, A> for Puller<T, A> {
+impl<T:Data, A: Send+Sync+'static> Pull<Message<T>, A> for Puller<T, A> {
     #[inline]
     fn pull(&mut self) -> &mut (Option<Message<T>>, Option<A>) {
         self.current.0 =

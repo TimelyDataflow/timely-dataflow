@@ -286,21 +286,21 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
         if let Some(builder1) = self.buffer1.take() {
             let mut buffer1 = builder1.build();
             let mut allocation = None;
-            for index in 0..self.pushers.len() {
+            for index in 0..self.pushers.len() - 1 {
                 if index < self.pushers.len() - 1 {
                     let copy = if let Some(allocation) = allocation.take() {
                         buffer1.clone_into(allocation)
                     } else {
                         buffer1.clone()
                     };
-                    Message::push_at(Some(copy), self.now_at.clone(), &mut self.pushers[index], &mut allocation);
-                } else {
-                    // TODO: retain allocation
-                    Message::push_at(Some(buffer1), self.now_at.clone(), &mut self.pushers[index], &mut allocation);
-                    debug_assert!(buffer1.is_empty());
+                    Message::push_at(Some(copy), self.now_at.clone(), &mut self.pushers[1 + index], &mut allocation);
                 }
             }
-            let builder = D::Builder::with_allocation(buffer1);
+            if self.pushers.len() > 0 {
+                // TODO: retain allocation
+                Message::push_at(Some(buffer1), self.now_at.clone(), &mut self.pushers[0], &mut allocation);
+            }
+            let builder = D::Builder::new();
             self.buffer1 = Some(builder);
         }
     }

@@ -25,7 +25,7 @@ use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
 use crate::order::Product;
-use crate::{Container, ContainerBuilder, Data};
+use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
 use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};

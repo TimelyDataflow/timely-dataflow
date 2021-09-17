@@ -136,7 +136,7 @@ pub struct TcpAllocator<A: Allocate> {
 impl<A: Allocate> Allocate for TcpAllocator<A> {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data, Al: Data+From<T>>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, Al>>>, Box<dyn Pull<Message<T>, Al>>) {
+    fn allocate<T: Data, Al: Send+Sync+From<T>+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, Al>>>, Box<dyn Pull<Message<T>, Al>>) {
 
         // Assume and enforce in-order identifier allocation.
         if let Some(bound) = self.channel_id_bound {

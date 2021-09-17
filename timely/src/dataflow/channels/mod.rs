@@ -1,6 +1,6 @@
 //! Structured communication between timely dataflow operators.
 
-use crate::{Container, ContainerBuilder};
+use crate::Container;
 use crate::communication::Push;
 use crate::communication::message::FromAllocated;
 
@@ -48,7 +48,7 @@ impl<T, D> Message<T, D> {
             pusher.push(bundle, &mut bundle_allocation);
 
             if let Some(message) = bundle_allocation {
-                *allocation = Some(message);
+                *allocation = message.data;
             }
 
             // TODO: Unclear we always want this here.
@@ -59,7 +59,9 @@ impl<T, D> Message<T, D> {
     }
 }
 
+/// TODO
 pub struct MessageAllocation<C> {
+    /// TODO
     pub data: Option<C>,
 }
 

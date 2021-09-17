@@ -25,7 +25,7 @@ pub struct CoreStream<S: Scope, D: Container> {
     /// The `Scope` containing the stream.
     scope: S,
     /// Maintains a list of Push<Bundle<T, D>> interested in the stream's output.
-    ports: TeeHelper<S::Timestamp, D, D::Allocation>,
+    ports: TeeHelper<S::Timestamp, D, MessageAllocation<D::Allocation>>,
 }
 
 /// A stream batching data in vectors.

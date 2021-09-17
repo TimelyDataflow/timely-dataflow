@@ -82,7 +82,7 @@ pub trait UnorderedInputCore<G: Scope> {
 impl<G: Scope> UnorderedInputCore<G> for G {
     fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), CoreStream<G, D>) {
 
-        let (output, registrar) = TeeCore::<G::Timestamp, D, D::Allocation>::new();
+        let (output, registrar) = TeeCore::<G::Timestamp, D, MessageAllocation<D::Allocation>>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = Capability::new(G::Timestamp::minimum(), internal.clone());

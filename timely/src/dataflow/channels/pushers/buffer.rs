@@ -80,7 +80,7 @@ impl<T, C: Container, P: Push<BundleCore<T, C>, MessageAllocation<C::Allocation>
             let mut buffer = ::std::mem::replace(&mut self.buffer, C::Builder::new()).build();
             // TODO: allocation
             Message::push_at(Some(buffer), time, &mut self.pusher, &mut None);
-            self.buffer = C::Builder::with_allocation(buffer);
+            self.buffer = C::Builder::new();
         }
     }
 

@@ -5,7 +5,7 @@ use std::fmt::{self, Debug};
 use std::rc::Rc;
 
 use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
-use crate::{Container, ContainerBuilder, Data};
+use crate::{Container, Data};
 
 use crate::communication::Push;
 
@@ -17,7 +17,7 @@ pub struct TeeCore<T: 'static, D: 'static, A: 'static> {
 }
 
 /// [TeeCore] specialized to `Vec`-based container.
-pub type Tee<T, D> = TeeCore<T, Vec<D>, Vec<D>>;
+pub type Tee<T, D> = TeeCore<T, Vec<D>, MessageAllocation<Vec<D>>>;
 
 impl<T: Data, D: Container> Push<BundleCore<T, D>, MessageAllocation<D::Allocation>> for TeeCore<T, D, MessageAllocation<D::Allocation>> {
     #[inline]

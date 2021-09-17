@@ -114,7 +114,12 @@ impl<G: Scope, D: Container> Probe<G, D> for CoreStream<G, D> {
 
                 while let Some((mut message, allocation)) = input.next() {
                     let (time, data) = (&message.time, message.to_owned());
-                    output.session(time).give_container(data.data, allocation);
+                    let mut a = allocation.as_mut().and_then(|ma| ma.data.take());
+                    output.session(time).give_container(data.data, &mut a);
+                    if let Some(inner) = allocation {
+                        inner.data = a;
+                    }
+
                 }
                 output.cease();
 

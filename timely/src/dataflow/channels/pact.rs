@@ -76,7 +76,7 @@ impl<'a, T: Eq+Data+Clone, C: Container<Inner=D>+ExchangeContainer+'static, D: D
     type Pusher = Box<dyn Push<BundleCore<T, C>, MessageAllocation<C::Allocation>>>;
     type Puller = Box<dyn Pull<BundleCore<T, C>, MessageAllocation<C::Allocation>>>;
     fn connect<A: AsWorker>(mut self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
-        let (senders, receiver) = allocator.allocate::<Message<T, C>, C::Allocation>(identifier, address);
+        let (senders, receiver) = allocator.allocate::<Message<T, C>, MessageAllocation<C::Allocation>>(identifier, address);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
         (Box::new(ExchangePusher::new(senders, move |_, d| (self.hash_func)(d))), Box::new(LogPuller::new(receiver, allocator.index(), identifier, logging.clone())))
     }
@@ -119,8 +119,8 @@ impl<T, D, A, P: Push<BundleCore<T, D>, MessageAllocation<A>>> LogPusher<T, D, A
 
 impl<T, D: Container, P: Push<BundleCore<T, D>, MessageAllocation<D::Allocation>>> Push<BundleCore<T, D>, MessageAllocation<D::Allocation>> for LogPusher<T, D, D::Allocation, P> {
     #[inline]
-    fn push(&mut self, pair: Option<BundleCore<T, D>>, allocation: &mut Option<MessageAllocation<D::Allocation>>) {
-        if let Some(bundle) = pair {
+    fn push(&mut self, mut pair: Option<BundleCore<T, D>>, allocation: &mut Option<MessageAllocation<D::Allocation>>) {
+        if let Some(bundle) = pair.as_mut() {
             self.counter += 1;
 
             // Stamp the sequence number and source.
@@ -142,7 +142,7 @@ impl<T, D: Container, P: Push<BundleCore<T, D>, MessageAllocation<D::Allocation>
             }
         }
 
-        self.pusher.push(pair);
+        self.pusher.push(pair, allocation);
     }
 }
 

@@ -259,7 +259,9 @@ impl<T> FromAllocated<Vec<T>> for Vec<T> {
 /// TODO
 pub trait IntoAllocated<T> {
     /// TODO
-    fn assemble(self, ref_or_mut: RefOrMut<T>) -> T;
+    fn assemble(self, ref_or_mut: RefOrMut<T>) -> T where Self: Sized {
+        Self::assemble_new(ref_or_mut)
+    }
     /// TODO
     fn assemble_new(ref_or_mut: RefOrMut<T>) -> T;
 }
