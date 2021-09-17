@@ -140,16 +140,16 @@ impl<G: Scope, D: Container> ConnectLoop<G, D> for CoreStream<G, D> {
 
         let mut input = builder.new_input_connection(self, Pipeline, vec![Antichain::from_elem(summary.clone())]);
 
-        let mut vector = D::empty();
+        let mut allocation = None;
         builder.build(move |_capability| move |_frontier| {
             let mut output = output.activate();
             input.for_each(|cap, data| {
-                data.swap(&mut vector);
+                let vector = data.assemble(&mut allocation);
                 if let Some(new_time) = summary.results_in(cap.time()) {
                     let new_cap = cap.delayed(&new_time);
                     output
                         .session(&new_cap)
-                        .give_container(&mut vector);
+                        .give_container(vector, &mut allocation);
                 }
             });
         });
@@ -161,7 +161,7 @@ impl<G: Scope, D: Container> ConnectLoop<G, D> for CoreStream<G, D> {
 pub struct HandleCore<G: Scope, D: Container> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
-    output: OutputWrapper<G::Timestamp, D, TeeCore<G::Timestamp, D>>,
+    output: OutputWrapper<G::Timestamp, D, TeeCore<G::Timestamp, D, D::Allocation>>,
 }
 
 /// A `HandleCore` specialized for using `Vec` as container

@@ -109,7 +109,7 @@ impl<G: Scope> InputCore for G where <G as ScopeParent>::Timestamp: TotalOrder {
         where <D as Container>::Builder: ContainerBuilder<Container=D>
     {
 
-        let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D>::new();
+        let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D, D::Allocation>::new();
         let counter = CounterCore::new(output);
         let produced = counter.produced().clone();
 
@@ -182,7 +182,7 @@ where <C as Container>::Builder: ContainerBuilder<Container=C>
 {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
-    pushers: Vec<CounterCore<T, C, TeeCore<T, C>>>,
+    pushers: Vec<CounterCore<T, C, C::Allocation, TeeCore<T, C, C::Allocation>>>,
     buffer1: Option<C::Builder>,
     buffer2: Option<C>,
     now_at: T,
@@ -265,7 +265,7 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
 
     fn register(
         &mut self,
-        pusher: CounterCore<T, D, TeeCore<T, D>>,
+        pusher: CounterCore<T, D, D::Allocation, TeeCore<T, D, D::Allocation>>,
         progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.
@@ -285,16 +285,18 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
     fn flush(&mut self) {
         if let Some(builder1) = self.buffer1.take() {
             let mut buffer1 = builder1.build();
+            let mut allocation = None;
             for index in 0..self.pushers.len() {
                 if index < self.pushers.len() - 1 {
-                    let builder = D::Builder::with_optional_allocation(&mut self.buffer2);
-                    builder.initialize_from(&buffer1);
-                    let buffer = builder.build();
-                    Message::push_at(&mut buffer, self.now_at.clone(), &mut self.pushers[index]);
-                    debug_assert!(buffer.is_empty());
-                    self.buffer2 = Some(buffer);
+                    let copy = if let Some(allocation) = allocation.take() {
+                        buffer1.clone_into(allocation)
+                    } else {
+                        buffer1.clone()
+                    };
+                    Message::push_at(Some(copy), self.now_at.clone(), &mut self.pushers[index], &mut allocation);
                 } else {
-                    Message::push_at(&mut buffer1, self.now_at.clone(), &mut self.pushers[index]);
+                    // TODO: retain allocation
+                    Message::push_at(Some(buffer1), self.now_at.clone(), &mut self.pushers[index], &mut allocation);
                     debug_assert!(buffer1.is_empty());
                 }
             }
@@ -335,31 +337,31 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
     /// Sends a batch of records into the corresponding timely dataflow `Stream`, at the current epoch.
     ///
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.
-    pub fn send_batch(&mut self, buffer: &mut D) {
-
-        if !buffer.is_empty() {
-            // flush buffered elements to ensure local fifo.
-            if !self.buffer1.as_ref().map_or(true, D::Builder::is_empty) { self.flush(); }
-
-            // push buffer (or clone of buffer) at each destination.
-            for index in 0 .. self.pushers.len() {
-                if index < self.pushers.len() - 1 {
-                    let builder = D::Builder::with_optional_allocation(&mut self.buffer2);
-                    builder.initialize_from(&buffer);
-                    let mut buffer = builder.build();
-                    Message::push_at(&mut buffer, self.now_at.clone(), &mut self.pushers[index]);
-                    assert!(buffer.is_empty());
-                    self.buffer2 = Some(buffer);
-                }
-                else {
-                    Message::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
-                    assert!(buffer.is_empty());
-                }
-            }
-            // TODO: Cannot clear `buffer` because containers are immutable
-            // buffer.clear();
-        }
-    }
+    // pub fn send_batch(&mut self, buffer: &mut D) {
+    //
+    //     if !buffer.is_empty() {
+    //         // flush buffered elements to ensure local fifo.
+    //         if !self.buffer1.as_ref().map_or(true, D::Builder::is_empty) { self.flush(); }
+    //
+    //         // push buffer (or clone of buffer) at each destination.
+    //         for index in 0 .. self.pushers.len() {
+    //             if index < self.pushers.len() - 1 {
+    //                 let builder = D::Builder::with_optional_allocation(&mut self.buffer2);
+    //                 builder.initialize_from(&buffer);
+    //                 let mut buffer = Some(builder.build());
+    //                 Message::push_at(&mut buffer, self.now_at.clone(), &mut self.pushers[index]);
+    //                 self.buffer2 = buffer;
+    //             }
+    //             else {
+    //                 // TODO: retain allocation
+    //                 Message::push_at(&mut Some(buffer), self.now_at.clone(), &mut self.pushers[index]);
+    //                 assert!(buffer.is_empty());
+    //             }
+    //         }
+    //         // TODO: Cannot clear `buffer` because containers are immutable
+    //         // buffer.clear();
+    //     }
+    // }
 
     /// Advances the current epoch to `next`.
     ///

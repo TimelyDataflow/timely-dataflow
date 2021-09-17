@@ -2,6 +2,7 @@
 
 use crate::{Container, ContainerBuilder};
 use crate::communication::Push;
+use crate::communication::Message as CommMessage;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -37,24 +38,23 @@ impl<T, D> Message<T, D> {
 
     /// Forms a message, and pushes contents at `pusher`.
     #[inline]
-    pub fn push_at<P: Push<BundleCore<T, D>>>(buffer: &mut D, time: T, pusher: &mut P)
+    pub fn push_at<P: Push<BundleCore<T, D>, CommMessage<D::Allocation>>>(data: Option<D>, time: T, pusher: &mut P, allocation: &mut Option<D::Allocation>)
     where D: Container
     {
+        if let Some(data) = data {
+            let message = Message::new(time, data, 0, 0);
+            let mut bundle = Some(BundleCore::from_typed(message));
+            let mut bundle_allocation = None;
+            pusher.push(bundle, &mut bundle_allocation);
 
-        let data = D::take(buffer);
-        let message = Message::new(time, data, 0, 0);
-        let mut bundle = Some(BundleCore::from_typed(message));
-
-        pusher.push(&mut bundle);
-
-        if let Some(message) = bundle {
-            if let Some(message) = message.if_typed() {
-                *buffer = message.data;
+            if let Some(message) = bundle_allocation.and_then(CommMessage::if_typed) {
+                *allocation = Some(message);
             }
-        }
 
-        // TODO: Unclear we always want this here.
-        if buffer.capacity() != D::default_length() {
-            *buffer = D::Builder::with_capacity(D::default_length()).build();
+            // TODO: Unclear we always want this here.
+            // if buffer.capacity() != D::default_length() {
+            //     *buffer = D::Builder::with_capacity(D::default_length()).build();
+            // }
         }
-    }}
+    }
+}

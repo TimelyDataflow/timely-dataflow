@@ -129,24 +129,24 @@ impl<T: Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
 /// Conventionally, a sequence of calls to `push()` should conclude with
 /// a call of `push(&mut None)` or `done()` to signal to implementors that
 /// another call to `push()` may not be coming.
-pub trait Push<T> {
+pub trait Push<T, A> {
     /// Pushes `element` with the opportunity to take ownership.
-    fn push(&mut self, element: &mut Option<T>);
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>);
     /// Pushes `element` and drops any resulting resources.
     #[inline]
-    fn send(&mut self, element: T) { self.push(&mut Some(element)); }
+    fn send(&mut self, element: T) { self.push(Some(element), &mut None); }
     /// Pushes `None`, conventionally signalling a flush.
     #[inline]
-    fn done(&mut self) { self.push(&mut None); }
+    fn done(&mut self) { self.push(None, &mut None); }
 }
 
-impl<T, P: ?Sized + Push<T>> Push<T> for Box<P> {
+impl<T, A, P: ?Sized + Push<T, A>,> Push<T, A> for Box<P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) { (**self).push(element) }
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>) { (**self).push(element, allocation) }
 }
 
 /// Pulling elements of type `T`.
-pub trait Pull<T> {
+pub trait Pull<T, A> {
     /// Pulls an element and provides the opportunity to take ownership.
     ///
     /// The puller may mutate the result, in particular take ownership of the data by
@@ -155,15 +155,15 @@ pub trait Pull<T> {
     ///
     /// If `pull` returns `None` this conventionally signals that no more data is available
     /// at the moment, and the puller should find something better to do.
-    fn pull(&mut self) -> &mut Option<T>;
+    fn pull(&mut self) -> &mut (Option<T>, Option<A>);
     /// Takes an `Option<T>` and leaves `None` behind.
     #[inline]
-    fn recv(&mut self) -> Option<T> { self.pull().take() }
+    fn recv(&mut self) -> Option<T> { self.pull().0.take() }
 }
 
-impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
+impl<T, A, P: ?Sized + Pull<T, A>> Pull<T, A> for Box<P> {
     #[inline]
-    fn pull(&mut self) -> &mut Option<T> { (**self).pull() }
+    fn pull(&mut self) -> &mut (Option<T>, Option<A>) { (**self).pull() }
 }
 
 

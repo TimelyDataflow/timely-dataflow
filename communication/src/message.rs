@@ -40,6 +40,22 @@ impl<'a, T: Clone+'a> RefOrMut<'a, T> {
         self.swap(&mut element);
         element
     }
+
+    // pub fn take(self) -> T {
+    //     match self {
+    //         RefOrMut::Ref(reference) => element.clone_from(reference),
+    //         RefOrMut::Mut(reference) => ::std::mem::swap(reference, element),
+    //     }
+    // };
+
+    /// TODO
+    pub fn assemble<A: IntoAllocated<T>>(self, allocation: &mut Option<A>) -> T {
+        if let Some(allocation) = allocation.take() {
+            allocation.assemble(self)
+        } else {
+            A::assemble_new(self)
+        }
+    }
 }
 
 /// A wrapped message which may be either typed or binary data.
@@ -214,6 +230,57 @@ impl<T: Clone> Message<T> {
         }
         else {
             unreachable!()
+        }
+    }
+}
+
+/// A hollow allocation
+pub trait FromAllocated<A> {
+    /// Turn an allocated object into a hollow object, if possible
+    fn hollow(self) -> Option<A>;
+}
+
+impl<T, A: From<T>> FromAllocated<A> for Message<T> {
+    fn hollow(self) -> Option<A> {
+        match self.payload {
+            MessageContents::Binary(_) | MessageContents::Arc(_) => None,
+            MessageContents::Owned(allocated) => Some(allocated.into()),
+        }
+    }
+}
+
+/// TODO
+pub trait IntoAllocated<T> {
+    /// TODO
+    fn assemble(self, ref_or_mut: RefOrMut<T>) -> T;
+    /// TODO
+    fn assemble_new(ref_or_mut: RefOrMut<T>) -> T;
+}
+
+impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
+    fn assemble(mut self, ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
+        self.clone_from(&*ref_or_mut);
+        self
+    }
+
+    fn assemble_new(ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
+        let mut vec = Vec::new();
+        vec.clone_from(&*ref_or_mut);
+        vec
+    }
+}
+
+mod rc {
+    use crate::message::{IntoAllocated, RefOrMut};
+    use std::rc::Rc;
+
+    impl<T> IntoAllocated<Rc<T>> for () {
+        fn assemble(self, ref_or_mut: RefOrMut<Rc<T>>) -> Rc<T> {
+            Rc::clone(&*ref_or_mut)
+        }
+
+        fn assemble_new(ref_or_mut: RefOrMut<Rc<T>>) -> Rc<T> {
+            Rc::clone(&*ref_or_mut)
         }
     }
 }

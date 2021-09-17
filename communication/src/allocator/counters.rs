@@ -8,15 +8,15 @@ use crate::{Push, Pull};
 use crate::allocator::Event;
 
 /// The push half of an intra-thread channel.
-pub struct Pusher<T, P: Push<T>> {
+pub struct Pusher<T, A, P: Push<T, A>> {
     index: usize,
     // count: usize,
     events: Rc<RefCell<VecDeque<(usize, Event)>>>,
     pusher: P,
-    phantom: ::std::marker::PhantomData<T>,
+    phantom: ::std::marker::PhantomData<(T, A)>,
 }
 
-impl<T, P: Push<T>>  Pusher<T, P> {
+impl<T, A, P: Push<T, A>> Pusher<T, A, P> {
     /// Wraps a pusher with a message counter.
     pub fn new(pusher: P, index: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>) -> Self {
         Pusher {
@@ -29,9 +29,9 @@ impl<T, P: Push<T>>  Pusher<T, P> {
     }
 }
 
-impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
+impl<T, A, P: Push<T, A>> Push<T, A> for Pusher<T, A, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) {
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>) {
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events
@@ -49,23 +49,23 @@ impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
             .borrow_mut()
             .push_back((self.index, Event::Pushed(1)));
 
-        self.pusher.push(element)
+        self.pusher.push(element, allocation)
     }
 }
 
 use crossbeam_channel::Sender;
 
 /// The push half of an intra-thread channel.
-pub struct ArcPusher<T, P: Push<T>> {
+pub struct ArcPusher<T, A, P: Push<T, A>> {
     index: usize,
     // count: usize,
     events: Sender<(usize, Event)>,
     pusher: P,
-    phantom: ::std::marker::PhantomData<T>,
+    phantom: ::std::marker::PhantomData<(T, A)>,
     buzzer: crate::buzzer::Buzzer,
 }
 
-impl<T, P: Push<T>>  ArcPusher<T, P> {
+impl<T, A, P: Push<T, A>>  ArcPusher<T, A, P> {
     /// Wraps a pusher with a message counter.
     pub fn new(pusher: P, index: usize, events: Sender<(usize, Event)>, buzzer: crate::buzzer::Buzzer) -> Self {
         ArcPusher {
@@ -79,9 +79,9 @@ impl<T, P: Push<T>>  ArcPusher<T, P> {
     }
 }
 
-impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
+impl<T, A, P: Push<T, A>> Push<T, A> for ArcPusher<T, A, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) {
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>) {
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events
@@ -98,7 +98,7 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
         // we first enqueue data, second enqueue interest in the channel,
         // and finally awaken the thread. Other orders are defective when
         // multiple threads are involved.
-        self.pusher.push(element);
+        self.pusher.push(element, allocation);
         let _ = self.events.send((self.index, Event::Pushed(1)));
             // TODO : Perhaps this shouldn't be a fatal error (e.g. in shutdown).
             // .expect("Failed to send message count");
@@ -107,15 +107,15 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
 }
 
 /// The pull half of an intra-thread channel.
-pub struct Puller<T, P: Pull<T>> {
+pub struct Puller<T, A, P: Pull<T, A>> {
     index: usize,
     count: usize,
     events: Rc<RefCell<VecDeque<(usize, Event)>>>,
     puller: P,
-    phantom: ::std::marker::PhantomData<T>,
+    phantom: ::std::marker::PhantomData<(T, A)>,
 }
 
-impl<T, P: Pull<T>>  Puller<T, P> {
+impl<T, A, P: Pull<T, A>>  Puller<T, A, P> {
     /// Wraps a puller with a message counter.
     pub fn new(puller: P, index: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>) -> Self {
         Puller {
@@ -127,11 +127,11 @@ impl<T, P: Pull<T>>  Puller<T, P> {
         }
     }
 }
-impl<T, P: Pull<T>> Pull<T> for Puller<T, P> {
+impl<T, A, P: Pull<T, A>> Pull<T, A> for Puller<T, A, P> {
     #[inline]
-    fn pull(&mut self) -> &mut Option<T> {
+    fn pull(&mut self) -> &mut (Option<T>, Option<A>) {
         let result = self.puller.pull();
-        if result.is_none() {
+        if result.0.is_none() {
             if self.count != 0 {
                 self.events
                     .borrow_mut()

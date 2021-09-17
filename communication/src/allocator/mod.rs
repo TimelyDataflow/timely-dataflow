@@ -43,7 +43,7 @@ pub trait Allocate {
     /// The number of workers in the communication group.
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>);
+    fn allocate<T: Data, A: Data+From<T>>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, Message<A>>>>, Box<dyn Pull<Message<T>, Message<A>>>);
     /// A shared queue of communication events with channel identifier.
     ///
     /// It is expected that users of the channel allocator will regularly
@@ -85,9 +85,9 @@ pub trait Allocate {
     ///
     /// By default, this method uses the thread-local channel constructor
     /// based on a shared `VecDeque` which updates the event queue.
-    fn pipeline<T: 'static>(&mut self, identifier: usize) ->
-        (thread::ThreadPusher<Message<T>>,
-         thread::ThreadPuller<Message<T>>)
+    fn pipeline<T: 'static, A: 'static+From<T>>(&mut self, identifier: usize) ->
+        (thread::ThreadPusher<Message<T>, Message<A>>,
+         thread::ThreadPuller<Message<T>, Message<A>>)
     {
         thread::Thread::new_from(identifier, self.events().clone())
     }

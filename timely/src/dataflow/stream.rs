@@ -7,10 +7,12 @@
 use crate::progress::{Source, Target};
 
 use crate::communication::Push;
+use crate::communication::Message as CommMessage;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::BundleCore;
 use std::fmt::{self, Debug};
+use crate::Container;
 
 // use dataflow::scopes::root::loggers::CHANNELS_Q;
 
@@ -18,19 +20,19 @@ use std::fmt::{self, Debug};
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-pub struct CoreStream<S: Scope, D> {
+pub struct CoreStream<S: Scope, D: Container> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
     scope: S,
     /// Maintains a list of Push<Bundle<T, D>> interested in the stream's output.
-    ports: TeeHelper<S::Timestamp, D>,
+    ports: TeeHelper<S::Timestamp, D, D::Allocation>,
 }
 
 /// A stream batching data in vectors.
 pub type Stream<S, D> = CoreStream<S, Vec<D>>;
 
-impl<S: Scope, D> Clone for CoreStream<S, D> {
+impl<S: Scope, D: Container> Clone for CoreStream<S, D> {
     fn clone(&self) -> Self {
         Self {
             name: self.name.clone(),
@@ -40,12 +42,12 @@ impl<S: Scope, D> Clone for CoreStream<S, D> {
     }
 }
 
-impl<S: Scope, D> CoreStream<S, D> {
+impl<S: Scope, D: Container> CoreStream<S, D> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<BundleCore<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
+    pub fn connect_to<P: Push<BundleCore<S::Timestamp, D>, CommMessage<D::Allocation>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
@@ -59,7 +61,7 @@ impl<S: Scope, D> CoreStream<S, D> {
         self.ports.add_pusher(pusher);
     }
     /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
-    pub fn new(source: Source, output: TeeHelper<S::Timestamp, D>, scope: S) -> Self {
+    pub fn new(source: Source, output: TeeHelper<S::Timestamp, D, D::Allocation>, scope: S) -> Self {
         CoreStream { name: source, ports: output, scope }
     }
     /// The name of the stream's source operator.
@@ -68,7 +70,7 @@ impl<S: Scope, D> CoreStream<S, D> {
     pub fn scope(&self) -> S { self.scope.clone() }
 }
 
-impl<S, D> Debug for CoreStream<S, D>
+impl<S, D: Container> Debug for CoreStream<S, D>
 where
     S: Scope,
 {

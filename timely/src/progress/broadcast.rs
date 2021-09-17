@@ -15,8 +15,9 @@ pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
     to_push: Option<ProgressMsg<T>>,
-    pushers: Vec<Box<dyn Push<ProgressMsg<T>>>>,
-    puller: Box<dyn Pull<ProgressMsg<T>>>,
+    allocation: Option<ProgressMsg<T>>,
+    pushers: Vec<Box<dyn Push<ProgressMsg<T>, ProgressMsg<T>>>>,
+    puller: Box<dyn Pull<ProgressMsg<T>, ProgressMsg<T>>>,
     /// Source worker index
     source: usize,
     /// Sequence number counter
@@ -29,7 +30,7 @@ pub struct Progcaster<T:Timestamp> {
     progress_logging: Option<ProgressLogger>,
 }
 
-impl<T:Timestamp+Send> Progcaster<T> {
+impl<T:Timestamp> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
     pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
 
@@ -43,6 +44,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
         let addr = path.clone();
         Progcaster {
             to_push: None,
+            allocation: None,
             pushers,
             puller,
             source: worker_index,
@@ -108,7 +110,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 }
 
                 // TODO: This should probably use a broadcast channel.
-                pusher.push(&mut self.to_push);
+                pusher.push(self.to_push.take(), &mut self.allocation);
                 pusher.done();
             }
 
@@ -120,7 +122,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     /// Receives pointstamp changes from all workers.
     pub fn recv(&mut self, changes: &mut ChangeBatch<(Location, T)>) {
 
-        while let Some(message) = self.puller.pull() {
+        while let (Some(message), allocation) = self.puller.pull() {
 
             let source = message.0;
             let counter = message.1;

@@ -27,6 +27,7 @@ use crate::progress::{Source, Target};
 use crate::order::Product;
 use crate::{Container, ContainerBuilder, Data};
 use crate::communication::Push;
+use crate::communication::Message as CommMessage;
 use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
 use crate::dataflow::channels::{BundleCore, Message};
 
@@ -82,12 +83,12 @@ impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Ti
     }
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container<Inner=D>, D> Enter<G, T, C, D> for CoreStream<G, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container<Inner=D>, D> Enter<G, T, C, D> for CoreStream<G, C> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> CoreStream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
-        let (targets, registrar) = TeeCore::<T, C>::new();
+        let (targets, registrar) = TeeCore::<T, C, C::Allocation>::new();
         let ingress = IngressNub {
             targets: CounterCore::new(targets),
             phantom: ::std::marker::PhantomData,
@@ -123,13 +124,13 @@ pub trait Leave<G: Scope, D: Container> {
     fn leave(&self) -> CoreStream<G, D>;
 }
 
-impl<'a, G: Scope, D: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for CoreStream<Child<'a, G, T>, D> {
+impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for CoreStream<Child<'a, G, T>, D> {
     fn leave(&self) -> CoreStream<G, D> {
 
         let scope = self.scope();
 
         let output = scope.subgraph.borrow_mut().new_output();
-        let (targets, registrar) = TeeCore::<G::Timestamp, D>::new();
+        let (targets, registrar) = TeeCore::<G::Timestamp, D, D::Allocation>::new();
         let channel_id = scope.clone().new_identifier();
         self.connect_to(Target::new(0, output.port), EgressNub { targets, phantom: PhantomData }, channel_id);
 
@@ -143,23 +144,21 @@ impl<'a, G: Scope, D: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D>
 
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
+    targets: CounterCore<TInner, TData, TData::Allocation, TeeCore<TInner, TData, TData::Allocation>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
-    fn push(&mut self, message: &mut Option<BundleCore<TOuter, TData>>) {
-        if let Some(message) = message {
-            let outer_message = message.as_mut();
-            let data = TData::take(&mut outer_message.data);
-            let mut inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
-            self.targets.push(&mut inner_message);
-            if let Some(inner_message) = inner_message {
-                if let Some(inner_message) = inner_message.if_typed() {
-                    outer_message.data = inner_message.data;
-                }
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data+Container> Push<BundleCore<TOuter, TData>, CommMessage<TData::Allocation>> for IngressNub<TOuter, TInner, TData> {
+    fn push(&mut self, message: Option<BundleCore<TOuter, TData>>, allocation: &mut Option<CommMessage<TData::Allocation>>) {
+        if let Some(mut message) = message {
+            let mut outer_message = message.into_typed();
+            let mut inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time), outer_message.data, 0, 0)));
+            let mut inner_allocation = None;
+            self.targets.push(inner_message, &mut inner_allocation);
+            if let Some(inner_allocation) = inner_allocation.take().and_then(|m| m.if_typed()) {
+                *allocation = Some(crate::communication::Message::from_typed(inner_allocation));
             }
             self.active = true;
         }
@@ -175,22 +174,20 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Pus
 
 
 struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: TeeCore<TOuter, TData>,
+    targets: TeeCore<TOuter, TData, TData::Allocation>,
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData: Container> Push<BundleCore<TInner, TData>> for EgressNub<TOuter, TInner, TData>
-where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container {
-    fn push(&mut self, message: &mut Option<BundleCore<TInner, TData>>) {
+impl<TOuter, TInner, TData> Push<BundleCore<TInner, TData>, CommMessage<TData::Allocation>> for EgressNub<TOuter, TInner, TData>
+where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Clone+Container {
+    fn push(&mut self, message: Option<BundleCore<TInner, TData>>, allocation: &mut Option<CommMessage<TData::Allocation>>) {
         if let Some(message) = message {
-            let inner_message = message.as_mut();
-            let data = TData::take(&mut inner_message.data);
-            let mut outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
-            self.targets.push(&mut outer_message);
-            if let Some(outer_message) = outer_message {
-                if let Some(outer_message) = outer_message.if_typed() {
-                    inner_message.data = outer_message.data;
-                }
+            let inner_message = message.into_typed();
+            let mut outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.to_outer(), inner_message.data, 0, 0)));
+            let mut outer_allocation = None;
+            self.targets.push(outer_message, &mut outer_allocation);
+            if let Some(outer_allocation) = outer_allocation.and_then(CommMessage::if_typed) {
+                *allocation = Some(CommMessage::from_typed(outer_allocation));
             }
         }
         else { self.targets.done(); }

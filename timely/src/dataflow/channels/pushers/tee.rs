@@ -8,49 +8,50 @@ use crate::dataflow::channels::{BundleCore, Message};
 use crate::{Container, ContainerBuilder, Data};
 
 use crate::communication::Push;
+use crate::communication::Message as CommMessage;
 
-type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
+type PushList<T, D, A> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>, CommMessage<A>>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
-pub struct TeeCore<T: 'static, D: 'static> {
-    buffer: Option<D>,
-    shared: PushList<T, D>,
+pub struct TeeCore<T: 'static, D: 'static, A: 'static> {
+    shared: PushList<T, D, A>,
 }
 
 /// [TeeCore] specialized to `Vec`-based container.
-pub type Tee<T, D> = TeeCore<T, Vec<D>>;
+pub type Tee<T, D> = TeeCore<T, Vec<D>, Vec<D>>;
 
-impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
+impl<T: Data, D: Container> Push<BundleCore<T, D>, CommMessage<D::Allocation>> for TeeCore<T, D, D::Allocation> {
     #[inline]
-    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) {
+    fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<CommMessage<D::Allocation>>) {
         let mut pushers = self.shared.borrow_mut();
-        if let Some(message) = message {
+        if let Some(message) = &message {
+            let mut allocation = None;
             for index in 1..pushers.len() {
-                let mut builder = D::Builder::with_optional_allocation(&mut self.buffer);
-                builder.initialize_from(&message.data);
-                let mut buffer = builder.build();
-                Message::push_at(&mut buffer, message.time.clone(), &mut pushers[index-1]);
-                self.buffer = Some(buffer);
+                let copy = if let Some(allocation) = allocation.take() {
+                    message.data.clone_into(allocation)
+                } else {
+                    message.data.clone()
+                };
+                Message::push_at(Some(copy), message.time.clone(), &mut pushers[index-1], &mut allocation);
             }
         }
         else {
             for index in 1..pushers.len() {
-                pushers[index-1].push(&mut None);
+                pushers[index-1].push(None, &mut None);
             }
         }
         if pushers.len() > 0 {
             let last = pushers.len() - 1;
-            pushers[last].push(message);
+            pushers[last].push(message, &mut None);
         }
     }
 }
 
-impl<T, D: Container> TeeCore<T, D> {
+impl<T, D: Container> TeeCore<T, D, D::Allocation> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
-    pub fn new() -> (TeeCore<T, D>, TeeHelper<T, D>) {
+    pub fn new() -> (TeeCore<T, D, D::Allocation>, TeeHelper<T, D, D::Allocation>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = TeeCore {
-            buffer: None,
             shared: shared.clone(),
         };
 
@@ -58,13 +59,12 @@ impl<T, D: Container> TeeCore<T, D> {
     }
 }
 
-impl<T, D> Debug for TeeCore<T, D>
+impl<T, D, A> Debug for TeeCore<T, D, A>
 where
     D: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("Tee");
-        debug.field("buffer", &self.buffer);
 
         if let Ok(shared) = self.shared.try_borrow() {
             debug.field("shared", &format!("{} pushers", shared.len()));
@@ -77,18 +77,18 @@ where
 }
 
 /// A shared list of `Box<Push>` used to add `Push` implementors.
-pub struct TeeHelper<T, D> {
-    shared: PushList<T, D>,
+pub struct TeeHelper<T, D, A> {
+    shared: PushList<T, D, A>,
 }
 
-impl<T, D> TeeHelper<T, D> {
+impl<T, D, A> TeeHelper<T, D, A> {
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
-    pub fn add_pusher<P: Push<BundleCore<T, D>>+'static>(&self, pusher: P) {
+    pub fn add_pusher<P: Push<BundleCore<T, D>, CommMessage<A>>+'static>(&self, pusher: P) {
         self.shared.borrow_mut().push(Box::new(pusher));
     }
 }
 
-impl<T, D> Clone for TeeHelper<T, D> {
+impl<T, D, A> Clone for TeeHelper<T, D, A> {
     fn clone(&self) -> Self {
         TeeHelper {
             shared: self.shared.clone(),
@@ -96,7 +96,7 @@ impl<T, D> Clone for TeeHelper<T, D> {
     }
 }
 
-impl<T, D> Debug for TeeHelper<T, D> {
+impl<T, D, A> Debug for TeeHelper<T, D, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("TeeHelper");
 

@@ -112,15 +112,9 @@ impl<G: Scope, D: Container> Probe<G, D> for CoreStream<G, D> {
                     started = true;
                 }
 
-                use crate::communication::message::RefOrMut;
-
-                while let Some(message) = input.next() {
-                    let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
-                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
-                    };
-                    data.swap(&mut vector);
-                    output.session(time).give_container(&mut vector);
+                while let Some((mut message, allocation)) = input.next() {
+                    let (time, data) = (&message.time, message.to_owned());
+                    output.session(time).give_container(data.data, allocation);
                 }
                 output.cease();
 

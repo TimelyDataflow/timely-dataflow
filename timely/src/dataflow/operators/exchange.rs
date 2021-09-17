@@ -28,13 +28,14 @@ pub trait Exchange<T, D: ExchangeData> {
 // impl<T: Timestamp, G: Scope<Timestamp=T>, D: ExchangeData> Exchange<T, D> for Stream<G, D> {
 impl<G: Scope, C: Container<Inner=D>+ExchangeContainer, D: ExchangeData> Exchange<G::Timestamp, D> for CoreStream<G, C>
     where for<'a> &'a mut C: DrainContainer<Inner=D>,
+    C::Allocation: ExchangeData,
 {
     fn exchange(&self, route: impl Fn(&D)->u64+'static) -> CoreStream<G, C> {
-        let mut vector = C::empty();
+        let mut vector = None;
         self.unary(ExchangePact::new(route), "Exchange", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                data.swap(&mut vector);
-                output.session(&time).give_container(&mut vector);
+                let data = data.assemble(&mut vector);
+                output.session(&time).give_container(data, &mut vector);
             });
         })
     }

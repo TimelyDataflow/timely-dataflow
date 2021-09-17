@@ -4,11 +4,12 @@ use std::marker::PhantomData;
 
 use crate::{Container, ContainerBuilder, Data, DrainContainer};
 use crate::communication::Push;
+use crate::communication::Message as CommMessage;
 use crate::dataflow::channels::{BundleCore, Message};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>, CommMessage<C::Allocation>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<Option<C::Builder>>,
     current: Option<T>,
@@ -16,7 +17,7 @@ pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, 
     _phantom_data: PhantomData<D>,
 }
 
-impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
+impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>, CommMessage<C::Allocation>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
         let mut buffers = vec![];
@@ -36,21 +37,22 @@ impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64
         if !self.buffers[index].as_ref().map_or(true, C::Builder::is_empty) {
             if let Some(ref time) = self.current {
                 let mut container = self.buffers[index].take().unwrap().build();
-                Message::push_at(&mut container, time.clone(), &mut self.pushers[index]);
+                // TODO: allocation
+                Message::push_at(Some(container), time.clone(), &mut self.pushers[index], &mut None);
                 self.buffers[index] = Some(C::Builder::with_allocation(container));
             }
         }
     }
 }
 
-impl<T: Eq+Data, C: Container<Inner=D>, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64> Push<BundleCore<T, C>> for Exchange<T, C, D, P, H>
+impl<T: Eq+Data, C: Container<Inner=D>, D: Data, P: Push<BundleCore<T, C>, CommMessage<C::Allocation>>, H: FnMut(&T, &D)->u64> Push<BundleCore<T, C>, CommMessage<C::Allocation>> for Exchange<T, C, D, P, H>
     where for<'b> &'b mut C: DrainContainer<Inner=D>,
 {
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<BundleCore<T, C>>) {
+    fn push(&mut self, message: Option<BundleCore<T, C>>, allocation: &mut Option<CommMessage<C::Allocation>>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
-            self.pushers[0].push(message);
+            self.pushers[0].push(message, allocation);
         }
         else if let Some(message) = message {
 
@@ -102,7 +104,7 @@ impl<T: Eq+Data, C: Container<Inner=D>, D: Data, P: Push<BundleCore<T, C>>, H: F
             // flush
             for index in 0..self.pushers.len() {
                 self.flush(index);
-                self.pushers[index].push(&mut None);
+                self.pushers[index].push(None, &mut None);
             }
         }
     }

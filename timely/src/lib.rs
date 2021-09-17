@@ -76,6 +76,8 @@ pub use timely_communication::Config as CommunicationConfig;
 pub use worker::Config as WorkerConfig;
 pub use execute::Config as Config;
 use std::ops::RangeBounds;
+use std::convert::TryFrom;
+use crate::communication::message::IntoAllocated;
 
 /// Re-export of the `timely_communication` crate.
 pub mod communication {
@@ -120,10 +122,14 @@ impl<T: Data + communication::Data> ExchangeData for T { }
 /// A container of data passing on a dataflow edge
 pub trait Container: Data {
     /// The type of elements contained by this collection
-    type Inner: Data;
+    type Inner;
 
     /// The builder for this container
     type Builder: ContainerBuilder<Container=Self>;
+
+    type Allocation: Data + TryFrom<Self> + IntoAllocated<Self>;
+
+    fn clone_into(&self, allocation: Self::Allocation) -> Self;
 
     /// Construct an empty container
     fn empty() -> Self;
@@ -138,9 +144,9 @@ pub trait Container: Data {
     fn len(&self) -> usize;
 
     /// Take a container leaving an empty container behind.
-    fn take(container: &mut Self) -> Self {
-        ::std::mem::replace(container, Self::empty())
-    }
+    // fn take(container: &mut Self) -> Self {
+    //     ::std::mem::replace(container, Self::empty())
+    // }
 
     /// Default buffer size.
     fn default_length() -> usize {
@@ -156,6 +162,14 @@ pub trait Container: Data {
             1
         }
     }
+}
+
+trait PushContainer: Container {
+    type Builder: ContainerBuilder<Container=Self> + PushContainerBuilder;
+}
+
+trait PushContainerBuilder {
+
 }
 
 /// A builder for containers
@@ -215,9 +229,15 @@ pub trait ContainerBuilder: Extend<<<Self as ContainerBuilder>::Container as Con
 /// A container specialized to be passed on exchange dataflow edges.
 pub trait ExchangeContainer: Container+ExchangeData {}
 
-impl<D: Data> Container for Vec<D> {
+impl<D: Clone + 'static> Container for Vec<D> {
     type Inner = D;
     type Builder = Vec<D>;
+    type Allocation = Vec<D>;
+
+    fn clone_into(&self, mut allocation: Self::Allocation) -> Self {
+        allocation.clone_from(&self);
+        allocation
+    }
 
     fn empty() -> Self {
         Vec::new()
@@ -237,7 +257,7 @@ impl<D: Data> Container for Vec<D> {
 
 }
 
-impl<D: Data> ContainerBuilder for Vec<D> {
+impl<D: Clone + 'static> ContainerBuilder for Vec<D> {
     type Container = Vec<D>;
 
     fn new() -> Self {
@@ -318,6 +338,7 @@ impl<'a, D: Data> DrainContainer for &'a mut Vec<D> {
 mod rc {
     use crate::{Container, ContainerBuilder};
     use std::rc::Rc;
+    use crate::communication::message::{IntoAllocated, RefOrMut};
 
     #[derive(Clone)]
     struct RcContainer<T: Container> {
@@ -327,6 +348,11 @@ mod rc {
     impl<T: Container> Container for RcContainer<T> {
         type Inner = T::Inner;
         type Builder = RcContainerBuilder<T::Builder>;
+        type Allocation = ();
+
+        fn clone_into(&self, allocation: Self::Allocation) -> Self {
+            Self { inner: Rc::clone(&self.inner)}
+        }
 
         fn empty() -> Self {
             Self { inner: Rc::new(T::empty()) }
@@ -346,6 +372,22 @@ mod rc {
 
         fn default_length() -> usize {
             T::default_length()
+        }
+    }
+
+    impl<T: Container> From<RcContainer<T>> for () {
+        fn from(_: RcContainer<T>) -> Self {
+            ()
+        }
+    }
+
+    impl<T: Container> IntoAllocated<RcContainer<T>> for () {
+        fn assemble(self, ref_or_mut: RefOrMut<RcContainer<T>>) -> RcContainer<T> {
+            Self::assemble_new(ref_or_mut)
+        }
+
+        fn assemble_new(ref_or_mut: RefOrMut<RcContainer<T>>) -> RcContainer<T> {
+            RcContainer { inner: Rc::clone(&ref_or_mut.inner) }
         }
     }
 
