@@ -16,9 +16,9 @@ use crate::dataflow::channels::pushers::buffer::{BufferCore as PushBuffer, Autof
 use crate::dataflow::operators::{ActivateCapability, Capability};
 
 use crate::dataflow::{Scope, CoreStream};
-use crate::Container;
 use std::fmt::Debug;
 use crate::dataflow::channels::MessageAllocation;
+use crate::communication::Container;
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInputCore<G: Scope> {
@@ -147,8 +147,8 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 }
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-pub struct UnorderedHandleCore<T: Timestamp, D: Container> {
-    buffer: PushBuffer<T, D, PushCounter<T, D, D::Allocation, TeeCore<T, D, MessageAllocation<D::Allocation>>>>,
+pub struct UnorderedHandleCore<T: Timestamp, D: Container+'static> {
+    buffer: PushBuffer<T, D, PushCounter<T, D, TeeCore<T, D>>>,
 }
 
 impl<T: Timestamp, D: Container> Debug for UnorderedHandleCore<T, D> where D: Debug, D::Allocation: Debug {
@@ -160,14 +160,14 @@ impl<T: Timestamp, D: Container> Debug for UnorderedHandleCore<T, D> where D: De
 }
 
 impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
-    fn new(pusher: PushCounter<T, D, D::Allocation, TeeCore<T, D, MessageAllocation<D::Allocation>>>) -> UnorderedHandleCore<T, D> {
+    fn new(pusher: PushCounter<T, D, TeeCore<T, D>>) -> UnorderedHandleCore<T, D> {
         UnorderedHandleCore {
             buffer: PushBuffer::new(pusher),
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, D, PushCounter<T, D, D::Allocation, TeeCore<T, D, MessageAllocation<D::Allocation>>>>> {
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, D, PushCounter<T, D, TeeCore<T, D>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }

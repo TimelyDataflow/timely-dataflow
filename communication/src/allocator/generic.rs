@@ -13,7 +13,7 @@ use crate::allocator::{Allocate, AllocateBuilder, Event, Thread, Process};
 use crate::allocator::zero_copy::allocator_process::{ProcessBuilder, ProcessAllocator};
 use crate::allocator::zero_copy::allocator::{TcpBuilder, TcpAllocator};
 
-use crate::{Push, Pull, Data, Message};
+use crate::{Push, Pull, Data, Message, Container};
 
 /// Enumerates known implementors of `Allocate`.
 /// Passes trait method calls on to members.
@@ -48,7 +48,9 @@ impl Generic {
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data, A: Send+Sync+From<T>+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>) {
+    fn allocate<T: Data+Container>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>)
+        where T::Allocation: Send+Sync
+    {
         match self {
             Generic::Thread(t) => t.allocate(identifier),
             Generic::Process(p) => p.allocate(identifier),
@@ -87,7 +89,9 @@ impl Generic {
 impl Allocate for Generic {
     fn index(&self) -> usize { self.index() }
     fn peers(&self) -> usize { self.peers() }
-    fn allocate<T: Data, A: Send+Sync+From<T>+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>) {
+    fn allocate<T: Data+Container>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>)
+        where T::Allocation: Send+Sync
+    {
         self.allocate(identifier)
     }
 

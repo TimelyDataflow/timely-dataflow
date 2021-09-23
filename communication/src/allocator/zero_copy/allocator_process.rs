@@ -9,7 +9,7 @@ use bytes::arc::Bytes;
 
 use crate::networking::MessageHeader;
 
-use crate::{Allocate, Message, Data, Push, Pull};
+use crate::{Allocate, Message, Data, Push, Pull, Container};
 use crate::allocator::{AllocateBuilder, Event};
 use crate::allocator::canary::Canary;
 
@@ -119,7 +119,7 @@ pub struct ProcessAllocator {
 impl Allocate for ProcessAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data, A: Send+Sync+From<T>+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>) {
+    fn allocate<T: Data+Container>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
 
         // Assume and enforce in-order identifier allocation.
         if let Some(bound) = self.channel_id_bound {
@@ -127,7 +127,7 @@ impl Allocate for ProcessAllocator {
         }
         self.channel_id_bound = Some(identifier);
 
-        let mut pushes = Vec::<Box<dyn Push<Message<T>, A>>>::with_capacity(self.peers());
+        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::with_capacity(self.peers());
 
         for target_index in 0 .. self.peers() {
 

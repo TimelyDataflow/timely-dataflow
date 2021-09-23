@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use bytes::arc::Bytes;
 use abomonation;
-use crate::Data;
+use crate::{Data, Container};
 
 /// Either an immutable or mutable reference.
 pub enum RefOrMut<'a, T> where T: 'a {
@@ -51,9 +51,9 @@ impl<'a, T: Clone+'a> RefOrMut<'a, T> {
     /// TODO
     pub fn assemble<A: IntoAllocated<T>>(self, allocation: &mut Option<A>) -> T {
         if let Some(allocation) = allocation.take() {
-            allocation.assemble(self)
+            allocation.assemble_ref(&*self)
         } else {
-            A::assemble_new(self)
+            A::assemble_new_ref(&*self)
         }
     }
 }
@@ -234,48 +234,119 @@ impl<T: Clone> Message<T> {
     }
 }
 
-/// A hollow allocation
-pub trait FromAllocated<A> {
-    /// Turn an allocated object into a hollow object, if possible
-    fn hollow(self) -> Option<A>;
-}
+/// TODO
+pub struct MessageAllocation<T>(T);
 
-impl<T, A: From<T>> FromAllocated<A> for Message<T> {
-    fn hollow(self) -> Option<A> {
+impl<T: Container> Container for Message<T> {
+    type Allocation = MessageAllocation<T::Allocation>;
+    fn hollow(self) -> Option<Self::Allocation> {
         match self.payload {
             MessageContents::Binary(_) | MessageContents::Arc(_) => None,
-            MessageContents::Owned(allocated) => Some(allocated.into()),
+            MessageContents::Owned(allocated) => allocated.hollow().map(|allocation| MessageAllocation(allocation)),
         }
     }
 }
 
-impl<T> FromAllocated<Vec<T>> for Vec<T> {
-    fn hollow(mut self) -> Option<Vec<T>> {
-        self.clear();
-        Some(self)
-    }
-}
+// /// A hollow allocation
+// pub trait FromAllocated<A> {
+//     /// Turn an allocated object into a hollow object, if possible
+//     fn hollow(self) -> Option<A>;
+// }
+//
+// impl<T, A: From<T>> FromAllocated<A> for Message<T> {
+//     fn hollow(self) -> Option<A> {
+//         match self.payload {
+//             MessageContents::Binary(_) | MessageContents::Arc(_) => None,
+//             MessageContents::Owned(allocated) => Some(allocated.into()),
+//         }
+//     }
+// }
+//
+// impl<T> FromAllocated<Vec<T>> for Vec<T> {
+//     fn hollow(mut self) -> Option<Vec<T>> {
+//         self.clear();
+//         Some(self)
+//     }
+// }
 
 /// TODO
 pub trait IntoAllocated<T> {
     /// TODO
-    fn assemble(self, ref_or_mut: RefOrMut<T>) -> T where Self: Sized {
-        Self::assemble_new(ref_or_mut)
+    fn assemble(self, allocated: T) -> T where Self: Sized {
+        Self::assemble_new(allocated)
     }
     /// TODO
-    fn assemble_new(ref_or_mut: RefOrMut<T>) -> T;
+    fn assemble_new(allocated: T) -> T;
 }
 
-impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
-    fn assemble(mut self, ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
-        self.clone_from(&*ref_or_mut);
+impl<T: Container> IntoAllocated<Message<T>> for MessageAllocation<T::Allocation> {
+    fn assemble(self, ref_or_mut: Message<T>) -> Message<T> where Self: Sized {
+        match ref_or_mut.payload {
+            MessageContents::Binary(binary) => Message { payload: MessageContents::Binary(binary) },
+            MessageContents::Owned(owned) => Message::from_typed(T::Allocation::assemble(self.0, owned)),
+            MessageContents::Arc(arc) => Message::from_arc(arc),
+        }
+    }
+
+    fn assemble_new(ref_or_mut: Message<T>) -> Message<T> {
+        todo!()
+    }
+
+    fn assemble_ref(self, allocated: &Message<T>) -> Message<T> where Message<T>: Clone {
+        todo!()
+    }
+
+    fn assemble_new_ref(allocated: &Message<T>) -> Message<T> where Message<T>: Clone {
+        todo!()
+    }
+}
+
+impl IntoAllocated<()> for () {
+    fn assemble_new(allocated: ()) -> () {
+        ()
+    }
+
+    fn assemble_ref(self, allocated: &()) -> () where (): Clone {
+        ()
+    }
+
+    fn assemble_new_ref(allocated: &()) -> () where (): Clone {
+        ()
+    }
+}
+
+impl<A: Container> IntoAllocated<(A,)> for (A::Allocation,) {
+    fn assemble_new(allocated: (A::Allocation,)) -> (A,) {
+        (A::Allocation::assemble_new(allocated.0),)
+    }
+
+    fn assemble_ref(self, allocated: &(A, )) -> (A, ) where (A, ): Clone {
+        todo!()
+    }
+
+    fn assemble_new_ref(allocated: &(A, )) -> (A, ) where (A, ): Clone {
+        todo!()
+    }
+}
+
+impl<'a, T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
+    fn assemble(mut self, ref_or_mut: Vec<T>) -> Vec<T> {
+        self.clone_from(&ref_or_mut);
         self
     }
 
-    fn assemble_new(ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
+    fn assemble_new(ref_or_mut: Vec<T>) -> Vec<T> {
         let mut vec = Vec::new();
-        vec.clone_from(&*ref_or_mut);
+        vec.clone_from(&ref_or_mut);
         vec
+    }
+
+    fn assemble_ref(self, allocated: &Vec<T>) -> Vec<T> where Vec<T>: Clone {
+        todo!()
+    }
+
+    fn assemble_new_ref(allocated: &Vec<T>) -> Vec<T> where Vec<T>: Clone {
+        todo!()
     }
 }
 
@@ -284,12 +355,20 @@ mod rc {
     use std::rc::Rc;
 
     impl<T> IntoAllocated<Rc<T>> for () {
-        fn assemble(self, ref_or_mut: RefOrMut<Rc<T>>) -> Rc<T> {
-            Rc::clone(&*ref_or_mut)
+        fn assemble(self, ref_or_mut: Rc<T>) -> Rc<T> {
+            Rc::clone(&ref_or_mut)
         }
 
-        fn assemble_new(ref_or_mut: RefOrMut<Rc<T>>) -> Rc<T> {
-            Rc::clone(&*ref_or_mut)
+        fn assemble_new(ref_or_mut: Rc<T>) -> Rc<T> {
+            Rc::clone(&ref_or_mut)
+        }
+
+        fn assemble_ref(self, allocated: &Rc<T>) -> Rc<T> where Rc<T>: Clone {
+            todo!()
+        }
+
+        fn assemble_new_ref(allocated: &Rc<T>) -> Rc<T> where Rc<T>: Clone {
+            todo!()
         }
     }
 }

@@ -25,8 +25,8 @@ use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
 use crate::order::Product;
-use crate::{Container, Data};
-use crate::communication::Push;
+use crate::{Data};
+use crate::communication::{Push, Container};
 use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
 use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
 
@@ -36,7 +36,7 @@ use crate::dataflow::scopes::{Child, ScopeParent};
 use crate::dataflow::operators::delay::Delay;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
-pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container<Inner=D>, D> {
+pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     /// Moves the `Stream` argument into a child of its current `Scope`.
     ///
     /// # Examples
@@ -75,14 +75,14 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, D> ;
 }
 
-impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, Vec<D>, D>> EnterAt<G, T, D> for E {
+impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, Vec<D>>> EnterAt<G, T, D> for E {
     fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, mut initial: F) ->
         Stream<Iterative<'a, G, T>, D> {
             self.enter(scope).delay(move |datum, time| Product::new(time.clone().to_outer(), initial(datum)))
     }
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container<Inner=D>, D> Enter<G, T, C, D> for CoreStream<G, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for CoreStream<G, C> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> CoreStream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
@@ -142,15 +142,15 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: CounterCore<TInner, TData, TData::Allocation, TeeCore<TInner, TData, MessageAllocation<TData::Allocation>>>,
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+'static> {
+    targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data+Container> Push<BundleCore<TOuter, TData>, MessageAllocation<TData::Allocation>> for IngressNub<TOuter, TInner, TData> {
-    fn push(&mut self, message: Option<BundleCore<TOuter, TData>>, allocation: &mut Option<MessageAllocation<TData::Allocation>>) {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data+Container> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
+    fn push(&mut self, message: Option<BundleCore<TOuter, TData>>, allocation: &mut Option<<BundleCore<TOuter,TData> as Container>::Allocation>) {
         if let Some(mut message) = message {
             let mut outer_message = message.into_typed();
             let mut inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time), outer_message.data, 0, 0)));
@@ -172,14 +172,14 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data+Container
 }
 
 
-struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: TeeCore<TOuter, TData, MessageAllocation<TData::Allocation>>,
+struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+'static> {
+    targets: TeeCore<TOuter, TData>,
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData> Push<BundleCore<TInner, TData>, MessageAllocation<TData::Allocation>> for EgressNub<TOuter, TInner, TData>
+impl<TOuter, TInner, TData> Push<BundleCore<TInner, TData>> for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Clone+Container {
-    fn push(&mut self, message: Option<BundleCore<TInner, TData>>, allocation: &mut Option<MessageAllocation<TData::Allocation>>) {
+    fn push(&mut self, message: Option<BundleCore<TInner, TData>>, allocation: &mut Option<<BundleCore<TInner, TData> as Container>::Allocation>) {
         if let Some(message) = message {
             let inner_message = message.into_typed();
             let mut outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.to_outer(), inner_message.data, 0, 0)));

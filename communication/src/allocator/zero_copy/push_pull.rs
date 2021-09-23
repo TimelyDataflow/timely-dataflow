@@ -9,25 +9,24 @@ use bytes::arc::Bytes;
 use crate::allocator::canary::Canary;
 use crate::networking::MessageHeader;
 
-use crate::{Data, Push, Pull};
+use crate::{Data, Push, Pull, Container};
 use crate::allocator::Message;
 
 use super::bytes_exchange::{BytesPush, SendEndpoint};
-use crate::message::FromAllocated;
 
 /// An adapter into which one may push elements of type `T`.
 ///
 /// This pusher has a fixed MessageHeader, and access to a SharedByteBuffer which it uses to
 /// acquire buffers for serialization.
-pub struct Pusher<T, A, P: BytesPush> {
+pub struct Pusher<T, P: BytesPush> {
     header:     MessageHeader,
     sender:     Rc<RefCell<SendEndpoint<P>>>,
-    phantom:    ::std::marker::PhantomData<(T, A)>,
+    phantom:    ::std::marker::PhantomData<T>,
 }
 
-impl<T, A, P: BytesPush> Pusher<T, A, P> {
+impl<T, P: BytesPush> Pusher<T, P> {
     /// Creates a new `Pusher` from a header and shared byte buffer.
-    pub fn new(header: MessageHeader, sender: Rc<RefCell<SendEndpoint<P>>>) -> Pusher<T, A, P> {
+    pub fn new(header: MessageHeader, sender: Rc<RefCell<SendEndpoint<P>>>) -> Pusher<T, P> {
         Pusher {
             header,
             sender,
@@ -36,9 +35,9 @@ impl<T, A, P: BytesPush> Pusher<T, A, P> {
     }
 }
 
-impl<T:Data, A: From<T>, P: BytesPush> Push<Message<T>, A> for Pusher<T, A, P> {
+impl<T:Data+Container, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
     #[inline]
-    fn push(&mut self, element: Option<Message<T>>, allocation: &mut Option<A>) {
+    fn push(&mut self, element: Option<Message<T>>, allocation: &mut Option<<Message<T> as Container>::Allocation>) {
         if let Some(element) = element {
 
             // determine byte lengths and build header.
@@ -68,13 +67,13 @@ impl<T:Data, A: From<T>, P: BytesPush> Push<Message<T>, A> for Pusher<T, A, P> {
 /// not the most efficient thing possible, which would probably instead be something
 /// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
 /// allocation.
-pub struct Puller<T, A> {
+pub struct Puller<T: Container> {
     _canary: Canary,
-    current: (Option<Message<T>>, Option<A>),
+    current: (Option<Message<T>>, Option<<Message<T> as Container>::Allocation>),
     receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
 }
 
-impl<T:Data, A: Send+Sync+'static> Puller<T, A> {
+impl<T:Data+Container> Puller<T> {
     /// Creates a new `Puller` instance from a shared queue.
     pub fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
         Self {
@@ -85,9 +84,9 @@ impl<T:Data, A: Send+Sync+'static> Puller<T, A> {
     }
 }
 
-impl<T:Data, A: Send+Sync+'static> Pull<Message<T>, A> for Puller<T, A> {
+impl<T:Data+Container> Pull<Message<T>> for Puller<T> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<Message<T>>, Option<A>) {
+    fn pull(&mut self) -> &mut (Option<Message<T>>, Option<<Message<T> as Container>::Allocation>) {
         self.current.0 =
         self.receiver
             .borrow_mut()
@@ -104,16 +103,16 @@ impl<T:Data, A: Send+Sync+'static> Pull<Message<T>, A> for Puller<T, A> {
 /// not the most efficient thing possible, which would probably instead be something
 /// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
 /// allocation.
-pub struct PullerInner<T, A> {
-    inner: Box<dyn Pull<Message<T>, A>>,               // inner pullable (e.g. intra-process typed queue)
+pub struct PullerInner<T: Container> {
+    inner: Box<dyn Pull<Message<T>>>,               // inner pullable (e.g. intra-process typed queue)
     _canary: Canary,
-    current: (Option<Message<T>>, Option<A>),
+    current: (Option<Message<T>>, Option<<Message<T> as Container>::Allocation>),
     receiver: Rc<RefCell<VecDeque<Bytes>>>,     // source of serialized buffers
 }
 
-impl<T: Data, A> PullerInner<T, A> {
+impl<T: Data+Container> PullerInner<T> {
     /// Creates a new `PullerInner` instance from a shared queue.
-    pub fn new(inner: Box<dyn Pull<Message<T>, A>>, receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
+    pub fn new(inner: Box<dyn Pull<Message<T>>>, receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
         Self {
             inner,
             _canary,
@@ -123,9 +122,9 @@ impl<T: Data, A> PullerInner<T, A> {
     }
 }
 
-impl<T: Data, A> Pull<Message<T>, A> for PullerInner<T, A> {
+impl<T: Data + Container> Pull<Message<T>> for PullerInner<T> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<Message<T>>, Option<A>) {
+    fn pull(&mut self) -> &mut (Option<Message<T>>, Option<<Message<T> as Container>::Allocation>) {
 
         let inner = self.inner.pull();
         if inner.0.is_some() {

@@ -4,19 +4,19 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use crate::{Push, Pull};
+use crate::{Push, Pull, Container};
 use crate::allocator::Event;
 
 /// The push half of an intra-thread channel.
-pub struct Pusher<T, A, P: Push<T, A>> {
+pub struct Pusher<T: Container, P: Push<T>> {
     index: usize,
     // count: usize,
     events: Rc<RefCell<VecDeque<(usize, Event)>>>,
     pusher: P,
-    phantom: ::std::marker::PhantomData<(T, A)>,
+    phantom: ::std::marker::PhantomData<T>,
 }
 
-impl<T, A, P: Push<T, A>> Pusher<T, A, P> {
+impl<T: Container, P: Push<T>> Pusher<T, P> {
     /// Wraps a pusher with a message counter.
     pub fn new(pusher: P, index: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>) -> Self {
         Pusher {
@@ -29,9 +29,9 @@ impl<T, A, P: Push<T, A>> Pusher<T, A, P> {
     }
 }
 
-impl<T, A, P: Push<T, A>> Push<T, A> for Pusher<T, A, P> {
+impl<T: Container, P: Push<T>> Push<T> for Pusher<T, P> {
     #[inline]
-    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>) {
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<T::Allocation>) {
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events
@@ -56,16 +56,16 @@ impl<T, A, P: Push<T, A>> Push<T, A> for Pusher<T, A, P> {
 use crossbeam_channel::Sender;
 
 /// The push half of an intra-thread channel.
-pub struct ArcPusher<T, A, P: Push<T, A>> {
+pub struct ArcPusher<T: Container, P: Push<T>> {
     index: usize,
     // count: usize,
     events: Sender<(usize, Event)>,
     pusher: P,
-    phantom: ::std::marker::PhantomData<(T, A)>,
+    phantom: ::std::marker::PhantomData<T>,
     buzzer: crate::buzzer::Buzzer,
 }
 
-impl<T, A, P: Push<T, A>>  ArcPusher<T, A, P> {
+impl<T: Container, P: Push<T>>  ArcPusher<T, P> {
     /// Wraps a pusher with a message counter.
     pub fn new(pusher: P, index: usize, events: Sender<(usize, Event)>, buzzer: crate::buzzer::Buzzer) -> Self {
         ArcPusher {
@@ -79,9 +79,9 @@ impl<T, A, P: Push<T, A>>  ArcPusher<T, A, P> {
     }
 }
 
-impl<T, A, P: Push<T, A>> Push<T, A> for ArcPusher<T, A, P> {
+impl<T: Container, P: Push<T>> Push<T> for ArcPusher<T, P> {
     #[inline]
-    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>) {
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<T::Allocation>) {
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events
@@ -107,15 +107,15 @@ impl<T, A, P: Push<T, A>> Push<T, A> for ArcPusher<T, A, P> {
 }
 
 /// The pull half of an intra-thread channel.
-pub struct Puller<T, A, P: Pull<T, A>> {
+pub struct Puller<T: Container, P: Pull<T>> {
     index: usize,
     count: usize,
     events: Rc<RefCell<VecDeque<(usize, Event)>>>,
     puller: P,
-    phantom: ::std::marker::PhantomData<(T, A)>,
+    phantom: ::std::marker::PhantomData<T>,
 }
 
-impl<T, A, P: Pull<T, A>>  Puller<T, A, P> {
+impl<T: Container, P: Pull<T>>  Puller<T, P> {
     /// Wraps a puller with a message counter.
     pub fn new(puller: P, index: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>) -> Self {
         Puller {
@@ -127,9 +127,9 @@ impl<T, A, P: Pull<T, A>>  Puller<T, A, P> {
         }
     }
 }
-impl<T, A, P: Pull<T, A>> Pull<T, A> for Puller<T, A, P> {
+impl<T: Container, P: Pull<T>> Pull<T> for Puller<T, P> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<T>, Option<A>) {
+    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>) {
         let result = self.puller.pull();
         if result.0.is_none() {
             if self.count != 0 {

@@ -191,12 +191,12 @@ pub trait AsWorker : Scheduler {
     /// scheduled in response to the receipt of records on the channel.
     /// Most commonly, this would be the address of the *target* of the
     /// channel.
-    fn allocate<T: Data, A: Send+Sync+From<T>+'static>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>);
+    fn allocate<T: Data+Container>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) where T::Allocation: Send+Sync ;
     /// Constructs a pipeline channel from the worker to itself.
     ///
     /// By default this method uses the native channel allocation mechanism, but the expectation is
     /// that this behavior will be overriden to be more efficient.
-    fn pipeline<T: 'static, A: 'static+From<T>>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>, A>, ThreadPuller<Message<T>, A>);
+    fn pipeline<T: Container+'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>);
 
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
@@ -231,14 +231,14 @@ impl<A: Allocate> AsWorker for Worker<A> {
     fn config(&self) -> &Config { &self.config }
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data, Al: Send+Sync+From<D>+'static>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>, Al>>>, Box<dyn Pull<Message<D>, Al>>) {
+    fn allocate<D: Data+Container>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) where D::Allocation: Send+Sync {
         if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address.to_vec());
         self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().allocate(identifier)
     }
-    fn pipeline<T: 'static, Al: 'static+From<T>>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>, Al>, ThreadPuller<Message<T>, Al>) {
+    fn pipeline<T: Container+'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
         if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address.to_vec());
@@ -706,6 +706,7 @@ impl<A: Allocate> Worker<A> {
 }
 
 use crate::communication::Message;
+use timely_communication::Container;
 
 impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {

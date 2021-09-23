@@ -132,14 +132,14 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<D: Container>(&mut self) -> (TeeCore<G::Timestamp, D, MessageAllocation<D::Allocation>>, CoreStream<G, D>) {
+    pub fn new_output<D: Container>(&mut self) -> (TeeCore<G::Timestamp, D>, CoreStream<G, D>) {
 
         let connection = vec![Antichain::from_elem(Default::default()); self.shape.inputs];
         self.new_output_connection(connection)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output_connection<D: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (TeeCore<G::Timestamp, D, MessageAllocation<D::Allocation>>, CoreStream<G, D>) {
+    pub fn new_output_connection<D: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (TeeCore<G::Timestamp, D>, CoreStream<G, D>) {
 
         let (targets, registrar) = TeeCore::<G::Timestamp,D, MessageAllocation<D::Allocation>>::new();
         let source = Source::new(self.index, self.shape.outputs);

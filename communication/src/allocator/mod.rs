@@ -18,7 +18,7 @@ pub mod counters;
 
 pub mod zero_copy;
 
-use crate::{Data, Push, Pull, Message};
+use crate::{Data, Push, Pull, Message, Container};
 
 /// A proto-allocator, which implements `Send` and can be completed with `build`.
 ///
@@ -43,7 +43,8 @@ pub trait Allocate {
     /// The number of workers in the communication group.
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data, A: Send+Sync+From<T>+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>);
+    fn allocate<T: Data+Container>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>)
+        where T::Allocation: Send+Sync;
     /// A shared queue of communication events with channel identifier.
     ///
     /// It is expected that users of the channel allocator will regularly
@@ -85,9 +86,9 @@ pub trait Allocate {
     ///
     /// By default, this method uses the thread-local channel constructor
     /// based on a shared `VecDeque` which updates the event queue.
-    fn pipeline<T: 'static, A: 'static+From<T>>(&mut self, identifier: usize) ->
-        (thread::ThreadPusher<Message<T>, A>,
-         thread::ThreadPuller<Message<T>, A>)
+    fn pipeline<T: Container>(&mut self, identifier: usize) ->
+        (thread::ThreadPusher<Message<T>>,
+         thread::ThreadPuller<Message<T>>)
     {
         thread::Thread::new_from(identifier, self.events().clone())
     }

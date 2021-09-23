@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use crate::allocator::{Allocate, AllocateBuilder, Event};
 use crate::allocator::counters::Pusher as CountPusher;
 use crate::allocator::counters::Puller as CountPuller;
-use crate::{Push, Pull, Message};
+use crate::{Push, Pull, Message, Container};
 
 /// Builder for single-threaded allocator.
 pub struct ThreadBuilder;
@@ -28,7 +28,7 @@ pub struct Thread {
 impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
-    fn allocate<T: 'static, A: 'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>) {
+    fn allocate<T: 'static+Container>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
         let (pusher, puller) = Thread::new_from(identifier, self.events.clone());
         (vec![Box::new(pusher)], Box::new(puller))
     }
@@ -48,9 +48,9 @@ impl Allocate for Thread {
 }
 
 /// Thread-local counting channel push endpoint.
-pub type ThreadPusher<T, A> = CountPusher<T, A, Pusher<T, A>>;
+pub type ThreadPusher<T> = CountPusher<T, Pusher<T>>;
 /// Thread-local counting channel pull endpoint.
-pub type ThreadPuller<T, A> = CountPuller<T, A, Puller<T, A>>;
+pub type ThreadPuller<T> = CountPuller<T, Puller<T>>;
 
 impl Thread {
     /// Allocates a new thread-local channel allocator.
@@ -61,10 +61,10 @@ impl Thread {
     }
 
     /// Creates a new thread-local channel from an identifier and shared counts.
-    pub fn new_from<T: 'static, A>(identifier: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>)
-        -> (ThreadPusher<Message<T>, A>, ThreadPuller<Message<T>, A>)
+    pub fn new_from<T: Container>(identifier: usize, events: Rc<RefCell<VecDeque<(usize, Event)>>>)
+        -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>)
     {
-        let shared = Rc::new(RefCell::new((VecDeque::<Message<T>>::new(), VecDeque::<A>::new())));
+        let shared = Rc::new(RefCell::new((VecDeque::<Message<T>>::new(), VecDeque::<<Message<T> as Container>::Allocation>::new())));
         let pusher = Pusher { target: shared.clone() };
         let pusher = CountPusher::new(pusher, identifier, events.clone());
         let puller = Puller { source: shared, current: (None, None) };
@@ -75,13 +75,13 @@ impl Thread {
 
 
 /// The push half of an intra-thread channel.
-pub struct Pusher<T, A> {
-    target: Rc<RefCell<(VecDeque<T>, VecDeque<A>)>>,
+pub struct Pusher<T: Container> {
+    target: Rc<RefCell<(VecDeque<T>, VecDeque<T::Allocation>)>>,
 }
 
-impl<T, A> Push<T, A> for Pusher<T, A> {
+impl<T: Container> Push<T> for Pusher<T> {
     #[inline]
-    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>) {
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<T::Allocation>) {
         let mut borrow = self.target.borrow_mut();
         if let Some(element) = element {
             borrow.0.push_back(element);
@@ -91,14 +91,14 @@ impl<T, A> Push<T, A> for Pusher<T, A> {
 }
 
 /// The pull half of an intra-thread channel.
-pub struct Puller<T, A> {
-    current: (Option<T>, Option<A>),
-    source: Rc<RefCell<(VecDeque<T>, VecDeque<A>)>>,
+pub struct Puller<T: Container> {
+    current: (Option<T>, Option<T::Allocation>),
+    source: Rc<RefCell<(VecDeque<T>, VecDeque<T::Allocation>)>>,
 }
 
-impl<T, A> Pull<T, A> for Puller<T, A> {
+impl<T: Container> Pull<T> for Puller<T> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<T>, Option<A>) {
+    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>) {
         let mut borrow = self.source.borrow_mut();
         // if let Some(element) = self.current.take() {
         //     // TODO : Arbitrary constant.

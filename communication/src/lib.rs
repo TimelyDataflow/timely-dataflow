@@ -129,9 +129,9 @@ impl<T: Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
 /// Conventionally, a sequence of calls to `push()` should conclude with
 /// a call of `push(&mut None)` or `done()` to signal to implementors that
 /// another call to `push()` may not be coming.
-pub trait Push<T, A> {
+pub trait Push<T: Container> {
     /// Pushes `element` with the opportunity to take ownership.
-    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>);
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<T::Allocation>);
     /// Pushes `element` and drops any resulting resources.
     #[inline]
     fn send(&mut self, element: T) { self.push(Some(element), &mut None); }
@@ -140,13 +140,13 @@ pub trait Push<T, A> {
     fn done(&mut self) { self.push(None, &mut None); }
 }
 
-impl<T, A, P: ?Sized + Push<T, A>,> Push<T, A> for Box<P> {
+impl<T: Container, P: ?Sized + Push<T>> Push<T> for Box<P> {
     #[inline]
-    fn push(&mut self, element: Option<T>, allocation: &mut Option<A>) { (**self).push(element, allocation) }
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<T::Allocation>) { (**self).push(element, allocation) }
 }
 
 /// Pulling elements of type `T`.
-pub trait Pull<T, A> {
+pub trait Pull<T: Container> {
     /// Pulls an element and provides the opportunity to take ownership.
     ///
     /// The puller may mutate the result, in particular take ownership of the data by
@@ -155,19 +155,71 @@ pub trait Pull<T, A> {
     ///
     /// If `pull` returns `None` this conventionally signals that no more data is available
     /// at the moment, and the puller should find something better to do.
-    fn pull(&mut self) -> &mut (Option<T>, Option<A>);
+    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>);
     /// Takes an `Option<T>` and leaves `None` behind.
     #[inline]
     fn recv(&mut self) -> Option<T> { self.pull().0.take() }
 }
 
-impl<T, A, P: ?Sized + Pull<T, A>> Pull<T, A> for Box<P> {
+impl<T: Container, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<T>, Option<A>) { (**self).pull() }
+    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>) { (**self).pull() }
 }
 
+/// TODO
+pub trait Container: Sized {
+
+    /// TODO
+    type Allocation: IntoAllocated<Self> + 'static;
+
+    /// TODO
+    fn hollow(self) -> Option<Self::Allocation>;
+}
+
+impl Container for () {
+    type Allocation = ();
+    fn hollow(self) -> Option<Self::Allocation> {
+        None
+    }
+}
+
+impl<A: Container> Container for (A,) {
+    type Allocation = (A::Allocation,);
+    fn hollow(self) -> Option<Self::Allocation> {
+        self.0.hollow().map(|t| (t,))
+    }
+}
+
+impl<A: Container, B: Container> Container for (A, B) {
+    type Allocation = (A::Allocation, B::Allocation);
+    fn hollow(self) -> Option<Self::Allocation> {
+        Some((self.0.hollow(), self.1.hollow()))
+    }
+}
+
+impl<A: Container, B: Container, C: Container> Container for (A, B, C) {
+    type Allocation = (A::Allocation, B::Allocation, C::Allocation);
+    fn hollow(self) -> Option<Self::Allocation> {
+        Some((self.0.hollow(), self.1.hollow(), self.2.hollow()))
+    }
+}
+
+impl<A: Container, B: Container, C: Container, D: Container> Container for (A, B, C, D) {
+    type Allocation = (A::Allocation, B::Allocation, C::Allocation, D::Allocation);
+    fn hollow(self) -> Option<Self::Allocation> {
+        Some((self.0.hollow(), self.1.hollow(), self.2.hollow(), self.3.hollow()))
+    }
+}
+
+impl Container for usize {
+    type Allocation = ();
+    fn hollow(self) -> Option<Self::Allocation> {
+        None
+    }
+}
 
 use crossbeam_channel::{Sender, Receiver};
+use crate::message::IntoAllocated;
 
 /// Allocate a matrix of send and receive changes to exchange items.
 ///
@@ -188,4 +240,13 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
     }
 
     (senders, recvers)
+}
+
+impl<T: Clone + 'static> Container for Vec<T> {
+    type Allocation = Self;
+
+    fn hollow(mut self) -> Option<Self::Allocation> {
+        self.clear();
+        Some(self)
+    }
 }

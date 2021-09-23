@@ -10,9 +10,8 @@ use crossbeam_channel::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
 use crate::allocator::{Allocate, AllocateBuilder, Event, Thread};
-use crate::{Push, Pull, Message};
+use crate::{Push, Pull, Message, Container};
 use crate::buzzer::Buzzer;
-use std::marker::PhantomData;
 
 /// An allocator for inter-thread, intra-process communication
 pub struct ProcessBuilder {
@@ -111,7 +110,9 @@ impl Process {
 impl Allocate for Process {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Any+Send+Sync+'static, A: Any+Send+Sync+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>, A>>>, Box<dyn Pull<Message<T>, A>>) {
+    fn allocate<T: Any+Send+Sync+Container+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>)
+        where T::Allocation: Send+Sync,
+    {
 
         // this is race-y global initialisation of all channels for all workers, performed by the
         // first worker that enters this critical section
@@ -124,8 +125,8 @@ impl Allocate for Process {
             // we may need to alloc a new channel ...
             let entry = channels.entry(identifier).or_insert_with(|| {
 
-                let mut pushers: Vec<(Pusher<Message<T>, A>, _)> = Vec::with_capacity(self.peers);
-                let mut pullers: Vec<Puller<_, A>> = Vec::with_capacity(self.peers);
+                let mut pushers: Vec<(Pusher<Message<T>>, _)> = Vec::with_capacity(self.peers);
+                let mut pullers: Vec<Puller<_>> = Vec::with_capacity(self.peers);
                 for buzzer in self.buzzers.iter() {
                     let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = crossbeam_channel::unbounded();
                     // TODO: the buzzer in the pusher may be redundant, because we need to buzz post-counter.
@@ -143,7 +144,7 @@ impl Allocate for Process {
 
             let vector =
             entry
-                .downcast_mut::<Vec<Option<(Vec<(Pusher<Message<T>, A>, Buzzer)>, Puller<Message<T>, A>)>>>()
+                .downcast_mut::<Vec<Option<(Vec<(Pusher<Message<T>>, Buzzer)>, Puller<Message<T>>)>>>()
                 .expect("failed to correctly cast channel");
 
             let (sends, recv) =
@@ -167,10 +168,10 @@ impl Allocate for Process {
         sends.into_iter()
              .zip(self.counters_send.iter())
              .map(|((s,b), sender)| CountPusher::new(s, identifier, sender.clone(), b))
-             .map(|s| Box::new(s) as Box<dyn Push<super::Message<T>, A>>)
+             .map(|s| Box::new(s) as Box<dyn Push<super::Message<T>>>)
              .collect::<Vec<_>>();
 
-        let recv = Box::new(CountPuller::new(recv, identifier, self.inner.events().clone())) as Box<dyn Pull<super::Message<T>, A>>;
+        let recv = Box::new(CountPuller::new(recv, identifier, self.inner.events().clone())) as Box<dyn Pull<super::Message<T>>>;
 
         (sends, recv)
     }
@@ -192,31 +193,28 @@ impl Allocate for Process {
 }
 
 /// The push half of an intra-process channel.
-struct Pusher<T, A> {
+struct Pusher<T> {
     target: Sender<T>,
-    _phantom_data: PhantomData<A>,
 }
 
-impl<T, A> Pusher<T, A> {
+impl<T> Pusher<T> {
     pub fn new(target: Sender<T>) -> Self {
         Self {
             target,
-            _phantom_data: PhantomData,
         }
     }
 }
 
-impl<T, A> Clone for Pusher<T, A> {
+impl<T> Clone for Pusher<T> {
     fn clone(&self) -> Self {
         Self {
             target: self.target.clone(),
-            _phantom_data: PhantomData,
         }
     }
 }
 
-impl<T, A> Push<T, A> for Pusher<T, A> {
-    #[inline] fn push(&mut self, element: Option<T>, _allocation: &mut Option<A>) {
+impl<T: Container> Push<T> for Pusher<T> {
+    #[inline] fn push(&mut self, element: Option<T>, _allocation: &mut Option<T::Allocation>) {
         if let Some(element) = element {
             // The remote endpoint could be shut down, and so
             // it is not fundamentally an error to fail to send.
@@ -226,14 +224,14 @@ impl<T, A> Push<T, A> for Pusher<T, A> {
 }
 
 /// The pull half of an intra-process channel.
-struct Puller<T, A> {
-    current: (Option<T>, Option<A>),
+struct Puller<T: Container> {
+    current: (Option<T>, Option<T::Allocation>),
     source: Receiver<T>,
 }
 
-impl<T, A> Pull<T, A> for Puller<T, A> {
+impl<T: Container> Pull<T> for Puller<T> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<T>, Option<A>) {
+    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>) {
         self.current.0 = self.source.try_recv().ok();
         &mut self.current
     }

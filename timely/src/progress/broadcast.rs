@@ -2,7 +2,7 @@
 
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::{Location, Port};
-use crate::communication::{Message, Push, Pull};
+use crate::communication::{Message, Push, Pull, Container};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 
@@ -16,8 +16,8 @@ pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
 pub struct Progcaster<T:Timestamp> {
     to_push: Option<ProgressMsg<T>>,
     allocation: Option<(usize, usize, ProgressVec<T>)>,
-    pushers: Vec<Box<dyn Push<ProgressMsg<T>, (usize, usize, ProgressVec<T>)>>>,
-    puller: Box<dyn Pull<ProgressMsg<T>, (usize, usize, ProgressVec<T>)>>,
+    pushers: Vec<Box<dyn Push<ProgressMsg<T>>>>,
+    puller: Box<dyn Pull<ProgressMsg<T>>>,
     /// Source worker index
     source: usize,
     /// Sequence number counter
@@ -30,12 +30,22 @@ pub struct Progcaster<T:Timestamp> {
     progress_logging: Option<ProgressLogger>,
 }
 
+impl<T> Container for (usize, usize, ProgressVec<T>) {
+    type Allocation = ProgressVec<T>;
+
+    fn hollow(self) -> Option<Self::Allocation> {
+        let mut pv = self.2;
+        pv.clear();
+        Some(pv)
+    }
+}
+
 impl<T:Timestamp> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
     pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
-        let (pushers, puller) = worker.allocate::<_, _>(channel_identifier, &path[..]);
+        let (pushers, puller) = worker.allocate::<_>(channel_identifier, &path[..]);
         logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: crate::logging::CommChannelKind::Progress,

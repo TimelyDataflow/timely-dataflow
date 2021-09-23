@@ -1,8 +1,7 @@
 //! Structured communication between timely dataflow operators.
 
-use crate::Container;
-use crate::communication::Push;
-use crate::communication::message::FromAllocated;
+use crate::communication::{Push, Container};
+use crate::communication::message::IntoAllocated;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -19,7 +18,7 @@ pub type Bundle<T, D> = BundleCore<T, Vec<D>>;
 
 /// A serializable representation of timestamped data.
 #[derive(Clone, Abomonation, Serialize, Deserialize)]
-pub struct Message<T, D> {
+pub struct Message<T, D: Container> {
     /// The timestamp associated with the message.
     pub time: T,
     /// The data in the message.
@@ -30,7 +29,7 @@ pub struct Message<T, D> {
     pub seq: usize,
 }
 
-impl<T, D> Message<T, D> {
+impl<T, D: Container> Message<T, D> {
     /// Creates a new message instance from arguments.
     pub fn new(time: T, data: D, from: usize, seq: usize) -> Self {
         Message { time, data, from, seq }
@@ -38,8 +37,7 @@ impl<T, D> Message<T, D> {
 
     /// Forms a message, and pushes contents at `pusher`.
     #[inline]
-    pub fn push_at<P: Push<BundleCore<T, D>, MessageAllocation<D::Allocation>>>(data: Option<D>, time: T, pusher: &mut P, allocation: &mut Option<D::Allocation>)
-    where D: Container
+    pub fn push_at<P: Push<BundleCore<T, D>>>(data: Option<D>, time: T, pusher: &mut P, allocation: &mut Option<D::Allocation>)
     {
         if let Some(data) = data {
             let message = Message::new(time, data, 0, 0);
@@ -65,8 +63,34 @@ pub struct MessageAllocation<C> {
     pub data: Option<C>,
 }
 
-impl<T, C: Container+FromAllocated<C::Allocation>> From<Message<T, C>> for MessageAllocation<C::Allocation> {
-    fn from(message: Message<T, C>) -> Self {
-        MessageAllocation { data: message.data.hollow() }
+impl<T, D: Container> Container for Message<T, D> {
+    type Allocation = MessageAllocation<D::Allocation>;
+
+    fn hollow(self) -> Option<Self::Allocation> {
+        self.data.hollow()
     }
 }
+
+impl<T, D: Container> IntoAllocated<Message<T, D>> for MessageAllocation<D::Allocation> {
+    fn assemble(self, allocated: Message<T, D>) -> Message<T, D> where Self: Sized {
+        todo!()
+    }
+
+    fn assemble_new(allocated: Message<T, D>) -> Message<T, D> {
+        todo!()
+    }
+
+    fn assemble_ref(self, allocated: &Message<T, D>) -> Message<T, D> where Message<T, D>: Clone {
+        todo!()
+    }
+
+    fn assemble_new_ref(allocated: &Message<T, D>) -> Message<T, D> where Message<T, D>: Clone {
+        todo!()
+    }
+}
+
+// impl<T, C: Container+FromAllocated<C::Allocation>> From<Message<T, C>> for MessageAllocation<C::Allocation> {
+//     fn from(message: Message<T, C>) -> Self {
+//         MessageAllocation { data: message.data.hollow() }
+//     }
+// }

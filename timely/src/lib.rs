@@ -77,7 +77,7 @@ pub use worker::Config as WorkerConfig;
 pub use execute::Config as Config;
 use std::ops::RangeBounds;
 use std::convert::TryFrom;
-use crate::communication::message::{IntoAllocated, FromAllocated};
+use crate::communication::message::IntoAllocated;
 
 /// Re-export of the `timely_communication` crate.
 pub mod communication {
@@ -120,7 +120,8 @@ pub trait ExchangeData: Data + communication::Data { }
 impl<T: Data + communication::Data> ExchangeData for T { }
 
 /// A container of data passing on a dataflow edge
-pub trait Container: Data + FromAllocated<Self::Allocation> {
+#[deprecated]
+pub trait Container: crate::communication::Container + Data  {
     /// The type of elements contained by this collection
     type Inner;
 
@@ -128,7 +129,7 @@ pub trait Container: Data + FromAllocated<Self::Allocation> {
     type Builder: ContainerBuilder<Container=Self>;
 
     /// The allocation type for this container
-    type Allocation: Data + TryFrom<Self> + IntoAllocated<Self>;
+    // type Allocation: Data + TryFrom<Self> + IntoAllocated<Self>;
 
     /// Clone this container while reusing the provided allocation
     fn clone_into(&self, allocation: Self::Allocation) -> Self;
@@ -234,7 +235,7 @@ pub trait ExchangeContainer: Container+ExchangeData {}
 impl<D: Clone + 'static> Container for Vec<D> {
     type Inner = D;
     type Builder = Vec<D>;
-    type Allocation = Vec<D>;
+    // type Allocation = Vec<D>;
 
     fn clone_into(&self, mut allocation: Self::Allocation) -> Self {
         allocation.clone_from(&self);
@@ -337,122 +338,122 @@ impl<'a, D: Data> DrainContainer for &'a mut Vec<D> {
     }
 }
 
-mod rc {
-    use crate::{Container, ContainerBuilder};
-    use std::rc::Rc;
-    use crate::communication::message::{IntoAllocated, RefOrMut, FromAllocated};
-
-    #[derive(Clone)]
-    struct RcContainer<T: Container> {
-        inner: Rc<T>,
-    }
-
-    impl<T: Container> Container for RcContainer<T> {
-        type Inner = T::Inner;
-        type Builder = RcContainerBuilder<T::Builder>;
-        type Allocation = ();
-
-        fn clone_into(&self, allocation: Self::Allocation) -> Self {
-            Self { inner: Rc::clone(&self.inner)}
-        }
-
-        fn empty() -> Self {
-            Self { inner: Rc::new(T::empty()) }
-        }
-
-        fn capacity(&self) -> usize {
-            T::capacity(&self.inner)
-        }
-
-        fn is_empty(&self) -> bool {
-            T::is_empty(&self.inner)
-        }
-
-        fn len(&self) -> usize {
-            T::len(&self.inner)
-        }
-
-        fn default_length() -> usize {
-            T::default_length()
-        }
-    }
-
-    impl<T: Container> From<RcContainer<T>> for () {
-        fn from(_: RcContainer<T>) -> Self {
-            ()
-        }
-    }
-
-    impl<T: Container> FromAllocated<()> for RcContainer<T> {
-        fn hollow(self) -> Option<()> {
-            Some(())
-        }
-    }
-
-    impl<T: Container> IntoAllocated<RcContainer<T>> for () {
-        fn assemble_new(ref_or_mut: RefOrMut<RcContainer<T>>) -> RcContainer<T> {
-            RcContainer { inner: Rc::clone(&ref_or_mut.inner) }
-        }
-    }
-
-    struct RcContainerBuilder<T: ContainerBuilder> {
-        inner: T,
-    }
-
-    impl<T: ContainerBuilder> Extend<<<Self as ContainerBuilder>::Container as Container>::Inner> for RcContainerBuilder<T> {
-        fn extend<I: IntoIterator<Item=<<Self as ContainerBuilder>::Container as Container>::Inner>>(&mut self, iter: I) {
-            self.inner.extend(iter)
-        }
-    }
-
-    impl<T: ContainerBuilder> ContainerBuilder for RcContainerBuilder<T> {
-        type Container = RcContainer<T::Container>;
-
-        fn new() -> Self {
-            Self { inner: T::new() }
-        }
-
-        fn with_allocation(container: Self::Container) -> Self {
-            match Rc::try_unwrap(container.inner) {
-                Ok(inner) => Self { inner: T::with_allocation(inner) },
-                Err(_) => Self { inner: T::with_capacity(T::Container::default_length()) },
-            }
-        }
-
-        fn with_capacity(capacity: usize) -> Self {
-            Self { inner: T::with_capacity(capacity) }
-        }
-
-        fn capacity(&self) -> usize {
-            self.inner.capacity()
-        }
-
-        fn is_empty(&self) -> bool {
-            self.inner.is_empty()
-        }
-
-        fn len(&self) -> usize {
-            self.inner.len()
-        }
-
-        fn initialize_from(&mut self, other: &Self::Container) {
-            self.inner.initialize_from(&other.inner)
-        }
-
-        fn copy_from(&mut self, other: &Self) {
-            self.inner.copy_from(&other.inner)
-        }
-
-        fn push(&mut self, element: <<Self as ContainerBuilder>::Container as Container>::Inner) {
-            T::push(&mut self.inner, element)
-        }
-
-        fn clear(&mut self) {
-            self.inner.clear()
-        }
-
-        fn build(self) -> Self::Container {
-            RcContainer { inner: Rc::new(T::build(self.inner)) }
-        }
-    }
-}
+// mod rc {
+//     use crate::{Container, ContainerBuilder};
+//     use std::rc::Rc;
+//     use crate::communication::message::{IntoAllocated, RefOrMut};
+//
+//     #[derive(Clone)]
+//     struct RcContainer<T: Container> {
+//         inner: Rc<T>,
+//     }
+//
+//     impl<T: Container> Container for RcContainer<T> {
+//         type Inner = T::Inner;
+//         type Builder = RcContainerBuilder<T::Builder>;
+//         // type Allocation = ();
+//
+//         fn clone_into(&self, allocation: Self::Allocation) -> Self {
+//             Self { inner: Rc::clone(&self.inner)}
+//         }
+//
+//         fn empty() -> Self {
+//             Self { inner: Rc::new(T::empty()) }
+//         }
+//
+//         fn capacity(&self) -> usize {
+//             T::capacity(&self.inner)
+//         }
+//
+//         fn is_empty(&self) -> bool {
+//             T::is_empty(&self.inner)
+//         }
+//
+//         fn len(&self) -> usize {
+//             T::len(&self.inner)
+//         }
+//
+//         fn default_length() -> usize {
+//             T::default_length()
+//         }
+//     }
+//
+//     impl<T: Container> From<RcContainer<T>> for () {
+//         fn from(_: RcContainer<T>) -> Self {
+//             ()
+//         }
+//     }
+//
+//     // impl<T: Container> FromAllocated<()> for RcContainer<T> {
+//     //     fn hollow(self) -> Option<()> {
+//     //         Some(())
+//     //     }
+//     // }
+//
+//     impl<T: Container> IntoAllocated<RcContainer<T>> for () {
+//         fn assemble_new(ref_or_mut: RefOrMut<RcContainer<T>>) -> RcContainer<T> {
+//             RcContainer { inner: Rc::clone(&ref_or_mut.inner) }
+//         }
+//     }
+//
+//     struct RcContainerBuilder<T: ContainerBuilder> {
+//         inner: T,
+//     }
+//
+//     impl<T: ContainerBuilder> Extend<<<Self as ContainerBuilder>::Container as Container>::Inner> for RcContainerBuilder<T> {
+//         fn extend<I: IntoIterator<Item=<<Self as ContainerBuilder>::Container as Container>::Inner>>(&mut self, iter: I) {
+//             self.inner.extend(iter)
+//         }
+//     }
+//
+//     impl<T: ContainerBuilder> ContainerBuilder for RcContainerBuilder<T> {
+//         type Container = RcContainer<T::Container>;
+//
+//         fn new() -> Self {
+//             Self { inner: T::new() }
+//         }
+//
+//         fn with_allocation(container: Self::Container) -> Self {
+//             match Rc::try_unwrap(container.inner) {
+//                 Ok(inner) => Self { inner: T::with_allocation(inner) },
+//                 Err(_) => Self { inner: T::with_capacity(T::Container::default_length()) },
+//             }
+//         }
+//
+//         fn with_capacity(capacity: usize) -> Self {
+//             Self { inner: T::with_capacity(capacity) }
+//         }
+//
+//         fn capacity(&self) -> usize {
+//             self.inner.capacity()
+//         }
+//
+//         fn is_empty(&self) -> bool {
+//             self.inner.is_empty()
+//         }
+//
+//         fn len(&self) -> usize {
+//             self.inner.len()
+//         }
+//
+//         fn initialize_from(&mut self, other: &Self::Container) {
+//             self.inner.initialize_from(&other.inner)
+//         }
+//
+//         fn copy_from(&mut self, other: &Self) {
+//             self.inner.copy_from(&other.inner)
+//         }
+//
+//         fn push(&mut self, element: <<Self as ContainerBuilder>::Container as Container>::Inner) {
+//             T::push(&mut self.inner, element)
+//         }
+//
+//         fn clear(&mut self) {
+//             self.inner.clear()
+//         }
+//
+//         fn build(self) -> Self::Container {
+//             RcContainer { inner: Rc::new(T::build(self.inner)) }
+//         }
+//     }
+// }

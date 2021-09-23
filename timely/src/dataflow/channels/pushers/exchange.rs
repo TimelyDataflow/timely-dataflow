@@ -8,7 +8,7 @@ use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>, MessageAllocation<C::Allocation>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<C::Builder>,
     current: Option<T>,
@@ -16,7 +16,7 @@ pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>, MessageAllocat
     _phantom_data: PhantomData<D>,
 }
 
-impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>, MessageAllocation<C::Allocation>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
+impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
         let mut buffers = vec![];
@@ -44,11 +44,11 @@ impl<T: Clone, C: Container, D, P: Push<BundleCore<T, C>, MessageAllocation<C::A
     }
 }
 
-impl<T: Eq+Data, C: Container<Inner=D>, D: Data, P: Push<BundleCore<T, C>, MessageAllocation<C::Allocation>>, H: FnMut(&T, &D)->u64> Push<BundleCore<T, C>, MessageAllocation<C::Allocation>> for Exchange<T, C, D, P, H>
+impl<T: Eq+Data, C: crate::communication::Container+Container<Inner=D>, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64> Push<BundleCore<T, C>> for Exchange<T, C, D, P, H>
     where for<'b> &'b mut C: DrainContainer<Inner=D>,
 {
     #[inline(never)]
-    fn push(&mut self, message: Option<BundleCore<T, C>>, allocation: &mut Option<MessageAllocation<C::Allocation>>) {
+    fn push(&mut self, message: Option<BundleCore<T, C>>, allocation: &mut Option<<BundleCore<T, C> as crate::communication::Container>::Allocation>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message, allocation);

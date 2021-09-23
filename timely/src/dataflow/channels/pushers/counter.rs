@@ -6,23 +6,22 @@ use std::cell::RefCell;
 
 use crate::progress::ChangeBatch;
 use crate::dataflow::channels::{BundleCore, MessageAllocation};
-use crate::communication::Push;
-use crate::Container;
+use crate::communication::{Push, Container};
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
-pub struct CounterCore<T: Ord, D, A, P: Push<BundleCore<T, D>, MessageAllocation<A>>> {
+pub struct CounterCore<T: Ord, D: Container, P: Push<BundleCore<T, D>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
-    phantom: PhantomData<(D, A)>,
+    phantom: PhantomData<(D)>,
 }
 
 /// A counter specialized to vector.
-pub type Counter<T, D, P> = CounterCore<T, Vec<D>, Vec<D>, P>;
+pub type Counter<T, D, P> = CounterCore<T, Vec<D>, P>;
 
-impl<T, D: Container, P> Push<BundleCore<T, D>, MessageAllocation<D::Allocation>> for CounterCore<T, D, D::Allocation, P> where T : Ord+Clone+'static, P: Push<BundleCore<T, D>, MessageAllocation<D::Allocation>> {
+impl<T, D: Container, P> Push<BundleCore<T, D>> for CounterCore<T, D, P> where T : Ord+Clone+'static, P: Push<BundleCore<T, D>> {
     #[inline]
-    fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<MessageAllocation<D::Allocation>>) {
+    fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<<BundleCore<T, D> as Container>::Allocation>) {
         if let Some(message) = &message {
             self.produced.borrow_mut().update(message.time.clone(), message.data.len() as i64);
         }
@@ -34,9 +33,9 @@ impl<T, D: Container, P> Push<BundleCore<T, D>, MessageAllocation<D::Allocation>
     }
 }
 
-impl<T, D, A, P: Push<BundleCore<T, D>, MessageAllocation<A>>> CounterCore<T, D, A, P> where T : Ord+Clone+'static {
+impl<T, D: Container, P: Push<BundleCore<T, D>>> CounterCore<T, D, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
-    pub fn new(pushee: P) -> CounterCore<T, D, A, P> {
+    pub fn new(pushee: P) -> CounterCore<T, D, P> {
         CounterCore {
             pushee,
             produced: Rc::new(RefCell::new(ChangeBatch::new())),
