@@ -13,6 +13,7 @@ use crate::dataflow::operators::generic::OutputWrapper;
 use crate::Data;
 use crate::dataflow::channels::MessageAllocation;
 use crate::communication::Container;
+use crate::communication::message::IntoAllocated;
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait Feedback<G: Scope> {
@@ -60,7 +61,7 @@ pub trait Feedback<G: Scope> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback_core<D: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (HandleCore<G, D>, CoreStream<G, D>);
+    fn feedback_core<D: Container+Clone>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (HandleCore<G, D>, CoreStream<G, D>);
 }
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
@@ -88,7 +89,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<D: Container>(&mut self, summary: T::Summary) -> (HandleCore<Iterative<'a, G, T>, D>, CoreStream<Iterative<'a, G, T>, D>);
+    fn loop_variable<D: Container+Clone>(&mut self, summary: T::Summary) -> (HandleCore<Iterative<'a, G, T>, D>, CoreStream<Iterative<'a, G, T>, D>);
 }
 
 impl<G: Scope> Feedback<G> for G {
@@ -96,7 +97,7 @@ impl<G: Scope> Feedback<G> for G {
         self.feedback_core(summary)
     }
 
-    fn feedback_core<D: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (HandleCore<G, D>, CoreStream<G, D>) {
+    fn feedback_core<D: Container+Clone>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (HandleCore<G, D>, CoreStream<G, D>) {
 
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
         let (output, stream) = builder.new_output();
@@ -106,13 +107,13 @@ impl<G: Scope> Feedback<G> for G {
 }
 
 impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
-    fn loop_variable<D: Container>(&mut self, summary: T::Summary) -> (HandleCore<Iterative<'a, G, T>, D>, CoreStream<Iterative<'a, G, T>, D>) {
+    fn loop_variable<D: Container+Clone>(&mut self, summary: T::Summary) -> (HandleCore<Iterative<'a, G, T>, D>, CoreStream<Iterative<'a, G, T>, D>) {
         self.feedback_core(Product::new(Default::default(), summary))
     }
 }
 
 /// Connect a `Stream` to the input of a loop variable.
-pub trait ConnectLoop<G: Scope, D: Container> {
+pub trait ConnectLoop<G: Scope, D: Container+Clone> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
     /// # Examples
@@ -133,7 +134,10 @@ pub trait ConnectLoop<G: Scope, D: Container> {
     fn connect_loop(&self, _: HandleCore<G, D>);
 }
 
-impl<G: Scope, D: Container> ConnectLoop<G, D> for CoreStream<G, D> {
+impl<G: Scope, D: Container+Clone> ConnectLoop<G, D> for CoreStream<G, D>
+where
+    D::Allocation: IntoAllocated<D>
+{
     fn connect_loop(&self, helper: HandleCore<G, D>) {
 
         let mut builder = helper.builder;
@@ -160,7 +164,7 @@ impl<G: Scope, D: Container> ConnectLoop<G, D> for CoreStream<G, D> {
 
 /// A handle used to bind the source of a loop variable.
 #[derive(Debug)]
-pub struct HandleCore<G: Scope, D: Container+'static> {
+pub struct HandleCore<G: Scope, D: Container+Clone+'static> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
     output: OutputWrapper<G::Timestamp, D, TeeCore<G::Timestamp, D>>,

@@ -17,8 +17,9 @@ use crate::dataflow::{CoreStream, Scope};
 use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pact::ParallelizationContractCore;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
-use crate::Container;
+use crate::DataflowContainer;
 use crate::dataflow::channels::MessageAllocation;
+use crate::communication::Container;
 
 /// Contains type-free information about the operator properties.
 #[derive(Debug)]
@@ -141,7 +142,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output_connection<D: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (TeeCore<G::Timestamp, D>, CoreStream<G, D>) {
 
-        let (targets, registrar) = TeeCore::<G::Timestamp,D, MessageAllocation<D::Allocation>>::new();
+        let (targets, registrar) = TeeCore::<G::Timestamp,D>::new();
         let source = Source::new(self.index, self.shape.outputs);
         let stream = CoreStream::new(source, registrar, self.scope.clone());
 

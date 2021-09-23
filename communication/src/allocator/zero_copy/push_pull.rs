@@ -56,7 +56,7 @@ impl<T:Data+Container, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
                 element.into_bytes(writer);
             }
             borrow.make_valid(header.required_bytes());
-            *allocation = element.hollow();
+            *allocation = Some(element.hollow());
         }
     }
 }

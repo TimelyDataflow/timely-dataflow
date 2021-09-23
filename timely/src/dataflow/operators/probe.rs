@@ -12,8 +12,10 @@ use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
-use crate::Container;
 use crate::dataflow::{CoreStream, Scope};
+use crate::dataflow::channels::MessageAllocation;
+use crate::communication::Container;
+use crate::communication::message::RefOrMut;
 
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, D: Container> {
@@ -97,7 +99,7 @@ impl<G: Scope, D: Container> Probe<G, D> for CoreStream<G, D> {
         let shared_frontier = handle.frontier.clone();
         let mut started = false;
 
-        let mut vector = D::empty();
+        let mut vector = None;
 
         builder.build(
             move |progress| {
@@ -113,11 +115,13 @@ impl<G: Scope, D: Container> Probe<G, D> for CoreStream<G, D> {
                 }
 
                 while let Some((mut message, allocation)) = input.next() {
-                    let (time, data) = (&message.time, message.to_owned());
-                    let mut a = allocation.as_mut().and_then(|ma| ma.data.take());
-                    output.session(time).give_container(data.data, &mut a);
+                    let data = RefOrMut::Mut(message).assemble(&mut vector);
+                    let mut a = allocation.as_mut().and_then(|ma| ma.0).map(|ma| ma.data);
+                    output.session(&message.time).give_container(data.data, &mut vector);
                     if let Some(inner) = allocation {
-                        inner.data = a;
+                        if let Some(a) = a {
+                            inner.0 = Some(MessageAllocation { data: a});
+                        }
                     }
 
                 }

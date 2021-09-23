@@ -1,7 +1,8 @@
 //! Structured communication between timely dataflow operators.
 
 use crate::communication::{Push, Container};
-use crate::communication::message::IntoAllocated;
+use crate::communication::message::MessageAllocation as CommMessageAllocation;
+use crate::communication::message::{IntoAllocated, RefOrMut};
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -45,8 +46,8 @@ impl<T, D: Container> Message<T, D> {
             let mut bundle_allocation = None;
             pusher.push(bundle, &mut bundle_allocation);
 
-            if let Some(message) = bundle_allocation {
-                *allocation = message.data;
+            if let Some(CommMessageAllocation(Some(MessageAllocation {data}))) = bundle_allocation {
+                *allocation = Some(data);
             }
 
             // TODO: Unclear we always want this here.
@@ -60,31 +61,31 @@ impl<T, D: Container> Message<T, D> {
 /// TODO
 pub struct MessageAllocation<C> {
     /// TODO
-    pub data: Option<C>,
+    pub data: C,
 }
 
 impl<T, D: Container> Container for Message<T, D> {
     type Allocation = MessageAllocation<D::Allocation>;
 
-    fn hollow(self) -> Option<Self::Allocation> {
-        self.data.hollow()
+    fn hollow(self) -> Self::Allocation {
+        MessageAllocation { data: self.data.hollow() }
+    }
+
+    fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
 }
 
 impl<T, D: Container> IntoAllocated<Message<T, D>> for MessageAllocation<D::Allocation> {
-    fn assemble(self, allocated: Message<T, D>) -> Message<T, D> where Self: Sized {
+    fn assemble(self, allocated: RefOrMut<Message<T, D>>) -> Message<T, D> where Self: Sized {
         todo!()
     }
 
-    fn assemble_new(allocated: Message<T, D>) -> Message<T, D> {
-        todo!()
-    }
-
-    fn assemble_ref(self, allocated: &Message<T, D>) -> Message<T, D> where Message<T, D>: Clone {
-        todo!()
-    }
-
-    fn assemble_new_ref(allocated: &Message<T, D>) -> Message<T, D> where Message<T, D>: Clone {
+    fn assemble_new(allocated: RefOrMut<Message<T, D>>) -> Message<T, D> {
         todo!()
     }
 }

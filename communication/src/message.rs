@@ -47,13 +47,15 @@ impl<'a, T: Clone+'a> RefOrMut<'a, T> {
     //         RefOrMut::Mut(reference) => ::std::mem::swap(reference, element),
     //     }
     // };
+}
 
+impl<'a, T: 'a> RefOrMut<'a, T> {
     /// TODO
     pub fn assemble<A: IntoAllocated<T>>(self, allocation: &mut Option<A>) -> T {
         if let Some(allocation) = allocation.take() {
-            allocation.assemble_ref(&*self)
+            allocation.assemble(self)
         } else {
-            A::assemble_new_ref(&*self)
+            A::assemble_new(self)
         }
     }
 }
@@ -235,15 +237,23 @@ impl<T: Clone> Message<T> {
 }
 
 /// TODO
-pub struct MessageAllocation<T>(T);
+pub struct MessageAllocation<T>(pub Option<T>);
 
 impl<T: Container> Container for Message<T> {
     type Allocation = MessageAllocation<T::Allocation>;
-    fn hollow(self) -> Option<Self::Allocation> {
+    fn hollow(self) -> Self::Allocation {
         match self.payload {
-            MessageContents::Binary(_) | MessageContents::Arc(_) => None,
-            MessageContents::Owned(allocated) => allocated.hollow().map(|allocation| MessageAllocation(allocation)),
+            MessageContents::Binary(_) | MessageContents::Arc(_) => MessageAllocation(None),
+            MessageContents::Owned(allocated) => MessageAllocation(Some(allocated.hollow()))
         }
+    }
+
+    fn len(&self) -> usize {
+        T::len(&*self)
+    }
+
+    fn is_empty(&self) -> bool {
+        T::is_empty(&*self)
     }
 }
 
@@ -272,81 +282,172 @@ impl<T: Container> Container for Message<T> {
 /// TODO
 pub trait IntoAllocated<T> {
     /// TODO
-    fn assemble(self, allocated: T) -> T where Self: Sized {
+    fn assemble(self, allocated: RefOrMut<T>) -> T where Self: Sized {
         Self::assemble_new(allocated)
     }
     /// TODO
-    fn assemble_new(allocated: T) -> T;
+    fn assemble_new(allocated: RefOrMut<T>) -> T;
 }
 
 impl<T: Container> IntoAllocated<Message<T>> for MessageAllocation<T::Allocation> {
-    fn assemble(self, ref_or_mut: Message<T>) -> Message<T> where Self: Sized {
-        match ref_or_mut.payload {
-            MessageContents::Binary(binary) => Message { payload: MessageContents::Binary(binary) },
-            MessageContents::Owned(owned) => Message::from_typed(T::Allocation::assemble(self.0, owned)),
-            MessageContents::Arc(arc) => Message::from_arc(arc),
-        }
-    }
-
-    fn assemble_new(ref_or_mut: Message<T>) -> Message<T> {
-        todo!()
-    }
-
-    fn assemble_ref(self, allocated: &Message<T>) -> Message<T> where Message<T>: Clone {
-        todo!()
-    }
-
-    fn assemble_new_ref(allocated: &Message<T>) -> Message<T> where Message<T>: Clone {
-        todo!()
+    fn assemble_new(allocated: RefOrMut<Message<T>>) -> Message<T> {
+        unreachable!()
     }
 }
 
 impl IntoAllocated<()> for () {
-    fn assemble_new(allocated: ()) -> () {
-        ()
-    }
-
-    fn assemble_ref(self, allocated: &()) -> () where (): Clone {
-        ()
-    }
-
-    fn assemble_new_ref(allocated: &()) -> () where (): Clone {
+    fn assemble_new(allocated: RefOrMut<()>) -> () {
         ()
     }
 }
 
-impl<A: Container> IntoAllocated<(A,)> for (A::Allocation,) {
-    fn assemble_new(allocated: (A::Allocation,)) -> (A,) {
-        (A::Allocation::assemble_new(allocated.0),)
+impl<A: Container> IntoAllocated<(A, )> for (A::Allocation, )
+where
+    A::Allocation: IntoAllocated<A>,
+{
+    fn assemble(self, allocated: RefOrMut<(A, )>) -> (A, ) where Self: Sized {
+        match allocated {
+            RefOrMut::Ref(t) => (self.0.assemble(RefOrMut::Ref(&t.0)), ),
+            RefOrMut::Mut(t) => (self.0.assemble(RefOrMut::Mut(&mut t.0)), ),
+        }
     }
 
-    fn assemble_ref(self, allocated: &(A, )) -> (A, ) where (A, ): Clone {
-        todo!()
-    }
-
-    fn assemble_new_ref(allocated: &(A, )) -> (A, ) where (A, ): Clone {
-        todo!()
+    fn assemble_new(allocated: RefOrMut<(A, )>) -> (A, ) {
+        match allocated {
+            RefOrMut::Ref(t) => (A::Allocation::assemble_new(RefOrMut::Ref(&t.0)), ),
+            RefOrMut::Mut(t) => (A::Allocation::assemble_new(RefOrMut::Mut(&mut t.0)), ),
+        }
     }
 }
 
-impl<'a, T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
-    fn assemble(mut self, ref_or_mut: Vec<T>) -> Vec<T> {
-        self.clone_from(&ref_or_mut);
+impl<A: Container, B: Container> IntoAllocated<(A, B)> for (A::Allocation, B::Allocation)
+    where
+        A::Allocation: IntoAllocated<A>,
+        B::Allocation: IntoAllocated<B>,
+{
+    fn assemble(self, allocated: RefOrMut<(A, B)>) -> (A, B) where Self: Sized {
+        match allocated {
+            RefOrMut::Ref(t) => (
+                self.0.assemble(RefOrMut::Ref(&t.0)),
+                self.1.assemble(RefOrMut::Ref(&t.1))
+            ),
+            RefOrMut::Mut(t) => (
+                self.0.assemble(RefOrMut::Mut(&mut t.0)),
+                self.1.assemble(RefOrMut::Mut(&mut t.1))
+            ),
+        }
+    }
+
+    fn assemble_new(allocated: RefOrMut<(A, B)>) -> (A, B) {
+        match allocated {
+            RefOrMut::Ref(t) => (
+                A::Allocation::assemble_new(RefOrMut::Ref(&t.0)),
+                B::Allocation::assemble_new(RefOrMut::Ref(&t.1))
+            ),
+            RefOrMut::Mut(t) => (
+                A::Allocation::assemble_new(RefOrMut::Mut(&mut t.0)),
+                B::Allocation::assemble_new(RefOrMut::Mut(&mut t.1)),
+            ),
+        }
+    }
+}
+
+impl<A: Container, B: Container, C: Container> IntoAllocated<(A, B, C)> for (A::Allocation, B::Allocation, C::Allocation)
+    where
+        A::Allocation: IntoAllocated<A>,
+        B::Allocation: IntoAllocated<B>,
+        C::Allocation: IntoAllocated<C>,
+{
+    fn assemble(self, allocated: RefOrMut<(A, B, C)>) -> (A, B, C) where Self: Sized {
+        match allocated {
+            RefOrMut::Ref(t) => (
+                self.0.assemble(RefOrMut::Ref(&t.0)),
+                self.1.assemble(RefOrMut::Ref(&t.1)),
+                self.2.assemble(RefOrMut::Ref(&t.2)),
+            ),
+            RefOrMut::Mut(t) => (
+                self.0.assemble(RefOrMut::Mut(&mut t.0)),
+                self.1.assemble(RefOrMut::Mut(&mut t.1)),
+                self.2.assemble(RefOrMut::Mut(&mut t.2)),
+            ),
+        }
+    }
+
+    fn assemble_new(allocated: RefOrMut<(A, B, C)>) -> (A, B, C) {
+        match allocated {
+            RefOrMut::Ref(t) => (
+                A::Allocation::assemble_new(RefOrMut::Ref(&t.0)),
+                B::Allocation::assemble_new(RefOrMut::Ref(&t.1)),
+                C::Allocation::assemble_new(RefOrMut::Ref(&t.2)),
+            ),
+            RefOrMut::Mut(t) => (
+                A::Allocation::assemble_new(RefOrMut::Mut(&mut t.0)),
+                B::Allocation::assemble_new(RefOrMut::Mut(&mut t.1)),
+                C::Allocation::assemble_new(RefOrMut::Mut(&mut t.2)),
+            ),
+        }
+    }
+}
+
+impl<A: Container, B: Container, C: Container, D: Container> IntoAllocated<(A, B, C, D)> for (A::Allocation, B::Allocation, C::Allocation, D::Allocation)
+    where
+        A::Allocation: IntoAllocated<A>,
+        B::Allocation: IntoAllocated<B>,
+        C::Allocation: IntoAllocated<C>,
+        D::Allocation: IntoAllocated<D>,
+{
+    fn assemble(self, allocated: RefOrMut<(A, B, C, D)>) -> (A, B, C, D) where Self: Sized {
+        match allocated {
+            RefOrMut::Ref(t) => (
+                self.0.assemble(RefOrMut::Ref(&t.0)),
+                self.1.assemble(RefOrMut::Ref(&t.1)),
+                self.2.assemble(RefOrMut::Ref(&t.2)),
+                self.3.assemble(RefOrMut::Ref(&t.3)),
+            ),
+            RefOrMut::Mut(t) => (
+                self.0.assemble(RefOrMut::Mut(&mut t.0)),
+                self.1.assemble(RefOrMut::Mut(&mut t.1)),
+                self.2.assemble(RefOrMut::Mut(&mut t.2)),
+                self.3.assemble(RefOrMut::Mut(&mut t.3)),
+            ),
+        }
+    }
+
+    fn assemble_new(allocated: RefOrMut<(A, B, C, D)>) -> (A, B, C, D) {
+        match allocated {
+            RefOrMut::Ref(t) => (
+                A::Allocation::assemble_new(RefOrMut::Ref(&t.0)),
+                B::Allocation::assemble_new(RefOrMut::Ref(&t.1)),
+                C::Allocation::assemble_new(RefOrMut::Ref(&t.2)),
+                D::Allocation::assemble_new(RefOrMut::Ref(&t.3)),
+            ),
+            RefOrMut::Mut(t) => (
+                A::Allocation::assemble_new(RefOrMut::Mut(&mut t.0)),
+                B::Allocation::assemble_new(RefOrMut::Mut(&mut t.1)),
+                C::Allocation::assemble_new(RefOrMut::Mut(&mut t.2)),
+                D::Allocation::assemble_new(RefOrMut::Mut(&mut t.3)),
+            ),
+        }
+    }
+}
+
+impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
+    fn assemble(mut self, ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
+        match ref_or_mut {
+            RefOrMut::Ref(t) => self.clone_from(t),
+            RefOrMut::Mut(t) => ::std::mem::swap(&mut self, t),
+        }
         self
     }
 
-    fn assemble_new(ref_or_mut: Vec<T>) -> Vec<T> {
-        let mut vec = Vec::new();
-        vec.clone_from(&ref_or_mut);
-        vec
+    fn assemble_new(ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
+        Self::new().assemble(ref_or_mut)
     }
+}
 
-    fn assemble_ref(self, allocated: &Vec<T>) -> Vec<T> where Vec<T>: Clone {
-        todo!()
-    }
-
-    fn assemble_new_ref(allocated: &Vec<T>) -> Vec<T> where Vec<T>: Clone {
-        todo!()
+impl IntoAllocated<usize> for () {
+    fn assemble_new(allocated: RefOrMut<usize>) -> usize {
+        *allocated
     }
 }
 
@@ -355,20 +456,12 @@ mod rc {
     use std::rc::Rc;
 
     impl<T> IntoAllocated<Rc<T>> for () {
-        fn assemble(self, ref_or_mut: Rc<T>) -> Rc<T> {
-            Rc::clone(&ref_or_mut)
+        fn assemble(self, ref_or_mut: RefOrMut<Rc<T>>) -> Rc<T> {
+            Rc::clone(&*ref_or_mut)
         }
 
-        fn assemble_new(ref_or_mut: Rc<T>) -> Rc<T> {
-            Rc::clone(&ref_or_mut)
-        }
-
-        fn assemble_ref(self, allocated: &Rc<T>) -> Rc<T> where Rc<T>: Clone {
-            todo!()
-        }
-
-        fn assemble_new_ref(allocated: &Rc<T>) -> Rc<T> where Rc<T>: Clone {
-            todo!()
+        fn assemble_new(ref_or_mut: RefOrMut<Rc<T>>) -> Rc<T> {
+            Rc::clone(&*ref_or_mut)
         }
     }
 }

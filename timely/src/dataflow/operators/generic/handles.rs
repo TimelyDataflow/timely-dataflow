@@ -46,7 +46,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<MessageAllocation<D::Allocation>>)> {
+    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<<BundleCore<T, D> as Container>::Allocation>)> {
         let internal = &self.internal;
         self.pull_counter.next().map(|(mut bundle, allocation)| {
             match bundle.as_ref_or_mut() {
@@ -113,7 +113,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>+'a> FrontieredInp
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<MessageAllocation<D::Allocation>>)> {
+    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<<BundleCore<T, D> as Container>::Allocation>)> {
         self.handle.next()
     }
 

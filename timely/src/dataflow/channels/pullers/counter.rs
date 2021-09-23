@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::dataflow::channels::{BundleCore, MessageAllocation};
+use crate::dataflow::channels::BundleCore;
 use crate::progress::ChangeBatch;
 use crate::communication::{Pull, Container};
 
@@ -17,7 +17,7 @@ pub struct Counter<T: Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>
 impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
-    pub fn next(&mut self) -> Option<(&mut BundleCore<T, D>, &mut Option<MessageAllocation<D::Allocation>>)> {
+    pub fn next(&mut self) -> Option<(&mut BundleCore<T, D>, &mut Option<<BundleCore<T,D> as Container>::Allocation>)> {
         if let (message, allocation) = self.pullable.pull() {
             if let Some(message) = message {
                 if message.data.len() > 0 {

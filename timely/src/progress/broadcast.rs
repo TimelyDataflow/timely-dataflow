@@ -2,9 +2,10 @@
 
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::{Location, Port};
-use crate::communication::{Message, Push, Pull, Container};
+use crate::communication::{Message, Push, Pull};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
+use crate::communication::message::MessageAllocation;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
@@ -15,7 +16,7 @@ pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
     to_push: Option<ProgressMsg<T>>,
-    allocation: Option<(usize, usize, ProgressVec<T>)>,
+    allocation: Option<MessageAllocation<((), (), ProgressVec<T>)>>,
     pushers: Vec<Box<dyn Push<ProgressMsg<T>>>>,
     puller: Box<dyn Pull<ProgressMsg<T>>>,
     /// Source worker index
@@ -28,16 +29,6 @@ pub struct Progcaster<T:Timestamp> {
     channel_identifier: usize,
 
     progress_logging: Option<ProgressLogger>,
-}
-
-impl<T> Container for (usize, usize, ProgressVec<T>) {
-    type Allocation = ProgressVec<T>;
-
-    fn hollow(self) -> Option<Self::Allocation> {
-        let mut pv = self.2;
-        pv.clear();
-        Some(pv)
-    }
 }
 
 impl<T:Timestamp> Progcaster<T> {

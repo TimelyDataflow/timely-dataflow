@@ -4,10 +4,12 @@ use std::cell::RefCell;
 use std::fmt::{self, Debug};
 use std::rc::Rc;
 
-use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
+use crate::dataflow::channels::{BundleCore, Message};
 use crate::{Data};
 
 use crate::communication::{Push, Container};
+use crate::communication::message::{RefOrMut, MessageAllocation};
+use crate::communication::message::IntoAllocated;
 
 type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
 
@@ -24,14 +26,14 @@ impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
     fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<<BundleCore<T, D> as Container>::Allocation>) {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = &message {
-            let mut allocation = None;
+            let mut inner_allocation: Option<D::Allocation> = allocation.take().and_then(|m| m.0).map(|m| m.data);
             for index in 1..pushers.len() {
-                let copy = if let Some(allocation) = allocation.take() {
-                    message.data.clone_into(allocation)
+                let copy: D = if let Some(allocation) = inner_allocation.take() {
+                    allocation.assemble(RefOrMut::Ref(&message.data))
                 } else {
-                    message.data.clone()
+                    D::Allocation::assemble_new(RefOrMut::Ref(&message.data))
                 };
-                Message::push_at(Some(copy), message.time.clone(), &mut pushers[index-1], &mut allocation);
+                Message::push_at(Some(copy), message.time.clone(), &mut pushers[index-1], &mut inner_allocation);
             }
         }
         else {

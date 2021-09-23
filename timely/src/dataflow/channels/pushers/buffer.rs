@@ -1,7 +1,7 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use crate::{ContainerBuilder, Data};
+use crate::Data;
 use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
@@ -98,7 +98,7 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
 
 impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
     // internal method for use by `Session`.
-    fn give<D>(&mut self, data: D) where C: crate::Container<Inner=D> {
+    fn give<D>(&mut self, data: D) where C: crate::DataflowContainer<Inner=D> {
         self.buffer.push(data);
         // assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
         if self.buffer.len() == self.buffer.capacity() {
@@ -187,12 +187,12 @@ pub type AutoflushSession<'a, T, D, P> = AutoflushSessionCore<'a, T, Vec<D>, P>;
 impl<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>+'a> AutoflushSessionCore<'a, T, C, P> where T: Eq+Clone+'a, C: 'a {
     /// Transmits a single record.
     #[inline]
-    pub fn give<D>(&mut self, data: D) where C: crate::Container<Inner=D> {
+    pub fn give<D>(&mut self, data: D) where C: crate::DataflowContainer<Inner=D> {
         self.buffer.give(data);
     }
     /// Transmits records produced by an iterator.
     #[inline]
-    pub fn give_iterator<D, I: Iterator<Item=D>>(&mut self, iter: I) where C: crate::Container<Inner=D> {
+    pub fn give_iterator<D, I: Iterator<Item=D>>(&mut self, iter: I) where C: crate::DataflowContainer<Inner=D> {
         for item in iter {
             self.give(item);
         }

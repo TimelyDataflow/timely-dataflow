@@ -171,50 +171,105 @@ pub trait Container: Sized {
 
     /// TODO
     type Allocation: IntoAllocated<Self> + 'static;
+    // type Allocation: 'static;
 
     /// TODO
-    fn hollow(self) -> Option<Self::Allocation>;
+    fn hollow(self) -> Self::Allocation;
+
+    /// TODO
+    fn len(&self) -> usize;
+
+    ///
+    fn is_empty(&self) -> bool;
 }
 
 impl Container for () {
     type Allocation = ();
-    fn hollow(self) -> Option<Self::Allocation> {
-        None
+    fn hollow(self) -> Self::Allocation {
+        ()
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        false
     }
 }
 
 impl<A: Container> Container for (A,) {
     type Allocation = (A::Allocation,);
-    fn hollow(self) -> Option<Self::Allocation> {
-        self.0.hollow().map(|t| (t,))
+    fn hollow(self) -> Self::Allocation {
+        (self.0.hollow(), )
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        false
     }
 }
 
 impl<A: Container, B: Container> Container for (A, B) {
     type Allocation = (A::Allocation, B::Allocation);
-    fn hollow(self) -> Option<Self::Allocation> {
-        Some((self.0.hollow(), self.1.hollow()))
+    fn hollow(self) -> Self::Allocation {
+        (self.0.hollow(), self.1.hollow())
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        false
     }
 }
 
 impl<A: Container, B: Container, C: Container> Container for (A, B, C) {
     type Allocation = (A::Allocation, B::Allocation, C::Allocation);
-    fn hollow(self) -> Option<Self::Allocation> {
-        Some((self.0.hollow(), self.1.hollow(), self.2.hollow()))
+    fn hollow(self) -> Self::Allocation {
+        (self.0.hollow(), self.1.hollow(), self.2.hollow())
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        false
     }
 }
 
 impl<A: Container, B: Container, C: Container, D: Container> Container for (A, B, C, D) {
     type Allocation = (A::Allocation, B::Allocation, C::Allocation, D::Allocation);
-    fn hollow(self) -> Option<Self::Allocation> {
-        Some((self.0.hollow(), self.1.hollow(), self.2.hollow(), self.3.hollow()))
+    fn hollow(self) -> Self::Allocation {
+        (self.0.hollow(), self.1.hollow(), self.2.hollow(), self.3.hollow())
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        false
     }
 }
 
 impl Container for usize {
     type Allocation = ();
-    fn hollow(self) -> Option<Self::Allocation> {
-        None
+    fn hollow(self) -> Self::Allocation {
+        ()
+    }
+
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn is_empty(&self) -> bool {
+        false
     }
 }
 
@@ -245,8 +300,16 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
 impl<T: Clone + 'static> Container for Vec<T> {
     type Allocation = Self;
 
-    fn hollow(mut self) -> Option<Self::Allocation> {
+    fn hollow(mut self) -> Self::Allocation {
         self.clear();
-        Some(self)
+        self
+    }
+
+    fn len(&self) -> usize {
+        Vec::len(&self)
+    }
+
+    fn is_empty(&self) -> bool {
+        Vec::is_empty(&self)
     }
 }

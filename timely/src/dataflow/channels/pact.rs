@@ -42,7 +42,7 @@ impl<T: 'static, D: Container+'static> ParallelizationContractCore<T, D> for Pip
     type Pusher = LogPusher<T, D, ThreadPusher<BundleCore<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<BundleCore<T, D>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
-        let (pusher, puller) = allocator.pipeline::<Message<T, D>, MessageAllocation<D::Allocation>>(identifier, address);
+        let (pusher, puller) = allocator.pipeline::<Message<T, D>>(identifier, address);
         // // ignore `&mut A` and use thread allocator
         // let (pusher, puller) = Thread::new::<Bundle<T, D>>();
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
@@ -66,7 +66,7 @@ impl<'a, C: Container, D: Data, F: FnMut(&D)->u64+'static> Exchange<C, D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<'a, T: Eq+Data+Clone, C: Container+crate::Container<Inner=D>+ExchangeContainer+'static, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for Exchange<C, D, F>
+impl<'a, T: Eq+Data+Clone, C: Container+crate::DataflowContainer<Inner=D>+ExchangeContainer+'static, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for Exchange<C, D, F>
     where for<'b> &'b mut C: DrainContainer<Inner=D>,
         C::Allocation: ExchangeData,
 {

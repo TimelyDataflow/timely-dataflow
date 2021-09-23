@@ -78,6 +78,7 @@ pub use execute::Config as Config;
 use std::ops::RangeBounds;
 use std::convert::TryFrom;
 use crate::communication::message::IntoAllocated;
+use crate::communication::Container;
 
 /// Re-export of the `timely_communication` crate.
 pub mod communication {
@@ -121,12 +122,12 @@ impl<T: Data + communication::Data> ExchangeData for T { }
 
 /// A container of data passing on a dataflow edge
 #[deprecated]
-pub trait Container: crate::communication::Container + Data  {
+pub trait DataflowContainer: crate::communication::Container + Data  {
     /// The type of elements contained by this collection
     type Inner;
 
     /// The builder for this container
-    type Builder: ContainerBuilder<Container=Self>;
+    type Builder: ContainerBuilder<Self::Inner, Container=Self>;
 
     /// The allocation type for this container
     // type Allocation: Data + TryFrom<Self> + IntoAllocated<Self>;
@@ -139,12 +140,6 @@ pub trait Container: crate::communication::Container + Data  {
 
     /// Get the capacity of this container.
     fn capacity(&self) -> usize;
-
-    /// Check if the container is empty.
-    fn is_empty(&self) -> bool;
-
-    /// The number of elements in this container.
-    fn len(&self) -> usize;
 
     /// Take a container leaving an empty container behind.
     // fn take(container: &mut Self) -> Self {
@@ -167,16 +162,12 @@ pub trait Container: crate::communication::Container + Data  {
     }
 }
 
-trait PushContainer: Container {
-    type Builder: ContainerBuilder<Container=Self> + PushContainerBuilder;
-}
-
-trait PushContainerBuilder {
-
+trait PushContainer<D> {
+    type Builder: ContainerBuilder<D, Container=Self>;
 }
 
 /// A builder for containers
-pub trait ContainerBuilder: Extend<<<Self as ContainerBuilder>::Container as Container>::Inner> {
+pub trait ContainerBuilder<D>: Extend<D> {
     /// The container this builder builds
     type Container: Container;
 
@@ -220,7 +211,7 @@ pub trait ContainerBuilder: Extend<<<Self as ContainerBuilder>::Container as Con
     fn copy_from(&mut self, other: &Self);
 
     /// Push a single element into this builder
-    fn push(&mut self, element: <<Self as ContainerBuilder>::Container as Container>::Inner);
+    fn push(&mut self, element: D);
 
     /// Clear all contents, possibly leaving allocations behind
     fn clear(&mut self);
@@ -230,9 +221,11 @@ pub trait ContainerBuilder: Extend<<<Self as ContainerBuilder>::Container as Con
 }
 
 /// A container specialized to be passed on exchange dataflow edges.
-pub trait ExchangeContainer: Container+ExchangeData {}
+pub trait ExchangeContainer: ExchangeData {
+    type Inner: ExchangeData;
+}
 
-impl<D: Clone + 'static> Container for Vec<D> {
+impl<D: Clone + 'static> DataflowContainer for Vec<D> {
     type Inner = D;
     type Builder = Vec<D>;
     // type Allocation = Vec<D>;
@@ -250,17 +243,9 @@ impl<D: Clone + 'static> Container for Vec<D> {
         Vec::capacity(self)
     }
 
-    fn is_empty(&self) -> bool {
-        Vec::is_empty(self)
-    }
-
-    fn len(&self) -> usize {
-        Vec::len(self)
-    }
-
 }
 
-impl<D: Clone + 'static> ContainerBuilder for Vec<D> {
+impl<D: Clone + 'static> ContainerBuilder<D> for Vec<D> {
     type Container = Vec<D>;
 
     fn new() -> Self {
@@ -297,7 +282,7 @@ impl<D: Clone + 'static> ContainerBuilder for Vec<D> {
         self.extend_from_slice(other)
     }
 
-    fn push(&mut self, element: <<Self as ContainerBuilder>::Container as Container>::Inner) {
+    fn push(&mut self, element: D) {
         self.push(element)
     }
 
@@ -310,7 +295,9 @@ impl<D: Clone + 'static> ContainerBuilder for Vec<D> {
     }
 }
 
-impl<D: ExchangeData> ExchangeContainer for Vec<D> {}
+impl<D: ExchangeData> ExchangeContainer for Vec<D> {
+    type Inner = D;
+}
 
 /// A trait describing how to drain a container
 ///

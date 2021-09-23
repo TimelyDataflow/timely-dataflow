@@ -75,14 +75,14 @@ pub trait UnorderedInputCore<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), CoreStream<G, D>);
+    fn new_unordered_input_core<D: Container+Clone>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), CoreStream<G, D>);
 }
 
 
 impl<G: Scope> UnorderedInputCore<G> for G {
-    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), CoreStream<G, D>) {
+    fn new_unordered_input_core<D: Container+Clone>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), CoreStream<G, D>) {
 
-        let (output, registrar) = TeeCore::<G::Timestamp, D, MessageAllocation<D::Allocation>>::new();
+        let (output, registrar) = TeeCore::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
@@ -147,11 +147,11 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 }
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-pub struct UnorderedHandleCore<T: Timestamp, D: Container+'static> {
+pub struct UnorderedHandleCore<T: Timestamp, D: Container+Clone+'static> {
     buffer: PushBuffer<T, D, PushCounter<T, D, TeeCore<T, D>>>,
 }
 
-impl<T: Timestamp, D: Container> Debug for UnorderedHandleCore<T, D> where D: Debug, D::Allocation: Debug {
+impl<T: Timestamp, D: Container+Clone> Debug for UnorderedHandleCore<T, D> where D: Debug, D::Allocation: Debug {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug = f.debug_struct("UnorderedHandle");
         debug.field("buffer", &self.buffer);
@@ -159,7 +159,7 @@ impl<T: Timestamp, D: Container> Debug for UnorderedHandleCore<T, D> where D: De
     }
 }
 
-impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
+impl<T: Timestamp, D: Container+Clone> UnorderedHandleCore<T, D> {
     fn new(pusher: PushCounter<T, D, TeeCore<T, D>>) -> UnorderedHandleCore<T, D> {
         UnorderedHandleCore {
             buffer: PushBuffer::new(pusher),

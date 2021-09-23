@@ -9,7 +9,7 @@ use crate::progress::frontier::Antichain;
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 
-use crate::communication::Push;
+use crate::communication::{Push, Container};
 use crate::dataflow::{ScopeParent, Scope, CoreStream};
 use crate::dataflow::channels::{Message, pushers::CounterCore, MessageAllocation};
 
@@ -55,8 +55,7 @@ pub trait InputCore : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, CoreStream<Self, D>)
-        where <D as Container>::Builder: ContainerBuilder<Container=D>;
+    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, CoreStream<Self, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -88,17 +87,15 @@ pub trait InputCore : Scope {
     ///     }
     /// });
     /// ```
-    fn input_core_from<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> CoreStream<Self, D>
-        where <D as Container>::Builder: ContainerBuilder<Container=D>;
+    fn input_core_from<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> CoreStream<Self, D>;
 }
 
 use crate::order::TotalOrder;
 use crate::dataflow::channels::pushers::TeeCore;
-use crate::{Container, ContainerBuilder};
+use crate::communication::message::{RefOrMut, IntoAllocated};
 
 impl<G: Scope> InputCore for G where <G as ScopeParent>::Timestamp: TotalOrder {
     fn new_input_core<D: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, CoreStream<G, D>)
-        where <D as Container>::Builder: ContainerBuilder<Container=D>
     {
         let mut handle = HandleCore::new();
         let stream = self.input_core_from(&mut handle);
@@ -106,10 +103,9 @@ impl<G: Scope> InputCore for G where <G as ScopeParent>::Timestamp: TotalOrder {
     }
 
     fn input_core_from<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> CoreStream<G, D>
-        where <D as Container>::Builder: ContainerBuilder<Container=D>
     {
 
-        let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D, MessageAllocation<D::Allocation>>::new();
+        let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D>::new();
         let counter = CounterCore::new(output);
         let produced = counter.produced().clone();
 
@@ -177,19 +173,14 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct HandleCore<T: Timestamp, C: Container>
-where <C as Container>::Builder: ContainerBuilder<Container=C>
-{
+pub struct HandleCore<T: Timestamp, C: Container+'static> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     pushers: Vec<CounterCore<T, C, TeeCore<T, C>>>,
-    buffer1: Option<C::Builder>,
-    buffer2: Option<C>,
     now_at: T,
 }
 
 impl<T:Timestamp, D: Container> HandleCore<T, D>
-    where <D as Container>::Builder: ContainerBuilder<Container=D>
 {
 
     /// Allocates a new input handle, from which one can create timely streams.
@@ -223,8 +214,6 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
             activate: Vec::new(),
             progress: Vec::new(),
             pushers: Vec::new(),
-            buffer1: None,
-            buffer2: None,
             now_at: T::minimum(),
         }
     }
@@ -269,7 +258,7 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
         progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.
-        if !self.buffer1.as_ref().map_or(false, D::Builder::is_empty) { self.flush(); }
+        // if !self.buffer1.as_ref().map_or(false, D::Builder::is_empty) { self.flush(); }
 
         // we need to produce an appropriate update to the capabilities for `progress`, in case a
         // user has decided to drive the handle around a bit before registering it.
@@ -281,33 +270,33 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
     }
 
     // flushes our buffer at each of the destinations. there can be more than one; clone if needed.
-    #[inline(never)]
-    fn flush(&mut self) {
-        if let Some(builder1) = self.buffer1.take() {
-            let mut buffer1 = builder1.build();
-            let mut allocation = None;
-            for index in 0..self.pushers.len() - 1 {
-                if index < self.pushers.len() - 1 {
-                    let copy = if let Some(allocation) = allocation.take() {
-                        buffer1.clone_into(allocation)
-                    } else {
-                        buffer1.clone()
-                    };
-                    Message::push_at(Some(copy), self.now_at.clone(), &mut self.pushers[1 + index], &mut allocation);
-                }
-            }
-            if self.pushers.len() > 0 {
-                // TODO: retain allocation
-                Message::push_at(Some(buffer1), self.now_at.clone(), &mut self.pushers[0], &mut allocation);
-            }
-            let builder = D::Builder::new();
-            self.buffer1 = Some(builder);
-        }
-    }
+    // #[inline(never)]
+    // fn flush(&mut self) {
+    //     if let Some(builder1) = self.buffer1.take() {
+    //         let mut buffer1 = builder1.build();
+    //         let mut allocation = None;
+    //         for index in 0..self.pushers.len() - 1 {
+    //             if index < self.pushers.len() - 1 {
+    //                 let copy = if let Some(allocation) = allocation.take() {
+    //                     buffer1.clone_into(allocation)
+    //                 } else {
+    //                     buffer1.clone()
+    //                 };
+    //                 Message::push_at(Some(copy), self.now_at.clone(), &mut self.pushers[1 + index], &mut allocation);
+    //             }
+    //         }
+    //         if self.pushers.len() > 0 {
+    //             // TODO: retain allocation
+    //             Message::push_at(Some(buffer1), self.now_at.clone(), &mut self.pushers[0], &mut allocation);
+    //         }
+    //         let builder = D::Builder::new();
+    //         self.buffer1 = Some(builder);
+    //     }
+    // }
 
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
     fn close_epoch(&mut self) {
-        if !self.buffer1.as_ref().map_or(true, D::Builder::is_empty) { self.flush(); }
+        // if !self.buffer1.as_ref().map_or(true, D::Builder::is_empty) { self.flush(); }
         for pusher in self.pushers.iter_mut() {
             pusher.done();
         }
@@ -320,48 +309,47 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
         }
     }
 
-    #[inline]
-    /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
-    pub fn send(&mut self, data: D::Inner) {
-        // assert!(self.buffer1.capacity() == Message::<T, D>::default_length());
-        if self.buffer1.is_none() {
-            self.buffer1 = Some(D::Builder::new());
-        }
-        let buffer1 = self.buffer1.as_mut().unwrap();
-        buffer1.push(data);
-        if buffer1.len() == buffer1.capacity() {
-            self.flush();
-        }
-    }
+    // #[inline]
+    // /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
+    // pub fn send(&mut self, data: D::Inner) {
+    //     // assert!(self.buffer1.capacity() == Message::<T, D>::default_length());
+    //     if self.buffer1.is_none() {
+    //         self.buffer1 = Some(D::Builder::new());
+    //     }
+    //     let buffer1 = self.buffer1.as_mut().unwrap();
+    //     buffer1.push(data);
+    //     if buffer1.len() == buffer1.capacity() {
+    //         self.flush();
+    //     }
+    // }
 
     /// Sends a batch of records into the corresponding timely dataflow `Stream`, at the current epoch.
     ///
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.
-    // pub fn send_batch(&mut self, buffer: &mut D) {
-    //
-    //     if !buffer.is_empty() {
-    //         // flush buffered elements to ensure local fifo.
-    //         if !self.buffer1.as_ref().map_or(true, D::Builder::is_empty) { self.flush(); }
-    //
-    //         // push buffer (or clone of buffer) at each destination.
-    //         for index in 0 .. self.pushers.len() {
-    //             if index < self.pushers.len() - 1 {
-    //                 let builder = D::Builder::with_optional_allocation(&mut self.buffer2);
-    //                 builder.initialize_from(&buffer);
-    //                 let mut buffer = Some(builder.build());
-    //                 Message::push_at(&mut buffer, self.now_at.clone(), &mut self.pushers[index]);
-    //                 self.buffer2 = buffer;
-    //             }
-    //             else {
-    //                 // TODO: retain allocation
-    //                 Message::push_at(&mut Some(buffer), self.now_at.clone(), &mut self.pushers[index]);
-    //                 assert!(buffer.is_empty());
-    //             }
-    //         }
-    //         // TODO: Cannot clear `buffer` because containers are immutable
-    //         // buffer.clear();
-    //     }
-    // }
+    pub fn send_batch(&mut self, buffer: D, allocation: &mut Option<D::Allocation>) {
+
+        if !buffer.is_empty() {
+            // flush buffered elements to ensure local fifo.
+            // if !self.buffer1.as_ref().map_or(true, Container::is_empty) { self.flush(); }
+
+            // push buffer (or clone of buffer) at each destination.
+            for index in 0 .. self.pushers.len() {
+                if index < self.pushers.len() - 1 {
+                    let copy = if let Some(allocation) = allocation.take() {
+                        allocation.assemble(RefOrMut::Ref(&buffer))
+                    } else {
+                        D::Allocation::assemble_new(RefOrMut::Ref(&buffer))
+                    };
+                    Message::push_at(Some(copy), self.now_at.clone(), &mut self.pushers[index], allocation);
+                }
+            }
+            if !self.pushers.is_empty() {
+                // TODO: retain allocation
+                Message::push_at(Some(buffer), self.now_at.clone(), &mut self.pushers[self.pushers.len() - 1], allocation);
+                assert!(buffer.is_empty());
+            }
+        }
+    }
 
     /// Advances the current epoch to `next`.
     ///
@@ -397,17 +385,13 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
     }
 }
 
-impl<T: Timestamp, D: Container> Default for HandleCore<T, D>
-    where <D as Container>::Builder: ContainerBuilder<Container=D>
-{
+impl<T: Timestamp, D: Container> Default for HandleCore<T, D> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T:Timestamp, D: Container> Drop for HandleCore<T, D>
-    where <D as Container>::Builder: ContainerBuilder<Container=D>
-{
+impl<T:Timestamp, D: Container> Drop for HandleCore<T, D> {
     fn drop(&mut self) {
         self.close_epoch();
     }

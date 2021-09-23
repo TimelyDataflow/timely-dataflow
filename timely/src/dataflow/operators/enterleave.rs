@@ -87,7 +87,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
 
         use crate::scheduling::Scheduler;
 
-        let (targets, registrar) = TeeCore::<T, C, MessageAllocation<C::Allocation>>::new();
+        let (targets, registrar) = TeeCore::<T, C>::new();
         let ingress = IngressNub {
             targets: CounterCore::new(targets),
             phantom: ::std::marker::PhantomData,
@@ -123,13 +123,13 @@ pub trait Leave<G: Scope, D: Container> {
     fn leave(&self) -> CoreStream<G, D>;
 }
 
-impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for CoreStream<Child<'a, G, T>, D> {
+impl<'a, G: Scope, D: Clone+Container+'static, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for CoreStream<Child<'a, G, T>, D> {
     fn leave(&self) -> CoreStream<G, D> {
 
         let scope = self.scope();
 
         let output = scope.subgraph.borrow_mut().new_output();
-        let (targets, registrar) = TeeCore::<G::Timestamp, D, MessageAllocation<D::Allocation>>::new();
+        let (targets, registrar) = TeeCore::<G::Timestamp, D>::new();
         let channel_id = scope.clone().new_identifier();
         self.connect_to(Target::new(0, output.port), EgressNub { targets, phantom: PhantomData }, channel_id);
 
@@ -142,7 +142,7 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+'static> {
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+Clone+'static> {
     targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
