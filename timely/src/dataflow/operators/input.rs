@@ -21,7 +21,7 @@ use crate::dataflow::{Stream, ScopeParent, Scope, CoreStream};
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 /// Create a new `Stream` and `Handle` through which to supply input.
-pub trait Input : Scope {
+pub trait Input: Scope {
     /// Create a new `Stream` and `Handle` through which to supply input.
     ///
     /// The `new_input` method returns a pair `(Handle, Stream)` where the `Stream` can be used
@@ -90,7 +90,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_core<D: Container+Clone+'static>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, CoreStream<Self, D>);
+    fn new_input_core<D: Container + Clone + 'static>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, CoreStream<Self, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -154,7 +154,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from_core<D: Container+Clone+'static>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> CoreStream<Self, D>;
+    fn input_from_core<D: Container + Clone + 'static>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> CoreStream<Self, D>;
 }
 
 use crate::order::TotalOrder;
@@ -172,14 +172,13 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         self.input_from_core(handle)
     }
 
-    fn new_input_core<D: Container+Clone+'static>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, CoreStream<G, D>) {
+    fn new_input_core<D: Container + Clone + 'static>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, CoreStream<G, D>) {
         let mut handle = HandleCore::new();
         let stream = self.input_from_core(&mut handle);
         (handle, stream)
     }
 
-    fn input_from_core<D: Container+Clone+'static>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> CoreStream<G, D> {
-
+    fn input_from_core<D: Container + Clone + 'static>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> CoreStream<G, D> {
         let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D>::new();
         let counter = CounterCore::new(output);
         let produced = counter.produced().clone();
@@ -210,17 +209,18 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 }
 
 #[derive(Debug)]
-struct Operator<T:Timestamp> {
+struct Operator<T: Timestamp> {
     name: String,
     address: Vec<usize>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
-    progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
-    messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
-    copies:     usize,
+    progress: Rc<RefCell<ChangeBatch<T>>>,
+    // times closed since last asked
+    messages: Rc<RefCell<ChangeBatch<T>>>,
+    // messages sent since last asked
+    copies: usize,
 }
 
-impl<T:Timestamp> Schedule for Operator<T> {
-
+impl<T: Timestamp> Schedule for Operator<T> {
     fn name(&self) -> &str { &self.name }
 
     fn path(&self) -> &[usize] { &self.address[..] }
@@ -233,8 +233,7 @@ impl<T:Timestamp> Schedule for Operator<T> {
     }
 }
 
-impl<T:Timestamp> Operate<T> for Operator<T> {
-
+impl<T: Timestamp> Operate<T> for Operator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
@@ -249,7 +248,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct HandleCore<T: Timestamp, C: Container+Clone+'static> {
+pub struct HandleCore<T: Timestamp, C: Container + Clone + 'static> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     pushers: Vec<CounterCore<T, C, TeeCore<T, C>>>,
@@ -261,8 +260,7 @@ pub struct HandleCore<T: Timestamp, C: Container+Clone+'static> {
 /// A handle specialized to vector-based containers.
 pub type Handle<T, D> = HandleCore<T, Vec<D>>;
 
-impl<T:Timestamp, D: Container+Clone> HandleCore<T, D> {
-
+impl<T: Timestamp, D: Container + Clone> HandleCore<T, D> {
     /// Allocates a new input handle, from which one can create timely streams.
     ///
     /// # Examples
@@ -327,9 +325,9 @@ impl<T:Timestamp, D: Container+Clone> HandleCore<T, D> {
     /// });
     /// ```
     pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> CoreStream<G, D>
-    where
-        T: TotalOrder,
-        G: ScopeParent<Timestamp=T>,
+        where
+            T: TotalOrder,
+            G: ScopeParent<Timestamp=T>,
     {
         scope.input_from_core(self)
     }
@@ -337,7 +335,7 @@ impl<T:Timestamp, D: Container+Clone> HandleCore<T, D> {
     fn register(
         &mut self,
         pusher: CounterCore<T, D, TeeCore<T, D>>,
-        progress: Rc<RefCell<ChangeBatch<T>>>
+        progress: Rc<RefCell<ChangeBatch<T>>>,
     ) {
         // flush current contents, so new registrant does not see existing data.
         self.flush();
@@ -356,11 +354,8 @@ impl<T:Timestamp, D: Container+Clone> HandleCore<T, D> {
     fn flush(&mut self) {
         if let Some(buffer) = self.buffer.take() {
             for index in 1..self.pushers.len() {
-                if index < self.pushers.len() - 1 {
-                    let data = RefOrMut::Ref(&buffer).assemble(&mut self.allocation);
-                    Message::push_at(Some(data), self.now_at.clone(), &mut self.pushers[index], &mut self.allocation);
-                } else {
-                }
+                let data = RefOrMut::Ref(&buffer).assemble(&mut self.allocation);
+                Message::push_at(Some(data), self.now_at.clone(), &mut self.pushers[index], &mut self.allocation);
             }
             if self.pushers.len() > 0 {
                 Message::push_at(Some(buffer), self.now_at.clone(), &mut self.pushers[0], &mut self.allocation);
@@ -404,7 +399,7 @@ impl<T:Timestamp, D: Container+Clone> HandleCore<T, D> {
     ///
     /// This method allows timely dataflow to issue all progress notifications blocked by this input
     /// and to begin to shut down operators, as this input can no longer produce data.
-    pub fn close(self) { }
+    pub fn close(self) {}
 
     /// Reports the current epoch.
     pub fn epoch(&self) -> &T {
@@ -422,7 +417,7 @@ impl<T: Timestamp, D: Data> Handle<T, D> {
     fn ensure_buffer(&mut self) -> &mut Vec<D> {
         if self.buffer.is_none() {
             // TODO: Vec::with_capacity()
-            self.buffer = Some(RefOrMut::Ref(&Vec::new()).assemble(&mut self.allocation));
+            self.buffer = Some(RefOrMut::Mut(&mut Vec::with_capacity(1024)).assemble(&mut self.allocation));
         }
         self.buffer.as_mut().unwrap()
     }
@@ -452,17 +447,15 @@ impl<T: Timestamp, D: Data> Handle<T, D> {
             }
         }
     }
-
-
 }
 
-impl<T: Timestamp, C: Container+Clone> Default for Handle<T, C> {
+impl<T: Timestamp, C: Container + Clone> Default for Handle<T, C> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T:Timestamp, C: Container+Clone> Drop for HandleCore<T, C> {
+impl<T: Timestamp, C: Container + Clone> Drop for HandleCore<T, C> {
     fn drop(&mut self) {
         self.close_epoch();
     }

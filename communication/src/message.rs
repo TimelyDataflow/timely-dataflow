@@ -257,28 +257,6 @@ impl<T: Container> Container for Message<T> {
     }
 }
 
-// /// A hollow allocation
-// pub trait FromAllocated<A> {
-//     /// Turn an allocated object into a hollow object, if possible
-//     fn hollow(self) -> Option<A>;
-// }
-//
-// impl<T, A: From<T>> FromAllocated<A> for Message<T> {
-//     fn hollow(self) -> Option<A> {
-//         match self.payload {
-//             MessageContents::Binary(_) | MessageContents::Arc(_) => None,
-//             MessageContents::Owned(allocated) => Some(allocated.into()),
-//         }
-//     }
-// }
-//
-// impl<T> FromAllocated<Vec<T>> for Vec<T> {
-//     fn hollow(mut self) -> Option<Vec<T>> {
-//         self.clear();
-//         Some(self)
-//     }
-// }
-
 /// TODO
 pub trait IntoAllocated<T> {
     /// TODO
@@ -448,6 +426,20 @@ impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
 impl IntoAllocated<usize> for () {
     fn assemble_new(allocated: RefOrMut<usize>) -> usize {
         *allocated
+    }
+}
+
+impl IntoAllocated<String> for String {
+    fn assemble(mut self, allocated: RefOrMut<String>) -> String where Self: Sized {
+        match allocated {
+            RefOrMut::Ref(t) => self.clone_from(t),
+            RefOrMut::Mut(t) => ::std::mem::swap(&mut self, t),
+        }
+        self
+    }
+
+    fn assemble_new(allocated: RefOrMut<String>) -> String {
+        Self::with_capacity(allocated.len()).assemble(allocated)
     }
 }
 

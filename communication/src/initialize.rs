@@ -58,6 +58,7 @@ impl Config {
         opts.optopt("n", "processes", "number of processes", "NUM");
         opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
         opts.optflag("r", "report", "reports connection progress");
+        opts.optflag("z", "zerocopy", "enable zero-copy for intra-process communication");
     }
 
     /// Instantiates a configuration based upon the parsed options in `matches`.
@@ -74,6 +75,7 @@ impl Config {
         let process = matches.opt_get_default("p", 0_usize).map_err(|e| e.to_string())?;
         let processes = matches.opt_get_default("n", 1_usize).map_err(|e| e.to_string())?;
         let report = matches.opt_present("report");
+        let zerocopy = matches.opt_get_default("z", false).map_err(|e| e.to_string())?;
 
         if processes > 1 {
             let mut addresses = Vec::new();
@@ -102,7 +104,11 @@ impl Config {
                 log_fn: Box::new( | _ | None),
             })
         } else if threads > 1 {
-            Ok(Config::Process(threads))
+            if zerocopy {
+                Ok(Config::ProcessBinary(threads))
+            } else {
+                Ok(Config::Process(threads))
+            }
         } else {
             Ok(Config::Thread)
         }

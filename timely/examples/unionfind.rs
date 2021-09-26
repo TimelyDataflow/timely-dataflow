@@ -9,6 +9,9 @@ use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Exchange, Probe};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
+use timely::communication::message::RefOrMut;
+use timely::communication::Container;
+use timely_communication::message::MessageAllocation;
 
 fn main() {
 
@@ -65,7 +68,7 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
 
             move |input, output| {
 
-                while let Some((time, data)) = input.next() {
+                while let Some((time, data, allocation)) = input.next() {
 
                     let mut session = output.session(&time);
                     for &(mut x, mut y) in data.iter() {
@@ -89,6 +92,10 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
                                 Ordering::Equal   => { roots[y] = x; ranks[x] += 1 },
                             }
                         }
+                    }
+                    if let RefOrMut::Mut(data) = data {
+                        let data = ::std::mem::take(data);
+                        *allocation = Some(MessageAllocation(Some(MessageAllocation(data.hollow()))));
                     }
                 }
             }

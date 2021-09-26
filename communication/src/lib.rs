@@ -273,6 +273,23 @@ impl Container for usize {
     }
 }
 
+impl Container for String {
+    type Allocation = String;
+
+    fn hollow(mut self) -> Self::Allocation {
+        self.clear();
+        self
+    }
+
+    fn len(&self) -> usize {
+        String::len(self)
+    }
+
+    fn is_empty(&self) -> bool {
+        String::is_empty(self)
+    }
+}
+
 use crossbeam_channel::{Sender, Receiver};
 use crate::message::IntoAllocated;
 

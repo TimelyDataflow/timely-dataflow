@@ -97,7 +97,7 @@ impl<T, D: Data, P: Push<BundleCore<T, Vec<D>>>> BufferCore<T, Vec<D>, P> where 
     fn ensure_buffer(&mut self) -> &mut Vec<D> {
         if self.buffer.is_none() {
             // TODO: Vec::with_capacity()
-            self.buffer = Some(RefOrMut::Ref(&Vec::new()).assemble(&mut self.allocation));
+            self.buffer = Some(RefOrMut::Mut(&mut Vec::with_capacity(1024)).assemble(&mut self.allocation));
         }
         self.buffer.as_mut().unwrap()
     }
