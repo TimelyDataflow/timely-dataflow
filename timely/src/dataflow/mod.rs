@@ -16,7 +16,7 @@
 pub use self::stream::{CoreStream, Stream};
 pub use self::scopes::{Scope, ScopeParent};
 
-pub use self::operators::input_core::HandleCore as InputHandleCore;
+pub use self::operators::input::HandleCore as InputHandleCore;
 pub use self::operators::input::Handle as InputHandle;
 pub use self::operators::probe::Handle as ProbeHandle;
 

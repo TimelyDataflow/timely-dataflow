@@ -11,7 +11,6 @@
 pub use self::enterleave::{Enter, EnterAt, Leave};
 // pub use self::queue::*;
 pub use self::input::Input;
-pub use self::input_core::InputCore;
 pub use self::unordered_input::UnorderedInput;
 pub use self::unordered_input_core::UnorderedInputCore;
 pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
@@ -38,7 +37,6 @@ pub use self::count::Accumulate;
 
 pub mod enterleave;
 pub mod input;
-pub mod input_core;
 pub mod flow_controlled;
 pub mod unordered_input;
 pub mod unordered_input_core;
