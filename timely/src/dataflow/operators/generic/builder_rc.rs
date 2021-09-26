@@ -22,7 +22,6 @@ use crate::dataflow::operators::generic::builder_raw::OperatorShape;
 use crate::logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
-use crate::dataflow::channels::MessageAllocation;
 use crate::communication::Container;
 
 /// Builds operators with generic shape.

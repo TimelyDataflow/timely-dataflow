@@ -137,7 +137,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
                 use crate::communication::message::RefOrMut;
 
                 // turn each received message into an event.
-                while let Some((mut message, allocation)) = input.next() {
+                while let Some((message, allocation)) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {
                         RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),

@@ -16,7 +16,7 @@ pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
     to_push: Option<ProgressMsg<T>>,
-    allocation: Option<MessageAllocation<((), (), ProgressVec<T>)>>,
+    allocation: Option<MessageAllocation<Option<((), (), ProgressVec<T>)>>>,
     pushers: Vec<Box<dyn Push<ProgressMsg<T>>>>,
     puller: Box<dyn Pull<ProgressMsg<T>>>,
     /// Source worker index

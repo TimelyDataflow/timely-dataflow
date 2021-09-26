@@ -11,7 +11,7 @@ use crate::progress::Source;
 
 use crate::communication::{Push, Container};
 use crate::dataflow::{ScopeParent, Scope, CoreStream};
-use crate::dataflow::channels::{Message, pushers::CounterCore, MessageAllocation};
+use crate::dataflow::channels::{Message, pushers::CounterCore};
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
 // TODO : more like a harness, with direct access to its inputs.
@@ -344,9 +344,8 @@ impl<T:Timestamp, D: Container> HandleCore<T, D>
                 }
             }
             if !self.pushers.is_empty() {
-                // TODO: retain allocation
-                Message::push_at(Some(buffer), self.now_at.clone(), &mut self.pushers[self.pushers.len() - 1], allocation);
-                assert!(buffer.is_empty());
+                let index = self.pushers.len() -1 ;
+                Message::push_at(Some(buffer), self.now_at.clone(), &mut self.pushers[index], allocation);
             }
         }
     }

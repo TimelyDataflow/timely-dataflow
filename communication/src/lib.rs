@@ -205,11 +205,11 @@ impl<A: Container> Container for (A,) {
     }
 
     fn len(&self) -> usize {
-        1
+       self.0.len()
     }
 
     fn is_empty(&self) -> bool {
-        false
+        self.0.is_empty()
     }
 }
 
@@ -220,11 +220,11 @@ impl<A: Container, B: Container> Container for (A, B) {
     }
 
     fn len(&self) -> usize {
-        1
+        self.0.len() + self.1.len()
     }
 
     fn is_empty(&self) -> bool {
-        false
+        self.0.is_empty() && self.1.is_empty()
     }
 }
 
@@ -235,11 +235,11 @@ impl<A: Container, B: Container, C: Container> Container for (A, B, C) {
     }
 
     fn len(&self) -> usize {
-        1
+        self.0.len() + self.1.len() + self.2.len()
     }
 
     fn is_empty(&self) -> bool {
-        false
+        self.0.is_empty() && self.1.is_empty() && self.2.is_empty()
     }
 }
 
@@ -250,11 +250,11 @@ impl<A: Container, B: Container, C: Container, D: Container> Container for (A, B
     }
 
     fn len(&self) -> usize {
-        1
+        self.0.len() + self.1.len() + self.2.len() + self.3.len()
     }
 
     fn is_empty(&self) -> bool {
-        false
+        self.0.is_empty() && self.1.is_empty() && self.2.is_empty() && self.3.is_empty()
     }
 }
 

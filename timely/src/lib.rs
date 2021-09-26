@@ -76,8 +76,6 @@ pub use timely_communication::Config as CommunicationConfig;
 pub use worker::Config as WorkerConfig;
 pub use execute::Config as Config;
 use std::ops::RangeBounds;
-use std::convert::TryFrom;
-use crate::communication::message::IntoAllocated;
 use crate::communication::Container;
 
 /// Re-export of the `timely_communication` crate.
@@ -121,45 +119,9 @@ pub trait ExchangeData: Data + communication::Data { }
 impl<T: Data + communication::Data> ExchangeData for T { }
 
 /// A container of data passing on a dataflow edge
-#[deprecated]
 pub trait DataflowContainer: crate::communication::Container + Data  {
-    /// The type of elements contained by this collection
+    /// TODO
     type Inner;
-
-    /// The builder for this container
-    type Builder: ContainerBuilder<Self::Inner, Container=Self>;
-
-    /// The allocation type for this container
-    // type Allocation: Data + TryFrom<Self> + IntoAllocated<Self>;
-
-    /// Clone this container while reusing the provided allocation
-    fn clone_into(&self, allocation: Self::Allocation) -> Self;
-
-    /// Construct an empty container
-    fn empty() -> Self;
-
-    /// Get the capacity of this container.
-    fn capacity(&self) -> usize;
-
-    /// Take a container leaving an empty container behind.
-    // fn take(container: &mut Self) -> Self {
-    //     ::std::mem::replace(container, Self::empty())
-    // }
-
-    /// Default buffer size.
-    fn default_length() -> usize {
-        const MESSAGE_BUFFER_SIZE: usize = 1 << 13;
-        let size = std::mem::size_of::<Self::Inner>();
-        if size == 0 {
-            // We could use usize::MAX here, but to avoid overflows we
-            // limit the default length for zero-byte types.
-            MESSAGE_BUFFER_SIZE
-        } else if size <= MESSAGE_BUFFER_SIZE {
-            MESSAGE_BUFFER_SIZE / size
-        } else {
-            1
-        }
-    }
 }
 
 trait PushContainer<D> {
@@ -222,27 +184,8 @@ pub trait ContainerBuilder<D>: Extend<D> {
 
 /// A container specialized to be passed on exchange dataflow edges.
 pub trait ExchangeContainer: ExchangeData {
+    /// TODO
     type Inner: ExchangeData;
-}
-
-impl<D: Clone + 'static> DataflowContainer for Vec<D> {
-    type Inner = D;
-    type Builder = Vec<D>;
-    // type Allocation = Vec<D>;
-
-    fn clone_into(&self, mut allocation: Self::Allocation) -> Self {
-        allocation.clone_from(&self);
-        allocation
-    }
-
-    fn empty() -> Self {
-        Vec::new()
-    }
-
-    fn capacity(&self) -> usize {
-        Vec::capacity(self)
-    }
-
 }
 
 impl<D: Clone + 'static> ContainerBuilder<D> for Vec<D> {

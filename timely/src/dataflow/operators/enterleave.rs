@@ -28,7 +28,7 @@ use crate::order::Product;
 use crate::{Data};
 use crate::communication::{Push, Container};
 use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
-use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
+use crate::dataflow::channels::{BundleCore, Message};
 
 use crate::worker::AsWorker;
 use crate::dataflow::{CoreStream, Scope, Stream};
@@ -151,9 +151,9 @@ struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: C
 
 impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data+Container> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
     fn push(&mut self, message: Option<BundleCore<TOuter, TData>>, allocation: &mut Option<<BundleCore<TOuter,TData> as Container>::Allocation>) {
-        if let Some(mut message) = message {
-            let mut outer_message = message.into_typed();
-            let mut inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time), outer_message.data, 0, 0)));
+        if let Some(message) = message {
+            let outer_message = message.into_typed();
+            let inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time), outer_message.data, 0, 0)));
             let mut inner_allocation = None;
             self.targets.push(inner_message, &mut inner_allocation);
             if let Some(inner_allocation) = inner_allocation.take() {
@@ -182,7 +182,7 @@ where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Clone+Contain
     fn push(&mut self, message: Option<BundleCore<TInner, TData>>, allocation: &mut Option<<BundleCore<TInner, TData> as Container>::Allocation>) {
         if let Some(message) = message {
             let inner_message = message.into_typed();
-            let mut outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.to_outer(), inner_message.data, 0, 0)));
+            let outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.to_outer(), inner_message.data, 0, 0)));
             let mut outer_allocation = None;
             self.targets.push(outer_message, &mut outer_allocation);
             if let Some(outer_allocation) = outer_allocation {

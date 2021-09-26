@@ -11,7 +11,6 @@ use crate::dataflow::scopes::child::Iterative;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OutputWrapper;
 use crate::Data;
-use crate::dataflow::channels::MessageAllocation;
 use crate::communication::Container;
 use crate::communication::message::IntoAllocated;
 

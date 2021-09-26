@@ -12,7 +12,7 @@ use crate::progress::frontier::MutableAntichain;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{BufferCore, Session};
-use crate::dataflow::channels::{BundleCore, MessageAllocation};
+use crate::dataflow::channels::BundleCore;
 use crate::communication::{Push, Pull, message::RefOrMut, Container};
 use crate::logging::TimelyLogger as Logger;
 
@@ -48,7 +48,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     #[inline]
     pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<<BundleCore<T, D> as Container>::Allocation>)> {
         let internal = &self.internal;
-        self.pull_counter.next().map(|(mut bundle, allocation)| {
+        self.pull_counter.next().map(|(bundle, allocation)| {
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
                     (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data), allocation)

@@ -1,7 +1,7 @@
 //! Structured communication between timely dataflow operators.
 
 use crate::communication::{Push, Container};
-use crate::communication::message::MessageAllocation as CommMessageAllocation;
+use crate::communication::message::{MessageAllocation};
 use crate::communication::message::{IntoAllocated, RefOrMut};
 
 /// A collection of types that may be pushed at.
@@ -13,6 +13,9 @@ pub mod pact;
 
 /// The input to and output from timely dataflow communication channels.
 pub type BundleCore<T, D> = crate::communication::Message<Message<T, D>>;
+
+/// Allocation for [BundleCore].
+pub type BundleCoreAllocation<T, D> = <BundleCore<T, D> as Container>::Allocation;
 
 /// The input to and output from timely dataflow communication channels specialized to vectors.
 pub type Bundle<T, D> = BundleCore<T, Vec<D>>;
@@ -42,11 +45,11 @@ impl<T, D: Container> Message<T, D> {
     {
         if let Some(data) = data {
             let message = Message::new(time, data, 0, 0);
-            let mut bundle = Some(BundleCore::from_typed(message));
+            let bundle = Some(BundleCore::from_typed(message));
             let mut bundle_allocation = None;
             pusher.push(bundle, &mut bundle_allocation);
 
-            if let Some(CommMessageAllocation(Some(MessageAllocation {data}))) = bundle_allocation {
+            if let Some(MessageAllocation(Some(MessageAllocation(data)))) = bundle_allocation {
                 *allocation = Some(data);
             }
 
@@ -58,17 +61,11 @@ impl<T, D: Container> Message<T, D> {
     }
 }
 
-/// TODO
-pub struct MessageAllocation<C> {
-    /// TODO
-    pub data: C,
-}
-
 impl<T, D: Container> Container for Message<T, D> {
     type Allocation = MessageAllocation<D::Allocation>;
 
     fn hollow(self) -> Self::Allocation {
-        MessageAllocation { data: self.data.hollow() }
+        MessageAllocation(self.data.hollow())
     }
 
     fn len(&self) -> usize {

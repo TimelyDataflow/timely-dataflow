@@ -1,54 +1,50 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
-use std::marker::PhantomData;
-
-use crate::{DataflowContainer, ContainerBuilder, Data, DrainContainer};
-use crate::communication::Push;
-use crate::dataflow::channels::{BundleCore, Message, MessageAllocation};
+use crate::Data;
+use crate::communication::{Push, Container};
+use crate::dataflow::channels::{Bundle, Message};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, C: DataflowContainer, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
-    buffers: Vec<C::Builder>,
+    buffers: Vec<Vec<D>>,
     current: Option<T>,
     hash_func: H,
-    _phantom_data: PhantomData<D>,
 }
 
-impl<T: Clone, C: DataflowContainer, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
+impl<T: Clone, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
-    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
+    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
-            buffers.push(C::Builder::with_capacity(C::default_length()));
+            // TODO: 1024
+            buffers.push(Vec::with_capacity(1024));
         }
         Exchange {
             pushers,
             hash_func: key,
             buffers,
             current: None,
-            _phantom_data: PhantomData,
         }
     }
     #[inline]
     fn flush(&mut self, index: usize) {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
-                let mut container = C::Builder::take_ref(&mut self.buffers[index]).build();
-                // TODO: allocation
-                Message::push_at(Some(container), time.clone(), &mut self.pushers[index], &mut None);
-                self.buffers[index] = C::Builder::new();
+                let mut allocation = None;
+                Message::push_at(Some(::std::mem::take(&mut self.buffers[index])), time.clone(), &mut self.pushers[index], &mut allocation);
+                if let Some(allocation) = allocation {
+                    self.buffers[index] = allocation;
+                }
             }
         }
     }
 }
 
-impl<T: Eq+Data, C: crate::communication::Container+ DataflowContainer<Inner=D>, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64> Push<BundleCore<T, C>> for Exchange<T, C, D, P, H>
-    where for<'b> &'b mut C: DrainContainer<Inner=D>,
-{
+impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
     #[inline(never)]
-    fn push(&mut self, message: Option<BundleCore<T, C>>, allocation: &mut Option<<BundleCore<T, C> as crate::communication::Container>::Allocation>) {
+    fn push(&mut self, message: Option<Bundle<T, D>>, allocation: &mut Option<<Bundle<T, D> as Container>::Allocation>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message, allocation);

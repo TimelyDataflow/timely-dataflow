@@ -17,7 +17,6 @@ use crate::dataflow::operators::{ActivateCapability, Capability};
 
 use crate::dataflow::{Scope, CoreStream};
 use std::fmt::Debug;
-use crate::dataflow::channels::MessageAllocation;
 use crate::communication::Container;
 
 /// Create a new `Stream` and `Handle` through which to supply input.

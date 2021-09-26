@@ -8,7 +8,7 @@ use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::CapabilitySet;
 use crate::dataflow::{Scope, Stream};
 use crate::progress::Timestamp;
-use crate::{Data, DataflowContainer};
+use crate::Data;
 
 /// Converts to a timely `Stream`.
 pub trait ToStream<T: Timestamp, D: Data> {
@@ -47,7 +47,8 @@ impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::
                 if let Some(element) = iterator.next() {
                     let mut session = output.session(capability.as_ref().unwrap());
                     session.give(element);
-                    for element in iterator.by_ref().take((256 * <Vec<I::Item> as DataflowContainer>::default_length()) - 1) {
+                    // TODO: 1024
+                    for element in iterator.by_ref().take((256 * 1024) - 1) {
                         session.give(element);
                     }
                     activator.activate();

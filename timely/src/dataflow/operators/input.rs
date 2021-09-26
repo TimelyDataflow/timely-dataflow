@@ -5,6 +5,8 @@ use crate::dataflow::operators::input_core::HandleCore;
 use crate::dataflow::{Stream, ScopeParent, Scope};
 use crate::order::TotalOrder;
 use crate::Data;
+use crate::progress::Timestamp;
+use crate::communication::Container;
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait Input : Scope {

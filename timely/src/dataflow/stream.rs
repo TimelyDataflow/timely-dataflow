@@ -9,7 +9,7 @@ use crate::progress::{Source, Target};
 use crate::communication::{Push, Container};
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
-use crate::dataflow::channels::{BundleCore, MessageAllocation};
+use crate::dataflow::channels::BundleCore;
 use std::fmt::{self, Debug};
 
 // use dataflow::scopes::root::loggers::CHANNELS_Q;

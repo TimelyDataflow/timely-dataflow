@@ -13,9 +13,7 @@ use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
 use crate::dataflow::{CoreStream, Scope};
-use crate::dataflow::channels::MessageAllocation;
 use crate::communication::Container;
-use crate::communication::message::RefOrMut;
 
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, D: Container> {
@@ -81,7 +79,7 @@ pub trait Probe<G: Scope, D: Container> {
     fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> CoreStream<G, D>;
 }
 
-impl<G: Scope, D: Container> Probe<G, D> for CoreStream<G, D> {
+impl<G: Scope, D: Container+'static> Probe<G, D> for CoreStream<G, D> {
     fn probe(&self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
@@ -99,7 +97,7 @@ impl<G: Scope, D: Container> Probe<G, D> for CoreStream<G, D> {
         let shared_frontier = handle.frontier.clone();
         let mut started = false;
 
-        let mut vector = None;
+        let mut vector: Option<D::Allocation> = None;
 
         builder.build(
             move |progress| {
@@ -114,16 +112,15 @@ impl<G: Scope, D: Container> Probe<G, D> for CoreStream<G, D> {
                     started = true;
                 }
 
-                while let Some((mut message, allocation)) = input.next() {
-                    let data = RefOrMut::Mut(message).assemble(&mut vector);
-                    let mut a = allocation.as_mut().and_then(|ma| ma.0).map(|ma| ma.data);
-                    output.session(&message.time).give_container(data.data, &mut vector);
-                    if let Some(inner) = allocation {
-                        if let Some(a) = a {
-                            inner.0 = Some(MessageAllocation { data: a});
-                        }
-                    }
+                use crate::communication::message::RefOrMut;
 
+                while let Some((message, allocation)) = input.next() {
+                    let (time, data) = match message.as_ref_or_mut() {
+                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
+                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
+                    };
+                    let data = data.assemble(&mut vector);
+                    output.session(time).give_container(data, &mut vector);
                 }
                 output.cease();
 

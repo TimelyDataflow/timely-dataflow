@@ -8,7 +8,7 @@ use crate::dataflow::channels::{BundleCore, Message};
 use crate::{Data};
 
 use crate::communication::{Push, Container};
-use crate::communication::message::{RefOrMut, MessageAllocation};
+use crate::communication::message::RefOrMut;
 use crate::communication::message::IntoAllocated;
 
 type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
@@ -26,7 +26,7 @@ impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
     fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<<BundleCore<T, D> as Container>::Allocation>) {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = &message {
-            let mut inner_allocation: Option<D::Allocation> = allocation.take().and_then(|m| m.0).map(|m| m.data);
+            let mut inner_allocation: Option<D::Allocation> = allocation.take().and_then(|m| m.0).map(|m| m.0);
             for index in 1..pushers.len() {
                 let copy: D = if let Some(allocation) = inner_allocation.take() {
                     allocation.assemble(RefOrMut::Ref(&message.data))

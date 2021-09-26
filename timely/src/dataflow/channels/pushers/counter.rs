@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::progress::ChangeBatch;
-use crate::dataflow::channels::{BundleCore, MessageAllocation};
+use crate::dataflow::channels::BundleCore;
 use crate::communication::{Push, Container};
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
@@ -13,7 +13,7 @@ use crate::communication::{Push, Container};
 pub struct CounterCore<T: Ord, D: Container, P: Push<BundleCore<T, D>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
-    phantom: PhantomData<(D)>,
+    phantom: PhantomData<D>,
 }
 
 /// A counter specialized to vector.

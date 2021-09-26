@@ -17,8 +17,6 @@ use crate::dataflow::{CoreStream, Scope};
 use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pact::ParallelizationContractCore;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
-use crate::DataflowContainer;
-use crate::dataflow::channels::MessageAllocation;
 use crate::communication::Container;
 
 /// Contains type-free information about the operator properties.

@@ -237,10 +237,10 @@ impl<T: Clone> Message<T> {
 }
 
 /// TODO
-pub struct MessageAllocation<T>(pub Option<T>);
+pub struct MessageAllocation<T>(pub T);
 
 impl<T: Container> Container for Message<T> {
-    type Allocation = MessageAllocation<T::Allocation>;
+    type Allocation = MessageAllocation<Option<T::Allocation>>;
     fn hollow(self) -> Self::Allocation {
         match self.payload {
             MessageContents::Binary(_) | MessageContents::Arc(_) => MessageAllocation(None),
@@ -289,14 +289,14 @@ pub trait IntoAllocated<T> {
     fn assemble_new(allocated: RefOrMut<T>) -> T;
 }
 
-impl<T: Container> IntoAllocated<Message<T>> for MessageAllocation<T::Allocation> {
-    fn assemble_new(allocated: RefOrMut<Message<T>>) -> Message<T> {
+impl<T: Container> IntoAllocated<Message<T>> for MessageAllocation<Option<T::Allocation>> {
+    fn assemble_new(_allocated: RefOrMut<Message<T>>) -> Message<T> {
         unreachable!()
     }
 }
 
 impl IntoAllocated<()> for () {
-    fn assemble_new(allocated: RefOrMut<()>) -> () {
+    fn assemble_new(_allocated: RefOrMut<()>) -> () {
         ()
     }
 }
