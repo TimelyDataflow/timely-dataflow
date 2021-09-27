@@ -257,9 +257,10 @@ impl<T: Container> Container for Message<T> {
     }
 }
 
-/// TODO
+/// Turn a hollow allocation into an allocated object.
 pub trait IntoAllocated<T> {
-    /// TODO
+    /// Use the allocation in `self` to reconstruct the allocated object into an
+    /// owned object.
     fn assemble(self, allocated: RefOrMut<T>) -> T where Self: Sized {
         Self::assemble_new(allocated)
     }
@@ -412,8 +413,14 @@ impl<A: Container, B: Container, C: Container, D: Container> IntoAllocated<(A, B
 impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
     fn assemble(mut self, ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
         match ref_or_mut {
-            RefOrMut::Ref(t) => self.clone_from(t),
-            RefOrMut::Mut(t) => ::std::mem::swap(&mut self, t),
+            RefOrMut::Ref(t) => {
+                self.clone_from(t);
+                println!("into_allocated<Vec<T>> ref")
+            }
+            RefOrMut::Mut(t) => {
+                ::std::mem::swap(&mut self, t);
+                println!("into_allocated<Vec<T>> mut")
+            },
         }
         self
     }
@@ -455,5 +462,56 @@ mod rc {
         fn assemble_new(ref_or_mut: RefOrMut<Rc<T>>) -> Rc<T> {
             Rc::clone(&*ref_or_mut)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::Container;
+    use crate::message::{IntoAllocated, RefOrMut};
+
+    #[test]
+    fn test_container_ref() {
+        let c = vec![1, 2, 3, 4];
+        let data = c.hollow().assemble(RefOrMut::Ref(&vec![5, 6, 7, 8]));
+        assert_eq!(data, vec![5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn test_container_mut() {
+        let c = vec![1, 2, 3, 4];
+        let data = c.hollow().assemble(RefOrMut::Mut(&mut vec![5, 6, 7, 8]));
+        assert_eq!(data, vec![5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn test_tuple_len() {
+        let t = (1, vec![1, 2, 3], "Hello".to_string());
+        assert_eq!(t.len(), 9);
+    }
+
+    #[test]
+    fn test_vec_hollow() {
+        let c = vec![1, 2, 3, 4].hollow();
+        assert!(c.is_empty());
+        assert_eq!(c.capacity(), 4);
+    }
+
+    #[test]
+    fn test_vec_assemble_ref() {
+        let c = vec![1, 2, 3, 4].hollow();
+        let c = c.assemble(RefOrMut::Ref(&vec![5, 6]));
+        assert!(!c.is_empty());
+        assert_eq!(c.capacity(), 4);
+        assert_eq!(c.len(), 2);
+    }
+
+    #[test]
+    fn test_vec_assemble_mut() {
+        let c = vec![1, 2, 3, 4].hollow();
+        let c = c.assemble(RefOrMut::Mut(&mut vec![5, 6]));
+        assert!(!c.is_empty());
+        assert_eq!(c.capacity(), 2);
+        assert_eq!(c.len(), 2);
     }
 }

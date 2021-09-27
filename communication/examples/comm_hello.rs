@@ -1,7 +1,8 @@
 extern crate timely_communication;
 
 use std::ops::Deref;
-use timely_communication::{Message, Allocate};
+use timely_communication::{Message, Allocate, Container};
+use timely_communication::message::MessageAllocation;
 
 fn main() {
 
@@ -27,9 +28,11 @@ fn main() {
 
             allocator.receive();
 
-            if let Some(message) = receiver.recv() {
+            let (message, allocation) = receiver.pull();
+            if let Some(message) = message.take() {
                 println!("worker {}: received: <{}>", allocator.index(), message.deref());
                 received += 1;
+                *allocation = Some(message.hollow());
             }
 
             allocator.release();
