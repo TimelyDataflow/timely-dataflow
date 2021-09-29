@@ -167,7 +167,7 @@ impl<T, D: Container, P: Pull<BundleCore<T, D>>> LogPuller<T, D, P> {
 
 impl<T, D: Container, P: Pull<BundleCore<T, D>>> Pull<BundleCore<T, D>> for LogPuller<T, D, P> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<BundleCore<T,D>>, Option<<BundleCore<T, D> as Container>::Allocation>) {
+    fn pull(&mut self) -> (Option<BundleCore<T,D>>, &mut Option<<BundleCore<T, D> as Container>::Allocation>) {
         let result = self.puller.pull();
         if let Some(bundle) = &result.0 {
             let channel = self.channel;

@@ -24,6 +24,7 @@ pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     logging: Option<Logger>,
+    bundle: Option<BundleCore<T, D>>,
 }
 
 /// Handle to an operator's input stream, specialized to vectors.
@@ -48,8 +49,10 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     #[inline]
     pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>, &mut Option<<BundleCore<T, D> as Container>::Allocation>)> {
         let internal = &self.internal;
-        self.pull_counter.next().map(|(bundle, allocation)| {
-            match bundle.as_ref_or_mut() {
+        let self_bundle = &mut self.bundle;
+        self.pull_counter.next().map(move |(bundle, allocation)| {
+            *self_bundle = Some(bundle);
+            match self_bundle.as_mut().unwrap().as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
                     (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data), allocation)
                 },
@@ -82,18 +85,21 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<D>)>(&mut self, mut logic: F) {
         // We inline `next()` so that we can use `self.logging` without cloning (and dropping) the logger.
         let internal = &self.internal;
-        while let Some((cap, data)) = self.pull_counter.next().map(|(bundle, allocation)| {
-            match bundle.as_ref_or_mut() {
+        let mut self_bundle = None;
+        while let Some((cap, data, allocation)) = self.pull_counter.next().map(|(bundle, allocation)| {
+            self_bundle = Some(bundle);
+            match self_bundle.as_mut().unwrap().as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
-                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data))
+                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data), allocation)
                 },
                 RefOrMut::Mut(bundle) => {
-                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data))
+                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data), allocation)
                 },
             }
         }) {
             self.logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
+            *allocation = self_bundle.take().map(Container::hollow);
             self.logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
         }
     }
@@ -158,6 +164,7 @@ pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>>(p
         pull_counter,
         internal,
         logging,
+        bundle: None,
     }
 }
 

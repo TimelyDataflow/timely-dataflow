@@ -114,7 +114,7 @@ impl<G: Scope, D: Container+'static> Probe<G, D> for CoreStream<G, D> {
 
                 use crate::communication::message::RefOrMut;
 
-                while let Some((message, allocation)) = input.next() {
+                while let Some((mut message, allocation)) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {
                         RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),

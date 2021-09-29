@@ -69,7 +69,8 @@ impl<T:Data+Container, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
 /// allocation.
 pub struct Puller<T: Container> {
     _canary: Canary,
-    current: (Option<Message<T>>, Option<<Message<T> as Container>::Allocation>),
+    current: Option<Message<T>>,
+    current_allocation: Option<<Message<T> as Container>::Allocation>,
     receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
 }
 
@@ -78,7 +79,8 @@ impl<T:Data+Container> Puller<T> {
     pub fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
         Self {
             _canary,
-            current: (None, None),
+            current: None,
+            current_allocation: None,
             receiver,
         }
     }
@@ -86,14 +88,14 @@ impl<T:Data+Container> Puller<T> {
 
 impl<T:Data+Container> Pull<Message<T>> for Puller<T> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<Message<T>>, Option<<Message<T> as Container>::Allocation>) {
-        self.current.0 =
+    fn pull(&mut self) -> (Option<Message<T>>, &mut Option<<Message<T> as Container>::Allocation>) {
+        self.current =
         self.receiver
             .borrow_mut()
             .pop_front()
             .map(|bytes| unsafe { Message::from_bytes(bytes) });
 
-        &mut self.current
+        (self.current.take(), &mut self.current_allocation)
     }
 }
 
@@ -106,7 +108,7 @@ impl<T:Data+Container> Pull<Message<T>> for Puller<T> {
 pub struct PullerInner<T: Container> {
     inner: Box<dyn Pull<Message<T>>>,               // inner pullable (e.g. intra-process typed queue)
     _canary: Canary,
-    current: (Option<Message<T>>, Option<<Message<T> as Container>::Allocation>),
+    allocation: Option<<Message<T> as Container>::Allocation>,
     receiver: Rc<RefCell<VecDeque<Bytes>>>,     // source of serialized buffers
 }
 
@@ -116,7 +118,7 @@ impl<T: Data+Container> PullerInner<T> {
         Self {
             inner,
             _canary,
-            current: (None, None),
+            allocation: None,
             receiver,
         }
     }
@@ -124,20 +126,20 @@ impl<T: Data+Container> PullerInner<T> {
 
 impl<T: Data + Container> Pull<Message<T>> for PullerInner<T> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<Message<T>>, Option<<Message<T> as Container>::Allocation>) {
+    fn pull(&mut self) -> (Option<Message<T>>, &mut Option<<Message<T> as Container>::Allocation>) {
 
         let inner = self.inner.pull();
         if inner.0.is_some() {
             inner
         }
         else {
-            self.current.0 =
+            let current =
             self.receiver
                 .borrow_mut()
                 .pop_front()
                 .map(|bytes| unsafe { Message::from_bytes(bytes) });
 
-            &mut self.current
+            (current, &mut self.allocation)
         }
     }
 }

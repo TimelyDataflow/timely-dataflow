@@ -67,7 +67,7 @@ impl Thread {
         let shared = Rc::new(RefCell::new((VecDeque::<Message<T>>::new(), VecDeque::<<Message<T> as Container>::Allocation>::new())));
         let pusher = Pusher { target: shared.clone() };
         let pusher = CountPusher::new(pusher, identifier, events.clone());
-        let puller = Puller { source: shared, current: (None, None) };
+        let puller = Puller { source: shared, current_allocation: None };
         let puller = CountPuller::new(puller, identifier, events);
         (pusher, puller)
     }
@@ -92,13 +92,13 @@ impl<T: Container> Push<T> for Pusher<T> {
 
 /// The pull half of an intra-thread channel.
 pub struct Puller<T: Container> {
-    current: (Option<T>, Option<T::Allocation>),
+    current_allocation: Option<T::Allocation>,
     source: Rc<RefCell<(VecDeque<T>, VecDeque<T::Allocation>)>>,
 }
 
 impl<T: Container> Pull<T> for Puller<T> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>) {
+    fn pull(&mut self) -> (Option<T>, &mut Option<T::Allocation>) {
         let mut borrow = self.source.borrow_mut();
         // if let Some(element) = self.current.take() {
         //     // TODO : Arbitrary constant.
@@ -106,7 +106,7 @@ impl<T: Container> Pull<T> for Puller<T> {
         //         borrow.1.push_back(element);
         //     }
         // }
-        self.current.0 = borrow.0.pop_front();
-        &mut self.current
+        let current = borrow.0.pop_front();
+        (current, &mut self.current_allocation)
     }
 }

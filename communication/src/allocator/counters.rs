@@ -129,7 +129,7 @@ impl<T: Container, P: Pull<T>>  Puller<T, P> {
 }
 impl<T: Container, P: Pull<T>> Pull<T> for Puller<T, P> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>) {
+    fn pull(&mut self) -> (Option<T>, &mut Option<T::Allocation>) {
         let result = self.puller.pull();
         if result.0.is_none() {
             if self.count != 0 {

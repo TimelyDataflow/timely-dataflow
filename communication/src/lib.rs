@@ -155,7 +155,7 @@ pub trait Pull<T: Container> {
     ///
     /// If `pull` returns `None` this conventionally signals that no more data is available
     /// at the moment, and the puller should find something better to do.
-    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>);
+    fn pull(&mut self) -> (Option<T>, &mut Option<T::Allocation>);
     /// Takes an `Option<T>` and leaves `None` behind.
     #[inline]
     fn recv(&mut self) -> Option<T> { self.pull().0.take() }
@@ -163,7 +163,7 @@ pub trait Pull<T: Container> {
 
 impl<T: Container, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     #[inline]
-    fn pull(&mut self) -> &mut (Option<T>, Option<T::Allocation>) { (**self).pull() }
+    fn pull(&mut self) -> (Option<T>, &mut Option<T::Allocation>) { (**self).pull() }
 }
 
 /// TODO

@@ -16,6 +16,7 @@ use crate::allocator::zero_copy::initialize::initialize_networking;
 
 use crate::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
+use std::fmt::{Debug, Formatter};
 
 
 /// Possible configurations for the communication infrastructure.
@@ -38,6 +39,23 @@ pub enum Config {
         report: bool,
         /// Closure to create a new logger for a communication thread
         log_fn: Box<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent, CommunicationSetup>> + Send + Sync>,
+    }
+}
+
+impl Debug for Config {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Config::Thread => write!(f, "Config::Thread()"),
+            Config::Process(n) => write!(f, "Config::Process({})", n),
+            Config::ProcessBinary(n) => write!(f, "Config::ProcessBinary({})", n),
+            Config::Cluster { threads, process, addresses, report, .. } => f
+                .debug_struct("Config::Cluster")
+                .field("threads", threads)
+                .field("process", process)
+                .field("addresses", addresses)
+                .field("report", report)
+                .finish_non_exhaustive(),
+        }
     }
 }
 
@@ -130,6 +148,7 @@ impl Config {
 
     /// Attempts to assemble the described communication infrastructure.
     pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
+        println!("{:?}", self);
         match self {
             Config::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
