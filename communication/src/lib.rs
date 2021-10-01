@@ -190,7 +190,7 @@ impl Container for () {
     }
 
     fn len(&self) -> usize {
-        1
+        0
     }
 
     fn is_empty(&self) -> bool {
@@ -265,7 +265,7 @@ impl Container for usize {
     }
 
     fn len(&self) -> usize {
-        1
+        0
     }
 
     fn is_empty(&self) -> bool {
