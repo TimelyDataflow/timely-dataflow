@@ -89,6 +89,7 @@ extern crate timely_bytes as bytes;
 extern crate timely_logging as logging_core;
 
 pub mod allocator;
+pub mod container;
 pub mod networking;
 pub mod initialize;
 pub mod logging;
@@ -104,6 +105,8 @@ use abomonation::Abomonation;
 
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
+pub use container::Container;
+pub use container::IntoAllocated;
 pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
 pub use message::Message;
 
@@ -166,132 +169,7 @@ impl<T: Container, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     fn pull(&mut self) -> (Option<T>, &mut Option<T::Allocation>) { (**self).pull() }
 }
 
-/// TODO
-pub trait Container: Sized {
-
-    /// TODO
-    type Allocation: IntoAllocated<Self> + 'static;
-    // type Allocation: 'static;
-
-    /// TODO
-    fn hollow(self) -> Self::Allocation;
-
-    /// TODO
-    fn len(&self) -> usize;
-
-    ///
-    fn is_empty(&self) -> bool;
-}
-
-impl Container for () {
-    type Allocation = ();
-    fn hollow(self) -> Self::Allocation {
-        ()
-    }
-
-    fn len(&self) -> usize {
-        0
-    }
-
-    fn is_empty(&self) -> bool {
-        false
-    }
-}
-
-impl<A: Container> Container for (A,) {
-    type Allocation = (A::Allocation,);
-    fn hollow(self) -> Self::Allocation {
-        (self.0.hollow(), )
-    }
-
-    fn len(&self) -> usize {
-       self.0.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl<A: Container, B: Container> Container for (A, B) {
-    type Allocation = (A::Allocation, B::Allocation);
-    fn hollow(self) -> Self::Allocation {
-        (self.0.hollow(), self.1.hollow())
-    }
-
-    fn len(&self) -> usize {
-        self.0.len() + self.1.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty() && self.1.is_empty()
-    }
-}
-
-impl<A: Container, B: Container, C: Container> Container for (A, B, C) {
-    type Allocation = (A::Allocation, B::Allocation, C::Allocation);
-    fn hollow(self) -> Self::Allocation {
-        (self.0.hollow(), self.1.hollow(), self.2.hollow())
-    }
-
-    fn len(&self) -> usize {
-        self.0.len() + self.1.len() + self.2.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty() && self.1.is_empty() && self.2.is_empty()
-    }
-}
-
-impl<A: Container, B: Container, C: Container, D: Container> Container for (A, B, C, D) {
-    type Allocation = (A::Allocation, B::Allocation, C::Allocation, D::Allocation);
-    fn hollow(self) -> Self::Allocation {
-        (self.0.hollow(), self.1.hollow(), self.2.hollow(), self.3.hollow())
-    }
-
-    fn len(&self) -> usize {
-        self.0.len() + self.1.len() + self.2.len() + self.3.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty() && self.1.is_empty() && self.2.is_empty() && self.3.is_empty()
-    }
-}
-
-impl Container for usize {
-    type Allocation = ();
-    fn hollow(self) -> Self::Allocation {
-        ()
-    }
-
-    fn len(&self) -> usize {
-        0
-    }
-
-    fn is_empty(&self) -> bool {
-        false
-    }
-}
-
-impl Container for String {
-    type Allocation = String;
-
-    fn hollow(mut self) -> Self::Allocation {
-        self.clear();
-        self
-    }
-
-    fn len(&self) -> usize {
-        String::len(self)
-    }
-
-    fn is_empty(&self) -> bool {
-        String::is_empty(self)
-    }
-}
-
 use crossbeam_channel::{Sender, Receiver};
-use crate::message::IntoAllocated;
 
 /// Allocate a matrix of send and receive changes to exchange items.
 ///
@@ -312,21 +190,4 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
     }
 
     (senders, recvers)
-}
-
-impl<T: Clone + 'static> Container for Vec<T> {
-    type Allocation = Self;
-
-    fn hollow(mut self) -> Self::Allocation {
-        self.clear();
-        self
-    }
-
-    fn len(&self) -> usize {
-        Vec::len(&self)
-    }
-
-    fn is_empty(&self) -> bool {
-        Vec::is_empty(&self)
-    }
 }

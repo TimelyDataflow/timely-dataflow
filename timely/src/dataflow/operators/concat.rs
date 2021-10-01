@@ -3,8 +3,7 @@
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{CoreStream, Scope};
-use crate::communication::Container;
-use crate::communication::message::IntoAllocated;
+use crate::communication::{Container, IntoAllocated};
 
 /// Merge the contents of two streams.
 pub trait Concat<G: Scope, D: Container> {

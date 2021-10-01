@@ -1,8 +1,8 @@
 //! Structured communication between timely dataflow operators.
 
-use crate::communication::{Push, Container};
+use crate::communication::{Push, Container, IntoAllocated};
 use crate::communication::message::{MessageAllocation};
-use crate::communication::message::{IntoAllocated, RefOrMut};
+use crate::communication::message::RefOrMut;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;

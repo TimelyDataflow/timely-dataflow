@@ -7,9 +7,8 @@ use std::rc::Rc;
 use crate::dataflow::channels::{BundleCore, Message};
 use crate::{Data};
 
-use crate::communication::{Push, Container};
+use crate::communication::{Push, Container, IntoAllocated};
 use crate::communication::message::RefOrMut;
-use crate::communication::message::IntoAllocated;
 
 type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
 

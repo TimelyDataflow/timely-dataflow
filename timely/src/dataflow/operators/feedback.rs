@@ -11,8 +11,7 @@ use crate::dataflow::scopes::child::Iterative;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OutputWrapper;
 use crate::Data;
-use crate::communication::Container;
-use crate::communication::message::IntoAllocated;
+use crate::communication::{Container, IntoAllocated};
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait Feedback<G: Scope> {
