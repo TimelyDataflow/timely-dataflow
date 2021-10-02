@@ -85,6 +85,7 @@ pub trait IntoAllocated<T> {
     /// owned object.
     ///
     /// The implementation is free to modify mutable references.
+    #[inline(always)]
     fn assemble(self, allocated: RefOrMut<T>) -> T where Self: Sized {
         Self::assemble_new(allocated)
     }
@@ -103,6 +104,7 @@ impl IntoAllocated<()> for () {
 }
 
 impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
+    #[inline(always)]
     fn assemble(mut self, ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
         match ref_or_mut {
             RefOrMut::Ref(t) => {
@@ -115,12 +117,14 @@ impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
         self
     }
 
+    #[inline(always)]
     fn assemble_new(ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
         Self::new().assemble(ref_or_mut)
     }
 }
 
 impl IntoAllocated<String> for String {
+    #[inline(always)]
     fn assemble(mut self, allocated: RefOrMut<String>) -> String where Self: Sized {
         match allocated {
             RefOrMut::Ref(t) => self.clone_from(t),
@@ -129,6 +133,7 @@ impl IntoAllocated<String> for String {
         self
     }
 
+    #[inline(always)]
     fn assemble_new(allocated: RefOrMut<String>) -> String {
         Self::with_capacity(allocated.len()).assemble(allocated)
     }
@@ -144,6 +149,7 @@ macro_rules! implement_clone_container {
                 fn is_empty(&self) -> bool { true }
             }
             impl IntoAllocated<$index_type> for () {
+                #[inline(always)]
                 fn assemble_new(allocated: RefOrMut<$index_type>) -> $index_type { (&*allocated).clone() }
             }
         )*
