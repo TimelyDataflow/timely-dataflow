@@ -94,7 +94,7 @@ impl Config {
         let process = matches.opt_get_default("p", 0_usize).map_err(|e| e.to_string())?;
         let processes = matches.opt_get_default("n", 1_usize).map_err(|e| e.to_string())?;
         let report = matches.opt_present("report");
-        let zerocopy = matches.opt_get_default("z", false).map_err(|e| e.to_string())?;
+        let zerocopy = matches.opt_present("zerocopy");
 
         if processes > 1 {
             let mut addresses = Vec::new();
