@@ -258,8 +258,19 @@ impl<T: Container> Container for Message<T> {
     }
 }
 
+// The following code is a bit special in that it probably will never run. Messages are constructed
+// directly without going through the usual allocation mechanism. For completeness we provide a
+// correct implementation, which will clone the message contents eagerly.
 impl<T: Container> IntoAllocated<Message<T>> for MessageAllocation<Option<T::Allocation>> {
-    fn assemble_new(_allocated: RefOrMut<Message<T>>) -> Message<T> {
-        unreachable!()
+    fn assemble(mut self, allocated: RefOrMut<Message<T>>) -> Message<T> where Self: Sized {
+        if let Some(inner) = self.0.take() {
+            Message::from_typed(inner.assemble(RefOrMut::Ref(&*allocated)))
+        } else {
+            Message::from_typed(T::Allocation::assemble_new(RefOrMut::Ref(&*allocated)))
+        }
+    }
+    fn assemble_new(allocated: RefOrMut<Message<T>>) -> Message<T> {
+        // We can't call Message::as_mut here because we don't want to require T: Clone
+        Message::from_typed(T::Allocation::assemble_new(RefOrMut::Ref(&*allocated)))
     }
 }
