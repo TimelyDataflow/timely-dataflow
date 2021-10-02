@@ -12,7 +12,7 @@ use crate::communication::message::RefOrMut;
 ///
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
 /// data must be flushed and creates a `Session` object which allows sending at the given time.
-pub struct BufferCore<T, D: Container, P: Push<BundleCore<T, D>>> {
+pub struct BufferCore<T: Container, D: Container, P: Push<BundleCore<T, D>>> {
     time: Option<T>,  // the currently open time, if it is open
     buffer: Option<D>,   // a buffer for records, to send at self.time
     /// An allocation to reconstruct buffers
@@ -25,7 +25,7 @@ pub type Buffer<T, D, P> = BufferCore<T, Vec<D>, P>;
 
 // Cannot derive `Debug` for [Buffer] because we cannot express the constraint that
 // `C::Builder: Debug`.
-impl<T: ::std::fmt::Debug, C: Container, P: Push<BundleCore<T, C>>+::std::fmt::Debug> ::std::fmt::Debug for BufferCore<T, C, P> {
+impl<T: ::std::fmt::Debug+Container, C: Container, P: Push<BundleCore<T, C>>+::std::fmt::Debug> ::std::fmt::Debug for BufferCore<T, C, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug = f.debug_struct("BufferCore");
         debug.field("time", &self.time);
@@ -36,7 +36,7 @@ impl<T: ::std::fmt::Debug, C: Container, P: Push<BundleCore<T, C>>+::std::fmt::D
     }
 }
 
-impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
+impl<T: Timestamp, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
 
     /// Creates a new `Buffer`.
     pub fn new(pusher: P) -> Self {
@@ -93,7 +93,7 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
     }
 }
 
-impl<T, D: Data, P: Push<BundleCore<T, Vec<D>>>> BufferCore<T, Vec<D>, P> where T: Eq+Clone {
+impl<T: Timestamp, D: Data, P: Push<BundleCore<T, Vec<D>>>> BufferCore<T, Vec<D>, P> where T: Eq+Clone {
     fn ensure_buffer(&mut self) -> &mut Vec<D> {
         if self.buffer.is_none() {
             // TODO: Vec::with_capacity()
@@ -133,18 +133,18 @@ impl<T, D: Data, P: Push<BundleCore<T, Vec<D>>>> BufferCore<T, Vec<D>, P> where 
 /// The `Session` struct provides the user-facing interface to an operator output, namely
 /// the `Buffer` type. A `Session` wraps a session of output at a specified time, and
 /// avoids what would otherwise be a constant cost of checking timestamp equality.
-pub struct Session<'a, T, C: Container, P: Push<BundleCore<T, C>>+'a> where T: Eq+Clone+'a, C: 'a {
+pub struct Session<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>+'a> where T: Eq+Clone+'a, C: 'a {
     buffer: &'a mut BufferCore<T, C, P>,
 }
 
-impl<'a, T, C: Container, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  where T: Eq+Clone+'a, C: 'a {
+impl<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  where T: Eq+Clone+'a, C: 'a {
     /// Provide a container at the time specified by the [Session].
     pub fn give_container(&mut self, container: C, allocation: &mut Option<C::Allocation>) {
         self.buffer.give_container(container, allocation)
     }
 }
 
-impl<'a, T, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P>  where T: Eq+Clone+'a, D: 'a {
+impl<'a, T: Timestamp, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P>  where T: Eq+Clone+'a, D: 'a {
     /// Provides one record at the time specified by the `Session`.
     #[inline]
     pub fn give(&mut self, data: D) {

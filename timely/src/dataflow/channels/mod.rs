@@ -3,6 +3,7 @@
 use crate::communication::{Push, Container, IntoAllocated};
 use crate::communication::message::{MessageAllocation};
 use crate::communication::message::RefOrMut;
+use crate::progress::Timestamp;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -33,7 +34,7 @@ pub struct Message<T, D: Container> {
     pub seq: usize,
 }
 
-impl<T, D: Container> Message<T, D> {
+impl<T: Timestamp, D: Container> Message<T, D> {
     /// Creates a new message instance from arguments.
     pub fn new(time: T, data: D, from: usize, seq: usize) -> Self {
         Message { time, data, from, seq }
@@ -61,7 +62,7 @@ impl<T, D: Container> Message<T, D> {
     }
 }
 
-impl<T, D: Container> Container for Message<T, D> {
+impl<T: Container, D: Container> Container for Message<T, D> {
     type Allocation = MessageAllocation<D::Allocation>;
 
     fn hollow(self) -> Self::Allocation {
@@ -77,18 +78,30 @@ impl<T, D: Container> Container for Message<T, D> {
     }
 }
 
-impl<T, D: Container> IntoAllocated<Message<T, D>> for MessageAllocation<D::Allocation> {
-    fn assemble(self, allocated: RefOrMut<Message<T, D>>) -> Message<T, D> where Self: Sized {
-        todo!()
+impl<T: Container, D: Container> IntoAllocated<Message<T, D>> for MessageAllocation<D::Allocation> {
+    fn assemble(self, mut allocated: RefOrMut<Message<T, D>>) -> Message<T, D> where Self: Sized {
+        let (time, data) = match &mut allocated {
+            RefOrMut::Ref(r) => (T::Allocation::assemble_new(RefOrMut::Ref(&r.time)), self.0.assemble(RefOrMut::Ref(&r.data))),
+            RefOrMut::Mut(r) => (T::Allocation::assemble_new(RefOrMut::Mut(&mut r.time)), self.0.assemble(RefOrMut::Mut(&mut r.data))),
+        };
+        Message {
+            time,
+            data,
+            from: allocated.from,
+            seq: allocated.seq,
+        }
     }
 
-    fn assemble_new(allocated: RefOrMut<Message<T, D>>) -> Message<T, D> {
-        todo!()
+    fn assemble_new(mut allocated: RefOrMut<Message<T, D>>) -> Message<T, D> {
+        let (time, data) = match &mut allocated {
+            RefOrMut::Ref(r) => (T::Allocation::assemble_new(RefOrMut::Ref(&r.time)), D::Allocation::assemble_new(RefOrMut::Ref(&r.data))),
+            RefOrMut::Mut(r) => (T::Allocation::assemble_new(RefOrMut::Mut(&mut r.time)), D::Allocation::assemble_new(RefOrMut::Mut(&mut r.data))),
+        };
+        Message {
+            time,
+            data,
+            from: allocated.from,
+            seq: allocated.seq,
+        }
     }
 }
-
-// impl<T, C: Container+FromAllocated<C::Allocation>> From<Message<T, C>> for MessageAllocation<C::Allocation> {
-//     fn from(message: Message<T, C>) -> Self {
-//         MessageAllocation { data: message.data.hollow() }
-//     }
-// }

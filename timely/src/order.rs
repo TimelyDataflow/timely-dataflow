@@ -87,6 +87,50 @@ impl<TOuter, TInner> Product<TOuter, TInner> {
     }
 }
 
+impl<TOuter: Container, TInner: Container> Container for Product<TOuter, TInner> {
+    type Allocation = MessageAllocation<(TOuter::Allocation, TInner::Allocation)>;
+
+    fn hollow(self) -> Self::Allocation {
+        MessageAllocation((self.outer.hollow(), self.inner.hollow()))
+    }
+
+    fn len(&self) -> usize {
+        self.outer.len() + self.inner.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.outer.is_empty() && self.inner.is_empty()
+    }
+}
+
+impl<TOuter: Container, TInner: Container> IntoAllocated<Product<TOuter, TInner>> for MessageAllocation<(TOuter::Allocation, TInner::Allocation)> {
+    fn assemble(self, allocated: RefOrMut<Product<TOuter, TInner>>) -> Product<TOuter, TInner> where Self: Sized {
+        match allocated {
+            RefOrMut::Ref(r) => Product {
+                outer: self.0.0.assemble(RefOrMut::Ref(&r.outer)),
+                inner: self.0.1.assemble(RefOrMut::Ref(&r.inner)),
+            },
+            RefOrMut::Mut(r) => Product {
+                outer: self.0.0.assemble(RefOrMut::Mut(&mut r.outer)),
+                inner: self.0.1.assemble(RefOrMut::Mut(&mut r.inner)),
+            }
+        }
+    }
+
+    fn assemble_new(allocated: RefOrMut<Product<TOuter, TInner>>) -> Product<TOuter, TInner> {
+        match allocated {
+            RefOrMut::Ref(r) => Product {
+                outer: TOuter::Allocation::assemble_new(RefOrMut::Ref(&r.outer)),
+                inner: TInner::Allocation::assemble_new(RefOrMut::Ref(&r.inner)),
+            },
+            RefOrMut::Mut(r) => Product {
+                outer: TOuter::Allocation::assemble_new(RefOrMut::Mut(&mut r.outer)),
+                inner: TInner::Allocation::assemble_new(RefOrMut::Mut(&mut r.inner)),
+            }
+        }
+    }
+}
+
 /// Debug implementation to avoid seeing fully qualified path names.
 impl<TOuter: Debug, TInner: Debug> Debug for Product<TOuter, TInner> {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -107,6 +151,9 @@ impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner>
 }
 
 use crate::progress::timestamp::PathSummary;
+use crate::communication::{Container, IntoAllocated};
+use crate::communication::message::{MessageAllocation, RefOrMut};
+
 impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<Product<TOuter, TInner>> for Product<TOuter::Summary, TInner::Summary> {
     #[inline]
     fn results_in(&self, product: &Product<TOuter, TInner>) -> Option<Product<TOuter, TInner>> {

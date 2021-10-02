@@ -4,13 +4,13 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::progress::ChangeBatch;
+use crate::progress::{ChangeBatch, Timestamp};
 use crate::dataflow::channels::BundleCore;
 use crate::communication::{Push, Container};
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
-pub struct CounterCore<T: Ord, D: Container, P: Push<BundleCore<T, D>>> {
+pub struct CounterCore<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
     phantom: PhantomData<D>,
@@ -19,7 +19,7 @@ pub struct CounterCore<T: Ord, D: Container, P: Push<BundleCore<T, D>>> {
 /// A counter specialized to vector.
 pub type Counter<T, D, P> = CounterCore<T, Vec<D>, P>;
 
-impl<T, D: Container, P> Push<BundleCore<T, D>> for CounterCore<T, D, P> where T : Ord+Clone+'static, P: Push<BundleCore<T, D>> {
+impl<T: Timestamp, D: Container, P> Push<BundleCore<T, D>> for CounterCore<T, D, P> where P: Push<BundleCore<T, D>> {
     #[inline]
     fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<<BundleCore<T, D> as Container>::Allocation>) {
         if let Some(message) = &message {
@@ -33,7 +33,7 @@ impl<T, D: Container, P> Push<BundleCore<T, D>> for CounterCore<T, D, P> where T
     }
 }
 
-impl<T, D: Container, P: Push<BundleCore<T, D>>> CounterCore<T, D, P> where T : Ord+Clone+'static {
+impl<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> CounterCore<T, D, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
     pub fn new(pushee: P) -> CounterCore<T, D, P> {
         CounterCore {

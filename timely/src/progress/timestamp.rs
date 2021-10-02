@@ -5,11 +5,11 @@ use std::any::Any;
 use std::default::Default;
 use std::hash::Hash;
 
-use crate::communication::Data;
+use crate::communication::{Data, Container};
 use crate::order::PartialOrder;
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
-pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
+pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord+Container {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
     /// A minimum value suitable as a default.

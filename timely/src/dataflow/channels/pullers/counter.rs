@@ -8,13 +8,13 @@ use crate::progress::ChangeBatch;
 use crate::communication::{Pull, Container};
 
 /// A wrapper which accounts records pulled past in a shared count map.
-pub struct Counter<T: Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> {
+pub struct Counter<T: Ord+Clone+Container, D: Container, P: Pull<BundleCore<T, D>>> {
     pullable: P,
     consumed: Rc<RefCell<ChangeBatch<T>>>,
     phantom: ::std::marker::PhantomData<D>,
 }
 
-impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
+impl<T:Ord+Clone+Container, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
     pub fn next(&mut self) -> Option<(BundleCore<T, D>, &mut Option<<BundleCore<T,D> as Container>::Allocation>)> {
@@ -27,7 +27,7 @@ impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D,
     }
 }
 
-impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
+impl<T:Ord+Clone+Container, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
     /// Allocates a new `Counter` from a boxed puller.
     pub fn new(pullable: P) -> Self {
         Counter {

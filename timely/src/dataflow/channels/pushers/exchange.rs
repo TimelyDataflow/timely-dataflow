@@ -3,17 +3,18 @@
 use crate::Data;
 use crate::communication::{Push, Container};
 use crate::dataflow::channels::{Bundle, Message};
+use crate::progress::Timestamp;
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T: Container, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<Vec<D>>,
     current: Option<T>,
     hash_func: H,
 }
 
-impl<T: Clone, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, P, H> {
+impl<T: Timestamp+Clone, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
         let mut buffers = vec![];
@@ -42,7 +43,7 @@ impl<T: Clone, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<
     }
 }
 
-impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
+impl<T: Timestamp, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
     #[inline(never)]
     fn push(&mut self, message: Option<Bundle<T, D>>, allocation: &mut Option<<Bundle<T, D> as Container>::Allocation>) {
         // if only one pusher, no exchange
