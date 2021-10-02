@@ -5,7 +5,7 @@ use crate::progress::{Location, Port};
 use crate::communication::{Message, Push, Pull, Container};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
-use crate::communication::message::MessageAllocation;
+use crate::communication::message::{MessageAllocation, RefOrMut};
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
@@ -15,7 +15,6 @@ pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
 
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
-    to_push: Option<ProgressMsg<T>>,
     allocation: Option<MessageAllocation<Option<((), (), ProgressVec<T>)>>>,
     pushers: Vec<Box<dyn Push<ProgressMsg<T>>>>,
     puller: Box<dyn Pull<ProgressMsg<T>>>,
@@ -44,7 +43,6 @@ impl<T:Timestamp> Progcaster<T> {
         let worker_index = worker.index();
         let addr = path.clone();
         Progcaster {
-            to_push: None,
             allocation: None,
             pushers,
             puller,
@@ -92,27 +90,18 @@ impl<T:Timestamp> Progcaster<T> {
                 });
             });
 
-            for pusher in self.pushers.iter_mut() {
+            let progress_message = Message::from_typed((self.source, self.counter, changes.iter().cloned().collect()));
 
-                // Attempt to reuse allocations, if possible.
-                if let Some(tuple) = &mut self.to_push {
-                    let tuple = tuple.as_mut();
-                    tuple.0 = self.source;
-                    tuple.1 = self.counter;
-                    tuple.2.clear(); tuple.2.extend(changes.iter().cloned());
-                }
-                // If we don't have an allocation ...
-                if self.to_push.is_none() {
-                    self.to_push = Some(Message::from_typed((
-                        self.source,
-                        self.counter,
-                        changes.clone().into_inner(),
-                    )));
-                }
+            for pusher in self.pushers[1..].iter_mut() {
+                let to_push = RefOrMut::Ref(&progress_message).assemble(&mut self.allocation);
 
                 // TODO: This should probably use a broadcast channel.
-                pusher.push(self.to_push.take(), &mut self.allocation);
+                pusher.push(Some(to_push), &mut self.allocation);
                 pusher.done();
+            }
+            if self.pushers.len() > 0 {
+                self.pushers[0].push(Some(progress_message), &mut self.allocation);
+                self.pushers[0].done();
             }
 
             self.counter += 1;
