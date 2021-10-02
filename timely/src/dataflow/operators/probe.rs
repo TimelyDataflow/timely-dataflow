@@ -121,6 +121,7 @@ impl<G: Scope, D: Container+'static> Probe<G, D> for CoreStream<G, D> {
                     };
                     let data = data.assemble(&mut vector);
                     output.session(time).give_container(data, &mut vector);
+                    *allocation = Some(message.hollow());
                 }
                 output.cease();
 

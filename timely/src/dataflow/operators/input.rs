@@ -70,7 +70,7 @@ pub trait Input: Scope {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::{InputCore, Inspect};
+    /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {

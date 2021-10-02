@@ -94,19 +94,11 @@ impl<A: Container, B: Container, C: Container, D: Container> Container for (A, B
     }
 }
 
-impl Container for usize {
+impl Container for ::std::time::Duration {
     type Allocation = ();
-    fn hollow(self) -> Self::Allocation {
-        ()
-    }
-
-    fn len(&self) -> usize {
-        0
-    }
-
-    fn is_empty(&self) -> bool {
-        false
-    }
+    fn hollow(self) -> Self::Allocation { () }
+    fn len(&self) -> usize { 0 }
+    fn is_empty(&self) -> bool { false }
 }
 
 impl Container for String {
@@ -311,9 +303,9 @@ impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
     }
 }
 
-impl IntoAllocated<usize> for () {
-    fn assemble_new(allocated: RefOrMut<usize>) -> usize {
-        *allocated
+impl IntoAllocated<::std::time::Duration> for () {
+    fn assemble_new(allocated: RefOrMut<::std::time::Duration>) -> ::std::time::Duration {
+        (&*allocated).clone()
     }
 }
 
@@ -330,6 +322,24 @@ impl IntoAllocated<String> for String {
         Self::with_capacity(allocated.len()).assemble(allocated)
     }
 }
+
+macro_rules! implement_container {
+    ($($index_type:ty,)*) => (
+        $(
+            impl Container for $index_type {
+                type Allocation = ();
+                fn hollow(self) -> Self::Allocation { () }
+                fn len(&self) -> usize { 0 }
+                fn is_empty(&self) -> bool { true }
+            }
+            impl IntoAllocated<$index_type> for () {
+                fn assemble_new(allocated: RefOrMut<$index_type>) -> $index_type { *allocated }
+            }
+        )*
+    )
+}
+
+implement_container!(usize, u128, u64, u32, u16, u8, isize, i128, i64, i32, i16, i8,);
 
 mod rc {
     use std::rc::Rc;
@@ -350,8 +360,8 @@ mod rc {
 
 #[cfg(test)]
 mod test {
-    use crate::Container;
-    use crate::message::{IntoAllocated, RefOrMut};
+    use crate::{IntoAllocated, Container};
+    use crate::message::RefOrMut;
 
     #[test]
     fn test_container_ref() {
@@ -370,7 +380,7 @@ mod test {
     #[test]
     fn test_tuple_len() {
         let t = (1, vec![1, 2, 3], "Hello".to_string());
-        assert_eq!(t.len(), 9);
+        assert_eq!(t.len(), 8);
     }
 
     #[test]

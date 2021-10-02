@@ -183,11 +183,7 @@ where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Clone+Contain
         if let Some(message) = message {
             let inner_message = message.into_typed();
             let outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.to_outer(), inner_message.data, 0, 0)));
-            let mut outer_allocation = None;
-            self.targets.push(outer_message, &mut outer_allocation);
-            if let Some(outer_allocation) = outer_allocation {
-                *allocation = Some(outer_allocation);
-            }
+            self.targets.push(outer_message, allocation);
         }
         else { self.targets.done(); }
     }

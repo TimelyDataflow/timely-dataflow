@@ -14,6 +14,8 @@ use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
+use crate::communication::Container;
+
 use super::{Event, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
@@ -144,6 +146,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
                     };
                     let vector = data.replace(Vec::new());
                     event_pusher.push(Event::Messages(time.clone(), vector));
+                    *allocation = Some(message.hollow());
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false

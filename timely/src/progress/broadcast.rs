@@ -2,7 +2,7 @@
 
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::{Location, Port};
-use crate::communication::{Message, Push, Pull};
+use crate::communication::{Message, Push, Pull, Container};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::communication::message::MessageAllocation;
@@ -166,6 +166,8 @@ impl<T:Timestamp> Progcaster<T> {
             for &(ref update, delta) in recv_changes.iter() {
                 changes.update(update.clone(), delta);
             }
+
+            *allocation = Some(message.hollow());
         }
 
     }
