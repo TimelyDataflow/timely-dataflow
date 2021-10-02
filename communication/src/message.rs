@@ -264,7 +264,10 @@ impl<T: Container> Container for Message<T> {
 impl<T: Container> IntoAllocated<Message<T>> for MessageAllocation<Option<T::Allocation>> {
     fn assemble(mut self, allocated: RefOrMut<Message<T>>) -> Message<T> where Self: Sized {
         if let Some(inner) = self.0.take() {
-            Message::from_typed(inner.assemble(RefOrMut::Ref(&*allocated)))
+            match allocated {
+                RefOrMut::Mut(Message { payload: MessageContents::Owned(owned) }) => Message::from_typed(inner.assemble(RefOrMut::Mut(owned))),
+                allocated => Message::from_typed(inner.assemble(RefOrMut::Ref(&*allocated)))
+            }
         } else {
             Message::from_typed(T::Allocation::assemble_new(RefOrMut::Ref(&*allocated)))
         }
