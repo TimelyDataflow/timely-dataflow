@@ -1,21 +1,32 @@
 //! Specifications for containers and allocations
 
+use std::num::*;
+
+use paste::paste;
+
 use crate::message::RefOrMut;
 
-/// TODO
+/// A container transferring data through dataflow edges
+///
+/// Each container has a corresponding allocation type. The allocation type
+/// captures any memory allocations the container owned after its contents
+/// have been consumed. A consumed container can be converted into its
+/// allocation type using `hollow()`.
 pub trait Container: Sized {
 
-    /// TODO
+    /// The allocation type capturing any allocations this container might own.
     type Allocation: IntoAllocated<Self> + 'static;
     // type Allocation: 'static;
 
-    /// TODO
+    /// Convert an allocated container into the allocation type.
+    ///
+    /// The allocation should not hold any usable data. Container types have to be cleared.
     fn hollow(self) -> Self::Allocation;
 
-    /// TODO
+    /// The number of elements in this container for the purpose of progress tracking
     fn len(&self) -> usize;
 
-    ///
+    /// Determine if the container contains any elements, corresponding to `len() == 0`.
     fn is_empty(&self) -> bool;
 }
 
@@ -30,75 +41,8 @@ impl Container for () {
     }
 
     fn is_empty(&self) -> bool {
-        false
+        true
     }
-}
-
-impl<A: Container> Container for (A,) {
-    type Allocation = (A::Allocation,);
-    fn hollow(self) -> Self::Allocation {
-        (self.0.hollow(), )
-    }
-
-    fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl<A: Container, B: Container> Container for (A, B) {
-    type Allocation = (A::Allocation, B::Allocation);
-    fn hollow(self) -> Self::Allocation {
-        (self.0.hollow(), self.1.hollow())
-    }
-
-    fn len(&self) -> usize {
-        self.0.len() + self.1.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty() && self.1.is_empty()
-    }
-}
-
-impl<A: Container, B: Container, C: Container> Container for (A, B, C) {
-    type Allocation = (A::Allocation, B::Allocation, C::Allocation);
-    fn hollow(self) -> Self::Allocation {
-        (self.0.hollow(), self.1.hollow(), self.2.hollow())
-    }
-
-    fn len(&self) -> usize {
-        self.0.len() + self.1.len() + self.2.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty() && self.1.is_empty() && self.2.is_empty()
-    }
-}
-
-impl<A: Container, B: Container, C: Container, D: Container> Container for (A, B, C, D) {
-    type Allocation = (A::Allocation, B::Allocation, C::Allocation, D::Allocation);
-    fn hollow(self) -> Self::Allocation {
-        (self.0.hollow(), self.1.hollow(), self.2.hollow(), self.3.hollow())
-    }
-
-    fn len(&self) -> usize {
-        self.0.len() + self.1.len() + self.2.len() + self.3.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty() && self.1.is_empty() && self.2.is_empty() && self.3.is_empty()
-    }
-}
-
-impl Container for ::std::time::Duration {
-    type Allocation = ();
-    fn hollow(self) -> Self::Allocation { () }
-    fn len(&self) -> usize { 0 }
-    fn is_empty(&self) -> bool { false }
 }
 
 impl Container for String {
@@ -139,10 +83,15 @@ impl<T: Clone + 'static> Container for Vec<T> {
 pub trait IntoAllocated<T> {
     /// Use the allocation in `self` to reconstruct the allocated object into an
     /// owned object.
+    ///
+    /// The implementation is free to modify mutable references.
     fn assemble(self, allocated: RefOrMut<T>) -> T where Self: Sized {
         Self::assemble_new(allocated)
     }
-    /// TODO
+
+    /// Construct a new owned object from a reference to an allocation.
+    ///
+    /// The implementation is free to modify mutable references.
     fn assemble_new(allocated: RefOrMut<T>) -> T;
 }
 
@@ -153,146 +102,14 @@ impl IntoAllocated<()> for () {
     }
 }
 
-impl<A: Container> IntoAllocated<(A, )> for (A::Allocation, )
-    where
-        A::Allocation: IntoAllocated<A>,
-{
-    fn assemble(self, allocated: RefOrMut<(A, )>) -> (A, ) where Self: Sized {
-        match allocated {
-            RefOrMut::Ref(t) => (self.0.assemble(RefOrMut::Ref(&t.0)), ),
-            RefOrMut::Mut(t) => (self.0.assemble(RefOrMut::Mut(&mut t.0)), ),
-        }
-    }
-
-    fn assemble_new(allocated: RefOrMut<(A, )>) -> (A, ) {
-        match allocated {
-            RefOrMut::Ref(t) => (A::Allocation::assemble_new(RefOrMut::Ref(&t.0)), ),
-            RefOrMut::Mut(t) => (A::Allocation::assemble_new(RefOrMut::Mut(&mut t.0)), ),
-        }
-    }
-}
-
-impl<A: Container, B: Container> IntoAllocated<(A, B)> for (A::Allocation, B::Allocation)
-    where
-        A::Allocation: IntoAllocated<A>,
-        B::Allocation: IntoAllocated<B>,
-{
-    fn assemble(self, allocated: RefOrMut<(A, B)>) -> (A, B) where Self: Sized {
-        match allocated {
-            RefOrMut::Ref(t) => (
-                self.0.assemble(RefOrMut::Ref(&t.0)),
-                self.1.assemble(RefOrMut::Ref(&t.1))
-            ),
-            RefOrMut::Mut(t) => (
-                self.0.assemble(RefOrMut::Mut(&mut t.0)),
-                self.1.assemble(RefOrMut::Mut(&mut t.1))
-            ),
-        }
-    }
-
-    fn assemble_new(allocated: RefOrMut<(A, B)>) -> (A, B) {
-        match allocated {
-            RefOrMut::Ref(t) => (
-                A::Allocation::assemble_new(RefOrMut::Ref(&t.0)),
-                B::Allocation::assemble_new(RefOrMut::Ref(&t.1))
-            ),
-            RefOrMut::Mut(t) => (
-                A::Allocation::assemble_new(RefOrMut::Mut(&mut t.0)),
-                B::Allocation::assemble_new(RefOrMut::Mut(&mut t.1)),
-            ),
-        }
-    }
-}
-
-impl<A: Container, B: Container, C: Container> IntoAllocated<(A, B, C)> for (A::Allocation, B::Allocation, C::Allocation)
-    where
-        A::Allocation: IntoAllocated<A>,
-        B::Allocation: IntoAllocated<B>,
-        C::Allocation: IntoAllocated<C>,
-{
-    fn assemble(self, allocated: RefOrMut<(A, B, C)>) -> (A, B, C) where Self: Sized {
-        match allocated {
-            RefOrMut::Ref(t) => (
-                self.0.assemble(RefOrMut::Ref(&t.0)),
-                self.1.assemble(RefOrMut::Ref(&t.1)),
-                self.2.assemble(RefOrMut::Ref(&t.2)),
-            ),
-            RefOrMut::Mut(t) => (
-                self.0.assemble(RefOrMut::Mut(&mut t.0)),
-                self.1.assemble(RefOrMut::Mut(&mut t.1)),
-                self.2.assemble(RefOrMut::Mut(&mut t.2)),
-            ),
-        }
-    }
-
-    fn assemble_new(allocated: RefOrMut<(A, B, C)>) -> (A, B, C) {
-        match allocated {
-            RefOrMut::Ref(t) => (
-                A::Allocation::assemble_new(RefOrMut::Ref(&t.0)),
-                B::Allocation::assemble_new(RefOrMut::Ref(&t.1)),
-                C::Allocation::assemble_new(RefOrMut::Ref(&t.2)),
-            ),
-            RefOrMut::Mut(t) => (
-                A::Allocation::assemble_new(RefOrMut::Mut(&mut t.0)),
-                B::Allocation::assemble_new(RefOrMut::Mut(&mut t.1)),
-                C::Allocation::assemble_new(RefOrMut::Mut(&mut t.2)),
-            ),
-        }
-    }
-}
-
-impl<A: Container, B: Container, C: Container, D: Container> IntoAllocated<(A, B, C, D)> for (A::Allocation, B::Allocation, C::Allocation, D::Allocation)
-    where
-        A::Allocation: IntoAllocated<A>,
-        B::Allocation: IntoAllocated<B>,
-        C::Allocation: IntoAllocated<C>,
-        D::Allocation: IntoAllocated<D>,
-{
-    fn assemble(self, allocated: RefOrMut<(A, B, C, D)>) -> (A, B, C, D) where Self: Sized {
-        match allocated {
-            RefOrMut::Ref(t) => (
-                self.0.assemble(RefOrMut::Ref(&t.0)),
-                self.1.assemble(RefOrMut::Ref(&t.1)),
-                self.2.assemble(RefOrMut::Ref(&t.2)),
-                self.3.assemble(RefOrMut::Ref(&t.3)),
-            ),
-            RefOrMut::Mut(t) => (
-                self.0.assemble(RefOrMut::Mut(&mut t.0)),
-                self.1.assemble(RefOrMut::Mut(&mut t.1)),
-                self.2.assemble(RefOrMut::Mut(&mut t.2)),
-                self.3.assemble(RefOrMut::Mut(&mut t.3)),
-            ),
-        }
-    }
-
-    fn assemble_new(allocated: RefOrMut<(A, B, C, D)>) -> (A, B, C, D) {
-        match allocated {
-            RefOrMut::Ref(t) => (
-                A::Allocation::assemble_new(RefOrMut::Ref(&t.0)),
-                B::Allocation::assemble_new(RefOrMut::Ref(&t.1)),
-                C::Allocation::assemble_new(RefOrMut::Ref(&t.2)),
-                D::Allocation::assemble_new(RefOrMut::Ref(&t.3)),
-            ),
-            RefOrMut::Mut(t) => (
-                A::Allocation::assemble_new(RefOrMut::Mut(&mut t.0)),
-                B::Allocation::assemble_new(RefOrMut::Mut(&mut t.1)),
-                C::Allocation::assemble_new(RefOrMut::Mut(&mut t.2)),
-                D::Allocation::assemble_new(RefOrMut::Mut(&mut t.3)),
-            ),
-        }
-    }
-}
-
 impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
     fn assemble(mut self, ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
         match ref_or_mut {
             RefOrMut::Ref(t) => {
                 self.clone_from(t);
-                println!("into_allocated<Vec<T>> ref")
             }
             RefOrMut::Mut(t) => {
                 ::std::mem::swap(&mut self, t);
-                println!("into_allocated<Vec<T>> mut")
             },
         }
         self
@@ -300,12 +117,6 @@ impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
 
     fn assemble_new(ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
         Self::new().assemble(ref_or_mut)
-    }
-}
-
-impl IntoAllocated<::std::time::Duration> for () {
-    fn assemble_new(allocated: RefOrMut<::std::time::Duration>) -> ::std::time::Duration {
-        (&*allocated).clone()
     }
 }
 
@@ -323,7 +134,7 @@ impl IntoAllocated<String> for String {
     }
 }
 
-macro_rules! implement_container {
+macro_rules! implement_clone_container {
     ($($index_type:ty,)*) => (
         $(
             impl Container for $index_type {
@@ -333,13 +144,118 @@ macro_rules! implement_container {
                 fn is_empty(&self) -> bool { true }
             }
             impl IntoAllocated<$index_type> for () {
-                fn assemble_new(allocated: RefOrMut<$index_type>) -> $index_type { *allocated }
+                fn assemble_new(allocated: RefOrMut<$index_type>) -> $index_type { (&*allocated).clone() }
             }
         )*
     )
 }
 
-implement_container!(usize, u128, u64, u32, u16, u8, isize, i128, i64, i32, i16, i8,);
+implement_clone_container!(usize, u128, u64, u32, u16, u8, isize, i128, i64, i32, i16, i8, ::std::time::Duration,);
+implement_clone_container!(f32, f64,);
+implement_clone_container!(NonZeroU8, NonZeroI8, NonZeroU16, NonZeroI16, NonZeroU32, NonZeroI32,);
+implement_clone_container!(NonZeroU64, NonZeroI64, NonZeroU128, NonZeroI128, NonZeroUsize, NonZeroIsize,);
+
+// general code for tuples (can't use '0', '1', ... as field identifiers)
+macro_rules! tuple_container {
+    ( $($name:ident)+) => ( paste! {
+        impl<$($name: Container),*> Container for ($($name,)*) {
+            type Allocation = ($($name::Allocation,)*);
+            fn hollow(self) -> Self::Allocation {
+                #[allow(non_snake_case)]
+                let ($($name,)*) = self;
+                ($($name.hollow(),)*)
+            }
+            fn len(&self) -> usize {
+                let mut len = 0;
+                #[allow(non_snake_case)]
+                let ($(ref $name,)*) = *self;
+                $( len += $name.len(); )*
+                len
+            }
+
+            fn is_empty(&self) -> bool {
+                let mut is_empty = true;
+                #[allow(non_snake_case)]
+                let ($(ref $name,)*) = *self;
+                $( is_empty = is_empty && $name.is_empty(); )*
+                is_empty
+            }
+
+        }
+        impl<$($name: Container),*> IntoAllocated<($($name,)*)> for ($($name::Allocation,)*)
+            where $($name::Allocation: IntoAllocated<$name>,)*
+        {
+            fn assemble(self, allocated: RefOrMut<($($name,)*)>) -> ($($name,)*) where Self: Sized {
+                match allocated {
+                    RefOrMut::Ref(t) => {
+                        #[allow(non_snake_case)]
+                        let ($(ref $name,)*) = t;
+                        #[allow(non_snake_case)]
+                        let ($([<self_ $name>],)*) = self;
+                        ($([<self_ $name>].assemble(RefOrMut::Ref($name)),)*)
+                    },
+                    RefOrMut::Mut(t) => {
+                        #[allow(non_snake_case)]
+                        let ($(ref mut $name,)*) = t;
+                        #[allow(non_snake_case)]
+                        let ($([<self_ $name >],)*) = self;
+                        ($([<self_ $name>].assemble(RefOrMut::Mut($name)),)*)
+                    }
+                }
+            }
+
+            fn assemble_new(allocated: RefOrMut<($($name,)*)>) -> ($($name,)*) {
+                match allocated {
+                    RefOrMut::Ref(t) => {
+                        #[allow(non_snake_case)]
+                        let ($(ref [<t_ $name>],)*) = t;
+                        ($( $name::Allocation::assemble_new(RefOrMut::Ref([<t_ $name >])),)*)
+                    },
+                    RefOrMut::Mut(t) => {
+                        #[allow(non_snake_case)]
+                        let ($(ref mut [<t_ $name >],)*) = t;
+                        ($( $name::Allocation::assemble_new(RefOrMut::Mut([<t_ $name >])),)*)
+                    },
+                }
+            }
+        }
+        }
+    );
+}
+
+tuple_container!(A);
+tuple_container!(A B);
+tuple_container!(A B C);
+tuple_container!(A B C D);
+tuple_container!(A B C D E);
+tuple_container!(A B C D E F);
+tuple_container!(A B C D E F G);
+tuple_container!(A B C D E F G H);
+tuple_container!(A B C D E F G H I);
+tuple_container!(A B C D E F G H I J);
+tuple_container!(A B C D E F G H I J K);
+tuple_container!(A B C D E F G H I J K L);
+tuple_container!(A B C D E F G H I J K L M);
+tuple_container!(A B C D E F G H I J K L M N);
+tuple_container!(A B C D E F G H I J K L M N O);
+tuple_container!(A B C D E F G H I J K L M N O P);
+tuple_container!(A B C D E F G H I J K L M N O P Q);
+tuple_container!(A B C D E F G H I J K L M N O P Q R);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC AD);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC AD AE);
+tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC AD AE AF);
+
 
 mod rc {
     use std::rc::Rc;
