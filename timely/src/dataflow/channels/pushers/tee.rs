@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use crate::dataflow::channels::{BundleCore, Message};
 
-use crate::communication::{Push, Container, IntoAllocated};
-use crate::communication::message::RefOrMut;
+use crate::communication::{Push, Container};
+use crate::communication::message::{RefOrMut, MessageAllocation};
 use crate::progress::Timestamp;
 
 type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
@@ -24,15 +24,14 @@ impl<T: Timestamp, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
     #[inline]
     fn push(&mut self, message: Option<BundleCore<T, D>>, allocation: &mut Option<<BundleCore<T, D> as Container>::Allocation>) {
         let mut pushers = self.shared.borrow_mut();
+        let mut inner_allocation = None;
         if let Some(message) = &message {
-            let mut inner_allocation: Option<D::Allocation> = allocation.take().and_then(|m| m.0).map(|m| m.0);
             for index in 1..pushers.len() {
-                let copy: D = if let Some(allocation) = inner_allocation.take() {
-                    allocation.assemble(RefOrMut::Ref(&message.data))
-                } else {
-                    D::Allocation::assemble_new(RefOrMut::Ref(&message.data))
-                };
+                let copy = RefOrMut::Ref(&message.data).assemble(&mut inner_allocation);
                 Message::push_at(Some(copy), message.time.clone(), &mut pushers[index-1], &mut inner_allocation);
+            }
+            if let Some(inner_allocation) = inner_allocation {
+                *allocation = Some(MessageAllocation(Some(MessageAllocation(inner_allocation))));
             }
         }
         else {
