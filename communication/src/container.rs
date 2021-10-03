@@ -266,10 +266,26 @@ tuple_container!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC AD
 mod rc {
     use std::rc::Rc;
 
-    use crate::IntoAllocated;
+    use crate::{Container, IntoAllocated};
     use crate::message::RefOrMut;
 
-    impl<T> IntoAllocated<Rc<T>> for () {
+    impl<T: Container> Container for Rc<T> {
+        type Allocation = ();
+
+        fn hollow(self) -> Self::Allocation {
+            ()
+        }
+
+        fn len(&self) -> usize {
+            std::ops::Deref::deref(self).len()
+        }
+
+        fn is_empty(&self) -> bool {
+            std::ops::Deref::deref(self).is_empty()
+        }
+    }
+
+    impl<T: Container> IntoAllocated<Rc<T>> for () {
         fn assemble(self, ref_or_mut: RefOrMut<Rc<T>>) -> Rc<T> {
             Rc::clone(&*ref_or_mut)
         }
