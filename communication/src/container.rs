@@ -28,6 +28,9 @@ pub trait Container: Sized {
 
     /// Determine if the container contains any elements, corresponding to `len() == 0`.
     fn is_empty(&self) -> bool;
+
+    /// Ensure the containers capacity is allocated and reallocate if needed.
+    fn ensure_capacity(&mut self) { }
 }
 
 impl Container for () {
@@ -76,6 +79,13 @@ impl<T: Clone + 'static> Container for Vec<T> {
 
     fn is_empty(&self) -> bool {
         Vec::is_empty(&self)
+    }
+
+    fn ensure_capacity(&mut self) {
+        let len = self.len();
+        if len < 1024 {
+            self.reserve(1024 - len);
+        }
     }
 }
 

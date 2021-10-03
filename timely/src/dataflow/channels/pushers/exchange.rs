@@ -35,13 +35,10 @@ impl<T: Timestamp+Clone, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> 
             if let Some(ref time) = self.current {
                 let mut allocation = None;
                 Message::push_at(Some(::std::mem::take(&mut self.buffers[index])), time.clone(), &mut self.pushers[index], &mut allocation);
-                let len = self.buffers[index].len();
-                if len < 1024 {
-                    self.buffers[index].reserve(1024 - len);
-                }
                 if let Some(allocation) = allocation {
                     self.buffers[index] = allocation;
                 }
+                self.buffers[index].ensure_capacity();
             }
         }
     }

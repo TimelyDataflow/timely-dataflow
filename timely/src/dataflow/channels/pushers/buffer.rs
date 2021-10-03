@@ -6,7 +6,6 @@ use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
 use crate::communication::{Push, Container};
 use crate::Data;
-use crate::communication::message::RefOrMut;
 
 /// Buffers data sent at the same time, for efficient communication.
 ///
@@ -96,8 +95,9 @@ impl<T: Timestamp, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> 
 impl<T: Timestamp, D: Data, P: Push<BundleCore<T, Vec<D>>>> BufferCore<T, Vec<D>, P> where T: Eq+Clone {
     fn ensure_buffer(&mut self) -> &mut Vec<D> {
         if self.buffer.is_none() {
-            // TODO: Vec::with_capacity()
-            self.buffer = Some(RefOrMut::Mut(&mut Vec::with_capacity(1024)).assemble(&mut self.allocation));
+            let mut buffer = self.allocation.take().unwrap_or_default();
+            buffer.ensure_capacity();
+            self.buffer = Some(buffer);
         }
         self.buffer.as_mut().unwrap()
     }

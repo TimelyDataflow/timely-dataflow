@@ -416,8 +416,9 @@ impl<T: Timestamp, D: Data> Handle<T, D> {
     #[inline]
     fn ensure_buffer(&mut self) -> &mut Vec<D> {
         if self.buffer.is_none() {
-            // TODO: Vec::with_capacity()
-            self.buffer = Some(RefOrMut::Mut(&mut Vec::with_capacity(1024)).assemble(&mut self.allocation));
+            let mut buffer = self.allocation.take().unwrap_or_default();
+            buffer.ensure_capacity();
+            self.buffer = Some(buffer);
         }
         self.buffer.as_mut().unwrap()
     }

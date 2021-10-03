@@ -41,7 +41,7 @@ impl<T: Timestamp, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
         }
         if pushers.len() > 0 {
             let last = pushers.len() - 1;
-            pushers[last].push(message, &mut None);
+            pushers[last].push(message, allocation);
         }
     }
 }
