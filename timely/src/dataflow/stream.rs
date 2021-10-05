@@ -18,7 +18,7 @@ use std::fmt::{self, Debug};
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-pub struct CoreStream<S: Scope, D: Container> {
+pub struct CoreStream<S: Scope, D> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
@@ -60,7 +60,7 @@ impl<S: Scope, D: Container> CoreStream<S, D> {
     }
     /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
     pub fn new(source: Source, output: TeeHelper<S::Timestamp, D>, scope: S) -> Self {
-        CoreStream { name: source, ports: output, scope }
+        Self { name: source, ports: output, scope }
     }
     /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }
@@ -68,7 +68,7 @@ impl<S: Scope, D: Container> CoreStream<S, D> {
     pub fn scope(&self) -> S { self.scope.clone() }
 }
 
-impl<S, D: Container> Debug for CoreStream<S, D>
+impl<S, D> Debug for CoreStream<S, D>
 where
     S: Scope,
 {

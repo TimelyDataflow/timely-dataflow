@@ -23,7 +23,7 @@ pub type Bundle<T, D> = BundleCore<T, Vec<D>>;
 
 /// A serializable representation of timestamped data.
 #[derive(Clone, Abomonation, Serialize, Deserialize)]
-pub struct Message<T, D: Container> {
+pub struct Message<T, D> {
     /// The timestamp associated with the message.
     pub time: T,
     /// The data in the message.

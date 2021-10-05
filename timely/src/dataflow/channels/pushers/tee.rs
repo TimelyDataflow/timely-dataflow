@@ -13,7 +13,7 @@ use crate::progress::Timestamp;
 type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
-pub struct TeeCore<T: 'static, D: Container+'static> {
+pub struct TeeCore<T: 'static, D: 'static> {
     shared: PushList<T, D>,
 }
 
@@ -46,7 +46,7 @@ impl<T: Timestamp, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
     }
 }
 
-impl<T: Timestamp, D: Container> TeeCore<T, D> {
+impl<T, D> TeeCore<T, D> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
     pub fn new() -> (TeeCore<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
@@ -76,18 +76,18 @@ where
 }
 
 /// A shared list of `Box<Push>` used to add `Push` implementors.
-pub struct TeeHelper<T: Timestamp, D: Container> {
+pub struct TeeHelper<T, D> {
     shared: PushList<T, D>,
 }
 
-impl<T: Timestamp, D: Container> TeeHelper<T, D> {
+impl<T, D> TeeHelper<T, D> {
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
     pub fn add_pusher<P: Push<BundleCore<T, D>>+'static>(&self, pusher: P) {
         self.shared.borrow_mut().push(Box::new(pusher));
     }
 }
 
-impl<T: Timestamp, D: Container> Clone for TeeHelper<T, D> {
+impl<T, D> Clone for TeeHelper<T, D> {
     fn clone(&self) -> Self {
         TeeHelper {
             shared: self.shared.clone(),
@@ -95,7 +95,7 @@ impl<T: Timestamp, D: Container> Clone for TeeHelper<T, D> {
     }
 }
 
-impl<T: Timestamp, D: Container> Debug for TeeHelper<T, D> {
+impl<T, D> Debug for TeeHelper<T, D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("TeeHelper");
 

@@ -79,7 +79,7 @@ pub trait Probe<G: Scope, D: Container> {
     fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> CoreStream<G, D>;
 }
 
-impl<G: Scope, D: Container+'static> Probe<G, D> for CoreStream<G, D> {
+impl<G: Scope, D: Container> Probe<G, D> for CoreStream<G, D> {
     fn probe(&self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.

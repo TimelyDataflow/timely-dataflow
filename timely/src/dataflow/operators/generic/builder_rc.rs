@@ -8,6 +8,7 @@ use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
+use crate::communication::Container;
 use crate::dataflow::{Scope, CoreStream};
 use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
@@ -22,7 +23,6 @@ use crate::dataflow::operators::generic::builder_raw::OperatorShape;
 use crate::logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
-use crate::communication::Container;
 
 /// Builds operators with generic shape.
 #[derive(Debug)]

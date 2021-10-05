@@ -13,11 +13,11 @@ use crate::scheduling::{Schedule, Activations};
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
+use crate::communication::Container;
 use crate::dataflow::{CoreStream, Scope};
 use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pact::ParallelizationContractCore;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
-use crate::communication::Container;
 
 /// Contains type-free information about the operator properties.
 #[derive(Debug)]

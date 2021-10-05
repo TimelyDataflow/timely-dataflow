@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+use crate::communication::Message;
+use crate::communication::Container;
 use crate::communication::{Allocate, Data, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::{Schedule, Scheduler, Activations};
@@ -196,7 +198,7 @@ pub trait AsWorker : Scheduler {
     ///
     /// By default this method uses the native channel allocation mechanism, but the expectation is
     /// that this behavior will be overriden to be more efficient.
-    fn pipeline<T: Container+'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>);
+    fn pipeline<T: Container>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>);
 
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
@@ -238,7 +240,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
         self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().allocate(identifier)
     }
-    fn pipeline<T: Container+'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
+    fn pipeline<T: Container>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
         if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address.to_vec());
@@ -704,9 +706,6 @@ impl<A: Allocate> Worker<A> {
         *self.dataflow_counter.borrow() - 1
     }
 }
-
-use crate::communication::Message;
-use timely_communication::Container;
 
 impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {

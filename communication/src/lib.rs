@@ -132,15 +132,15 @@ impl<T: Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
 /// Conventionally, a sequence of calls to `push()` should conclude with
 /// a call of `push(&mut None)` or `done()` to signal to implementors that
 /// another call to `push()` may not be coming.
-pub trait Push<T: Container> {
+pub trait Push<T> {
     /// Pushes `element` with the opportunity to take ownership.
-    fn push(&mut self, element: Option<T>, allocation: &mut Option<T::Allocation>);
+    fn push(&mut self, element: Option<T>, allocation: &mut Option<T::Allocation>) where T: Container;
     /// Pushes `element` and drops any resulting resources.
     #[inline]
-    fn send(&mut self, element: T) { self.push(Some(element), &mut None); }
+    fn send(&mut self, element: T) where T: Container { self.push(Some(element), &mut None); }
     /// Pushes `None`, conventionally signalling a flush.
     #[inline]
-    fn done(&mut self) { self.push(None, &mut None); }
+    fn done(&mut self) where T: Container { self.push(None, &mut None); }
 }
 
 impl<T: Container, P: ?Sized + Push<T>> Push<T> for Box<P> {
@@ -149,7 +149,7 @@ impl<T: Container, P: ?Sized + Push<T>> Push<T> for Box<P> {
 }
 
 /// Pulling elements of type `T`.
-pub trait Pull<T: Container> {
+pub trait Pull<T> {
     /// Pulls an element and provides the opportunity to take ownership.
     ///
     /// The puller may mutate the result, in particular take ownership of the data by
@@ -158,16 +158,17 @@ pub trait Pull<T: Container> {
     ///
     /// If `pull` returns `None` this conventionally signals that no more data is available
     /// at the moment, and the puller should find something better to do.
-    fn pull(&mut self) -> (Option<T>, &mut Option<T::Allocation>);
+    fn pull(&mut self) -> (Option<T>, &mut Option<T::Allocation>) where T: Container;
     /// Takes an `Option<T>` and leaves `None` behind.
     #[inline]
-    fn recv(&mut self) -> Option<T> { self.pull().0.take() }
+    fn recv(&mut self) -> Option<T> where T: Container { self.pull().0.take() }
 }
 
 impl<T: Container, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     #[inline]
     fn pull(&mut self) -> (Option<T>, &mut Option<T::Allocation>) { (**self).pull() }
 }
+
 
 use crossbeam_channel::{Sender, Receiver};
 

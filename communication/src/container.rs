@@ -12,7 +12,7 @@ use crate::message::RefOrMut;
 /// captures any memory allocations the container owned after its contents
 /// have been consumed. A consumed container can be converted into its
 /// allocation type using `hollow()`.
-pub trait Container: Sized {
+pub trait Container: Sized + 'static {
 
     /// The allocation type capturing any allocations this container might own.
     type Allocation: IntoAllocated<Self> + 'static;
@@ -113,6 +113,27 @@ impl IntoAllocated<()> for () {
     }
 }
 
+pub mod buffer {
+    //! Functionality related to calculating default buffer sizes
+
+    /// The upper limit for buffers to allocate, size in bytes. [default_capacity] converts
+    /// this to size in elements.
+    pub const BUFFER_SIZE_BYTES: usize = 1 << 13;
+
+    /// The maximum buffer capacity in elements. Returns a number between [:BUFFER_SIZE_BYTES]
+    /// and 1, inclusively.
+    pub const fn default_capacity<T>() -> usize {
+        let size = ::std::mem::size_of::<T>();
+        if size == 0 {
+            BUFFER_SIZE_BYTES
+        } else if size <= BUFFER_SIZE_BYTES {
+            BUFFER_SIZE_BYTES / size
+        } else {
+            1
+        }
+    }
+}
+
 impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
     #[inline(always)]
     fn assemble(mut self, ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
@@ -129,7 +150,7 @@ impl<T: Clone> IntoAllocated<Vec<T>> for Vec<T> {
 
     #[inline(always)]
     fn assemble_new(ref_or_mut: RefOrMut<Vec<T>>) -> Vec<T> {
-        Self::new().assemble(ref_or_mut)
+        Self::with_capacity(buffer::default_capacity::<T>()).assemble(ref_or_mut)
     }
 }
 

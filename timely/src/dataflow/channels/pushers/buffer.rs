@@ -22,8 +22,7 @@ pub struct BufferCore<T: Container, D: Container, P: Push<BundleCore<T, D>>> {
 /// A buffer specialized to vector-based containers.
 pub type Buffer<T, D, P> = BufferCore<T, Vec<D>, P>;
 
-// Cannot derive `Debug` for [Buffer] because we cannot express the constraint that
-// `C::Builder: Debug`.
+// Cannot derive `Debug` for [Buffer] because we do not want to require `D::Allocation: Debug`.
 impl<T: ::std::fmt::Debug+Container, C: Container, P: Push<BundleCore<T, C>>+::std::fmt::Debug> ::std::fmt::Debug for BufferCore<T, C, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug = f.debug_struct("BufferCore");

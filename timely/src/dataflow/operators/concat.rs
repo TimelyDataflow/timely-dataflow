@@ -1,9 +1,9 @@
 //! Merges the contents of multiple streams.
 
 
+use crate::communication::{Container, IntoAllocated};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{CoreStream, Scope};
-use crate::communication::{Container, IntoAllocated};
 
 /// Merge the contents of two streams.
 pub trait Concat<G: Scope, D: Container> {
@@ -52,7 +52,7 @@ pub trait Concatenate<G: Scope, D: Container> {
         I: IntoIterator<Item=CoreStream<G, D>>;
 }
 
-impl<G: Scope, D: Container+Clone+'static> Concatenate<G, D> for CoreStream<G, D> {
+impl<G: Scope, D: Container+Clone> Concatenate<G, D> for CoreStream<G, D> {
     fn concatenate<I>(&self, sources: I) -> CoreStream<G, D>
     where
         I: IntoIterator<Item=CoreStream<G, D>>
@@ -62,7 +62,7 @@ impl<G: Scope, D: Container+Clone+'static> Concatenate<G, D> for CoreStream<G, D
     }
 }
 
-impl<G: Scope, D: Container+Clone+'static> Concatenate<G, D> for G
+impl<G: Scope, D: Container+Clone> Concatenate<G, D> for G
 where
     D::Allocation: IntoAllocated<D>
 {

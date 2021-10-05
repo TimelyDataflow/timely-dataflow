@@ -187,7 +187,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
         let canary = Canary::new(identifier, self.canaries.clone());
         let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.events().clone()));
 
-        (pushes, puller)
+        (pushes, puller, )
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.

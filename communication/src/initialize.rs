@@ -149,7 +149,6 @@ impl Config {
 
     /// Attempts to assemble the described communication infrastructure.
     pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
-        println!("{:?}", self);
         match self {
             Config::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))

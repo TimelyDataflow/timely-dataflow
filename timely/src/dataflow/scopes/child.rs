@@ -61,7 +61,7 @@ where
     fn allocate<D: Data+Container>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) where D::Allocation: Send+Sync{
         self.parent.allocate(identifier, address)
     }
-    fn pipeline<D: Container+'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
+    fn pipeline<D: Container>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
         self.parent.pipeline(identifier, address)
     }
     fn new_identifier(&mut self) -> usize {

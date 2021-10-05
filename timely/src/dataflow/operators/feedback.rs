@@ -162,7 +162,7 @@ where
 
 /// A handle used to bind the source of a loop variable.
 #[derive(Debug)]
-pub struct HandleCore<G: Scope, D: Container+Clone+'static> {
+pub struct HandleCore<G: Scope, D: Container+Clone> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
     output: OutputWrapper<G::Timestamp, D, TeeCore<G::Timestamp, D>>,

@@ -1,5 +1,13 @@
 //! Traits and types for partially ordered sets.
 
+use std::fmt::{Formatter, Error, Debug};
+
+use crate::progress::Timestamp;
+use crate::progress::timestamp::Refines;
+use crate::progress::timestamp::PathSummary;
+use crate::communication::{Container, IntoAllocated};
+use crate::communication::message::{MessageAllocation, RefOrMut};
+
 /// A type that is partially ordered.
 ///
 /// This trait is distinct from Rust's `PartialOrd` trait, because the implementation
@@ -46,12 +54,6 @@ macro_rules! implement_total {
 
 implement_partial!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, (), ::std::time::Duration,);
 implement_total!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, (), ::std::time::Duration,);
-
-
-use std::fmt::{Formatter, Error, Debug};
-
-use crate::progress::Timestamp;
-use crate::progress::timestamp::Refines;
 
 impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for Product<TOuter, TInner> {
     fn to_inner(other: TOuter) -> Self {
@@ -149,10 +151,6 @@ impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner>
     type Summary = Product<TOuter::Summary, TInner::Summary>;
     fn minimum() -> Self { Product { outer: TOuter::minimum(), inner: TInner::minimum() }}
 }
-
-use crate::progress::timestamp::PathSummary;
-use crate::communication::{Container, IntoAllocated};
-use crate::communication::message::{MessageAllocation, RefOrMut};
 
 impl<TOuter: Timestamp, TInner: Timestamp> PathSummary<Product<TOuter, TInner>> for Product<TOuter::Summary, TInner::Summary> {
     #[inline]

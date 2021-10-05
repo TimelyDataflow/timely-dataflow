@@ -8,7 +8,7 @@ use crate::{Push, Pull, Container};
 use crate::allocator::Event;
 
 /// The push half of an intra-thread channel.
-pub struct Pusher<T: Container, P: Push<T>> {
+pub struct Pusher<T, P: Push<T>> {
     index: usize,
     // count: usize,
     events: Rc<RefCell<VecDeque<(usize, Event)>>>,
@@ -107,7 +107,7 @@ impl<T: Container, P: Push<T>> Push<T> for ArcPusher<T, P> {
 }
 
 /// The pull half of an intra-thread channel.
-pub struct Puller<T: Container, P: Pull<T>> {
+pub struct Puller<T, P: Pull<T>> {
     index: usize,
     count: usize,
     events: Rc<RefCell<VecDeque<(usize, Event)>>>,

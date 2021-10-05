@@ -11,10 +11,9 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
+use crate::communication::Container;
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
-
-use crate::communication::Container;
 
 use super::{Event, EventPusher};
 

@@ -47,8 +47,8 @@ impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::
                 if let Some(element) = iterator.next() {
                     let mut session = output.session(capability.as_ref().unwrap());
                     session.give(element);
-                    // TODO: 1024
-                    for element in iterator.by_ref().take((256 * 1024) - 1) {
+                    let n = 256 * crate::communication::container::buffer::default_capacity::<I::Item>();
+                    for element in iterator.by_ref().take(n - 1) {
                         session.give(element);
                     }
                     activator.activate();

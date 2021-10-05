@@ -41,17 +41,10 @@ impl<'a, T: Clone+'a> RefOrMut<'a, T> {
         self.swap(&mut element);
         element
     }
-
-    // pub fn take(self) -> T {
-    //     match self {
-    //         RefOrMut::Ref(reference) => element.clone_from(reference),
-    //         RefOrMut::Mut(reference) => ::std::mem::swap(reference, element),
-    //     }
-    // };
 }
 
 impl<'a, T: 'a> RefOrMut<'a, T> {
-    /// TODO
+    /// Assemble the content of self using the provided allocation
     pub fn assemble<A: IntoAllocated<T>>(self, allocation: &mut Option<A>) -> T {
         if let Some(allocation) = allocation.take() {
             allocation.assemble(self)
@@ -237,12 +230,15 @@ impl<T: Clone> Message<T> {
     }
 }
 
-/// TODO
+/// A wrapper for allocations. The main reason this exists is because we need to implement
+/// [IntoAllocated] for this type, which is in general not possible to implement for types outside
+/// this crate.
 pub struct MessageAllocation<T>(pub T);
 
 impl<T: Container> Container for Message<T> {
     type Allocation = MessageAllocation<Option<T::Allocation>>;
     fn hollow(self) -> Self::Allocation {
+        // We can only recycle owned data.
         match self.payload {
             MessageContents::Binary(_) | MessageContents::Arc(_) => MessageAllocation(None),
             MessageContents::Owned(allocated) => MessageAllocation(Some(allocated.hollow()))
@@ -265,15 +261,27 @@ impl<T: Container> IntoAllocated<Message<T>> for MessageAllocation<Option<T::All
     fn assemble(mut self, allocated: RefOrMut<Message<T>>) -> Message<T> where Self: Sized {
         if let Some(inner) = self.0.take() {
             match allocated {
+                // Allow to take ownership of passed massed
                 RefOrMut::Mut(Message { payload: MessageContents::Owned(owned) }) => Message::from_typed(inner.assemble(RefOrMut::Mut(owned))),
+                // Clone message contents
                 allocated => Message::from_typed(inner.assemble(RefOrMut::Ref(&*allocated)))
             }
         } else {
-            Message::from_typed(T::Allocation::assemble_new(RefOrMut::Ref(&*allocated)))
+            match allocated {
+                // Allow to take ownership of passed massed
+                RefOrMut::Mut(Message { payload: MessageContents::Owned(owned) }) => Message::from_typed(T::Allocation::assemble_new(RefOrMut::Mut(owned))),
+                // Clone message contents
+                allocated => Message::from_typed(T::Allocation::assemble_new(RefOrMut::Ref(&*allocated)))
+            }
         }
     }
     fn assemble_new(allocated: RefOrMut<Message<T>>) -> Message<T> {
         // We can't call Message::as_mut here because we don't want to require T: Clone
-        Message::from_typed(T::Allocation::assemble_new(RefOrMut::Ref(&*allocated)))
+        match allocated {
+            // Allow to take ownership of passed massed
+            RefOrMut::Mut(Message { payload: MessageContents::Owned(owned) }) => Message::from_typed(T::Allocation::assemble_new(RefOrMut::Mut(owned))),
+            // Clone message contents
+            allocated => Message::from_typed(T::Allocation::assemble_new(RefOrMut::Ref(&*allocated)))
+        }
     }
 }

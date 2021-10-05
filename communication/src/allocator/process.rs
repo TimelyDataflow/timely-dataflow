@@ -125,12 +125,12 @@ impl Allocate for Process {
             // we may need to alloc a new channel ...
             let entry = channels.entry(identifier).or_insert_with(|| {
 
-                let mut pushers: Vec<(Pusher<Message<T>>, _)> = Vec::with_capacity(self.peers);
-                let mut pullers: Vec<Puller<_>> = Vec::with_capacity(self.peers);
+                let mut pushers = Vec::with_capacity(self.peers);
+                let mut pullers = Vec::with_capacity(self.peers);
                 for buzzer in self.buzzers.iter() {
                     let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = crossbeam_channel::unbounded();
                     // TODO: the buzzer in the pusher may be redundant, because we need to buzz post-counter.
-                    pushers.push((Pusher::new(s), buzzer.clone()));
+                    pushers.push((Pusher { target: s }, buzzer.clone()));
                     pullers.push(Puller { source: r, current_allocation: None });
                 }
 
@@ -195,14 +195,6 @@ impl Allocate for Process {
 /// The push half of an intra-process channel.
 struct Pusher<T> {
     target: Sender<T>,
-}
-
-impl<T> Pusher<T> {
-    pub fn new(target: Sender<T>) -> Self {
-        Self {
-            target,
-        }
-    }
 }
 
 impl<T> Clone for Pusher<T> {

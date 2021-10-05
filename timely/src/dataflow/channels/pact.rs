@@ -21,27 +21,24 @@ use crate::dataflow::channels::Bundle;
 use crate::progress::Timestamp;
 
 /// A `ParallelizationContractCore` allocates paired `Push` and `Pull` implementors.
-pub trait ParallelizationContractCore<T: Timestamp, D: Container>
-{
+pub trait ParallelizationContractCore<T: 'static, D: 'static> {
     /// Type implementing `Push` produced by this pact.
     type Pusher: Push<BundleCore<T, D>>+'static;
     /// Type implementing `Pull` produced by this pact.
     type Puller: Pull<BundleCore<T, D>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller)
-        // where D::Allocation: Send+Sync,
-    ;
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
 
 /// A `ParallelizationContractCore` specialized for `Vec` containers
 /// TODO: Use trait aliases once stable.
-pub trait ParallelizationContract<T: Timestamp, D: Clone + 'static>: ParallelizationContractCore<T, Vec<D>> { }
+pub trait ParallelizationContract<T: 'static, D: Clone + 'static>: ParallelizationContractCore<T, Vec<D>> { }
 
 /// A direct connection
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: Timestamp, D: Container+'static> ParallelizationContractCore<T, D> for Pipeline {
+impl<T: Timestamp, D: Container> ParallelizationContractCore<T, D> for Pipeline {
     type Pusher = LogPusher<T, D, ThreadPusher<BundleCore<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<BundleCore<T, D>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -58,7 +55,7 @@ impl<T: Timestamp, D: Clone+'static> ParallelizationContract<T, D> for Pipeline 
 /// An exchange between multiple observers by data
 pub struct Exchange<C, D, F> { hash_func: F, phantom: PhantomData<(C, D)> }
 
-impl<'a, D: Data, F: FnMut(&D)->u64+'static> Exchange<Vec<D>, D, F> {
+impl<D, F: FnMut(&D)->u64+'static> Exchange<Vec<D>, D, F> {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new(func: F) -> Exchange<Vec<D>, D, F> {
         Exchange {
@@ -69,7 +66,7 @@ impl<'a, D: Data, F: FnMut(&D)->u64+'static> Exchange<Vec<D>, D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<'a, T: Timestamp, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, Vec<D>> for Exchange<Vec<D>, D, F> {
+impl<T: Timestamp, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, Vec<D>> for Exchange<Vec<D>, D, F> {
     // TODO: The closure in the type prevents us from naming it.
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<dyn Push<Bundle<T, D>>>;
@@ -89,7 +86,7 @@ impl<C, D, F> Debug for Exchange<C, D, F> {
 
 /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
 #[derive(Debug)]
-pub struct LogPusher<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> {
+pub struct LogPusher<T, D, P: Push<BundleCore<T, D>>> {
     pusher: P,
     channel: usize,
     counter: usize,
@@ -99,7 +96,7 @@ pub struct LogPusher<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> {
     logging: Option<Logger>,
 }
 
-impl<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> LogPusher<T, D, P> {
+impl<T, D, P: Push<BundleCore<T, D>>> LogPusher<T, D, P> {
     /// Allocates a new pusher.
     pub fn new(pusher: P, source: usize, target: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPusher {
@@ -145,7 +142,7 @@ impl<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> Push<BundleCore<T, D
 
 /// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
 #[derive(Debug)]
-pub struct LogPuller<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> {
+pub struct LogPuller<T, D, P: Pull<BundleCore<T, D>>> {
     puller: P,
     channel: usize,
     index: usize,
@@ -153,7 +150,7 @@ pub struct LogPuller<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> {
     logging: Option<Logger>,
 }
 
-impl<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> LogPuller<T, D, P> {
+impl<T, D, P: Pull<BundleCore<T, D>>> LogPuller<T, D, P> {
     /// Allocates a new `Puller`.
     pub fn new(puller: P, index: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPuller {

@@ -7,7 +7,7 @@ use crate::progress::Timestamp;
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T: Container, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
     buffers: Vec<Vec<D>>,
     current: Option<T>,
@@ -19,8 +19,7 @@ impl<T: Timestamp+Clone, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> 
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
-            // TODO: 1024
-            buffers.push(Vec::with_capacity(1024));
+            buffers.push(Vec::with_capacity(crate::communication::container::buffer::default_capacity::<D>()));
         }
         Exchange {
             pushers,

@@ -35,7 +35,7 @@ impl<T:Timestamp> Progcaster<T> {
     pub fn new<A: crate::worker::AsWorker>(worker: &mut A, path: &Vec<usize>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
-        let (pushers, puller) = worker.allocate::<_>(channel_identifier, &path[..]);
+        let (pushers, puller) = worker.allocate(channel_identifier, &path[..]);
         logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: crate::logging::CommChannelKind::Progress,

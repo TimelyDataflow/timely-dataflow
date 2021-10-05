@@ -25,7 +25,7 @@ use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
 use crate::order::Product;
-use crate::{Data};
+use crate::Data;
 use crate::communication::{Push, Container};
 use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
 use crate::dataflow::channels::{BundleCore, Message};
@@ -123,7 +123,7 @@ pub trait Leave<G: Scope, D: Container> {
     fn leave(&self) -> CoreStream<G, D>;
 }
 
-impl<'a, G: Scope, D: Clone+Container+'static, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for CoreStream<Child<'a, G, T>, D> {
+impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for CoreStream<Child<'a, G, T>, D> {
     fn leave(&self) -> CoreStream<G, D> {
 
         let scope = self.scope();
@@ -142,7 +142,7 @@ impl<'a, G: Scope, D: Clone+Container+'static, T: Timestamp+Refines<G::Timestamp
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+Clone+'static> {
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+Clone> {
     targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
@@ -172,7 +172,7 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data+Container
 }
 
 
-struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+'static> {
+struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
     targets: TeeCore<TOuter, TData>,
     phantom: PhantomData<TInner>,
 }

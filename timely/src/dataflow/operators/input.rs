@@ -21,7 +21,7 @@ use crate::dataflow::{Stream, ScopeParent, Scope, CoreStream};
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
 /// Create a new `Stream` and `Handle` through which to supply input.
-pub trait Input: Scope {
+pub trait Input : Scope {
     /// Create a new `Stream` and `Handle` through which to supply input.
     ///
     /// The `new_input` method returns a pair `(Handle, Stream)` where the `Stream` can be used
@@ -142,7 +142,7 @@ pub trait Input: Scope {
     ///     // add an input and base computation off of it
     ///     let mut input = Handle::new();
     ///     worker.dataflow(|scope| {
-    ///         scope.input_from(&mut input)
+    ///         scope.input_from_core(&mut input)
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
     ///
@@ -209,18 +209,17 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 }
 
 #[derive(Debug)]
-struct Operator<T: Timestamp> {
+struct Operator<T:Timestamp> {
     name: String,
     address: Vec<usize>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
-    progress: Rc<RefCell<ChangeBatch<T>>>,
-    // times closed since last asked
-    messages: Rc<RefCell<ChangeBatch<T>>>,
-    // messages sent since last asked
-    copies: usize,
+    progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
+    messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
+    copies:     usize,
 }
 
-impl<T: Timestamp> Schedule for Operator<T> {
+impl<T:Timestamp> Schedule for Operator<T> {
+
     fn name(&self) -> &str { &self.name }
 
     fn path(&self) -> &[usize] { &self.address[..] }
@@ -233,7 +232,8 @@ impl<T: Timestamp> Schedule for Operator<T> {
     }
 }
 
-impl<T: Timestamp> Operate<T> for Operator<T> {
+impl<T:Timestamp> Operate<T> for Operator<T> {
+
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
@@ -325,9 +325,9 @@ impl<T: Timestamp, D: Container + Clone> HandleCore<T, D> {
     /// });
     /// ```
     pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> CoreStream<G, D>
-        where
-            T: TotalOrder,
-            G: ScopeParent<Timestamp=T>,
+    where
+        T: TotalOrder,
+        G: ScopeParent<Timestamp=T>,
     {
         scope.input_from_core(self)
     }
@@ -456,7 +456,7 @@ impl<T: Timestamp, C: Container + Clone> Default for Handle<T, C> {
     }
 }
 
-impl<T: Timestamp, C: Container + Clone> Drop for HandleCore<T, C> {
+impl<T:Timestamp, C: Container + Clone> Drop for HandleCore<T, C> {
     fn drop(&mut self) {
         self.close_epoch();
     }
