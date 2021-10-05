@@ -83,8 +83,9 @@ impl<T: Clone + 'static> Container for Vec<T> {
 
     fn ensure_capacity(&mut self) {
         let len = self.len();
-        if len < 1024 {
-            self.reserve(1024 - len);
+        let desired_capacity = buffer::default_capacity::<T>();
+        if len < desired_capacity {
+            self.reserve(desired_capacity - len);
         }
     }
 }
