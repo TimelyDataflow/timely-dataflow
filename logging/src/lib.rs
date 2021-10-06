@@ -208,11 +208,11 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Logg
     }
 }
 
-/// Bit weird, because we only have to flush on the *last* drop, but this should be ok.
-impl<T, E> Drop for Logger<T, E> {
+/// Flush on the *last* drop of a logger.
+impl<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Drop for LoggerInner<T, E, A> {
     fn drop(&mut self) {
         // Avoid sending out empty buffers just because of drops.
-        if !self.inner.borrow().buffer.is_empty() {
+        if !self.buffer.is_empty() {
             self.flush();
         }
     }
