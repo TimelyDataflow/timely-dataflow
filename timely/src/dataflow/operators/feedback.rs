@@ -19,7 +19,7 @@ pub trait Feedback<G: Scope> {
     ///
     /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
     /// its `Handle` passed as an argument. Data passed through the stream will have their
-    /// timestamps advanced by `summary`, and will be dropped if the result exceeds `limit`.
+    /// timestamps advanced by `summary`.
     ///
     /// # Examples
     /// ```
@@ -45,7 +45,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///
     /// The resulting `Stream` will have its data defined by a future call to `connect_loop` with
     /// its `Handle` passed as an argument. Data passed through the stream will have their
-    /// timestamps advanced by `summary`, and will be dropped if the result exceeds `limit`.
+    /// timestamps advanced by `summary`.
     ///
     /// # Examples
     /// ```
