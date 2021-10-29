@@ -9,8 +9,7 @@
 
 use std::{fmt::{self, Debug}, marker::PhantomData};
 
-use crate::ExchangeData;
-use crate::communication::{Push, Pull};
+use crate::communication::{Push, Pull, Data};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 
 use crate::worker::AsWorker;
@@ -18,8 +17,6 @@ use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{Bundle, Message};
 
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
-
-pub use super::pushers::non_retaining_exchange::NonRetainingExchange;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T: 'static, D: 'static> {
@@ -61,7 +58,7 @@ impl<D, F: FnMut(&D)->u64+'static> Exchange<D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Eq+ExchangeData, D: ExchangeData, F: FnMut(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
+impl<T: Eq+Data+Clone, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
     // TODO: The closure in the type prevents us from naming it.
     //       Could specialize `ExchangePusher` to a time-free version.
     type Pusher = Box<dyn Push<Bundle<T, D>>>;
