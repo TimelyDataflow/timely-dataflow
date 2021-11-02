@@ -23,6 +23,15 @@ impl<'a, T: 'a> ::std::ops::Deref for RefOrMut<'a, T> {
     }
 }
 
+impl<'a, T: 'a> ::std::borrow::Borrow<T> for RefOrMut<'a, T> {
+    fn borrow(&self) -> &T {
+        match self {
+            RefOrMut::Ref(reference) => reference,
+            RefOrMut::Mut(reference) => reference,
+        }
+    }
+}
+
 impl<'a, T: Clone+'a> RefOrMut<'a, T> {
     /// Extracts the contents of `self`, either by cloning or swapping.
     ///
