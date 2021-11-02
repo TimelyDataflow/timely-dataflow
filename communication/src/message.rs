@@ -50,6 +50,7 @@ pub struct Message<T> {
 /// Possible returned representations from a channel.
 enum MessageContents<T> {
     /// Binary representation. Only available as a reference.
+    #[cfg_attr(feature = "bincode", allow(dead_code))]
     Binary(abomonation::abomonated::Abomonated<T, Bytes>),
     /// Rust typed instance. Available for ownership.
     Owned(T),
