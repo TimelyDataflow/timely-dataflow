@@ -584,7 +584,7 @@ impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainF
 }
 
 /// A wrapper for elements of an antichain.
-#[derive(Debug)]
+#[derive(Debug,Copy)]
 pub struct AntichainRef<'a, T: 'a> {
     /// Elements contained in the antichain.
     frontier: &'a [T],
@@ -597,8 +597,6 @@ impl<'a, T: 'a> Clone for AntichainRef<'a, T> {
         }
     }
 }
-
-impl<'a, T: 'a> Copy for AntichainRef<'a, T> { }
 
 impl<'a, T: 'a> AntichainRef<'a, T> {
     /// Create a new `AntichainRef` from a reference to a slice of elements forming the frontier.
