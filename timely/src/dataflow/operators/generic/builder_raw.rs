@@ -178,6 +178,11 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn operator_info(&self) -> OperatorInfo {
         OperatorInfo::new(self.index, self.global, &self.address[..])
     }
+
+    /// The containing scope of this operator
+    pub fn scope(&self) -> &G {
+        &self.scope
+    }
 }
 
 struct OperatorCore<T, L>

@@ -204,6 +204,11 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn operator_info(&self) -> OperatorInfo {
         self.builder.operator_info()
     }
+
+    /// The containing scope of this operator
+    pub fn scope(&self) -> &G {
+        self.builder.scope()
+    }
 }
 
 
