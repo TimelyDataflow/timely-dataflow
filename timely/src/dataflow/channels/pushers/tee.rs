@@ -31,6 +31,8 @@ impl<T: Data, D: Data> Push<Bundle<T, D>> for Tee<T, D> {
             for index in 1..pushers.len() {
                 pushers[index-1].push(&mut None);
             }
+            // Free up buffer space.
+            self.buffer = Vec::new();
         }
         if pushers.len() > 0 {
             let last = pushers.len() - 1;
@@ -44,7 +46,7 @@ impl<T, D> Tee<T, D> {
     pub fn new() -> (Tee<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = Tee {
-            buffer: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer: Vec::new(),
             shared: shared.clone(),
         };
 
