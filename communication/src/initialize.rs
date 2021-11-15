@@ -16,6 +16,7 @@ use crate::allocator::zero_copy::initialize::initialize_networking;
 
 use crate::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
+use std::fmt::{Debug, Formatter};
 
 
 /// Possible configurations for the communication infrastructure.
@@ -41,6 +42,24 @@ pub enum Config {
     }
 }
 
+impl Debug for Config {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Config::Thread => write!(f, "Config::Thread()"),
+            Config::Process(n) => write!(f, "Config::Process({})", n),
+            Config::ProcessBinary(n) => write!(f, "Config::ProcessBinary({})", n),
+            Config::Cluster { threads, process, addresses, report, .. } => f
+                .debug_struct("Config::Cluster")
+                .field("threads", threads)
+                .field("process", process)
+                .field("addresses", addresses)
+                .field("report", report)
+                // TODO: Use `.finish_non_exhaustive()` after rust/#67364 lands
+                .finish()
+        }
+    }
+}
+
 impl Config {
     /// Installs options into a [`getopts::Options`] struct that corresponds
     /// to the parameters in the configuration.
@@ -58,6 +77,7 @@ impl Config {
         opts.optopt("n", "processes", "number of processes", "NUM");
         opts.optopt("h", "hostfile", "text file whose lines are process addresses", "FILE");
         opts.optflag("r", "report", "reports connection progress");
+        opts.optflag("z", "zerocopy", "enable zero-copy for intra-process communication");
     }
 
     /// Instantiates a configuration based upon the parsed options in `matches`.
@@ -74,6 +94,7 @@ impl Config {
         let process = matches.opt_get_default("p", 0_usize).map_err(|e| e.to_string())?;
         let processes = matches.opt_get_default("n", 1_usize).map_err(|e| e.to_string())?;
         let report = matches.opt_present("report");
+        let zerocopy = matches.opt_present("zerocopy");
 
         if processes > 1 {
             let mut addresses = Vec::new();
@@ -102,7 +123,11 @@ impl Config {
                 log_fn: Box::new( | _ | None),
             })
         } else if threads > 1 {
-            Ok(Config::Process(threads))
+            if zerocopy {
+                Ok(Config::ProcessBinary(threads))
+            } else {
+                Ok(Config::Process(threads))
+            }
         } else {
             Ok(Config::Thread)
         }
