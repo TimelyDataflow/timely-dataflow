@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
-    - run: rustup update 1.50.0 --no-self-update && rustup default 1.50.0
+    - run: rustup update 1.56.1 --no-self-update && rustup default 1.56.1
     - run: cargo build
     - name: test mdBook
       # rustdoc doesn't build dependencies, so it needs to run after `cargo build`,
