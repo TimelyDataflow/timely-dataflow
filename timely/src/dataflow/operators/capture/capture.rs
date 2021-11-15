@@ -5,19 +5,19 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
-use crate::Data;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
+use crate::Container;
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
-use super::{Event, EventPusher};
+use super::{EventCore, EventPusherCore};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<T: Timestamp, D: Data> {
+pub trait Capture<T: Timestamp, D: Container> {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -30,7 +30,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
+    /// use timely::dataflow::operators::capture::{EventLinkCore, Replay, Extract};
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
@@ -42,7 +42,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///     let send = send.lock().unwrap().clone();
     ///
     ///     // these are to capture/replay the stream.
-    ///     let handle1 = Rc::new(EventLink::new());
+    ///     let handle1 = Rc::new(EventLinkCore::new());
     ///     let handle2 = Some(handle1.clone());
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
@@ -103,18 +103,18 @@ pub trait Capture<T: Timestamp, D: Data> {
     ///
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// ```
-    fn capture_into<P: EventPusher<T, D>+'static>(&self, pusher: P);
+    fn capture_into<P: EventPusherCore<T, D>+'static>(&self, pusher: P);
 
     /// Captures a stream using Rust's MPSC channels.
-    fn capture(&self) -> ::std::sync::mpsc::Receiver<Event<T, D>> {
+    fn capture(&self) -> ::std::sync::mpsc::Receiver<EventCore<T, D>> {
         let (send, recv) = ::std::sync::mpsc::channel();
         self.capture_into(send);
         recv
     }
 }
 
-impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
-    fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, mut event_pusher: P) {
+impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
+    fn capture_into<P: EventPusherCore<S::Timestamp, D>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
@@ -131,7 +131,7 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
                 if !progress.frontiers[0].is_empty() {
                     // transmit any frontier progress.
                     let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
-                    event_pusher.push(Event::Progress(to_send.into_inner()));
+                    event_pusher.push(EventCore::Progress(to_send.into_inner()));
                 }
 
                 use crate::communication::message::RefOrMut;
@@ -142,8 +142,8 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
                         RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
-                    let vector = data.replace(Vec::new());
-                    event_pusher.push(Event::Messages(time.clone(), vector));
+                    let vector = data.replace(Default::default());
+                    event_pusher.push(EventCore::Messages(time.clone(), vector));
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false

@@ -233,12 +233,12 @@ where
 
                 use ::std::net::TcpStream;
                 use crate::logging::BatchLogger;
-                use crate::dataflow::operators::capture::EventWriter;
+                use crate::dataflow::operators::capture::EventWriterCore;
 
                 eprintln!("enabled COMM logging to {}", addr);
 
                 if let Ok(stream) = TcpStream::connect(&addr) {
-                    let writer = EventWriter::new(stream);
+                    let writer = EventWriterCore::new(stream);
                     let mut logger = BatchLogger::new(writer);
                     result = Some(crate::logging_core::Logger::new(
                         ::std::time::Instant::now(),
@@ -267,10 +267,10 @@ where
 
             use ::std::net::TcpStream;
             use crate::logging::{BatchLogger, TimelyEvent};
-            use crate::dataflow::operators::capture::EventWriter;
+            use crate::dataflow::operators::capture::EventWriterCore;
 
             if let Ok(stream) = TcpStream::connect(&addr) {
-                let writer = EventWriter::new(stream);
+                let writer = EventWriterCore::new(stream);
                 let mut logger = BatchLogger::new(writer);
                 worker.log_register()
                     .insert::<TimelyEvent,_>("timely", move |time, data|

@@ -38,20 +38,20 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
-use crate::Data;
-use crate::dataflow::{Scope, Stream};
-use crate::dataflow::channels::pushers::Counter as PushCounter;
-use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
+use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::channels::pushers::CounterCore as PushCounter;
+use crate::dataflow::channels::pushers::buffer::BufferCore as PushBuffer;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;
 
-use super::Event;
-use super::event::EventIterator;
+use super::EventCore;
+use super::event::EventIteratorCore;
+use crate::Container;
 
 /// Replay a capture stream into a scope with the same timestamp.
-pub trait Replay<T: Timestamp, D: Data> : Sized {
+pub trait Replay<T: Timestamp, C> : Sized {
     /// Replays `self` into the provided scope, as a `Stream<S, D>`.
-    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D> {
+    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }
     /// Replays `self` into the provided scope, as a `Stream<S, D>'.
@@ -59,13 +59,13 @@ pub trait Replay<T: Timestamp, D: Data> : Sized {
     /// The `period` argument allows the specification of a re-activation period, where the operator
     /// will re-activate itself every so often. The `None` argument instructs the operator not to
     /// re-activate itself.us
-    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, D>;
+    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>;
 }
 
-impl<T: Timestamp, D: Data, I> Replay<T, D> for I
+impl<T: Timestamp, C: Container, I> Replay<T, C> for I
 where I : IntoIterator,
-      <I as IntoIterator>::Item: EventIterator<T, D>+'static {
-    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, D>{
+      <I as IntoIterator>::Item: EventIteratorCore<T, C>+'static {
+    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
 
@@ -77,6 +77,7 @@ where I : IntoIterator,
         let mut output = PushBuffer::new(PushCounter::new(targets));
         let mut event_streams = self.into_iter().collect::<Vec<_>>();
         let mut started = false;
+        let mut allocation: C = Default::default();
 
         builder.build(
             move |progress| {
@@ -91,12 +92,13 @@ where I : IntoIterator,
 
                 for event_stream in event_streams.iter_mut() {
                     while let Some(event) = event_stream.next() {
-                        match *event {
-                            Event::Progress(ref vec) => {
+                        match event {
+                            EventCore::Progress(vec) => {
                                 progress.internals[0].extend(vec.iter().cloned());
                             },
-                            Event::Messages(ref time, ref data) => {
-                                output.session(time).give_iterator(data.iter().cloned());
+                            EventCore::Messages(ref time, data) => {
+                                allocation.clone_from(data);
+                                output.session(time).give_container(&mut allocation);
                             }
                         }
                     }

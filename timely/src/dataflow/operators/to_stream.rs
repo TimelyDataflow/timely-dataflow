@@ -3,11 +3,11 @@
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use crate::Container;
 
-use crate::dataflow::channels::Message;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::CapabilitySet;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::{StreamCore, Scope, Stream};
 use crate::progress::Timestamp;
 use crate::Data;
 
@@ -48,8 +48,60 @@ impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::
                 if let Some(element) = iterator.next() {
                     let mut session = output.session(capability.as_ref().unwrap());
                     session.give(element);
-                    for element in iterator.by_ref().take((256 * Message::<T, I::Item>::default_length()) - 1) {
+                    let n = 256 * crate::container::buffer::default_capacity::<I::Item>();
+                    for element in iterator.by_ref().take(n - 1) {
                         session.give(element);
+                    }
+                    activator.activate();
+                }
+                else {
+                    capability = None;
+                }
+            }
+        })
+    }
+}
+
+/// Converts to a timely [StreamCore].
+pub trait ToStreamCore<T: Timestamp, C: Container> {
+    /// Converts to a timely [StreamCore].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use timely::dataflow::operators::{ToStreamCore, Capture};
+    /// use timely::dataflow::operators::capture::Extract;
+    ///
+    /// let (data1, data2) = timely::example(|scope| {
+    ///     let data1 = Some((0..3).collect::<Vec<_>>()).to_stream_core(scope).capture();
+    ///     let data2 = Some(vec![0,1,2]).to_stream_core(scope).capture();
+    ///     (data1, data2)
+    /// });
+    ///
+    /// assert_eq!(data1.extract(), data2.extract());
+    /// ```
+    fn to_stream_core<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C>;
+}
+
+impl<T: Timestamp, I: IntoIterator+'static> ToStreamCore<T, I::Item> for I where I::Item: Container {
+    fn to_stream_core<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, I::Item> {
+
+        source(scope, "ToStreamCore", |capability, info| {
+
+            // Acquire an activator, so that the operator can rescheduled itself.
+            let activator = scope.activator_for(&info.address[..]);
+
+            let mut iterator = self.into_iter().fuse();
+            let mut capability = Some(capability);
+
+            move |output| {
+
+                if let Some(mut element) = iterator.next() {
+                    let mut session = output.session(capability.as_ref().unwrap());
+                    session.give_container(&mut element);
+                    let n = 256;
+                    for mut element in iterator.by_ref().take(n - 1) {
+                        session.give_container(&mut element);
                     }
                     activator.activate();
                 }
