@@ -77,10 +77,13 @@ fn experiment_exchange(
         let mut time = 0;
         let timer = Instant::now();
 
+        let buffer = (0..batch).collect();
+        let mut copy = Vec::new();
+
         for _round in 0..rounds {
-            for i in 0..batch {
-                input.send(i);
-            }
+            copy.clone_from(&buffer);
+            input.send_batch(&mut copy);
+            copy.clear();
             time += 1;
             input.advance_to(time);
             while probe.less_than(input.time()) {
