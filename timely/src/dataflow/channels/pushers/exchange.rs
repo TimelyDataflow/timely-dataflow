@@ -63,6 +63,9 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
                 let mask = (self.pushers.len() - 1) as u64;
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) & mask) as usize;
+
+                    // Ensure allocated buffers: If the buffer's capacity is less than its default
+                    // capacity, increase the capacity such that it matches the default.
                     if self.buffers[index].capacity() < Message::<T, D>::default_length() {
                         let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
                         self.buffers[index].reserve(to_reserve);
@@ -85,6 +88,8 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             else {
                 for datum in data.drain(..) {
                     let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
+                    // Ensure allocated buffers: If the buffer's capacity is less than its default
+                    // capacity, increase the capacity such that it matches the default.
                     if self.buffers[index].capacity() < Message::<T, D>::default_length() {
                         let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
                         self.buffers[index].reserve(to_reserve);

@@ -54,7 +54,7 @@ impl<T, D> Message<T, D> {
 
         Self::push_at_no_allocation(buffer, time, pusher);
 
-        // TODO: Unclear we always want this here.
+        // Allocate a default buffer to avoid oddly sized or empty buffers
         if buffer.capacity() != Self::default_length() {
             *buffer = Vec::with_capacity(Self::default_length());
         }
@@ -67,7 +67,7 @@ impl<T, D> Message<T, D> {
     #[inline]
     pub fn push_at_no_allocation<P: Push<Bundle<T, D>>>(buffer: &mut Vec<D>, time: T, pusher: &mut P) {
 
-        let data = ::std::mem::replace(buffer, Vec::new());
+        let data = ::std::mem::take(buffer);
         let message = Message::new(time, data, 0, 0);
         let mut bundle = Some(Bundle::from_typed(message));
 
