@@ -23,6 +23,10 @@ impl<T: Data, D: Data> Push<Bundle<T, D>> for Tee<T, D> {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = message {
             for index in 1..pushers.len() {
+                // Ensure default capacity
+                if self.buffer.capacity() != Message::<T, D>::default_length() {
+                    self.buffer = Vec::with_capacity(Message::<T, D>::default_length());
+                }
                 self.buffer.extend_from_slice(&message.data);
                 Message::push_at(&mut self.buffer, message.time.clone(), &mut pushers[index-1]);
             }
@@ -44,7 +48,7 @@ impl<T, D> Tee<T, D> {
     pub fn new() -> (Tee<T, D>, TeeHelper<T, D>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = Tee {
-            buffer: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer: Default::default(),
             shared: shared.clone(),
         };
 
@@ -55,7 +59,7 @@ impl<T, D> Tee<T, D> {
 impl<T, D> Clone for Tee<T, D> {
     fn clone(&self) -> Tee<T, D> {
         Tee {
-            buffer: Vec::with_capacity(self.buffer.capacity()),
+            buffer: Default::default(),
             shared: self.shared.clone(),
         }
     }

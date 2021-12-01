@@ -212,8 +212,8 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
             activate: Vec::new(),
             progress: Vec::new(),
             pushers: Vec::new(),
-            buffer1: Vec::with_capacity(Message::<T, D>::default_length()),
-            buffer2: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer1: Default::default(),
+            buffer2: Default::default(),
             now_at: T::minimum(),
         }
     }
@@ -258,7 +258,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
         progress: Rc<RefCell<ChangeBatch<T>>>
     ) {
         // flush current contents, so new registrant does not see existing data.
-        if !self.buffer1.is_empty() { self.flush(); }
+        self.flush();
 
         // we need to produce an appropriate update to the capabilities for `progress`, in case a
         // user has decided to drive the handle around a bit before registering it.
@@ -272,8 +272,15 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     // flushes our buffer at each of the destinations. there can be more than one; clone if needed.
     #[inline(never)]
     fn flush(&mut self) {
+        if self.buffer1.is_empty() {
+            return;
+        }
         for index in 0 .. self.pushers.len() {
             if index < self.pushers.len() - 1 {
+                // Ensure default capacity
+                if self.buffer2.capacity() != Message::<T, D>::default_length() {
+                    self.buffer2 = Vec::with_capacity(Message::<T, D>::default_length());
+                }
                 self.buffer2.extend_from_slice(&self.buffer1[..]);
                 Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
                 debug_assert!(self.buffer2.is_empty());
@@ -288,7 +295,7 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
     // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
     fn close_epoch(&mut self) {
-        if !self.buffer1.is_empty() { self.flush(); }
+        self.flush();
         for pusher in self.pushers.iter_mut() {
             pusher.done();
         }
@@ -304,7 +311,11 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
     #[inline]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     pub fn send(&mut self, data: D) {
-        // assert!(self.buffer1.capacity() == Message::<T, D>::default_length());
+        // Ensure default capacity
+        if self.buffer1.capacity() < Message::<T, D>::default_length() {
+            let to_reserve = Message::<T, D>::default_length() - self.buffer1.capacity();
+            self.buffer1.reserve(to_reserve);
+        }
         self.buffer1.push(data);
         if self.buffer1.len() == self.buffer1.capacity() {
             self.flush();
@@ -318,21 +329,12 @@ impl<T:Timestamp, D: Data> Handle<T, D> {
 
         if !buffer.is_empty() {
             // flush buffered elements to ensure local fifo.
-            if !self.buffer1.is_empty() { self.flush(); }
+            self.flush();
 
-            // push buffer (or clone of buffer) at each destination.
-            for index in 0 .. self.pushers.len() {
-                if index < self.pushers.len() - 1 {
-                    self.buffer2.extend_from_slice(&buffer[..]);
-                    Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
-                    assert!(self.buffer2.is_empty());
-                }
-                else {
-                    Message::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
-                    assert!(buffer.is_empty());
-                }
-            }
-            buffer.clear();
+            // flush sends and clears the contents of self.buffer1, re-use by swapping buffers
+            ::std::mem::swap(&mut self.buffer1, buffer);
+            self.flush();
+            ::std::mem::swap(&mut self.buffer1, buffer);
         }
     }
 
