@@ -5,8 +5,13 @@ edition = "2018"
 
 [dependencies]
 criterion = "0.3.5"
+itertools = "0.10"
 timely = { path = "../timely" }
 
 [[bench]]
 name = "exchange_bench"
+harness = false
+
+[[bench]]
+name = "buffer_bench"
 harness = false
