@@ -4,6 +4,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
 
+use crate::communication::message::RefOrMut;
+
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
@@ -75,10 +77,40 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn new_input_connection<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandleCore<G::Timestamp, D, P::Puller>
         where
             P: ParallelizationContractCore<G::Timestamp, D> {
+        self.new_input_filter(stream, pact, connection, |data, buffer| data.swap(buffer))
+    }
 
-        let puller = self.builder.new_input_connection(stream, pact, connection);
+    /// Adds a new input with connection information to a generic operator builder, returning the `Pull` implementor to use.
+    ///
+    /// The `connection` parameter contains promises made by the operator for each of the existing *outputs*, that any timestamp
+    /// appearing at the input, any output timestamp will be greater than or equal to the input timestamp subjected to a `Summary`
+    /// greater or equal to some element of the corresponding antichain in `connection`.
+    ///
+    /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
+    /// antichain indicating that there is no connection from the input to the output.
+    ///
+    /// The `filter` parameter gets a chance to process data on the output of the upstream operator.
+    /// It receives a [RefOrMut] to the input data and a mutable vector to append its output. A
+    /// no-op implementation would simply swap the data, i.e., `|data, buffer| data.swap(buffer)`.
+    pub fn new_input_filter<D: Container, P, F>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>, mut filter: F) -> InputHandleCore<G::Timestamp, D, P::Puller>
+        where
+            P: ParallelizationContractCore<G::Timestamp, D>,
+            F: FnMut(RefOrMut<D>, &mut D) + 'static
+    {
 
-        let input = PullCounter::new(puller);
+        // The data that's filtered on the output of the upstream operator won't show up in the
+        // pull counter's input. Hence, we need to announce that the messages were consumed to
+        // ensure the invariants of progress tracking.
+        let consumed = Rc::new(RefCell::new(ChangeBatch::new()));
+        let consumed_input = Rc::clone(&consumed);
+        let puller = self.builder.new_input_filter(stream, pact, connection, move |time, data, buffer| {
+            let len = data.len();
+            filter(data, buffer);
+            let delta = len - buffer.len();
+            consumed_input.borrow_mut().update(time.clone(), delta as i64);
+        });
+
+        let input = PullCounter::new_with_consumed(puller, consumed);
         self.frontier.push(MutableAntichain::new());
         self.consumed.push(input.consumed().clone());
 

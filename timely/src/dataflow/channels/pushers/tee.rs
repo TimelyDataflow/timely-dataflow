@@ -6,10 +6,11 @@ use std::rc::Rc;
 
 use crate::dataflow::channels::{BundleCore, Message};
 
-use crate::communication::Push;
 use crate::{Container, Data};
+use crate::communication::Push;
+use crate::communication::message::RefOrMut;
 
-type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
+type PushList<T, D> = Rc<RefCell<Vec<(Box<dyn Push<BundleCore<T, D>>>, Box<dyn FnMut(&T, RefOrMut<D>, &mut D)>)>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct TeeCore<T, D> {
@@ -26,18 +27,33 @@ impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = message {
             for index in 1..pushers.len() {
-                self.buffer.clone_from(&message.data);
-                Message::push_at(&mut self.buffer, message.time.clone(), &mut pushers[index-1]);
+                (pushers[index-1].1)(&message.time, RefOrMut::Ref(&message.data), &mut self.buffer);
+                if !self.buffer.is_empty() {
+                    Message::push_at(&mut self.buffer, message.time.clone(), &mut pushers[index-1].0);
+                }
             }
         }
         else {
             for index in 1..pushers.len() {
-                pushers[index-1].push(&mut None);
+                pushers[index-1].0.push(&mut None);
             }
         }
         if pushers.len() > 0 {
             let last = pushers.len() - 1;
-            pushers[last].push(message);
+            if let Some(message) = message {
+                let message = message.as_ref_or_mut();
+                let time = message.time.clone();
+                let data = match message {
+                    RefOrMut::Ref(message) => RefOrMut::Ref(&message.data),
+                    RefOrMut::Mut(message) => RefOrMut::Mut(&mut message.data)
+                };
+                (pushers[last].1)(&time, data, &mut self.buffer);
+                if !self.buffer.is_empty() {
+                    Message::push_at(&mut self.buffer, time, &mut pushers[last].0);
+                }
+            } else {
+                pushers[last].0.push(message);
+            }
         }
     }
 }
@@ -88,9 +104,14 @@ pub struct TeeHelper<T, D> {
 }
 
 impl<T, D> TeeHelper<T, D> {
-    /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
-    pub fn add_pusher<P: Push<BundleCore<T, D>>+'static>(&self, pusher: P) {
-        self.shared.borrow_mut().push(Box::new(pusher));
+    /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`, with an
+    /// associated `filter` which will be applied before pushing data..
+    pub fn add_pusher<P, F>(&self, pusher: P, filter: F)
+        where
+            P: Push<BundleCore<T, D>> + 'static,
+            F: FnMut(&T, RefOrMut<D>, &mut D) + 'static
+    {
+        self.shared.borrow_mut().push((Box::new(pusher), Box::new(filter)));
     }
 }
 

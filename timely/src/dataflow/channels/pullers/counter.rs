@@ -33,10 +33,15 @@ impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D,
 impl<T:Ord+Clone+'static, D, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
     /// Allocates a new `Counter` from a boxed puller.
     pub fn new(pullable: P) -> Self {
+        Self::new_with_consumed(pullable, Rc::new(RefCell::new(ChangeBatch::new())))
+    }
+
+    /// Allocates a new [Counter] from a puller and a shared consumed handle.
+    pub fn new_with_consumed(pullable: P, consumed: Rc<RefCell<ChangeBatch<T>>>) -> Self {
         Counter {
             phantom: ::std::marker::PhantomData,
             pullable,
-            consumed: Rc::new(RefCell::new(ChangeBatch::new())),
+            consumed,
         }
     }
     /// A references to shared changes in counts, for cloning or draining.

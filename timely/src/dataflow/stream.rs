@@ -7,6 +7,7 @@
 use crate::progress::{Source, Target};
 
 use crate::communication::Push;
+use crate::communication::message::RefOrMut;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::BundleCore;
@@ -37,7 +38,11 @@ impl<S: Scope, D: Container> StreamCore<S, D> {
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<BundleCore<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
+    pub fn connect_to<P, F>(&self, target: Target, pusher: P, identifier: usize, filter: F)
+        where
+            P: Push<BundleCore<S::Timestamp, D>> + 'static,
+            F: FnMut(&S::Timestamp, RefOrMut<D>, &mut D) + 'static
+    {
 
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
@@ -48,7 +53,7 @@ impl<S: Scope, D: Container> StreamCore<S, D> {
         }));
 
         self.scope.add_edge(self.name, target);
-        self.ports.add_pusher(pusher);
+        self.ports.add_pusher(pusher, filter);
     }
     /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
     pub fn new(source: Source, output: TeeHelper<S::Timestamp, D>, scope: S) -> Self {
