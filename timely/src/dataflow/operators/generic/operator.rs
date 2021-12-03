@@ -11,7 +11,7 @@ use crate::Data;
 
 use crate::dataflow::{Stream, Scope};
 
-use super::builder_rc::OperatorBuilder;
+use super::builder_ref::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 
@@ -336,19 +336,20 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                  &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let operator_info = builder.operator_info();
 
-        let mut input = builder.new_input(self, pact);
-        let (mut output, stream) = builder.new_output();
+        let (builder, stream) = builder
+            .new_input(self, pact)
+            .new_output();
 
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, operator_info);
-            move |frontiers| {
-                let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
-                let mut output_handle = output.activate();
+            move |input, output, frontiers| {
+                let mut input_handle = FrontieredInputHandle::new(&mut input.0, &frontiers[0]);
+                let mut output_handle = output.0.activate();
                 logic(&mut input_handle, &mut output_handle);
             }
         });
@@ -386,20 +387,22 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
                  &mut OutputHandle<G::Timestamp, D2, Tee<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let operator_info = builder.operator_info();
 
-        let mut input = builder.new_input(self, pact);
-        let (mut output, stream) = builder.new_output();
+        let (mut builder, stream) = builder
+            .new_input(self, pact)
+            .new_output();
+
         builder.set_notify(false);
 
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, operator_info);
-            move |_frontiers| {
-                let mut output_handle = output.activate();
-                logic(&mut input, &mut output_handle);
+            move |input, output, _frontiers| {
+                let mut output_handle = output.0.activate();
+                logic(&mut input.0, &mut output_handle);
             }
         });
 
@@ -417,21 +420,22 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let operator_info = builder.operator_info();
 
-        let mut input1 = builder.new_input(self, pact1);
-        let mut input2 = builder.new_input(other, pact2);
-        let (mut output, stream) = builder.new_output();
+        let (builder, stream) = builder
+            .new_input(self, pact1)
+            .new_input(other, pact2)
+            .new_output();
 
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, operator_info);
-            move |frontiers| {
-                let mut input1_handle = FrontieredInputHandle::new(&mut input1, &frontiers[0]);
-                let mut input2_handle = FrontieredInputHandle::new(&mut input2, &frontiers[1]);
-                let mut output_handle = output.activate();
+            move |inputs, output, frontiers| {
+                let mut input1_handle = FrontieredInputHandle::new(&mut inputs.1.0, &frontiers[0]);
+                let mut input2_handle = FrontieredInputHandle::new(&mut inputs.0, &frontiers[1]);
+                let mut output_handle = output.0.activate();
                 logic(&mut input1_handle, &mut input2_handle, &mut output_handle);
             }
         });
@@ -477,21 +481,23 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
+        let builder = OperatorBuilder::new(name.to_owned(), self.scope());
         let operator_info = builder.operator_info();
 
-        let mut input1 = builder.new_input(self, pact1);
-        let mut input2 = builder.new_input(other, pact2);
-        let (mut output, stream) = builder.new_output();
+        let (mut builder, stream) = builder
+            .new_input(self, pact1)
+            .new_input(other, pact2)
+            .new_output();
+
         builder.set_notify(false);
 
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
             let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, operator_info);
-            move |_frontiers| {
-                let mut output_handle = output.activate();
-                logic(&mut input1, &mut input2, &mut output_handle);
+            move |inputs, output, _frontiers| {
+                let mut output_handle = output.0.activate();
+                logic(&mut inputs.1.0, &mut inputs.0, &mut output_handle);
             }
         });
 
@@ -503,15 +509,14 @@ impl<G: Scope, D1: Data> Operator<G, D1> for Stream<G, D1> {
         L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P::Puller>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
-        let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
-        let mut input = builder.new_input(self, pact);
-
-        builder.build(|_capabilities| {
-            move |frontiers| {
-                let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
-                logic(&mut input_handle);
-            }
-        });
+        OperatorBuilder::new(name.to_owned(), self.scope())
+            .new_input(self, pact)
+            .build(|_capabilities| {
+                move |input, _output, frontiers| {
+                    let mut input_handle = FrontieredInputHandle::new(&mut input.0, &frontiers[0]);
+                    logic(&mut input_handle);
+                }
+            });
     }
 }
 
@@ -562,18 +567,18 @@ where
     B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
     L: FnMut(&mut OutputHandle<G::Timestamp, D, Tee<G::Timestamp, D>>)+'static {
 
-    let mut builder = OperatorBuilder::new(name.to_owned(), scope.clone());
+    let builder = OperatorBuilder::new(name.to_owned(), scope.clone());
     let operator_info = builder.operator_info();
 
-    let (mut output, stream) = builder.new_output();
+    let (mut builder, stream) = builder.new_output();
     builder.set_notify(false);
 
     builder.build(move |mut capabilities| {
         // `capabilities` should be a single-element vector.
         let capability = capabilities.pop().unwrap();
         let mut logic = constructor(capability, operator_info);
-        move |_frontier| {
-            logic(&mut output.activate());
+        move |_input, output, _frontier| {
+            logic(&mut output.0.activate());
         }
     });
 
