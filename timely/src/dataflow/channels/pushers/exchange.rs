@@ -36,9 +36,9 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
         }
     }
 
-    /// Partition data according to an index function
+    /// Push data partitioned according to an index function.
     #[inline(always)]
-    fn partition<F: Fn(u64) -> usize>(&mut self, time: &T, data: &mut Vec<D>, func: F) {
+    fn push_partitioned<F: Fn(u64) -> usize>(&mut self, time: &T, data: &mut Vec<D>, func: F) {
         for datum in data.drain(..) {
             let index = (func)((self.hash_func)(time, &datum));
 
@@ -80,12 +80,12 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             // if the number of pushers is a power of two, use a mask
             if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
                 let mask = (self.pushers.len() - 1) as u64;
-                self.partition(time, data, move |hash| (hash & mask) as usize);
+                self.push_partitioned(time, data, move |hash| (hash & mask) as usize);
             }
             // as a last resort, use mod (%)
             else {
                 let pushers = self.pushers.len() as u64;
-                self.partition(time, data, move |hash| (hash % pushers) as usize);
+                self.push_partitioned(time, data, move |hash| (hash % pushers) as usize);
             }
 
         }
