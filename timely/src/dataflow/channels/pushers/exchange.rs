@@ -35,6 +35,25 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
             }
         }
     }
+
+    /// Push data partitioned according to an index function.
+    #[inline(always)]
+    fn push_partitioned<F: Fn(u64) -> usize>(&mut self, time: &T, data: &mut Vec<D>, func: F) {
+        for datum in data.drain(..) {
+            let index = (func)((self.hash_func)(time, &datum));
+
+            // Ensure allocated buffers: If the buffer's capacity is less than its default
+            // capacity, increase the capacity such that it matches the default.
+            if self.buffers[index].capacity() < Message::<T, D>::default_length() {
+                let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
+                self.buffers[index].reserve(to_reserve);
+            }
+            self.buffers[index].push(datum);
+            if self.buffers[index].len() == self.buffers[index].capacity() {
+                self.flush(index);
+            }
+        }
+    }
 }
 
 impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
@@ -61,44 +80,12 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             // if the number of pushers is a power of two, use a mask
             if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
                 let mask = (self.pushers.len() - 1) as u64;
-                for datum in data.drain(..) {
-                    let index = (((self.hash_func)(time, &datum)) & mask) as usize;
-
-                    // Ensure allocated buffers: If the buffer's capacity is less than its default
-                    // capacity, increase the capacity such that it matches the default.
-                    if self.buffers[index].capacity() < Message::<T, D>::default_length() {
-                        let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
-                        self.buffers[index].reserve(to_reserve);
-                    }
-                    self.buffers[index].push(datum);
-                    if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
-                    }
-
-                    // unsafe {
-                    //     self.buffers.get_unchecked_mut(index).push(datum);
-                    //     if self.buffers.get_unchecked(index).len() == self.buffers.get_unchecked(index).capacity() {
-                    //         self.flush(index);
-                    //     }
-                    // }
-
-                }
+                self.push_partitioned(time, data, move |hash| (hash & mask) as usize);
             }
             // as a last resort, use mod (%)
             else {
-                for datum in data.drain(..) {
-                    let index = (((self.hash_func)(time, &datum)) % self.pushers.len() as u64) as usize;
-                    // Ensure allocated buffers: If the buffer's capacity is less than its default
-                    // capacity, increase the capacity such that it matches the default.
-                    if self.buffers[index].capacity() < Message::<T, D>::default_length() {
-                        let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
-                        self.buffers[index].reserve(to_reserve);
-                    }
-                    self.buffers[index].push(datum);
-                    if self.buffers[index].len() == self.buffers[index].capacity() {
-                        self.flush(index);
-                    }
-                }
+                let pushers = self.pushers.len() as u64;
+                self.push_partitioned(time, data, move |hash| (hash % pushers) as usize);
             }
 
         }
