@@ -3,7 +3,7 @@ extern crate timely;
 
 use std::collections::HashMap;
 
-use rand::{Rng, SeedableRng, StdRng};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 
 use timely::dataflow::operators::{ToStream, Concat, Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
@@ -21,8 +21,7 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
 
-        let seed: &[_] = &[1, 2, 3, index];
-        let mut rng: StdRng = SeedableRng::from_seed(seed);
+        let mut rng: SmallRng = SeedableRng::seed_from_u64(index as u64);
 
         // pending edges and node updates.
         let mut edge_list = Vec::new();
@@ -41,7 +40,7 @@ fn main() {
 
             // generate part of a random graph.
             let graph = (0..edges / peers)
-                .map(move |_| (rng.gen_range(0u32, nodes as u32), rng.gen_range(0u32, nodes as u32)))
+                .map(move |_| (rng.gen_range(0..nodes as u32), rng.gen_range(0..nodes as u32)))
                 .to_stream(scope);
 
             // define a loop variable, for the (node, worker) pairs.

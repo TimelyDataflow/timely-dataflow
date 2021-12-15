@@ -34,4 +34,4 @@ futures-util = "0.3"
 
 [dev-dependencies]
 # timely_sort="0.1.6"
-rand="0.4"
+rand = { version = "0.8", features = ["small_rng"] }

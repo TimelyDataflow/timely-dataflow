@@ -2,7 +2,7 @@ extern crate rand;
 extern crate timely;
 
 use std::collections::HashMap;
-use rand::{Rng, SeedableRng, StdRng};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Feedback, ConnectLoop, Probe};
@@ -161,12 +161,11 @@ fn main() {
         let nodes: usize = std::env::args().nth(1).unwrap().parse().unwrap();
         let edges: usize = std::env::args().nth(2).unwrap().parse().unwrap();
 
-        let seed: &[_] = &[1, 2, 3, worker.index()];
-        let mut rng1: StdRng = SeedableRng::from_seed(seed);
-        let mut rng2: StdRng = SeedableRng::from_seed(seed);
+        let mut rng1: SmallRng = SeedableRng::seed_from_u64(worker.index() as u64);
+        let mut rng2: SmallRng = SeedableRng::seed_from_u64(worker.index() as u64);
 
         for _ in 0 .. edges / worker.peers() {
-            input.send(((rng1.gen_range(0, nodes), rng1.gen_range(0, nodes)), 1));
+            input.send(((rng1.gen_range(0..nodes), rng1.gen_range(0..nodes)), 1));
         }
 
         input.advance_to(1);
@@ -176,8 +175,8 @@ fn main() {
         }
 
         for i in 1 .. 1000 {
-            input.send(((rng1.gen_range(0, nodes), rng1.gen_range(0, nodes)), 1));
-            input.send(((rng2.gen_range(0, nodes), rng2.gen_range(0, nodes)), -1));
+            input.send(((rng1.gen_range(0..nodes), rng1.gen_range(0..nodes)), 1));
+            input.send(((rng2.gen_range(0..nodes), rng2.gen_range(0..nodes)), -1));
             input.advance_to(i + 1);
             while probe.less_than(input.time()) {
                 worker.step();

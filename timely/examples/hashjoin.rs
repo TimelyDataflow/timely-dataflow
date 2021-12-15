@@ -3,7 +3,7 @@ extern crate timely;
 
 use std::collections::HashMap;
 
-use rand::{Rng, SeedableRng, StdRng};
+use rand::{Rng, SeedableRng, rngs::SmallRng};
 
 use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Probe};
@@ -79,8 +79,7 @@ fn main() {
                 .probe_with(&mut probe);
         });
 
-        let seed: &[_] = &[1, 2, 3, index];
-        let mut rng: StdRng = SeedableRng::from_seed(seed);
+        let mut rng: SmallRng = SeedableRng::seed_from_u64(index as u64);
 
         let timer = std::time::Instant::now();
 
@@ -90,8 +89,8 @@ fn main() {
             // Send some amount of data, no more than `batch`.
             let to_send = std::cmp::min(batch, vals/peers - sent);
             for _ in 0 .. to_send {
-                input1.send((rng.gen_range(0, keys), rng.gen_range(0, keys)));
-                input2.send((rng.gen_range(0, keys), rng.gen_range(0, keys)));
+                input1.send((rng.gen_range(0..keys), rng.gen_range(0..keys)));
+                input2.send((rng.gen_range(0..keys), rng.gen_range(0..keys)));
             }
             sent += to_send;
 
