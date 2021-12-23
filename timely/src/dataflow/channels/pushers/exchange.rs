@@ -31,7 +31,7 @@ impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, 
     fn flush(&mut self, index: usize) {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
-                Message::push_at_no_allocation(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
+                Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
             }
         }
     }

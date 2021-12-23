@@ -23,7 +23,7 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
     pub fn new(pusher: P) -> Buffer<T, D, P> {
         Buffer {
             time: None,
-            buffer: Vec::with_capacity(Message::<T, D>::default_length()),
+            buffer: Default::default(),
             pusher,
         }
     }
@@ -65,8 +65,12 @@ impl<T, D, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
 
     // internal method for use by `Session`.
     fn give(&mut self, data: D) {
+        // Ensure default capacity
+        if self.buffer.capacity() < Message::<T, D>::default_length() {
+            let to_reserve = Message::<T, D>::default_length() - self.buffer.capacity();
+            self.buffer.reserve(to_reserve);
+        }
         self.buffer.push(data);
-        // assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
         if self.buffer.len() == self.buffer.capacity() {
             self.flush();
         }
