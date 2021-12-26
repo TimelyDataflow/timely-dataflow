@@ -21,6 +21,7 @@
 
 use std::marker::PhantomData;
 
+use crate::dataflow::scopes::region::{Region, RegionSubgraph};
 use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
@@ -30,6 +31,7 @@ use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::{Bundle, Message};
 
+use crate::scheduling::Scheduler;
 use crate::worker::AsWorker;
 use crate::dataflow::{Stream, Scope};
 use crate::dataflow::scopes::{Child, ScopeParent};
@@ -51,7 +53,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D>;
+    fn enter<'a>(&self, child: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D>;
 }
 
 use crate::dataflow::scopes::child::Iterative;
@@ -84,9 +86,6 @@ impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Ti
 
 impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, D: Data> Enter<G, T, D> for Stream<G, D> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, D> {
-
-        use crate::scheduling::Scheduler;
-
         let (targets, registrar) = Tee::<T, D>::new();
         let ingress = IngressNub {
             targets: Counter::new(targets),
@@ -194,6 +193,107 @@ where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
             }
         }
         else { self.targets.done(); }
+    }
+}
+
+/// Extension trait to move a [`Stream`] into a child [`Region`]
+pub trait EnterRegion<G, D>
+where
+    G: Scope,
+    D: Data,
+{
+    /// Moves the [`Stream`] argument into a child [`Region`]
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::scopes::Scope;
+    /// use timely::dataflow::operators::{enterleave::{EnterRegion, LeaveRegion}, ToStream};
+    ///
+    /// timely::example(|outer| {
+    ///     let stream = (0..9).to_stream(outer);
+    ///     let output = outer.optional_region(true, |inner| {
+    ///         stream.enter_region(inner).leave_region()
+    ///     });
+    /// });
+    /// ```
+    fn enter_region<'a>(&self, region: &Region<'a, G>) -> Stream<Region<'a, G>, D>;
+}
+
+impl<G, D> EnterRegion<G, D> for Stream<G, D>
+where
+    G: Scope,
+    D: Data,
+{
+    fn enter_region<'a>(&self, region: &Region<'a, G>) -> Stream<Region<'a, G>, D> {
+        match region.subgraph {
+            RegionSubgraph::Subgraph { subgraph, .. } => {
+                let (targets, registrar) = Tee::<G::Timestamp, D>::new();
+                let ingress = IngressNub {
+                    targets: Counter::new(targets),
+                    phantom: PhantomData,
+                    activator: region.activator_for(&region.addr()),
+                    active: false,
+                };
+                let produced = ingress.targets.produced().clone();
+
+                let input = subgraph.borrow_mut().new_input(produced);
+
+                let channel_id = region.clone().new_identifier();
+                self.connect_to(input, ingress, channel_id);
+
+                Stream::new(Source::new(0, input.port), registrar, region.clone())
+            }
+
+            RegionSubgraph::Passthrough => Stream::new(*self.name(), self.ports.clone(), region.clone()),
+        }
+    }
+}
+
+/// Extension trait to move a [`Stream`] to the parent of its current [`Region`]
+pub trait LeaveRegion<G: Scope, D: Data> {
+    /// Moves a [`Stream`] to the parent of its current [`Region`]
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::scopes::Scope;
+    /// use timely::dataflow::operators::{enterleave::{EnterRegion, LeaveRegion}, ToStream};
+    ///
+    /// timely::example(|outer| {
+    ///     let stream = (0..9).to_stream(outer);
+    ///     let output = outer.optional_region(false, |inner| {
+    ///         stream.enter_region(inner).leave_region()
+    ///     });
+    /// });
+    /// ```
+    fn leave_region(&self) -> Stream<G, D>;
+}
+
+impl<'a, G: Scope, D: Data> LeaveRegion<G, D> for Stream<Region<'a, G>, D> {
+    fn leave_region(&self) -> Stream<G, D> {
+        let scope = self.scope();
+
+        match scope.subgraph {
+            RegionSubgraph::Subgraph { subgraph, .. } => {
+                let output = subgraph.borrow_mut().new_output();
+                let (targets, registrar) = Tee::<G::Timestamp, D>::new();
+                let channel_id = scope.clone().new_identifier();
+
+                self.connect_to(
+                    Target::new(0, output.port),
+                    EgressNub {
+                        targets,
+                        phantom: PhantomData,
+                    },
+                    channel_id,
+                );
+
+                Stream::new(output, registrar, scope.parent)
+            }
+
+            RegionSubgraph::Passthrough => {
+                Stream::new(*self.name(), self.ports.clone(), scope.parent)
+            }
+        }
     }
 }
 

@@ -5,6 +5,7 @@ use std::cell::RefCell;
 
 use crate::communication::{Data, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
+use crate::dataflow::scopes::region::RegionSubgraph;
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
 use crate::progress::{Timestamp, Operate, SubgraphBuilder};
@@ -15,6 +16,7 @@ use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::worker::{AsWorker, Config};
 
+use super::Region;
 use super::{ScopeParent, Scope};
 
 /// Type alias for iterative child scope.
@@ -131,6 +133,54 @@ where
         let subscope = subscope.into_inner().build(self);
 
         self.add_operator_with_index(Box::new(subscope), index);
+
+        result
+    }
+
+    fn optional_region_named<R, F>(&mut self, name: &str, enabled: bool, func: F) -> R
+    where
+        F: FnOnce(&mut Region<Self>) -> R,
+    {
+        // If the region is enabled then build the child dataflow graph, otherwise
+        // create a passthrough region
+        let region = if enabled {
+            let index = self.subgraph.borrow_mut().allocate_child_id();
+            let path = self.subgraph.borrow().path.clone();
+
+            let subscope = RefCell::new(SubgraphBuilder::<T, T>::new_from(
+                index,
+                path,
+                self.logging(),
+                self.progress_logging.clone(),
+                name,
+            ));
+
+            Some((subscope, index))
+        } else {
+            None
+        };
+
+        let result = {
+            let region = region
+                .as_ref()
+                .map_or(RegionSubgraph::Passthrough, |(scope, idx)| {
+                    RegionSubgraph::subgraph(scope, *idx)
+                });
+
+            let mut builder = Region {
+                subgraph: region,
+                parent: self.clone(),
+                logging: self.logging.clone(),
+                progress_logging: self.progress_logging.clone(),
+            };
+            func(&mut builder)
+        };
+
+        // If the region is enabled then build and add the sub-scope to the dataflow graph
+        if let Some((subscope, index)) = region {
+            let subscope = subscope.into_inner().build(self);
+            self.add_operator_with_index(Box::new(subscope), index);
+        }
 
         result
     }
