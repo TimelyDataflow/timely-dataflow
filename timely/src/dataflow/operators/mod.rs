@@ -62,4 +62,4 @@ pub mod count;
 
 // keep "mint" module-private
 mod capability;
-pub use self::capability::{ActivateCapability, Capability, CapabilityRef, CapabilitySet};
+pub use self::capability::{Activate, ActivateCapability, Capability, CapabilityRef, CapabilitySet, DoNothing, OnDowngradeDrop};
