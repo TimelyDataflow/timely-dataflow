@@ -291,11 +291,7 @@ impl std::fmt::Display for SyncActivationError {
     }
 }
 
-impl std::error::Error for SyncActivationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
+impl std::error::Error for SyncActivationError {}
 
 /// A wrapper that unparks on drop.
 #[derive(Debug)]
