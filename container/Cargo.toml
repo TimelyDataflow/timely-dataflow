@@ -6,6 +6,5 @@ description = "Container abstractions for Timely"
 license = "MIT"
 
 [dependencies]
-columnation = { git = "https://github.com/antiguru/columnation", branch = "container" }
-#columnation = { path = "../../columnation/" }
+columnation = { git = "https://github.com/frankmcsherry/columnation" }
 serde = { version = "1.0"}
