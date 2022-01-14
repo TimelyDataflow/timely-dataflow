@@ -28,11 +28,11 @@ pub trait Exchange<T, D: ExchangeData> {
 // impl<T: Timestamp, G: Scope<Timestamp=T>, D: ExchangeData> Exchange<T, D> for Stream<G, D> {
 impl<G: Scope, D: ExchangeData> Exchange<G::Timestamp, D> for Stream<G, D> {
     fn exchange(&self, route: impl Fn(&D)->u64+'static) -> Stream<G, D> {
-        let mut vector = Vec::new();
+        let mut vector = Default::default();
         self.unary(ExchangePact::new(route), "Exchange", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                output.session(&time).give_vec(&mut vector);
+                output.session(&time).give_container(&mut vector);
             });
         })
     }

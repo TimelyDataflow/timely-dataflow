@@ -76,6 +76,12 @@ pub use timely_communication::Config as CommunicationConfig;
 pub use worker::Config as WorkerConfig;
 pub use execute::Config as Config;
 
+pub use timely_container::Container;
+/// Re-export of the `timely_container` crate.
+pub mod container {
+    pub use timely_container::*;
+}
+
 /// Re-export of the `timely_communication` crate.
 pub mod communication {
     pub use timely_communication::*;

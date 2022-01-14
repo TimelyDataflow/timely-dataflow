@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use crate::Container;
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
 
@@ -11,12 +12,12 @@ use crate::progress::Source;
 use crate::progress::ChangeBatch;
 
 use crate::Data;
-use crate::dataflow::channels::pushers::{Tee, Counter as PushCounter};
-use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
+use crate::dataflow::channels::pushers::{CounterCore as PushCounter, TeeCore};
+use crate::dataflow::channels::pushers::buffer::{BufferCore as PushBuffer, AutoflushSessionCore};
 
 use crate::dataflow::operators::{ActivateCapability, Capability};
 
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Stream, Scope, StreamCore};
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
@@ -79,8 +80,76 @@ pub trait UnorderedInput<G: Scope> {
 
 impl<G: Scope> UnorderedInput<G> for G {
     fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
+        self.new_unordered_input_core()
+    }
+}
 
-        let (output, registrar) = Tee::<G::Timestamp, D>::new();
+/// An unordered handle specialized to vectors.
+pub type UnorderedHandle<T, D> = UnorderedHandleCore<T, Vec<D>>;
+
+/// Create a new `Stream` and `Handle` through which to supply input.
+pub trait UnorderedInputCore<G: Scope> {
+    /// Create a new capability-based [StreamCore] and [UnorderedHandleCore] through which to supply input. This
+    /// input supports multiple open epochs (timestamps) at the same time.
+    ///
+    /// The `new_unordered_input_core` method returns `((HandleCore, Capability), StreamCore)` where the `StreamCore` can be used
+    /// immediately for timely dataflow construction, `HandleCore` and `Capability` are later used to introduce
+    /// data into the timely dataflow computation.
+    ///
+    /// The `Capability` returned is for the default value of the timestamp type in use. The
+    /// capability can be dropped to inform the system that the input has advanced beyond the
+    /// capability's timestamp. To retain the ability to send, a new capability at a later timestamp
+    /// should be obtained first, via the `delayed` function for `Capability`.
+    ///
+    /// To communicate the end-of-input drop all available capabilities.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::sync::{Arc, Mutex};
+    ///
+    /// use timely::*;
+    /// use timely::dataflow::operators::*;
+    /// use timely::dataflow::operators::capture::Extract;
+    /// use timely::dataflow::Stream;
+    ///
+    /// // get send and recv endpoints, wrap send to share
+    /// let (send, recv) = ::std::sync::mpsc::channel();
+    /// let send = Arc::new(Mutex::new(send));
+    ///
+    /// timely::execute(Config::thread(), move |worker| {
+    ///
+    ///     // this is only to validate the output.
+    ///     let send = send.lock().unwrap().clone();
+    ///
+    ///     // create and capture the unordered input.
+    ///     let (mut input, mut cap) = worker.dataflow::<usize,_,_>(|scope| {
+    ///         let (input, stream) = scope.new_unordered_input_core();
+    ///         stream.capture_into(send);
+    ///         input
+    ///     });
+    ///
+    ///     // feed values 0..10 at times 0..10.
+    ///     for round in 0..10 {
+    ///         input.session(cap.clone()).give(round);
+    ///         cap = cap.delayed(&(round + 1));
+    ///         worker.step();
+    ///     }
+    /// }).unwrap();
+    ///
+    /// let extract = recv.extract();
+    /// for i in 0..10 {
+    ///     assert_eq!(extract[i], (i, vec![i]));
+    /// }
+    /// ```
+    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>);
+}
+
+
+impl<G: Scope> UnorderedInputCore<G> for G {
+    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>) {
+
+        let (output, registrar) = TeeCore::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
@@ -94,7 +163,7 @@ impl<G: Scope> UnorderedInput<G> for G {
 
         let cap = ActivateCapability::new(cap, &address, self.activations());
 
-        let helper = UnorderedHandle::new(counter);
+        let helper = UnorderedHandleCore::new(counter);
 
         self.add_operator_with_index(Box::new(UnorderedOperator {
             name: "UnorderedInput".to_owned(),
@@ -105,7 +174,7 @@ impl<G: Scope> UnorderedInput<G> for G {
             peers,
         }), index);
 
-        ((helper, cap), Stream::new(Source::new(index, 0), registrar, self.clone()))
+        ((helper, cap), StreamCore::new(Source::new(index, 0), registrar, self.clone()))
     }
 }
 
@@ -144,21 +213,21 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     fn notify_me(&self) -> bool { false }
 }
 
-/// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
+/// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct UnorderedHandle<T: Timestamp, D: Data> {
-    buffer: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
+pub struct UnorderedHandleCore<T: Timestamp, D: Container> {
+    buffer: PushBuffer<T, D, PushCounter<T, D, TeeCore<T, D>>>,
 }
 
-impl<T: Timestamp, D: Data> UnorderedHandle<T, D> {
-    fn new(pusher: PushCounter<T, D, Tee<T, D>>) -> UnorderedHandle<T, D> {
-        UnorderedHandle {
+impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
+    fn new(pusher: PushCounter<T, D, TeeCore<T, D>>) -> UnorderedHandleCore<T, D> {
+        UnorderedHandleCore {
             buffer: PushBuffer::new(pusher),
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, D, PushCounter<T, D, TeeCore<T, D>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }

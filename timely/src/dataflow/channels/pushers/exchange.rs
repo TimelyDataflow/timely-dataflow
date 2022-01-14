@@ -1,64 +1,51 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
-use crate::Data;
+use timely_container::PushPartitioned;
+use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::channels::{BundleCore, Message};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D) -> u64> {
     pushers: Vec<P>,
-    buffers: Vec<Vec<D>>,
+    buffers: Vec<C>,
     current: Option<T>,
     hash_func: H,
+    phantom: std::marker::PhantomData<D>,
 }
 
-impl<T: Clone, D, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64>  Exchange<T, D, P, H> {
+impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
-    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, D, P, H> {
+    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
-            buffers.push(Vec::new());
+            buffers.push(Default::default());
         }
         Exchange {
             pushers,
             hash_func: key,
             buffers,
             current: None,
+            phantom: std::marker::PhantomData,
         }
     }
     #[inline]
     fn flush(&mut self, index: usize) {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
-                Message::push_at_no_allocation(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
-            }
-        }
-    }
-
-    /// Push data partitioned according to an index function.
-    #[inline(always)]
-    fn push_partitioned<F: Fn(u64) -> usize>(&mut self, time: &T, data: &mut Vec<D>, func: F) {
-        for datum in data.drain(..) {
-            let index = (func)((self.hash_func)(time, &datum));
-
-            // Ensure allocated buffers: If the buffer's capacity is less than its default
-            // capacity, increase the capacity such that it matches the default.
-            if self.buffers[index].capacity() < Message::<T, D>::default_length() {
-                let to_reserve = Message::<T, D>::default_length() - self.buffers[index].capacity();
-                self.buffers[index].reserve(to_reserve);
-            }
-            self.buffers[index].push(datum);
-            if self.buffers[index].len() == self.buffers[index].capacity() {
-                self.flush(index);
+                Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
             }
         }
     }
 }
 
-impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bundle<T, D>> for Exchange<T, D, P, H> {
+impl<T: Eq+Data, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64> Push<BundleCore<T, C>> for Exchange<T, C, D, P, H>
+where
+    C: PushPartitioned<Item=D>
+{
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
+    fn push(&mut self, message: &mut Option<BundleCore<T, C>>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);
@@ -77,15 +64,31 @@ impl<T: Eq+Data, D: Data, P: Push<Bundle<T, D>>, H: FnMut(&T, &D)->u64> Push<Bun
             }
             self.current = Some(time.clone());
 
+            let hash_func = &mut self.hash_func;
+
             // if the number of pushers is a power of two, use a mask
             if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
                 let mask = (self.pushers.len() - 1) as u64;
-                self.push_partitioned(time, data, move |hash| (hash & mask) as usize);
+                let pushers = &mut self.pushers;
+                data.push_partitioned(
+                    &mut self.buffers,
+                    move |datum| ((hash_func)(time, datum) & mask) as usize,
+                    |index, buffer| {
+                            Message::push_at(buffer, time.clone(), &mut pushers[index]);
+                    }
+                );
             }
             // as a last resort, use mod (%)
             else {
-                let pushers = self.pushers.len() as u64;
-                self.push_partitioned(time, data, move |hash| (hash % pushers) as usize);
+                let num_pushers = self.pushers.len() as u64;
+                let pushers = &mut self.pushers;
+                data.push_partitioned(
+                    &mut self.buffers,
+                    move |datum| ((hash_func)(time, datum) % num_pushers) as usize,
+                    |index, buffer| {
+                        Message::push_at(buffer, time.clone(), &mut pushers[index]);
+                    }
+                );
             }
 
         }
