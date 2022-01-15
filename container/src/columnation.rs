@@ -272,7 +272,7 @@ mod serde {
 }
 
 mod container {
-    use crate::{Container, PushPartitioned};
+    use crate::{Container, MonotonicContainer, PushPartitioned};
 
     use crate::columnation::{Columnation, TimelyStack};
 
@@ -294,6 +294,10 @@ mod container {
         fn clear(&mut self) {
             TimelyStack::clear(self)
         }
+    }
+
+    impl<T: Columnation + 'static, O: Columnation + 'static> MonotonicContainer<O> for TimelyStack<T> {
+        type Output = TimelyStack<O>;
     }
 
     impl<T: Columnation + 'static> PushPartitioned for TimelyStack<T> {

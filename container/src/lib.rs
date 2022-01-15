@@ -40,6 +40,16 @@ pub trait Container: Default + Clone + 'static {
     fn clear(&mut self);
 }
 
+/// A container specifying a follow-up container type.
+///
+/// This trait is useful to express that an operation applied to a container results in a specific
+/// type of result container. For example, it would allow us to express that a map operation applied
+/// on a vector results in a vector of different elements.
+pub trait MonotonicContainer<O>: Container {
+    /// The output container
+    type Output: Container<Item=O>;
+}
+
 impl<T: Clone + 'static> Container for Vec<T> {
     type Item = T;
 
@@ -58,10 +68,14 @@ impl<T: Clone + 'static> Container for Vec<T> {
     fn clear(&mut self) { Vec::clear(self) }
 }
 
+impl<T: Clone + 'static, O: Clone + 'static> MonotonicContainer<O> for Vec<T> {
+    type Output = Vec<O>;
+}
+
 mod rc {
     use std::rc::Rc;
 
-    use crate::Container;
+    use crate::{Container, MonotonicContainer};
 
     impl<T: Container> Container for Rc<T> {
         type Item = T::Item;
@@ -80,12 +94,16 @@ mod rc {
 
         fn clear(&mut self) { }
     }
+
+    impl<O, T: MonotonicContainer<O>> MonotonicContainer<O> for Rc<T> {
+        type Output = T::Output;
+    }
 }
 
 mod arc {
     use std::sync::Arc;
 
-    use crate::Container;
+    use crate::{Container, MonotonicContainer};
 
     impl<T: Container> Container for Arc<T> {
         type Item = T::Item;
@@ -103,6 +121,10 @@ mod arc {
         }
 
         fn clear(&mut self) { }
+    }
+
+    impl<O, T: MonotonicContainer<O>> MonotonicContainer<O> for Arc<T> {
+        type Output = T::Output;
     }
 }
 
