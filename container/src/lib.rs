@@ -42,6 +42,57 @@ pub trait Container: Default + Clone + 'static {
     fn clear(&mut self);
 }
 
+/// A container that supports appending data
+pub trait AppendableContainer: Container {
+    /// Construct a container with the specified capacity.
+    fn with_capacity(capacity: usize) -> Self {
+        let mut container = Self::default();
+        container.reserve(capacity);
+        container
+    }
+
+    /// Reserve space for at least `additional` elements.
+    fn reserve(&mut self, additional: usize);
+
+    /// Present a single element, which should be re-created in this container
+    fn show(&mut self, element: RefOrMut<Self::Item>);
+}
+
+impl<T: Clone + 'static> AppendableContainer for Vec<T> {
+    fn with_capacity(capacity: usize) -> Self {
+        Vec::with_capacity(capacity)
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        Vec::reserve(self, additional)
+    }
+
+    fn show(&mut self, element: RefOrMut<Self::Item>) {
+        match element {
+            RefOrMut::Ref(reference) => self.push(reference.clone()),
+            // The following `clone` is annoying. `T` is not `Default`, so we cannot
+            // move out of the mutable reference.
+            RefOrMut::Mut(reference) => self.push(reference.clone()),
+            RefOrMut::Owned(element) => self.push(element),
+        }
+    }
+}
+
+
+/// A drainable container
+pub trait DrainContainer: Container {
+    /// Drains this container by calling `logic` on all elements. Leaves an empty container behind.
+    fn drain<F: FnMut(RefOrMut<Self::Item>)>(&mut self, logic: F);
+}
+
+impl<T: Clone + 'static> DrainContainer for Vec<T> {
+    fn drain<F: FnMut(RefOrMut<T>)>(&mut self, mut logic: F) {
+        for x in self.drain(..).map(RefOrMut::Owned) {
+            logic(x)
+        }
+    }
+}
+
 impl<T: Clone + 'static> Container for Vec<T> {
     type Item = T;
 
