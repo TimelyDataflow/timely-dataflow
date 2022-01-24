@@ -76,7 +76,7 @@ pub struct ChannelsEvent {
 pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
     /// Upcasts this `ProgressEventTimestamp` to `Any`.
     ///
-    /// NOTE: This is required until https://github.com/rust-lang/rfcs/issues/2765 is fixed
+    /// NOTE: This is required until <https://github.com/rust-lang/rfcs/issues/2765> is fixed
     ///
     /// # Example
     /// ```rust

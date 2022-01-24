@@ -92,7 +92,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Installs options into a [`getopts::Options`] struct that correspond
+    /// Installs options into a [getopts_dep::Options] struct that correspond
     /// to the parameters in the configuration.
     ///
     /// It is the caller's responsibility to ensure that the installed options
@@ -109,8 +109,8 @@ impl Config {
     /// Instantiates a configuration based upon the parsed options in `matches`.
     ///
     /// The `matches` object must have been constructed from a
-    /// [`getopts::Options`] which contained at least the options installed by
-    /// [`Self::install_options`].
+    /// [getopts_dep::Options] which contained at least the options installed by
+    /// [Self::install_options].
     ///
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
@@ -154,7 +154,7 @@ impl Config {
     /// Gets the value for configured parameter `key`.
     ///
     /// Returns `None` if `key` has not previously been set with
-    /// [`WorkerConfig::set`], or if the specified `T` does not match the `T`
+    /// [Config::set], or if the specified `T` does not match the `T`
     /// from the call to `set`.
     ///
     /// # Examples
