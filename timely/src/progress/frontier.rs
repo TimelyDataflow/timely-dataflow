@@ -1,7 +1,7 @@
 //! Tracks minimal sets of mutually incomparable elements of a partial order.
 
 use crate::progress::ChangeBatch;
-use crate::order::PartialOrder;
+use crate::order::{PartialOrder, TotalOrder};
 
 /// A set of mutually incomparable elements.
 ///
@@ -226,6 +226,8 @@ impl<T: Clone> Clone for Antichain<T> {
         self.elements.clone_from(&source.elements)
     }
 }
+
+impl<T: TotalOrder> TotalOrder for Antichain<T> { }
 
 impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
     fn from(vec: Vec<T>) -> Self {
