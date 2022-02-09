@@ -49,6 +49,16 @@ impl<'a, T: Clone+'a> RefOrMut<'a, T> {
         self.swap(&mut element);
         element
     }
+
+    /// Extracts the contents of `self`, either by cloning, or swapping and leaving a default
+    /// element in place.
+    ///
+    /// This consumes `self` because its contents are now in an unknown state.
+    pub fn take(self) -> T where T: Default {
+        let mut element = Default::default();
+        self.swap(&mut element);
+        element
+    }
 }
 
 /// A wrapped message which may be either typed or binary data.
