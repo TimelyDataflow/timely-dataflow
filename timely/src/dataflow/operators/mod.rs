@@ -9,7 +9,6 @@
 //! Most of the operators in this module are defined using these two general operators.
 
 pub use self::enterleave::{Enter, EnterAt, Leave};
-// pub use self::queue::*;
 pub use self::input::Input;
 pub use self::unordered_input::{UnorderedInput, UnorderedInputCore};
 pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
@@ -62,4 +61,4 @@ pub mod count;
 
 // keep "mint" module-private
 mod capability;
-pub use self::capability::{ActivateCapability, Capability, CapabilityRef, CapabilitySet};
+pub use self::capability::{ActivateCapability, Capability, CapabilityRef, CapabilitySet, DowngradeError};

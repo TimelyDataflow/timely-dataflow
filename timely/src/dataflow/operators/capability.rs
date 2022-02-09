@@ -147,7 +147,7 @@ impl<T: Timestamp> Capability<T> {
 
     /// Attempts to downgrade the capability to one corresponding to `new_time`.
     ///
-    /// Returns a [`DowngradeError`] if `self.time` is not less or equal to `new_time`.
+    /// Returns a [DowngradeError] if `self.time` is not less or equal to `new_time`.
     pub fn try_downgrade(&mut self, new_time: &T) -> Result<(), DowngradeError> {
         if let Some(new_capability) = self.try_delayed(new_time) {
             *self = new_capability;

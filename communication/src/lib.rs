@@ -4,7 +4,7 @@
 //! It may be independently useful, but it is separated out mostly to make clear boundaries in the project.
 //!
 //! Threads are spawned with an [`allocator::Generic`](allocator::generic::Generic), whose
-//! [`allocate`](allocator::generic::Generic::allocate) method returns a pair of several send endpoints and one
+//! [`allocate`](Allocate::allocate) method returns a pair of several send endpoints and one
 //! receive endpoint. Messages sent into a send endpoint will eventually be received by the corresponding worker,
 //! if it receives often enough. The point-to-point channels are each FIFO, but with no fairness guarantees.
 //!

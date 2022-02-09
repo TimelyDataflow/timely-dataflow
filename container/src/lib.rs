@@ -150,7 +150,7 @@ pub mod buffer {
     /// this to size in elements.
     pub const BUFFER_SIZE_BYTES: usize = 1 << 13;
 
-    /// The maximum buffer capacity in elements. Returns a number between [:BUFFER_SIZE_BYTES]
+    /// The maximum buffer capacity in elements. Returns a number between [BUFFER_SIZE_BYTES]
     /// and 1, inclusively.
     pub const fn default_capacity<T>() -> usize {
         let size = ::std::mem::size_of::<T>();
