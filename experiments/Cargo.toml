@@ -1,12 +1,13 @@
 [package]
 name = "experiments"
-version = "0.1.0"
+version = "0.12.0"
 edition = "2018"
+publish = false
 
 [dependencies]
 criterion = "0.3.5"
 itertools = "0.10"
-timely = { path = "../timely" }
+timely = { version = "0.12.0", path = "../timely" }
 
 [[bench]]
 name = "exchange_bench"

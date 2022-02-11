@@ -3,6 +3,7 @@ members = [
     "bytes",
     "communication",
     "container",
+    "experiments",
     "kafkaesque",
     "logging",
     "timely",

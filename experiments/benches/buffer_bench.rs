@@ -1,17 +1,18 @@
-extern crate timely;
+//! Benchmarks for [Tee] and [Buffer].
+//!
+//! The benchmarks determine throughput and latency for a number of configurations.
 
 use std::fmt::{Display, Formatter};
 
 use criterion::black_box;
 use criterion::*;
-use itertools::Itertools;
 
 use timely::communication::Push;
 use timely::dataflow::channels::pushers::buffer::Buffer;
 use timely::dataflow::channels::pushers::Tee;
 use timely::dataflow::channels::{Bundle, Message};
 
-use experiments::{DropPusher, ReturnPusher};
+use experiments::{construct_data, DropPusher, ReturnPusher};
 
 #[derive(Clone)]
 struct ExperimentConfig {
@@ -25,6 +26,12 @@ impl Display for ExperimentConfig {
     }
 }
 
+/// Benchmark the [Tee] pusher for both [DropPusher] and [ReturnPusher].
+///
+/// This does not spawn a Timely instance but only benchmarks the struct on a single thread.
+/// The benchmark varies
+/// * the number of pushers downstream of the [Tee],
+/// * the amount of data pushed at the tee.
 fn tee_micro(c: &mut Criterion) {
     let mut group = c.benchmark_group("tee_micro");
     for pushers in [1, 2, 512] {
@@ -59,22 +66,20 @@ fn experiment_tee_micro<P: 'static + Default + Push<Bundle<u32, u64>>>(
         helper.add_pusher(pusher);
     }
 
-    let buffer: Vec<Vec<_>> = (0..params.batch)
-        .map(|x| x)
-        .chunks(Message::<usize, u64>::default_length())
-        .into_iter()
-        .map(|chunk| chunk.collect())
-        .collect();
+    let buffer = construct_data(params.batch);
     let mut copy = Vec::new();
 
     b.iter(move || {
         for batch in black_box(&buffer) {
             copy.clone_from(&batch);
-            Message::push_at_no_allocation(&mut copy, 0, &mut tee);
+            Message::push_at(&mut copy, 0, &mut tee);
         }
     })
 }
 
+/// Benchmark the [Buffer] pusher for both [DropPusher] and [ReturnPusher].
+///
+/// The benchmark varies the amount of data pushed at the buffer.
 fn buffer_micro(c: &mut Criterion) {
     let mut group = c.benchmark_group("buffer_micro");
     for shift in [0, 4, 8, 14, 16] {
@@ -104,12 +109,7 @@ fn experiment_buffer_micro<P: 'static + Default + Push<Bundle<u32, u64>>>(
 ) {
     let mut send_buffer = Buffer::new(P::default());
 
-    let buffer: Vec<Vec<_>> = (0..params.batch)
-        .map(|x| x)
-        .chunks(Message::<usize, u64>::default_length())
-        .into_iter()
-        .map(|chunk| chunk.collect())
-        .collect();
+    let buffer = construct_data(params.batch);
 
     b.iter(move || {
         for (index, batch) in black_box(&buffer).iter().enumerate() {
