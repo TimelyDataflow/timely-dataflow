@@ -212,7 +212,7 @@ mod test {
         use crate::dataflow::operators::{Enter, Leave};
 
         // initializes and runs a timely dataflow.
-        crate::execute_from_args(std::env::args(), |worker| {
+        crate::execute(crate::Config::process(3), |worker| {
 
             let index = worker.index();
             let mut input = InputHandle::new();
