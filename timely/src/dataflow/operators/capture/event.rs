@@ -5,7 +5,7 @@
 //! of timestamps.
 
 /// Data and progress events of the captured stream.
-#[derive(Debug, Clone, Abomonation, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Clone, Abomonation, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub enum EventCore<T, D> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
