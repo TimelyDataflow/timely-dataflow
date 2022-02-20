@@ -585,6 +585,21 @@ impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainF
     }
 }
 
+impl<T: PartialOrder+Ord+Clone> From<Antichain<T>> for MutableAntichain<T> {
+    fn from(antichain: Antichain<T>) -> Self {
+        let mut result = MutableAntichain::new();
+        result.update_iter(antichain.into_iter().map(|time| (time, 1)));
+        result
+    }
+}
+impl<'a, T: PartialOrder+Ord+Clone> From<AntichainRef<'a, T>> for MutableAntichain<T> {
+    fn from(antichain: AntichainRef<'a, T>) -> Self {
+        let mut result = MutableAntichain::new();
+        result.update_iter(antichain.into_iter().map(|time| (time.clone(), 1)));
+        result
+    }
+}
+
 /// A wrapper for elements of an antichain.
 #[derive(Debug)]
 pub struct AntichainRef<'a, T: 'a> {
