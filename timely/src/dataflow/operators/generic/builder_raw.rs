@@ -161,6 +161,26 @@ impl<G: Scope> OperatorBuilder<G> {
         let inputs = self.shape.inputs;
         let outputs = self.shape.outputs;
 
+        // Generate a tracing span for the function.
+        #[cfg(feature = "tracing")]
+        let span = {
+            let location = std::panic::Location::caller();
+            // timely.console.span is a marker target allowing us to
+            // turn these spans on and off specifically
+            // TODO(guswynn): check with tracing folks if there is a better
+            // way to do this
+            tracing::trace_span!(
+                target: "timely.console.span",
+                "runtime.spawn",
+                kind = %"timely-operator",
+                "fn" = %std::any::type_name::<L>(),
+                task.name = self.shape.name.as_str(),
+                loc.file = location.file(),
+                loc.line = location.line(),
+                loc.col = location.column(),
+            )
+        };
+
         let operator = OperatorCore {
             shape: self.shape,
             address: self.address,
@@ -168,6 +188,8 @@ impl<G: Scope> OperatorBuilder<G> {
             logic,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
             summary: self.summary,
+            #[cfg(feature = "tracing")]
+            span,
         };
 
         self.scope.add_operator_with_indices(Box::new(operator), self.index, self.global);
@@ -190,6 +212,8 @@ where
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     activations: Rc<RefCell<Activations>>,
     summary: Vec<Vec<Antichain<T::Summary>>>,
+    #[cfg(feature = "tracing")]
+    span: tracing::Span,
 }
 
 impl<T, L> Schedule for OperatorCore<T, L>
@@ -201,6 +225,8 @@ where
     fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
         let shared_progress = &mut *self.shared_progress.borrow_mut();
+        #[cfg(feature = "tracing")]
+        let _s = self.span.enter();
         (self.logic)(shared_progress)
     }
 }
