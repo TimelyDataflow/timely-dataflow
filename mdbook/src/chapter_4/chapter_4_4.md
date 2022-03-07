@@ -1,6 +1,6 @@
 # Capture and Replay
 
-Timely dataflow has two fairly handy operators, `capture_into` and `replay_from`, that are great for transporting a timely dataflow stream from its native representation into data, and then back again. They are also a fine way to think about interoperating with other systems for streaming data.
+Timely dataflow has two fairly handy operators, `capture_into` and `replay_into`, that are great for transporting a timely dataflow stream from its native representation into data, and then back again. They are also a fine way to think about interoperating with other systems for streaming data.
 
 ## Capturing Streams
 
