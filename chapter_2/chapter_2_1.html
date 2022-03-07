@@ -191,7 +191,7 @@ fn main() {
 </code></pre></pre>
 <p>There will be more to do to get data into <code>input</code>, and we aren't going to worry about that at the moment. But, now you know two of the places you can get data from!</p>
 <h2><a class="header" href="#other-sources" id="other-sources">Other sources</a></h2>
-<p>There are other sources of input that are a bit more advanced. Once we learn how to create custom operators, the <code>source</code> method will allow us to create a custom operator with zero input streams and one output stream, which looks like a source of data (hence the name). There are also the <code>Capture</code> and <code>Replay</code> traits that allow us to exfiltrate the contents of a stream from one dataflow (using <code>capture_into</code>) and re-load it in another dataflow (using <code>replay_from</code>).</p>
+<p>There are other sources of input that are a bit more advanced. Once we learn how to create custom operators, the <code>source</code> method will allow us to create a custom operator with zero input streams and one output stream, which looks like a source of data (hence the name). There are also the <code>Capture</code> and <code>Replay</code> traits that allow us to exfiltrate the contents of a stream from one dataflow (using <code>capture_into</code>) and re-load it in another dataflow (using <code>replay_into</code>).</p>
 
                     </main>
 

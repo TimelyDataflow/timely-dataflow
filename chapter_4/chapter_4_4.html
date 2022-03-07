@@ -164,7 +164,7 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#capture-and-replay" id="capture-and-replay">Capture and Replay</a></h1>
-<p>Timely dataflow has two fairly handy operators, <code>capture_into</code> and <code>replay_from</code>, that are great for transporting a timely dataflow stream from its native representation into data, and then back again. They are also a fine way to think about interoperating with other systems for streaming data.</p>
+<p>Timely dataflow has two fairly handy operators, <code>capture_into</code> and <code>replay_into</code>, that are great for transporting a timely dataflow stream from its native representation into data, and then back again. They are also a fine way to think about interoperating with other systems for streaming data.</p>
 <h2><a class="header" href="#capturing-streams" id="capturing-streams">Capturing Streams</a></h2>
 <p>At its core, <code>capture_into</code> records everything it sees about the stream it is attached to. If some data arrive, it records that. If there is a change in the possibility that timestamps might arrive on its input, it records that.</p>
 <p>The <code>capture_into</code> method is relative simple, and we can just look at it:</p>
