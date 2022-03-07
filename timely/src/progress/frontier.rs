@@ -229,6 +229,16 @@ impl<T: Clone> Clone for Antichain<T> {
 
 impl<T: TotalOrder> TotalOrder for Antichain<T> { }
 
+impl<T: Ord+std::hash::Hash> std::hash::Hash for Antichain<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let mut temp = self.elements.iter().collect::<Vec<_>>();
+        temp.sort();
+        for element in temp {
+            element.hash(state);
+        }
+    }
+}
+
 impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
     fn from(vec: Vec<T>) -> Self {
         // TODO: We could reuse `vec` with some care.
@@ -713,5 +723,37 @@ impl<'a, T: 'a> ::std::iter::IntoIterator for &'a AntichainRef<'a, T> {
     type IntoIter = ::std::slice::Iter<'a, T>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+    struct Elem(char, usize);
+
+    impl PartialOrder for Elem {
+        fn less_equal(&self, other: &Self) -> bool {
+            self.0 <= other.0 && self.1 <= other.1
+        }
+    }
+
+    #[test]
+    fn antichain_hash() {
+        let mut hashed = HashSet::new();
+        hashed.insert(Antichain::from(vec![Elem('a', 2), Elem('b', 1)]));
+
+        assert!(hashed.contains(&Antichain::from(vec![Elem('a', 2), Elem('b', 1)])));
+        assert!(hashed.contains(&Antichain::from(vec![Elem('b', 1), Elem('a', 2)])));
+
+        assert!(!hashed.contains(&Antichain::from(vec![Elem('a', 2)])));
+        assert!(!hashed.contains(&Antichain::from(vec![Elem('a', 1)])));
+        assert!(!hashed.contains(&Antichain::from(vec![Elem('b', 2)])));
+        assert!(!hashed.contains(&Antichain::from(vec![Elem('a', 1), Elem('b', 2)])));
+        assert!(!hashed.contains(&Antichain::from(vec![Elem('c', 3)])));
+        assert!(!hashed.contains(&Antichain::from(vec![])));
     }
 }
