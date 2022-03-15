@@ -43,8 +43,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
         let addr = path.clone();
         Progcaster {
             to_push: None,
-            pushers,
-            puller,
+            pushers: pushers.into_iter().map(|p| Box::new(p) as Box<dyn Push<_>>).collect(),
+            puller: Box::new(puller),
             source: worker_index,
             counter: 0,
             addr,
