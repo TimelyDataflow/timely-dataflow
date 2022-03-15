@@ -8,9 +8,11 @@ use std::time::Duration;
 use std::collections::{HashMap};
 use crossbeam_channel::{Sender, Receiver};
 
+use crate::allocator::counters::ArcPusher as CountPusher;
+use crate::allocator::counters::Puller as CountPuller;
 use crate::allocator::thread::{ThreadBuilder};
 use crate::allocator::{Allocate, AllocateBuilder, Thread};
-use crate::{Push, Pull, Message};
+use crate::{Data, Push, Pull, Message};
 use crate::buzzer::Buzzer;
 
 /// An allocator for inter-thread, intra-process communication
@@ -108,9 +110,12 @@ impl Process {
 }
 
 impl Allocate for Process {
+    type Pusher<T: Data> = CountPusher<Message<T>, Pusher<Message<T>>>;
+    type Puller<T: Data> = CountPuller<Message<T>, Puller<Message<T>>>;
+
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Any+Send+Sync+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Self::Pusher<T>>, Self::Puller<T>) {
 
         // this is race-y global initialisation of all channels for all workers, performed by the
         // first worker that enters this critical section
@@ -159,17 +164,13 @@ impl Allocate for Process {
 
         if empty { channels.remove(&identifier); }
 
-        use crate::allocator::counters::ArcPusher as CountPusher;
-        use crate::allocator::counters::Puller as CountPuller;
-
         let sends =
         sends.into_iter()
              .zip(self.counters_send.iter())
              .map(|((s,b), sender)| CountPusher::new(s, identifier, sender.clone(), b))
-             .map(|s| Box::new(s) as Box<dyn Push<super::Message<T>>>)
              .collect::<Vec<_>>();
 
-        let recv = Box::new(CountPuller::new(recv, identifier, self.inner.events().clone())) as Box<dyn Pull<super::Message<T>>>;
+        let recv = CountPuller::new(recv, identifier, self.inner.events().clone());
 
         (sends, recv)
     }
@@ -191,7 +192,7 @@ impl Allocate for Process {
 }
 
 /// The push half of an intra-process channel.
-struct Pusher<T> {
+pub struct Pusher<T> {
     target: Sender<T>,
 }
 
@@ -214,7 +215,7 @@ impl<T> Push<T> for Pusher<T> {
 }
 
 /// The pull half of an intra-process channel.
-struct Puller<T> {
+pub struct Puller<T> {
     current: Option<T>,
     source: Receiver<T>,
 }

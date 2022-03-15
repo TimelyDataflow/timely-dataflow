@@ -175,6 +175,11 @@ impl Config {
 ///
 /// These methods are often proxied by child scopes, and this trait provides access.
 pub trait AsWorker : Scheduler {
+    /// The Pusher returned by allocate
+    type Pusher<T: Data>: Push<Message<T>> + 'static;
+    /// The Puller returned by allocate
+    type Puller<T: Data>: Pull<Message<T>> + 'static;
+
     /// Returns the worker configuration parameters.
     fn config(&self) -> &Config;
     /// Index of the worker among its peers.
@@ -191,7 +196,7 @@ pub trait AsWorker : Scheduler {
     /// scheduled in response to the receipt of records on the channel.
     /// Most commonly, this would be the address of the *target* of the
     /// channel.
-    fn allocate<T: Data>(&mut self, identifier: usize, address: Vec<usize>) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>);
+    fn allocate<T: Data>(&mut self, identifier: usize, address: Vec<usize>) -> (Vec<Self::Pusher<T>>, Self::Puller<T>);
     /// Constructs a pipeline channel from the worker to itself.
     ///
     /// By default this method uses the native channel allocation mechanism, but the expectation is
@@ -228,10 +233,13 @@ pub struct Worker<A: Allocate> {
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
+    type Pusher<T: Data> = A::Pusher<T>;
+    type Puller<T: Data> = A::Puller<T>;
+
     fn config(&self) -> &Config { &self.config }
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize, address: Vec<usize>) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize, address: Vec<usize>) -> (Vec<Self::Pusher<T>>, Self::Puller<T>) {
         if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address);

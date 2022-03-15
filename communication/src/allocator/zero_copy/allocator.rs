@@ -8,9 +8,10 @@ use bytes::arc::Bytes;
 
 use crate::networking::MessageHeader;
 
-use crate::{Allocate, Message, Data, Push, Pull};
+use crate::{Allocate, Message, Data, Push};
 use crate::allocator::AllocateBuilder;
 use crate::allocator::canary::Canary;
+use crate::allocator::counters::Puller as CountPuller;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 use super::push_pull::{Pusher, PullerInner};
@@ -132,10 +133,31 @@ pub struct TcpAllocator<A: Allocate> {
     to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,   // to worker-local typed pullers.
 }
 
+/// The pusher for TcpAllocator
+/// It encapsulates the two variants of pusher types.
+pub enum TcpPusher<T, P> {
+    /// The local pusher that sends data within he same process
+    Local(Pusher<T, MergeQueue>),
+    /// The remote pusher that sends data over the network
+    Remote(P),
+}
+
+impl<T: Data, P: Push<Message<T>>> Push<Message<T>> for TcpPusher<T, P> {
+    fn push(&mut self, element: &mut Option<Message<T>>) {
+        match self {
+            Self::Local(l) => l.push(element),
+            Self::Remote(r) => r.push(element),
+        }
+    }
+}
+
 impl<A: Allocate> Allocate for TcpAllocator<A> {
+    type Pusher<T: Data> = TcpPusher<T, A::Pusher<T>>;
+    type Puller<T: Data> = CountPuller<Message<T>, PullerInner<T, A::Puller<T>>>;
+
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Self::Pusher<T>>, Self::Puller<T>) {
 
         // Assume and enforce in-order identifier allocation.
         if let Some(bound) = self.channel_id_bound {
@@ -144,7 +166,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
         self.channel_id_bound = Some(identifier);
 
         // Result list of boxed pushers.
-        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::new();
+        let mut pushes = Vec::with_capacity(self.peers());
 
         // Inner exchange allocations.
         let inner_peers = self.inner.peers();
@@ -156,7 +178,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             let mut process_id = target_index / inner_peers;
 
             if process_id == self.index / inner_peers {
-                pushes.push(inner_sends.remove(0));
+                pushes.push(TcpPusher::Remote(inner_sends.remove(0)));
             }
             else {
                 // message header template.
@@ -170,7 +192,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
                 // create, box, and stash new process_binary pusher.
                 if process_id > self.index / inner_peers { process_id -= 1; }
-                pushes.push(Box::new(Pusher::new(header, self.sends[process_id].clone())));
+                pushes.push(TcpPusher::Local(Pusher::new(header, self.sends[process_id].clone())));
             }
         }
 
@@ -180,11 +202,10 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
             .clone();
 
-        use crate::allocator::counters::Puller as CountPuller;
         let canary = Canary::new(identifier, self.canaries.clone());
-        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.events().clone()));
+        let puller = CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.events().clone());
 
-        (pushes, puller, )
+        (pushes, puller)
     }
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
