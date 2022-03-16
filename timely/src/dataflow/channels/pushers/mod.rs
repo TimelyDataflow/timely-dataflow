@@ -1,5 +1,5 @@
 pub use self::tee::{Tee, TeeCore, TeeHelper};
-pub use self::exchange::Exchange;
+pub use self::exchange::{Exchange, DataHasher};
 pub use self::counter::{Counter, CounterCore};
 
 pub mod tee;

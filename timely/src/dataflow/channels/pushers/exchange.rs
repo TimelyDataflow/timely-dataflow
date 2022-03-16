@@ -5,9 +5,37 @@ use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::channels::{BundleCore, Message};
 
+/// Hashes a pair of time and data in order to distribute records
+pub trait ParallelizationHasher<T, D> {
+    /// Computes the distribution function
+    fn hash(&mut self, time: &T, data: &D) -> u64;
+}
+
+impl<T, D, F: FnMut(&T, &D) -> u64> ParallelizationHasher<T, D> for F {
+    fn hash(&mut self, time: &T, data: &D) -> u64 {
+        (self)(time, data)
+    }
+}
+
+/// A ParallizationContract hasher that only consideres the data
+pub struct DataHasher<F>(F);
+
+impl<T, D, F: FnMut(&D) -> u64> ParallelizationHasher<T, D> for DataHasher<F> {
+    fn hash(&mut self, _time: &T, data: &D) -> u64 {
+        (self.0)(data)
+    }
+}
+
+impl<F> DataHasher<F> {
+    /// Construct a new data hasher with the given function
+    pub fn new(hash_func: F) -> Self {
+        Self(hash_func)
+    }
+}
+
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D) -> u64> {
+pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: ParallelizationHasher<T, D>> {
     pushers: Vec<P>,
     buffers: Vec<C>,
     current: Option<T>,
@@ -15,7 +43,7 @@ pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&T, 
     phantom: std::marker::PhantomData<D>,
 }
 
-impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64>  Exchange<T, C, D, P, H> {
+impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: ParallelizationHasher<T, D>>  Exchange<T, C, D, P, H> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
         let mut buffers = vec![];
@@ -40,7 +68,7 @@ impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D
     }
 }
 
-impl<T: Eq+Data, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&T, &D)->u64> Push<BundleCore<T, C>> for Exchange<T, C, D, P, H>
+impl<T: Eq+Data, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: ParallelizationHasher<T, D>> Push<BundleCore<T, C>> for Exchange<T, C, D, P, H>
 where
     C: PushPartitioned<Item=D>
 {
@@ -72,7 +100,7 @@ where
                 let pushers = &mut self.pushers;
                 data.push_partitioned(
                     &mut self.buffers,
-                    move |datum| ((hash_func)(time, datum) & mask) as usize,
+                    move |datum| (hash_func.hash(time, datum) & mask) as usize,
                     |index, buffer| {
                             Message::push_at(buffer, time.clone(), &mut pushers[index]);
                     }
@@ -84,7 +112,7 @@ where
                 let pushers = &mut self.pushers;
                 data.push_partitioned(
                     &mut self.buffers,
-                    move |datum| ((hash_func)(time, datum) % num_pushers) as usize,
+                    move |datum| (hash_func.hash(time, datum) % num_pushers) as usize,
                     |index, buffer| {
                         Message::push_at(buffer, time.clone(), &mut pushers[index]);
                     }
