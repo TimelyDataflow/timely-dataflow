@@ -15,7 +15,7 @@ use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::Container;
 
 use crate::worker::AsWorker;
-use crate::dataflow::channels::pushers::{Exchange as ExchangePusher, DataHasher};
+use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use super::{BundleCore, Message};
 
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
@@ -73,13 +73,13 @@ impl<T: Timestamp, C, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationC
 where
     C: Data + Container + PushPartitioned<Item=D>,
 {
-    type Pusher = ExchangePusher<T, C, D, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, DataHasher<F>>;
+    type Pusher = ExchangePusher<T, C, D, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, F>;
     type Puller = LogPuller<T, C, Box<dyn Pull<BundleCore<T, C>>>>;
 
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, C>>(identifier, address);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
-        (ExchangePusher::new(senders, DataHasher::new(self.hash_func)), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
+        (ExchangePusher::new(senders, self.hash_func), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
     }
 }
 
