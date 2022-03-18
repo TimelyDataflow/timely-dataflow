@@ -1,7 +1,7 @@
 extern crate timely_communication;
 
 use std::ops::Deref;
-use timely_communication::{Message, Allocate};
+use timely_communication::{Message, Allocate, Pull, Push};
 
 fn main() {
 
