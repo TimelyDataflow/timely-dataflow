@@ -182,7 +182,7 @@ impl Config {
 ///
 /// # Examples
 /// ```
-/// use timely_communication::Allocate;
+/// use timely_communication::{Allocate, Pull, Push};
 ///
 /// // configure for two threads, just one process.
 /// let config = timely_communication::Config::Process(2);
@@ -254,7 +254,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 ///
 /// # Examples
 /// ```
-/// use timely_communication::Allocate;
+/// use timely_communication::{Allocate, Pull, Push};
 ///
 /// // configure for two threads, just one process.
 /// let builders = timely_communication::allocator::process::Process::new_vector(2);
