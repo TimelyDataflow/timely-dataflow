@@ -116,6 +116,17 @@ impl<T: PartialOrder> Antichain<T> {
     }
 }
 
+impl<T: PartialOrder> std::iter::FromIterator<T> for Antichain<T> {
+    fn from_iter<I>(iterator: I) -> Self
+    where
+        I: IntoIterator<Item=T>
+    {
+        let mut result = Self::new();
+        result.extend(iterator);
+        result
+    }
+}
+
 impl<T> Antichain<T> {
 
     /// Creates a new empty `Antichain`.
@@ -619,6 +630,20 @@ impl<'a, T: PartialOrder+Ord+Clone> From<AntichainRef<'a, T>> for MutableAnticha
     fn from(antichain: AntichainRef<'a, T>) -> Self {
         let mut result = MutableAntichain::new();
         result.update_iter(antichain.into_iter().map(|time| (time.clone(), 1)));
+        result
+    }
+}
+
+impl<T> std::iter::FromIterator<(T, i64)> for MutableAntichain<T>
+where
+    T: Clone + PartialOrder + Ord,
+{
+    fn from_iter<I>(iterator: I) -> Self
+    where
+        I: IntoIterator<Item=(T, i64)>,
+    {
+        let mut result = Self::new();
+        result.update_iter(iterator);
         result
     }
 }
