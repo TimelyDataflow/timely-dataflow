@@ -14,21 +14,21 @@ use crate::communication::{Push, Pull, Data};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::Container;
 
-use crate::worker::AsWorker;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
+use crate::progress::Timestamp;
+use crate::worker::AsWorker;
 use super::{BundleCore, Message};
 
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
-use crate::progress::Timestamp;
 
 /// A `ParallelizationContractCore` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContractCore<T, D> {
     /// Type implementing `Push` produced by this pact.
-    type Pusher: Push<BundleCore<T, D>>+'static;
+    type Pusher<A: AsWorker>: Push<BundleCore<T, D>>+'static;
     /// Type implementing `Pull` produced by this pact.
-    type Puller: Pull<BundleCore<T, D>>+'static;
+    type Puller<A: AsWorker>: Pull<BundleCore<T, D>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher<A>, Self::Puller<A>);
 }
 
 /// A `ParallelizationContractCore` specialized for `Vec` containers
@@ -41,9 +41,9 @@ impl<T, D: Clone, P: ParallelizationContractCore<T, Vec<D>>> ParallelizationCont
 pub struct Pipeline;
 
 impl<T: 'static, D: Container> ParallelizationContractCore<T, D> for Pipeline {
-    type Pusher = LogPusher<T, D, ThreadPusher<BundleCore<T, D>>>;
-    type Puller = LogPuller<T, D, ThreadPuller<BundleCore<T, D>>>;
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+    type Pusher<A: AsWorker> = LogPusher<T, D, ThreadPusher<BundleCore<T, D>>>;
+    type Puller<A: AsWorker> = LogPuller<T, D, ThreadPuller<BundleCore<T, D>>>;
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher<A>, Self::Puller<A>) {
         let (pusher, puller) = allocator.pipeline::<Message<T, D>>(identifier, address);
         // // ignore `&mut A` and use thread allocator
         // let (pusher, puller) = Thread::new::<Bundle<T, D>>();
@@ -68,15 +68,13 @@ impl<C, D, F: FnMut(&D)->u64+'static> ExchangeCore<C, D, F> {
     }
 }
 
-// Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Timestamp, C, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for ExchangeCore<C, D, F>
 where
     C: Data + Container + PushPartitioned<Item=D>,
 {
-    type Pusher = ExchangePusher<T, C, D, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, F>;
-    type Puller = LogPuller<T, C, Box<dyn Pull<BundleCore<T, C>>>>;
-
-    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+    type Pusher<A: AsWorker> = ExchangePusher<T, C, D, LogPusher<T, C, A::Pusher<Message<T, C>>>, F>;
+    type Puller<A: AsWorker> = LogPuller<T, C, A::Puller<Message<T, C>>>;
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher<A>, Self::Puller<A>) {
         let (senders, receiver) = allocator.allocate::<Message<T, C>>(identifier, address);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
         (ExchangePusher::new(senders, self.hash_func), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
