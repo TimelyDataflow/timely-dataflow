@@ -229,6 +229,19 @@ impl<T: Clone> Clone for Antichain<T> {
 
 impl<T: TotalOrder> TotalOrder for Antichain<T> { }
 
+impl<T: TotalOrder> Antichain<T> {
+    /// Convert to the at most one element the antichain contains.
+    pub fn into_option(mut self) -> Option<T> {
+        debug_assert!(self.len() <= 1);
+        self.elements.pop()
+    }
+    /// Return a reference to the at most one element the antichain contains.
+    pub fn as_option(&self) -> Option<&T> {
+        debug_assert!(self.len() <= 1);
+        self.elements.last()
+    }
+}
+
 impl<T: Ord+std::hash::Hash> std::hash::Hash for Antichain<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let mut temp = self.elements.iter().collect::<Vec<_>>();
@@ -708,6 +721,16 @@ impl<'a, T: Eq> Eq for AntichainRef<'a, T> { }
 impl<'a, T: PartialOrder> PartialOrder for AntichainRef<'a, T> {
     fn less_equal(&self, other: &Self) -> bool {
         other.iter().all(|t2| self.iter().any(|t1| t1.less_equal(t2)))
+    }
+}
+
+impl<'a, T: TotalOrder> TotalOrder for AntichainRef<'a, T> { }
+
+impl<'a, T: TotalOrder> AntichainRef<'a, T> {
+    /// Return a reference to the at most one element the antichain contains.
+    pub fn as_option(&self) -> Option<&T> {
+        debug_assert!(self.len() <= 1);
+        self.frontier.last()
     }
 }
 
