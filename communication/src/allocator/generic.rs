@@ -54,13 +54,13 @@ impl<T: Data> Push<Message<T>> for GenericPusher<T> {
 /// Enumerates known implementors of `Allocate::Puller`.
 /// Passes trait method calls on to members.
 pub enum GenericPuller<T: Data> {
-    /// Intra-thread pusher
+    /// Intra-thread puller
     Thread(<Thread as Allocate>::Puller<T>),
-    /// Inter-thread, intra-process pusher
+    /// Inter-thread, intra-process puller
     Process(<Process as Allocate>::Puller<T>),
-    /// Inter-thread, intra-process serializing pusher
+    /// Inter-thread, intra-process serializing puller
     ProcessBinary(<ProcessAllocator as Allocate>::Puller<T>),
-    /// Inter-process pusher
+    /// Inter-process puller
     ZeroCopy(<TcpAllocator<Process> as Allocate>::Puller<T>),
 }
 
