@@ -61,7 +61,7 @@ pub trait Operator<G: Scope, C1: Container> {
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P::Puller>,
+        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P::Puller<G>>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P: ParallelizationContract<G::Timestamp, C1>;
 
@@ -95,7 +95,7 @@ pub trait Operator<G: Scope, C1: Container> {
     /// }
     /// ```
     fn unary_notify<CB: ContainerBuilder,
-            L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller>,
+            L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller<G>>,
                      &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, C1>>
@@ -133,7 +133,7 @@ pub trait Operator<G: Scope, C1: Container> {
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller>,
+        L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller<G>>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P: ParallelizationContract<G::Timestamp, C1>;
 
@@ -194,8 +194,8 @@ pub trait Operator<G: Scope, C1: Container> {
         C2: Container,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller>,
-                 &mut FrontieredInputHandleCore<G::Timestamp, C2, P2::Puller>,
+        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller<G>>,
+                 &mut FrontieredInputHandleCore<G::Timestamp, C2, P2::Puller<G>>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P1: ParallelizationContract<G::Timestamp, C1>,
         P2: ParallelizationContract<G::Timestamp, C2>;
@@ -247,8 +247,8 @@ pub trait Operator<G: Scope, C1: Container> {
     /// ```
     fn binary_notify<C2: Container,
               CB: ContainerBuilder,
-              L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
-                       &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
+              L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller<G>>,
+                       &mut InputHandleCore<G::Timestamp, C2, P2::Puller<G>>,
                        &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, C1>,
@@ -294,8 +294,8 @@ pub trait Operator<G: Scope, C1: Container> {
         C2: Container,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
-                 &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
+        L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller<G>>,
+                 &mut InputHandleCore<G::Timestamp, C2, P2::Puller<G>>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P1: ParallelizationContract<G::Timestamp, C1>,
         P2: ParallelizationContract<G::Timestamp, C2>;
@@ -325,7 +325,7 @@ pub trait Operator<G: Scope, C1: Container> {
     /// ```
     fn sink<L, P>(&self, pact: P, name: &str, logic: L)
     where
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P::Puller>)+'static,
+        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P::Puller<G>>)+'static,
         P: ParallelizationContract<G::Timestamp, C1>;
 }
 
@@ -335,7 +335,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P::Puller>,
+        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P::Puller<G>>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P: ParallelizationContract<G::Timestamp, C1> {
 
@@ -360,7 +360,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
     }
 
     fn unary_notify<CB: ContainerBuilder,
-            L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller>,
+            L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller<G>>,
                      &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, C1>>
@@ -385,7 +385,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller>,
+        L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller<G>>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P: ParallelizationContract<G::Timestamp, C1> {
 
@@ -414,8 +414,8 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
         C2: Container,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller>,
-                 &mut FrontieredInputHandleCore<G::Timestamp, C2, P2::Puller>,
+        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller<G>>,
+                 &mut FrontieredInputHandleCore<G::Timestamp, C2, P2::Puller<G>>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P1: ParallelizationContract<G::Timestamp, C1>,
         P2: ParallelizationContract<G::Timestamp, C2> {
@@ -444,8 +444,8 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
 
     fn binary_notify<C2: Container,
               CB: ContainerBuilder,
-              L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
-                       &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
+              L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller<G>>,
+                       &mut InputHandleCore<G::Timestamp, C2, P2::Puller<G>>,
                        &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, C1>,
@@ -474,8 +474,8 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
         C2: Container,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
-                 &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
+        L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller<G>>,
+                 &mut InputHandleCore<G::Timestamp, C2, P2::Puller<G>>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P1: ParallelizationContract<G::Timestamp, C1>,
         P2: ParallelizationContract<G::Timestamp, C2> {
@@ -503,7 +503,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
 
     fn sink<L, P>(&self, pact: P, name: &str, mut logic: L)
     where
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P::Puller>)+'static,
+        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P::Puller<G>>)+'static,
         P: ParallelizationContract<G::Timestamp, C1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
