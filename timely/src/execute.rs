@@ -155,8 +155,8 @@ where
     let alloc = crate::communication::allocator::thread::Thread::new();
     let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc);
     let result = func(&mut worker);
-    if worker.step_or_park(Some(std::time::Duration::new(0, 0))) {
-        while worker.step_or_park(None) { }
+    while worker.has_dataflows() {
+        worker.step_or_park(None);
     }
     result
 }
@@ -285,8 +285,8 @@ where
         }
 
         let result = func(&mut worker);
-        if worker.step_or_park(Some(std::time::Duration::new(0, 0))) {
-            while worker.step_or_park(None) { }
+        while worker.has_dataflows() {
+            worker.step_or_park(None);
         }
         result
     })
@@ -386,8 +386,8 @@ where
     initialize_from(builders, others, move |allocator| {
         let mut worker = Worker::new(worker_config.clone(), allocator);
         let result = func(&mut worker);
-        if worker.step_or_park(Some(std::time::Duration::new(0, 0))) {
-            while worker.step_or_park(None) { }
+        while worker.has_dataflows() {
+            worker.step_or_park(None);
         }
         result
     })

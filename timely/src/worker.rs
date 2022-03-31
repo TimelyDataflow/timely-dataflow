@@ -698,6 +698,11 @@ impl<A: Allocate> Worker<A> {
         self.dataflows.borrow().keys().cloned().collect()
     }
 
+    /// True if there is at least one dataflow under management.
+    pub fn has_dataflows(&self) -> bool {
+        !self.dataflows.borrow().is_empty()
+    }
+
     // Acquire a new distinct dataflow identifier.
     fn allocate_dataflow_index(&mut self) -> usize {
         *self.dataflow_counter.borrow_mut() += 1;
