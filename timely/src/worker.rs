@@ -366,7 +366,7 @@ impl<A: Allocate> Worker<A> {
             (x, y) => x.or(y),
         };
 
-        if !self.dataflows.borrow().is_empty() && delay != Some(Duration::new(0,0)) {
+        if delay != Some(Duration::new(0,0)) {
 
             // Log parking and flush log.
             if let Some(l) = self.logging().as_mut() {
