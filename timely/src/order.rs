@@ -100,6 +100,7 @@ mod product {
     use crate::progress::Timestamp;
     impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for Product<TOuter, TInner> {
         type Summary = Product<TOuter::Summary, TInner::Summary>;
+        type Container = Vec<Self>;
         fn minimum() -> Self { Self { outer: TOuter::minimum(), inner: TInner::minimum() }}
     }
 
@@ -159,6 +160,7 @@ mod tuple {
     use crate::progress::Timestamp;
     impl<TOuter: Timestamp, TInner: Timestamp> Timestamp for (TOuter, TInner) {
         type Summary = (TOuter::Summary, TInner::Summary);
+        type Container = Vec<Self>;
         fn minimum() -> Self { (TOuter::minimum(), TInner::minimum()) }
     }
 

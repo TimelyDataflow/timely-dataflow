@@ -10,11 +10,156 @@ use crate::order::PartialOrder;
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
 pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
+    /// A type storing timestamps.
+    type Container: TimestampContainer<Self> + Debug;
     /// A type summarizing action on a timestamp along a dataflow path.
-    type Summary : PathSummary<Self> + 'static;
+    type Summary : Timestamp + PathSummary<Self> + 'static;
     /// A minimum value suitable as a default.
     fn minimum() -> Self;
 }
+
+/// A type to store timestamps. This serves as a means to avoid heap-allocating space for
+/// totally ordered timestamps, where we know that a frontier is either empty or has exactly
+/// one element.
+pub trait TimestampContainer<T>: Default + Clone {
+    /// Create this container with the specified capacity hint.
+    fn with_capacity(_capacity: usize) -> Self { Default::default()}
+    /// Create this container from the supplied element.
+    fn from_element(element: T) -> Self;
+    /// Create this container from an iterator of elements.
+    fn from_iter<I: IntoIterator<Item=T>>(iterator: I) -> Self {
+        let iter = iterator.into_iter();
+        let mut this = Self::with_capacity(iter.size_hint().0);
+        this.extend(iter);
+        this
+    }
+    /// Remove all elements from this container, potentially leaving allocations in place.
+    fn clear(&mut self);
+    /// Sort the elements of this container.
+    fn sort(&mut self) where T: Ord;
+
+    /// Insert a single element into this container while maintaining the frontier invariants.
+    /// Returns whether the container changed because of the insert.
+    fn insert(&mut self, element: T) -> bool;
+
+    /// Extend the container by individually inserting the elments. Returns whether the container
+    /// changed.
+    fn extend<I: IntoIterator<Item=T>>(&mut self, iterator: I) -> bool {
+        let mut added = false;
+        for element in iterator {
+            added = self.insert(element) || added;
+        }
+        added
+    }
+    /// Reserve space for additional elements.
+    fn reserve(&mut self, _additional: usize) {}
+    /// Test if this container is less than the provided `time`.
+    fn less_than(&self, time: &T) -> bool;
+    /// Test if this container is less or equal the provided `time`.
+    fn less_equal(&self, time: &T) -> bool;
+    /// Represent this container as a reference to a slice.
+    fn as_ref(&self) -> &[T];
+    /// Convert to the at most one element the antichain contains.
+    fn into_option(self) -> Option<T>;
+    /// Return a reference to the at most one element the antichain contains.
+    fn as_option(&self) -> Option<&T>;
+    /// Convert this container into a vector.
+    fn into_vec(self) -> Vec<T>;
+}
+
+impl<T: PartialOrder + Clone> TimestampContainer<T> for Option<T> {
+    fn from_element(element: T) -> Self { Some(element) }
+    fn insert(&mut self, element: T) -> bool {
+        match self {
+            Some(e) if !e.less_equal(&element) => {
+                *self = Some(element);
+                true
+            }
+            None => {
+                *self = Some(element);
+                true
+            }
+            _ => false,
+        }
+    }
+    fn clear(&mut self) {
+        *self = None
+    }
+    fn sort(&mut self) where T: Ord {
+    }
+
+    fn less_than(&self, time: &T) -> bool {
+        self.as_ref().map(|x| x.less_than(time)).unwrap_or(false)
+    }
+
+    fn less_equal(&self, time: &T) -> bool {
+        self.as_ref().map(|x| x.less_equal(time)).unwrap_or(false)
+    }
+
+    fn as_ref(&self) -> &[T] {
+        match self {
+            None => &[],
+            Some(element) => std::slice::from_ref(element),
+        }
+    }
+    fn into_option(self) -> Option<T> {
+        self
+    }
+    fn as_option(&self) -> Option<&T> {
+        self.as_ref()
+    }
+    fn into_vec(self) -> Vec<T> {
+        match self {
+            None => vec![],
+            Some(element) => vec![element],
+        }
+    }
+}
+
+impl<T: PartialOrder + Clone> TimestampContainer<T> for Vec<T> {
+    fn from_element(element: T) -> Self { vec![element] }
+    fn with_capacity(capacity: usize) -> Self {
+        Vec::with_capacity(capacity)
+    }
+    fn insert(&mut self, element: T) -> bool {
+        if !self.iter().any(|x| x.less_equal(&element)) {
+            self.retain(|x| !element.less_equal(x));
+            self.push(element);
+            true
+        } else {
+            false
+        }
+    }
+    fn clear(&mut self) {
+        self.clear()
+    }
+    fn sort(&mut self) where T: Ord {
+        <[T]>::sort(self)
+    }
+
+    fn less_than(&self, time: &T) -> bool {
+        self.iter().any(|x| x.less_than(time))
+    }
+
+    fn less_equal(&self, time: &T) -> bool {
+        self.iter().any(|x| x.less_equal(time))
+    }
+    fn as_ref(&self) -> &[T] {
+        &self
+    }
+    fn into_option(mut self) -> Option<T> {
+        debug_assert!(self.len() <= 1);
+        self.pop()
+    }
+    fn as_option(&self) -> Option<&T> {
+        debug_assert!(self.len() <= 1);
+        self.last()
+    }
+    fn into_vec(self) -> Vec<T> {
+        self
+    }
+}
+
 
 /// A summary of how a timestamp advances along a timely dataflow path.
 pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
@@ -61,7 +206,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     fn followed_by(&self, other: &Self) -> Option<Self>;
 }
 
-impl Timestamp for () { type Summary = (); fn minimum() -> Self { () }}
+impl Timestamp for () { type Summary = (); type Container = Option<()>; fn minimum() -> Self { () }}
 impl PathSummary<()> for () {
     #[inline] fn results_in(&self, _src: &()) -> Option<()> { Some(()) }
     #[inline] fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
@@ -73,6 +218,7 @@ macro_rules! implement_timestamp_add {
         $(
             impl Timestamp for $index_type {
                 type Summary = $index_type;
+                type Container = Option<$index_type>;
                 fn minimum() -> Self { Self::min_value() }
             }
             impl PathSummary<$index_type> for $index_type {
@@ -89,6 +235,7 @@ implement_timestamp_add!(usize, u128, u64, u32, u16, u8, isize, i128, i64, i32, 
 
 impl Timestamp for ::std::time::Duration {
     type Summary = ::std::time::Duration;
+    type Container = Option<::std::time::Duration>;
     fn minimum() -> Self { ::std::time::Duration::new(0, 0) }
 }
 impl PathSummary<::std::time::Duration> for ::std::time::Duration {
