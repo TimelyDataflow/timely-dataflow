@@ -17,6 +17,7 @@ use crate::allocator::zero_copy::initialize::initialize_networking;
 use crate::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 use std::fmt::{Debug, Formatter};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 
 /// Possible configurations for the communication infrastructure.
@@ -176,7 +177,8 @@ impl Config {
 /// This method allocates an `allocator::Generic` for each thread, spawns local worker threads,
 /// and invokes the supplied function with the allocator.
 /// The method returns a `WorkerGuards<T>` which can be `join`ed to retrieve the return values
-/// (or errors) of the workers.
+/// (or errors) of the workers. If the worker has no work to do, it should
+/// check `kill_switch`, if it is not set it is safe to park the thread.
 ///
 ///
 /// # Examples
@@ -187,7 +189,7 @@ impl Config {
 /// let config = timely_communication::Config::Process(2);
 ///
 /// // initializes communication, spawns workers
-/// let guards = timely_communication::initialize(config, |mut allocator| {
+/// let guards = timely_communication::initialize(config, |mut allocator, _kill_switch| {
 ///     println!("worker {} started", allocator.index());
 ///
 ///     // allocates a pair of senders list and one receiver.
@@ -236,7 +238,7 @@ impl Config {
 /// result: Ok(0)
 /// result: Ok(1)
 /// ```
-pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
+pub fn initialize<T:Send+'static, F: Fn(Generic, Arc<AtomicBool>)->T+Send+Sync+'static>(
     config: Config,
     func: F,
 ) -> Result<WorkerGuards<T>,String> {
@@ -259,7 +261,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 /// let builders = timely_communication::allocator::process::Process::new_vector(2);
 ///
 /// // initializes communication, spawns workers
-/// let guards = timely_communication::initialize_from(builders, Box::new(()), |mut allocator| {
+/// let guards = timely_communication::initialize_from(builders, Box::new(()), |mut allocator, _kill_switch| {
 ///     println!("worker {} started", allocator.index());
 ///
 ///     // allocates a pair of senders list and one receiver.
@@ -303,27 +305,32 @@ pub fn initialize_from<A, T, F>(
 where
     A: AllocateBuilder+'static,
     T: Send+'static,
-    F: Fn(<A as AllocateBuilder>::Allocator)->T+Send+Sync+'static
+    F: Fn(<A as AllocateBuilder>::Allocator, Arc<AtomicBool>)->T+Send+Sync+'static
 {
     let logic = Arc::new(func);
     let mut guards = Vec::new();
+    let mut kill_switches = Vec::new();
     for (index, builder) in builders.into_iter().enumerate() {
         let clone = logic.clone();
+        let kill_switch = Arc::new(AtomicBool::new(false));
+        let kill_switch2 = Arc::clone(&kill_switch);
         guards.push(thread::Builder::new()
                             .name(format!("timely:work-{}", index))
                             .spawn(move || {
                                 let communicator = builder.build();
-                                (*clone)(communicator)
+                                (*clone)(communicator, kill_switch2)
                             })
                             .map_err(|e| format!("{:?}", e))?);
+        kill_switches.push(kill_switch);
     }
 
-    Ok(WorkerGuards { guards, others })
+    Ok(WorkerGuards { guards, others, kill_switches })
 }
 
 /// Maintains `JoinHandle`s for worker threads.
 pub struct WorkerGuards<T:Send+'static> {
     guards: Vec<::std::thread::JoinHandle<T>>,
+    kill_switches: Vec<Arc<AtomicBool>>,
     others: Box<dyn Any+Send>,
 }
 
@@ -350,7 +357,9 @@ impl<T:Send+'static> WorkerGuards<T> {
 
 impl<T:Send+'static> Drop for WorkerGuards<T> {
     fn drop(&mut self) {
-        for guard in self.guards.drain(..) {
+        for (guard, kill_switch) in self.guards.drain(..).zip(self.kill_switches.drain(..)) {
+            kill_switch.swap(true, Ordering::SeqCst);
+            guard.thread().unpark();
             guard.join().expect("Worker panic");
         }
         // println!("WORKER THREADS JOINED");

@@ -1,5 +1,7 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use crate::communication::{initialize_from, Allocator, allocator::AllocateBuilder, WorkerGuards};
 use crate::dataflow::scopes::Child;
 use crate::worker::Worker;
@@ -153,7 +155,8 @@ where
     F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
 {
     let alloc = crate::communication::allocator::thread::Thread::new();
-    let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc);
+    let kill_switch = Arc::new(AtomicBool::new(false));
+    let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc, kill_switch);
     let result = func(&mut worker);
     while worker.step_or_park(None) { }
     result
@@ -258,9 +261,9 @@ where
     let (allocators, other) = config.communication.try_build()?;
 
     let worker_config = config.worker;
-    initialize_from(allocators, other, move |allocator| {
+    initialize_from(allocators, other, move |allocator, kill_switch| {
 
-        let mut worker = Worker::new(worker_config.clone(), allocator);
+        let mut worker = Worker::new(worker_config.clone(), allocator, kill_switch);
 
         // If an environment variable is set, use it as the default timely logging.
         if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
@@ -379,8 +382,8 @@ where
     A: AllocateBuilder+'static,
     T: Send+'static,
     F: Fn(&mut Worker<<A as AllocateBuilder>::Allocator>)->T+Send+Sync+'static {
-    initialize_from(builders, others, move |allocator| {
-        let mut worker = Worker::new(worker_config.clone(), allocator);
+    initialize_from(builders, others, move |allocator, kill_switch| {
+        let mut worker = Worker::new(worker_config.clone(), allocator, kill_switch);
         let result = func(&mut worker);
         while worker.step_or_park(None) { }
         result

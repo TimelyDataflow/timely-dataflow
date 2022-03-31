@@ -22,7 +22,7 @@
 //! let config = timely_communication::Config::Process(2);
 //!
 //! // initializes communication, spawns workers
-//! let guards = timely_communication::initialize(config, |mut allocator| {
+//! let guards = timely_communication::initialize(config, |mut allocator, _kill_switch| {
 //!     println!("worker {} started", allocator.index());
 //!
 //!     // allocates a pair of senders list and one receiver.

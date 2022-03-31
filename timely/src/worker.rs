@@ -8,6 +8,7 @@ use std::time::{Instant, Duration};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::communication::{Allocate, Data, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
@@ -225,6 +226,7 @@ pub struct Worker<A: Allocate> {
     // Temporary storage for channel identifiers during dataflow construction.
     // These are then associated with a dataflow once constructed.
     temp_channel_ids: Rc<RefCell<Vec<usize>>>,
+    kill_switch: Arc<AtomicBool>,
 }
 
 impl<A: Allocate> AsWorker for Worker<A> {
@@ -260,7 +262,7 @@ impl<A: Allocate> Scheduler for Worker<A> {
 
 impl<A: Allocate> Worker<A> {
     /// Allocates a new `Worker` bound to a channel allocator.
-    pub fn new(config: Config, c: A) -> Worker<A> {
+    pub fn new(config: Config, c: A, kill_switch: Arc<AtomicBool>) -> Worker<A> {
         let now = Instant::now();
         let index = c.index();
         Worker {
@@ -275,6 +277,7 @@ impl<A: Allocate> Worker<A> {
             activations: Rc::new(RefCell::new(Activations::new(now))),
             active_dataflows: Default::default(),
             temp_channel_ids:  Default::default(),
+            kill_switch,
         }
     }
 
@@ -366,7 +369,7 @@ impl<A: Allocate> Worker<A> {
             (x, y) => x.or(y),
         };
 
-        if !self.dataflows.borrow().is_empty() && delay != Some(Duration::new(0,0)) {
+        if delay != Some(Duration::new(0,0)) && !self.kill_switch.load(Ordering::SeqCst)  {
 
             // Log parking and flush log.
             if let Some(l) = self.logging().as_mut() {
@@ -381,30 +384,30 @@ impl<A: Allocate> Worker<A> {
             // Log return from unpark.
             self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));
         }
-        else {   // Schedule active dataflows.
 
-            let active_dataflows = &mut self.active_dataflows;
-            self.activations
-                .borrow_mut()
-                .for_extensions(&[], |index| active_dataflows.push(index));
+        // Schedule active dataflows.
+        let active_dataflows = &mut self.active_dataflows;
+        self.activations
+            .borrow_mut()
+            .for_extensions(&[], |index| active_dataflows.push(index));
 
-            let mut dataflows = self.dataflows.borrow_mut();
-            for index in active_dataflows.drain(..) {
-                // Step dataflow if it exists, remove if not incomplete.
-                if let Entry::Occupied(mut entry) = dataflows.entry(index) {
-                    // TODO: This is a moment at which a scheduling decision is being made.
-                    let incomplete = entry.get_mut().step();
-                    if !incomplete {
-                        let mut paths = self.paths.borrow_mut();
-                        for channel in entry.get_mut().channel_ids.drain(..) {
-                            paths.remove(&channel);
-                        }
-                        entry.remove_entry();
+        let mut dataflows = self.dataflows.borrow_mut();
+        for index in active_dataflows.drain(..) {
+            // Step dataflow if it exists, remove if not incomplete.
+            if let Entry::Occupied(mut entry) = dataflows.entry(index) {
+                // TODO: This is a moment at which a scheduling decision is being made.
+                let incomplete = entry.get_mut().step();
+                if !incomplete {
+                    let mut paths = self.paths.borrow_mut();
+                    for channel in entry.get_mut().channel_ids.drain(..) {
+                        paths.remove(&channel);
                     }
+                    entry.remove_entry();
                 }
             }
         }
-
+        std::mem::drop(dataflows);
+    
         // Clean up, indicate if dataflows remain.
         self.logging.borrow_mut().flush();
         self.allocator.borrow_mut().release();
@@ -721,6 +724,7 @@ impl<A: Allocate> Clone for Worker<A> {
             activations: self.activations.clone(),
             active_dataflows: Vec::new(),
             temp_channel_ids: self.temp_channel_ids.clone(),
+            kill_switch: Arc::clone(&self.kill_switch),
         }
     }
 }
