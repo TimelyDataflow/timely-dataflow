@@ -366,7 +366,7 @@ impl<A: Allocate> Worker<A> {
             (x, y) => x.or(y),
         };
 
-        if !self.dataflows.borrow().is_empty() && delay != Some(Duration::new(0,0)) {
+        if delay != Some(Duration::new(0,0)) {
 
             // Log parking and flush log.
             if let Some(l) = self.logging().as_mut() {
@@ -696,6 +696,11 @@ impl<A: Allocate> Worker<A> {
     /// List the current dataflow indices.
     pub fn installed_dataflows(&self) -> Vec<usize> {
         self.dataflows.borrow().keys().cloned().collect()
+    }
+
+    /// True if there is at least one dataflow under management.
+    pub fn has_dataflows(&self) -> bool {
+        !self.dataflows.borrow().is_empty()
     }
 
     // Acquire a new distinct dataflow identifier.
