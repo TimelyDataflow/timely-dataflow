@@ -69,6 +69,7 @@ pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: I
 ///             .inspect_time(|t, d| eprintln!("@ {:?}: {:?}", t, d))
 ///             .probe_with(&mut probe_handle);
 ///         });
+///     Ok(())
 ///     }).unwrap();
 /// }
 /// ```

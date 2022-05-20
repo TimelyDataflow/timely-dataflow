@@ -31,8 +31,9 @@ fn main() {
                 input.send(round);
             }
             input.advance_to(round + 1);
-            worker.step_while(|| probe.less_than(input.time()));
+            worker.step_while(|| probe.less_than(input.time()))?;
         }
+        Ok(())
     }).unwrap();
 }
 ```
@@ -41,7 +42,7 @@ We'll put the whole program up here, but there are really just two lines that de
 
 ```rust,ignore
 input.advance_to(round + 1);
-worker.step_while(|| probe.less_than(input.time()));
+worker.step_while(|| probe.less_than(input.time()))?;
 ```
 
 Let's talk about each of them.

@@ -190,7 +190,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn receive(&mut self) {
+    fn receive(&mut self) -> anyhow::Result<()> {
 
         // Check for channels whose `Puller` has been dropped.
         let mut canaries = self.canaries.borrow_mut();
@@ -205,12 +205,12 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             // on events from it.
             // assert!(dropped.borrow().is_empty());
         }
-        ::std::mem::drop(canaries);
+        drop(canaries);
 
-        self.inner.receive();
+        self.inner.receive()?;
 
         for recv in self.recvs.iter_mut() {
-            recv.drain_into(&mut self.staged);
+            recv.drain_into(&mut self.staged)?;
         }
 
         let mut events = self.inner.events().borrow_mut();
@@ -251,13 +251,14 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
                 }
             }
         }
+        Ok(())
     }
 
     // Perform postparatory work, most likely sending un-full binary buffers.
-    fn release(&mut self) {
+    fn release(&mut self) -> anyhow::Result<()> {
         // Publish outgoing byte ledgers.
         for send in self.sends.iter_mut() {
-            send.borrow_mut().publish();
+            send.borrow_mut().publish()?;
         }
 
         // OPTIONAL: Tattle on channels sitting on borrowed data.
@@ -268,6 +269,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
         //         eprintln!("Warning: worker {}, undrained channel[{}].len() = {}", self.index, index, len);
         //     }
         // }
+        Ok(())
     }
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
         self.inner.events()

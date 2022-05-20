@@ -10,6 +10,8 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
+use crate::Result;
+
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 
@@ -277,7 +279,7 @@ where
 
     fn path(&self) -> &[usize] { &self.path }
 
-    fn schedule(&mut self) -> bool {
+    fn schedule(&mut self) -> Result<bool> {
 
         // This method performs several actions related to progress tracking
         // and child operator scheduling. The actions have been broken apart
@@ -309,13 +311,13 @@ where
             // De-duplicate, and don't revisit.
             if index > previous {
                 // TODO: This is a moment where a scheduling decision happens.
-                self.activate_child(index);
+                self.activate_child(index)?;
                 previous = index;
             }
         }
 
         // Transmit produced progress updates.
-        self.send_progress();
+        self.send_progress()?;
 
         // If child scopes surface more final pointstamp updates we must re-execute.
         if !self.final_pointstamp.is_empty() {
@@ -326,7 +328,7 @@ where
         let incomplete = self.incomplete_count > 0;
         let tracking = self.pointstamp_tracker.tracking_anything();
 
-        incomplete || tracking
+        Ok(incomplete || tracking)
     }
 }
 
@@ -339,11 +341,11 @@ where
     /// Schedules a child operator and collects progress statements.
     ///
     /// The return value indicates that the child task cannot yet shut down.
-    fn activate_child(&mut self, child_index: usize) -> bool {
+    fn activate_child(&mut self, child_index: usize) -> Result<bool> {
 
         let child = &mut self.children[child_index];
 
-        let incomplete = child.schedule();
+        let incomplete = child.schedule()?;
 
         if incomplete != self.incomplete[child_index] {
             if incomplete { self.incomplete_count += 1; }
@@ -375,7 +377,7 @@ where
             child.extract_progress(&mut self.final_pointstamp, &mut self.temp_active);
         }
 
-        incomplete
+        Ok(incomplete)
     }
 
     /// Move frontier changes from parent into progress statements.
@@ -507,7 +509,7 @@ where
     ///
     /// This method does not guarantee that all of `self.local_pointstamps` are
     /// sent, but that no blocking pointstamps remain
-    fn send_progress(&mut self) {
+    fn send_progress(&mut self) -> Result<()> {
 
         // If we are requested to eagerly send progress updates, or if there are
         // updates visible in the scope-wide frontier, we must send all updates.
@@ -522,8 +524,9 @@ where
         };
 
         if must_send {
-            self.progcaster.send(&mut self.local_pointstamp);
+            self.progcaster.send(&mut self.local_pointstamp)?;
         }
+        Ok(())
     }
 }
 
@@ -679,7 +682,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         }
     }
 
-    pub fn schedule(&mut self) -> bool {
+    pub fn schedule(&mut self) -> Result<bool> {
 
         if let Some(ref mut operator) = self.operator {
 
@@ -716,7 +719,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
 
             // A closed operator shouldn't keep anything open.
-            false
+            Ok(false)
         }
     }
 

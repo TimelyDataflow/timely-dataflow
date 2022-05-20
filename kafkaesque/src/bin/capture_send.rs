@@ -27,5 +27,6 @@ fn main() {
                 .to_stream(scope)
                 .capture_into(producer)
         );
+        Ok(())
     }).unwrap();
 }

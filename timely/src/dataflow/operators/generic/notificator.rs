@@ -230,6 +230,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///     }
 ///     in1.close();
 ///     in2.close();
+///     Ok(())
 /// }).unwrap();
 /// ```
 #[derive(Debug)]

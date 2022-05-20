@@ -79,13 +79,14 @@ impl<T: ExchangeData> Sequencer<T> {
     ///         sequencer.push(format!("worker {:?}, round {:?}", worker.index(), round));
     ///
     ///         // Ensures the pushed string is sent.
-    ///         worker.step();
+    ///         worker.step()?;
     ///
     ///         // Read out received announcements.
     ///         while let Some(element) = sequencer.next() {
     ///             println!("{:?}:\tWorker {:?}:\t recv'd: {:?}", timer.elapsed(), worker.index(), element);
     ///         }
     ///     }
+    ///     Ok(())
     /// }).expect("Timely computation did not complete correctly.");
     /// ```
     pub fn new<A: Allocate>(worker: &mut Worker<A>, timer: Instant) -> Self {

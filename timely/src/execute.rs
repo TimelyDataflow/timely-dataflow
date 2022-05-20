@@ -3,7 +3,7 @@
 use crate::communication::{initialize_from, Allocator, allocator::AllocateBuilder, WorkerGuards};
 use crate::dataflow::scopes::Child;
 use crate::worker::Worker;
-use crate::{CommunicationConfig, WorkerConfig};
+use crate::{CommunicationConfig, WorkerConfig, Result};
 
 /// Configures the execution of a timely dataflow computation.
 pub struct Config {
@@ -38,7 +38,7 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config, String> {
+    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config> {
         Ok(Config {
             communication: CommunicationConfig::from_matches(matches)?,
             worker: WorkerConfig::from_matches(matches)?,
@@ -49,10 +49,10 @@ impl Config {
     ///
     /// Most commonly, callers supply `std::env::args()` as the iterator.
     #[cfg(feature = "getopts")]
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config, String> {
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config> {
         let mut opts = getopts_dep::Options::new();
         Config::install_options(&mut opts);
-        let matches = opts.parse(args).map_err(|e| e.to_string())?;
+        let matches = opts.parse(args)?;
         Config::from_matches(&matches)
     }
 
@@ -123,7 +123,7 @@ where
     T: Send+'static,
     F: FnOnce(&mut Child<Worker<crate::communication::allocator::thread::Thread>,u64>)->T+Send+Sync+'static
 {
-    crate::execute::execute_directly(|worker| worker.dataflow(|scope| func(scope)))
+    execute_directly(|worker| worker.dataflow(|scope| func(scope))).unwrap()
 }
 
 
@@ -145,9 +145,9 @@ where
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
-/// });
+/// }).unwrap();
 /// ```
-pub fn execute_directly<T, F>(func: F) -> T
+pub fn execute_directly<T, F>(func: F) -> Result<T>
 where
     T: Send+'static,
     F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
@@ -156,9 +156,9 @@ where
     let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc);
     let result = func(&mut worker);
     while worker.has_dataflows() {
-        worker.step_or_park(None);
+        worker.step_or_park(None)?;
     }
-    result
+    Ok(result)
 }
 
 /// Executes a timely dataflow from a configuration and per-communicator logic.
@@ -188,7 +188,8 @@ where
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
-///     })
+///     });
+///     Ok(())
 /// }).unwrap();
 /// ```
 ///
@@ -213,6 +214,7 @@ where
 ///                .inspect(|x| println!("seen: {:?}", x))
 ///                .capture_into(send);
 ///     });
+///     Ok(())
 /// }).unwrap();
 ///
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
@@ -221,10 +223,10 @@ where
 pub fn execute<T, F>(
     mut config: Config,
     func: F
-) -> Result<WorkerGuards<T>,String>
+) -> Result<WorkerGuards<Result<T>>>
 where
     T:Send+'static,
-    F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static {
+    F: Fn(&mut Worker<Allocator>)->Result<T>+Send+Sync+'static {
 
     if let CommunicationConfig::Cluster { ref mut log_fn, .. } = config.communication {
 
@@ -286,7 +288,7 @@ where
 
         let result = func(&mut worker);
         while worker.has_dataflows() {
-            worker.step_or_park(None);
+            worker.step_or_park(None)?;
         }
         result
     })
@@ -331,7 +333,8 @@ where
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
 ///                .inspect(|x| println!("seen: {:?}", x));
-///     })
+///     });
+///     Ok(())
 /// }).unwrap();
 /// ```
 /// ```ignore
@@ -348,10 +351,10 @@ where
 /// host3:port
 /// ```
 #[cfg(feature = "getopts")]
-pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,String>
+pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<Result<T>>>
     where I: Iterator<Item=String>,
           T:Send+'static,
-          F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static, {
+          F: Fn(&mut Worker<Allocator>)->Result<T>+Send+Sync+'static, {
     let config = Config::from_args(iter)?;
     execute(config, func)
 }
@@ -378,7 +381,7 @@ pub fn execute_from<A, T, F>(
     others: Box<dyn ::std::any::Any+Send>,
     worker_config: WorkerConfig,
     func: F,
-) -> Result<WorkerGuards<T>, String>
+) -> Result<WorkerGuards<Result<T>>>
 where
     A: AllocateBuilder+'static,
     T: Send+'static,
@@ -387,8 +390,8 @@ where
         let mut worker = Worker::new(worker_config.clone(), allocator);
         let result = func(&mut worker);
         while worker.has_dataflows() {
-            worker.step_or_park(None);
+            worker.step_or_park(None)?;
         }
-        result
+        Ok(result)
     })
 }

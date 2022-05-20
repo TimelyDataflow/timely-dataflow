@@ -25,7 +25,7 @@ fn main() {
             let stream2 = (0 .. 9).to_stream(scope);
 
         });
-
+        Ok(())
     }).unwrap();
 }
 ```

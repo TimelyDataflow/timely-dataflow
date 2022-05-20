@@ -8,6 +8,7 @@ use std::time::{Instant, Duration};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
+use anyhow::bail;
 
 use crate::communication::{Allocate, Data, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
@@ -17,6 +18,7 @@ use crate::progress::SubgraphBuilder;
 use crate::progress::operate::Operate;
 use crate::dataflow::scopes::Child;
 use crate::logging::TimelyLogger;
+use crate::Result;
 
 /// Different ways in which timely's progress tracking can work.
 ///
@@ -71,13 +73,13 @@ impl Default for ProgressMode {
 }
 
 impl FromStr for ProgressMode {
-    type Err = String;
+    type Err = anyhow::Error;
 
-    fn from_str(s: &str) -> Result<ProgressMode, String> {
+    fn from_str(s: &str) -> Result<ProgressMode> {
         match s {
             "eager" => Ok(ProgressMode::Eager),
             "demand" => Ok(ProgressMode::Demand),
-            _ => Err(format!("unknown progress mode: {}", s)),
+            _ => bail!("unknown progress mode: {s}"),
         }
     }
 }
@@ -115,7 +117,7 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config, String> {
+    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config> {
         let progress_mode = matches
             .opt_get_default("progress-mode", ProgressMode::Eager)?;
         Ok(Config::default().progress_mode(progress_mode))
@@ -141,6 +143,7 @@ impl Config {
     /// timely::execute(config, |worker| {
     ///    use crate::timely::worker::AsWorker;
     ///    assert_eq!(worker.config().get::<u64>("example"), Some(&7));
+    ///     Ok(())
     /// }).unwrap();
     /// ```
     pub fn set<T>(&mut self, key: String, val: T) -> &mut Self
@@ -164,6 +167,7 @@ impl Config {
     /// timely::execute(config, |worker| {
     ///    use crate::timely::worker::AsWorker;
     ///    assert_eq!(worker.config().get::<u64>("example"), Some(&7));
+    ///     Ok(())
     /// }).unwrap();
     /// ```
     pub fn get<T: 'static>(&self, key: &str) -> Option<&T> {
@@ -296,10 +300,11 @@ impl<A: Allocate> Worker<A> {
     ///             .inspect(|x| println!("{:?}", x));
     ///     });
     ///
-    ///     worker.step();
-    /// });
+    ///     worker.step()?;
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self) -> Result<bool> {
         self.step_or_park(Some(Duration::from_secs(0)))
     }
 
@@ -327,14 +332,15 @@ impl<A: Allocate> Worker<A> {
     ///             .inspect(|x| println!("{:?}", x));
     ///     });
     ///
-    ///     worker.step_or_park(Some(Duration::from_secs(1)));
-    /// });
+    ///     worker.step_or_park(Some(Duration::from_secs(1)))?;
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
-    pub fn step_or_park(&mut self, duration: Option<Duration>) -> bool {
+    pub fn step_or_park(&mut self, duration: Option<Duration>) -> Result<bool> {
 
         {   // Process channel events. Activate responders.
             let mut allocator = self.allocator.borrow_mut();
-            allocator.receive();
+            allocator.receive()?;
             let events = allocator.events().clone();
             let mut borrow = events.borrow_mut();
             let paths = self.paths.borrow();
@@ -393,7 +399,7 @@ impl<A: Allocate> Worker<A> {
                 // Step dataflow if it exists, remove if not incomplete.
                 if let Entry::Occupied(mut entry) = dataflows.entry(index) {
                     // TODO: This is a moment at which a scheduling decision is being made.
-                    let incomplete = entry.get_mut().step();
+                    let incomplete = entry.get_mut().step()?;
                     if !incomplete {
                         let mut paths = self.paths.borrow_mut();
                         for channel in entry.get_mut().channel_ids.drain(..) {
@@ -407,8 +413,8 @@ impl<A: Allocate> Worker<A> {
 
         // Clean up, indicate if dataflows remain.
         self.logging.borrow_mut().flush();
-        self.allocator.borrow_mut().release();
-        !self.dataflows.borrow().is_empty()
+        self.allocator.borrow_mut().release()?;
+        Ok(!self.dataflows.borrow().is_empty())
     }
 
     /// Calls `self.step()` as long as `func` evaluates to true.
@@ -433,10 +439,11 @@ impl<A: Allocate> Worker<A> {
     ///             .probe()
     ///     });
     ///
-    ///     worker.step_while(|| probe.less_than(&0));
-    /// });
+    ///     worker.step_while(|| probe.less_than(&0))?;
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
-    pub fn step_while<F: FnMut()->bool>(&mut self, func: F) {
+    pub fn step_while<F: FnMut()->bool>(&mut self, func: F) -> Result<()> {
         self.step_or_park_while(Some(Duration::from_secs(0)), func)
     }
 
@@ -462,11 +469,13 @@ impl<A: Allocate> Worker<A> {
     ///             .probe()
     ///     });
     ///
-    ///     worker.step_or_park_while(None, || probe.less_than(&0));
-    /// });
+    ///     worker.step_or_park_while(None, || probe.less_than(&0))?;
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
-    pub fn step_or_park_while<F: FnMut()->bool>(&mut self, duration: Option<Duration>, mut func: F) {
-        while func() { self.step_or_park(duration); }
+    pub fn step_or_park_while<F: FnMut()->bool>(&mut self, duration: Option<Duration>, mut func: F) -> Result<()> {
+        while func() { self.step_or_park(duration)?; }
+        Ok(())
     }
 
     /// The index of the worker out of its peers.
@@ -480,8 +489,8 @@ impl<A: Allocate> Worker<A> {
     ///     let timer = worker.timer();
     ///
     ///     println!("{:?}\tWorker {} of {}", timer.elapsed(), index, peers);
-    ///
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn index(&self) -> usize { self.allocator.borrow().index() }
     /// The total number of peer workers.
@@ -495,8 +504,8 @@ impl<A: Allocate> Worker<A> {
     ///     let timer = worker.timer();
     ///
     ///     println!("{:?}\tWorker {} of {}", timer.elapsed(), index, peers);
-    ///
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn peers(&self) -> usize { self.allocator.borrow().peers() }
 
@@ -511,8 +520,8 @@ impl<A: Allocate> Worker<A> {
     ///     let timer = worker.timer();
     ///
     ///     println!("{:?}\tWorker {} of {}", timer.elapsed(), index, peers);
-    ///
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn timer(&self) -> Instant { self.timer }
 
@@ -536,7 +545,8 @@ impl<A: Allocate> Worker<A> {
     ///           .insert::<timely::logging::TimelyEvent,_>("timely", |time, data|
     ///               println!("{:?}\t{:?}", time, data)
     ///           );
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
         self.logging.borrow_mut()
@@ -555,7 +565,8 @@ impl<A: Allocate> Worker<A> {
     ///         // uses of `scope` to build dataflow
     ///
     ///     });
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn dataflow<T, R, F>(&mut self, func: F) -> R
     where
@@ -579,7 +590,8 @@ impl<A: Allocate> Worker<A> {
     ///         // uses of `scope` to build dataflow
     ///
     ///     });
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn dataflow_named<T, R, F>(&mut self, name: &str, func: F) -> R
     where
@@ -613,7 +625,8 @@ impl<A: Allocate> Worker<A> {
     ///
     ///         }
     ///     );
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn dataflow_core<T, R, F, V>(&mut self, name: &str, mut logging: Option<TimelyLogger>, mut resources: V, func: F) -> R
     where
@@ -744,15 +757,15 @@ impl Wrapper {
     /// If the dataflow is incomplete, this call will drop it and its resources,
     /// dropping the dataflow first and then the resources (so that, e.g., shared
     /// library bindings will outlive the dataflow).
-    fn step(&mut self) -> bool {
+    fn step(&mut self) -> Result<bool> {
 
         // Perhaps log information about the start of the schedule call.
         if let Some(l) = self.logging.as_mut() {
             l.log(crate::logging::ScheduleEvent::start(self.identifier));
         }
 
-        let incomplete = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false);
-        if !incomplete {
+        let incomplete = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(Ok(false));
+        if !matches!(incomplete, Ok(true)) {
             self.operate = None;
             self.resources = None;
         }

@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use std::any::Any;
 
+use crate::Result;
+
 use crate::allocator::thread::ThreadBuilder;
 use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
 use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
@@ -17,6 +19,7 @@ use crate::allocator::zero_copy::initialize::initialize_networking;
 use crate::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 use std::fmt::{Debug, Formatter};
+use anyhow::bail;
 
 
 /// Possible configurations for the communication infrastructure.
@@ -89,23 +92,23 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts::Matches) -> Result<Config, String> {
-        let threads = matches.opt_get_default("w", 1_usize).map_err(|e| e.to_string())?;
-        let process = matches.opt_get_default("p", 0_usize).map_err(|e| e.to_string())?;
-        let processes = matches.opt_get_default("n", 1_usize).map_err(|e| e.to_string())?;
+    pub fn from_matches(matches: &getopts::Matches) -> Result<Config> {
+        let threads = matches.opt_get_default("w", 1_usize)?;
+        let process = matches.opt_get_default("p", 0_usize)?;
+        let processes = matches.opt_get_default("n", 1_usize)?;
         let report = matches.opt_present("report");
         let zerocopy = matches.opt_present("zerocopy");
 
         if processes > 1 {
             let mut addresses = Vec::new();
             if let Some(hosts) = matches.opt_str("h") {
-                let file = ::std::fs::File::open(hosts.clone()).map_err(|e| e.to_string())?;
+                let file = ::std::fs::File::open(hosts.clone())?;
                 let reader = ::std::io::BufReader::new(file);
                 for line in reader.lines().take(processes) {
-                    addresses.push(line.map_err(|e| e.to_string())?);
+                    addresses.push(line?);
                 }
                 if addresses.len() < processes {
-                    return Err(format!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes));
+                    bail!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes);
                 }
             }
             else {
@@ -140,15 +143,15 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config, String> {
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config> {
         let mut opts = getopts::Options::new();
         Config::install_options(&mut opts);
-        let matches = opts.parse(args).map_err(|e| e.to_string())?;
+        let matches = opts.parse(args)?;
         Config::from_matches(&matches)
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
+    pub fn try_build(self) -> anyhow::Result<(Vec<GenericBuilder>, Box<dyn Any+Send>)> {
         match self {
             Config::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
@@ -164,7 +167,7 @@ impl Config {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
                     },
-                    Err(err) => Err(format!("failed to initialize networking: {}", err))
+                    Err(err) => anyhow::bail!("failed to initialize networking: {}", err)
                 }
             },
         }
@@ -239,7 +242,7 @@ impl Config {
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Config,
     func: F,
-) -> Result<WorkerGuards<T>,String> {
+) -> Result<WorkerGuards<T>> {
     let (allocators, others) = config.try_build()?;
     initialize_from(allocators, others, func)
 }
@@ -299,7 +302,7 @@ pub fn initialize_from<A, T, F>(
     builders: Vec<A>,
     others: Box<dyn Any+Send>,
     func: F,
-) -> Result<WorkerGuards<T>,String>
+) -> Result<WorkerGuards<T>>
 where
     A: AllocateBuilder+'static,
     T: Send+'static,
@@ -314,8 +317,7 @@ where
                             .spawn(move || {
                                 let communicator = builder.build();
                                 (*clone)(communicator)
-                            })
-                            .map_err(|e| format!("{:?}", e))?);
+                            })?);
     }
 
     Ok(WorkerGuards { guards, others })
@@ -340,10 +342,10 @@ impl<T:Send+'static> WorkerGuards<T> {
     }
 
     /// Waits on the worker threads and returns the results they produce.
-    pub fn join(mut self) -> Vec<Result<T, String>> {
+    pub fn join(mut self) -> Vec<Result<T>> {
         self.guards
             .drain(..)
-            .map(|guard| guard.join().map_err(|e| format!("{:?}", e)))
+            .map(|guard| guard.join().map_err(|e| anyhow::anyhow!("{e:?}")))
             .collect()
     }
 }

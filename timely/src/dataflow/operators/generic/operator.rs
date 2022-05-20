@@ -183,6 +183,7 @@ pub trait Operator<G: Scope, D1: Container> {
     ///        in2.send(i - 1);
     ///        in2.advance_to(i);
     ///    }
+    ///     Ok(())
     /// }).unwrap();
     /// ```
     fn binary_frontier<D2, D3, B, L, P1, P2>(&self, other: &StreamCore<G, D2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, D3>
@@ -239,6 +240,7 @@ pub trait Operator<G: Scope, D1: Container> {
     ///        in2.send(i - 1);
     ///        in2.advance_to(i);
     ///    }
+    ///     Ok(())
     /// }).unwrap();
     /// ```
     fn binary_notify<D2: Container,

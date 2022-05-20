@@ -36,7 +36,8 @@
 //!     worker.dataflow(|scope2| {
 //!         handle2.replay_into(scope2)
 //!                .inspect(|x| println!("replayed: {:?}", x));
-//!     })
+//!     });
+//!     Ok(())
 //! }).unwrap();
 //! ```
 //!
@@ -69,7 +70,8 @@
 //!         Some(EventReader::<_,u64,_>::new(recv))
 //!             .replay_into(scope2)
 //!             .inspect(|x| println!("replayed: {:?}", x));
-//!     })
+//!     });
+//!     Ok(())
 //! }).unwrap();
 //! ```
 

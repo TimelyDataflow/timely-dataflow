@@ -75,15 +75,8 @@
 
 #![forbid(missing_docs)]
 
-#[cfg(feature = "getopts")]
-extern crate getopts;
-#[cfg(feature = "bincode")]
-extern crate bincode;
-#[cfg(feature = "bincode")]
-extern crate serde;
-
-extern crate abomonation;
-#[macro_use] extern crate abomonation_derive;
+use std::any::Any;
+use crossbeam_channel::{Sender, Receiver};
 
 extern crate timely_bytes as bytes;
 extern crate timely_logging as logging_core;
@@ -94,8 +87,6 @@ pub mod initialize;
 pub mod logging;
 pub mod message;
 pub mod buzzer;
-
-use std::any::Any;
 
 #[cfg(feature = "bincode")]
 use serde::{Serialize, Deserialize};
@@ -131,25 +122,25 @@ impl<T: Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
 /// another call to `push()` may not be coming.
 pub trait Push<T> {
     /// Pushes `element` with the opportunity to take ownership.
-    fn push(&mut self, element: &mut Option<T>);
+    fn push(&mut self, element: &mut Option<T>) -> Result<()>;
     /// Pushes `element` and drops any resulting resources.
     #[inline]
-    fn send(&mut self, element: T) { self.push(&mut Some(element)); }
+    fn send(&mut self, element: T) -> Result<()> { self.push(&mut Some(element)) }
     /// Pushes `None`, conventionally signalling a flush.
     #[inline]
-    fn done(&mut self) { self.push(&mut None); }
+    fn done(&mut self) -> Result<()> { self.push(&mut None) }
 }
 
 impl<T, P: ?Sized + Push<T>> Push<T> for Box<P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) { (**self).push(element) }
+    fn push(&mut self, element: &mut Option<T>) -> Result<()> { (**self).push(element) }
 }
 
 /// Pulling elements of type `T`.
 pub trait Pull<T> {
     /// Pulls an element and provides the opportunity to take ownership.
     ///
-    /// The puller may mutate the result, in particular take ownership of the data by
+    /// The puller may mutate the result, in particular take ownership of the data by
     /// replacing it with other data or even `None`. This allows the puller to return
     /// resources to the implementor.
     ///
@@ -166,8 +157,6 @@ impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     fn pull(&mut self) -> &mut Option<T> { (**self).pull() }
 }
 
-
-use crossbeam_channel::{Sender, Receiver};
 
 /// Allocate a matrix of send and receive changes to exchange items.
 ///
@@ -189,3 +178,6 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
 
     (senders, recvers)
 }
+
+/// Result type used throughout Timely communication. Typedef'ed to `anyhow::Result`.
+pub type Result<T> = anyhow::Result<T>;

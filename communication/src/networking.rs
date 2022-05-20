@@ -9,6 +9,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use abomonation::{encode, decode};
+use abomonation_derive::Abomonation;
 
 // This constant is sent along immediately after establishing a TCP stream, so
 // that it is easy to sniff out Timely traffic when it is multiplexed with

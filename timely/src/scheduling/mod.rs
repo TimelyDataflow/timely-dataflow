@@ -5,6 +5,7 @@ use std::cell::RefCell;
 
 pub mod activate;
 
+use crate::Result;
 pub use self::activate::{Activations, Activator, ActivateOnDrop, SyncActivator};
 
 /// A type that can be scheduled.
@@ -17,7 +18,7 @@ pub trait Schedule {
     ///
     /// The return value indicates whether `self` has outstanding
     /// work and would be upset if the computation terminated.
-    fn schedule(&mut self) -> bool;
+    fn schedule(&mut self) -> Result<bool>;
 }
 
 /// Methods for types which schedule fibers.

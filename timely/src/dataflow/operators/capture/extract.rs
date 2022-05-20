@@ -42,6 +42,7 @@ pub trait Extract<T: Ord, D: Ord> {
     ///         handle2.replay_into(scope2)
     ///                .capture_into(send)
     ///     });
+    ///     Ok(())
     /// }).unwrap();
     ///
     /// assert_eq!(recv.extract()[0].1, (0..10).collect::<Vec<_>>());
@@ -110,6 +111,7 @@ pub trait ExtractCore<T, C> {
     ///         handle2.replay_into(scope2)
     ///                .capture_into(send)
     ///     });
+    ///     Ok(())
     /// }).unwrap();
     ///
     /// assert_eq!(recv.extract_core().into_iter().flat_map(|x| x.1).collect::<Vec<_>>(), (0..10).collect::<Vec<_>>());

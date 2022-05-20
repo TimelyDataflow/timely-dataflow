@@ -78,7 +78,7 @@ use rdkafka::consumer::{ConsumerContext, BaseConsumer};
 ///             strings.inspect(|x| println!("Observed: {:?}", x));
 ///
 ///         });
-///
+///         Ok(())
 ///     }).expect("Timely computation failed somehow");
 ///
 ///     println!("Hello, world!");

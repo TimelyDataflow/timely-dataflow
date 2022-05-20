@@ -57,7 +57,7 @@ impl Generic {
         }
     }
     /// Perform work before scheduling operators.
-    fn receive(&mut self) {
+    fn receive(&mut self) -> anyhow::Result<()> {
         match self {
             Generic::Thread(t) => t.receive(),
             Generic::Process(p) => p.receive(),
@@ -66,7 +66,7 @@ impl Generic {
         }
     }
     /// Perform work after scheduling operators.
-    pub fn release(&mut self) {
+    pub fn release(&mut self) -> anyhow::Result<()> {
         match self {
             Generic::Thread(t) => t.release(),
             Generic::Process(p) => p.release(),
@@ -91,8 +91,8 @@ impl Allocate for Generic {
         self.allocate(identifier)
     }
 
-    fn receive(&mut self) { self.receive(); }
-    fn release(&mut self) { self.release(); }
+    fn receive(&mut self) -> anyhow::Result<()> { self.receive() }
+    fn release(&mut self) -> anyhow::Result<()> { self.release() }
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> { self.events() }
     fn await_events(&self, _duration: Option<std::time::Duration>) {
         match self {

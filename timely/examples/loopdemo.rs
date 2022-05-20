@@ -97,7 +97,7 @@ fn main() {
                 inserted_ns = target_ns;
             }
 
-            worker.step();
+            worker.step()?;
         }
 
         // Report observed latency measurements.
@@ -120,6 +120,6 @@ fn main() {
                 println!("{}\t{}", latency, fraction);
             }
         }
-
+        Ok(())
     }).unwrap();
 }

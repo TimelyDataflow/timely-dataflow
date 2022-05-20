@@ -99,11 +99,11 @@ fn main() {
             input1.advance_to(next);
             input2.advance_to(next);
             while probe.less_than(input1.time()) {
-                worker.step();
+                worker.step()?;
             }
 
             println!("{:?}\tworker {} batch complete", timer.elapsed(), index)
         }
-
+        Ok(())
     }).unwrap(); // asserts error-free execution;
 }

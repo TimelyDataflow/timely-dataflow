@@ -1,6 +1,8 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::dataflow::channels::{Bundle, BundleCore, Message};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
@@ -18,6 +20,7 @@ pub struct BufferCore<T, D: Container, P: Push<BundleCore<T, D>>> {
     /// a buffer for records, to send at self.time
     buffer: D,
     pusher: P,
+    error: Rc<RefCell<Option<anyhow::Error>>>,
 }
 
 /// A buffer specialized to vector-based containers.
@@ -26,11 +29,12 @@ pub type Buffer<T, D, P> = BufferCore<T, Vec<D>, P>;
 impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
 
     /// Creates a new `Buffer`.
-    pub fn new(pusher: P) -> Self {
+    pub fn new(pusher: P, error: Rc<RefCell<Option<anyhow::Error>>>) -> Self {
         Self {
             time: None,
             buffer: Default::default(),
             pusher,
+            error,
         }
     }
 
@@ -58,14 +62,18 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
     /// Flushes all data and pushes a `None` to `self.pusher`, indicating a flush.
     pub fn cease(&mut self) {
         self.flush();
-        self.pusher.push(&mut None);
+        if let Err(e) = self.pusher.push(&mut None) {
+            *self.error.borrow_mut() = Some(e);
+        }
     }
 
     /// moves the contents of
     fn flush(&mut self) {
         if !self.buffer.is_empty() {
             let time = self.time.as_ref().unwrap().clone();
-            Message::push_at(&mut self.buffer, time, &mut self.pusher);
+            if let Err(e) = Message::push_at(&mut self.buffer, time, &mut self.pusher) {
+                *self.error.borrow_mut() = Some(e);
+            }
         }
     }
 
@@ -75,7 +83,9 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
         self.flush();
 
         let time = self.time.as_ref().expect("Buffer::give_container(): time is None.").clone();
-        Message::push_at(vector, time, &mut self.pusher);
+        if let Err(e) = Message::push_at(vector, time, &mut self.pusher) {
+            *self.error.borrow_mut() = Some(e);
+        }
     }
 }
 
@@ -99,7 +109,9 @@ impl<T, D: Data, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
         self.flush();
 
         let time = self.time.as_ref().expect("Buffer::give_vec(): time is None.").clone();
-        Message::push_at(vector, time, &mut self.pusher);
+        if let Err(e) = Message::push_at(vector, time, &mut self.pusher) {
+            *self.error.borrow_mut() = Some(e);
+        }
     }
 }
 

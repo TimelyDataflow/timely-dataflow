@@ -32,19 +32,22 @@ impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, 
     /// Publishes a batch of logged events and advances the capability.
     pub fn publish_batch(&mut self, &time: &Duration, data: &mut Vec<(Duration, E, T)>) {
         if !data.is_empty() {
-            self.event_pusher.push(Event::Messages(self.time, data.drain(..).collect()));
+            // We unwrap because we don't have a good way to report errors.
+            self.event_pusher.push(Event::Messages(self.time, data.drain(..).collect())).unwrap();
         }
         if self.time < time {
             let new_frontier = time;
             let old_frontier = self.time;
-            self.event_pusher.push(Event::Progress(vec![(new_frontier, 1), (old_frontier, -1)]));
+            // We unwrap because we don't have a good way to report errors.
+            self.event_pusher.push(Event::Progress(vec![(new_frontier, 1), (old_frontier, -1)])).unwrap();
         }
         self.time = time;
     }
 }
 impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
     fn drop(&mut self) {
-        self.event_pusher.push(Event::Progress(vec![(self.time, -1)]));
+        // Ignore errors on drop.
+        let _ = self.event_pusher.push(Event::Progress(vec![(self.time, -1)]));
     }
 }
 

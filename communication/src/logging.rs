@@ -1,5 +1,7 @@
 //! Configuration and events for communication logging.
 
+use abomonation_derive::Abomonation;
+
 /// Configuration information about a communication thread.
 #[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct CommunicationSetup {

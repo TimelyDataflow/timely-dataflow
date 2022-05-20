@@ -60,9 +60,10 @@ fn main() {
             input.send(("round".to_owned(), 1));
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
-                worker.step();
+                worker.step()?;
             }
         }
+        Ok(())
     }).unwrap();
 }
 ```
@@ -100,7 +101,7 @@ Having constructed the dataflow, we feed it some data.
             input.send(("round".to_owned(), 1));
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
-                worker.step();
+                worker.step()?;
             }
         }
 ```
@@ -146,9 +147,10 @@ Rather than repeat all the code up above, I'm just going to show you the fragmen
 #             input.send(("round".to_owned(), 1));
 #             input.advance_to(round + 1);
 #             while probe.less_than(input.time()) {
-#                 worker.step();
+#                 worker.step()?;
 #             }
 #         }
+#         Ok(())
 #     }).unwrap();
 # }
 ```
@@ -249,9 +251,10 @@ As before, I'm just going to show you the new code, which now lives just after `
 #             input.send(("round".to_owned(), 1));
 #             input.advance_to(round + 1);
 #             while probe.less_than(input.time()) {
-#                 worker.step();
+#                 worker.step()?;
 #             }
 #         }
+#         Ok(())
 #     }).unwrap();
 # }
 ```

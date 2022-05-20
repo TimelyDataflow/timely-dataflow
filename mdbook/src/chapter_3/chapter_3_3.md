@@ -3,7 +3,7 @@
 Perhaps the most important statement in a timely dataflow program:
 
 ```rust,ignore
-worker.step()
+worker.step()?
 ```
 
 This is the method that tells the worker that it is now a good time to schedule each of the operators. If you recall, when designing our dataflow we wrote these operators, each of which were programmed by what they would do when shown their input and output handles. This is where we run that code.

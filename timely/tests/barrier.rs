@@ -36,5 +36,6 @@ fn barrier_sync_helper(comm_config: ::timely::CommunicationConfig) {
             )
             .connect_loop(handle);
         });
+        Ok(())
     }).unwrap(); // asserts error-free execution;
 }

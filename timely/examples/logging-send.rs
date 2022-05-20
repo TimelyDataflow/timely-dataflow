@@ -82,7 +82,7 @@ fn main() {
             input_logger.log(());
 
             while probe.less_than(input.time()) {
-                worker.step();
+                worker.step()?;
             }
 
         }
@@ -92,6 +92,6 @@ fn main() {
         let seconds = elapsed.as_secs() as f64 + (f64::from(elapsed.subsec_nanos())/1000000000.0);
 
         println!("{:?}\tworker {} complete; rate: {:?}", timer.elapsed(), worker.index(), volume / seconds);
-
+        Ok(())
     }).unwrap();
 }

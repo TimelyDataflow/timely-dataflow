@@ -56,8 +56,8 @@ fn main() {
 
         });
 
+        Ok(())
     }).expect("Timely computation failed somehow");
 
     println!("Hello, world!");
 }
-

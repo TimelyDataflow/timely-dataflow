@@ -54,6 +54,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     ///         handle2.replay_into(scope2)
     ///                .capture_into(send)
     ///     });
+    ///     Ok(())
     /// }).unwrap();
     ///
     /// assert_eq!(recv.extract()[0].1, (0..10).collect::<Vec<_>>());
@@ -99,6 +100,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     ///             .replay_into(scope2)
     ///             .capture_into(send0)
     ///     });
+    ///     Ok(())
     /// }).unwrap();
     ///
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
@@ -131,7 +133,7 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
                 if !progress.frontiers[0].is_empty() {
                     // transmit any frontier progress.
                     let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
-                    event_pusher.push(EventCore::Progress(to_send.into_inner()));
+                    event_pusher.push(EventCore::Progress(to_send.into_inner()))?;
                 }
 
                 use crate::communication::message::RefOrMut;
@@ -143,10 +145,10 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
                     let vector = data.replace(Default::default());
-                    event_pusher.push(EventCore::Messages(time.clone(), vector));
+                    event_pusher.push(EventCore::Messages(time.clone(), vector))?;
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
-                false
+                Ok(false)
             }
         );
     }

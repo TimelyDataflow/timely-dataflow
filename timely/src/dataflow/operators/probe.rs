@@ -40,8 +40,9 @@ pub trait Probe<G: Scope, D: Container> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step_while(|| probe.less_than(input.time()));
+    ///         worker.step_while(|| probe.less_than(input.time()))?;
     ///     }
+    ///     Ok(())
     /// }).unwrap();
     /// ```
     fn probe(&self) -> Handle<G::Timestamp>;
@@ -72,8 +73,9 @@ pub trait Probe<G: Scope, D: Container> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step_while(|| probe.less_than(input.time()));
+    ///         worker.step_while(|| probe.less_than(input.time()))?;
     ///     }
+    ///     Ok(())
     /// }).unwrap();
     /// ```
     fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> StreamCore<G, D>;
@@ -87,14 +89,18 @@ impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
         self.probe_with(&mut handle);
         handle
     }
+
     fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> StreamCore<G, D> {
 
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let (tee, stream) = builder.new_output();
-        let mut output = PushBuffer::new(PushCounter::new(tee));
+        let error = Rc::new(RefCell::new(None));
+        let mut output = PushBuffer::new(PushCounter::new(tee), Rc::clone(&error));
 
         let shared_frontier = handle.frontier.clone();
+        // Update probe's frontier to match the initial frontier of the channel it is observing.
+        shared_frontier.borrow_mut().update_iter(std::iter::once((Timestamp::minimum(), 1)));
         let mut started = false;
 
         let mut vector = Default::default();
@@ -108,7 +114,9 @@ impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
 
                 if !started {
                     // discard initial capability.
-                    progress.internals[0].update(G::Timestamp::minimum(), -1);
+                    progress.internals[0].update(Timestamp::minimum(), -1);
+                    // discard initial probe capability
+                    borrow.update_iter(std::iter::once((Timestamp::minimum(), -1)));
                     started = true;
                 }
 
@@ -128,7 +136,11 @@ impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 output.inner().produced().borrow_mut().drain_into(&mut progress.produceds[0]);
 
-                false
+                if let Some(err) = error.borrow_mut().take() {
+                    Err(err)
+                } else {
+                    Ok(false)
+                }
             },
         );
 
@@ -203,7 +215,9 @@ mod tests {
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {
                 let (input, stream) = scope.new_input::<String>();
-                (input, stream.probe())
+                let mut probe = stream.probe();
+                stream.probe_with(&mut probe);
+                (input, probe)
             });
 
             // introduce data and watch!
@@ -212,18 +226,19 @@ mod tests {
                 assert!(probe.less_equal(&round));
                 assert!(probe.less_than(&(round + 1)));
                 input.advance_to(round + 1);
-                worker.step();
+                worker.step()?;
             }
 
             // seal the input
             input.close();
 
             // finish off any remaining work
-            worker.step();
-            worker.step();
-            worker.step();
-            worker.step();
+            worker.step()?;
+            worker.step()?;
+            worker.step()?;
+            worker.step()?;
             assert!(probe.done());
+            Ok(())
         }).unwrap();
     }
 

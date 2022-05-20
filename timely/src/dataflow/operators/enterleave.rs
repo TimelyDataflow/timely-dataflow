@@ -25,7 +25,7 @@ use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
 use crate::order::Product;
-use crate::{Container, Data};
+use crate::{Container, Data, Result};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
 use crate::dataflow::channels::{BundleCore, Message};
@@ -150,12 +150,12 @@ struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: C
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
-    fn push(&mut self, element: &mut Option<BundleCore<TOuter, TData>>) {
+    fn push(&mut self, element: &mut Option<BundleCore<TOuter, TData>>) -> Result<()>{
         if let Some(message) = element {
             let outer_message = message.as_mut();
             let data = ::std::mem::take(&mut outer_message.data);
             let mut inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
-            self.targets.push(&mut inner_message);
+            self.targets.push(&mut inner_message)?;
             if let Some(inner_message) = inner_message {
                 if let Some(inner_message) = inner_message.if_typed() {
                     outer_message.data = inner_message.data;
@@ -168,8 +168,9 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Pus
                 self.activator.activate();
                 self.active = false;
             }
-            self.targets.done();
+            self.targets.done()?;
         }
+        Ok(())
     }
 }
 
@@ -181,19 +182,20 @@ struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Da
 
 impl<TOuter, TInner, TData: Container> Push<BundleCore<TInner, TData>> for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
-    fn push(&mut self, message: &mut Option<BundleCore<TInner, TData>>) {
+    fn push(&mut self, message: &mut Option<BundleCore<TInner, TData>>) -> Result<()>{
         if let Some(message) = message {
             let inner_message = message.as_mut();
             let data = ::std::mem::take(&mut inner_message.data);
             let mut outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
-            self.targets.push(&mut outer_message);
+            self.targets.push(&mut outer_message)?;
             if let Some(outer_message) = outer_message {
                 if let Some(outer_message) = outer_message.if_typed() {
                     inner_message.data = outer_message.data;
                 }
             }
         }
-        else { self.targets.done(); }
+        else { self.targets.done()?; }
+        Ok(())
     }
 }
 
@@ -239,9 +241,10 @@ mod test {
                 }
                 input.advance_to(round + 1);
                 while probe.less_than(input.time()) {
-                    worker.step_or_park(None);
+                    worker.step_or_park(None)?;
                 }
             }
+            Ok(())
         }).unwrap();
     }
 

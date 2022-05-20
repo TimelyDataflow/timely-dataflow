@@ -15,5 +15,6 @@ fn main() {
                 .to_stream(scope)
                 .capture_into(EventWriter::new(send))
         );
+        Ok(())
     }).unwrap();
 }

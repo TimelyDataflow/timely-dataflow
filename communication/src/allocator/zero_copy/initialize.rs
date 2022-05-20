@@ -1,37 +1,39 @@
 //! Network initialization.
 
 use std::sync::Arc;
-// use crate::allocator::Process;
+
+use logging_core::Logger;
+
+use crate::Result;
 use crate::allocator::process::ProcessBuilder;
+use crate::logging::{CommunicationSetup, CommunicationEvent};
 use crate::networking::create_sockets;
-use super::tcp::{send_loop, recv_loop};
 use super::allocator::{TcpBuilder, new_vector};
 use super::stream::Stream;
+use super::tcp::{send_loop, recv_loop};
+
 
 /// Join handles for send and receive threads.
 ///
 /// On drop, the guard joins with each of the threads to ensure that they complete
 /// cleanly and send all necessary data.
 pub struct CommsGuard {
-    send_guards: Vec<::std::thread::JoinHandle<()>>,
-    recv_guards: Vec<::std::thread::JoinHandle<()>>,
+    send_guards: Vec<::std::thread::JoinHandle<Result<()>>>,
+    recv_guards: Vec<::std::thread::JoinHandle<Result<()>>>,
 }
 
 impl Drop for CommsGuard {
     fn drop(&mut self) {
         for handle in self.send_guards.drain(..) {
-            handle.join().expect("Send thread panic");
+            handle.join().expect("Send thread panic").unwrap();
         }
         // println!("SEND THREADS JOINED");
         for handle in self.recv_guards.drain(..) {
-            handle.join().expect("Recv thread panic");
+            handle.join().expect("Recv thread panic").unwrap();
         }
         // println!("RECV THREADS JOINED");
     }
 }
-
-use crate::logging::{CommunicationSetup, CommunicationEvent};
-use logging_core::Logger;
 
 /// Initializes network connections
 pub fn initialize_networking(
@@ -97,7 +99,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
                         remote: Some(index),
                     });
 
-                    send_loop(stream, remote_recv, my_index, index, logger);
+                    send_loop(stream, remote_recv, my_index, index, logger)
                 })?;
 
             send_guards.push(join_guard);
@@ -118,7 +120,9 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
                         sender: false,
                         remote: Some(index),
                     });
-                    recv_loop(stream, remote_send, threads * my_index, my_index, index, logger);
+                    let result = recv_loop(stream, remote_send, threads * my_index, my_index, index, logger);
+                    println!("{result:?}");
+                    result
                 })?;
 
             recv_guards.push(join_guard);

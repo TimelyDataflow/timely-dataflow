@@ -42,11 +42,11 @@ fn main() {
             inputs[dataflow].advance_to(round);
             let mut steps = 0;
             while probes[dataflow].less_than(&round) {
-                worker.step();
+                worker.step()?;
                 steps += 1;
             }
             println!("{:?}\tround {} complete in {} steps", timer.elapsed(), round, steps);
         }
-
+        Ok(())
     }).unwrap();
 }

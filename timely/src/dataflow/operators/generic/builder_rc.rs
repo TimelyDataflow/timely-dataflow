@@ -35,6 +35,7 @@ pub struct OperatorBuilder<G: Scope> {
     summaries: Vec<Rc<RefCell<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     logging: Option<Logger>,
+    error: Rc<RefCell<Option<anyhow::Error>>>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {
@@ -50,6 +51,7 @@ impl<G: Scope> OperatorBuilder<G> {
             summaries: Vec::new(),
             produced: Vec::new(),
             logging,
+            error: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -112,7 +114,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         self.internal.borrow_mut().push(internal.clone());
 
-        let mut buffer = PushBuffer::new(PushCounter::new(tee));
+        let mut buffer = PushBuffer::new(PushCounter::new(tee), Rc::clone(&self.error));
         self.produced.push(buffer.inner().produced().clone());
 
         for (summary, connection) in self.summaries.iter().zip(connection.into_iter()) {
@@ -159,6 +161,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let self_consumed = self.consumed;
         let self_internal = self.internal;
         let self_produced = self.produced;
+        let self_error = self.error;
 
         let raw_logic =
         move |progress: &mut SharedProgress<G::Timestamp>| {
@@ -188,7 +191,11 @@ impl<G: Scope> OperatorBuilder<G> {
                 produced.borrow_mut().drain_into(progress);
             }
 
-            result
+            if let Some(err) = self_error.borrow_mut().take() {
+                Err(err)
+            } else {
+                Ok(result)
+            }
         };
 
         self.builder.build(raw_logic);

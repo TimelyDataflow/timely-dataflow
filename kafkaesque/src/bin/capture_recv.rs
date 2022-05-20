@@ -41,6 +41,7 @@ fn main() {
                 .count()
                 .inspect(|x| println!("replayed: {:?}", x))
                 ;
-        })
+        });
+        Ok(())
     }).unwrap(); // asserts error-free execution
 }
