@@ -1,5 +1,7 @@
 //! Tracks minimal sets of mutually incomparable elements of a partial order.
 
+use smallvec::{smallvec, SmallVec};
+
 use crate::progress::ChangeBatch;
 use crate::order::{PartialOrder, TotalOrder};
 
@@ -15,7 +17,7 @@ use crate::order::{PartialOrder, TotalOrder};
 /// are identical.
 #[derive(Debug, Default, Abomonation, Serialize, Deserialize)]
 pub struct Antichain<T> {
-    elements: Vec<T>
+    elements: SmallVec<[T; 1]>
 }
 
 impl<T: PartialOrder> Antichain<T> {
@@ -138,7 +140,7 @@ impl<T> Antichain<T> {
     ///
     /// let mut frontier = Antichain::<u32>::new();
     ///```
-    pub fn new() -> Antichain<T> { Antichain { elements: Vec::new() } }
+    pub fn new() -> Antichain<T> { Antichain { elements: SmallVec::new() } }
 
     /// Creates a new empty `Antichain` with space for `capacity` elements.
     ///
@@ -151,7 +153,7 @@ impl<T> Antichain<T> {
     ///```
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            elements: Vec::with_capacity(capacity),
+            elements: SmallVec::with_capacity(capacity),
         }
     }
 
@@ -164,7 +166,7 @@ impl<T> Antichain<T> {
     ///
     /// let mut frontier = Antichain::from_elem(2);
     ///```
-    pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: vec![element] } }
+    pub fn from_elem(element: T) -> Antichain<T> { Antichain { elements: smallvec![element] } }
 
     /// Clears the contents of the antichain.
     ///
@@ -274,7 +276,7 @@ impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
 
 impl<T> Into<Vec<T>> for Antichain<T> {
     fn into(self) -> Vec<T> {
-        self.elements
+        self.elements.into_vec()
     }
 }
 
@@ -287,7 +289,7 @@ impl<T> ::std::ops::Deref for Antichain<T> {
 
 impl<T> ::std::iter::IntoIterator for Antichain<T> {
     type Item = T;
-    type IntoIter = ::std::vec::IntoIter<T>;
+    type IntoIter = smallvec::IntoIter<[T; 1]>;
     fn into_iter(self) -> Self::IntoIter {
         self.elements.into_iter()
     }
@@ -688,7 +690,7 @@ impl<'a, T: 'a> AntichainRef<'a, T> {
     ///```
     pub fn to_owned(&self) -> Antichain<T> where T: Clone {
         Antichain {
-            elements: self.frontier.to_vec()
+            elements: self.frontier.iter().cloned().collect()
         }
     }
 }
