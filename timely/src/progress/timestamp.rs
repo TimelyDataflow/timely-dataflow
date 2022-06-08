@@ -6,7 +6,7 @@ use std::default::Default;
 use std::hash::Hash;
 
 use crate::communication::Data;
-use crate::order::PartialOrder;
+use crate::order::{PartialOrder, TotalOrder};
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
 pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
@@ -67,7 +67,7 @@ pub trait TimestampContainer<T>: Default + Clone {
     fn into_vec(self) -> Vec<T>;
 }
 
-impl<T: PartialOrder + Clone> TimestampContainer<T> for Option<T> {
+impl<T: TotalOrder + Clone> TimestampContainer<T> for Option<T> {
     fn from_element(element: T) -> Self { Some(element) }
     fn insert(&mut self, element: T) -> bool {
         match self {
