@@ -456,7 +456,7 @@ impl<T: Timestamp> PortInformation<T> {
     /// this pointstamp.
     #[inline]
     pub fn is_global(&self, time: &T) -> bool {
-        let dominated = self.implications.frontier().iter().any(|t| t.less_than(time));
+        let dominated = self.implications.iter().any(|t| t.less_than(time));
         let redundant = self.implications.count_for(time) > 1;
         !dominated && !redundant
     }

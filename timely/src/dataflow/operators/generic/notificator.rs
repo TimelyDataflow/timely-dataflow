@@ -40,8 +40,8 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     }
 
     /// Reveals the elements in the frontier of the indicated input.
-    pub fn frontier(&self, input: usize) -> AntichainRef<T> {
-        self.frontiers[input].frontier()
+    pub fn frontier(&self, input: usize) -> &AntichainRef<T> {
+        self.frontiers[input]
     }
 
     /// Requests a notification at the time associated with capability `cap`.
