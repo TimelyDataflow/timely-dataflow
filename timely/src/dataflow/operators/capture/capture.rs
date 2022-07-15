@@ -134,16 +134,17 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
                     event_pusher.push(EventCore::Progress(to_send.into_inner()));
                 }
 
-                use crate::communication::message::RefOrMut;
+                use crate::container::RefOrMut;
 
                 // turn each received message into an event.
                 while let Some(message) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
-                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
+                        RefOrMut::Ref(reference) => (reference.time.clone(), RefOrMut::Ref(&reference.data)),
+                        RefOrMut::Mut(reference) => (reference.time.clone(), RefOrMut::Mut(&mut reference.data)),
+                        RefOrMut::Owned(owned) => (owned.time.clone(), RefOrMut::Owned(owned.data)),
                     };
                     let vector = data.replace(Default::default());
-                    event_pusher.push(EventCore::Messages(time.clone(), vector));
+                    event_pusher.push(EventCore::Messages(time, vector));
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false

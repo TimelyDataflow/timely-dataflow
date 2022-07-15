@@ -112,15 +112,26 @@ impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
                     started = true;
                 }
 
-                use crate::communication::message::RefOrMut;
+                use crate::container::RefOrMut;
 
                 while let Some(message) = input.next() {
-                    let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
-                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
+                    match message.as_ref_or_mut() {
+                        RefOrMut::Ref(reference) => {
+                            let (time, data) = (&reference.time, RefOrMut::Ref(&reference.data));
+                            data.swap(&mut vector);
+                            output.session(time).give_container(&mut vector);
+                        },
+                        RefOrMut::Mut(reference) => {
+                            let (time, data) = (&reference.time, RefOrMut::Mut(&mut reference.data));
+                            data.swap(&mut vector);
+                            output.session(time).give_container(&mut vector);
+                        }
+                        RefOrMut::Owned(owned) => {
+                            let (time, data) = (&owned.time, RefOrMut::Owned(owned.data));
+                            data.swap(&mut vector);
+                            output.session(time).give_container(&mut vector);
+                        }
                     };
-                    data.swap(&mut vector);
-                    output.session(time).give_container(&mut vector);
                 }
                 output.cease();
 

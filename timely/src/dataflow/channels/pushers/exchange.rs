@@ -1,8 +1,8 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
-use timely_container::PushPartitioned;
 use crate::{Container, Data};
 use crate::communication::Push;
+use crate::container::PushPartitioned;
 use crate::dataflow::channels::{BundleCore, Message};
 
 // TODO : Software write combining

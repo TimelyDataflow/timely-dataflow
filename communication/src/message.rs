@@ -5,61 +5,8 @@ use bytes::arc::Bytes;
 use abomonation;
 use crate::Data;
 
-/// Either an immutable or mutable reference.
-pub enum RefOrMut<'a, T> where T: 'a {
-    /// An immutable reference.
-    Ref(&'a T),
-    /// A mutable reference.
-    Mut(&'a mut T),
-}
-
-impl<'a, T: 'a> ::std::ops::Deref for RefOrMut<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        match self {
-            RefOrMut::Ref(reference) => reference,
-            RefOrMut::Mut(reference) => reference,
-        }
-    }
-}
-
-impl<'a, T: 'a> ::std::borrow::Borrow<T> for RefOrMut<'a, T> {
-    fn borrow(&self) -> &T {
-        match self {
-            RefOrMut::Ref(reference) => reference,
-            RefOrMut::Mut(reference) => reference,
-        }
-    }
-}
-
-impl<'a, T: Clone+'a> RefOrMut<'a, T> {
-    /// Extracts the contents of `self`, either by cloning or swapping.
-    ///
-    /// This consumes `self` because its contents are now in an unknown state.
-    pub fn swap<'b>(self, element: &'b mut T) {
-        match self {
-            RefOrMut::Ref(reference) => element.clone_from(reference),
-            RefOrMut::Mut(reference) => ::std::mem::swap(reference, element),
-        };
-    }
-    /// Extracts the contents of `self`, either by cloning or swapping.
-    ///
-    /// This consumes `self` because its contents are now in an unknown state.
-    pub fn replace(self, mut element: T) -> T {
-        self.swap(&mut element);
-        element
-    }
-
-    /// Extracts the contents of `self`, either by cloning, or swapping and leaving a default
-    /// element in place.
-    ///
-    /// This consumes `self` because its contents are now in an unknown state.
-    pub fn take(self) -> T where T: Default {
-        let mut element = Default::default();
-        self.swap(&mut element);
-        element
-    }
-}
+/// Re-export [crate::container::RefOrMut] for backwards compatibility.
+pub use crate::container::RefOrMut;
 
 /// A wrapped message which may be either typed or binary data.
 pub struct Message<T> {

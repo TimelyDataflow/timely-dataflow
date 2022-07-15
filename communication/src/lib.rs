@@ -88,6 +88,12 @@ extern crate abomonation;
 extern crate timely_bytes as bytes;
 extern crate timely_logging as logging_core;
 
+/// Re-export [timely_container].
+pub mod container {
+    pub use timely_container::*;
+}
+pub use timely_container::Container;
+
 pub mod allocator;
 pub mod networking;
 pub mod initialize;
