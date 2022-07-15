@@ -594,7 +594,7 @@ where
 /// timely::example(|scope| {
 ///
 ///
-///     empty(scope)     // type required in this example
+///     empty::<_, Vec<_>>(scope)     // type required in this example
 ///         .inspect(|()| panic!("never called"));
 ///
 /// });
