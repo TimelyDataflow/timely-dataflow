@@ -51,6 +51,7 @@ pub mod to_stream;
 pub mod capture;
 pub mod branch;
 pub mod ok_err;
+pub mod rc;
 pub mod result;
 
 pub mod aggregation;
