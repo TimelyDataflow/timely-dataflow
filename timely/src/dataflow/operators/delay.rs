@@ -2,14 +2,14 @@
 
 use std::collections::HashMap;
 
-use crate::Data;
+use crate::container::{AppendableContainer, DrainContainer};
 use crate::order::{PartialOrder, TotalOrder};
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Methods to advance the timestamps of records or batches of records.
-pub trait Delay<G: Scope, D: Data> {
+pub trait Delay<G: Scope, D> {
 
     /// Advances the timestamp of records using a supplied function.
     ///
@@ -94,32 +94,32 @@ pub trait Delay<G: Scope, D: Data> {
     fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self;
 }
 
-impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
-    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
+impl<G: Scope, C: AppendableContainer+DrainContainer> Delay<G, C::Item> for StreamCore<G, C> {
+    fn delay<L: FnMut(&C::Item, &G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
         let mut elements = HashMap::new();
-        let mut vector = Vec::new();
+        let mut vector = Default::default();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                for datum in vector.drain(..) {
+                vector.drain(|datum| {
                     let new_time = func(&datum, &time);
                     assert!(time.time().less_equal(&new_time));
                     elements.entry(new_time.clone())
-                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
-                            .push(datum);
-                }
+                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); C::default() })
+                            .show(datum);
+                });
             });
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
                 if let Some(mut data) = elements.remove(&time) {
-                    output.session(&time).give_iterator(data.drain(..));
+                    output.session(&time).drain_container(&mut data);
                 }
             });
         })
     }
 
-    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self
+    fn delay_total<L: FnMut(&C::Item, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self
     where G::Timestamp: TotalOrder
     {
         self.delay(func)
@@ -133,14 +133,14 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
                 assert!(time.time().less_equal(&new_time));
                 elements.entry(new_time.clone())
                         .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
-                        .push(data.replace(Vec::new()));
+                        .push(data.replace(Default::default()));
             });
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain(..) {
-                        output.session(&time).give_vec(&mut data);
+                        output.session(&time).give_container(&mut data);
                     }
                 }
             });
