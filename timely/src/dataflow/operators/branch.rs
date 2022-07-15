@@ -1,12 +1,13 @@
 //! Operators that separate one stream into two streams based on some condition
 
+use crate::container::{AppendableContainer, DrainContainer};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, Stream};
-use crate::Data;
+use crate::dataflow::{Scope, Stream, StreamCore};
+use crate::{Container, Data};
 
 /// Extension trait for `Stream`.
-pub trait Branch<S: Scope, D: Data> {
+pub trait Branch<S: Scope, C: Container> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
     /// the data and its time. If it returns true, the record will be sent
@@ -30,15 +31,18 @@ pub trait Branch<S: Scope, D: Data> {
     /// ```
     fn branch(
         &self,
-        condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
-    ) -> (Stream<S, D>, Stream<S, D>);
+        condition: impl Fn(&S::Timestamp, &C::Item) -> bool + 'static,
+    ) -> (StreamCore<S, C>, StreamCore<S, C>);
 }
 
-impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
+impl<S: Scope, C: AppendableContainer+DrainContainer> Branch<S, C> for StreamCore<S, C>
+where
+    C::Item: Default,
+{
     fn branch(
         &self,
-        condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
-    ) -> (Stream<S, D>, Stream<S, D>) {
+        condition: impl Fn(&S::Timestamp, &C::Item) -> bool + 'static,
+    ) -> (StreamCore<S, C>, StreamCore<S, C>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
         let mut input = builder.new_input(self, Pipeline);
@@ -46,7 +50,7 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
         let (mut output2, stream2) = builder.new_output();
 
         builder.build(move |_| {
-            let mut vector = Vec::new();
+            let mut vector = Default::default();
             move |_frontiers| {
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
@@ -55,13 +59,13 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
                     data.swap(&mut vector);
                     let mut out1 = output1_handle.session(&time);
                     let mut out2 = output2_handle.session(&time);
-                    for datum in vector.drain(..) {
+                    vector.drain(|datum| {
                         if condition(&time.time(), &datum) {
-                            out2.give(datum);
+                            out2.show(datum);
                         } else {
-                            out1.give(datum);
+                            out1.show(datum);
                         }
-                    }
+                    });
                 });
             }
         });
