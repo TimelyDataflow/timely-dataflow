@@ -294,6 +294,9 @@ impl std::fmt::Display for SyncActivationError {
 impl std::error::Error for SyncActivationError {}
 
 /// A wrapper that unparks on drop.
+///
+/// The wrapped value can be `()` if you only desire an
+/// `Activator` that activates on drop.
 #[derive(Debug)]
 pub struct ActivateOnDrop<T>  {
     wrapped: T,
@@ -326,5 +329,47 @@ impl<T> DerefMut for ActivateOnDrop<T> {
 impl<T> Drop for ActivateOnDrop<T> {
     fn drop(&mut self) {
         self.activator.borrow_mut().activate(&self.address[..]);
+    }
+}
+
+/// A _thread-safe_ wrapper that unparks on drop.
+///
+/// The wrapped value can be `()` if you only desire an
+/// `SyncActivator` that activates on drop. Note this has a
+/// slightly different `new` api than `ActivateOnDrop` as it
+/// involves a `SyncActivator` which requires ownership of
+/// the address.
+///
+/// Note this is best effort, and `SyncActivationError`'s will
+/// be ignored on drop
+#[derive(Debug)]
+pub struct SyncActivateOnDrop<T>  {
+    wrapped: T,
+    activator: SyncActivator,
+}
+
+impl<T> SyncActivateOnDrop<T> {
+    /// Wraps an element so that it is unparked on drop.
+    pub fn new(wrapped: T, activator: SyncActivator) -> Self {
+        Self { wrapped, activator}
+    }
+}
+
+impl<T> Deref for SyncActivateOnDrop<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.wrapped
+    }
+}
+
+impl<T> DerefMut for SyncActivateOnDrop<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.wrapped
+    }
+}
+
+impl<T> Drop for SyncActivateOnDrop<T> {
+    fn drop(&mut self) {
+        let _ = self.activator.activate();
     }
 }
