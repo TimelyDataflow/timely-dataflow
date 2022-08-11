@@ -4,37 +4,25 @@
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Adding Operators</title>
-        
-        
 
 
         <!-- Custom HTML head -->
         
-
-
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-        
         <link rel="icon" href="../favicon.svg">
-        
-        
         <link rel="shortcut icon" href="../favicon.png">
-        
         <link rel="stylesheet" href="../css/variables.css">
         <link rel="stylesheet" href="../css/general.css">
         <link rel="stylesheet" href="../css/chrome.css">
-        
         <link rel="stylesheet" href="../css/print.css" media="print">
-        
 
         <!-- Fonts -->
         <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
-        
         <link rel="stylesheet" href="../fonts/fonts.css">
-        
 
         <!-- Highlight.js Stylesheets -->
         <link rel="stylesheet" href="../highlight.css">
@@ -42,9 +30,7 @@
         <link rel="stylesheet" href="../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
-        
 
-        
     </head>
     <body>
         <!-- Provide site root to javascript -->
@@ -103,8 +89,7 @@
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
-                
-                <div id="menu-bar-hover-placeholder"></div>
+                                <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky bordered">
                     <div class="left-buttons">
                         <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
@@ -120,29 +105,24 @@
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
                         </ul>
-                        
                         <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
                             <i class="fa fa-search"></i>
                         </button>
-                        
                     </div>
 
                     <h1 class="menu-title"></h1>
 
                     <div class="right-buttons">
-                        
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        
-                        
+
                     </div>
                 </div>
 
-                
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -150,7 +130,6 @@
                         </ul>
                     </div>
                 </div>
-                
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
                 <script type="text/javascript">
@@ -163,9 +142,9 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#introducing-operators" id="introducing-operators">Introducing Operators</a></h1>
+                        <h1 id="introducing-operators"><a class="header" href="#introducing-operators">Introducing Operators</a></h1>
 <p>In between introducing streams of data and inspecting or capturing the output, we'll probably want to do some computation on those data. There are a lot of things that you can do, and timely comes with a set of generally useful operators built in. We will survey a few of these, but this list will be necessarily incomplete: the operators are pretty easy to write, and keep showing up.</p>
-<h2><a class="header" href="#mapping" id="mapping">Mapping</a></h2>
+<h2 id="mapping"><a class="header" href="#mapping">Mapping</a></h2>
 <p>One of the simplest things one can do with a stream of data is to transform each record into a new record. In database terminology this would be called &quot;projection&quot;, where you extract some fields from a larger record, but as we are in a more rich programming language we can perform arbitrary transformations.</p>
 <p>The <code>map</code> operator takes as an argument a closure from the input data type to an output data type that you get to define. The result is the stream of records corresponding to the application of your closure to each record in the input stream.</p>
 <p>The following program should print out the numbers one through ten.</p>
@@ -201,7 +180,7 @@ fn main() {
     }).unwrap();
 }
 </code></pre></pre>
-<h3><a class="header" href="#map-variants" id="map-variants">Map variants</a></h3>
+<h3 id="map-variants"><a class="header" href="#map-variants">Map variants</a></h3>
 <p>There are a few variants of <code>map</code> with different functionality.</p>
 <p>For example, the <code>map_in_place</code> method takes a closure which receives a mutable reference and produces no output; instead, this method allows you to change the data <em>in-place</em>, which can be a valuable way to avoid duplication of resources.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
@@ -236,7 +215,7 @@ fn main() {
     }).unwrap();
 }
 </code></pre></pre>
-<h2><a class="header" href="#filtering" id="filtering">Filtering</a></h2>
+<h2 id="filtering"><a class="header" href="#filtering">Filtering</a></h2>
 <p>Another fundamental operation is <em>filtering</em>, in which a predicate dictates a subset of the stream to retain.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
@@ -254,7 +233,7 @@ fn main() {
 }
 </code></pre></pre>
 <p>Unlike <code>map</code>, the predicate passed to the <code>filter</code> operator does not receive <em>owned</em> data, but rather a reference to the data. This allows <code>filter</code> to observe the data to determine whether to keep it, but not to change it.</p>
-<h2><a class="header" href="#logical-partitioning" id="logical-partitioning">Logical Partitioning</a></h2>
+<h2 id="logical-partitioning"><a class="header" href="#logical-partitioning">Logical Partitioning</a></h2>
 <p>There are two operators for splitting and combining streams, <code>partition</code> and <code>concat</code> respectively.</p>
 <p>The <code>partition</code> operator takes two arguments, a number of resulting streams to produce, and a closure which takes each record to a pair of the target partition identifier and the output record. The output of <code>partition</code> is a list of streams, where each stream contains those elements mapped to the stream under the closure.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
@@ -305,28 +284,24 @@ fn main() {
 }
 </code></pre></pre>
 <p>Both <code>concat</code> and <code>concatenate</code> are efficient operations that exchange no data between workers, operate only on batches of stream elements, and do not make further copies of the data.</p>
-<h2><a class="header" href="#physical-partitioning" id="physical-partitioning">Physical Partitioning</a></h2>
+<h2 id="physical-partitioning"><a class="header" href="#physical-partitioning">Physical Partitioning</a></h2>
 <p>To complement the logical partitioning of <code>partition</code>, timely also provides the physical partitioning operator <code>exchange</code> which routes records to a worker based on a supplied closure. The <code>exchange</code> operator does not change the contents of the stream, but rather the distribution of elements to the workers. This operation can be important if you would like to collect records before printing statistics to the screen, or otherwise do some work that requires a specific data distribution.</p>
 <p>Operators that require a specific data distribution will ensure that this occurs as part of their definition. As the programmer, you should not need to invoke <code>exchange</code>.</p>
 <p>There are times where <code>exchange</code> can be useful. For example, if a stream is used by two operators requiring the same distribution, simply using the stream twice will cause duplicate data exchange as each operator satisfies its requirements. Instead, it may make sense to invoke <code>exchange</code> to move the data once, at which point the two operators will no longer require serialization and communication to shuffle their inputs appropriately.</p>
-<h2><a class="header" href="#other-operators" id="other-operators">Other operators</a></h2>
+<h2 id="other-operators"><a class="header" href="#other-operators">Other operators</a></h2>
 <p>There are any number of other operators, most of which you should be able to find in the <code>timely::dataflow::operators</code> module. Scanning through the documentation for this module may lead you to operators that you need, and alternately their implementations may demonstrate how to <em>construct</em> similar operators, if the one you require is not present. Operator construction is the subject of the next section!</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                        
                             <a rel="prev" href="../chapter_2/chapter_2_2.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
-                        
 
-                        
                             <a rel="next" href="../chapter_2/chapter_2_4.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
-                        
 
                         <div style="clear: both"></div>
                     </nav>
@@ -334,49 +309,35 @@ fn main() {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                
                     <a rel="prev" href="../chapter_2/chapter_2_2.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
-                
 
-                
                     <a rel="next" href="../chapter_2/chapter_2_4.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
-                
             </nav>
 
         </div>
 
-        
 
-        
 
-        
 
-        
         <script type="text/javascript">
             window.playground_copyable = true;
         </script>
-        
 
-        
 
-        
         <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
-        
 
         <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
         <script src="../book.js" type="text/javascript" charset="utf-8"></script>
 
         <!-- Custom JS scripts -->
-        
 
-        
 
     </body>
 </html>

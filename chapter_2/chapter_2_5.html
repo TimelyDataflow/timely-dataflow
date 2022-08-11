@@ -4,37 +4,25 @@
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>A Worked Example</title>
-        
-        
 
 
         <!-- Custom HTML head -->
         
-
-
         <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-        
         <link rel="icon" href="../favicon.svg">
-        
-        
         <link rel="shortcut icon" href="../favicon.png">
-        
         <link rel="stylesheet" href="../css/variables.css">
         <link rel="stylesheet" href="../css/general.css">
         <link rel="stylesheet" href="../css/chrome.css">
-        
         <link rel="stylesheet" href="../css/print.css" media="print">
-        
 
         <!-- Fonts -->
         <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
-        
         <link rel="stylesheet" href="../fonts/fonts.css">
-        
 
         <!-- Highlight.js Stylesheets -->
         <link rel="stylesheet" href="../highlight.css">
@@ -42,9 +30,7 @@
         <link rel="stylesheet" href="../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
-        
 
-        
     </head>
     <body>
         <!-- Provide site root to javascript -->
@@ -103,8 +89,7 @@
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
-                
-                <div id="menu-bar-hover-placeholder"></div>
+                                <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky bordered">
                     <div class="left-buttons">
                         <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
@@ -120,29 +105,24 @@
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
                         </ul>
-                        
                         <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
                             <i class="fa fa-search"></i>
                         </button>
-                        
                     </div>
 
                     <h1 class="menu-title"></h1>
 
                     <div class="right-buttons">
-                        
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        
-                        
+
                     </div>
                 </div>
 
-                
                 <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
                     <div id="searchresults-outer" class="searchresults-outer hidden">
                         <div id="searchresults-header" class="searchresults-header"></div>
@@ -150,7 +130,6 @@
                         </ul>
                     </div>
                 </div>
-                
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
                 <script type="text/javascript">
@@ -163,13 +142,12 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1><a class="header" href="#a-worked-example" id="a-worked-example">A Worked Example</a></h1>
+                        <h1 id="a-worked-example"><a class="header" href="#a-worked-example">A Worked Example</a></h1>
 <p>You may have heard of <code>word_count</code> as the archetypical &quot;big data&quot; problem: you have a large collection of text, and what you want most in life is to know how many of each word are present in the text. The data are too large to load into memory, but let's assume that the set of distinct words, each with an associated count, is small enough to fit in memory.</p>
 <p>Let's take the <code>word_count</code> example in the streaming direction. For whatever reason, your collection of text <em>changes</em>. As time moves along, some new texts are added and some old texts are retracted. We don't know why this happens, we just get told about the changes. Our new job is to <em>maintain</em> the <code>word_count</code> computation, in the face of arbitrary changes to the collection of texts, as promptly as possible.</p>
 <p>Let's model a changing corpus of text as a list of pairs of <em>times</em> which will be <code>u64</code> integers with a list of <em>changes</em> which are each pairs <code>(String, i64)</code> indicating the text and whether it has been added (+1) or removed (-1).</p>
 <p>We are going to write a program that is the moral equivalent of the following sequential Rust program:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>/// From a sequence of changes to the occurrences of text,
 /// produce the changing counts of words in that text.
@@ -190,7 +168,7 @@ fn word_count(mut history: Vec&lt;(u64, Vec&lt;(String, i64)&gt;)&gt;) {
 </span></code></pre></pre>
 <p>This program is fairly straightforward; hopefully you understand its intent, even if you aren't familiar with every method and type. However, the program is also very specific about what must happen: we process the history in order, and for each time we process the text changes in order. The program does not allow for any flexibility here.</p>
 <p>Our program will be a bit larger, but it will be more flexible. By specifying more about what we want to happen to the data, and less about which order this needs to happen, we will gain the ability to scale out to multiple workers across multiple machines.</p>
-<h2><a class="header" href="#starting-out-with-text-streams" id="starting-out-with-text-streams">Starting out with text streams</a></h2>
+<h2 id="starting-out-with-text-streams"><a class="header" href="#starting-out-with-text-streams">Starting out with text streams</a></h2>
 <p>Let's first build a timely computation into which we can send text and which will show us the text back. Our next steps will be to put more clever logic in place, but let's start here to get some boiler-plate out of the way.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
@@ -250,7 +228,7 @@ fn main() {
         }
 </code></pre>
 <p>There are several things going on here. First, we <code>send</code> some data into the input, which allows the data to circulate through the workers along the dataflow. This data will be of type <code>(String, i64)</code>, because our example wants to send some text and annotate each with the change in the count (we add or remove text with <code>+1</code> or <code>-1</code>, respectively). Second, we <code>advance_to</code> to tell timely dataflow that we have ceased sending data for <code>round</code> and anything before it. At this point timely can start to reason about <code>round</code> becoming complete, once all the associated data make their way through the dataflow. Finally, we repeatedly <code>step</code> the worker until <code>probe</code> reports that it has caught up to <code>round + 1</code>, meaning that data for <code>round</code> are fully flushed from the system (and printed to the screen, one hopes).</p>
-<h2><a class="header" href="#breaking-text-into-words" id="breaking-text-into-words">Breaking text into words</a></h2>
+<h2 id="breaking-text-into-words"><a class="header" href="#breaking-text-into-words">Breaking text into words</a></h2>
 <p>Let's add a simple operator that takes our text strings we supply as input and breaks them into words.</p>
 <p>More specifically, we will take <code>(String, i64)</code> pairs and break them into many <code>(String, i64)</code> pairs with the same <code>i64</code> value, because if we are adding some text we'll add the words, and if subtracting text we'll subtract the words.</p>
 <p>Rather than repeat all the code up above, I'm just going to show you the fragment you insert between <code>to_stream</code> and <code>inspect</code>:</p>
@@ -292,7 +270,7 @@ fn main() {
 </span></code></pre></pre>
 <p>The <code>flat_map</code> method expects to be told how to take each record and turn it into an iterator. Here, we are saying that each received <code>text</code> should be split (at whitespace boundaries), and each resulting <code>word</code> should be paired up with <code>diff</code>. We do a weird <code>collect</code> thing at the end because <code>split_whitespace</code> tries to hand back pointers into <code>text</code> and it makes life complicated. Sorry, blame Rust (and then blame me for using Rust).</p>
 <p>This code should now show us the stream of <code>(word, diff)</code> pairs that fly by, but we still haven't done anything complicated with them yet.</p>
-<h2><a class="header" href="#maintaining-word-counts" id="maintaining-word-counts">Maintaining word counts</a></h2>
+<h2 id="maintaining-word-counts"><a class="header" href="#maintaining-word-counts">Maintaining word counts</a></h2>
 <p>This gets a bit more interesting. We don't have an operator to maintain word counts, so we are going to write one.</p>
 <p>We start with a stream of words and differences coming at us. This stream has no particular structure, and in particular if the stream is distributed across multiple workers we have no assurance that all instances of the same word are at the same worker. This means that if each worker just adds up the counts for each word, we will get a bunch of partial results, local to each worker.</p>
 <p>We will need to introduce <em>data exchange</em>, where the workers communicate with each other to shuffle the data so that the resulting distribution provides correct results. Specifically, we are going to distribute the data so that each individual word goes to the same worker, but the words themselves may be distributed across workers.</p>
@@ -447,7 +425,7 @@ fn main() {
 </code></pre>
 <p>Here we process each time in order (we sorted them!). For each time, we create a new output session from <code>output</code> using <code>time</code> More importantly, this actually needs to be the same type as <code>time</code> from before; the system is smart and knows that if you drop all references to a time you cannot create new output sessions. It's a feature, not a bug.</p>
 <p>We then proceed through each of the batches we enqueue, and through each of the <code>(word, diff)</code> pairs in each of the batches. I've decided that what we are going to do is update the count and announce the new count, but you could probably imagine doing lots of different things here.</p>
-<h2><a class="header" href="#the-finished-product" id="the-finished-product">The finished product</a></h2>
+<h2 id="the-finished-product"><a class="header" href="#the-finished-product">The finished product</a></h2>
 <p>You can check out the result in <a href="https://github.com/TimelyDataflow/timely-dataflow/blob/master/timely/examples/wordcount.rs"><code>examples/wordcount.rs</code></a>. If you run it as written, you'll see output that looks like:</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example wordcount
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
@@ -481,17 +459,13 @@ fn main() {
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                        
                             <a rel="prev" href="../chapter_2/chapter_2_4.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
-                        
 
-                        
                             <a rel="next" href="../chapter_3/chapter_3.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
-                        
 
                         <div style="clear: both"></div>
                     </nav>
@@ -499,49 +473,35 @@ fn main() {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                
                     <a rel="prev" href="../chapter_2/chapter_2_4.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
-                
 
-                
                     <a rel="next" href="../chapter_3/chapter_3.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
-                
             </nav>
 
         </div>
 
-        
 
-        
 
-        
 
-        
         <script type="text/javascript">
             window.playground_copyable = true;
         </script>
-        
 
-        
 
-        
         <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
-        
 
         <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
         <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
         <script src="../book.js" type="text/javascript" charset="utf-8"></script>
 
         <!-- Custom JS scripts -->
-        
 
-        
 
     </body>
 </html>
