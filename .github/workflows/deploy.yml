@@ -7,12 +7,12 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - run: cargo install mdbook --version 0.4.6
+      - uses: actions/checkout@v3
+      - run: cargo install mdbook --version 0.4.20
       - run: cd mdbook && mdbook build
-      - uses: JamesIves/github-pages-deploy-action@4.0.0
+      - uses: JamesIves/github-pages-deploy-action@v4
         with:
           branch: gh-pages
           folder: mdbook/book
