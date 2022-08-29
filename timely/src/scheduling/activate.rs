@@ -187,7 +187,7 @@ impl Activations {
 }
 
 /// A thread-safe handle to an `Activations`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SyncActivations {
     tx: Sender<Vec<usize>>,
     thread: Thread,
@@ -218,7 +218,7 @@ impl SyncActivations {
 }
 
 /// A capability to activate a specific path.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Activator {
     path: Vec<usize>,
     queue: Rc<RefCell<Activations>>,
@@ -253,7 +253,7 @@ impl Activator {
 }
 
 /// A thread-safe version of `Activator`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SyncActivator {
     path: Vec<usize>,
     queue: SyncActivations,
@@ -282,7 +282,7 @@ impl ArcWake for SyncActivator {
 
 /// The error returned when activation fails across thread boundaries because
 /// the receiving end has hung up.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct SyncActivationError;
 
 impl std::fmt::Display for SyncActivationError {
@@ -294,7 +294,7 @@ impl std::fmt::Display for SyncActivationError {
 impl std::error::Error for SyncActivationError {}
 
 /// A wrapper that unparks on drop.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ActivateOnDrop<T>  {
     wrapped: T,
     address: Rc<Vec<usize>>,
