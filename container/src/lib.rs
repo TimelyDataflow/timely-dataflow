@@ -3,6 +3,8 @@
 #![forbid(missing_docs)]
 
 pub mod columnation;
+mod refs;
+pub use refs::RefOrMut;
 
 /// A container transferring data through dataflow edges
 ///
