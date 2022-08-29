@@ -1,13 +1,13 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
-use crate::Data;
+use crate::Container;
 use crate::order::PartialOrder;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for reclocking a stream.
-pub trait Reclock<S: Scope, D: Data> {
+pub trait Reclock<S: Scope> {
     /// Delays records until an input is observed on the `clock` input.
     ///
     /// The source stream is buffered until a record is seen on the clock input,
@@ -45,11 +45,11 @@ pub trait Reclock<S: Scope, D: Data> {
     /// assert_eq!(extracted[1], (5, vec![4,5]));
     /// assert_eq!(extracted[2], (8, vec![6,7,8]));
     /// ```
-    fn reclock(&self, clock: &Stream<S, ()>) -> Stream<S, D>;
+    fn reclock<TC: Container<Item=()>>(&self, clock: &StreamCore<S, TC>) -> Self;
 }
 
-impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
-    fn reclock(&self, clock: &Stream<S, ()>) -> Stream<S, D> {
+impl<S: Scope, C: Container> Reclock<S> for StreamCore<S, C> {
+    fn reclock<TC: Container<Item=()>>(&self, clock: &StreamCore<S, TC>) -> StreamCore<S, C> {
 
         let mut stash = vec![];
 
@@ -57,7 +57,7 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
 
             // stash each data input with its timestamp.
             input1.for_each(|cap, data| {
-                stash.push((cap.time().clone(), data.replace(Vec::new())));
+                stash.push((cap.time().clone(), data.replace(Default::default())));
             });
 
             // request notification at time, to flush stash.
@@ -70,7 +70,7 @@ impl<S: Scope, D: Data> Reclock<S, D> for Stream<S, D> {
                 let mut session = output.session(&cap);
                 for &mut (ref t, ref mut data) in &mut stash {
                     if t.less_equal(cap.time()) {
-                        session.give_vec(data);
+                        session.give_container(data);
                     }
                 }
                 stash.retain(|x| !x.0.less_equal(cap.time()));
