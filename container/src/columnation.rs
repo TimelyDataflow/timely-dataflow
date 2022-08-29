@@ -130,10 +130,22 @@ impl<T: Columnation> Default for TimelyStack<T> {
 
 impl<'a, A: 'a + Columnation> FromIterator<&'a A> for TimelyStack<A> {
     fn from_iter<T: IntoIterator<Item = &'a A>>(iter: T) -> Self {
-        let mut iter = iter.into_iter();
+        let iter = iter.into_iter();
         let mut c = TimelyStack::<A>::with_capacity(iter.size_hint().0);
-        while let Some(element) = iter.next() {
+        for element in iter {
             c.copy(element);
+        }
+
+        c
+    }
+}
+
+impl<A: Columnation> FromIterator<A> for TimelyStack<A> {
+    fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+        let iter = iter.into_iter();
+        let mut c = TimelyStack::<A>::with_capacity(iter.size_hint().0);
+        for element in iter {
+            c.copy(&element);
         }
 
         c
@@ -242,7 +254,7 @@ mod serde {
 }
 
 mod container {
-    use crate::{Container, PushPartitioned};
+    use crate::{AppendableContainer, Container, DrainContainer, PushPartitioned, RefOrMut};
 
     use crate::columnation::{Columnation, TimelyStack};
 
@@ -287,6 +299,29 @@ mod container {
                 if buffers[index].len() == buffers[index].local.capacity() {
                     flush(index, &mut buffers[index]);
                 }
+            }
+            self.clear();
+        }
+    }
+
+    impl<T: Columnation + 'static> AppendableContainer for TimelyStack<T> {
+        fn with_capacity(capacity: usize) -> Self {
+            TimelyStack::with_capacity(capacity)
+        }
+
+        fn reserve(&mut self, additional: usize) {
+            self.local.reserve(additional)
+        }
+
+        fn show(&mut self, element: RefOrMut<Self::Item>) {
+            self.copy(&element)
+        }
+    }
+
+    impl<T: Columnation + 'static> DrainContainer for TimelyStack<T> {
+        fn drain<F: FnMut(RefOrMut<T>)>(&mut self, mut logic: F) {
+            for x in &**self {
+                logic(RefOrMut::Ref(&x))
             }
             self.clear();
         }

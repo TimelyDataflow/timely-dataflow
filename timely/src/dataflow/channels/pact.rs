@@ -8,11 +8,11 @@
 //! The progress tracking logic assumes that this number is independent of the pact used.
 
 use std::{fmt::{self, Debug}, marker::PhantomData};
-use timely_container::PushPartitioned;
 
 use crate::communication::{Push, Pull, Data};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::Container;
+use crate::container::PushPartitioned;
 
 use crate::worker::AsWorker;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;

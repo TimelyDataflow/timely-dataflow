@@ -1,9 +1,8 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
 use std::rc::Rc;
-use timely_container::columnation::{Columnation, TimelyStack};
-use crate::Container;
-use crate::Data;
+use crate::{Container, Data};
+use crate::container::columnation::{Columnation, TimelyStack};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::Operator;
