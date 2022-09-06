@@ -30,6 +30,35 @@ impl<T: Columnation> TimelyStack<T> {
         }
     }
 
+    /// Ensures `Self` can absorb `items` without further allocations.
+    ///
+    /// The argument `items` may be cloned and iterated multiple times.
+    /// Please be careful if it contains side effects.
+    #[inline(always)]
+    pub fn reserve_items<'a, I>(&'a mut self, items: I)
+        where
+            I: Iterator<Item= &'a T>+Clone,
+    {
+        self.local.reserve(items.clone().count());
+        self.inner.reserve_items(items);
+    }
+
+    /// Ensures `Self` can absorb `items` without further allocations.
+    ///
+    /// The argument `items` may be cloned and iterated multiple times.
+    /// Please be careful if it contains side effects.
+    #[inline(always)]
+    pub fn reserve_regions<'a, I>(&mut self, regions: I)
+        where
+            Self: 'a,
+            I: Iterator<Item= &'a Self>+Clone,
+    {
+        self.local.reserve(regions.clone().map(|cs| cs.local.len()).sum());
+        self.inner.reserve_regions(regions.map(|cs| &cs.inner));
+    }
+
+
+
     /// Copies an element in to the region.
     ///
     /// The element can be read by indexing
@@ -71,7 +100,8 @@ impl<T: Columnation> TimelyStack<T> {
     /// Unsafe access to `local` data. The slices stores data that is backed by a region
     /// allocation. Therefore, it is undefined behavior to mutate elements of the `local` slice.
     ///
-    /// Safety: Elements within `local` can be reordered, but not mutated, removed and/or dropped.
+    /// # Safety
+    /// Elements within `local` can be reordered, but not mutated, removed and/or dropped.
     pub unsafe fn local(&mut self) -> &mut [T] {
         &mut self.local[..]
     }
