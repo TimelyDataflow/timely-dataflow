@@ -15,14 +15,36 @@ pub struct Counter<T: Ord+Clone+'static, D, P: Pull<BundleCore<T, D>>> {
     phantom: ::std::marker::PhantomData<D>,
 }
 
+/// A guard type that updates the change batch counts on drop
+pub struct ConsumedGuard<'a, T: Ord + Clone + 'static> {
+    consumed: &'a Rc<RefCell<ChangeBatch<T>>>,
+    time: Option<T>,
+    len: usize,
+}
+
+impl<'a, T:Ord+Clone+'static> Drop for ConsumedGuard<'a, T> {
+    fn drop(&mut self) {
+        self.consumed.borrow_mut().update(self.time.take().unwrap(), self.len as i64);
+    }
+}
+
 impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
     pub fn next(&mut self) -> Option<&mut BundleCore<T, D>> {
+        self.next_guarded().map(|(_guard, bundle)| bundle)
+    }
+
+    #[inline]
+    pub(crate) fn next_guarded(&mut self) -> Option<(ConsumedGuard<'_, T>, &mut BundleCore<T, D>)> {
         if let Some(message) = self.pullable.pull() {
             if message.data.len() > 0 {
-                self.consumed.borrow_mut().update(message.time.clone(), message.data.len() as i64);
-                Some(message)
+                let guard = ConsumedGuard {
+                    consumed: &self.consumed,
+                    time: Some(message.time.clone()),
+                    len: message.data.len(),
+                };
+                Some((guard, message))
             }
             else { None }
         }

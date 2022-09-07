@@ -30,6 +30,7 @@ use crate::order::PartialOrder;
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
 use crate::scheduling::Activations;
+use crate::dataflow::channels::pullers::counter::ConsumedGuard;
 
 /// An internal trait expressing the capability to send messages with a given timestamp.
 pub trait CapabilityTrait<T: Timestamp> {
@@ -231,6 +232,8 @@ type CapabilityUpdates<T> = Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>;
 pub struct CapabilityRef<'cap, T: Timestamp+'cap> {
     time: &'cap T,
     internal: CapabilityUpdates<T>,
+    /// A drop guard that updates the consumed capability this CapabilityRef refers to on drop
+    _consumed_guard: ConsumedGuard<'cap, T>,
 }
 
 impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
@@ -244,10 +247,11 @@ impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
 impl<'cap, T: Timestamp + 'cap> CapabilityRef<'cap, T> {
     /// Creates a new capability reference at `time` while incrementing (and keeping a reference to)
     /// the provided [`ChangeBatch`].
-    pub(crate) fn new(time: &'cap T, internal: CapabilityUpdates<T>) -> Self {
+    pub(crate) fn new(time: &'cap T, internal: CapabilityUpdates<T>, guard: ConsumedGuard<'cap, T>) -> Self {
         CapabilityRef {
             time,
             internal,
+            _consumed_guard: guard,
         }
     }
 

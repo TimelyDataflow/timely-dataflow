@@ -49,13 +49,13 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     #[inline]
     pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>)> {
         let internal = &self.internal;
-        self.pull_counter.next().map(|bundle| {
+        self.pull_counter.next_guarded().map(|(guard, bundle)| {
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
-                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data))
+                    (CapabilityRef::new(&bundle.time, internal.clone(), guard), RefOrMut::Ref(&bundle.data))
                 },
                 RefOrMut::Mut(bundle) => {
-                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data))
+                    (CapabilityRef::new(&bundle.time, internal.clone(), guard), RefOrMut::Mut(&mut bundle.data))
                 },
             }
         })
@@ -81,22 +81,13 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     /// ```
     #[inline]
     pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<D>)>(&mut self, mut logic: F) {
-        // We inline `next()` so that we can use `self.logging` without cloning (and dropping) the logger.
-        let internal = &self.internal;
-        while let Some((cap, data)) = self.pull_counter.next().map(|bundle| {
-            match bundle.as_ref_or_mut() {
-                RefOrMut::Ref(bundle) => {
-                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Ref(&bundle.data))
-                },
-                RefOrMut::Mut(bundle) => {
-                    (CapabilityRef::new(&bundle.time, internal.clone()), RefOrMut::Mut(&mut bundle.data))
-                },
-            }
-        }) {
-            self.logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
+        let mut logging = self.logging.take();
+        while let Some((cap, data)) = self.next() {
+            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            self.logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
+            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
         }
+        self.logging = logging;
     }
 
 }
