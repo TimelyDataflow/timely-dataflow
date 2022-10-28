@@ -293,6 +293,14 @@ impl<T> ::std::iter::IntoIterator for Antichain<T> {
     }
 }
 
+impl<'a, T> ::std::iter::IntoIterator for &'a Antichain<T> {
+    type Item = &'a T;
+    type IntoIter = ::std::slice::Iter<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.elements.iter()
+    }
+}
+
 /// An antichain based on a multiset whose elements frequencies can be updated.
 ///
 /// The `MutableAntichain` maintains frequencies for many elements of type `T`, and exposes the set
@@ -316,7 +324,7 @@ impl<T> ::std::iter::IntoIterator for Antichain<T> {
 pub struct MutableAntichain<T> {
     dirty: usize,
     updates: Vec<(T, i64)>,
-    frontier: Vec<T>,
+    frontier: Antichain<T>,
     changes: ChangeBatch<T>,
 }
 
@@ -336,7 +344,7 @@ impl<T> MutableAntichain<T> {
         MutableAntichain {
             dirty: 0,
             updates: Vec::new(),
-            frontier:  Vec::new(),
+            frontier:  Antichain::new(),
             changes: ChangeBatch::new(),
         }
     }
@@ -380,9 +388,9 @@ impl<T> MutableAntichain<T> {
     /// assert!(frontier.frontier().len() == 0);
     ///```
     #[inline]
-    pub fn frontier(&self) -> AntichainRef<'_, T> {
+    pub fn frontier(&self) -> &Antichain<T> {
         debug_assert_eq!(self.dirty, 0);
-        AntichainRef::new(&self.frontier)
+        &self.frontier
     }
 
     /// Creates a new singleton `MutableAntichain`.
@@ -390,10 +398,10 @@ impl<T> MutableAntichain<T> {
     /// # Examples
     ///
     ///```
-    /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
+    /// use timely::progress::frontier::{Antichain, MutableAntichain};
     ///
     /// let mut frontier = MutableAntichain::new_bottom(0u64);
-    /// assert!(frontier.frontier() == AntichainRef::new(&[0u64]));
+    /// assert!(frontier.frontier() == &Antichain::from_elem(0u64));
     ///```
     #[inline]
     pub fn new_bottom(bottom: T) -> MutableAntichain<T>
@@ -403,7 +411,7 @@ impl<T> MutableAntichain<T> {
         MutableAntichain {
             dirty: 0,
             updates: vec![(bottom.clone(), 1)],
-            frontier: vec![bottom],
+            frontier: Antichain::from_elem(bottom),
             changes: ChangeBatch::new(),
         }
     }
@@ -483,7 +491,7 @@ impl<T> MutableAntichain<T> {
     /// # Examples
     ///
     ///```
-    /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
+    /// use timely::progress::frontier::{Antichain, MutableAntichain};
     ///
     /// let mut frontier = MutableAntichain::new_bottom(1u64);
     /// let changes =
@@ -491,7 +499,7 @@ impl<T> MutableAntichain<T> {
     ///     .update_iter(vec![(1, -1), (2, 7)])
     ///     .collect::<Vec<_>>();
     ///
-    /// assert!(frontier.frontier() == AntichainRef::new(&[2]));
+    /// assert!(frontier.frontier() == &Antichain::from_elem(2));
     /// assert!(changes == vec![(1, -1), (2, 1)]);
     ///```
     #[inline]
@@ -557,16 +565,14 @@ impl<T> MutableAntichain<T> {
             self.updates.retain(|x| x.1 != 0);
         }
 
-        for time in self.frontier.drain(..) {
+        for time in self.frontier.elements.drain(..) {
             self.changes.update(time, -1);
         }
 
         // build new frontier using strictly positive times.
         // as the times are sorted, we don't need to worry that we might displace frontier elements.
         for time in self.updates.iter().filter(|x| x.1 > 0) {
-            if !self.frontier.iter().any(|f| f.less_equal(&time.0)) {
-                self.frontier.push(time.0.clone());
-            }
+            self.frontier.insert(time.0.clone());
         }
 
         for time in self.frontier.iter() {
