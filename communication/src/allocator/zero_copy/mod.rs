@@ -11,3 +11,4 @@ pub mod allocator;
 pub mod allocator_process;
 pub mod initialize;
 pub mod push_pull;
+pub mod stream;
