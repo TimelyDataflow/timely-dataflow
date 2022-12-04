@@ -1,13 +1,13 @@
 //!
 
-use std::io::{self, Read, Write};
-use std::net::TcpStream;
+use std::io::{self, Write};
 use crossbeam_channel::{Sender, Receiver};
 
 use crate::networking::MessageHeader;
 
 use super::bytes_slab::BytesSlab;
 use super::bytes_exchange::MergeQueue;
+use super::stream::Stream;
 
 use logging_core::Logger;
 
@@ -29,13 +29,15 @@ fn tcp_panic(context: &'static str, cause: io::Error) -> ! {
 /// If the stream ends without being shut down, or if reading from the stream fails, the
 /// receive thread panics with a message that starts with "timely communication error:"
 /// in an attempt to take down the computation and cause the failures to cascade.
-pub fn recv_loop(
-    mut reader: TcpStream,
+pub fn recv_loop<S>(
+    mut reader: S,
     targets: Vec<Receiver<MergeQueue>>,
     worker_offset: usize,
     process: usize,
     remote: usize,
     mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
+where
+    S: Stream,
 {
     // Log the receive thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: true }));
@@ -126,9 +128,9 @@ pub fn recv_loop(
 /// If writing to the stream fails, the send thread panics with a message that starts with
 /// "timely communication error:" in an attempt to take down the computation and cause the
 /// failures to cascade.
-pub fn send_loop(
+pub fn send_loop<S: Stream>(
     // TODO: Maybe we don't need BufWriter with consolidation in writes.
-    writer: TcpStream,
+    writer: S,
     sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
