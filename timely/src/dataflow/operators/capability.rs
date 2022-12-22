@@ -225,39 +225,39 @@ impl Error for DowngradeError {}
 
 type CapabilityUpdates<T> = Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>;
 
-/// An unowned capability, which can be used but not retained.
+/// An capability of an input port. Holding onto this capability will implicitly holds onto a
+/// capability for all the outputs ports this input is connected to, after the connection summaries
+/// have been applied.
 ///
-/// The capability reference supplies a `retain(self)` method which consumes the reference
-/// and turns it into an owned capability
-pub struct CapabilityRef<'cap, T: Timestamp+'cap> {
-    time: &'cap T,
+/// This input capability supplies a `retain_for_output(self)` method which consumes the input
+/// capability and turns it into a [Capability] for a specific output port.
+pub struct InputCapability<T: Timestamp> {
     internal: CapabilityUpdates<T>,
-    /// A drop guard that updates the consumed capability this CapabilityRef refers to on drop
-    _consumed_guard: ConsumedGuard<'cap, T>,
+    /// A drop guard that updates the consumed capability this InputCapability refers to on drop
+    consumed_guard: ConsumedGuard<T>,
 }
 
-impl<'cap, T: Timestamp+'cap> CapabilityTrait<T> for CapabilityRef<'cap, T> {
-    fn time(&self) -> &T { self.time }
+impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
+    fn time(&self) -> &T { self.time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         // let borrow = ;
         self.internal.borrow().iter().any(|rc| Rc::ptr_eq(rc, query_buffer))
     }
 }
 
-impl<'cap, T: Timestamp + 'cap> CapabilityRef<'cap, T> {
+impl<T: Timestamp> InputCapability<T> {
     /// Creates a new capability reference at `time` while incrementing (and keeping a reference to)
     /// the provided [`ChangeBatch`].
-    pub(crate) fn new(time: &'cap T, internal: CapabilityUpdates<T>, guard: ConsumedGuard<'cap, T>) -> Self {
-        CapabilityRef {
-            time,
+    pub(crate) fn new(internal: CapabilityUpdates<T>, guard: ConsumedGuard<T>) -> Self {
+        InputCapability {
             internal,
-            _consumed_guard: guard,
+            consumed_guard: guard,
         }
     }
 
     /// The timestamp associated with this capability.
     pub fn time(&self) -> &T {
-        self.time
+        self.consumed_guard.time()
     }
 
     /// Makes a new capability for a timestamp `new_time` greater or equal to the timestamp of
@@ -271,7 +271,7 @@ impl<'cap, T: Timestamp + 'cap> CapabilityRef<'cap, T> {
     /// Delays capability for a specific output port.
     pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
         // TODO : Test operator summary?
-        if !self.time.less_equal(new_time) {
+        if !self.time().less_equal(new_time) {
             panic!("Attempted to delay {:?} to {:?}, which is not beyond the capability's time.", self, new_time);
         }
         if output_port < self.internal.borrow().len() {
@@ -295,7 +295,7 @@ impl<'cap, T: Timestamp + 'cap> CapabilityRef<'cap, T> {
     /// Transforms to an owned capability for a specific output port.
     pub fn retain_for_output(self, output_port: usize) -> Capability<T> {
         if output_port < self.internal.borrow().len() {
-            Capability::new(self.time.clone(), self.internal.borrow()[output_port].clone())
+            Capability::new(self.time().clone(), self.internal.borrow()[output_port].clone())
         }
         else {
             panic!("Attempted to acquire a capability for a non-existent output port.");
@@ -303,18 +303,18 @@ impl<'cap, T: Timestamp + 'cap> CapabilityRef<'cap, T> {
     }
 }
 
-impl<'cap, T: Timestamp> Deref for CapabilityRef<'cap, T> {
+impl<T: Timestamp> Deref for InputCapability<T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        self.time
+        self.time()
     }
 }
 
-impl<'cap, T: Timestamp> Debug for CapabilityRef<'cap, T> {
+impl<T: Timestamp> Debug for InputCapability<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("CapabilityRef")
-            .field("time", &self.time)
+        f.debug_struct("InputCapability")
+            .field("time", self.time())
             .field("internal", &"...")
             .finish()
     }

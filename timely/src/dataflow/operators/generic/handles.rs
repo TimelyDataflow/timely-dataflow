@@ -17,7 +17,7 @@ use crate::communication::{Push, Pull, message::RefOrMut};
 use crate::Container;
 use crate::logging::TimelyLogger as Logger;
 
-use crate::dataflow::operators::CapabilityRef;
+use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
 /// Handle to an operator's input stream.
@@ -47,15 +47,15 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>)> {
+    pub fn next(&mut self) -> Option<(InputCapability<T>, RefOrMut<D>)> {
         let internal = &self.internal;
         self.pull_counter.next_guarded().map(|(guard, bundle)| {
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
-                    (CapabilityRef::new(&bundle.time, internal.clone(), guard), RefOrMut::Ref(&bundle.data))
+                    (InputCapability::new(internal.clone(), guard), RefOrMut::Ref(&bundle.data))
                 },
                 RefOrMut::Mut(bundle) => {
-                    (CapabilityRef::new(&bundle.time, internal.clone(), guard), RefOrMut::Mut(&mut bundle.data))
+                    (InputCapability::new(internal.clone(), guard), RefOrMut::Mut(&mut bundle.data))
                 },
             }
         })
@@ -80,7 +80,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     /// });
     /// ```
     #[inline]
-    pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<D>)>(&mut self, mut logic: F) {
+    pub fn for_each<F: FnMut(InputCapability<T>, RefOrMut<D>)>(&mut self, mut logic: F) {
         let mut logging = self.logging.take();
         while let Some((cap, data)) = self.next() {
             logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
@@ -105,7 +105,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>+'a> FrontieredInp
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(CapabilityRef<T>, RefOrMut<D>)> {
+    pub fn next(&mut self) -> Option<(InputCapability<T>, RefOrMut<D>)> {
         self.handle.next()
     }
 
@@ -128,7 +128,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>+'a> FrontieredInp
     /// });
     /// ```
     #[inline]
-    pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<D>)>(&mut self, logic: F) {
+    pub fn for_each<F: FnMut(InputCapability<T>, RefOrMut<D>)>(&mut self, logic: F) {
         self.handle.for_each(logic)
     }
 
