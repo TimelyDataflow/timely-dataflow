@@ -477,7 +477,7 @@ where
                     // If the operator is closed and we are reporting progress at it, something has surely gone wrong.
                     println!("Operator prematurely shut down: {}", child.name);
                     println!("  {:?}", child.notify);
-                    // panic!();
+                    panic!();
                 }
             }
         }
@@ -621,7 +621,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     fn empty(inputs: usize, outputs: usize) -> PerOperatorState<T> {
         PerOperatorState {
             name:       "External".to_owned(),
-            operator:   None,
+            operator:   Some(Box::new(EmptyOperator::new(inputs, outputs))),
             index:      0,
             id:         usize::max_value(),
             local:      false,
@@ -793,5 +793,54 @@ impl<T: Timestamp> PerOperatorState<T> {
 impl<T: Timestamp> Drop for PerOperatorState<T> {
     fn drop(&mut self) {
         self.shut_down();
+    }
+}
+
+/// An dummy operator to act as a represenantive of a scope
+struct EmptyOperator<T: Timestamp> {
+    inputs: usize,
+    outputs: usize,
+    shared_progress: SharedProgress<T>,
+}
+
+impl<T: Timestamp> EmptyOperator<T> {
+    fn new(inputs: usize, outputs: usize) -> Self {
+        EmptyOperator {
+            inputs,
+            outputs,
+            shared_progress: SharedProgress::new(inputs, outputs),
+        }
+    }
+}
+
+impl<T: Timestamp> Operate<T> for EmptyOperator<T> {
+    fn local(&self) -> bool {
+        false
+    }
+    fn inputs(&self)  -> usize {
+        self.inputs
+    }
+    fn outputs(&self) -> usize {
+        self.outputs
+    }
+    fn get_internal_summary(&mut self) -> Vec<Vec<Antichain<T::Summary>>> {
+        unreachable!("requested internal summary of empty operator");
+    }
+    fn set_external_summary(&mut self) {}
+
+    fn shared_progress_mut(&mut self) -> &mut SharedProgress<T> {
+        &mut self.shared_progress
+    }
+}
+
+impl<T: Timestamp> Schedule for EmptyOperator<T> {
+    fn name(&self) -> &str {
+        "External"
+    }
+    fn path(&self) -> &[usize] {
+        &[]
+    }
+    fn schedule(&mut self) -> bool {
+        false
     }
 }
