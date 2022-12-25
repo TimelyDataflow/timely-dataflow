@@ -16,7 +16,7 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     ///
     /// The `aggregate` method is implemented for streams of `(K, V)` data,
     /// and takes functions `fold`, `emit`, and `hash`; used to combine new `V`
-    /// data with existing `D` state, to produce `R` output from `D` state, and
+    /// data with existing `D` state, to produce `I` output from `D` state, and
     /// to route `K` keys, respectively.
     ///
     /// Aggregation happens within each time, and results are produced once the
@@ -33,7 +33,7 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     ///         .map(|x| (x % 2, x))
     ///         .aggregate(
     ///             |_key, val, agg| { *agg += val; },
-    ///             |key, agg: i32| (key, agg),
+    ///             |key, agg: i32| [(key, agg)],
     ///             |key| *key as u64
     ///         )
     ///         .inspect(|x| assert!(*x == (0, 20) || *x == (1, 25)));
@@ -54,26 +54,31 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     ///         .map(|x| (x % 2, x))
     ///         .aggregate::<_,Vec<i32>,_,_,_>(
     ///             |_key, val, agg| { agg.push(val); },
-    ///             |key, agg| (key, agg.len()),
+    ///             |key, agg| [(key, agg.len())],
     ///             |key| *key as u64
     ///         )
     ///         .inspect(|x| assert!(*x == (0, 5) || *x == (1, 5)));
     /// });
     /// ```
-    fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
+    fn aggregate<I: IntoIterator, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->I+'static, H: Fn(&K)->u64+'static>(
         &self,
         fold: F,
         emit: E,
-        hash: H) -> Stream<S, R> where S::Timestamp: Eq;
+        hash: H) -> Stream<S, I::Item>
+    where S::Timestamp: Eq,
+          I::Item: Data;
 }
 
 impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
 
-    fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
+    fn aggregate<I: IntoIterator, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->I+'static, H: Fn(&K)->u64+'static>(
         &self,
         fold: F,
         emit: E,
-        hash: H) -> Stream<S, R> where S::Timestamp: Eq {
+        hash: H) -> Stream<S, I::Item>
+    where S::Timestamp: Eq,
+          I::Item: Data
+    {
 
         let mut aggregates = HashMap::new();
         let mut vector = Vec::new();
@@ -95,7 +100,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for 
                 if let Some(aggs) = aggregates.remove(time.time()) {
                     let mut session = output.session(&time);
                     for (key, agg) in aggs {
-                        session.give(emit(key, agg));
+                        session.give_iterator(emit(key, agg).into_iter());
                     }
                 }
             });
