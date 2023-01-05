@@ -8,6 +8,7 @@
 //! The progress tracking logic assumes that this number is independent of the pact used.
 
 use std::{fmt::{self, Debug}, marker::PhantomData};
+use std::hash::{Hash, Hasher};
 use timely_container::PushPartitioned;
 
 use crate::communication::{Push, Pull, Data};
@@ -49,6 +50,46 @@ impl<T: 'static, D: Container> ParallelizationContractCore<T, D> for Pipeline {
         // let (pusher, puller) = Thread::new::<Bundle<T, D>>();
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
          LogPuller::new(puller, allocator.index(), identifier, logging))
+    }
+}
+
+/// A connection that dynamically distributes records to all workers
+#[derive(Debug)]
+pub struct Distribute;
+
+impl<T: Timestamp, C: Container + Data> ParallelizationContractCore<T, C> for Distribute {
+    type Pusher = DistributePusher<LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>>;
+    type Puller = LogPuller<T, C, Box<dyn Pull<BundleCore<T, C>>>>;
+
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+        let (senders, receiver) = allocator.allocate::<Message<T, C>>(identifier, address);
+        let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
+        (DistributePusher::new(senders), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
+    }
+}
+
+/// Distributes records among target pushees.
+///
+/// It is more efficient than `Exchange` when the target worker doesn't matter
+pub struct DistributePusher<P> {
+    pushers: Vec<P>,
+}
+
+impl<P>  DistributePusher<P> {
+    /// Allocates a new `DistributePusher` from a supplied set of pushers
+    pub fn new(pushers: Vec<P>) -> DistributePusher<P> {
+        DistributePusher {
+            pushers,
+        }
+    }
+}
+
+impl<T: Eq+Data, C: Container, P: Push<BundleCore<T, C>>> Push<BundleCore<T, C>> for DistributePusher<P> {
+    fn push(&mut self, message: &mut Option<BundleCore<T, C>>) {
+        let mut state: fnv::FnvHasher = Default::default();
+        std::time::Instant::now().hash(&mut state);
+        let worker_idx = (state.finish() as usize) % self.pushers.len();
+        self.pushers[worker_idx].push(message);
     }
 }
 
