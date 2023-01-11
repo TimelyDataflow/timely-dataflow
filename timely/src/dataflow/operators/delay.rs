@@ -30,9 +30,9 @@ pub trait Delay<G: Scope, D: Data> {
     ///     (0..10).to_stream(scope)
     ///            .delay(|data, time| *data)
     ///            .sink(Pipeline, "example", |input| {
-    ///                input.for_each(|time, data| {
+    ///                while let Some((time, data)) = input.next() {
     ///                    println!("data at time: {:?}", time);
-    ///                });
+    ///                }
     ///            });
     /// });
     /// ```
@@ -57,9 +57,9 @@ pub trait Delay<G: Scope, D: Data> {
     ///     (0..10).to_stream(scope)
     ///            .delay(|data, time| *data)
     ///            .sink(Pipeline, "example", |input| {
-    ///                input.for_each(|time, data| {
+    ///                while let Some((time, data)) = input.next() {
     ///                    println!("data at time: {:?}", time);
-    ///                });
+    ///                }
     ///            });
     /// });
     /// ```
@@ -85,9 +85,9 @@ pub trait Delay<G: Scope, D: Data> {
     ///     (0..10).to_stream(scope)
     ///            .delay_batch(|time| time + 1)
     ///            .sink(Pipeline, "example", |input| {
-    ///                input.for_each(|time, data| {
+    ///                while let Some((time, data)) = input.next() {
     ///                    println!("data at time: {:?}", time);
-    ///                });
+    ///                }
     ///            });
     /// });
     /// ```
@@ -97,18 +97,16 @@ pub trait Delay<G: Scope, D: Data> {
 impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
     fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
         let mut elements = HashMap::new();
-        let mut vector = Vec::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
-            input.for_each(|time, data| {
-                data.swap(&mut vector);
-                for datum in vector.drain(..) {
+            while let Some((time, data)) = input.next_mut() {
+                for datum in data.drain(..) {
                     let new_time = func(&datum, &time);
                     assert!(time.time().less_equal(&new_time));
                     elements.entry(new_time.clone())
                             .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
                             .push(datum);
                 }
-            });
+            }
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
@@ -128,13 +126,13 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
     fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
-            input.for_each(|time, data| {
+            while let Some((time, data)) = input.next() {
                 let new_time = func(&time);
                 assert!(time.time().less_equal(&new_time));
                 elements.entry(new_time.clone())
                         .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
-                        .push(data.replace(Vec::new()));
-            });
+                        .push(data.take());
+            }
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {

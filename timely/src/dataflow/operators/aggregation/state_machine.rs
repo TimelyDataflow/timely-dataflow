@@ -66,8 +66,6 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
         let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state
 
-        let mut vector = Vec::new();
-
         self.unary_notify(Exchange::new(move |&(ref k, _)| hash(k)), "StateMachine", vec![], move |input, output, notificator| {
 
             // go through each time with data, process each (key, val) pair.
@@ -86,19 +84,16 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             });
 
             // stash each input and request a notification when ready
-            input.for_each(|time, data| {
-
-                data.swap(&mut vector);
-
+            while let Some((time, data)) = input.next_mut() {
                 // stash if not time yet
                 if notificator.frontier(0).less_than(time.time()) {
-                    pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(vector.drain(..));
+                    pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(data.drain(..));
                     notificator.notify_at(time.retain());
                 }
                 else {
                     // else we can process immediately
                     let mut session = output.session(&time);
-                    for (key, val) in vector.drain(..) {
+                    for (key, val) in data.drain(..) {
                         let (remove, output) = {
                             let state = states.entry(key.clone()).or_insert_with(Default::default);
                             fold(&key, val, state)
@@ -107,7 +102,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
                         session.give_iterator(output.into_iter());
                     }
                 }
-            });
+            }
         })
     }
 }

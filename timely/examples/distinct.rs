@@ -20,7 +20,7 @@ fn main() {
             scope.input_from(&mut input)
                 .unary(Exchange::new(|x| *x), "Distinct", move |_, _|
                     move |input, output| {
-                        input.for_each(|time, data| {
+                        while let Some((time, data)) = input.next() {
                             let counts =
                             counts_by_time
                                 .entry(time.time().clone())
@@ -33,7 +33,7 @@ fn main() {
                                 }
                                 *count += 1;
                             }
-                        })
+                        }
                     })
                 .inspect(move |x| println!("worker {}:\tvalue {}", index, x))
                 .probe_with(&mut probe);

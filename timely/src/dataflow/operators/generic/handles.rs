@@ -15,7 +15,6 @@ use crate::dataflow::channels::pushers::buffer::{BufferCore, Session};
 use crate::dataflow::channels::BundleCore;
 use crate::communication::{Push, Pull, message::RefOrMut};
 use crate::Container;
-use crate::logging::TimelyLogger as Logger;
 
 use crate::dataflow::operators::CapabilityRef;
 use crate::dataflow::operators::capability::CapabilityTrait;
@@ -24,7 +23,7 @@ use crate::dataflow::operators::capability::CapabilityTrait;
 pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
-    logging: Option<Logger>,
+    container: D,
 }
 
 /// Handle to an operator's input stream, specialized to vectors.
@@ -42,7 +41,6 @@ pub struct FrontieredInputHandleCore<'a, T: Timestamp, D: Container+'a, P: Pull<
 pub type FrontieredInputHandle<'a, T, D, P> = FrontieredInputHandleCore<'a, T, Vec<D>, P>;
 
 impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<T, D, P> {
-
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
@@ -61,35 +59,25 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
         })
     }
 
-    /// Repeatedly calls `logic` till exhaustion of the available input data.
-    /// `logic` receives a capability and an input buffer.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-    ///                });
-    ///            });
-    /// });
-    /// ```
+    /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
+    /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
+    /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<D>)>(&mut self, mut logic: F) {
-        let mut logging = self.logging.take();
-        while let Some((cap, data)) = self.next() {
-            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
-            logic(cap, data);
-            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
-        }
-        self.logging = logging;
+    pub fn next_mut(&mut self) -> Option<(CapabilityRef<T>, &mut D)> {
+        let internal = &self.internal;
+        let container = &mut self.container;
+        self.pull_counter.next_guarded().map(|(guard, bundle)| {
+            match bundle.as_ref_or_mut() {
+                RefOrMut::Ref(bundle) => {
+                    container.clone_from(&bundle.data);
+                    (CapabilityRef::new(&bundle.time, internal.clone(), guard), container)
+                },
+                RefOrMut::Mut(bundle) => {
+                    (CapabilityRef::new(&bundle.time, internal.clone(), guard), &mut bundle.data)
+                },
+            }
+        })
     }
-
 }
 
 impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>+'a> FrontieredInputHandleCore<'a, T, D, P> {
@@ -109,27 +97,12 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>+'a> FrontieredInp
         self.handle.next()
     }
 
-    /// Repeatedly calls `logic` till exhaustion of the available input data.
-    /// `logic` receives a capability and an input buffer.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
-    ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
-    ///                });
-    ///            });
-    /// });
-    /// ```
+    /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
+    /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
+    /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn for_each<F: FnMut(CapabilityRef<T>, RefOrMut<D>)>(&mut self, logic: F) {
-        self.handle.for_each(logic)
+    pub fn next_mut(&mut self) -> Option<(CapabilityRef<T>, &mut D)> {
+        self.handle.next_mut()
     }
 
     /// Inspect the frontier associated with this input.
@@ -145,11 +118,11 @@ pub fn _access_pull_counter<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, logging: Option<Logger>) -> InputHandleCore<T, D, P> {
+pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>) -> InputHandleCore<T, D, P> {
     InputHandleCore {
         pull_counter,
         internal,
-        logging,
+        container: D::default(),
     }
 }
 
@@ -209,11 +182,11 @@ impl<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>> OutputHandleCore
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each(|cap, data| {
+    ///                while let Some((cap, data)) = input.next_mut() {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session(&cap.delayed(&time))
-    ///                          .give_vec(&mut data.replace(Vec::new()));
-    ///                });
+    ///                          .give_vec(data);
+    ///                }
     ///            });
     /// });
     /// ```

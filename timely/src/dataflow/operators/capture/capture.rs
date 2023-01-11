@@ -142,8 +142,7 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
                         RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
-                    let vector = data.replace(Default::default());
-                    event_pusher.push(EventCore::Messages(time.clone(), vector));
+                    event_pusher.push(EventCore::Messages(time.clone(), data.take()));
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false
