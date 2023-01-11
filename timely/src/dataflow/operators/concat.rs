@@ -80,15 +80,12 @@ impl<G: Scope, D: Container> Concatenate<G, D> for G {
 
         // build an operator that plays out all input data.
         builder.build(move |_capability| {
-
-            let mut vector = Default::default();
             move |_frontier| {
                 let mut output = output.activate();
                 for handle in handles.iter_mut() {
-                    handle.for_each(|time, data| {
-                        data.swap(&mut vector);
-                        output.session(&time).give_container(&mut vector);
-                    })
+                    while let Some((time, data)) = handle.next_mut() {
+                        output.session(&time).give_container(data);
+                    }
                 }
             }
         });

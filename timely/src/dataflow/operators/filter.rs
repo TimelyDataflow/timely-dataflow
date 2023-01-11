@@ -24,15 +24,13 @@ pub trait Filter<D: Data> {
 
 impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
     fn filter<P: FnMut(&D)->bool+'static>(&self, mut predicate: P) -> Stream<G, D> {
-        let mut vector = Vec::new();
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
-            input.for_each(|time, data| {
-                data.swap(&mut vector);
-                vector.retain(|x| predicate(x));
-                if !vector.is_empty() {
-                    output.session(&time).give_vec(&mut vector);
+            while let Some((time, data)) = input.next_mut() {
+                data.retain(|x| predicate(x));
+                if !data.is_empty() {
+                    output.session(&time).give_vec(data);
                 }
-            });
+            }
         })
     }
 }

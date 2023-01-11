@@ -56,20 +56,20 @@ fn main() {
                 move |input1, input2, output, notify| {
 
                     // receive edges, start to sort them
-                    input1.for_each(|time, data| {
+                    while let Some((time, data)) = input1.next() {
                         notify.notify_at(time.retain());
-                        edge_list.push(data.replace(Vec::new()));
-                    });
+                        edge_list.push(data.take());
+                    }
 
                     // receive (node, worker) pairs, note any new ones.
-                    input2.for_each(|time, data| {
+                    while let Some((time, data)) = input2.next() {
                         node_lists.entry(time.time().clone())
                                   .or_insert_with(|| {
                                       notify.notify_at(time.retain());
                                       Vec::new()
                                   })
-                                  .push(data.replace(Vec::new()));
-                    });
+                                  .push(data.take());
+                    }
 
                     notify.for_each(|time, _num, _notify| {
 

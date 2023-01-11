@@ -141,18 +141,16 @@ impl<G: Scope, D: Container> ConnectLoop<G, D> for StreamCore<G, D> {
 
         let mut input = builder.new_input_connection(self, Pipeline, vec![Antichain::from_elem(summary.clone())]);
 
-        let mut vector = Default::default();
         builder.build(move |_capability| move |_frontier| {
             let mut output = output.activate();
-            input.for_each(|cap, data| {
-                data.swap(&mut vector);
+            while let Some((cap, data)) = input.next_mut() {
                 if let Some(new_time) = summary.results_in(cap.time()) {
                     let new_cap = cap.delayed(&new_time);
                     output
                         .session(&new_cap)
-                        .give_container(&mut vector);
+                        .give_container(data);
                 }
-            });
+            }
         });
     }
 }

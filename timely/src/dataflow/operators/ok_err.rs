@@ -59,22 +59,20 @@ impl<S: Scope, D: Data> OkErr<S, D> for Stream<S, D> {
         let (mut output2, stream2) = builder.new_output();
 
         builder.build(move |_| {
-            let mut vector = Vec::new();
             move |_frontiers| {
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
-                input.for_each(|time, data| {
-                    data.swap(&mut vector);
+                while let Some((time, data)) = input.next_mut() {
                     let mut out1 = output1_handle.session(&time);
                     let mut out2 = output2_handle.session(&time);
-                    for datum in vector.drain(..) {
+                    for datum in data.drain(..) {
                         match logic(datum) {
                             Ok(datum) => out1.give(datum),
                             Err(datum) => out2.give(datum),
                         }
                     }
-                });
+                }
             }
         });
 

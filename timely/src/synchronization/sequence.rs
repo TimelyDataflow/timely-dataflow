@@ -116,7 +116,6 @@ impl<T: ExchangeData> Sequencer<T> {
             let peers = dataflow.peers();
 
             let mut recvd = Vec::new();
-            let mut vector = Vec::new();
 
             // monotonic counter to maintain per-worker total order.
             let mut counter = 0;
@@ -177,14 +176,12 @@ impl<T: ExchangeData> Sequencer<T> {
                 move |input| {
 
                     // grab each command and queue it up
-                    input.for_each(|time, data| {
-                        data.swap(&mut vector);
-
-                        recvd.reserve(vector.len());
-                        for (worker, counter, element) in vector.drain(..) {
+                    while let Some((time, data)) = input.next_mut() {
+                        recvd.reserve(data.len());
+                        for (worker, counter, element) in data.drain(..) {
                             recvd.push(((time.time().clone(), worker, counter), element));
                         }
-                    });
+                    };
 
                     recvd.sort_by(|x,y| x.0.cmp(&y.0));
 

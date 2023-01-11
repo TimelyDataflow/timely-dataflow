@@ -32,13 +32,11 @@ where
     C::Item: ExchangeData,
 {
     fn exchange(&self, route: impl FnMut(&C::Item) -> u64 + 'static) -> StreamCore<G, C> {
-        let mut container = Default::default();
         self.unary(ExchangeCore::new(route), "Exchange", |_, _| {
             move |input, output| {
-                input.for_each(|time, data| {
-                    data.swap(&mut container);
-                    output.session(&time).give_container(&mut container);
-                });
+                while let Some((time, data)) = input.next_mut() {
+                    output.session(&time).give_container(data);
+                }
             }
         })
     }
