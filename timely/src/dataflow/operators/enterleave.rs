@@ -99,7 +99,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
         let input = scope.subgraph.borrow_mut().new_input(produced);
 
         let channel_id = scope.clone().new_identifier();
-        self.connect_to(input, ingress, channel_id);
+        self.connect_to(input, ingress, channel_id, |_, data, buffer| data.swap(buffer));
         StreamCore::new(Source::new(0, input.port), registrar, scope.clone())
     }
 }
@@ -131,7 +131,7 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
         let output = scope.subgraph.borrow_mut().new_output();
         let (targets, registrar) = TeeCore::<G::Timestamp, D>::new();
         let channel_id = scope.clone().new_identifier();
-        self.connect_to(Target::new(0, output.port), EgressNub { targets, phantom: PhantomData }, channel_id);
+        self.connect_to(Target::new(0, output.port), EgressNub { targets, phantom: PhantomData }, channel_id, |_, data, buffer| data.swap(buffer));
 
         StreamCore::new(
             output,

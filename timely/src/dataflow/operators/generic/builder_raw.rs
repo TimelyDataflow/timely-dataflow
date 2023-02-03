@@ -8,6 +8,8 @@ use std::default::Default;
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use crate::communication::message::RefOrMut;
+
 use crate::scheduling::{Schedule, Activations};
 
 use crate::progress::{Source, Target};
@@ -116,12 +118,22 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn new_input_connection<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller
     where
         P: ParallelizationContractCore<G::Timestamp, D> {
+        self.new_input_filter(stream, pact, connection, |_, data, buffer| data.swap(buffer))
+    }
+
+    /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
+    /// `filter` gives clients the opportunity to filter data before transferring over an edge.
+    pub fn new_input_filter<D: Container, P, F>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>, filter: F) -> P::Puller
+        where
+            P: ParallelizationContractCore<G::Timestamp, D>,
+            F: FnMut(&G::Timestamp, RefOrMut<D>, &mut D)+'static
+    {
 
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
         let (sender, receiver) = pact.connect(&mut self.scope, channel_id, &self.address[..], logging);
         let target = Target::new(self.index, self.shape.inputs);
-        stream.connect_to(target, sender, channel_id);
+        stream.connect_to(target, sender, channel_id, filter);
 
         self.shape.inputs += 1;
         assert_eq!(self.shape.outputs, connection.len());
