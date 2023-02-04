@@ -1,25 +1,20 @@
 //! Network initialization.
 
 use std::sync::Arc;
-
-use logging_core::Logger;
-
-use crate::Result;
+// use crate::allocator::Process;
 use crate::allocator::process::ProcessBuilder;
-use crate::logging::{CommunicationSetup, CommunicationEvent};
 use crate::networking::create_sockets;
 use super::allocator::{TcpBuilder, new_vector};
 use super::stream::Stream;
 use super::tcp::{send_loop, recv_loop};
-
 
 /// Join handles for send and receive threads.
 ///
 /// On drop, the guard joins with each of the threads to ensure that they complete
 /// cleanly and send all necessary data.
 pub struct CommsGuard {
-    send_guards: Vec<::std::thread::JoinHandle<Result<()>>>,
-    recv_guards: Vec<::std::thread::JoinHandle<Result<()>>>,
+    send_guards: Vec<::std::thread::JoinHandle<crate::Result<()>>>,
+    recv_guards: Vec<::std::thread::JoinHandle<crate::Result<()>>>,
 }
 
 impl Drop for CommsGuard {
@@ -34,6 +29,9 @@ impl Drop for CommsGuard {
         // println!("RECV THREADS JOINED");
     }
 }
+
+use crate::logging::{CommunicationSetup, CommunicationEvent};
+use logging_core::Logger;
 
 /// Initializes network connections
 pub fn initialize_networking(
@@ -120,9 +118,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
                         sender: false,
                         remote: Some(index),
                     });
-                    let result = recv_loop(stream, remote_send, threads * my_index, my_index, index, logger);
-                    println!("{result:?}");
-                    result
+                    recv_loop(stream, remote_send, threads * my_index, my_index, index, logger)
                 })?;
 
             recv_guards.push(join_guard);

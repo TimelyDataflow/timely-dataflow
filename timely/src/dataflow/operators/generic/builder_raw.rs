@@ -13,7 +13,7 @@ use crate::scheduling::{Schedule, Activations};
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
-use crate::{Container, Result};
+use crate::Container;
 use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pact::ParallelizationContractCore;
@@ -156,7 +156,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Creates an operator implementation from supplied logic constructor.
     pub fn build<L>(mut self, logic: L)
     where
-        L: FnMut(&mut SharedProgress<G::Timestamp>) -> Result<bool>+'static
+        L: FnMut(&mut SharedProgress<G::Timestamp>) -> crate::Result<bool>+'static
     {
         let inputs = self.shape.inputs;
         let outputs = self.shape.outputs;
@@ -182,7 +182,7 @@ impl<G: Scope> OperatorBuilder<G> {
 struct OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(&mut SharedProgress<T>)->Result<bool>+'static,
+    L: FnMut(&mut SharedProgress<T>)->crate::Result<bool>+'static,
 {
     shape: OperatorShape,
     address: Vec<usize>,
@@ -195,11 +195,11 @@ where
 impl<T, L> Schedule for OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(&mut SharedProgress<T>)->Result<bool>+'static,
+    L: FnMut(&mut SharedProgress<T>)->crate::Result<bool>+'static,
 {
     fn name(&self) -> &str { &self.shape.name }
     fn path(&self) -> &[usize] { &self.address[..] }
-    fn schedule(&mut self) -> Result<bool> {
+    fn schedule(&mut self) -> crate::Result<bool> {
         let shared_progress = &mut *self.shared_progress.borrow_mut();
         (self.logic)(shared_progress)
     }
@@ -208,7 +208,7 @@ where
 impl<T, L> Operate<T> for OperatorCore<T, L>
 where
     T: Timestamp,
-    L: FnMut(&mut SharedProgress<T>)->Result<bool>+'static,
+    L: FnMut(&mut SharedProgress<T>)->crate::Result<bool>+'static,
 {
     fn inputs(&self) -> usize { self.shape.inputs }
     fn outputs(&self) -> usize { self.shape.outputs }
@@ -229,8 +229,11 @@ where
         (self.summary.clone(), self.shared_progress.clone())
     }
 
-    fn set_external_summary(&mut self) {
-        // Schedule the operator on its first invocation instead of here.
+    // initialize self.frontier antichains as indicated by hosting scope.
+    fn set_external_summary(&mut self) -> crate::Result<()> {
+        // should we schedule the operator here, or just await the first invocation?
+        self.schedule()?;
+        Ok(())
     }
 
     fn notify_me(&self) -> bool { self.shape.notify }

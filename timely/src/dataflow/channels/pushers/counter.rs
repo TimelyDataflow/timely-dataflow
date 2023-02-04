@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::dataflow::channels::BundleCore;
 use crate::communication::Push;
-use crate::{Container, Result};
+use crate::Container;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
@@ -22,7 +22,7 @@ pub type Counter<T, D, P> = CounterCore<T, Vec<D>, P>;
 
 impl<T: Timestamp, D: Container, P> Push<BundleCore<T, D>> for CounterCore<T, D, P> where P: Push<BundleCore<T, D>> {
     #[inline]
-    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) -> Result<()>{
+    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) -> crate::Result<()>{
         if let Some(message) = message {
             self.produced.borrow_mut().update(message.time.clone(), message.data.len() as i64);
         }

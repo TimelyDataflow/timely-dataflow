@@ -9,8 +9,6 @@ use std::sync::Arc;
 
 use std::any::Any;
 
-use crate::Result;
-
 use crate::allocator::thread::ThreadBuilder;
 use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
 use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
@@ -19,7 +17,7 @@ use crate::allocator::zero_copy::initialize::initialize_networking;
 use crate::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 use std::fmt::{Debug, Formatter};
-use anyhow::bail;
+use anyhow::{bail, Context};
 
 
 /// Possible configurations for the communication infrastructure.
@@ -92,7 +90,7 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts::Matches) -> Result<Config> {
+    pub fn from_matches(matches: &getopts::Matches) -> crate::Result<Config> {
         let threads = matches.opt_get_default("w", 1_usize)?;
         let process = matches.opt_get_default("p", 0_usize)?;
         let processes = matches.opt_get_default("n", 1_usize)?;
@@ -108,7 +106,7 @@ impl Config {
                     addresses.push(line?);
                 }
                 if addresses.len() < processes {
-                    bail!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes);
+                    bail!("could only read {} addresses from {hosts}, but -n: {processes}", addresses.len());
                 }
             }
             else {
@@ -143,7 +141,7 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config> {
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> crate::Result<Config> {
         let mut opts = getopts::Options::new();
         Config::install_options(&mut opts);
         let matches = opts.parse(args)?;
@@ -151,7 +149,7 @@ impl Config {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self) -> anyhow::Result<(Vec<GenericBuilder>, Box<dyn Any+Send>)> {
+    pub fn try_build(self) -> crate::Result<(Vec<GenericBuilder>, Box<dyn Any+Send>)> {
         match self {
             Config::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
@@ -163,12 +161,9 @@ impl Config {
                 Ok((ProcessBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect(), Box::new(())))
             },
             Config::Cluster { threads, process, addresses, report, log_fn } => {
-                match initialize_networking(addresses, process, threads, report, log_fn) {
-                    Ok((stuff, guard)) => {
-                        Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
-                    },
-                    Err(err) => anyhow::bail!("failed to initialize networking: {}", err)
-                }
+                let (stuff, guard) = initialize_networking(addresses, process, threads, report, log_fn)
+                    .context("initializing network")?;
+                Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
             },
         }
     }
@@ -242,7 +237,7 @@ impl Config {
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Config,
     func: F,
-) -> Result<WorkerGuards<T>> {
+) -> crate::Result<WorkerGuards<T>> {
     let (allocators, others) = config.try_build()?;
     initialize_from(allocators, others, func)
 }
@@ -302,7 +297,7 @@ pub fn initialize_from<A, T, F>(
     builders: Vec<A>,
     others: Box<dyn Any+Send>,
     func: F,
-) -> Result<WorkerGuards<T>>
+) -> crate::Result<WorkerGuards<T>>
 where
     A: AllocateBuilder+'static,
     T: Send+'static,
@@ -342,7 +337,7 @@ impl<T:Send+'static> WorkerGuards<T> {
     }
 
     /// Waits on the worker threads and returns the results they produce.
-    pub fn join(mut self) -> Vec<Result<T>> {
+    pub fn join(mut self) -> Vec<crate::Result<T>> {
         self.guards
             .drain(..)
             .map(|guard| guard.join().map_err(|e| anyhow::anyhow!("{e:?}")))

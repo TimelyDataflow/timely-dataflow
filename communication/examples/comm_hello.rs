@@ -1,7 +1,7 @@
 extern crate timely_communication;
 
 use std::ops::Deref;
-use timely_communication::{Message, Allocate};
+use timely_communication::{Message, Allocate, Result};
 
 fn main() {
 
@@ -35,7 +35,7 @@ fn main() {
             allocator.release()?;
         }
 
-        Result::<_, anyhow::Error>::Ok(allocator.index())
+        Result::Ok(allocator.index())
     });
 
     // computation runs until guards are joined or dropped.

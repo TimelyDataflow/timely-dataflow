@@ -24,7 +24,7 @@ fn main() {
             replayers
                 .replay_into(scope)
                 .inspect(|x| println!("replayed: {:?}", x));
-        });
-        Ok(())
+            Ok(())
+        })
     }).unwrap(); // asserts error-free execution
 }

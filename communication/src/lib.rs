@@ -75,8 +75,15 @@
 
 #![forbid(missing_docs)]
 
-use std::any::Any;
-use crossbeam_channel::{Sender, Receiver};
+#[cfg(feature = "getopts")]
+extern crate getopts;
+#[cfg(feature = "bincode")]
+extern crate bincode;
+#[cfg(feature = "bincode")]
+extern crate serde;
+
+extern crate abomonation;
+#[macro_use] extern crate abomonation_derive;
 
 extern crate timely_bytes as bytes;
 extern crate timely_logging as logging_core;
@@ -87,6 +94,8 @@ pub mod initialize;
 pub mod logging;
 pub mod message;
 pub mod buzzer;
+
+use std::any::Any;
 
 #[cfg(feature = "bincode")]
 use serde::{Serialize, Deserialize};
@@ -157,6 +166,8 @@ impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
     fn pull(&mut self) -> &mut Option<T> { (**self).pull() }
 }
 
+
+use crossbeam_channel::{Sender, Receiver};
 
 /// Allocate a matrix of send and receive changes to exchange items.
 ///

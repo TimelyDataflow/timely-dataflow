@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use crate::{Push, Pull, Result};
+use crate::{Push, Pull};
 use crate::allocator::Event;
 
 /// The push half of an intra-thread channel.
@@ -31,7 +31,7 @@ impl<T, P: Push<T>>  Pusher<T, P> {
 
 impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) -> Result<()>{
+    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()>{
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events
@@ -81,7 +81,7 @@ impl<T, P: Push<T>>  ArcPusher<T, P> {
 
 impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) -> Result<()>{
+    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()>{
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events

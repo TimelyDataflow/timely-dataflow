@@ -40,6 +40,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use anyhow::bail;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
 use crate::dataflow::channels::pushers::buffer::BufferCore as PushBuffer;
@@ -85,7 +86,7 @@ where I : IntoIterator,
         builder.build(
             move |progress| {
                 if let Some(error) = error.borrow_mut().take() {
-                    return Err(error);
+                    bail!(error);
                 }
 
                 if !started {

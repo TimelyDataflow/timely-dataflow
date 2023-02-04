@@ -12,7 +12,7 @@ use timely_container::PushPartitioned;
 
 use crate::communication::{Push, Pull, Data};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::{Container, Result};
+use crate::Container;
 
 use crate::worker::AsWorker;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -118,7 +118,7 @@ impl<T, D, P: Push<BundleCore<T, D>>> LogPusher<T, D, P> {
 
 impl<T, D: Container, P: Push<BundleCore<T, D>>> Push<BundleCore<T, D>> for LogPusher<T, D, P> {
     #[inline]
-    fn push(&mut self, pair: &mut Option<BundleCore<T, D>>) -> Result<()>{
+    fn push(&mut self, pair: &mut Option<BundleCore<T, D>>) -> crate::Result<()>{
         if let Some(bundle) = pair {
             self.counter += 1;
 

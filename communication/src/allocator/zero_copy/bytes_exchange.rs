@@ -1,30 +1,28 @@
 //! Types and traits for sharing `Bytes`.
 
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::VecDeque;
 use anyhow::bail;
 
 use bytes::arc::Bytes;
 use super::bytes_slab::BytesSlab;
 
-use crate::Result;
-
 /// A target for `Bytes`.
 pub trait BytesPush {
     // /// Pushes bytes at the instance.
     // fn push(&mut self, bytes: Bytes);
     /// Pushes many bytes at the instance.
-    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iter: I) -> Result<()>;
+    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iter: I) -> crate::Result<()>;
 }
 /// A source for `Bytes`.
 pub trait BytesPull {
     // /// Pulls bytes from the instance.
     // fn pull(&mut self) -> Option<Bytes>;
     /// Drains many bytes from the instance.
-    fn drain_into(&mut self, vec: &mut Vec<Bytes>) -> Result<()>;
+    fn drain_into(&mut self, vec: &mut Vec<Bytes>) -> crate::Result<()>;
 }
 
+use std::sync::atomic::{AtomicBool, Ordering};
 /// An unbounded queue of bytes intended for point-to-point communication
 /// between threads. Cloning returns another handle to the same queue.
 ///
@@ -46,19 +44,19 @@ impl MergeQueue {
         }
     }
     /// Indicates that all input handles to the queue have dropped.
-    pub fn is_complete(&self) -> Result<bool> {
+    pub fn is_complete(&self) -> crate::Result<bool> {
         if self.panic.load(Ordering::SeqCst) { bail!("MergeQueue poisoned."); }
-        Ok(Arc::strong_count(&self.queue) == 1 && self.queue.lock().map_err(|_| anyhow::anyhow!("MergeQueue mutex poisoned."))?.is_empty())
+        Ok(Arc::strong_count(&self.queue) == 1 && self.queue.lock().map_err(|e| anyhow::anyhow!("MergeQueue mutex poisoned: {e}"))?.is_empty())
     }
 
-    /// TODO
+    /// Mark self as poisoned, which causes all subsequent operations to error.
     pub fn poison(&mut self) {
         self.panic.store(true, Ordering::SeqCst);
     }
 }
 
 impl BytesPush for MergeQueue {
-    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iterator: I) -> Result<()> {
+    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iterator: I) -> crate::Result<()> {
 
         if self.panic.load(Ordering::SeqCst) { bail!("MergeQueue poisoned."); }
 
@@ -68,7 +66,7 @@ impl BytesPush for MergeQueue {
             lock_ok = self.queue.try_lock();
         }
         let mut queue = lock_ok
-            .map_err(|_| anyhow::anyhow!("MergeQueue mutex poisoned."))?;
+            .map_err(|e| anyhow::anyhow!("MergeQueue mutex poisoned: {e}"))?;
 
         let mut iterator = iterator.into_iter();
         let mut should_ping = false;
@@ -102,7 +100,7 @@ impl BytesPush for MergeQueue {
 }
 
 impl BytesPull for MergeQueue {
-    fn drain_into(&mut self, vec: &mut Vec<Bytes>) -> Result<()> {
+    fn drain_into(&mut self, vec: &mut Vec<Bytes>) -> crate::Result<()> {
         if self.panic.load(Ordering::SeqCst) { bail!("MergeQueue poisoned."); }
 
         // try to acquire lock without going to sleep (Rust's lock() might yield)
@@ -111,7 +109,7 @@ impl BytesPull for MergeQueue {
             lock_ok = self.queue.try_lock();
         }
         let mut queue = lock_ok
-            .map_err(|_| anyhow::anyhow!("MergeQueue mutex poisoned."))?;
+            .map_err(|e| anyhow::anyhow!("MergeQueue mutex poisoned: {e}"))?;
 
         vec.extend(queue.drain(..));
         Ok(())
@@ -128,7 +126,7 @@ impl Drop for MergeQueue {
         }
         else {
             // TODO: Perhaps this aggressive ordering can relax orderings elsewhere.
-            // if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
+            if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
         }
         // Drop the queue before pinging.
         self.queue = Arc::new(Mutex::new(VecDeque::new()));
@@ -146,7 +144,7 @@ pub struct SendEndpoint<P: BytesPush> {
 impl<P: BytesPush> SendEndpoint<P> {
 
     /// Moves `self.buffer` into `self.send`, replaces with empty buffer.
-    fn send_buffer(&mut self) -> Result<()> {
+    fn send_buffer(&mut self) -> crate::Result<()> {
         let valid_len = self.buffer.valid().len();
         if valid_len > 0 {
             self.send.extend(Some(self.buffer.extract(valid_len)))?;
@@ -164,12 +162,12 @@ impl<P: BytesPush> SendEndpoint<P> {
     /// Makes the next `bytes` bytes valid.
     ///
     /// The current implementation also sends the bytes, to ensure early visibility.
-    pub fn make_valid(&mut self, bytes: usize) -> Result<()> {
+    pub fn make_valid(&mut self, bytes: usize) -> crate::Result<()> {
         self.buffer.make_valid(bytes);
         self.send_buffer()
     }
     /// Acquires a prefix of `self.empty()` of length at least `capacity`.
-    pub fn reserve(&mut self, capacity: usize) -> Result<&mut [u8]> {
+    pub fn reserve(&mut self, capacity: usize) -> crate::Result<&mut [u8]> {
 
         if self.buffer.empty().len() < capacity {
             self.send_buffer()?;
@@ -180,7 +178,7 @@ impl<P: BytesPush> SendEndpoint<P> {
         Ok(self.buffer.empty())
     }
     /// Marks all written data as valid, makes visible.
-    pub fn publish(&mut self) -> Result<()> {
+    pub fn publish(&mut self) -> crate::Result<()> {
         self.send_buffer()
     }
 }

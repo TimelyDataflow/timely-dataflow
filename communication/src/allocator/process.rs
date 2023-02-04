@@ -10,7 +10,7 @@ use crossbeam_channel::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
 use crate::allocator::{Allocate, AllocateBuilder, Event, Thread};
-use crate::{Push, Pull, Message, Result};
+use crate::{Push, Pull, Message};
 use crate::buzzer::Buzzer;
 
 /// An allocator for inter-thread, intra-process communication
@@ -182,7 +182,7 @@ impl Allocate for Process {
         self.inner.await_events(duration);
     }
 
-    fn receive(&mut self) -> anyhow::Result<()>{
+    fn receive(&mut self) -> crate::Result<()>{
         let mut events = self.inner.events().borrow_mut();
         while let Ok((index, event)) = self.counters_recv.try_recv() {
             events.push_back((index, event));
@@ -205,7 +205,7 @@ impl<T> Clone for Pusher<T> {
 }
 
 impl<T> Push<T> for Pusher<T> {
-    #[inline] fn push(&mut self, element: &mut Option<T>) -> Result<()>{
+    #[inline] fn push(&mut self, element: &mut Option<T>) -> crate::Result<()>{
         if let Some(element) = element.take() {
             // The remote endpoint could be shut down, and so
             // it is not fundamentally an error to fail to send.

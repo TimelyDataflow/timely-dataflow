@@ -52,7 +52,7 @@ pub trait Operate<T: Timestamp> : Schedule {
     /// of the shared progress state. An operator should be able to consult `frontiers` at any
     /// point and read out the current frontier information, or the changes from the last time
     /// that `frontiers` was drained.
-    fn set_external_summary(&mut self) { }
+    fn set_external_summary(&mut self) -> crate::Result<()> { Ok(()) }
 
     /// Indicates of whether the operator requires `push_external_progress` information or not.
     fn notify_me(&self) -> bool { true }

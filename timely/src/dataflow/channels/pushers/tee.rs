@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::dataflow::channels::{BundleCore, Message};
 
 use crate::communication::Push;
-use crate::{Container, Data, Result};
+use crate::{Container, Data};
 
 type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
 
@@ -22,7 +22,7 @@ pub type Tee<T, D> = TeeCore<T, Vec<D>>;
 
 impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
     #[inline]
-    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) -> Result<()>{
+    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) -> crate::Result<()>{
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = message {
             for index in 1..pushers.len() {

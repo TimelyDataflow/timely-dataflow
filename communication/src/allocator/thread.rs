@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use crate::allocator::{Allocate, AllocateBuilder, Event};
 use crate::allocator::counters::Pusher as CountPusher;
 use crate::allocator::counters::Puller as CountPuller;
-use crate::{Push, Pull, Message, Result};
+use crate::{Push, Pull, Message};
 
 /// Builder for single-threaded allocator.
 pub struct ThreadBuilder;
@@ -81,7 +81,7 @@ pub struct Pusher<T> {
 
 impl<T> Push<T> for Pusher<T> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) -> Result<()>{
+    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()>{
         let mut borrow = self.target.borrow_mut();
         if let Some(element) = element.take() {
             borrow.0.push_back(element);

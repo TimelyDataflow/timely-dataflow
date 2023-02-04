@@ -4,8 +4,6 @@
 //! stream. There are two types of events, (i) the receipt of data and (ii) reports of progress
 //! of timestamps.
 
-use crate::Result;
-
 /// Data and progress events of the captured stream.
 #[derive(Debug, Clone, Abomonation, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub enum EventCore<T, D> {
@@ -45,7 +43,7 @@ impl<T, D, E: EventIteratorCore<T, Vec<D>>> EventIterator<T, D> for E {
 /// Receives `EventCore<T, D>` events.
 pub trait EventPusherCore<T, D> {
     /// Provides a new `Event<T, D>` to the pusher.
-    fn push(&mut self, event: EventCore<T, D>) -> Result<()>;
+    fn push(&mut self, event: EventCore<T, D>) -> crate::Result<()>;
 }
 
 /// A [EventPusherCore] specialized to vector-based containers.
@@ -56,7 +54,7 @@ impl<T, D, E: EventPusherCore<T, Vec<D>>> EventPusher<T, D> for E {}
 
 // implementation for the linked list behind a `Handle`.
 impl<T, D> EventPusherCore<T, D> for ::std::sync::mpsc::Sender<EventCore<T, D>> {
-    fn push(&mut self, event: EventCore<T, D>) -> Result<()> {
+    fn push(&mut self, event: EventCore<T, D>) -> crate::Result<()> {
         // NOTE: An Err(x) result just means "data not accepted" most likely
         //       because the receiver is gone. No need to panic.
         let _ = self.send(event);
@@ -70,7 +68,6 @@ pub mod link {
     use std::rc::Rc;
     use std::cell::RefCell;
 
-    use crate::Result;
     use super::{EventCore, EventPusherCore, EventIteratorCore};
 
     /// A linked list of EventCore<T, D>.
@@ -96,7 +93,7 @@ pub mod link {
 
     // implementation for the linked list behind a `Handle`.
     impl<T, D> EventPusherCore<T, D> for Rc<EventLinkCore<T, D>> {
-        fn push(&mut self, event: EventCore<T, D>) -> Result<()> {
+        fn push(&mut self, event: EventCore<T, D>) -> crate::Result<()> {
             *self.next.borrow_mut() = Some(Rc::new(EventLinkCore { event: Some(event), next: RefCell::new(None) }));
             let next = self.next.borrow().as_ref().unwrap().clone();
             *self = next;
@@ -136,7 +133,7 @@ pub mod link {
     }
 
     #[test]
-    fn avoid_stack_overflow_in_drop() -> Result<()>{
+    fn avoid_stack_overflow_in_drop() -> crate::Result<()>{
         let mut event1 = Rc::new(EventLinkCore::<(),()>::new());
         let _event2 = event1.clone();
         for _ in 0 .. 1_000_000 {
@@ -153,7 +150,6 @@ pub mod binary {
     use abomonation::Abomonation;
     use anyhow::Context;
 
-    use crate::Result;
     use super::{EventCore, EventPusherCore, EventIteratorCore};
 
     /// A wrapper for `W: Write` implementing `EventPusherCore<T, D>`.
@@ -176,7 +172,7 @@ pub mod binary {
     }
 
     impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusherCore<T, D> for EventWriterCore<T, D, W> {
-        fn push(&mut self, event: EventCore<T, D>) -> Result<()> {
+        fn push(&mut self, event: EventCore<T, D>) -> crate::Result<()> {
             unsafe { ::abomonation::encode(&event, &mut self.stream) }
                 .with_context(|| "Event abomonation/write failed")?;
             Ok(())

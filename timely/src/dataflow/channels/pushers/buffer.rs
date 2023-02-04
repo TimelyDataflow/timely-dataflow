@@ -20,6 +20,7 @@ pub struct BufferCore<T, D: Container, P: Push<BundleCore<T, D>>> {
     /// a buffer for records, to send at self.time
     buffer: D,
     pusher: P,
+    /// An error produced by a pusher.
     error: Rc<RefCell<Option<anyhow::Error>>>,
 }
 

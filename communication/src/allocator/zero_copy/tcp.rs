@@ -1,10 +1,8 @@
 //!
 
-use std::io::{self, Write};
-use std::net::TcpStream;
+use std::io::Write;
 use anyhow::{bail, Context};
 use crossbeam_channel::{Sender, Receiver};
-use bytes::arc::Bytes;
 
 use crate::networking::MessageHeader;
 
@@ -13,7 +11,6 @@ use super::bytes_exchange::MergeQueue;
 use super::stream::Stream;
 
 use logging_core::Logger;
-use crate::Result;
 
 use crate::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, StateEvent};
 
@@ -32,7 +29,7 @@ pub fn recv_loop<S>(
     process: usize,
     remote: usize,
     mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
--> Result<()>
+-> crate::Result<()>
 where
     S: Stream,
 {
@@ -60,8 +57,18 @@ where
     result
 }
 
-fn recv_loop_inner(reader: &mut TcpStream, worker_offset: usize, logger: &mut Option<Logger<CommunicationEvent, CommunicationSetup>>, targets: &mut Vec<MergeQueue>, buffer: &mut BytesSlab, stageds: &mut Vec<Vec<Bytes>>) -> Result<()> {
-// Each loop iteration adds to `self.Bytes` and consumes all complete messages.
+fn recv_loop_inner<S>(
+    reader: &mut S,
+    worker_offset: usize,
+    logger: &mut Option<Logger<CommunicationEvent, CommunicationSetup>>,
+    targets: &mut Vec<MergeQueue>,
+    buffer: &mut BytesSlab,
+    stageds: &mut Vec<Vec<bytes::arc::Bytes>>
+) -> crate::Result<()>
+where
+    S: Stream
+{
+    // Each loop iteration adds to `self.Bytes` and consumes all complete messages.
     // At the start of each iteration, `self.buffer[..self.length]` represents valid
     // data, and the remaining capacity is available for reading from the reader.
     //
@@ -70,17 +77,15 @@ fn recv_loop_inner(reader: &mut TcpStream, worker_offset: usize, logger: &mut Op
     // can be recovered once all readers have read what they need to.
     let mut active = true;
     while active {
+
         buffer.ensure_capacity(1);
 
         assert!(!buffer.empty().is_empty());
 
         // Attempt to read some more bytes into self.buffer.
-        let read = match reader.read(&mut buffer.empty()) {
-            Err(x) => bail!("reading data: {x}"),
-            Ok(n) if n == 0 => {
-                bail!("reading data: Unexpected EOF");
-            }
-            Ok(n) => n,
+        let read = match reader.read(&mut buffer.empty()).context("reading data")? {
+            0 => bail!("reading data: Unexpected EOF"),
+            n => n,
         };
 
         buffer.make_valid(read);
@@ -99,14 +104,15 @@ fn recv_loop_inner(reader: &mut TcpStream, worker_offset: usize, logger: &mut Op
 
             if header.length > 0 {
                 stageds[header.target - worker_offset].push(bytes);
-            } else {
+            }
+            else {
                 // Shutting down; confirm absence of subsequent data.
                 active = false;
                 if !buffer.valid().is_empty() {
                     bail!("Clean shutdown followed by data.");
                 }
                 buffer.ensure_capacity(1);
-                if reader.read(&mut buffer.empty()).with_context(||"reading EOF")? > 0 {
+                if reader.read(&mut buffer.empty()).context("reading data")? > 0 {
                     bail!("Clean shutdown followed by data.");
                 }
             }
@@ -136,26 +142,27 @@ pub fn send_loop<S: Stream>(
     sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>) -> Result<()>
+    mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>,
+) -> crate::Result<()>
 {
 
     // Log the send thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
 
-    let mut sources: Vec<MergeQueue> = sources.into_iter().map(|x| {
+    let mut sources: Vec<Option<MergeQueue>> = sources.into_iter().map(|x| {
         let buzzer = crate::buzzer::Buzzer::new();
         let queue = MergeQueue::new(buzzer);
         x.send(queue.clone()).expect("failed to send MergeQueue");
-        queue
+        Some(queue)
     }).collect();
 
-    let mut writer = std::io::BufWriter::with_capacity(1 << 16, writer);
+    let mut writer = ::std::io::BufWriter::with_capacity(1 << 16, writer);
     let mut stash = Vec::new();
 
     while !sources.is_empty() {
 
         // TODO: Round-robin better, to release resources fairly when overloaded.
-        for source in sources.iter_mut() {
+        for source in sources.iter_mut().flat_map(|s| s) {
             use crate::allocator::zero_copy::bytes_exchange::BytesPull;
             source.drain_into(&mut stash)?;
         }
@@ -167,8 +174,15 @@ pub fn send_loop<S: Stream>(
             // still be a signal incoming.
             //
             // We could get awoken by more data, a channel closing, or spuriously perhaps.
-            writer.flush().with_context(|| "Flushing writer")?;
-            sources.retain(|source| !source.is_complete().unwrap());
+            writer.flush().context("Flushing writer")?;
+            for source in sources.iter_mut() {
+                if let Some(s) = source {
+                    if s.is_complete()? {
+                        *source = None;
+                    }
+                }
+            }
+            sources.retain(Option::is_some);
             if !sources.is_empty() {
                 std::thread::park();
             }
@@ -186,7 +200,7 @@ pub fn send_loop<S: Stream>(
                     }
                 });
 
-                writer.write_all(&bytes[..]).with_context(|| "writing data")?;
+                writer.write_all(&bytes[..]).context("writing data")?;
             }
         }
     }
@@ -201,9 +215,9 @@ pub fn send_loop<S: Stream>(
         length:     0,
         seqno:      0,
     };
-    header.write_to(&mut writer).with_context(|| "writing data")?;
-    writer.flush().with_context(|| "flushing writer")?;
-    writer.get_mut().shutdown(::std::net::Shutdown::Write).with_context(|| "Write shutdown failed")?;
+    header.write_to(&mut writer).context("writing data")?;
+    writer.flush().context("flushing writer")?;
+    writer.get_mut().shutdown(::std::net::Shutdown::Write).context("Write shutdown failed")?;
     logger.as_mut().map(|logger| logger.log(MessageEvent { is_send: true, header }));
 
     // Log the send thread's end.

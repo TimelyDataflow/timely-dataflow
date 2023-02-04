@@ -1,7 +1,7 @@
 //! Structured communication between timely dataflow operators.
 
 use crate::communication::Push;
-use crate::{Container, Result};
+use crate::Container;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -46,7 +46,7 @@ impl<T, D: Container> Message<T, D> {
     /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
     /// leaves in place, or the container's default element.
     #[inline]
-    pub fn push_at<P: Push<BundleCore<T, D>>>(buffer: &mut D, time: T, pusher: &mut P) -> Result<()> {
+    pub fn push_at<P: Push<BundleCore<T, D>>>(buffer: &mut D, time: T, pusher: &mut P) -> crate::Result<()> {
 
         let data = ::std::mem::take(buffer);
         let message = Message::new(time, data, 0, 0);

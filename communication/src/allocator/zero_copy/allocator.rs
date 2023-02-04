@@ -190,7 +190,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn receive(&mut self) -> anyhow::Result<()> {
+    fn receive(&mut self) -> crate::Result<()> {
 
         // Check for channels whose `Puller` has been dropped.
         let mut canaries = self.canaries.borrow_mut();
@@ -205,7 +205,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             // on events from it.
             // assert!(dropped.borrow().is_empty());
         }
-        drop(canaries);
+        ::std::mem::drop(canaries);
 
         self.inner.receive()?;
 
@@ -255,7 +255,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
     }
 
     // Perform postparatory work, most likely sending un-full binary buffers.
-    fn release(&mut self) -> anyhow::Result<()> {
+    fn release(&mut self) -> crate::Result<()> {
         // Publish outgoing byte ledgers.
         for send in self.sends.iter_mut() {
             send.borrow_mut().publish()?;
