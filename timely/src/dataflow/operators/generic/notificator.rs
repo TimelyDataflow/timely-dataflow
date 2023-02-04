@@ -1,4 +1,4 @@
-use crate::progress::frontier::{AntichainRef, MutableAntichain};
+use crate::progress::frontier::{Antichain, MutableAntichain};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
 use crate::logging::TimelyLogger as Logger;
@@ -40,7 +40,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     }
 
     /// Reveals the elements in the frontier of the indicated input.
-    pub fn frontier(&self, input: usize) -> AntichainRef<T> {
+    pub fn frontier(&self, input: usize) -> &Antichain<T> {
         self.frontiers[input].frontier()
     }
 

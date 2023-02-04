@@ -167,7 +167,7 @@ impl<T: Timestamp> Handle<T> {
     /// ```
     #[inline]
     pub fn with_frontier<R, F: FnMut(AntichainRef<T>)->R>(&self, mut function: F) -> R {
-        function(self.frontier.borrow().frontier())
+        function(self.frontier.borrow().frontier().borrow())
     }
 }
 
