@@ -67,7 +67,6 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Stream")
             .field("source", &self.name)
-            // TODO: Use `.finish_non_exhaustive()` after rust/#67364 lands
-            .finish()
+            .finish_non_exhaustive()
     }
 }
