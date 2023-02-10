@@ -245,7 +245,11 @@ pub struct InputCapability<T: Timestamp> {
 impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
     fn time(&self) -> &T { self.time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
-        self.internal.borrow().iter().any(|rc| Rc::ptr_eq(rc, query_buffer))
+        let borrow = self.summaries.borrow();
+        self.internal.borrow().iter().enumerate().any(|(index, rc)| {
+            // To be valid, the output buffer must match and the timestamp summary needs to be the default.
+            Rc::ptr_eq(rc, query_buffer) && borrow[index].len() == 1 && borrow[index][0] == Default::default()
+        })
     }
 }
 
