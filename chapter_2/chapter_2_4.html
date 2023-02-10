@@ -8,7 +8,6 @@
 
         <!-- Custom HTML head -->
         
-        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
@@ -33,14 +32,15 @@
 
     </head>
     <body>
+    <div id="body-container">
         <!-- Provide site root to javascript -->
-        <script type="text/javascript">
+        <script>
             var path_to_root = "../";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
-        <script type="text/javascript">
+        <script>
             try {
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
@@ -56,7 +56,7 @@
         </script>
 
         <!-- Set the theme before any content is loaded, prevents flash -->
-        <script type="text/javascript">
+        <script>
             var theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
@@ -68,7 +68,7 @@
         </script>
 
         <!-- Hide / unhide sidebar before it is displayed -->
-        <script type="text/javascript">
+        <script>
             var html = document.querySelector('html');
             var sidebar = 'hidden';
             if (document.body.clientWidth >= 1080) {
@@ -99,7 +99,7 @@
                             <i class="fa fa-paint-brush"></i>
                         </button>
                         <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
@@ -132,7 +132,7 @@
                 </div>
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
-                <script type="text/javascript">
+                <script>
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
                     document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
                     Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
@@ -170,8 +170,7 @@ fn main() {
                 }
             });
     });
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>What is going on here? The heart of the mess is the dataflow operator <code>unary</code>, which is a ready-to-assemble dataflow operator with one input and one output. The <code>unary</code> operator takes three arguments (it looks like so many more!): (i) instructions about how it should distribute its inputs, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.</p>
 <p>Most of what is interesting lies in the closure, so let's first tidy up some loose ends before we dive in there. There are a few ways to request how input data should be distributed and <code>Pipeline</code> is the one that says &quot;don't move anything&quot;. The string &quot;increment&quot; is utterly arbitrary; this happens to be what the operator does, but you could change it to be your name, or a naughty word, or whatever you like. The <code>|capability|</code> stuff should be ignored for the moment; we'll explain in just a moment (it has to do with whether you would like the ability to send data before you receive any).</p>
 <p>The heart of the logic lies in the closure that binds <code>input</code> and <code>output</code>. These two are handles respectively to the operator's input (from which it can read records) and the operator's output (to which it can send records).</p>
@@ -224,8 +223,7 @@ fn main() {
         })
         .inspect(|x| println!(&quot;number: {:?}&quot;, x));
     });
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>The details seem a bit tedious, but let's talk them out. The first thing we do is capture <code>capability</code> in the variable <code>cap</code>, whose type is <code>Option&lt;Capability&lt;Time&gt;&gt;</code>. This type is important because it will allow us to eventually discard the capability, replacing it with <code>None</code>. If we always held a <code>Capability&lt;Time&gt;</code>, the best we could do would be to continually downgrade it. Another option is <code>Vec&lt;Capability&lt;Time&gt;&gt;</code>, which we could eventually clear.</p>
 <p>Our next step is to define and return a closure that takes <code>output</code> as a parameter. The <code>move</code> keyword is part of Rust and is an important part of making sure that <code>cap</code> makes its way into the closure, rather than just evaporating from the local scope when we return.</p>
 <p>The closure does a bit of a dance to capture the current time (not a capability, in this case), create a session with this time and send whatever the time happens to be as data, then downgrade the capability to be one timestep in the future. If it turns out that this is greater than twenty we discard the capability.</p>
@@ -262,8 +260,7 @@ fn main() {
                 }
             });
     });
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>This example just captures an integer, but you could just as easily define and capture ownership of a <code>HashMap</code>, or whatever complicated state you would like repeated access to.</p>
 <p>Bear in mind that this example is probably a bit wrong, in that we update <code>max</code> without paying any attention to the times of the data that come past, and so we may report a sequence of values that doesn't seem to correspond with the sequence when sorted by time. Writing sane operators in the presence of batches of data at shuffled times requires more thought. Specifically, for an operator to put its input back in order it needs to understand which times it might see in the future, which was the reason we were so careful about those capabilities and is the subject of the next subsection.</p>
 <h3 id="frontiered-operators"><a class="header" href="#frontiered-operators">Frontiered operators</a></h3>
@@ -315,8 +312,7 @@ fn main() {
             }
         });
     });
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>As an exercise, this example could be improved in a few ways. How might you change it so that the data are still sent in the order they are received, but messages may be sent as soon as they are received if their time is currently in the frontier? This would avoid buffering messages that are ready to go, and would only buffer messages that are out-of-order, potentially reducing the memory footprint and improving the effective latency.</p>
 <p>Before ending the section, let's rewrite this example without the <code>notificator</code>, in an attempt to demystify how it works. Whether you use a notificator or not is up to you; they are mostly about staying sane in what can be a confusing setting, and you can totally skip them once you have internalized how capabilities and frontiers work.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
@@ -366,8 +362,7 @@ fn main() {
             }
         });
     });
-}
-</code></pre></pre>
+}</code></pre></pre>
 <p>Take a moment and check out the differences. Mainly, <code>stash</code> is now the one source of truth about <code>time</code> and <code>data</code>, but we now have to do our own checking of <code>time</code> against the input frontiers, and <em>very importantly</em> we need to make sure to discard <code>time</code> from the <code>stash</code> when we are finished with it (otherwise we retain the ability to send at <code>time</code>, and the system will not make progress).</p>
 
                     </main>
@@ -402,21 +397,22 @@ fn main() {
 
 
 
-        <script type="text/javascript">
+        <script>
             window.playground_copyable = true;
         </script>
 
 
-        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
 
-        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
 
 
+    </div>
     </body>
 </html>

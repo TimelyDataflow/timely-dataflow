@@ -8,7 +8,6 @@
 
         <!-- Custom HTML head -->
         
-        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
@@ -33,14 +32,15 @@
 
     </head>
     <body>
+    <div id="body-container">
         <!-- Provide site root to javascript -->
-        <script type="text/javascript">
+        <script>
             var path_to_root = "../";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
-        <script type="text/javascript">
+        <script>
             try {
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
@@ -56,7 +56,7 @@
         </script>
 
         <!-- Set the theme before any content is loaded, prevents flash -->
-        <script type="text/javascript">
+        <script>
             var theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
@@ -68,7 +68,7 @@
         </script>
 
         <!-- Hide / unhide sidebar before it is displayed -->
-        <script type="text/javascript">
+        <script>
             var html = document.querySelector('html');
             var sidebar = 'hidden';
             if (document.body.clientWidth >= 1080) {
@@ -99,7 +99,7 @@
                             <i class="fa fa-paint-brush"></i>
                         </button>
                         <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
@@ -132,7 +132,7 @@
                 </div>
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
-                <script type="text/javascript">
+                <script>
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
                     document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
                     Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
@@ -176,8 +176,7 @@
                 false
             }
         );
-    }
-</code></pre>
+    }</code></pre>
 <p>The method is generic with respect to some implementor <code>P</code> of the trait <code>EventPusher</code> which defines a method <code>push</code> that accepts <code>Event&lt;T, D&gt;</code> items (we will see a few implementations in just a moment). After a bit of set-up, <code>capture_into</code> builds a new operator with one input and zero outputs, and sets the logic for (i) what to do when the input frontier changes, and (ii) what to do when presented with the opportunity to do a bit of computation. In both cases, we just create new events based on what we see (progress changes and data messages, respectively).</p>
 <p>There is a mysterious subtraction of <code>Default::default()</code>, which has to do with the contract that the replaying operators assume the stream starts with such a capability. This prevents the need for the replayers to block on the stream in their operator construction (any operator must state any initial capabilities as part of its construction; it cannot defer that until later).</p>
 <p>One nice aspect of <code>capture_into</code> is that it really does reveal everything that an operator sees about a stream. If you got your hands on the resulting sequence of events, you would be able to review the full history of the stream. In principle, this could be a fine place to persist the data, capturing both data and progress information.</p>
@@ -223,14 +222,12 @@
         );
 
         stream
-   }
-</code></pre>
+   }</code></pre>
 <p>The type of <code>self</code> here is actually something that allows us to enumerate a sequence of event streams, so each replayer is actually replaying some variable number of streams. As part of this, our very first action is to amend our initial <code>Default::default()</code> capability to have multiplicity equal to the number of streams we are replaying:</p>
 <pre><code class="language-rust ignore">                if !started {
                     internal[0].update(Default::default(), (event_streams.len() as i64) - 1);
                     started = true;
-                }
-</code></pre>
+                }</code></pre>
 <p>If we have multiple streams, we'll now have multiple capabilities. If we have no stream, we will just drop the capability. This change is important because each source stream believes it has such a capability, and we will eventually see this many drops of the capability in the event stream (though perhaps not immediately; the initial deletion we inserted in <code>capture_into</code> likely cancels with the initial capabilities expressed by the outside world; we will likely need to wait until the captured stream is informed about the completion of messages with the default time).</p>
 <p>Having done the initial adjustment, we literally just play out the streams (note the plural) as they are available. The <code>next</code> method is expected not to block, but rather to return <code>None</code> when there are no more events currently available. It is a bit of a head-scratcher, but any interleaving of these streams is itself a valid stream (messages are sent and capabilities claimed only when we hold appropriate capabilities).</p>
 <h2 id="an-example"><a class="header" href="#an-example">An Example</a></h2>
@@ -254,8 +251,7 @@ fn main() {
                 .capture_into(EventWriter::new(send))
         );
     }).unwrap();
-}
-</code></pre>
+}</code></pre>
 <p>The <code>capture_recv</code> example is more complicated, because we may have a different number of workers replaying the stream than initially captured it.</p>
 <pre><code class="language-rust ignore">extern crate timely;
 
@@ -285,8 +281,7 @@ fn main() {
                 .inspect(|x| println!(&quot;replayed: {:?}&quot;, x));
         })
     }).unwrap(); // asserts error-free execution
-}
-</code></pre>
+}</code></pre>
 <p>Almost all of the code up above is assigning responsibility for the replaying between the workers we have (from <code>worker.peers()</code>). We partition responsibility for <code>0 .. source_peers</code> among the workers, create <code>TcpListener</code>s to handle the connection requests, wrap them in <code>EventReader</code>s, and then collect them up as a vector. The workers have collectively partitioned the incoming captured streams between themselves.</p>
 <p>Finally, each worker just uses the list of <code>EventReader</code>s as the argument to <code>replay_into</code>, and we get the stream magically transported into a new dataflow, in a different process, with a potentially different number of workers.</p>
 <p>If you want to try it out, make sure to start up the <code>capture_recv</code> example first (otherwise the connections will be refused for <code>capture_send</code>) and specify the expected number of source workers, modifying the number of received workers if you like. Here we are expecting five source workers, and distributing them among three receive workers (to make life complicated):</p>
@@ -345,21 +340,22 @@ fn main() {
 
 
 
-        <script type="text/javascript">
+        <script>
             window.playground_copyable = true;
         </script>
 
 
-        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
 
-        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
 
 
+    </div>
     </body>
 </html>

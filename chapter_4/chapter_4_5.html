@@ -8,7 +8,6 @@
 
         <!-- Custom HTML head -->
         
-        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
@@ -33,14 +32,15 @@
 
     </head>
     <body>
+    <div id="body-container">
         <!-- Provide site root to javascript -->
-        <script type="text/javascript">
+        <script>
             var path_to_root = "../";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
-        <script type="text/javascript">
+        <script>
             try {
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
@@ -56,7 +56,7 @@
         </script>
 
         <!-- Set the theme before any content is loaded, prevents flash -->
-        <script type="text/javascript">
+        <script>
             var theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
@@ -68,7 +68,7 @@
         </script>
 
         <!-- Hide / unhide sidebar before it is displayed -->
-        <script type="text/javascript">
+        <script>
             var html = document.querySelector('html');
             var sidebar = 'hidden';
             if (document.body.clientWidth >= 1080) {
@@ -99,7 +99,7 @@
                             <i class="fa fa-paint-brush"></i>
                         </button>
                         <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
@@ -132,7 +132,7 @@
                 </div>
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
-                <script type="text/javascript">
+                <script>
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
                     document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
                     Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
@@ -149,26 +149,22 @@
 <h2 id="the-data-trait"><a class="header" href="#the-data-trait">The <code>Data</code> trait</a></h2>
 <p>The <code>Data</code> trait is essentially a synonym for <code>Clone+'static</code>, meaning the type must be cloneable and cannot contain any references with other than a static lifetime. Most types implement these traits automatically, but if yours do not you should decorate your struct definition with a derivation of the <code>Clone</code> trait:</p>
 <pre><code class="language-rust ignore">#[derive(Clone)]
-struct YourStruct { .. }
-</code></pre>
+struct YourStruct { .. }</code></pre>
 <h2 id="the-exchangedata-trait"><a class="header" href="#the-exchangedata-trait">The <code>ExchangeData</code> trait</a></h2>
 <p>The <code>ExchangeData</code> trait is more complicated, and is established in the <code>communication/</code> module. There are two options for this trait, which are determined by whether you use the <code>--bincode</code> feature at compilation, or not.</p>
 <ul>
 <li>
 <p>If you use <code>--bincode</code> then the trait is a synonym for</p>
-<pre><code class="language-rust ignore">Send+Sync+Any+serde::Serialize+for&lt;'a&gt;serde::Deserialize&lt;'a&gt;+'static
-</code></pre>
+<pre><code class="language-rust ignore">Send+Sync+Any+serde::Serialize+for&lt;'a&gt;serde::Deserialize&lt;'a&gt;+'static</code></pre>
 <p>where <code>serde</code> is Rust's most popular serialization and deserialization crate. A great many types implement these traits. If your types does not, you should add these decorators to their definition:</p>
-<pre><code class="language-rust ignore">#[derive(Serialize, Deserialize)]
-</code></pre>
+<pre><code class="language-rust ignore">#[derive(Serialize, Deserialize)]</code></pre>
 <p>You must include the <code>serde</code> crate, and if not on Rust 2018 the <code>serde_derive</code> crate.</p>
 <p>The downside to the <code>--bincode</code> flag is that deserialization will always involve a clone of the data, which has the potential to adversely impact performance. For example, if you have structures that contain lots of strings, timely dataflow will create allocations for each string even if you do not plan to use all of them.</p>
 </li>
 <li>
 <p>If you do not use the <code>--bincode</code> feature, then the <code>Serialize</code> and <code>Deserialize</code> requirements are replaced by <code>Abomonation</code>, from the <code>abomonation</code> crate. This trait allows in-place deserialization, but is implemented for fewer types, and has the potential to be a bit scarier (due to in-place pointer correction).</p>
 <p>Your types likely do not implement <code>Abomonation</code> by default, but you can similarly use</p>
-<pre><code class="language-rust ignore">#[derive(Abomonation)]
-</code></pre>
+<pre><code class="language-rust ignore">#[derive(Abomonation)]</code></pre>
 <p>You must include the <code>abomonation</code> and <code>abomonation_derive</code> crate for this to work correctly.</p>
 </li>
 </ul>
@@ -196,8 +192,7 @@ impl&lt;D&gt; TreeNode&lt;D&gt; {
     fn new(data: D) -&gt; Self {
         Self { data, children: Vec::new() }
     }
-}
-</code></pre>
+}</code></pre>
 <p>This doesn't work. You'll probably get two errors, that <code>TreeNode</code> doesn't implement <code>Clone</code>, nor does it implement <code>Debug</code>. Timely data types need to implement <code>Clone</code>, and our attempt to print out the trees requires an implementation of <code>Debug</code>. We can create these implementations by decorating the <code>struct</code> declaration like so:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -206,8 +201,7 @@ struct TreeNode&lt;D&gt; {
     data: D,
     children: Vec&lt;TreeNode&lt;D&gt;&gt;,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>This works for me! We see</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example types
        Compiling timely v0.8.0 (/Users/mcsherry/Projects/timely-dataflow)
@@ -251,8 +245,7 @@ impl&lt;D&gt; TreeNode&lt;D&gt; {
     fn new(data: D) -&gt; Self {
         Self { data, children: Vec::new() }
     }
-}
-</code></pre>
+}</code></pre>
 <p>We get a new error. A not especially helpful error. It says that it cannot find an <code>exchange</code> method, or more specifically that one exists but it doesn't apply to our type at hand. This is because the data need to satisfy the <code>ExchangeData</code> trait but do not. It would be better if this were clearer in the error messages, I agree.</p>
 <p>We can fix the problem two ways. First, if you would like to use <code>bincode</code>, then we update the source like so:</p>
 <pre><code class="language-rust ignore">#[macro_use]
@@ -263,8 +256,7 @@ extern crate serde;
 struct TreeNode&lt;D&gt; {
     data: D,
     children: Vec&lt;TreeNode&lt;D&gt;&gt;,
-}
-</code></pre>
+}</code></pre>
 <p>and make sure to include the <code>serde_derive</code> and <code>serde</code> crates. Now when we run things (notice the <code>--features</code> flag) we see:</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example types --features bincode
         Finished dev [unoptimized + debuginfo] target(s) in 0.07s
@@ -315,21 +307,22 @@ struct TreeNode&lt;D&gt; {
 
 
 
-        <script type="text/javascript">
+        <script>
             window.playground_copyable = true;
         </script>
 
 
-        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
 
-        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
 
 
+    </div>
     </body>
 </html>
