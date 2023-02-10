@@ -6,6 +6,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use crate::progress::Antichain;
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
 use crate::progress::frontier::MutableAntichain;
@@ -24,6 +25,11 @@ use crate::dataflow::operators::capability::CapabilityTrait;
 pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
+    /// Timestamp summaries from this input to each output.
+    ///
+    /// Each timestamp received through this input may only produce output timestamps
+    /// greater or equal to the input timestamp subjected to at least one of these summaries.
+    summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, 
     logging: Option<Logger>,
 }
 
@@ -49,13 +55,14 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
     #[inline]
     pub fn next(&mut self) -> Option<(InputCapability<T>, RefOrMut<D>)> {
         let internal = &self.internal;
+        let summaries = &self.summaries;
         self.pull_counter.next_guarded().map(|(guard, bundle)| {
             match bundle.as_ref_or_mut() {
                 RefOrMut::Ref(bundle) => {
-                    (InputCapability::new(internal.clone(), guard), RefOrMut::Ref(&bundle.data))
+                    (InputCapability::new(internal.clone(), summaries.clone(), guard), RefOrMut::Ref(&bundle.data))
                 },
                 RefOrMut::Mut(bundle) => {
-                    (InputCapability::new(internal.clone(), guard), RefOrMut::Mut(&mut bundle.data))
+                    (InputCapability::new(internal.clone(), summaries.clone(), guard), RefOrMut::Mut(&mut bundle.data))
                 },
             }
         })
@@ -145,10 +152,16 @@ pub fn _access_pull_counter<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>>(pull_counter: PullCounter<T, D, P>, internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, logging: Option<Logger>) -> InputHandleCore<T, D, P> {
+pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>>(
+    pull_counter: PullCounter<T, D, P>, 
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, 
+    summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, 
+    logging: Option<Logger>
+) -> InputHandleCore<T, D, P> {
     InputHandleCore {
         pull_counter,
         internal,
+        summaries,
         logging,
     }
 }

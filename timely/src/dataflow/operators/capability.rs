@@ -27,6 +27,7 @@ use std::cell::RefCell;
 use std::fmt::{self, Debug};
 
 use crate::order::PartialOrder;
+use crate::progress::Antichain;
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
 use crate::scheduling::Activations;
@@ -223,6 +224,7 @@ impl Display for DowngradeError {
 
 impl Error for DowngradeError {}
 
+/// A shared list of shared output capability buffers.
 type CapabilityUpdates<T> = Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>;
 
 /// An capability of an input port. Holding onto this capability will implicitly holds onto a
@@ -232,7 +234,10 @@ type CapabilityUpdates<T> = Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>;
 /// This input capability supplies a `retain_for_output(self)` method which consumes the input
 /// capability and turns it into a [Capability] for a specific output port.
 pub struct InputCapability<T: Timestamp> {
+    /// Output capability buffers, for use in minting capabilities.
     internal: CapabilityUpdates<T>,
+    /// Timestamp summaries for each output.
+    summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>,
     /// A drop guard that updates the consumed capability this InputCapability refers to on drop
     consumed_guard: ConsumedGuard<T>,
 }
@@ -240,17 +245,21 @@ pub struct InputCapability<T: Timestamp> {
 impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
     fn time(&self) -> &T { self.time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
-        // let borrow = ;
-        self.internal.borrow().iter().any(|rc| Rc::ptr_eq(rc, query_buffer))
+        let borrow = self.summaries.borrow();
+        self.internal.borrow().iter().enumerate().any(|(index, rc)| {
+            // To be valid, the output buffer must match and the timestamp summary needs to be the default.
+            Rc::ptr_eq(rc, query_buffer) && borrow[index].len() == 1 && borrow[index][0] == Default::default()
+        })
     }
 }
 
 impl<T: Timestamp> InputCapability<T> {
     /// Creates a new capability reference at `time` while incrementing (and keeping a reference to)
     /// the provided [`ChangeBatch`].
-    pub(crate) fn new(internal: CapabilityUpdates<T>, guard: ConsumedGuard<T>) -> Self {
+    pub(crate) fn new(internal: CapabilityUpdates<T>, summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, guard: ConsumedGuard<T>) -> Self {
         InputCapability {
             internal,
+            summaries,
             consumed_guard: guard,
         }
     }
@@ -270,15 +279,11 @@ impl<T: Timestamp> InputCapability<T> {
 
     /// Delays capability for a specific output port.
     pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
-        // TODO : Test operator summary?
-        if !self.time().less_equal(new_time) {
-            panic!("Attempted to delay {:?} to {:?}, which is not beyond the capability's time.", self, new_time);
-        }
-        if output_port < self.internal.borrow().len() {
+        use crate::progress::timestamp::PathSummary;
+        if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
             Capability::new(new_time.clone(), self.internal.borrow()[output_port].clone())
-        }
-        else {
-            panic!("Attempted to acquire a capability for a non-existent output port.");
+        } else {
+            panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilies time ({:?})", new_time, self.summaries.borrow()[output_port], self.time());
         }
     }
 
@@ -287,18 +292,23 @@ impl<T: Timestamp> InputCapability<T> {
     /// This method produces an owned capability which must be dropped to release the
     /// capability. Users should take care that these capabilities are only stored for
     /// as long as they are required, as failing to drop them may result in livelock.
+    ///
+    /// This method panics if the timestamp summary to output zero strictly advances the time.
     pub fn retain(self) -> Capability<T> {
-        // mint(self.time.clone(), self.internal)
         self.retain_for_output(0)
     }
 
     /// Transforms to an owned capability for a specific output port.
+    ///
+    /// This method panics if the timestamp summary to `output_port` strictly advances the time.
     pub fn retain_for_output(self, output_port: usize) -> Capability<T> {
-        if output_port < self.internal.borrow().len() {
-            Capability::new(self.time().clone(), self.internal.borrow()[output_port].clone())
+        use crate::progress::timestamp::PathSummary;
+        let self_time = self.time().clone();
+        if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(&self_time)).any(|time| time.less_equal(&self_time)) {
+            Capability::new(self_time, self.internal.borrow()[output_port].clone())
         }
         else {
-            panic!("Attempted to acquire a capability for a non-existent output port.");
+            panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilies time ({:?})", self_time, self.summaries.borrow()[output_port], self_time);
         }
     }
 }
