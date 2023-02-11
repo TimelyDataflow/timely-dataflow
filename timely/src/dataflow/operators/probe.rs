@@ -166,8 +166,8 @@ impl<T: Timestamp> Handle<T> {
     /// let frontier = handle.with_frontier(|frontier| frontier.to_vec());
     /// ```
     #[inline]
-    pub fn with_frontier<R, F: FnMut(AntichainRef<T>)->R>(&self, mut function: F) -> R {
-        function(self.frontier.borrow().frontier())
+    pub fn with_frontier<R, F: FnMut(&AntichainRef<T>)->R>(&self, mut function: F) -> R {
+        function(&self.frontier.borrow())
     }
 }
 

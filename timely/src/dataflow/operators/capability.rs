@@ -417,7 +417,7 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
     ///             let mut vector = Vec::new();
     ///             move |input, output| {
-    ///                 cap.downgrade(&input.frontier().frontier());
+    ///                 cap.downgrade(&**input.frontier());
     ///                 while let Some((time, data)) = input.next() {
     ///                     data.swap(&mut vector);
     ///                 }
