@@ -22,7 +22,7 @@ fn main() {
         worker.dataflow(|scope| {
 
             let stream1 = input.to_stream(scope);
-            let stream2 = (0 .. 9).to_stream(scope);
+            let stream2 = (0 .. 10).to_stream(scope);
 
         });
 
