@@ -283,7 +283,7 @@ impl<T: Timestamp> InputCapability<T> {
         if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
             Capability::new(new_time.clone(), self.internal.borrow()[output_port].clone())
         } else {
-            panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilies time ({:?})", new_time, self.summaries.borrow()[output_port], self.time());
+            panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, self.summaries.borrow()[output_port], self.time());
         }
     }
 
@@ -308,7 +308,7 @@ impl<T: Timestamp> InputCapability<T> {
             Capability::new(self_time, self.internal.borrow()[output_port].clone())
         }
         else {
-            panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilies time ({:?})", self_time, self.summaries.borrow()[output_port], self_time);
+            panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", self_time, self.summaries.borrow()[output_port], self_time);
         }
     }
 }
