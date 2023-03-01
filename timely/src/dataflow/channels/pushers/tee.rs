@@ -22,7 +22,7 @@ pub type Tee<T, D> = TeeCore<T, Vec<D>>;
 
 impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
     #[inline]
-    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) -> crate::Result<()>{
+    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) -> crate::Result<()> {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = message {
             for index in 1..pushers.len() {

@@ -55,7 +55,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     }
 
     /// Sends pointstamp changes to all workers.
-    pub fn send(&mut self, changes: &mut ChangeBatch<(Location, T)>) -> Result<()>{
+    pub fn send(&mut self, changes: &mut ChangeBatch<(Location, T)>) -> Result<()> {
 
         changes.compact();
         if !changes.is_empty() {

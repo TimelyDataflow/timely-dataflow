@@ -31,7 +31,7 @@ impl<T, P: Push<T>>  Pusher<T, P> {
 
 impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()>{
+    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()> {
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events
@@ -81,7 +81,7 @@ impl<T, P: Push<T>>  ArcPusher<T, P> {
 
 impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()>{
+    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()> {
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events

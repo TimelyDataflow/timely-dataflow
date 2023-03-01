@@ -3,6 +3,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use timely_communication::err::CommError;
 use crate::dataflow::channels::{Bundle, BundleCore, Message};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
@@ -21,7 +22,7 @@ pub struct BufferCore<T, D: Container, P: Push<BundleCore<T, D>>> {
     buffer: D,
     pusher: P,
     /// An error produced by a pusher.
-    error: Rc<RefCell<Option<anyhow::Error>>>,
+    error: Rc<RefCell<Option<CommError>>>,
 }
 
 /// A buffer specialized to vector-based containers.
@@ -30,7 +31,7 @@ pub type Buffer<T, D, P> = BufferCore<T, Vec<D>, P>;
 impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
 
     /// Creates a new `Buffer`.
-    pub fn new(pusher: P, error: Rc<RefCell<Option<anyhow::Error>>>) -> Self {
+    pub fn new(pusher: P, error: Rc<RefCell<Option<CommError>>>) -> Self {
         Self {
             time: None,
             buffer: Default::default(),

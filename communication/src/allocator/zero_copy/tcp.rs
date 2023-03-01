@@ -1,7 +1,6 @@
 //!
 
 use std::io::Write;
-use anyhow::{bail, Context};
 use crossbeam_channel::{Sender, Receiver};
 
 use crate::networking::MessageHeader;
@@ -12,6 +11,7 @@ use super::stream::Stream;
 
 use logging_core::Logger;
 
+use crate::err::CommError;
 use crate::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, StateEvent};
 
 /// Repeatedly reads from a TcpStream and carves out messages.
@@ -83,8 +83,8 @@ where
         assert!(!buffer.empty().is_empty());
 
         // Attempt to read some more bytes into self.buffer.
-        let read = match reader.read(&mut buffer.empty()).context("reading data")? {
-            0 => bail!("reading data: Unexpected EOF"),
+        let read = match reader.read(&mut buffer.empty())? {
+            0 => { return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into()); },
             n => n,
         };
 
@@ -109,11 +109,11 @@ where
                 // Shutting down; confirm absence of subsequent data.
                 active = false;
                 if !buffer.valid().is_empty() {
-                    bail!("Clean shutdown followed by data.");
+                    return Err(CommError::UnexpectedData);
                 }
                 buffer.ensure_capacity(1);
-                if reader.read(&mut buffer.empty()).context("reading data")? > 0 {
-                    bail!("Clean shutdown followed by data.");
+                if reader.read(&mut buffer.empty())? > 0 {
+                    return Err(CommError::UnexpectedData);
                 }
             }
         }
@@ -174,7 +174,7 @@ pub fn send_loop<S: Stream>(
             // still be a signal incoming.
             //
             // We could get awoken by more data, a channel closing, or spuriously perhaps.
-            writer.flush().context("Flushing writer")?;
+            writer.flush()?;
             for source in sources.iter_mut() {
                 if let Some(s) = source {
                     if s.is_complete()? {
@@ -200,7 +200,7 @@ pub fn send_loop<S: Stream>(
                     }
                 });
 
-                writer.write_all(&bytes[..]).context("writing data")?;
+                writer.write_all(&bytes[..])?;
             }
         }
     }
@@ -215,9 +215,9 @@ pub fn send_loop<S: Stream>(
         length:     0,
         seqno:      0,
     };
-    header.write_to(&mut writer).context("writing data")?;
-    writer.flush().context("flushing writer")?;
-    writer.get_mut().shutdown(::std::net::Shutdown::Write).context("Write shutdown failed")?;
+    header.write_to(&mut writer)?;
+    writer.flush()?;
+    writer.get_mut().shutdown(::std::net::Shutdown::Write)?;
     logger.as_mut().map(|logger| logger.log(MessageEvent { is_send: true, header }));
 
     // Log the send thread's end.

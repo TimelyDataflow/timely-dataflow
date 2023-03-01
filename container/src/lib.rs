@@ -2,8 +2,6 @@
 
 #![forbid(missing_docs)]
 
-use anyhow::Result;
-
 pub mod columnation;
 
 /// A container transferring data through dataflow edges
@@ -114,19 +112,19 @@ pub trait PushPartitioned: Container {
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
     /// append an element to. Call `flush` with an index and a buffer to send the data downstream.
-    fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], index: I, flush: F)
-        -> Result<()>
+    fn push_partitioned<I, F, E>(&mut self, buffers: &mut [Self], index: I, flush: F)
+        -> Result<(), E>
     where
         I: FnMut(&Self::Item) -> usize,
-        F: FnMut(usize, &mut Self) -> Result<()>;
+        F: FnMut(usize, &mut Self) -> Result<(), E>;
 }
 
 impl<T: Clone + 'static> PushPartitioned for Vec<T> {
-    fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
-        -> Result<()>
+    fn push_partitioned<I, F, E>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
+        -> Result<(), E>
     where
         I: FnMut(&Self::Item) -> usize,
-        F: FnMut(usize, &mut Self) -> Result<()>,
+        F: FnMut(usize, &mut Self) -> Result<(), E>,
     {
         fn ensure_capacity<E>(this: &mut Vec<E>) {
             let capacity = this.capacity();

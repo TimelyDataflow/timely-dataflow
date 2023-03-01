@@ -133,7 +133,7 @@ pub mod link {
     }
 
     #[test]
-    fn avoid_stack_overflow_in_drop() -> crate::Result<()>{
+    fn avoid_stack_overflow_in_drop() -> crate::Result<()> {
         let mut event1 = Rc::new(EventLinkCore::<(),()>::new());
         let _event2 = event1.clone();
         for _ in 0 .. 1_000_000 {
@@ -148,8 +148,6 @@ pub mod binary {
 
     use std::io::Write;
     use abomonation::Abomonation;
-    use anyhow::Context;
-
     use super::{EventCore, EventPusherCore, EventIteratorCore};
 
     /// A wrapper for `W: Write` implementing `EventPusherCore<T, D>`.
@@ -173,8 +171,7 @@ pub mod binary {
 
     impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusherCore<T, D> for EventWriterCore<T, D, W> {
         fn push(&mut self, event: EventCore<T, D>) -> crate::Result<()> {
-            unsafe { ::abomonation::encode(&event, &mut self.stream) }
-                .with_context(|| "Event abomonation/write failed")?;
+            unsafe { ::abomonation::encode(&event, &mut self.stream)? };
             Ok(())
         }
     }

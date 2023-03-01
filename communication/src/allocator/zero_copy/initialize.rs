@@ -4,9 +4,9 @@ use std::sync::Arc;
 // use crate::allocator::Process;
 use crate::allocator::process::ProcessBuilder;
 use crate::networking::create_sockets;
+use super::tcp::{send_loop, recv_loop};
 use super::allocator::{TcpBuilder, new_vector};
 use super::stream::Stream;
-use super::tcp::{send_loop, recv_loop};
 
 /// Join handles for send and receive threads.
 ///

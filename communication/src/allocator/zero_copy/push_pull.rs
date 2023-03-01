@@ -3,7 +3,6 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use anyhow::Context;
 
 use bytes::arc::Bytes;
 
@@ -38,7 +37,7 @@ impl<T, P: BytesPush> Pusher<T, P> {
 
 impl<T:Data, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<Message<T>>) -> crate::Result<()>{
+    fn push(&mut self, element: &mut Option<Message<T>>) -> crate::Result<()> {
         if let Some(ref mut element) = *element {
 
             // determine byte lengths and build header.
@@ -53,7 +52,7 @@ impl<T:Data, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
                 let mut bytes = borrow.reserve(header.required_bytes())?;
                 assert!(bytes.len() >= header.required_bytes());
                 let writer = &mut bytes;
-                header.write_to(writer).context("writing header")?;
+                header.write_to(writer)?;
                 element.into_bytes(writer);
             }
             borrow.make_valid(header.required_bytes())?;

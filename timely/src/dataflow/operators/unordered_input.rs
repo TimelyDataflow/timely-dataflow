@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use timely_communication::err::CommError;
 use crate::Container;
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
@@ -189,7 +190,7 @@ struct UnorderedOperator<T:Timestamp> {
     internal:   Rc<RefCell<ChangeBatch<T>>>,
     produced:   Rc<RefCell<ChangeBatch<T>>>,
     peers:     usize,
-    error: Rc<RefCell<Option<anyhow::Error>>>,
+    error: Rc<RefCell<Option<CommError>>>,
 }
 
 impl<T:Timestamp> Schedule for UnorderedOperator<T> {
@@ -229,7 +230,7 @@ pub struct UnorderedHandleCore<T: Timestamp, D: Container> {
 }
 
 impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
-    fn new(pusher: PushCounter<T, D, TeeCore<T, D>>, error: Rc<RefCell<Option<anyhow::Error>>>) -> UnorderedHandleCore<T, D> {
+    fn new(pusher: PushCounter<T, D, TeeCore<T, D>>, error: Rc<RefCell<Option<CommError>>>) -> UnorderedHandleCore<T, D> {
         UnorderedHandleCore {
             buffer: PushBuffer::new(pusher, error),
         }

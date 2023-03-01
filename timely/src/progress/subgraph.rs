@@ -583,7 +583,7 @@ where
         (internal_summary, self.shared_progress.clone())
     }
 
-    fn set_external_summary(&mut self) -> crate::Result<()> {
+    fn set_external_summary(&mut self) -> Result<()> {
         self.accept_frontier();
         self.propagate_pointstamps();  // ensure propagation of input frontiers.
         for op in self.children

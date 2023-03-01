@@ -150,7 +150,7 @@ struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: C
 }
 
 impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
-    fn push(&mut self, element: &mut Option<BundleCore<TOuter, TData>>) -> Result<()>{
+    fn push(&mut self, element: &mut Option<BundleCore<TOuter, TData>>) -> Result<()> {
         if let Some(message) = element {
             let outer_message = message.as_mut();
             let data = ::std::mem::take(&mut outer_message.data);
@@ -182,7 +182,7 @@ struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Da
 
 impl<TOuter, TInner, TData: Container> Push<BundleCore<TInner, TData>> for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
-    fn push(&mut self, message: &mut Option<BundleCore<TInner, TData>>) -> Result<()>{
+    fn push(&mut self, message: &mut Option<BundleCore<TInner, TData>>) -> Result<()> {
         if let Some(message) = message {
             let inner_message = message.as_mut();
             let data = ::std::mem::take(&mut inner_message.data);

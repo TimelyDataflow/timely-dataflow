@@ -17,7 +17,6 @@ use crate::allocator::zero_copy::initialize::initialize_networking;
 use crate::logging::{CommunicationSetup, CommunicationEvent};
 use logging_core::Logger;
 use std::fmt::{Debug, Formatter};
-use anyhow::{bail, Context};
 
 
 /// Possible configurations for the communication infrastructure.
@@ -90,23 +89,23 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts::Matches) -> crate::Result<Config> {
-        let threads = matches.opt_get_default("w", 1_usize)?;
-        let process = matches.opt_get_default("p", 0_usize)?;
-        let processes = matches.opt_get_default("n", 1_usize)?;
+    pub fn from_matches(matches: &getopts::Matches) -> Result<Config, String> {
+        let threads = matches.opt_get_default("w", 1_usize).map_err(|e| e.to_string())?;
+        let process = matches.opt_get_default("p", 0_usize).map_err(|e| e.to_string())?;
+        let processes = matches.opt_get_default("n", 1_usize).map_err(|e| e.to_string())?;
         let report = matches.opt_present("report");
         let zerocopy = matches.opt_present("zerocopy");
 
         if processes > 1 {
             let mut addresses = Vec::new();
             if let Some(hosts) = matches.opt_str("h") {
-                let file = ::std::fs::File::open(hosts.clone())?;
+                let file = ::std::fs::File::open(hosts.clone()).map_err(|e| e.to_string())?;
                 let reader = ::std::io::BufReader::new(file);
                 for line in reader.lines().take(processes) {
-                    addresses.push(line?);
+                    addresses.push(line.map_err(|e| e.to_string())?);
                 }
                 if addresses.len() < processes {
-                    bail!("could only read {} addresses from {hosts}, but -n: {processes}", addresses.len());
+                    return Err(format!("could only read {} addresses from {}, but -n: {}", addresses.len(), hosts, processes));
                 }
             }
             else {
@@ -141,10 +140,10 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> crate::Result<Config> {
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config, String> {
         let mut opts = getopts::Options::new();
         Config::install_options(&mut opts);
-        let matches = opts.parse(args)?;
+        let matches = opts.parse(args).map_err(|e| e.to_string())?;
         Config::from_matches(&matches)
     }
 
@@ -161,8 +160,7 @@ impl Config {
                 Ok((ProcessBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect(), Box::new(())))
             },
             Config::Cluster { threads, process, addresses, report, log_fn } => {
-                let (stuff, guard) = initialize_networking(addresses, process, threads, report, log_fn)
-                    .context("initializing network")?;
+                let (stuff, guard) = initialize_networking(addresses, process, threads, report, log_fn)?;
                 Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
             },
         }
@@ -337,10 +335,10 @@ impl<T:Send+'static> WorkerGuards<T> {
     }
 
     /// Waits on the worker threads and returns the results they produce.
-    pub fn join(mut self) -> Vec<crate::Result<T>> {
+    pub fn join(mut self) -> Vec<Result<T, String>> {
         self.guards
             .drain(..)
-            .map(|guard| guard.join().map_err(|e| anyhow::anyhow!("{e:?}")))
+            .map(|guard| guard.join().map_err(|e| format!("{:?}", e)))
             .collect()
     }
 }

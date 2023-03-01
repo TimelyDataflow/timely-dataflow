@@ -3,6 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
+use timely_communication::err::CommError;
 
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::operate::SharedProgress;
@@ -35,7 +36,7 @@ pub struct OperatorBuilder<G: Scope> {
     summaries: Vec<Rc<RefCell<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     logging: Option<Logger>,
-    error: Rc<RefCell<Option<anyhow::Error>>>,
+    error: Rc<RefCell<Option<CommError>>>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {

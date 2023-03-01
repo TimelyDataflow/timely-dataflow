@@ -8,7 +8,6 @@ use std::time::{Instant, Duration};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
-use anyhow::bail;
 
 use crate::communication::{Allocate, Data, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
@@ -73,13 +72,13 @@ impl Default for ProgressMode {
 }
 
 impl FromStr for ProgressMode {
-    type Err = anyhow::Error;
+    type Err = String;
 
-    fn from_str(s: &str) -> Result<ProgressMode> {
+    fn from_str(s: &str) -> std::result::Result<ProgressMode, Self::Err> {
         match s {
             "eager" => Ok(ProgressMode::Eager),
             "demand" => Ok(ProgressMode::Demand),
-            _ => bail!("unknown progress mode: {s}"),
+            _ => Err(format!("unknown progress mode: {s}")),
         }
     }
 }
@@ -117,7 +116,7 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config> {
+    pub fn from_matches(matches: &getopts_dep::Matches) -> std::result::Result<Config, String> {
         let progress_mode = matches
             .opt_get_default("progress-mode", ProgressMode::Eager)?;
         Ok(Config::default().progress_mode(progress_mode))

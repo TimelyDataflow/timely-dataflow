@@ -97,6 +97,8 @@ pub mod buzzer;
 
 use std::any::Any;
 
+use crate::err::CommError;
+
 #[cfg(feature = "bincode")]
 use serde::{Serialize, Deserialize};
 #[cfg(not(feature = "bincode"))]
@@ -190,5 +192,50 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
     (senders, recvers)
 }
 
-/// Result type used throughout Timely communication. Typedef'ed to `anyhow::Result`.
-pub type Result<T> = anyhow::Result<T>;
+/// Result type used throughout Timely communication.
+pub type Result<T> = std::result::Result<T, CommError>;
+
+pub mod err {
+    //! blubb
+    use std::io::Error as IOError;
+    use std::sync::{PoisonError, TryLockError};
+
+    /// blubb
+    #[derive(Debug)]
+    pub enum CommError {
+        /// blubb
+        Panic,
+        /// blubb
+        Poison,
+        /// blubb
+        IO(IOError),
+        /// blubb
+        UnexpectedData,
+        /// blubb
+        String(String),
+    }
+
+    impl From<IOError> for CommError {
+        fn from(value: IOError) -> Self {
+            Self::IO(value)
+        }
+    }
+
+    impl From<String> for CommError {
+        fn from(value: String) -> Self {
+            Self::String(value)
+        }
+    }
+
+    impl<M> From<PoisonError<M>> for CommError {
+        fn from(_value: PoisonError<M>) -> Self {
+            Self::Poison
+        }
+    }
+
+    impl<M> From<TryLockError<M>> for CommError {
+        fn from(_value: TryLockError<M>) -> Self {
+            Self::Poison
+        }
+    }
+}

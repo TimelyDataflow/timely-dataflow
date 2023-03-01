@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use timely_communication::err::CommError;
 
 use crate::scheduling::{Schedule, Activator};
 
@@ -219,7 +220,7 @@ struct Operator<T:Timestamp> {
     progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
     messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
     copies:     usize,
-    error: Rc<RefCell<Option<anyhow::Error>>>,
+    error: Rc<RefCell<Option<CommError>>>,
 }
 
 impl<T:Timestamp> Schedule for Operator<T> {
@@ -263,7 +264,7 @@ pub struct HandleCore<T: Timestamp, C: Container> {
     buffer1: C,
     buffer2: C,
     now_at: T,
-    error: Rc<RefCell<Option<anyhow::Error>>>,
+    error: Rc<RefCell<Option<CommError>>>,
 }
 
 /// A handle specialized to vector-based containers.

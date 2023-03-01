@@ -38,7 +38,7 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config> {
+    pub fn from_matches(matches: &getopts_dep::Matches) -> std::result::Result<Config, String> {
         Ok(Config {
             communication: CommunicationConfig::from_matches(matches)?,
             worker: WorkerConfig::from_matches(matches)?,
@@ -49,10 +49,10 @@ impl Config {
     ///
     /// Most commonly, callers supply `std::env::args()` as the iterator.
     #[cfg(feature = "getopts")]
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config> {
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> std::result::Result<Config, String> {
         let mut opts = getopts_dep::Options::new();
         Config::install_options(&mut opts);
-        let matches = opts.parse(args)?;
+        let matches = opts.parse(args).map_err(|e| e.to_string())?;
         Config::from_matches(&matches)
     }
 

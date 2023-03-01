@@ -31,7 +31,7 @@ impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&D) ->
         }
     }
     #[inline]
-    fn flush(&mut self, index: usize) -> crate::Result<()>{
+    fn flush(&mut self, index: usize) -> crate::Result<()> {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
                 Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index])?;
@@ -46,7 +46,7 @@ where
     C: PushPartitioned<Item=D>
 {
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<BundleCore<T, C>>) -> crate::Result<()>{
+    fn push(&mut self, message: &mut Option<BundleCore<T, C>>) -> crate::Result<()> {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message)?;
@@ -75,7 +75,7 @@ where
                     &mut self.buffers,
                     move |datum| ((hash_func)(datum) & mask) as usize,
                     |index, buffer| {
-                            Message::push_at(buffer, time.clone(), &mut pushers[index])
+                        Message::push_at(buffer, time.clone(), &mut pushers[index])
                     }
                 )?;
             }

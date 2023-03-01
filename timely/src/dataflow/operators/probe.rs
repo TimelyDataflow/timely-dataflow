@@ -89,7 +89,6 @@ impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
         self.probe_with(&mut handle);
         handle
     }
-
     fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> StreamCore<G, D> {
 
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());

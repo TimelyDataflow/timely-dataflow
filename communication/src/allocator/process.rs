@@ -182,7 +182,7 @@ impl Allocate for Process {
         self.inner.await_events(duration);
     }
 
-    fn receive(&mut self) -> crate::Result<()>{
+    fn receive(&mut self) -> crate::Result<()> {
         let mut events = self.inner.events().borrow_mut();
         while let Ok((index, event)) = self.counters_recv.try_recv() {
             events.push_back((index, event));
@@ -205,7 +205,7 @@ impl<T> Clone for Pusher<T> {
 }
 
 impl<T> Push<T> for Pusher<T> {
-    #[inline] fn push(&mut self, element: &mut Option<T>) -> crate::Result<()>{
+    #[inline] fn push(&mut self, element: &mut Option<T>) -> crate::Result<()> {
         if let Some(element) = element.take() {
             // The remote endpoint could be shut down, and so
             // it is not fundamentally an error to fail to send.

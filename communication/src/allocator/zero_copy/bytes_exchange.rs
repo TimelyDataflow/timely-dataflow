@@ -2,10 +2,10 @@
 
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
-use anyhow::bail;
 
 use bytes::arc::Bytes;
 use super::bytes_slab::BytesSlab;
+use crate::err::CommError;
 
 /// A target for `Bytes`.
 pub trait BytesPush {
@@ -45,8 +45,8 @@ impl MergeQueue {
     }
     /// Indicates that all input handles to the queue have dropped.
     pub fn is_complete(&self) -> crate::Result<bool> {
-        if self.panic.load(Ordering::SeqCst) { bail!("MergeQueue poisoned."); }
-        Ok(Arc::strong_count(&self.queue) == 1 && self.queue.lock().map_err(|e| anyhow::anyhow!("MergeQueue mutex poisoned: {e}"))?.is_empty())
+        if self.panic.load(Ordering::SeqCst) { return Err(CommError::Poison); }
+        Ok(Arc::strong_count(&self.queue) == 1 && self.queue.lock()?.is_empty())
     }
 
     /// Mark self as poisoned, which causes all subsequent operations to error.
@@ -58,15 +58,14 @@ impl MergeQueue {
 impl BytesPush for MergeQueue {
     fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iterator: I) -> crate::Result<()> {
 
-        if self.panic.load(Ordering::SeqCst) { bail!("MergeQueue poisoned."); }
+        if self.panic.load(Ordering::SeqCst) { return Err(CommError::Poison); }
 
         // try to acquire lock without going to sleep (Rust's lock() might yield)
         let mut lock_ok = self.queue.try_lock();
         while let Err(::std::sync::TryLockError::WouldBlock) = lock_ok {
             lock_ok = self.queue.try_lock();
         }
-        let mut queue = lock_ok
-            .map_err(|e| anyhow::anyhow!("MergeQueue mutex poisoned: {e}"))?;
+        let mut queue = lock_ok?;
 
         let mut iterator = iterator.into_iter();
         let mut should_ping = false;
@@ -101,15 +100,14 @@ impl BytesPush for MergeQueue {
 
 impl BytesPull for MergeQueue {
     fn drain_into(&mut self, vec: &mut Vec<Bytes>) -> crate::Result<()> {
-        if self.panic.load(Ordering::SeqCst) { bail!("MergeQueue poisoned."); }
+        if self.panic.load(Ordering::SeqCst) { return Err(CommError::Poison); }
 
         // try to acquire lock without going to sleep (Rust's lock() might yield)
         let mut lock_ok = self.queue.try_lock();
         while let Err(::std::sync::TryLockError::WouldBlock) = lock_ok {
             lock_ok = self.queue.try_lock();
         }
-        let mut queue = lock_ok
-            .map_err(|e| anyhow::anyhow!("MergeQueue mutex poisoned: {e}"))?;
+        let mut queue = lock_ok?;
 
         vec.extend(queue.drain(..));
         Ok(())

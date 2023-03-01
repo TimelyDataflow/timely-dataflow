@@ -272,7 +272,7 @@ mod serde {
 }
 
 mod container {
-    use crate::{Container, PushPartitioned, Result};
+    use crate::{Container, PushPartitioned};
 
     use crate::columnation::{Columnation, TimelyStack};
 
@@ -297,11 +297,11 @@ mod container {
     }
 
     impl<T: Columnation + 'static> PushPartitioned for TimelyStack<T> {
-        fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
-            -> Result<()>
+        fn push_partitioned<I, F, E>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
+            -> Result<(), E>
         where
             I: FnMut(&Self::Item) -> usize,
-            F: FnMut(usize, &mut Self) -> Result<()>,
+            F: FnMut(usize, &mut Self) -> Result<(), E>,
         {
             fn ensure_capacity<E: Columnation>(this: &mut TimelyStack<E>) {
                 let capacity = this.local.capacity();
