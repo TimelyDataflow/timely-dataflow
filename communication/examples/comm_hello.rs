@@ -35,7 +35,7 @@ fn main() {
             allocator.release()?;
         }
 
-        Ok(allocator.index())
+        Result::Ok(allocator.index())
     });
 
     // computation runs until guards are joined or dropped.
