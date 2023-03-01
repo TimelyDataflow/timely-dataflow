@@ -98,8 +98,6 @@ impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
         let mut output = PushBuffer::new(PushCounter::new(tee), Rc::clone(&error));
 
         let shared_frontier = handle.frontier.clone();
-        // Update probe's frontier to match the initial frontier of the channel it is observing.
-        shared_frontier.borrow_mut().update_iter(std::iter::once((Timestamp::minimum(), 1)));
         let mut started = false;
 
         let mut vector = Default::default();
@@ -113,9 +111,7 @@ impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
 
                 if !started {
                     // discard initial capability.
-                    progress.internals[0].update(Timestamp::minimum(), -1);
-                    // discard initial probe capability
-                    borrow.update_iter(std::iter::once((Timestamp::minimum(), -1)));
+                    progress.internals[0].update(G::Timestamp::minimum(), -1);
                     started = true;
                 }
 
@@ -214,9 +210,7 @@ mod tests {
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {
                 let (input, stream) = scope.new_input::<String>();
-                let mut probe = stream.probe();
-                stream.probe_with(&mut probe);
-                (input, probe)
+                (input, stream.probe())
             });
 
             // introduce data and watch!
