@@ -1,11 +1,11 @@
 //! Conversion to the `Stream` type from iterators.
 
 use crate::Data;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Scope, OwnedStream};
 use crate::dataflow::operators::core::{ToStream as ToStreamCore};
 
 /// Converts to a timely `Stream`.
-pub trait ToStream<D: Data> {
+pub trait ToStream<D: 'static> {
     /// Converts to a timely `Stream`.
     ///
     /// # Examples
@@ -22,11 +22,11 @@ pub trait ToStream<D: Data> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, D>;
+    fn to_stream<S: Scope>(self, scope: &mut S) -> OwnedStream<S, Vec<D>>;
 }
 
 impl<I: IntoIterator+'static> ToStream<I::Item> for I where I::Item: Data {
-    fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, I::Item> {
+    fn to_stream<S: Scope>(self, scope: &mut S) -> OwnedStream<S, Vec<I::Item>> {
         ToStreamCore::to_stream(self, scope)
     }
 }

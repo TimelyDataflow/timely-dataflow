@@ -27,11 +27,11 @@ use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
 use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::channels::pushers::{Counter, Tee};
+use crate::dataflow::channels::pushers::{Counter, PushOwned};
 use crate::dataflow::channels::Message;
 
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Scope, OwnedStream, StreamLike};
 use crate::dataflow::scopes::Child;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
@@ -50,15 +50,15 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(self, _: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C>;
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for StreamCore<G, C> {
-    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container, S: StreamLike<G, C>> Enter<G, T, C> for S {
+    fn enter<'a>(self, scope: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
-        let (targets, registrar) = Tee::<T, C>::new();
+        let (targets, registrar) = PushOwned::<T, C>::new();
         let ingress = IngressNub {
             targets: Counter::new(targets),
             phantom: PhantomData,
@@ -76,7 +76,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
             self.connect_to(input, ingress, channel_id);
         }
 
-        StreamCore::new(
+        OwnedStream::new(
             Source::new(0, input.port),
             registrar,
             scope.clone(),
@@ -85,7 +85,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
 }
 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
-pub trait Leave<G: Scope, C: Container> {
+pub trait Leave<G: Scope, T, C: Container> {
     /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// # Examples
@@ -100,20 +100,20 @@ pub trait Leave<G: Scope, C: Container> {
     ///     });
     /// });
     /// ```
-    fn leave(&self) -> StreamCore<G, C>;
+    fn leave(self) -> OwnedStream<G, C>;
 }
 
-impl<G: Scope, C: Container + Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
-    fn leave(&self) -> StreamCore<G, C> {
+impl<'a, G: Scope, C: Container + 'static, T: Timestamp+Refines<G::Timestamp>, S: StreamLike<Child<'a, G, T>, C>> Leave<G, T, C> for S {
+    fn leave(self) -> OwnedStream<G, C> {
 
         let scope = self.scope();
 
         let output = scope.subgraph.borrow_mut().new_output();
-        let target = Target::new(0, output.port);
-        let (targets, registrar) = Tee::<G::Timestamp, C>::new();
-        let egress = EgressNub { targets, phantom: PhantomData };
+        let (target, registrar) = PushOwned::<G::Timestamp, C>::new();
+        let egress = EgressNub { target, phantom: PhantomData };
         let channel_id = scope.clone().new_identifier();
 
+        let target = Target::new(0, output.port);
         if let Some(logger) = scope.logging() {
             let pusher = LogPusher::new(egress, channel_id, scope.index(), logger);
             self.connect_to(target, pusher, channel_id);
@@ -121,7 +121,7 @@ impl<G: Scope, C: Container + Data, T: Timestamp+Refines<G::Timestamp>> Leave<G,
             self.connect_to(target, egress, channel_id);
         }
 
-        StreamCore::new(
+        OwnedStream::new(
             output,
             registrar,
             scope.parent,
@@ -131,8 +131,8 @@ impl<G: Scope, C: Container + Data, T: Timestamp+Refines<G::Timestamp>> Leave<G,
 
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container + Data> {
-    targets: Counter<TInner, TContainer, Tee<TInner, TContainer>>,
-    phantom: ::std::marker::PhantomData<TOuter>,
+    targets: Counter<TInner, TContainer, PushOwned<TInner, TContainer>>,
+    phantom: PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
@@ -159,23 +159,23 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container
 }
 
 
-struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data> {
-    targets: Tee<TOuter, TContainer>,
+struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer> {
+    target: PushOwned<TOuter, TContainer>,
     phantom: PhantomData<TInner>,
 }
 
 impl<TOuter, TInner, TContainer: Container> Push<Message<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
-where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data {
+where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: 'static {
     fn push(&mut self, message: &mut Option<Message<TInner, TContainer>>) {
         if let Some(inner_message) = message {
             let data = ::std::mem::take(&mut inner_message.data);
             let mut outer_message = Some(Message::new(inner_message.time.clone().to_outer(), data, 0, 0));
-            self.targets.push(&mut outer_message);
+            self.target.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
                 inner_message.data = outer_message.data;
             }
         }
-        else { self.targets.done(); }
+        else { self.target.done(); }
     }
 }
 

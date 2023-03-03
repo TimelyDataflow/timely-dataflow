@@ -2,11 +2,11 @@
 use crate::container::{Container, SizableContainer, PushInto};
 use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{OwnedStream, Scope, StreamLike};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
-pub trait Filter<C: Container> {
+pub trait Filter<G: Scope, C: Container> {
     /// Returns a new instance of `self` containing only records satisfying `predicate`.
     ///
     /// # Examples
@@ -20,14 +20,14 @@ pub trait Filter<C: Container> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(&self, predicate: P) -> Self;
+    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, predicate: P) -> OwnedStream<G, C>;
 }
 
-impl<G: Scope, C: SizableContainer + Data> Filter<C> for StreamCore<G, C>
+impl<G: Scope, C: SizableContainer + Data, S: StreamLike<G, C>> Filter<G, C> for S
 where
     for<'a> C: PushInto<C::Item<'a>>
 {
-    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(&self, mut predicate: P) -> StreamCore<G, C> {
+    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, mut predicate: P) -> OwnedStream<G, C> {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 if !data.is_empty() {

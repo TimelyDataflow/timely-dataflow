@@ -23,7 +23,7 @@ fn main() {
 
             // bring edges and ranks together!
             let changes = edge_stream.binary_frontier(
-                &rank_stream,
+                rank_stream,
                 Exchange::new(|x: &((usize, usize), i64)| (x.0).0 as u64),
                 Exchange::new(|x: &(usize, i64)| x.0 as u64),
                 "PageRank",

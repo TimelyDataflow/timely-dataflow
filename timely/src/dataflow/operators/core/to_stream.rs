@@ -3,9 +3,9 @@
 use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, PushInto};
 use crate::{Container, Data};
 use crate::dataflow::operators::generic::operator::source;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Scope, OwnedStream};
 
-/// Converts to a timely [StreamCore], using a container builder.
+/// Converts to a timely stream, using a container builder.
 pub trait ToStreamBuilder<CB: ContainerBuilder> {
     /// Converts to a timely [StreamCore], using the supplied container builder type.
     ///
@@ -28,11 +28,11 @@ pub trait ToStreamBuilder<CB: ContainerBuilder> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream_with_builder<S: Scope>(self, scope: &mut S) -> StreamCore<S, CB::Container>;
+    fn to_stream_with_builder<S: Scope>(self, scope: &mut S) -> OwnedStream<S, CB::Container>;
 }
 
 impl<CB: ContainerBuilder, I: IntoIterator+'static> ToStreamBuilder<CB> for I where CB: PushInto<I::Item> {
-    fn to_stream_with_builder<S: Scope>(self, scope: &mut S) -> StreamCore<S, CB::Container> {
+    fn to_stream_with_builder<S: Scope>(self, scope: &mut S) -> OwnedStream<S, CB::Container> {
 
         source::<_, CB, _, _>(scope, "ToStreamBuilder", |capability, info| {
 
@@ -78,11 +78,11 @@ pub trait ToStream<C: Container> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope>(self, scope: &mut S) -> StreamCore<S, C>;
+    fn to_stream<S: Scope>(self, scope: &mut S) -> OwnedStream<S, C>;
 }
 
 impl<C: SizableContainer + Data, I: IntoIterator+'static> ToStream<C> for I where C: PushInto<I::Item> {
-    fn to_stream<S: Scope>(self, scope: &mut S) -> StreamCore<S, C> {
+    fn to_stream<S: Scope>(self, scope: &mut S) -> OwnedStream<S, C> {
         ToStreamBuilder::<CapacityContainerBuilder<C>>::to_stream_with_builder(self, scope)
     }
 }

@@ -2,12 +2,12 @@
 
 use crate::container::{Container, SizableContainer, PushInto};
 use crate::Data;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{OwnedStream, Scope, StreamLike};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for `Stream`.
-pub trait Map<S: Scope, C: Container> {
+pub trait Map<G: Scope, C: Container> : Sized {
     /// Consumes each element of the stream and yields a new element.
     ///
     /// # Examples
@@ -22,7 +22,7 @@ pub trait Map<S: Scope, C: Container> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map<C2, D2, L>(&self, mut logic: L) -> StreamCore<S, C2>
+    fn map<C2, D2, L>(self, mut logic: L) -> OwnedStream<G, C2>
     where
         C2: SizableContainer + PushInto<D2> + Data,
         L: FnMut(C::Item<'_>)->D2 + 'static,
@@ -43,7 +43,7 @@ pub trait Map<S: Scope, C: Container> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<C2, I, L>(&self, logic: L) -> StreamCore<S, C2>
+    fn flat_map<C2, I, L>(self, logic: L) -> OwnedStream<G, C2>
     where
         I: IntoIterator,
         C2: SizableContainer + PushInto<I::Item> + Data,
@@ -51,11 +51,11 @@ pub trait Map<S: Scope, C: Container> {
     ;
 }
 
-impl<S: Scope, C: Container + Data> Map<S, C> for StreamCore<S, C> {
+impl<G: Scope, C: Container + Data, S: StreamLike<G, C>> Map<G, C> for S {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<C2, I, L>(&self, mut logic: L) -> StreamCore<S, C2>
+    fn flat_map<C2, I, L>(self, mut logic: L) -> OwnedStream<G, C2>
     where
         I: IntoIterator,
         C2: SizableContainer + PushInto<I::Item> + Data,

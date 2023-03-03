@@ -2,12 +2,12 @@
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::Operator;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{OwnedStream, Scope, StreamLike};
 use crate::{Container, Data};
 use std::rc::Rc;
 
 /// Convert a stream into a stream of shared containers
-pub trait SharedStream<S: Scope, C: Container> {
+pub trait SharedStream<G: Scope, C: Container> {
     /// Convert a stream into a stream of shared data
     ///
     /// # Examples
@@ -21,11 +21,11 @@ pub trait SharedStream<S: Scope, C: Container> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn shared(&self) -> StreamCore<S, Rc<C>>;
+    fn shared(self) -> OwnedStream<G, Rc<C>>;
 }
 
-impl<S: Scope, C: Container + Data> SharedStream<S, C> for StreamCore<S, C> {
-    fn shared(&self) -> StreamCore<S, Rc<C>> {
+impl<G: Scope, C: Container + Data, S: StreamLike<G, C>> SharedStream<G, C> for S {
+    fn shared(self) -> OwnedStream<G, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each(|time, data| {
@@ -48,7 +48,7 @@ mod test {
     #[test]
     fn test_shared() {
         let output = crate::example(|scope| {
-            let shared = vec![Ok(0), Err(())].to_stream(scope).container::<Vec<_>>().shared();
+            let shared = vec![Ok(0), Err(())].to_stream(scope).container::<Vec<_>>().shared().tee();
             scope
                 .concatenate([
                     shared.unary(Pipeline, "read shared 1", |_, _| {
