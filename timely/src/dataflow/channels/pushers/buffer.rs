@@ -81,6 +81,7 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
 
 impl<T, D: Data, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
     // internal method for use by `Session`.
+    #[inline]
     fn give(&mut self, data: D) {
         if self.buffer.capacity() < crate::container::buffer::default_capacity::<D>() {
             let to_reserve = crate::container::buffer::default_capacity::<D>() - self.buffer.capacity();
