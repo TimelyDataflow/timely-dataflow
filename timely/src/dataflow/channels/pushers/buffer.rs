@@ -36,8 +36,13 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
 
     /// Returns a `Session`, which accepts data to send at the associated time
     pub fn session(&mut self, time: &T) -> Session<T, C, P> {
-        if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
-        self.time = Some(time.clone());
+        match self.time {
+            Some(ref t) => if t != time {
+                self.flush();
+                self.time = Some(time.clone())
+            },
+            None => self.time = Some(time.clone()),
+        };
         Session { buffer: self }
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
