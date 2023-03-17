@@ -62,36 +62,33 @@ pub mod link {
     use super::{Event, EventPusher, EventIteratorCore};
 
     /// A linked list of Event<T, D>.
-    pub struct EventLinkCore<T, D> {
+    pub struct EventLink<T, D> {
         /// An event, if one exists.
         ///
         /// An event might not exist, if either we want to insert a `None` and have the output iterator pause,
         /// or in the case of the very first linked list element, which has no event when constructed.
         pub event: Option<Event<T, D>>,
         /// The next event, if it exists.
-        pub next: RefCell<Option<Rc<EventLinkCore<T, D>>>>,
+        pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
     }
 
-    /// A [EventLinkCore] specialized to vector-based containers.
-    pub type EventLink<T, D> = EventLinkCore<T, Vec<D>>;
-
-    impl<T, D> EventLinkCore<T, D> {
+    impl<T, D> EventLink<T, D> {
         /// Allocates a new `EventLink`.
-        pub fn new() -> EventLinkCore<T, D> {
-            EventLinkCore { event: None, next: RefCell::new(None) }
+        pub fn new() -> EventLink<T, D> {
+            EventLink { event: None, next: RefCell::new(None) }
         }
     }
 
     // implementation for the linked list behind a `Handle`.
-    impl<T, D> EventPusher<T, D> for Rc<EventLinkCore<T, D>> {
+    impl<T, D> EventPusher<T, D> for Rc<EventLink<T, D>> {
         fn push(&mut self, event: Event<T, D>) {
-            *self.next.borrow_mut() = Some(Rc::new(EventLinkCore { event: Some(event), next: RefCell::new(None) }));
+            *self.next.borrow_mut() = Some(Rc::new(EventLink { event: Some(event), next: RefCell::new(None) }));
             let next = self.next.borrow().as_ref().unwrap().clone();
             *self = next;
         }
     }
 
-    impl<T, D> EventIteratorCore<T, D> for Rc<EventLinkCore<T, D>> {
+    impl<T, D> EventIteratorCore<T, D> for Rc<EventLink<T, D>> {
         fn next(&mut self) -> Option<&Event<T, D>> {
             let is_some = self.next.borrow().is_some();
             if is_some {
@@ -106,7 +103,7 @@ pub mod link {
     }
 
     // Drop implementation to prevent stack overflow through naive drop impl.
-    impl<T, D> Drop for EventLinkCore<T, D> {
+    impl<T, D> Drop for EventLink<T, D> {
         fn drop(&mut self) {
             while let Some(link) = self.next.replace(None) {
                 if let Ok(head) = Rc::try_unwrap(link) {
@@ -116,7 +113,7 @@ pub mod link {
         }
     }
 
-    impl<T, D> Default for EventLinkCore<T, D> {
+    impl<T, D> Default for EventLink<T, D> {
         fn default() -> Self {
             Self::new()
         }
@@ -124,7 +121,7 @@ pub mod link {
 
     #[test]
     fn avoid_stack_overflow_in_drop() {
-        let mut event1 = Rc::new(EventLinkCore::<(),()>::new());
+        let mut event1 = Rc::new(EventLink::<(),()>::new());
         let _event2 = event1.clone();
         for _ in 0 .. 1_000_000 {
             event1.push(Event::Progress(vec![]));

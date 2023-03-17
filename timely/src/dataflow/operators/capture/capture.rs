@@ -30,7 +30,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    /// use timely::dataflow::operators::capture::{EventLinkCore, Replay, Extract};
+    /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
@@ -42,7 +42,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     ///     let send = send.lock().unwrap().clone();
     ///
     ///     // these are to capture/replay the stream.
-    ///     let handle1 = Rc::new(EventLinkCore::new());
+    ///     let handle1 = Rc::new(EventLink::new());
     ///     let handle2 = Some(handle1.clone());
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
