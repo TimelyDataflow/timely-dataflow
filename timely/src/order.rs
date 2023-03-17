@@ -5,6 +5,9 @@
 /// This trait is distinct from Rust's `PartialOrd` trait, because the implementation
 /// of that trait precludes a distinct `Ord` implementation. We need an independent
 /// trait if we want to have a partially ordered type that can also be sorted.
+///
+/// The partial order should be consistent with [Eq], in the sense that if `a == b` then
+/// `a.less_equal(b)` and `b.less_equal(a)`.
 pub trait PartialOrder : Eq {
     /// Returns true iff one element is strictly less than the other.
     fn less_than(&self, other: &Self) -> bool {
