@@ -12,7 +12,7 @@ use crate::progress::Source;
 use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::{ScopeParent, Scope, Stream};
-use crate::dataflow::channels::pushers::{TeeCore, CounterCore};
+use crate::dataflow::channels::pushers::{TeeCore, Counter};
 use crate::dataflow::channels::Message;
 
 
@@ -178,7 +178,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 
     fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
         let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D>::new();
-        let counter = CounterCore::new(output);
+        let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
         let index = self.allocate_operator_index();
@@ -249,7 +249,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 pub struct HandleCore<T: Timestamp, C: Container> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
-    pushers: Vec<CounterCore<T, C, TeeCore<T, C>>>,
+    pushers: Vec<Counter<T, C, TeeCore<T, C>>>,
     buffer1: C,
     buffer2: C,
     now_at: T,
@@ -332,7 +332,7 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
 
     fn register(
         &mut self,
-        pusher: CounterCore<T, D, TeeCore<T, D>>,
+        pusher: Counter<T, D, TeeCore<T, D>>,
         progress: Rc<RefCell<ChangeBatch<T>>>,
     ) {
         // flush current contents, so new registrant does not see existing data.

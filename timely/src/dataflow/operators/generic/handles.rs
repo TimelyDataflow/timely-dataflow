@@ -11,7 +11,7 @@ use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
 use crate::progress::frontier::MutableAntichain;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
-use crate::dataflow::channels::pushers::CounterCore as PushCounter;
+use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{BufferCore, Session};
 use crate::dataflow::channels::Bundle;
 use crate::communication::{Push, Pull, message::RefOrMut};
