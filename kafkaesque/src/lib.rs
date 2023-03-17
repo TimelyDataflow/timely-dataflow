@@ -37,7 +37,7 @@ impl OutstandingCounterContext {
 }
 
 /// A wrapper for `W: Write` implementing `EventPusher<T, D>`.
-pub struct EventProducerCore<T, D> {
+pub struct EventProducer<T, D> {
     topic: String,
     buffer: Vec<u8>,
     producer: BaseProducer<OutstandingCounterContext>,
@@ -45,10 +45,7 @@ pub struct EventProducerCore<T, D> {
     phant: ::std::marker::PhantomData<(T,D)>,
 }
 
-/// [EventProducerCore] specialized to vector-based containers.
-pub type EventProducer<T, D> = EventProducerCore<T, Vec<D>>;
-
-impl<T, D> EventProducerCore<T, D> {
+impl<T, D> EventProducer<T, D> {
     /// Allocates a new `EventWriter` wrapping a supplied writer.
     pub fn new(config: ClientConfig, topic: String) -> Self {
         let counter = Arc::new(AtomicIsize::new(0));
@@ -65,7 +62,7 @@ impl<T, D> EventProducerCore<T, D> {
     }
 }
 
-impl<T: Abomonation, D: Abomonation> EventPusherCore<T, D> for EventProducerCore<T, D> {
+impl<T: Abomonation, D: Abomonation> EventPusherCore<T, D> for EventProducer<T, D> {
     fn push(&mut self, event: EventCore<T, D>) {
         unsafe { ::abomonation::encode(&event, &mut self.buffer).expect("Encode failure"); }
         // println!("sending {:?} bytes", self.buffer.len());
@@ -76,7 +73,7 @@ impl<T: Abomonation, D: Abomonation> EventPusherCore<T, D> for EventProducerCore
     }
 }
 
-impl<T, D> Drop for EventProducerCore<T, D> {
+impl<T, D> Drop for EventProducer<T, D> {
     fn drop(&mut self) {
         while self.counter.load(Ordering::SeqCst) > 0 {
             self.producer.poll(std::time::Duration::from_millis(10));
