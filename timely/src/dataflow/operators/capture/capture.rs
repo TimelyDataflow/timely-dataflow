@@ -95,7 +95,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     ///     );
     ///
     ///     worker.dataflow::<u64,_,_>(|scope2| {
-    ///         Some(EventReader::<_,u64,_>::new(recv))
+    ///         Some(EventReader::<_, Vec<u64>,_>::new(recv))
     ///             .replay_into(scope2)
     ///             .capture_into(send0)
     ///     });

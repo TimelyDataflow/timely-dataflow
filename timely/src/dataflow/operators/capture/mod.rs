@@ -66,7 +66,7 @@
 //!     );
 //!
 //!     worker.dataflow::<u64,_,_>(|scope2| {
-//!         Some(EventReader::<_,u64,_>::new(recv))
+//!         Some(EventReader::<u64, Vec<u64>, TcpStream>::new(recv))
 //!             .replay_into(scope2)
 //!             .inspect(|x| println!("replayed: {:?}", x));
 //!     })
@@ -78,7 +78,7 @@ pub use self::replay::Replay;
 pub use self::extract::{Extract, ExtractCore};
 pub use self::event::{Event, EventPusher};
 pub use self::event::link::EventLink;
-pub use self::event::binary::{EventReader, EventReaderCore};
+pub use self::event::binary::EventReader;
 pub use self::event::binary::EventWriter;
 
 pub mod capture;

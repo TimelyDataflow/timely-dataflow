@@ -147,7 +147,7 @@ pub mod binary {
     }
 
     /// A Wrapper for `R: Read` implementing `EventIterator<T, D>`.
-    pub struct EventReaderCore<T, D, R: ::std::io::Read> {
+    pub struct EventReader<T, D, R: ::std::io::Read> {
         reader: R,
         bytes: Vec<u8>,
         buff1: Vec<u8>,
@@ -157,10 +157,7 @@ pub mod binary {
         phant: ::std::marker::PhantomData<(T,D)>,
     }
 
-    /// [EventReaderCore] specialized to vector-based containers.
-    pub type EventReader<T, D, R> = EventReaderCore<T, Vec<D>, R>;
-
-    impl<T, D, R: ::std::io::Read> EventReaderCore<T, D, R> {
+    impl<T, D, R: ::std::io::Read> EventReader<T, D, R> {
         /// Allocates a new `EventReader` wrapping a supplied reader.
         pub fn new(r: R) -> Self {
             Self {
@@ -175,7 +172,7 @@ pub mod binary {
         }
     }
 
-    impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for EventReaderCore<T, D, R> {
+    impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for EventReader<T, D, R> {
         fn next(&mut self) -> Option<&Event<T, D>> {
 
             // if we can decode something, we should just return it! :D
