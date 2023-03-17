@@ -22,7 +22,7 @@ use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
 /// Handle to an operator's input stream.
-pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> {
+pub struct InputHandle<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     /// Timestamp summaries from this input to each output.
@@ -36,12 +36,12 @@ pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> {
 /// Handle to an operator's input stream and frontier.
 pub struct FrontieredInputHandle<'a, T: Timestamp, D: Container+'a, P: Pull<Bundle<T, D>>+'a> {
     /// The underlying input handle.
-    pub handle: &'a mut InputHandleCore<T, D, P>,
+    pub handle: &'a mut InputHandle<T, D, P>,
     /// The frontier as reported by timely progress tracking.
     pub frontier: &'a MutableAntichain<T>,
 }
 
-impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> InputHandleCore<T, D, P> {
+impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
 
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
@@ -95,7 +95,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> InputHandleCore<T, D
 
 impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>+'a> FrontieredInputHandle<'a, T, D, P> {
     /// Allocate a new frontiered input handle.
-    pub fn new(handle: &'a mut InputHandleCore<T, D, P>, frontier: &'a MutableAntichain<T>) -> Self {
+    pub fn new(handle: &'a mut InputHandle<T, D, P>, frontier: &'a MutableAntichain<T>) -> Self {
         FrontieredInputHandle {
             handle,
             frontier,
@@ -140,7 +140,7 @@ impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>+'a> FrontieredInputHa
     }
 }
 
-pub fn _access_pull_counter<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>>(input: &mut InputHandleCore<T, D, P>) -> &mut PullCounter<T, D, P> {
+pub fn _access_pull_counter<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>>(input: &mut InputHandle<T, D, P>) -> &mut PullCounter<T, D, P> {
     &mut input.pull_counter
 }
 
@@ -151,8 +151,8 @@ pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>>(
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, 
     summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, 
     logging: Option<Logger>
-) -> InputHandleCore<T, D, P> {
-    InputHandleCore {
+) -> InputHandle<T, D, P> {
+    InputHandle {
         pull_counter,
         internal,
         summaries,
