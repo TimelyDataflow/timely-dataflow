@@ -10,7 +10,7 @@
 
 pub use self::enterleave::{Enter, EnterAt, Leave};
 pub use self::input::Input;
-pub use self::unordered_input::{UnorderedInput, UnorderedInputCore};
+pub use self::unordered_input::UnorderedInput;
 pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
 pub use self::concat::{Concat, Concatenate};
 pub use self::partition::Partition;
