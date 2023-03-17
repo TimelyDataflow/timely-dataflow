@@ -82,16 +82,13 @@ impl<T, D> Drop for EventProducer<T, D> {
 }
 
 /// A Wrapper for `R: Read` implementing `EventIterator<T, D>`.
-pub struct EventConsumerCore<T, D> {
+pub struct EventConsumer<T, D> {
     consumer: BaseConsumer<DefaultConsumerContext>,
     buffer: Vec<u8>,
     phant: ::std::marker::PhantomData<(T,D)>,
 }
 
-/// [EventConsumerCore] specialized to vector-based containers.
-pub type EventConsumer<T, D> = EventConsumerCore<T, Vec<D>>;
-
-impl<T, D> EventConsumerCore<T, D> {
+impl<T, D> EventConsumer<T, D> {
     /// Allocates a new `EventReader` wrapping a supplied reader.
     pub fn new(config: ClientConfig, topic: String) -> Self {
         println!("allocating consumer for topic {:?}", topic);
@@ -105,7 +102,7 @@ impl<T, D> EventConsumerCore<T, D> {
     }
 }
 
-impl<T: Abomonation, D: Abomonation> EventIteratorCore<T, D> for EventConsumerCore<T, D> {
+impl<T: Abomonation, D: Abomonation> EventIteratorCore<T, D> for EventConsumer<T, D> {
     fn next(&mut self) -> Option<&Event<T, D>> {
         if let Some(result) = self.consumer.poll(std::time::Duration::from_millis(0)) {
             match result {
