@@ -44,9 +44,6 @@ pub struct FrontieredInputHandleCore<'a, T: Timestamp, D: Container+'a, P: Pull<
     pub frontier: &'a MutableAntichain<T>,
 }
 
-/// Handle to an operator's input stream and frontier, specialized to vectors.
-pub type FrontieredInputHandle<'a, T, D, P> = FrontieredInputHandleCore<'a, T, Vec<D>, P>;
-
 impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> InputHandleCore<T, D, P> {
 
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
