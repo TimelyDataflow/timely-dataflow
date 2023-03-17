@@ -70,7 +70,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    /// use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay, Extract};
+    /// use timely::dataflow::operators::capture::{EventReader, Replay, Extract, EventWriter};
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send0, recv0) = ::std::sync::mpsc::channel();

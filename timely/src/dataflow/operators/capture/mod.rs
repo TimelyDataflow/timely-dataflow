@@ -79,7 +79,7 @@ pub use self::extract::{Extract, ExtractCore};
 pub use self::event::{Event, EventPusher};
 pub use self::event::link::EventLink;
 pub use self::event::binary::{EventReader, EventReaderCore};
-pub use self::event::binary::{EventWriter, EventWriterCore};
+pub use self::event::binary::EventWriter;
 
 pub mod capture;
 pub mod replay;

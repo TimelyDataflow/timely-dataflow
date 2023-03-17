@@ -124,15 +124,12 @@ pub mod binary {
     use super::{Event, EventPusher, EventIterator};
 
     /// A wrapper for `W: Write` implementing `EventPusherCore<T, D>`.
-    pub struct EventWriterCore<T, D, W: ::std::io::Write> {
+    pub struct EventWriter<T, D, W: ::std::io::Write> {
         stream: W,
         phant: ::std::marker::PhantomData<(T,D)>,
     }
 
-    /// [EventWriterCore] specialized to vector-based containers.
-    pub type EventWriter<T, D, W> = EventWriterCore<T, Vec<D>, W>;
-
-    impl<T, D, W: ::std::io::Write> EventWriterCore<T, D, W> {
+    impl<T, D, W: ::std::io::Write> EventWriter<T, D, W> {
         /// Allocates a new `EventWriter` wrapping a supplied writer.
         pub fn new(w: W) -> Self {
             Self {
@@ -142,7 +139,7 @@ pub mod binary {
         }
     }
 
-    impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriterCore<T, D, W> {
+    impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
         fn push(&mut self, event: Event<T, D>) {
             // TODO: `push` has no mechanism to report errors, so we `unwrap`.
             unsafe { ::abomonation::encode(&event, &mut self.stream).expect("Event abomonation/write failed"); }
