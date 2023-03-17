@@ -1,6 +1,6 @@
 pub use self::tee::{Tee, TeeCore, TeeHelper};
 pub use self::exchange::Exchange;
-pub use self::counter::{Counter, CounterCore};
+pub use self::counter::CounterCore;
 
 pub mod tee;
 pub mod exchange;

@@ -17,9 +17,6 @@ pub struct CounterCore<T, D, P: Push<Bundle<T, D>>> {
     phantom: PhantomData<D>,
 }
 
-/// A counter specialized to vector.
-pub type Counter<T, D, P> = CounterCore<T, Vec<D>, P>;
-
 impl<T: Timestamp, D: Container, P> Push<Bundle<T, D>> for CounterCore<T, D, P> where P: Push<Bundle<T, D>> {
     #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
