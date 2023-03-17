@@ -22,7 +22,7 @@ fn main() {
             let edge_stream = input.to_stream(scope);
 
             // create a new feedback stream, which will be changes to ranks.
-            let (handle, rank_stream) = scope.feedback(1);
+            let (handle, rank_stream) = scope.feedback::<Vec<_>>(1);
 
             // bring edges and ranks together!
             let changes = edge_stream.binary_frontier(
