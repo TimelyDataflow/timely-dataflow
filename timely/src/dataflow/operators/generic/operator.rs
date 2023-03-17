@@ -4,7 +4,7 @@
 use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pact::ParallelizationContract;
 
-use crate::dataflow::operators::generic::handles::{InputHandleCore, FrontieredInputHandleCore, OutputHandleCore};
+use crate::dataflow::operators::generic::handles::{InputHandleCore, FrontieredInputHandle, OutputHandleCore};
 use crate::dataflow::operators::capability::Capability;
 
 use crate::dataflow::{Scope, Stream};
@@ -59,7 +59,7 @@ pub trait Operator<G: Scope, D1: Container> {
     where
         D2: Container,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, D1, P::Puller>,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P::Puller>,
                  &mut OutputHandleCore<G::Timestamp, D2, TeeCore<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
 
@@ -190,8 +190,8 @@ pub trait Operator<G: Scope, D1: Container> {
         D2: Container,
         D3: Container,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, D1, P1::Puller>,
-                 &mut FrontieredInputHandleCore<G::Timestamp, D2, P2::Puller>,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P1::Puller>,
+                 &mut FrontieredInputHandle<G::Timestamp, D2, P2::Puller>,
                  &mut OutputHandleCore<G::Timestamp, D3, TeeCore<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2>;
@@ -321,7 +321,7 @@ pub trait Operator<G: Scope, D1: Container> {
     /// ```
     fn sink<L, P>(&self, pact: P, name: &str, logic: L)
     where
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, D1, P::Puller>)+'static,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P::Puller>)+'static,
         P: ParallelizationContract<G::Timestamp, D1>;
 }
 
@@ -331,7 +331,7 @@ impl<G: Scope, D1: Container> Operator<G, D1> for Stream<G, D1> {
     where
         D2: Container,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, D1, P::Puller>,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P::Puller>,
                  &mut OutputHandleCore<G::Timestamp, D2, TeeCore<G::Timestamp, D2>>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
@@ -346,7 +346,7 @@ impl<G: Scope, D1: Container> Operator<G, D1> for Stream<G, D1> {
             let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, operator_info);
             move |frontiers| {
-                let mut input_handle = FrontieredInputHandleCore::new(&mut input, &frontiers[0]);
+                let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
                 let mut output_handle = output.activate();
                 logic(&mut input_handle, &mut output_handle);
             }
@@ -410,8 +410,8 @@ impl<G: Scope, D1: Container> Operator<G, D1> for Stream<G, D1> {
         D2: Container,
         D3: Container,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, D1, P1::Puller>,
-                 &mut FrontieredInputHandleCore<G::Timestamp, D2, P2::Puller>,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P1::Puller>,
+                 &mut FrontieredInputHandle<G::Timestamp, D2, P2::Puller>,
                  &mut OutputHandleCore<G::Timestamp, D3, TeeCore<G::Timestamp, D3>>)+'static,
         P1: ParallelizationContract<G::Timestamp, D1>,
         P2: ParallelizationContract<G::Timestamp, D2> {
@@ -428,8 +428,8 @@ impl<G: Scope, D1: Container> Operator<G, D1> for Stream<G, D1> {
             let capability = capabilities.pop().unwrap();
             let mut logic = constructor(capability, operator_info);
             move |frontiers| {
-                let mut input1_handle = FrontieredInputHandleCore::new(&mut input1, &frontiers[0]);
-                let mut input2_handle = FrontieredInputHandleCore::new(&mut input2, &frontiers[1]);
+                let mut input1_handle = FrontieredInputHandle::new(&mut input1, &frontiers[0]);
+                let mut input2_handle = FrontieredInputHandle::new(&mut input2, &frontiers[1]);
                 let mut output_handle = output.activate();
                 logic(&mut input1_handle, &mut input2_handle, &mut output_handle);
             }
@@ -499,7 +499,7 @@ impl<G: Scope, D1: Container> Operator<G, D1> for Stream<G, D1> {
 
     fn sink<L, P>(&self, pact: P, name: &str, mut logic: L)
     where
-        L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, D1, P::Puller>)+'static,
+        L: FnMut(&mut FrontieredInputHandle<G::Timestamp, D1, P::Puller>)+'static,
         P: ParallelizationContract<G::Timestamp, D1> {
 
         let mut builder = OperatorBuilder::new(name.to_owned(), self.scope());
@@ -507,7 +507,7 @@ impl<G: Scope, D1: Container> Operator<G, D1> for Stream<G, D1> {
 
         builder.build(|_capabilities| {
             move |frontiers| {
-                let mut input_handle = FrontieredInputHandleCore::new(&mut input, &frontiers[0]);
+                let mut input_handle = FrontieredInputHandle::new(&mut input, &frontiers[0]);
                 logic(&mut input_handle);
             }
         });

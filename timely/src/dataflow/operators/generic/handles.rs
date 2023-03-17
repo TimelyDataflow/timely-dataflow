@@ -37,7 +37,7 @@ pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> {
 pub type InputHandle<T, D, P> = InputHandleCore<T, Vec<D>, P>;
 
 /// Handle to an operator's input stream and frontier.
-pub struct FrontieredInputHandleCore<'a, T: Timestamp, D: Container+'a, P: Pull<Bundle<T, D>>+'a> {
+pub struct FrontieredInputHandle<'a, T: Timestamp, D: Container+'a, P: Pull<Bundle<T, D>>+'a> {
     /// The underlying input handle.
     pub handle: &'a mut InputHandleCore<T, D, P>,
     /// The frontier as reported by timely progress tracking.
@@ -96,10 +96,10 @@ impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> InputHandleCore<T, D
 
 }
 
-impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>+'a> FrontieredInputHandleCore<'a, T, D, P> {
+impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>+'a> FrontieredInputHandle<'a, T, D, P> {
     /// Allocate a new frontiered input handle.
     pub fn new(handle: &'a mut InputHandleCore<T, D, P>, frontier: &'a MutableAntichain<T>) -> Self {
-        FrontieredInputHandleCore {
+        FrontieredInputHandle {
             handle,
             frontier,
         }

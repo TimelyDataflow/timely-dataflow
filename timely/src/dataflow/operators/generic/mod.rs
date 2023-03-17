@@ -8,7 +8,7 @@ mod handles;
 mod notificator;
 mod operator_info;
 
-pub use self::handles::{InputHandle, InputHandleCore, FrontieredInputHandleCore, OutputHandle, OutputHandleCore, OutputWrapper};
+pub use self::handles::{InputHandle, InputHandleCore, FrontieredInputHandle, OutputHandle, OutputHandleCore, OutputWrapper};
 pub use self::notificator::{Notificator, FrontierNotificator};
 
 pub use self::operator::{Operator, source};
