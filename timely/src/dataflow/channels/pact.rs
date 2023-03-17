@@ -31,11 +31,6 @@ pub trait ParallelizationContractCore<T, D> {
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
 
-/// A `ParallelizationContractCore` specialized for `Vec` containers
-/// TODO: Use trait aliases once stable.
-pub trait ParallelizationContract<T, D: Clone>: ParallelizationContractCore<T, Vec<D>> { }
-impl<T, D: Clone, P: ParallelizationContractCore<T, Vec<D>>> ParallelizationContract<T, D> for P { }
-
 /// A direct connection
 #[derive(Debug)]
 pub struct Pipeline;
