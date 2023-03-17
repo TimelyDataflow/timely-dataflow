@@ -17,7 +17,7 @@ use crate::dataflow::channels::pushers::buffer::{BufferCore as PushBuffer, Autof
 
 use crate::dataflow::operators::{ActivateCapability, Capability};
 
-use crate::dataflow::{Stream, Scope, StreamCore};
+use crate::dataflow::{Scope, StreamCore};
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
@@ -42,9 +42,7 @@ pub trait UnorderedInput<G: Scope> {
     ///
     /// use timely::*;
     /// use timely::dataflow::operators::*;
-    /// use timely::dataflow::operators::capture::Extract;
-    /// use timely::dataflow::Stream;
-    ///
+    /// use timely::dataflow::operators::capture::Extract;    ///     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
     /// let send = Arc::new(Mutex::new(send));
@@ -74,12 +72,12 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>);
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, Vec<D>>);
 }
 
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, Vec<D>>) {
         self.new_unordered_input_core()
     }
 }
@@ -110,9 +108,7 @@ pub trait UnorderedInputCore<G: Scope> {
     ///
     /// use timely::*;
     /// use timely::dataflow::operators::*;
-    /// use timely::dataflow::operators::capture::Extract;
-    /// use timely::dataflow::Stream;
-    ///
+    /// use timely::dataflow::operators::capture::Extract;    ///     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
     /// let send = Arc::new(Mutex::new(send));

@@ -11,7 +11,7 @@ use crate::progress::Source;
 
 use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::{Stream, ScopeParent, Scope, StreamCore};
+use crate::dataflow::{ScopeParent, Scope, StreamCore};
 use crate::dataflow::channels::pushers::{TeeCore, CounterCore};
 use crate::dataflow::channels::Message;
 
@@ -58,7 +58,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, Stream<Self, D>);
+    fn new_input<D: Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, StreamCore<Self, Vec<D>>);
 
     /// Create a new [StreamCore] and [HandleCore] through which to supply input.
     ///
@@ -125,7 +125,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, D>;
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> StreamCore<Self, Vec<D>>;
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -162,11 +162,11 @@ pub trait Input : Scope {
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, Stream<G, D>) {
+    fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, StreamCore<G, Vec<D>>) {
         self.new_input_core()
     }
 
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> StreamCore<G, Vec<D>> {
         self.input_from_core(handle)
     }
 

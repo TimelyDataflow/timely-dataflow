@@ -8,7 +8,7 @@ use crate::order::Product;
 
 use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{StreamCore, Scope, Stream};
+use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::scopes::child::Iterative;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OutputWrapper;
@@ -36,7 +36,7 @@ pub trait Feedback<G: Scope> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, D>, Stream<G, D>);
+    fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, D>, StreamCore<G, Vec<D>>);
 
     /// Creates a [StreamCore] and a [HandleCore] to later bind the source of that `Stream`.
     ///
@@ -91,7 +91,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
 }
 
 impl<G: Scope> Feedback<G> for G {
-    fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, D>, Stream<G, D>) {
+    fn feedback<D: Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, D>, StreamCore<G, Vec<D>>) {
         self.feedback_core(summary)
     }
 

@@ -1,7 +1,7 @@
 //! Broadcast records to all workers.
 
 use crate::ExchangeData;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::{Map, Exchange};
 
 /// Broadcast records to all workers.
@@ -21,8 +21,8 @@ pub trait Broadcast<D: ExchangeData> {
     fn broadcast(&self) -> Self;
 }
 
-impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
-    fn broadcast(&self) -> Stream<G, D> {
+impl<G: Scope, D: ExchangeData> Broadcast<D> for StreamCore<G, Vec<D>> {
+    fn broadcast(&self) -> StreamCore<G, Vec<D>> {
 
         // NOTE: Simplified implementation due to underlying motion
         // in timely dataflow internals. Optimize once they have

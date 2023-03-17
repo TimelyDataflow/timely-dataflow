@@ -29,9 +29,6 @@ pub struct StreamCore<S: Scope, D> {
     ports: TeeHelper<S::Timestamp, D>,
 }
 
-/// A stream batching data in vectors.
-pub type Stream<S, D> = StreamCore<S, Vec<D>>;
-
 impl<S: Scope, D: Container> StreamCore<S, D> {
     /// Connects the stream to a destination.
     ///

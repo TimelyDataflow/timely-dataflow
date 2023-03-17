@@ -2,7 +2,7 @@
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::{Scope, StreamCore};
 use crate::Data;
 
 /// Partition a stream of records into multiple streams.
@@ -22,11 +22,11 @@ pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2)> {
     ///     streams[2].inspect(|x| println!("seen 2: {:?}", x));
     /// });
     /// ```
-    fn partition(&self, parts: u64, route: F) -> Vec<Stream<G, D2>>;
+    fn partition(&self, parts: u64, route: F) -> Vec<StreamCore<G, Vec<D2>>>;
 }
 
-impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D2, F> for Stream<G, D> {
-    fn partition(&self, parts: u64, route: F) -> Vec<Stream<G, D2>> {
+impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D2, F> for StreamCore<G, Vec<D>> {
+    fn partition(&self, parts: u64, route: F) -> Vec<StreamCore<G, Vec<D2>>> {
         let mut builder = OperatorBuilder::new("Partition".to_owned(), self.scope());
 
         let mut input = builder.new_input(self, Pipeline);

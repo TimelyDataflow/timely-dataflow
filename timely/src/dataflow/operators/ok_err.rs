@@ -2,7 +2,7 @@
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::{Scope, StreamCore};
 use crate::Data;
 
 /// Extension trait for `Stream`.
@@ -32,7 +32,7 @@ pub trait OkErr<S: Scope, D: Data> {
     fn ok_err<D1, D2, L>(
         &self,
         logic: L,
-    ) -> (Stream<S, D1>, Stream<S, D2>)
+    ) -> (StreamCore<S, Vec<D1>>, StreamCore<S, Vec<D2>>)
 
     where
         D1: Data,
@@ -41,11 +41,11 @@ pub trait OkErr<S: Scope, D: Data> {
     ;
 }
 
-impl<S: Scope, D: Data> OkErr<S, D> for Stream<S, D> {
+impl<S: Scope, D: Data> OkErr<S, D> for StreamCore<S, Vec<D>> {
     fn ok_err<D1, D2, L>(
         &self,
         mut logic: L,
-    ) -> (Stream<S, D1>, Stream<S, D2>)
+    ) -> (StreamCore<S, Vec<D1>>, StreamCore<S, Vec<D2>>)
 
     where
         D1: Data,

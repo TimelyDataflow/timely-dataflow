@@ -52,7 +52,7 @@ One nice aspect of `capture_into` is that it really does reveal everything that 
 At *its* core, `replay_into` takes some sequence of `Event<T, D>` items and reproduces the stream, as it was recorded. It is also fairly simple, and we can just look at its implementation as well:
 
 ```rust,ignore
-    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>{
+    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, Vec<D>>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
         let (targets, stream) = builder.new_output();

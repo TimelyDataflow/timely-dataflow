@@ -31,7 +31,7 @@ use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
 use crate::dataflow::channels::{BundleCore, Message};
 
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope, Stream};
+use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::scopes::{Child, ScopeParent};
 use crate::dataflow::operators::delay::Delay;
 
@@ -72,12 +72,12 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, D> ;
+    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> StreamCore<Iterative<'a, G, T>, Vec<D>>;
 }
 
 impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, Vec<D>>> EnterAt<G, T, D> for E {
     fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, mut initial: F) ->
-        Stream<Iterative<'a, G, T>, D> {
+    StreamCore<Iterative<'a, G, T>, Vec<D>> {
             self.enter(scope).delay(move |datum, time| Product::new(time.clone().to_outer(), initial(datum)))
     }
 }

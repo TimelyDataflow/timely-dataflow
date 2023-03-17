@@ -7,7 +7,7 @@ use crate::Container;
 
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::CapabilitySet;
-use crate::dataflow::{StreamCore, Scope, Stream};
+use crate::dataflow::{StreamCore, Scope};
 use crate::progress::Timestamp;
 use crate::Data;
 
@@ -29,11 +29,11 @@ pub trait ToStream<T: Timestamp, D: Data> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>;
+    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, Vec<D>>;
 }
 
 impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::Item: Data {
-    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, I::Item> {
+    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, Vec<<I as IntoIterator>::Item>> {
 
         source(scope, "ToStream", |capability, info| {
 
@@ -124,7 +124,7 @@ pub enum Event<F: IntoIterator, D> {
 /// Converts to a timely `Stream`.
 pub trait ToStreamAsync<T: Timestamp, D: Data> {
     /// Converts a [native `Stream`](futures_util::stream::Stream) of [`Event`s](Event) into a [timely
-    /// `Stream`](crate::dataflow::Stream).
+    /// `Stream`](StreamCore::<_, Vec<_>> ).
     ///
     /// # Examples
     ///
@@ -150,7 +150,7 @@ pub trait ToStreamAsync<T: Timestamp, D: Data> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope<Timestamp = T>>(self, scope: &S) -> Stream<S, D>;
+    fn to_stream<S: Scope<Timestamp = T>>(self, scope: &S) -> StreamCore<S, Vec<D>>;
 }
 
 impl<T, D, F, I> ToStreamAsync<T, D> for I
@@ -160,7 +160,7 @@ where
     F: IntoIterator<Item = T>,
     I: futures_util::stream::Stream<Item = Event<F, D>> + Unpin + 'static,
 {
-    fn to_stream<S: Scope<Timestamp = T>>(mut self, scope: &S) -> Stream<S, D> {
+    fn to_stream<S: Scope<Timestamp = T>>(mut self, scope: &S) -> StreamCore<S, Vec<D>> {
         source(scope, "ToStreamAsync", move |capability, info| {
             let activator = Arc::new(scope.sync_activator_for(&info.address[..]));
 
