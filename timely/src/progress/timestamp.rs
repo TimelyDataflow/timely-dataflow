@@ -31,6 +31,10 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// in computation, uses this method and will drop messages with timestamps that when advanced
     /// result in `None`. Ideally, all other timestamp manipulation should behave similarly.
     ///
+    /// This summary's partial order is expected to be compatible with the partial order of [T],
+    /// in the sense that if `s1.less_equal(s2)`, then `s1.results_in(&t)` is less than or equal to
+    /// `s2.results_in(&t)`.
+    ///
     /// Note that `Self::default()` is expected to behave as an "empty" or "noop" summary, such that
     /// `Self::default().results_in(&t) == Some(t)`.
     ///
