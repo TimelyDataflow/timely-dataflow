@@ -20,9 +20,6 @@ pub struct BufferCore<T, D: Container, P: Push<Bundle<T, D>>> {
     pusher: P,
 }
 
-/// A buffer specialized to vector-based containers.
-pub type Buffer<T, D, P> = BufferCore<T, Vec<D>, P>;
-
 impl<T, C: Container, P: Push<Bundle<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
 
     /// Creates a new `Buffer`.
@@ -79,7 +76,7 @@ impl<T, C: Container, P: Push<Bundle<T, C>>> BufferCore<T, C, P> where T: Eq+Clo
     }
 }
 
-impl<T, D: Data, P: Push<Bundle<T, Vec<D>>>> Buffer<T, D, P> where T: Eq+Clone {
+impl<T, D: Data, P: Push<Bundle<T, Vec<D>>>> BufferCore<T, Vec<D>, P> where T: Eq+Clone {
     // internal method for use by `Session`.
     #[inline]
     fn give(&mut self, data: D) {
