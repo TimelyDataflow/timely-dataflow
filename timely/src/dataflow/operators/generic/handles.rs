@@ -198,9 +198,6 @@ pub struct OutputHandleCore<'a, T: Timestamp, C: Container+'a, P: Push<Bundle<T,
     internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
 }
 
-/// Handle specialized to `Vec`-based container.
-pub type OutputHandle<'a, T, D, P> = OutputHandleCore<'a, T, Vec<D>, P>;
-
 impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a, T, C, P> {
     /// Obtains a session that can send data at the timestamp associated with capability `cap`.
     ///
