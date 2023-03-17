@@ -13,9 +13,6 @@ pub mod pact;
 /// The input to and output from timely dataflow communication channels.
 pub type BundleCore<T, D> = crate::communication::Message<Message<T, D>>;
 
-/// The input to and output from timely dataflow communication channels specialized to vectors.
-pub type Bundle<T, D> = BundleCore<T, Vec<D>>;
-
 /// A serializable representation of timestamped data.
 #[derive(Clone, Abomonation, Serialize, Deserialize)]
 pub struct Message<T, D> {

@@ -1,7 +1,7 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use crate::dataflow::channels::{Bundle, BundleCore, Message};
+use crate::dataflow::channels::{BundleCore, Message};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
 use crate::communication::Push;
@@ -79,7 +79,7 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
     }
 }
 
-impl<T, D: Data, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
+impl<T, D: Data, P: Push<BundleCore<T, Vec<D>>>> Buffer<T, D, P> where T: Eq+Clone {
     // internal method for use by `Session`.
     #[inline]
     fn give(&mut self, data: D) {
