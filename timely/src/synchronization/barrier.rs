@@ -17,7 +17,7 @@ impl<A: Allocate> Barrier<A> {
     pub fn new(worker: &mut Worker<A>) -> Self {
         use crate::dataflow::operators::{Input, Probe};
         let (input, probe) = worker.dataflow(|scope| {
-            let (handle, stream) = scope.new_input::<()>();
+            let (handle, stream) = scope.new_input::<Vec<()>>();
             (handle, stream.probe())
         });
         Barrier { input, probe, worker: worker.clone() }

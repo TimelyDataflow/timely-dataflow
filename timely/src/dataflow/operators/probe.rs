@@ -202,7 +202,7 @@ mod tests {
 
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {
-                let (input, stream) = scope.new_input::<String>();
+                let (input, stream) = scope.new_input::<Vec<String>>();
                 (input, stream.probe())
             });
 

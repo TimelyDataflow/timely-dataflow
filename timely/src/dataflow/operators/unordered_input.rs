@@ -11,7 +11,6 @@ use crate::progress::{Operate, operate::SharedProgress, Timestamp};
 use crate::progress::Source;
 use crate::progress::ChangeBatch;
 
-use crate::Data;
 use crate::dataflow::channels::pushers::{Counter as PushCounter, Tee};
 use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
 

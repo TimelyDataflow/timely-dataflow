@@ -193,8 +193,8 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///
 /// timely::execute(timely::Config::thread(), |worker| {
 ///     let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
-///         let (in1_handle, in1) = scope.new_input();
-///         let (in2_handle, in2) = scope.new_input();
+///         let (in1_handle, in1) = scope.new_input::<Vec<_>>();
+///         let (in2_handle, in2) = scope.new_input::<Vec<_>>();
 ///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
 ///             let mut notificator = FrontierNotificator::new();
 ///             let mut stash = HashMap::new();

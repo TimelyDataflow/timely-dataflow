@@ -16,7 +16,7 @@ fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
 
-        let mut input = InputHandle::<(), String>::new();
+        let mut input = InputHandle::<(), Vec<String>>::new();
 
         // define a new dataflow
         worker.dataflow(|scope| {
