@@ -3,7 +3,7 @@ use timely::dataflow::{Scope, Stream};
 use timely::dataflow::operators::Capability;
 use rdkafka::Message;
 use rdkafka::consumer::{ConsumerContext, BaseConsumer};
-use timely::dataflow::channels::pushers::TeeCore;
+use timely::dataflow::channels::pushers::Tee;
 use timely::dataflow::operators::generic::OutputHandle;
 
 /// Constructs a stream of data from a Kafka consumer.
@@ -95,7 +95,7 @@ where
     D: Data,
     L: Fn(&[u8],
           &mut Capability<G::Timestamp>,
-          &mut OutputHandle<G::Timestamp, Vec<D>, TeeCore<G::Timestamp, Vec<D>>>) -> bool+'static,
+          &mut OutputHandle<G::Timestamp, Vec<D>, Tee<G::Timestamp, Vec<D>>>) -> bool+'static,
 {
     use timely::dataflow::operators::generic::source;
     source(scope, name, move |capability, info| {

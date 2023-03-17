@@ -12,7 +12,7 @@ use crate::progress::Source;
 use crate::progress::ChangeBatch;
 
 use crate::Data;
-use crate::dataflow::channels::pushers::{Counter as PushCounter, TeeCore};
+use crate::dataflow::channels::pushers::{Counter as PushCounter, Tee};
 use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSessionCore};
 
 use crate::dataflow::operators::{ActivateCapability, Capability};
@@ -145,7 +145,7 @@ pub trait UnorderedInputCore<G: Scope> {
 impl<G: Scope> UnorderedInputCore<G> for G {
     fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
 
-        let (output, registrar) = TeeCore::<G::Timestamp, D>::new();
+        let (output, registrar) = Tee::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
@@ -212,18 +212,18 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 /// A handle to an input [Stream], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
 pub struct UnorderedHandleCore<T: Timestamp, D: Container> {
-    buffer: PushBuffer<T, D, PushCounter<T, D, TeeCore<T, D>>>,
+    buffer: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
 }
 
 impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
-    fn new(pusher: PushCounter<T, D, TeeCore<T, D>>) -> UnorderedHandleCore<T, D> {
+    fn new(pusher: PushCounter<T, D, Tee<T, D>>) -> UnorderedHandleCore<T, D> {
         UnorderedHandleCore {
             buffer: PushBuffer::new(pusher),
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, D, PushCounter<T, D, TeeCore<T, D>>>> {
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }
