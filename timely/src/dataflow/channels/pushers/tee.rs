@@ -17,9 +17,6 @@ pub struct TeeCore<T, D> {
     shared: PushList<T, D>,
 }
 
-/// [TeeCore] specialized to `Vec`-based container.
-pub type Tee<T, D> = TeeCore<T, Vec<D>>;
-
 impl<T: Data, D: Container> Push<Bundle<T, D>> for TeeCore<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {

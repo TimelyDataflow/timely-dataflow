@@ -1,4 +1,4 @@
-pub use self::tee::{Tee, TeeCore, TeeHelper};
+pub use self::tee::{TeeCore, TeeHelper};
 pub use self::exchange::Exchange;
 pub use self::counter::Counter;
 
