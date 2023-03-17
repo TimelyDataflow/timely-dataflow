@@ -33,9 +33,6 @@ pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> {
     logging: Option<Logger>,
 }
 
-/// Handle to an operator's input stream, specialized to vectors.
-pub type InputHandle<T, D, P> = InputHandleCore<T, Vec<D>, P>;
-
 /// Handle to an operator's input stream and frontier.
 pub struct FrontieredInputHandle<'a, T: Timestamp, D: Container+'a, P: Pull<Bundle<T, D>>+'a> {
     /// The underlying input handle.
