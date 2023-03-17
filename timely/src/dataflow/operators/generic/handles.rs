@@ -183,8 +183,8 @@ impl<T: Timestamp, D: Container, P: Push<Bundle<T, D>>> OutputWrapper<T, D, P> {
     ///
     /// This method ensures that the only access to the push buffer is through the `OutputHandle`
     /// type which ensures the use of capabilities, and which calls `cease` when it is dropped.
-    pub fn activate(&mut self) -> OutputHandleCore<T, D, P> {
-        OutputHandleCore {
+    pub fn activate(&mut self) -> OutputHandle<T, D, P> {
+        OutputHandle {
             push_buffer: &mut self.push_buffer,
             internal_buffer: &self.internal_buffer,
         }
@@ -193,12 +193,12 @@ impl<T: Timestamp, D: Container, P: Push<Bundle<T, D>>> OutputWrapper<T, D, P> {
 
 
 /// Handle to an operator's output stream.
-pub struct OutputHandleCore<'a, T: Timestamp, C: Container+'a, P: Push<Bundle<T, C>>+'a> {
+pub struct OutputHandle<'a, T: Timestamp, C: Container+'a, P: Push<Bundle<T, C>>+'a> {
     push_buffer: &'a mut Buffer<T, C, PushCounter<T, C, P>>,
     internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
 }
 
-impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a, T, C, P> {
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandle<'a, T, C, P> {
     /// Obtains a session that can send data at the timestamp associated with capability `cap`.
     ///
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp
@@ -232,7 +232,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a,
     }
 }
 
-impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> Drop for OutputHandleCore<'a, T, C, P> {
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> Drop for OutputHandle<'a, T, C, P> {
     fn drop(&mut self) {
         self.push_buffer.cease();
     }
