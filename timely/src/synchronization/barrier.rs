@@ -6,7 +6,7 @@ use crate::worker::Worker;
 
 /// A re-usable barrier synchronization mechanism.
 pub struct Barrier<A: Allocate> {
-    input: InputHandle<usize, ()>,
+    input: InputHandle<usize, Vec<()>>,
     probe: ProbeHandle<usize>,
     worker: Worker<A>,
 }
@@ -17,7 +17,7 @@ impl<A: Allocate> Barrier<A> {
     pub fn new(worker: &mut Worker<A>) -> Self {
         use crate::dataflow::operators::{Input, Probe};
         let (input, probe) = worker.dataflow(|scope| {
-            let (handle, stream) = scope.new_input::<()>();
+            let (handle, stream) = scope.new_input::<Vec<()>>();
             (handle, stream.probe())
         });
         Barrier { input, probe, worker: worker.clone() }
@@ -51,4 +51,3 @@ impl<A: Allocate> Barrier<A> {
         !self.probe.less_than(self.input.time())
     }
 }
-

@@ -11,7 +11,7 @@ fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
         let index = worker.index();
-        let mut input = InputHandle::new();
+        let mut input = InputHandle::<_, Vec<_>>::new();
         let mut probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output

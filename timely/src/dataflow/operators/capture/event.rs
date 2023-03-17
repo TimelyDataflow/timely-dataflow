@@ -6,55 +6,34 @@
 
 /// Data and progress events of the captured stream.
 #[derive(Debug, Clone, Abomonation, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
-pub enum EventCore<T, D> {
+pub enum Event<T, D> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
     /// Messages received via the data stream.
     Messages(T, D),
 }
 
-/// Data and progress events of the captured stream, specialized to vector-based containers.
-pub type Event<T, D> = EventCore<T, Vec<D>>;
-
-/// Iterates over contained `EventCore<T, D>`.
+/// Iterates over contained `Event<T, D>`.
 ///
 /// The `EventIterator` trait describes types that can iterate over references to events,
 /// and which can be used to replay a stream into a new timely dataflow computation.
 ///
 /// This method is not simply an iterator because of the lifetime in the result.
-pub trait EventIteratorCore<T, D> {
-    /// Iterates over references to `EventCore<T, D>` elements.
-    fn next(&mut self) -> Option<&EventCore<T, D>>;
-}
-
-/// A [EventIteratorCore] specialized to vector-based containers.
-// TODO: use trait aliases once stable.
-pub trait EventIterator<T, D>: EventIteratorCore<T, Vec<D>> {
+pub trait EventIterator<T, D> {
     /// Iterates over references to `Event<T, D>` elements.
     fn next(&mut self) -> Option<&Event<T, D>>;
 }
-impl<T, D, E: EventIteratorCore<T, Vec<D>>> EventIterator<T, D> for E {
-    fn next(&mut self) -> Option<&Event<T, D>> {
-        <Self as EventIteratorCore<_, _>>::next(self)
-    }
-}
 
-
-/// Receives `EventCore<T, D>` events.
-pub trait EventPusherCore<T, D> {
+/// Receives `Event<T, D>` events.
+pub trait EventPusher<T, D> {
     /// Provides a new `Event<T, D>` to the pusher.
-    fn push(&mut self, event: EventCore<T, D>);
+    fn push(&mut self, event: Event<T, D>);
 }
-
-/// A [EventPusherCore] specialized to vector-based containers.
-// TODO: use trait aliases once stable.
-pub trait EventPusher<T, D>: EventPusherCore<T, Vec<D>> {}
-impl<T, D, E: EventPusherCore<T, Vec<D>>> EventPusher<T, D> for E {}
 
 
 // implementation for the linked list behind a `Handle`.
-impl<T, D> EventPusherCore<T, D> for ::std::sync::mpsc::Sender<EventCore<T, D>> {
-    fn push(&mut self, event: EventCore<T, D>) {
+impl<T, D> EventPusher<T, D> for ::std::sync::mpsc::Sender<Event<T, D>> {
+    fn push(&mut self, event: Event<T, D>) {
         // NOTE: An Err(x) result just means "data not accepted" most likely
         //       because the receiver is gone. No need to panic.
         let _ = self.send(event);
@@ -67,40 +46,37 @@ pub mod link {
     use std::rc::Rc;
     use std::cell::RefCell;
 
-    use super::{EventCore, EventPusherCore, EventIteratorCore};
+    use super::{Event, EventPusher, EventIterator};
 
-    /// A linked list of EventCore<T, D>.
-    pub struct EventLinkCore<T, D> {
+    /// A linked list of Event<T, D>.
+    pub struct EventLink<T, D> {
         /// An event, if one exists.
         ///
         /// An event might not exist, if either we want to insert a `None` and have the output iterator pause,
         /// or in the case of the very first linked list element, which has no event when constructed.
-        pub event: Option<EventCore<T, D>>,
+        pub event: Option<Event<T, D>>,
         /// The next event, if it exists.
-        pub next: RefCell<Option<Rc<EventLinkCore<T, D>>>>,
+        pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
     }
 
-    /// A [EventLinkCore] specialized to vector-based containers.
-    pub type EventLink<T, D> = EventLinkCore<T, Vec<D>>;
-
-    impl<T, D> EventLinkCore<T, D> {
+    impl<T, D> EventLink<T, D> {
         /// Allocates a new `EventLink`.
-        pub fn new() -> EventLinkCore<T, D> {
-            EventLinkCore { event: None, next: RefCell::new(None) }
+        pub fn new() -> EventLink<T, D> {
+            EventLink { event: None, next: RefCell::new(None) }
         }
     }
 
     // implementation for the linked list behind a `Handle`.
-    impl<T, D> EventPusherCore<T, D> for Rc<EventLinkCore<T, D>> {
-        fn push(&mut self, event: EventCore<T, D>) {
-            *self.next.borrow_mut() = Some(Rc::new(EventLinkCore { event: Some(event), next: RefCell::new(None) }));
+    impl<T, D> EventPusher<T, D> for Rc<EventLink<T, D>> {
+        fn push(&mut self, event: Event<T, D>) {
+            *self.next.borrow_mut() = Some(Rc::new(EventLink { event: Some(event), next: RefCell::new(None) }));
             let next = self.next.borrow().as_ref().unwrap().clone();
             *self = next;
         }
     }
 
-    impl<T, D> EventIteratorCore<T, D> for Rc<EventLinkCore<T, D>> {
-        fn next(&mut self) -> Option<&EventCore<T, D>> {
+    impl<T, D> EventIterator<T, D> for Rc<EventLink<T, D>> {
+        fn next(&mut self) -> Option<&Event<T, D>> {
             let is_some = self.next.borrow().is_some();
             if is_some {
                 let next = self.next.borrow().as_ref().unwrap().clone();
@@ -114,7 +90,7 @@ pub mod link {
     }
 
     // Drop implementation to prevent stack overflow through naive drop impl.
-    impl<T, D> Drop for EventLinkCore<T, D> {
+    impl<T, D> Drop for EventLink<T, D> {
         fn drop(&mut self) {
             while let Some(link) = self.next.replace(None) {
                 if let Ok(head) = Rc::try_unwrap(link) {
@@ -124,7 +100,7 @@ pub mod link {
         }
     }
 
-    impl<T, D> Default for EventLinkCore<T, D> {
+    impl<T, D> Default for EventLink<T, D> {
         fn default() -> Self {
             Self::new()
         }
@@ -132,10 +108,10 @@ pub mod link {
 
     #[test]
     fn avoid_stack_overflow_in_drop() {
-        let mut event1 = Rc::new(EventLinkCore::<(),()>::new());
+        let mut event1 = Rc::new(EventLink::<(),()>::new());
         let _event2 = event1.clone();
         for _ in 0 .. 1_000_000 {
-            event1.push(EventCore::Progress(vec![]));
+            event1.push(Event::Progress(vec![]));
         }
     }
 }
@@ -145,18 +121,15 @@ pub mod binary {
 
     use std::io::Write;
     use abomonation::Abomonation;
-    use super::{EventCore, EventPusherCore, EventIteratorCore};
+    use super::{Event, EventPusher, EventIterator};
 
     /// A wrapper for `W: Write` implementing `EventPusherCore<T, D>`.
-    pub struct EventWriterCore<T, D, W: ::std::io::Write> {
+    pub struct EventWriter<T, D, W: ::std::io::Write> {
         stream: W,
         phant: ::std::marker::PhantomData<(T,D)>,
     }
 
-    /// [EventWriterCore] specialized to vector-based containers.
-    pub type EventWriter<T, D, W> = EventWriterCore<T, Vec<D>, W>;
-
-    impl<T, D, W: ::std::io::Write> EventWriterCore<T, D, W> {
+    impl<T, D, W: ::std::io::Write> EventWriter<T, D, W> {
         /// Allocates a new `EventWriter` wrapping a supplied writer.
         pub fn new(w: W) -> Self {
             Self {
@@ -166,15 +139,15 @@ pub mod binary {
         }
     }
 
-    impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusherCore<T, D> for EventWriterCore<T, D, W> {
-        fn push(&mut self, event: EventCore<T, D>) {
+    impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
+        fn push(&mut self, event: Event<T, D>) {
             // TODO: `push` has no mechanism to report errors, so we `unwrap`.
             unsafe { ::abomonation::encode(&event, &mut self.stream).expect("Event abomonation/write failed"); }
         }
     }
 
     /// A Wrapper for `R: Read` implementing `EventIterator<T, D>`.
-    pub struct EventReaderCore<T, D, R: ::std::io::Read> {
+    pub struct EventReader<T, D, R: ::std::io::Read> {
         reader: R,
         bytes: Vec<u8>,
         buff1: Vec<u8>,
@@ -184,10 +157,7 @@ pub mod binary {
         phant: ::std::marker::PhantomData<(T,D)>,
     }
 
-    /// [EventReaderCore] specialized to vector-based containers.
-    pub type EventReader<T, D, R> = EventReaderCore<T, Vec<D>, R>;
-
-    impl<T, D, R: ::std::io::Read> EventReaderCore<T, D, R> {
+    impl<T, D, R: ::std::io::Read> EventReader<T, D, R> {
         /// Allocates a new `EventReader` wrapping a supplied reader.
         pub fn new(r: R) -> Self {
             Self {
@@ -202,12 +172,12 @@ pub mod binary {
         }
     }
 
-    impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIteratorCore<T, D> for EventReaderCore<T, D, R> {
-        fn next(&mut self) -> Option<&EventCore<T, D>> {
+    impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for EventReader<T, D, R> {
+        fn next(&mut self) -> Option<&Event<T, D>> {
 
             // if we can decode something, we should just return it! :D
-            if unsafe { ::abomonation::decode::<EventCore<T,D>>(&mut self.buff1[self.consumed..]) }.is_some() {
-                let (item, rest) = unsafe { ::abomonation::decode::<EventCore<T,D>>(&mut self.buff1[self.consumed..]) }.unwrap();
+            if unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buff1[self.consumed..]) }.is_some() {
+                let (item, rest) = unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buff1[self.consumed..]) }.unwrap();
                 self.consumed = self.valid - rest.len();
                 return Some(item);
             }

@@ -11,9 +11,9 @@ use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
 use crate::progress::frontier::MutableAntichain;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
-use crate::dataflow::channels::pushers::CounterCore as PushCounter;
-use crate::dataflow::channels::pushers::buffer::{BufferCore, Session};
-use crate::dataflow::channels::BundleCore;
+use crate::dataflow::channels::pushers::Counter as PushCounter;
+use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
+use crate::dataflow::channels::Bundle;
 use crate::communication::{Push, Pull, message::RefOrMut};
 use crate::Container;
 use crate::logging::TimelyLogger as Logger;
@@ -22,7 +22,7 @@ use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
 /// Handle to an operator's input stream.
-pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> {
+pub struct InputHandle<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> {
     pull_counter: PullCounter<T, D, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     /// Timestamp summaries from this input to each output.
@@ -33,21 +33,15 @@ pub struct InputHandleCore<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>
     logging: Option<Logger>,
 }
 
-/// Handle to an operator's input stream, specialized to vectors.
-pub type InputHandle<T, D, P> = InputHandleCore<T, Vec<D>, P>;
-
 /// Handle to an operator's input stream and frontier.
-pub struct FrontieredInputHandleCore<'a, T: Timestamp, D: Container+'a, P: Pull<BundleCore<T, D>>+'a> {
+pub struct FrontieredInputHandle<'a, T: Timestamp, D: Container+'a, P: Pull<Bundle<T, D>>+'a> {
     /// The underlying input handle.
-    pub handle: &'a mut InputHandleCore<T, D, P>,
+    pub handle: &'a mut InputHandle<T, D, P>,
     /// The frontier as reported by timely progress tracking.
     pub frontier: &'a MutableAntichain<T>,
 }
 
-/// Handle to an operator's input stream and frontier, specialized to vectors.
-pub type FrontieredInputHandle<'a, T, D, P> = FrontieredInputHandleCore<'a, T, Vec<D>, P>;
-
-impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<T, D, P> {
+impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>> InputHandle<T, D, P> {
 
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
@@ -99,10 +93,10 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>> InputHandleCore<
 
 }
 
-impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>+'a> FrontieredInputHandleCore<'a, T, D, P> {
+impl<'a, T: Timestamp, D: Container, P: Pull<Bundle<T, D>>+'a> FrontieredInputHandle<'a, T, D, P> {
     /// Allocate a new frontiered input handle.
-    pub fn new(handle: &'a mut InputHandleCore<T, D, P>, frontier: &'a MutableAntichain<T>) -> Self {
-        FrontieredInputHandleCore {
+    pub fn new(handle: &'a mut InputHandle<T, D, P>, frontier: &'a MutableAntichain<T>) -> Self {
+        FrontieredInputHandle {
             handle,
             frontier,
         }
@@ -146,19 +140,19 @@ impl<'a, T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>+'a> FrontieredInp
     }
 }
 
-pub fn _access_pull_counter<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>>(input: &mut InputHandleCore<T, D, P>) -> &mut PullCounter<T, D, P> {
+pub fn _access_pull_counter<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>>(input: &mut InputHandle<T, D, P>) -> &mut PullCounter<T, D, P> {
     &mut input.pull_counter
 }
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>>(
+pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>>(
     pull_counter: PullCounter<T, D, P>, 
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, 
     summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, 
     logging: Option<Logger>
-) -> InputHandleCore<T, D, P> {
-    InputHandleCore {
+) -> InputHandle<T, D, P> {
+    InputHandle {
         pull_counter,
         internal,
         summaries,
@@ -172,14 +166,14 @@ pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<BundleCore<T, D>>>(
 /// than with an `OutputHandle`, whose methods ensure that capabilities are used and that the
 /// pusher is flushed (via the `cease` method) once it is no longer used.
 #[derive(Debug)]
-pub struct OutputWrapper<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> {
-    push_buffer: BufferCore<T, D, PushCounter<T, D, P>>,
+pub struct OutputWrapper<T: Timestamp, D: Container, P: Push<Bundle<T, D>>> {
+    push_buffer: Buffer<T, D, PushCounter<T, D, P>>,
     internal_buffer: Rc<RefCell<ChangeBatch<T>>>,
 }
 
-impl<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> OutputWrapper<T, D, P> {
+impl<T: Timestamp, D: Container, P: Push<Bundle<T, D>>> OutputWrapper<T, D, P> {
     /// Creates a new output wrapper from a push buffer.
-    pub fn new(push_buffer: BufferCore<T, D, PushCounter<T, D, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>) -> Self {
+    pub fn new(push_buffer: Buffer<T, D, PushCounter<T, D, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>) -> Self {
         OutputWrapper {
             push_buffer,
             internal_buffer,
@@ -189,8 +183,8 @@ impl<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> OutputWrapper<T, D, 
     ///
     /// This method ensures that the only access to the push buffer is through the `OutputHandle`
     /// type which ensures the use of capabilities, and which calls `cease` when it is dropped.
-    pub fn activate(&mut self) -> OutputHandleCore<T, D, P> {
-        OutputHandleCore {
+    pub fn activate(&mut self) -> OutputHandle<T, D, P> {
+        OutputHandle {
             push_buffer: &mut self.push_buffer,
             internal_buffer: &self.internal_buffer,
         }
@@ -199,15 +193,12 @@ impl<T: Timestamp, D: Container, P: Push<BundleCore<T, D>>> OutputWrapper<T, D, 
 
 
 /// Handle to an operator's output stream.
-pub struct OutputHandleCore<'a, T: Timestamp, C: Container+'a, P: Push<BundleCore<T, C>>+'a> {
-    push_buffer: &'a mut BufferCore<T, C, PushCounter<T, C, P>>,
+pub struct OutputHandle<'a, T: Timestamp, C: Container+'a, P: Push<Bundle<T, C>>+'a> {
+    push_buffer: &'a mut Buffer<T, C, PushCounter<T, C, P>>,
     internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
 }
 
-/// Handle specialized to `Vec`-based container.
-pub type OutputHandle<'a, T, D, P> = OutputHandleCore<'a, T, Vec<D>, P>;
-
-impl<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>> OutputHandleCore<'a, T, C, P> {
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandle<'a, T, C, P> {
     /// Obtains a session that can send data at the timestamp associated with capability `cap`.
     ///
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp
@@ -241,7 +232,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>> OutputHandleCore
     }
 }
 
-impl<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>> Drop for OutputHandleCore<'a, T, C, P> {
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> Drop for OutputHandle<'a, T, C, P> {
     fn drop(&mut self) {
         self.push_buffer.cease();
     }

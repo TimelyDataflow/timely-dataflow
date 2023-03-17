@@ -13,14 +13,14 @@ use std::time::Duration;
 use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
-pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
+pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
     // None when the logging stream is closed
     time: Duration,
     event_pusher: P,
     _phantom: ::std::marker::PhantomData<(E, T)>,
 }
 
-impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
+impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
         BatchLogger {
@@ -42,7 +42,7 @@ impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, 
         self.time = time;
     }
 }
-impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
+impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
     fn drop(&mut self) {
         self.event_pusher.push(Event::Progress(vec![(self.time, -1)]));
     }

@@ -1,6 +1,6 @@
 //! Traits and types for extracting captured timely dataflow streams.
 
-use super::EventCore;
+use super::Event;
 use crate::Container;
 use crate::Data;
 
@@ -18,7 +18,7 @@ pub trait Extract<T: Ord, D: Ord> {
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    /// use timely::dataflow::operators::capture::{EventLinkCore, Replay, Extract};
+    /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
@@ -30,7 +30,7 @@ pub trait Extract<T: Ord, D: Ord> {
     ///     let send = send.lock().unwrap().clone();
     ///
     ///     // these are to capture/replay the stream.
-    ///     let handle1 = Rc::new(EventLinkCore::new());
+    ///     let handle1 = Rc::new(EventLink::new());
     ///     let handle2 = Some(handle1.clone());
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
@@ -49,7 +49,7 @@ pub trait Extract<T: Ord, D: Ord> {
     fn extract(self) -> Vec<(T, Vec<D>)>;
 }
 
-impl<T: Ord, D: Ord+Data> Extract<T,D> for ::std::sync::mpsc::Receiver<EventCore<T, Vec<D>>> {
+impl<T: Ord, D: Ord+Data> Extract<T,D> for ::std::sync::mpsc::Receiver<Event<T, Vec<D>>> {
     fn extract(self) -> Vec<(T, Vec<D>)> {
         let mut result = self.extract_core();
 
@@ -86,7 +86,7 @@ pub trait ExtractCore<T, C> {
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    /// use timely::dataflow::operators::capture::{EventLinkCore, Replay, ExtractCore};
+    /// use timely::dataflow::operators::capture::{EventLink, Replay, ExtractCore};
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
@@ -98,7 +98,7 @@ pub trait ExtractCore<T, C> {
     ///     let send = send.lock().unwrap().clone();
     ///
     ///     // these are to capture/replay the stream.
-    ///     let handle1 = Rc::new(EventLinkCore::new());
+    ///     let handle1 = Rc::new(EventLink::new());
     ///     let handle2 = Some(handle1.clone());
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
@@ -117,11 +117,11 @@ pub trait ExtractCore<T, C> {
     fn extract_core(self) -> Vec<(T, C)>;
 }
 
-impl<T, C: Container> ExtractCore<T, C> for ::std::sync::mpsc::Receiver<EventCore<T, C>> {
+impl<T, C: Container> ExtractCore<T, C> for ::std::sync::mpsc::Receiver<Event<T, C>> {
     fn extract_core(self) -> Vec<(T, C)> {
         let mut result = Vec::new();
         for event in self {
-            if let EventCore::Messages(time, data) = event {
+            if let Event::Messages(time, data) = event {
                 result.push((time, data));
             }
         }

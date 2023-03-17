@@ -8,15 +8,10 @@ Many parts of Timely assume that data is organized into `Vec<T>`, i.e., batches 
 This abstractions works well for many cases but precludes some advanced techniques, such as transferring translated or columnar data between operators.
 With the container abstraction, Timely specifies a minimal interface it requires tracking progress and provide data to operators.
 
-## Core operators
-
-In Timely, we provide a set of `Core` operators that are generic on the container type they can handle.
-In most cases, the `Core` operators are a immediate generalization of their non-core variant, providing the semantically equivalent functionality.
-
 ## Limitations
 
 A challenge when genericizing Timely operators is that all interfaces need to be declared independent of a concrete type, for example as part of a trait.
-For this reason, Timely doesn't currently support operators that require knowledge of the elements of a container or how to partition a container, with the only exception being the `Vec` type.
+For this reason, Timely doesn't currently support operators that require knowledge of the elements of a container, with the only exception being the `Vec` type.
 
 ## A custom container
 

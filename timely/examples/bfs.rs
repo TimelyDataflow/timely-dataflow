@@ -44,7 +44,7 @@ fn main() {
                 .to_stream(scope);
 
             // define a loop variable, for the (node, worker) pairs.
-            let (handle, stream) = scope.feedback(1usize);
+            let (handle, stream) = scope.feedback::<Vec<_>>(1usize);
 
             // use the stream of edges
             graph.binary_notify(
@@ -58,7 +58,7 @@ fn main() {
                     // receive edges, start to sort them
                     input1.for_each(|time, data| {
                         notify.notify_at(time.retain());
-                        edge_list.push(data.replace(Vec::new()));
+                        edge_list.push(data.take());
                     });
 
                     // receive (node, worker) pairs, note any new ones.
@@ -68,7 +68,7 @@ fn main() {
                                       notify.notify_at(time.retain());
                                       Vec::new()
                                   })
-                                  .push(data.replace(Vec::new()));
+                                  .push(data.take());
                     });
 
                     notify.for_each(|time, _num, _notify| {

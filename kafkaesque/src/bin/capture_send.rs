@@ -2,7 +2,6 @@ use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::capture::Capture;
 
 use rdkafka::config::ClientConfig;
-
 use kafkaesque::EventProducer;
 
 fn main() {
@@ -20,7 +19,7 @@ fn main() {
             .set("bootstrap.servers", brokers);
 
         let topic = format!("{}-{:?}", topic, worker.index());
-        let producer = EventProducer::new(producer_config, topic);
+        let producer = EventProducer::<u64, Vec<u64>>::new(producer_config, topic);
 
         worker.dataflow::<u64,_,_>(|scope|
             (0 .. count)

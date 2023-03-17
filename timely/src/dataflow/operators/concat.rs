@@ -3,7 +3,7 @@
 
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Stream, Scope};
 
 /// Merge the contents of two streams.
 pub trait Concat<G: Scope, D: Container> {
@@ -20,11 +20,11 @@ pub trait Concat<G: Scope, D: Container> {
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concat(&self, _: &StreamCore<G, D>) -> StreamCore<G, D>;
+    fn concat(&self, _: &Stream<G, D>) -> Stream<G, D>;
 }
 
-impl<G: Scope, D: Container> Concat<G, D> for StreamCore<G, D> {
-    fn concat(&self, other: &StreamCore<G, D>) -> StreamCore<G, D> {
+impl<G: Scope, D: Container> Concat<G, D> for Stream<G, D> {
+    fn concat(&self, other: &Stream<G, D>) -> Stream<G, D> {
         self.scope().concatenate([self.clone(), other.clone()])
     }
 }
@@ -47,15 +47,15 @@ pub trait Concatenate<G: Scope, D: Container> {
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, D>
+    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
     where
-        I: IntoIterator<Item=StreamCore<G, D>>;
+        I: IntoIterator<Item=Stream<G, D>>;
 }
 
-impl<G: Scope, D: Container> Concatenate<G, D> for StreamCore<G, D> {
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, D>
+impl<G: Scope, D: Container> Concatenate<G, D> for Stream<G, D> {
+    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
     where
-        I: IntoIterator<Item=StreamCore<G, D>>
+        I: IntoIterator<Item=Stream<G, D>>
     {
         let clone = self.clone();
         self.scope().concatenate(Some(clone).into_iter().chain(sources))
@@ -63,9 +63,9 @@ impl<G: Scope, D: Container> Concatenate<G, D> for StreamCore<G, D> {
 }
 
 impl<G: Scope, D: Container> Concatenate<G, D> for G {
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, D>
+    fn concatenate<I>(&self, sources: I) -> Stream<G, D>
     where
-        I: IntoIterator<Item=StreamCore<G, D>>
+        I: IntoIterator<Item=Stream<G, D>>
     {
 
         // create an operator builder.

@@ -1,7 +1,7 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use crate::dataflow::channels::{Bundle, BundleCore, Message};
+use crate::dataflow::channels::{Bundle, Message};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
 use crate::communication::Push;
@@ -12,7 +12,7 @@ use crate::{Container, Data};
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
 /// data must be flushed and creates a `Session` object which allows sending at the given time.
 #[derive(Debug)]
-pub struct BufferCore<T, D: Container, P: Push<BundleCore<T, D>>> {
+pub struct Buffer<T, D: Container, P: Push<Bundle<T, D>>> {
     /// the currently open time, if it is open
     time: Option<T>,
     /// a buffer for records, to send at self.time
@@ -20,10 +20,7 @@ pub struct BufferCore<T, D: Container, P: Push<BundleCore<T, D>>> {
     pusher: P,
 }
 
-/// A buffer specialized to vector-based containers.
-pub type Buffer<T, D, P> = BufferCore<T, Vec<D>, P>;
-
-impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
+impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, C, P> where T: Eq+Clone {
 
     /// Creates a new `Buffer`.
     pub fn new(pusher: P) -> Self {
@@ -41,10 +38,10 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
         Session { buffer: self }
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
-    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSessionCore<T, C, P> where T: Timestamp {
+    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, C, P> where T: Timestamp {
         if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
         self.time = Some(cap.time().clone());
-        AutoflushSessionCore {
+        AutoflushSession {
             buffer: self,
             _capability: cap,
         }
@@ -79,7 +76,7 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
     }
 }
 
-impl<T, D: Data, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
+impl<T, D: Data, P: Push<Bundle<T, Vec<D>>>> Buffer<T, Vec<D>, P> where T: Eq+Clone {
     // internal method for use by `Session`.
     #[inline]
     fn give(&mut self, data: D) {
@@ -110,18 +107,18 @@ impl<T, D: Data, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
 /// The `Session` struct provides the user-facing interface to an operator output, namely
 /// the `Buffer` type. A `Session` wraps a session of output at a specified time, and
 /// avoids what would otherwise be a constant cost of checking timestamp equality.
-pub struct Session<'a, T, C: Container, P: Push<BundleCore<T, C>>+'a> where T: Eq+Clone+'a, C: 'a {
-    buffer: &'a mut BufferCore<T, C, P>,
+pub struct Session<'a, T, C: Container, P: Push<Bundle<T, C>>+'a> where T: Eq+Clone+'a, C: 'a {
+    buffer: &'a mut Buffer<T, C, P>,
 }
 
-impl<'a, T, C: Container, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  where T: Eq+Clone+'a, C: 'a {
+impl<'a, T, C: Container, P: Push<Bundle<T, C>>+'a> Session<'a, T, C, P>  where T: Eq+Clone+'a, C: 'a {
     /// Provide a container at the time specified by the [Session].
     pub fn give_container(&mut self, container: &mut C) {
         self.buffer.give_container(container)
     }
 }
 
-impl<'a, T, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P>  where T: Eq+Clone+'a, D: 'a {
+impl<'a, T, D: Data, P: Push<Bundle<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P>  where T: Eq+Clone+'a, D: 'a {
     /// Provides one record at the time specified by the `Session`.
     #[inline]
     pub fn give(&mut self, data: D) {
@@ -148,18 +145,15 @@ impl<'a, T, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P
 }
 
 /// A session which will flush itself when dropped.
-pub struct AutoflushSessionCore<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>+'a> where
+pub struct AutoflushSession<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>+'a> where
     T: Eq+Clone+'a, C: 'a {
     /// A reference to the underlying buffer.
-    buffer: &'a mut BufferCore<T, C, P>,
+    buffer: &'a mut Buffer<T, C, P>,
     /// The capability being used to send the data.
     _capability: Capability<T>,
 }
 
-/// Auto-flush session specialized to vector-based containers.
-pub type AutoflushSession<'a, T, D, P> = AutoflushSessionCore<'a, T, Vec<D>, P>;
-
-impl<'a, T: Timestamp, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> AutoflushSessionCore<'a, T, Vec<D>, P> where T: Eq+Clone+'a, D: 'a {
+impl<'a, T: Timestamp, D: Data, P: Push<Bundle<T, Vec<D>>>+'a> AutoflushSession<'a, T, Vec<D>, P> where T: Eq+Clone+'a, D: 'a {
     /// Transmits a single record.
     #[inline]
     pub fn give(&mut self, data: D) {
@@ -181,7 +175,7 @@ impl<'a, T: Timestamp, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> AutoflushSess
     }
 }
 
-impl<'a, T: Timestamp, C: Container, P: Push<BundleCore<T, C>>+'a> Drop for AutoflushSessionCore<'a, T, C, P> where T: Eq+Clone+'a, C: 'a {
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>+'a> Drop for AutoflushSession<'a, T, C, P> where T: Eq+Clone+'a, C: 'a {
     fn drop(&mut self) {
         self.buffer.cease();
     }

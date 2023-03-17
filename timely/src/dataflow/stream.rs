@@ -9,7 +9,7 @@ use crate::progress::{Source, Target};
 use crate::communication::Push;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
-use crate::dataflow::channels::BundleCore;
+use crate::dataflow::channels::Bundle;
 use std::fmt::{self, Debug};
 use crate::Container;
 
@@ -20,7 +20,7 @@ use crate::Container;
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
 #[derive(Clone)]
-pub struct StreamCore<S: Scope, D> {
+pub struct Stream<S: Scope, D> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
@@ -29,15 +29,12 @@ pub struct StreamCore<S: Scope, D> {
     ports: TeeHelper<S::Timestamp, D>,
 }
 
-/// A stream batching data in vectors.
-pub type Stream<S, D> = StreamCore<S, Vec<D>>;
-
-impl<S: Scope, D: Container> StreamCore<S, D> {
+impl<S: Scope, D: Container> Stream<S, D> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<BundleCore<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
+    pub fn connect_to<P: Push<Bundle<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
@@ -60,7 +57,7 @@ impl<S: Scope, D: Container> StreamCore<S, D> {
     pub fn scope(&self) -> S { self.scope.clone() }
 }
 
-impl<S, D> Debug for StreamCore<S, D>
+impl<S, D> Debug for Stream<S, D>
 where
     S: Scope,
 {

@@ -22,8 +22,8 @@ fn main() {
         let index = worker.index();
         let peers = worker.peers();
 
-        let mut input1 = InputHandle::new();
-        let mut input2 = InputHandle::new();
+        let mut input1 = InputHandle::<_, Vec<_>>::new();
+        let mut input2 = InputHandle::<_, Vec<_>>::new();
         let mut probe = ProbeHandle::new();
 
         worker.dataflow(|scope| {

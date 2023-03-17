@@ -13,7 +13,7 @@ fn main() {
 
     timely::execute_from_args(std::env::args().skip(3), move |worker| {
 
-        let mut input = InputHandle::new();
+        let mut input = InputHandle::<_, Vec<_>>::new();
         let mut probe = ProbeHandle::new();
 
         worker.dataflow::<usize,_,_>(|scope| {
@@ -22,7 +22,7 @@ fn main() {
             let edge_stream = input.to_stream(scope);
 
             // create a new feedback stream, which will be changes to ranks.
-            let (handle, rank_stream) = scope.feedback(1);
+            let (handle, rank_stream) = scope.feedback::<Vec<_>>(1);
 
             // bring edges and ranks together!
             let changes = edge_stream.binary_frontier(

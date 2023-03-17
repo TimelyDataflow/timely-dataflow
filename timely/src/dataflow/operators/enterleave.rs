@@ -27,11 +27,11 @@ use crate::progress::{Source, Target};
 use crate::order::Product;
 use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
-use crate::dataflow::channels::{BundleCore, Message};
+use crate::dataflow::channels::pushers::{Counter, Tee};
+use crate::dataflow::channels::{Bundle, Message};
 
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope, Stream};
+use crate::dataflow::{Stream, Scope};
 use crate::dataflow::scopes::{Child, ScopeParent};
 use crate::dataflow::operators::delay::Delay;
 
@@ -51,7 +51,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(&self, _: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C>;
 }
 
 use crate::dataflow::scopes::child::Iterative;
@@ -72,24 +72,24 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, D> ;
+    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, Vec<D>>;
 }
 
 impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, Vec<D>>> EnterAt<G, T, D> for E {
     fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, mut initial: F) ->
-        Stream<Iterative<'a, G, T>, D> {
+    Stream<Iterative<'a, G, T>, Vec<D>> {
             self.enter(scope).delay(move |datum, time| Product::new(time.clone().to_outer(), initial(datum)))
     }
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for StreamCore<G, C> {
-    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for Stream<G, C> {
+    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
-        let (targets, registrar) = TeeCore::<T, C>::new();
+        let (targets, registrar) = Tee::<T, C>::new();
         let ingress = IngressNub {
-            targets: CounterCore::new(targets),
+            targets: Counter::new(targets),
             phantom: ::std::marker::PhantomData,
             activator: scope.activator_for(&scope.addr()),
             active: false,
@@ -100,7 +100,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
 
         let channel_id = scope.clone().new_identifier();
         self.connect_to(input, ingress, channel_id);
-        StreamCore::new(Source::new(0, input.port), registrar, scope.clone())
+        Stream::new(Source::new(0, input.port), registrar, scope.clone())
     }
 }
 
@@ -120,20 +120,20 @@ pub trait Leave<G: Scope, D: Container> {
     ///     });
     /// });
     /// ```
-    fn leave(&self) -> StreamCore<G, D>;
+    fn leave(&self) -> Stream<G, D>;
 }
 
-impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for StreamCore<Child<'a, G, T>, D> {
-    fn leave(&self) -> StreamCore<G, D> {
+impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for Stream<Child<'a, G, T>, D> {
+    fn leave(&self) -> Stream<G, D> {
 
         let scope = self.scope();
 
         let output = scope.subgraph.borrow_mut().new_output();
-        let (targets, registrar) = TeeCore::<G::Timestamp, D>::new();
+        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         let channel_id = scope.clone().new_identifier();
         self.connect_to(Target::new(0, output.port), EgressNub { targets, phantom: PhantomData }, channel_id);
 
-        StreamCore::new(
+        Stream::new(
             output,
             registrar,
             scope.parent,
@@ -143,18 +143,18 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
+    targets: Counter<TInner, TData, Tee<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
-    fn push(&mut self, element: &mut Option<BundleCore<TOuter, TData>>) {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<Bundle<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
+    fn push(&mut self, element: &mut Option<Bundle<TOuter, TData>>) {
         if let Some(message) = element {
             let outer_message = message.as_mut();
             let data = ::std::mem::take(&mut outer_message.data);
-            let mut inner_message = Some(BundleCore::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
+            let mut inner_message = Some(Bundle::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
                 if let Some(inner_message) = inner_message.if_typed() {
@@ -175,17 +175,17 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Pus
 
 
 struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> {
-    targets: TeeCore<TOuter, TData>,
+    targets: Tee<TOuter, TData>,
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData: Container> Push<BundleCore<TInner, TData>> for EgressNub<TOuter, TInner, TData>
+impl<TOuter, TInner, TData: Container> Push<Bundle<TInner, TData>> for EgressNub<TOuter, TInner, TData>
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
-    fn push(&mut self, message: &mut Option<BundleCore<TInner, TData>>) {
+    fn push(&mut self, message: &mut Option<Bundle<TInner, TData>>) {
         if let Some(message) = message {
             let inner_message = message.as_mut();
             let data = ::std::mem::take(&mut inner_message.data);
-            let mut outer_message = Some(BundleCore::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
+            let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
                 if let Some(outer_message) = outer_message.if_typed() {
