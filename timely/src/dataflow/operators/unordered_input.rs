@@ -13,7 +13,7 @@ use crate::progress::ChangeBatch;
 
 use crate::Data;
 use crate::dataflow::channels::pushers::{Counter as PushCounter, Tee};
-use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSessionCore};
+use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
 
 use crate::dataflow::operators::{ActivateCapability, Capability};
 
@@ -223,7 +223,7 @@ impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }

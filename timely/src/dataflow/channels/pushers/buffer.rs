@@ -38,10 +38,10 @@ impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, C, P> where T: Eq+Clone {
         Session { buffer: self }
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
-    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSessionCore<T, C, P> where T: Timestamp {
+    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, C, P> where T: Timestamp {
         if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
         self.time = Some(cap.time().clone());
-        AutoflushSessionCore {
+        AutoflushSession {
             buffer: self,
             _capability: cap,
         }
@@ -145,7 +145,7 @@ impl<'a, T, D: Data, P: Push<Bundle<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P>  w
 }
 
 /// A session which will flush itself when dropped.
-pub struct AutoflushSessionCore<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>+'a> where
+pub struct AutoflushSession<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>+'a> where
     T: Eq+Clone+'a, C: 'a {
     /// A reference to the underlying buffer.
     buffer: &'a mut Buffer<T, C, P>,
@@ -153,10 +153,7 @@ pub struct AutoflushSessionCore<'a, T: Timestamp, C: Container, P: Push<Bundle<T
     _capability: Capability<T>,
 }
 
-/// Auto-flush session specialized to vector-based containers.
-pub type AutoflushSession<'a, T, D, P> = AutoflushSessionCore<'a, T, Vec<D>, P>;
-
-impl<'a, T: Timestamp, D: Data, P: Push<Bundle<T, Vec<D>>>+'a> AutoflushSessionCore<'a, T, Vec<D>, P> where T: Eq+Clone+'a, D: 'a {
+impl<'a, T: Timestamp, D: Data, P: Push<Bundle<T, Vec<D>>>+'a> AutoflushSession<'a, T, Vec<D>, P> where T: Eq+Clone+'a, D: 'a {
     /// Transmits a single record.
     #[inline]
     pub fn give(&mut self, data: D) {
@@ -178,7 +175,7 @@ impl<'a, T: Timestamp, D: Data, P: Push<Bundle<T, Vec<D>>>+'a> AutoflushSessionC
     }
 }
 
-impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>+'a> Drop for AutoflushSessionCore<'a, T, C, P> where T: Eq+Clone+'a, C: 'a {
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>+'a> Drop for AutoflushSession<'a, T, C, P> where T: Eq+Clone+'a, C: 'a {
     fn drop(&mut self) {
         self.buffer.cease();
     }
