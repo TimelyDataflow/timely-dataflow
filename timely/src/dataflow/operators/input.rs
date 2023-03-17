@@ -58,9 +58,9 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, Stream<Self, Vec<D>>);
+    fn new_input<D: Data>(&mut self) -> (Handle<Self::Timestamp, Vec<D>>, Stream<Self, Vec<D>>);
 
-    /// Create a new [Stream] and [HandleCore] through which to supply input.
+    /// Create a new [Stream] and [Handle] through which to supply input.
     ///
     /// The `new_input_core` method returns a pair `(HandleCore, Stream)` where the [Stream] can be used
     /// immediately for timely dataflow construction, and the `HandleCore` is later used to introduce
@@ -93,7 +93,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, Stream<Self, D>);
+    fn new_input_core<D: Container>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, Stream<Self, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -125,7 +125,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, Vec<D>>;
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<Self::Timestamp, Vec<D>>) -> Stream<Self, Vec<D>>;
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -157,26 +157,26 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, D>;
+    fn input_from_core<D: Container>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, D>;
 }
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, Stream<G, Vec<D>>) {
+    fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, Vec<D>>, Stream<G, Vec<D>>) {
         self.new_input_core()
     }
 
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> Stream<G, Vec<D>> {
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, Vec<D>>) -> Stream<G, Vec<D>> {
         self.input_from_core(handle)
     }
 
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, Stream<G, D>) {
-        let mut handle = HandleCore::new();
+    fn new_input_core<D: Container>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, Stream<G, D>) {
+        let mut handle = Handle::new();
         let stream = self.input_from_core(&mut handle);
         (handle, stream)
     }
 
-    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
+    fn input_from_core<D: Container>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
         let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, D>::new();
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
@@ -246,7 +246,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct HandleCore<T: Timestamp, C: Container> {
+pub struct Handle<T: Timestamp, C: Container> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     pushers: Vec<Counter<T, C, Tee<T, C>>>,
@@ -255,10 +255,7 @@ pub struct HandleCore<T: Timestamp, C: Container> {
     now_at: T,
 }
 
-/// A handle specialized to vector-based containers.
-pub type Handle<T, D> = HandleCore<T, Vec<D>>;
-
-impl<T: Timestamp, D: Container> HandleCore<T, D> {
+impl<T: Timestamp, D: Container> Handle<T, D> {
     /// Allocates a new input handle, from which one can create timely streams.
     ///
     /// # Examples
@@ -387,13 +384,13 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, InspectCore};
-    /// use timely::dataflow::operators::input::HandleCore;
+    /// use timely::dataflow::operators::input::Handle;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = HandleCore::new();
+    ///     let mut input = Handle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from_core(&mut input)
     ///              .inspect_container(|x| println!("hello {:?}", x));
@@ -463,7 +460,7 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     }
 }
 
-impl<T: Timestamp, D: Data> Handle<T, D> {
+impl<T: Timestamp, D: Data> Handle<T, Vec<D>> {
     #[inline]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     ///
@@ -500,13 +497,13 @@ impl<T: Timestamp, D: Data> Handle<T, D> {
     }
 }
 
-impl<T: Timestamp, D: Data> Default for Handle<T, D> {
+impl<T: Timestamp, D: Data> Default for Handle<T, Vec<D>> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T:Timestamp, C: Container> Drop for HandleCore<T, C> {
+impl<T:Timestamp, C: Container> Drop for Handle<T, C> {
     fn drop(&mut self) {
         self.close_epoch();
     }

@@ -6,7 +6,7 @@ use crate::worker::Worker;
 
 /// A re-usable barrier synchronization mechanism.
 pub struct Barrier<A: Allocate> {
-    input: InputHandle<usize, ()>,
+    input: InputHandle<usize, Vec<()>>,
     probe: ProbeHandle<usize>,
     worker: Worker<A>,
 }
@@ -51,4 +51,3 @@ impl<A: Allocate> Barrier<A> {
         !self.probe.less_than(self.input.time())
     }
 }
-

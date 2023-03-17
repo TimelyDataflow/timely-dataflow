@@ -13,7 +13,7 @@ fn main() {
 
     timely::execute_from_args(std::env::args().skip(3), move |worker| {
 
-        let mut input = InputHandle::new();
+        let mut input = InputHandle::<_, Vec<_>>::new();
         let mut probe = ProbeHandle::new();
 
         worker.dataflow::<usize,_,_>(|scope| {
