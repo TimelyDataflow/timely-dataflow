@@ -14,7 +14,7 @@ use crate::Container;
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
-use super::{EventCore, EventPusher};
+use super::{Event, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
 pub trait Capture<T: Timestamp, D: Container> {
@@ -106,7 +106,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     fn capture_into<P: EventPusher<T, D>+'static>(&self, pusher: P);
 
     /// Captures a stream using Rust's MPSC channels.
-    fn capture(&self) -> ::std::sync::mpsc::Receiver<EventCore<T, D>> {
+    fn capture(&self) -> ::std::sync::mpsc::Receiver<Event<T, D>> {
         let (send, recv) = ::std::sync::mpsc::channel();
         self.capture_into(send);
         recv
@@ -131,7 +131,7 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for Stream<S, D> {
                 if !progress.frontiers[0].is_empty() {
                     // transmit any frontier progress.
                     let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
-                    event_pusher.push(EventCore::Progress(to_send.into_inner()));
+                    event_pusher.push(Event::Progress(to_send.into_inner()));
                 }
 
                 use crate::communication::message::RefOrMut;
@@ -143,7 +143,7 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for Stream<S, D> {
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
                     let vector = data.replace(Default::default());
-                    event_pusher.push(EventCore::Messages(time.clone(), vector));
+                    event_pusher.push(Event::Messages(time.clone(), vector));
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false

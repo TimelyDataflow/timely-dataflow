@@ -1,6 +1,6 @@
 //! Traits and types for extracting captured timely dataflow streams.
 
-use super::EventCore;
+use super::Event;
 use crate::Container;
 use crate::Data;
 
@@ -49,7 +49,7 @@ pub trait Extract<T: Ord, D: Ord> {
     fn extract(self) -> Vec<(T, Vec<D>)>;
 }
 
-impl<T: Ord, D: Ord+Data> Extract<T,D> for ::std::sync::mpsc::Receiver<EventCore<T, Vec<D>>> {
+impl<T: Ord, D: Ord+Data> Extract<T,D> for ::std::sync::mpsc::Receiver<Event<T, Vec<D>>> {
     fn extract(self) -> Vec<(T, Vec<D>)> {
         let mut result = self.extract_core();
 
@@ -117,11 +117,11 @@ pub trait ExtractCore<T, C> {
     fn extract_core(self) -> Vec<(T, C)>;
 }
 
-impl<T, C: Container> ExtractCore<T, C> for ::std::sync::mpsc::Receiver<EventCore<T, C>> {
+impl<T, C: Container> ExtractCore<T, C> for ::std::sync::mpsc::Receiver<Event<T, C>> {
     fn extract_core(self) -> Vec<(T, C)> {
         let mut result = Vec::new();
         for event in self {
-            if let EventCore::Messages(time, data) = event {
+            if let Event::Messages(time, data) = event {
                 result.push((time, data));
             }
         }

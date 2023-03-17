@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, Ordering};
 
 use abomonation::Abomonation;
-use timely::dataflow::operators::capture::event::{EventCore, EventPusher, EventIteratorCore};
+use timely::dataflow::operators::capture::event::{Event, EventPusher, EventIteratorCore};
 
 use rdkafka::Message;
 use rdkafka::client::ClientContext;
@@ -63,7 +63,7 @@ impl<T, D> EventProducer<T, D> {
 }
 
 impl<T: Abomonation, D: Abomonation> EventPusher<T, D> for EventProducer<T, D> {
-    fn push(&mut self, event: EventCore<T, D>) {
+    fn push(&mut self, event: Event<T, D>) {
         unsafe { ::abomonation::encode(&event, &mut self.buffer).expect("Encode failure"); }
         // println!("sending {:?} bytes", self.buffer.len());
         self.producer.send::<(),[u8]>(BaseRecord::to(self.topic.as_str()).payload(&self.buffer[..])).unwrap();
@@ -106,13 +106,13 @@ impl<T, D> EventConsumerCore<T, D> {
 }
 
 impl<T: Abomonation, D: Abomonation> EventIteratorCore<T, D> for EventConsumerCore<T, D> {
-    fn next(&mut self) -> Option<&EventCore<T, D>> {
+    fn next(&mut self) -> Option<&Event<T, D>> {
         if let Some(result) = self.consumer.poll(std::time::Duration::from_millis(0)) {
             match result {
                 Ok(message) =>  {
                     self.buffer.clear();
                     self.buffer.extend_from_slice(message.payload().unwrap());
-                    Some(unsafe { ::abomonation::decode::<EventCore<T,D>>(&mut self.buffer[..]).unwrap().0 })
+                    Some(unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buffer[..]).unwrap().0 })
                 },
                 Err(err) => {
                     println!("KafkaConsumer error: {:?}", err);

@@ -44,7 +44,7 @@ use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;
 
-use super::EventCore;
+use super::Event;
 use super::event::EventIteratorCore;
 use crate::Container;
 
@@ -93,10 +93,10 @@ where I : IntoIterator,
                 for event_stream in event_streams.iter_mut() {
                     while let Some(event) = event_stream.next() {
                         match event {
-                            EventCore::Progress(vec) => {
+                            Event::Progress(vec) => {
                                 progress.internals[0].extend(vec.iter().cloned());
                             },
-                            EventCore::Messages(ref time, data) => {
+                            Event::Messages(ref time, data) => {
                                 allocation.clone_from(data);
                                 output.session(time).give_container(&mut allocation);
                             }
