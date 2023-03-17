@@ -48,15 +48,12 @@ impl<T: 'static, D: Container> ParallelizationContract<T, D> for Pipeline {
 }
 
 /// An exchange between multiple observers by data
-pub struct ExchangeCore<C, D, F> { hash_func: F, phantom: PhantomData<(C, D)> }
+pub struct Exchange<C, D, F> { hash_func: F, phantom: PhantomData<(C, D)> }
 
-/// [ExchangeCore] specialized to vector-based containers.
-pub type Exchange<D, F> = ExchangeCore<Vec<D>, D, F>;
-
-impl<C, D, F: FnMut(&D)->u64+'static> ExchangeCore<C, D, F> {
+impl<C, D, F: FnMut(&D)->u64+'static> Exchange<C, D, F> {
     /// Allocates a new `Exchange` pact from a distribution function.
-    pub fn new(func: F) -> ExchangeCore<C, D, F> {
-        ExchangeCore {
+    pub fn new(func: F) -> Exchange<C, D, F> {
+        Self {
             hash_func:  func,
             phantom:    PhantomData,
         }
@@ -64,7 +61,7 @@ impl<C, D, F: FnMut(&D)->u64+'static> ExchangeCore<C, D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Timestamp, C, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContract<T, C> for ExchangeCore<C, D, F>
+impl<T: Timestamp, C, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContract<T, C> for Exchange<C, D, F>
 where
     C: Data + Container + PushPartitioned<Item=D>,
 {
@@ -78,7 +75,7 @@ where
     }
 }
 
-impl<C, D, F> Debug for ExchangeCore<C, D, F> {
+impl<C, D, F> Debug for Exchange<C, D, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Exchange").finish()
     }

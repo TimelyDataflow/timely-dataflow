@@ -2,7 +2,7 @@
 
 use crate::ExchangeData;
 use crate::container::PushPartitioned;
-use crate::dataflow::channels::pact::ExchangeCore;
+use crate::dataflow::channels::pact::Exchange as ExchangePact;
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::{Scope, Stream};
 
@@ -33,7 +33,7 @@ where
 {
     fn exchange(&self, route: impl FnMut(&C::Item) -> u64 + 'static) -> Stream<G, C> {
         let mut container = Default::default();
-        self.unary(ExchangeCore::new(route), "Exchange", |_, _| {
+        self.unary(ExchangePact::new(route), "Exchange", |_, _| {
             move |input, output| {
                 input.for_each(|time, data| {
                     data.swap(&mut container);
