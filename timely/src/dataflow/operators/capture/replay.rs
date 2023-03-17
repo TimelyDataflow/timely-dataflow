@@ -45,7 +45,7 @@ use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;
 
 use super::Event;
-use super::event::EventIteratorCore;
+use super::event::EventIterator;
 use crate::Container;
 
 /// Replay a capture stream into a scope with the same timestamp.
@@ -64,7 +64,7 @@ pub trait Replay<T: Timestamp, C> : Sized {
 
 impl<T: Timestamp, C: Container, I> Replay<T, C> for I
 where I : IntoIterator,
-      <I as IntoIterator>::Item: EventIteratorCore<T, C>+'static {
+      <I as IntoIterator>::Item: EventIterator<T, C>+'static {
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, C>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());

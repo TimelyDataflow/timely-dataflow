@@ -19,23 +19,10 @@ pub enum Event<T, D> {
 /// and which can be used to replay a stream into a new timely dataflow computation.
 ///
 /// This method is not simply an iterator because of the lifetime in the result.
-pub trait EventIteratorCore<T, D> {
+pub trait EventIterator<T, D> {
     /// Iterates over references to `Event<T, D>` elements.
     fn next(&mut self) -> Option<&Event<T, D>>;
 }
-
-/// A [EventIteratorCore] specialized to vector-based containers.
-// TODO: use trait aliases once stable.
-pub trait EventIterator<T, D>: EventIteratorCore<T, Vec<D>> {
-    /// Iterates over references to `Event<T, D>` elements.
-    fn next(&mut self) -> Option<&Event<T, Vec<D>>>;
-}
-impl<T, D, E: EventIteratorCore<T, Vec<D>>> EventIterator<T, D> for E {
-    fn next(&mut self) -> Option<&Event<T, Vec<D>>> {
-        <Self as EventIteratorCore<_, _>>::next(self)
-    }
-}
-
 
 /// Receives `Event<T, D>` events.
 pub trait EventPusher<T, D> {
@@ -59,7 +46,7 @@ pub mod link {
     use std::rc::Rc;
     use std::cell::RefCell;
 
-    use super::{Event, EventPusher, EventIteratorCore};
+    use super::{Event, EventPusher, EventIterator};
 
     /// A linked list of Event<T, D>.
     pub struct EventLink<T, D> {
@@ -88,7 +75,7 @@ pub mod link {
         }
     }
 
-    impl<T, D> EventIteratorCore<T, D> for Rc<EventLink<T, D>> {
+    impl<T, D> EventIterator<T, D> for Rc<EventLink<T, D>> {
         fn next(&mut self) -> Option<&Event<T, D>> {
             let is_some = self.next.borrow().is_some();
             if is_some {
@@ -134,7 +121,7 @@ pub mod binary {
 
     use std::io::Write;
     use abomonation::Abomonation;
-    use super::{Event, EventPusher, EventIteratorCore};
+    use super::{Event, EventPusher, EventIterator};
 
     /// A wrapper for `W: Write` implementing `EventPusherCore<T, D>`.
     pub struct EventWriterCore<T, D, W: ::std::io::Write> {
@@ -191,7 +178,7 @@ pub mod binary {
         }
     }
 
-    impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIteratorCore<T, D> for EventReaderCore<T, D, R> {
+    impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for EventReaderCore<T, D, R> {
         fn next(&mut self) -> Option<&Event<T, D>> {
 
             // if we can decode something, we should just return it! :D

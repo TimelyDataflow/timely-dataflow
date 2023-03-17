@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, Ordering};
 
 use abomonation::Abomonation;
-use timely::dataflow::operators::capture::event::{Event, EventPusher, EventIteratorCore};
+use timely::dataflow::operators::capture::event::{Event, EventPusher, EventIterator};
 
 use rdkafka::Message;
 use rdkafka::client::ClientContext;
@@ -102,7 +102,7 @@ impl<T, D> EventConsumer<T, D> {
     }
 }
 
-impl<T: Abomonation, D: Abomonation> EventIteratorCore<T, D> for EventConsumer<T, D> {
+impl<T: Abomonation, D: Abomonation> EventIterator<T, D> for EventConsumer<T, D> {
     fn next(&mut self) -> Option<&Event<T, D>> {
         if let Some(result) = self.consumer.poll(std::time::Duration::from_millis(0)) {
             match result {
