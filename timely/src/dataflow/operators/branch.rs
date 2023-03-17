@@ -2,7 +2,7 @@
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::{Container, Data};
 
 /// Extension trait for `Stream`.
@@ -31,14 +31,14 @@ pub trait Branch<S: Scope, D: Data> {
     fn branch(
         &self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
-    ) -> (StreamCore<S, Vec<D>>, StreamCore<S, Vec<D>>);
+    ) -> (Stream<S, Vec<D>>, Stream<S, Vec<D>>);
 }
 
-impl<S: Scope, D: Data> Branch<S, D> for StreamCore<S, Vec<D>> {
+impl<S: Scope, D: Data> Branch<S, D> for Stream<S, Vec<D>> {
     fn branch(
         &self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
-    ) -> (StreamCore<S, Vec<D>>, StreamCore<S, Vec<D>>) {
+    ) -> (Stream<S, Vec<D>>, Stream<S, Vec<D>>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
         let mut input = builder.new_input(self, Pipeline);
@@ -94,7 +94,7 @@ pub trait BranchWhen<T>: Sized {
     fn branch_when(&self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
+impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for Stream<S, C> {
     fn branch_when(&self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 

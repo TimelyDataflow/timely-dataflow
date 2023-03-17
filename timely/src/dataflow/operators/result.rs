@@ -2,7 +2,7 @@
 
 use crate::Data;
 use crate::dataflow::operators::Map;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 
 /// Extension trait for `Stream`.
 pub trait ResultStream<S: Scope, T: Data, E: Data> {
@@ -18,7 +18,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn ok(&self) -> StreamCore<S, Vec<T>>;
+    fn ok(&self) -> Stream<S, Vec<T>>;
 
     /// Returns a new instance of `self` containing only `err` records.
     ///
@@ -32,7 +32,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn err(&self) -> StreamCore<S, Vec<E>>;
+    fn err(&self) -> Stream<S, Vec<E>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records.
     ///
@@ -46,7 +46,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(&self, logic: L) -> StreamCore<S, Vec<Result<T2, E>>>;
+    fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(&self, logic: L) -> Stream<S, Vec<Result<T2, E>>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Err` records.
     ///
@@ -60,7 +60,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(&self, logic: L) -> StreamCore<S, Vec<Result<T, E2>>>;
+    fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(&self, logic: L) -> Stream<S, Vec<Result<T, E2>>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records, passes through `Err`
     /// records.
@@ -78,7 +78,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     fn and_then<T2: Data, L: FnMut(T) -> Result<T2, E> + 'static>(
         &self,
         logic: L,
-    ) -> StreamCore<S, Vec<Result<T2, E>>>;
+    ) -> Stream<S, Vec<Result<T2, E>>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records.
     ///
@@ -92,31 +92,31 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(&self, logic: L) -> StreamCore<S, Vec<T>>;
+    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(&self, logic: L) -> Stream<S, Vec<T>>;
 }
 
-impl<S: Scope, T: Data, E: Data> ResultStream<S, T, E> for StreamCore<S, Vec<Result<T, E>>> {
-    fn ok(&self) -> StreamCore<S, Vec<T>> {
+impl<S: Scope, T: Data, E: Data> ResultStream<S, T, E> for Stream<S, Vec<Result<T, E>>> {
+    fn ok(&self) -> Stream<S, Vec<T>> {
         self.flat_map(Result::ok)
     }
 
-    fn err(&self) -> StreamCore<S, Vec<E>> {
+    fn err(&self) -> Stream<S, Vec<E>> {
         self.flat_map(Result::err)
     }
 
-    fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(&self, mut logic: L) -> StreamCore<S, Vec<Result<T2, E>>> {
+    fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(&self, mut logic: L) -> Stream<S, Vec<Result<T2, E>>> {
         self.map(move |r| r.map(|x| logic(x)))
     }
 
-    fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(&self, mut logic: L) -> StreamCore<S, Vec<Result<T, E2>>> {
+    fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(&self, mut logic: L) -> Stream<S, Vec<Result<T, E2>>> {
         self.map(move |r| r.map_err(|x| logic(x)))
     }
 
-    fn and_then<T2: Data, L: FnMut(T) -> Result<T2, E> + 'static>(&self, mut logic: L) -> StreamCore<S, Vec<Result<T2, E>>> {
+    fn and_then<T2: Data, L: FnMut(T) -> Result<T2, E> + 'static>(&self, mut logic: L) -> Stream<S, Vec<Result<T2, E>>> {
         self.map(move |r| r.and_then(|x| logic(x)))
     }
 
-    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(&self, mut logic: L) -> StreamCore<S, Vec<T>> {
+    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(&self, mut logic: L) -> Stream<S, Vec<T>> {
         self.map(move |r| r.unwrap_or_else(|err| logic(err)))
     }
 }

@@ -5,7 +5,7 @@ use crate::order::{PartialOrder, TotalOrder};
 use crate::progress::timestamp::Timestamp;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::probe::Handle;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 
 /// Output of the input reading function for iterator_source.
 pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: IntoIterator<Item=(T, DI)>> {
@@ -82,7 +82,7 @@ pub fn iterator_source<
         name: &str,
         mut input_f: F,
         probe: Handle<G::Timestamp>,
-        ) -> StreamCore<G, Vec<D>> where G::Timestamp: TotalOrder {
+        ) -> Stream<G, Vec<D>> where G::Timestamp: TotalOrder {
 
     let mut target = G::Timestamp::minimum();
     source(scope, name, |cap, info| {

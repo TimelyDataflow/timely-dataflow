@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::{Data, ExchangeData};
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
 
@@ -64,16 +64,16 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
         &self,
         fold: F,
         emit: E,
-        hash: H) -> StreamCore<S, Vec<R>> where S::Timestamp: Eq;
+        hash: H) -> Stream<S, Vec<R>> where S::Timestamp: Eq;
 }
 
-impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for StreamCore<S, Vec<(K, V)>> {
+impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, Vec<(K, V)>> {
 
     fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         &self,
         fold: F,
         emit: E,
-        hash: H) -> StreamCore<S, Vec<R>> where S::Timestamp: Eq {
+        hash: H) -> Stream<S, Vec<R>> where S::Timestamp: Eq {
 
         let mut aggregates = HashMap::new();
         let mut vector = Vec::new();

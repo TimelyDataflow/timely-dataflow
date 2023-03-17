@@ -1,5 +1,5 @@
 use timely::Data;
-use timely::dataflow::{Scope, StreamCore};
+use timely::dataflow::{Scope, Stream};
 use timely::dataflow::operators::Capability;
 use timely::dataflow::operators::generic::OutputHandle;
 use timely::dataflow::channels::pushers::Tee;
@@ -89,7 +89,7 @@ pub fn kafka_source<C, G, D, L>(
     name: &str,
     consumer: BaseConsumer<C>,
     logic: L
-) -> StreamCore<G, Vec<D>>
+) -> Stream<G, Vec<D>>
 where
     C: ConsumerContext+'static,
     G: Scope,

@@ -11,7 +11,7 @@ use crate::progress::Source;
 
 use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::{ScopeParent, Scope, StreamCore};
+use crate::dataflow::{ScopeParent, Scope, Stream};
 use crate::dataflow::channels::pushers::{TeeCore, CounterCore};
 use crate::dataflow::channels::Message;
 
@@ -58,11 +58,11 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, StreamCore<Self, Vec<D>>);
+    fn new_input<D: Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, Stream<Self, Vec<D>>);
 
-    /// Create a new [StreamCore] and [HandleCore] through which to supply input.
+    /// Create a new [Stream] and [HandleCore] through which to supply input.
     ///
-    /// The `new_input_core` method returns a pair `(HandleCore, StreamCore)` where the [StreamCore] can be used
+    /// The `new_input_core` method returns a pair `(HandleCore, Stream)` where the [Stream] can be used
     /// immediately for timely dataflow construction, and the `HandleCore` is later used to introduce
     /// data into the timely dataflow computation.
     ///
@@ -93,7 +93,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, StreamCore<Self, D>);
+    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, Stream<Self, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -125,7 +125,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> StreamCore<Self, Vec<D>>;
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, Vec<D>>;
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -157,26 +157,26 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> StreamCore<Self, D>;
+    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, D>;
 }
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, StreamCore<G, Vec<D>>) {
+    fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, Stream<G, Vec<D>>) {
         self.new_input_core()
     }
 
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> StreamCore<G, Vec<D>> {
+    fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> Stream<G, Vec<D>> {
         self.input_from_core(handle)
     }
 
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, StreamCore<G, D>) {
+    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, Stream<G, D>) {
         let mut handle = HandleCore::new();
         let stream = self.input_from_core(&mut handle);
         (handle, stream)
     }
 
-    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> StreamCore<G, D> {
+    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
         let (output, registrar) = TeeCore::<<G as ScopeParent>::Timestamp, D>::new();
         let counter = CounterCore::new(output);
         let produced = counter.produced().clone();
@@ -202,7 +202,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
             copies,
         }), index);
 
-        StreamCore::new(Source::new(index, 0), registrar, self.clone())
+        Stream::new(Source::new(index, 0), registrar, self.clone())
     }
 }
 
@@ -322,7 +322,7 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> StreamCore<G, D>
+    pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> Stream<G, D>
     where
         T: TotalOrder,
         G: ScopeParent<Timestamp=T>,
@@ -379,7 +379,7 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
         }
     }
 
-    /// Sends a batch of records into the corresponding timely dataflow [StreamCore], at the current epoch.
+    /// Sends a batch of records into the corresponding timely dataflow [Stream], at the current epoch.
     ///
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.
     ///

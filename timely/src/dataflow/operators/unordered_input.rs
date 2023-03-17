@@ -17,7 +17,7 @@ use crate::dataflow::channels::pushers::buffer::{BufferCore as PushBuffer, Autof
 
 use crate::dataflow::operators::{ActivateCapability, Capability};
 
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
@@ -72,12 +72,12 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, Vec<D>>);
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, Vec<D>>);
 }
 
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, Vec<D>>) {
+    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, Vec<D>>) {
         self.new_unordered_input_core()
     }
 }
@@ -87,10 +87,10 @@ pub type UnorderedHandle<T, D> = UnorderedHandleCore<T, Vec<D>>;
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInputCore<G: Scope> {
-    /// Create a new capability-based [StreamCore] and [UnorderedHandleCore] through which to supply input. This
+    /// Create a new capability-based [Stream] and [UnorderedHandleCore] through which to supply input. This
     /// input supports multiple open epochs (timestamps) at the same time.
     ///
-    /// The `new_unordered_input_core` method returns `((HandleCore, Capability), StreamCore)` where the `StreamCore` can be used
+    /// The `new_unordered_input_core` method returns `((HandleCore, Capability), Stream)` where the `Stream` can be used
     /// immediately for timely dataflow construction, `HandleCore` and `Capability` are later used to introduce
     /// data into the timely dataflow computation.
     ///
@@ -138,12 +138,12 @@ pub trait UnorderedInputCore<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>);
+    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>);
 }
 
 
 impl<G: Scope> UnorderedInputCore<G> for G {
-    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>) {
+    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), Stream<G, D>) {
 
         let (output, registrar) = TeeCore::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
@@ -170,7 +170,7 @@ impl<G: Scope> UnorderedInputCore<G> for G {
             peers,
         }), index);
 
-        ((helper, cap), StreamCore::new(Source::new(index, 0), registrar, self.clone()))
+        ((helper, cap), Stream::new(Source::new(index, 0), registrar, self.clone()))
     }
 }
 
@@ -209,7 +209,7 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     fn notify_me(&self) -> bool { false }
 }
 
-/// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
+/// A handle to an input [Stream], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
 pub struct UnorderedHandleCore<T: Timestamp, D: Container> {
     buffer: PushBuffer<T, D, PushCounter<T, D, TeeCore<T, D>>>,

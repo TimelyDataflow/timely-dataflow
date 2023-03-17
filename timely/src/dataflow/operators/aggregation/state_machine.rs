@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::{Data, ExchangeData};
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
 
@@ -51,17 +51,17 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
         I: IntoIterator<Item=R>,                    // type of output iterator
         F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
         H: Fn(&K)->u64+'static,                     // "hash" function for keys
-    >(&self, fold: F, hash: H) -> StreamCore<S, Vec<R>> where S::Timestamp : Hash+Eq ;
+    >(&self, fold: F, hash: H) -> Stream<S, Vec<R>> where S::Timestamp : Hash+Eq ;
 }
 
-impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> for StreamCore<S, Vec<(K, V)>> {
+impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> for Stream<S, Vec<(K, V)>> {
     fn state_machine<
             R: Data,                                    // output type
             D: Default+'static,                         // per-key state (data)
             I: IntoIterator<Item=R>,                    // type of output iterator
             F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
             H: Fn(&K)->u64+'static,                     // "hash" function for keys
-        >(&self, fold: F, hash: H) -> StreamCore<S, Vec<R>> where S::Timestamp : Hash+Eq {
+        >(&self, fold: F, hash: H) -> Stream<S, Vec<R>> where S::Timestamp : Hash+Eq {
 
         let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state

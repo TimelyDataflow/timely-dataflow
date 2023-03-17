@@ -20,7 +20,7 @@ use crate::Container;
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
 #[derive(Clone)]
-pub struct StreamCore<S: Scope, D> {
+pub struct Stream<S: Scope, D> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
@@ -29,7 +29,7 @@ pub struct StreamCore<S: Scope, D> {
     ports: TeeHelper<S::Timestamp, D>,
 }
 
-impl<S: Scope, D: Container> StreamCore<S, D> {
+impl<S: Scope, D: Container> Stream<S, D> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
@@ -57,7 +57,7 @@ impl<S: Scope, D: Container> StreamCore<S, D> {
     pub fn scope(&self) -> S { self.scope.clone() }
 }
 
-impl<S, D> Debug for StreamCore<S, D>
+impl<S, D> Debug for Stream<S, D>
 where
     S: Scope,
 {

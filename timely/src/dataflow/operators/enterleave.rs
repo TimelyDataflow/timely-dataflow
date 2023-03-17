@@ -31,7 +31,7 @@ use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
 use crate::dataflow::channels::{BundleCore, Message};
 
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Stream, Scope};
 use crate::dataflow::scopes::{Child, ScopeParent};
 use crate::dataflow::operators::delay::Delay;
 
@@ -51,7 +51,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(&self, _: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C>;
 }
 
 use crate::dataflow::scopes::child::Iterative;
@@ -72,18 +72,18 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> StreamCore<Iterative<'a, G, T>, Vec<D>>;
+    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, Vec<D>>;
 }
 
 impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, Vec<D>>> EnterAt<G, T, D> for E {
     fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, mut initial: F) ->
-    StreamCore<Iterative<'a, G, T>, Vec<D>> {
+    Stream<Iterative<'a, G, T>, Vec<D>> {
             self.enter(scope).delay(move |datum, time| Product::new(time.clone().to_outer(), initial(datum)))
     }
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for StreamCore<G, C> {
-    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for Stream<G, C> {
+    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -100,7 +100,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
 
         let channel_id = scope.clone().new_identifier();
         self.connect_to(input, ingress, channel_id);
-        StreamCore::new(Source::new(0, input.port), registrar, scope.clone())
+        Stream::new(Source::new(0, input.port), registrar, scope.clone())
     }
 }
 
@@ -120,11 +120,11 @@ pub trait Leave<G: Scope, D: Container> {
     ///     });
     /// });
     /// ```
-    fn leave(&self) -> StreamCore<G, D>;
+    fn leave(&self) -> Stream<G, D>;
 }
 
-impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for StreamCore<Child<'a, G, T>, D> {
-    fn leave(&self) -> StreamCore<G, D> {
+impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for Stream<Child<'a, G, T>, D> {
+    fn leave(&self) -> Stream<G, D> {
 
         let scope = self.scope();
 
@@ -133,7 +133,7 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
         let channel_id = scope.clone().new_identifier();
         self.connect_to(Target::new(0, output.port), EgressNub { targets, phantom: PhantomData }, channel_id);
 
-        StreamCore::new(
+        Stream::new(
             output,
             registrar,
             scope.parent,

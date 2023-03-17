@@ -54,8 +54,8 @@ trait UnionFind {
     fn union_find(&self) -> Self;
 }
 
-impl<G: Scope> UnionFind for StreamCore<G, Vec<(usize, usize)>> {
-    fn union_find(&self) -> StreamCore<G, Vec<(usize, usize)>> {
+impl<G: Scope> UnionFind for Stream<G, Vec<(usize, usize)>> {
+    fn union_find(&self) -> Stream<G, Vec<(usize, usize)>> {
 
         self.unary(Pipeline, "UnionFind", |_,_| {
 

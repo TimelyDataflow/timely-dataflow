@@ -4,7 +4,7 @@ use crate::ExchangeData;
 use crate::container::PushPartitioned;
 use crate::dataflow::channels::pact::ExchangeCore;
 use crate::dataflow::operators::generic::operator::Operator;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 
 /// Exchange records between workers.
 pub trait Exchange<D> {
@@ -26,12 +26,12 @@ pub trait Exchange<D> {
     fn exchange(&self, route: impl FnMut(&D) -> u64 + 'static) -> Self;
 }
 
-impl<G: Scope, C> Exchange<C::Item> for StreamCore<G, C>
+impl<G: Scope, C> Exchange<C::Item> for Stream<G, C>
 where
     C: PushPartitioned + ExchangeData,
     C::Item: ExchangeData,
 {
-    fn exchange(&self, route: impl FnMut(&C::Item) -> u64 + 'static) -> StreamCore<G, C> {
+    fn exchange(&self, route: impl FnMut(&C::Item) -> u64 + 'static) -> Stream<G, C> {
         let mut container = Default::default();
         self.unary(ExchangeCore::new(route), "Exchange", |_, _| {
             move |input, output| {
