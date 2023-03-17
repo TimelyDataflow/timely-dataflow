@@ -12,7 +12,7 @@ use crate::progress::ChangeBatch;
 use crate::progress::frontier::MutableAntichain;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
-use crate::dataflow::channels::pushers::buffer::{BufferCore, Session};
+use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Bundle;
 use crate::communication::{Push, Pull, message::RefOrMut};
 use crate::Container;
@@ -173,13 +173,13 @@ pub fn new_input_handle<T: Timestamp, D: Container, P: Pull<Bundle<T, D>>>(
 /// pusher is flushed (via the `cease` method) once it is no longer used.
 #[derive(Debug)]
 pub struct OutputWrapper<T: Timestamp, D: Container, P: Push<Bundle<T, D>>> {
-    push_buffer: BufferCore<T, D, PushCounter<T, D, P>>,
+    push_buffer: Buffer<T, D, PushCounter<T, D, P>>,
     internal_buffer: Rc<RefCell<ChangeBatch<T>>>,
 }
 
 impl<T: Timestamp, D: Container, P: Push<Bundle<T, D>>> OutputWrapper<T, D, P> {
     /// Creates a new output wrapper from a push buffer.
-    pub fn new(push_buffer: BufferCore<T, D, PushCounter<T, D, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>) -> Self {
+    pub fn new(push_buffer: Buffer<T, D, PushCounter<T, D, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>) -> Self {
         OutputWrapper {
             push_buffer,
             internal_buffer,
@@ -200,7 +200,7 @@ impl<T: Timestamp, D: Container, P: Push<Bundle<T, D>>> OutputWrapper<T, D, P> {
 
 /// Handle to an operator's output stream.
 pub struct OutputHandleCore<'a, T: Timestamp, C: Container+'a, P: Push<Bundle<T, C>>+'a> {
-    push_buffer: &'a mut BufferCore<T, C, PushCounter<T, C, P>>,
+    push_buffer: &'a mut Buffer<T, C, PushCounter<T, C, P>>,
     internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
 }
 
