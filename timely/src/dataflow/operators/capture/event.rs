@@ -41,19 +41,14 @@ impl<T, D, E: EventIteratorCore<T, Vec<D>>> EventIterator<T, D> for E {
 
 
 /// Receives `EventCore<T, D>` events.
-pub trait EventPusherCore<T, D> {
+pub trait EventPusher<T, D> {
     /// Provides a new `Event<T, D>` to the pusher.
     fn push(&mut self, event: EventCore<T, D>);
 }
 
-/// A [EventPusherCore] specialized to vector-based containers.
-// TODO: use trait aliases once stable.
-pub trait EventPusher<T, D>: EventPusherCore<T, Vec<D>> {}
-impl<T, D, E: EventPusherCore<T, Vec<D>>> EventPusher<T, D> for E {}
-
 
 // implementation for the linked list behind a `Handle`.
-impl<T, D> EventPusherCore<T, D> for ::std::sync::mpsc::Sender<EventCore<T, D>> {
+impl<T, D> EventPusher<T, D> for ::std::sync::mpsc::Sender<EventCore<T, D>> {
     fn push(&mut self, event: EventCore<T, D>) {
         // NOTE: An Err(x) result just means "data not accepted" most likely
         //       because the receiver is gone. No need to panic.
@@ -67,7 +62,7 @@ pub mod link {
     use std::rc::Rc;
     use std::cell::RefCell;
 
-    use super::{EventCore, EventPusherCore, EventIteratorCore};
+    use super::{EventCore, EventPusher, EventIteratorCore};
 
     /// A linked list of EventCore<T, D>.
     pub struct EventLinkCore<T, D> {
@@ -91,7 +86,7 @@ pub mod link {
     }
 
     // implementation for the linked list behind a `Handle`.
-    impl<T, D> EventPusherCore<T, D> for Rc<EventLinkCore<T, D>> {
+    impl<T, D> EventPusher<T, D> for Rc<EventLinkCore<T, D>> {
         fn push(&mut self, event: EventCore<T, D>) {
             *self.next.borrow_mut() = Some(Rc::new(EventLinkCore { event: Some(event), next: RefCell::new(None) }));
             let next = self.next.borrow().as_ref().unwrap().clone();
@@ -145,7 +140,7 @@ pub mod binary {
 
     use std::io::Write;
     use abomonation::Abomonation;
-    use super::{EventCore, EventPusherCore, EventIteratorCore};
+    use super::{EventCore, EventPusher, EventIteratorCore};
 
     /// A wrapper for `W: Write` implementing `EventPusherCore<T, D>`.
     pub struct EventWriterCore<T, D, W: ::std::io::Write> {
@@ -166,7 +161,7 @@ pub mod binary {
         }
     }
 
-    impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusherCore<T, D> for EventWriterCore<T, D, W> {
+    impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriterCore<T, D, W> {
         fn push(&mut self, event: EventCore<T, D>) {
             // TODO: `push` has no mechanism to report errors, so we `unwrap`.
             unsafe { ::abomonation::encode(&event, &mut self.stream).expect("Event abomonation/write failed"); }

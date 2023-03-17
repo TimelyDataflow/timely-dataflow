@@ -14,7 +14,7 @@ use crate::Container;
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
-use super::{EventCore, EventPusherCore};
+use super::{EventCore, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
 pub trait Capture<T: Timestamp, D: Container> {
@@ -103,7 +103,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     ///
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// ```
-    fn capture_into<P: EventPusherCore<T, D>+'static>(&self, pusher: P);
+    fn capture_into<P: EventPusher<T, D>+'static>(&self, pusher: P);
 
     /// Captures a stream using Rust's MPSC channels.
     fn capture(&self) -> ::std::sync::mpsc::Receiver<EventCore<T, D>> {
@@ -114,7 +114,7 @@ pub trait Capture<T: Timestamp, D: Container> {
 }
 
 impl<S: Scope, D: Container> Capture<S::Timestamp, D> for Stream<S, D> {
-    fn capture_into<P: EventPusherCore<S::Timestamp, D>+'static>(&self, mut event_pusher: P) {
+    fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));

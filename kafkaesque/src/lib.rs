@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicIsize, Ordering};
 
 use abomonation::Abomonation;
-use timely::dataflow::operators::capture::event::{EventCore, EventPusherCore, EventIteratorCore};
+use timely::dataflow::operators::capture::event::{EventCore, EventPusher, EventIteratorCore};
 
 use rdkafka::Message;
 use rdkafka::client::ClientContext;
@@ -62,7 +62,7 @@ impl<T, D> EventProducer<T, D> {
     }
 }
 
-impl<T: Abomonation, D: Abomonation> EventPusherCore<T, D> for EventProducer<T, D> {
+impl<T: Abomonation, D: Abomonation> EventPusher<T, D> for EventProducer<T, D> {
     fn push(&mut self, event: EventCore<T, D>) {
         unsafe { ::abomonation::encode(&event, &mut self.buffer).expect("Encode failure"); }
         // println!("sending {:?} bytes", self.buffer.len());
