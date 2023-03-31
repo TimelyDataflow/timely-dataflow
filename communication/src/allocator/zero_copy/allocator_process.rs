@@ -79,7 +79,7 @@ impl ProcessBuilder {
             peers: self.peers,
             events: Rc::new(RefCell::new(VecDeque::new())),
             canaries: Rc::new(RefCell::new(Vec::new())),
-            channel_id_bound: None,
+            channel_id_upper: 0,
             staged: Vec::new(),
             sends,
             recvs,
@@ -107,7 +107,7 @@ pub struct ProcessAllocator {
 
     canaries: Rc<RefCell<Vec<usize>>>,
 
-    channel_id_bound: Option<usize>,
+    channel_id_upper: usize,
 
     // sending, receiving, and responding to binary buffers.
     staged:     Vec<Bytes>,
@@ -122,10 +122,8 @@ impl Allocate for ProcessAllocator {
     fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
 
         // Assume and enforce in-order identifier allocation.
-        if let Some(bound) = self.channel_id_bound {
-            assert!(bound < identifier);
-        }
-        self.channel_id_bound = Some(identifier);
+        assert!(self.channel_id_upper <= identifier);
+        self.channel_id_upper = identifier + 1;
 
         let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::with_capacity(self.peers());
 
@@ -202,7 +200,7 @@ impl Allocate for ProcessAllocator {
                     match self.to_local.entry(header.channel) {
                         Entry::Vacant(entry) => {
                             // We may receive data before allocating, and shouldn't block.
-                            if self.channel_id_bound.map(|b| b < header.channel).unwrap_or(true) {
+                            if self.channel_id_upper <= header.channel {
                                 entry.insert(Rc::new(RefCell::new(VecDeque::new())))
                                     .borrow_mut()
                                     .push_back(peel);
