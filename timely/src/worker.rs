@@ -672,9 +672,7 @@ impl<A: Allocate> Worker<A> {
     /// Drops an identified dataflow.
     ///
     /// This method removes the identified dataflow, which will no longer be scheduled.
-    /// Various other resources will be cleaned up, though the method is currently in
-    /// public beta rather than expected to work. Please report all crashes and unmet
-    /// expectations!
+    /// Various other resources will be cleaned up.
     pub fn drop_dataflow(&mut self, dataflow_identifier: usize) {
         if let Some(mut entry) = self.dataflows.borrow_mut().remove(&dataflow_identifier) {
             // Garbage collect channel_id to path information.
