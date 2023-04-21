@@ -126,17 +126,19 @@ pub trait PushPartitioned: Container {
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
     /// append an element to. Call `flush` with an index and a buffer to send the data downstream.
-    fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], index: I, flush: F)
+    fn push_partitioned<I, F, E>(&mut self, buffers: &mut [Self], index: I, flush: F)
+        -> Result<(), E>
     where
         I: FnMut(&Self::Item) -> usize,
-        F: FnMut(usize, &mut Self);
+        F: FnMut(usize, &mut Self) -> Result<(), E>;
 }
 
 impl<T: Clone + 'static> PushPartitioned for Vec<T> {
-    fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
+    fn push_partitioned<I, F, E>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
+        -> Result<(), E>
     where
         I: FnMut(&Self::Item) -> usize,
-        F: FnMut(usize, &mut Self),
+        F: FnMut(usize, &mut Self) -> Result<(), E>,
     {
         fn ensure_capacity<E>(this: &mut Vec<E>) {
             let capacity = this.capacity();
@@ -151,9 +153,10 @@ impl<T: Clone + 'static> PushPartitioned for Vec<T> {
             ensure_capacity(&mut buffers[index]);
             buffers[index].push(datum);
             if buffers[index].len() == buffers[index].capacity() {
-                flush(index, &mut buffers[index]);
+                flush(index, &mut buffers[index])?;
             }
         }
+        Ok(())
     }
 }
 

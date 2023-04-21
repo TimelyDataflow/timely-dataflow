@@ -26,8 +26,9 @@ fn main() {
             }
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
-                worker.step();
+                worker.step()?;
             }
         }
+        Ok(())
     }).unwrap();
 }

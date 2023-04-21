@@ -42,11 +42,11 @@ fn main() {
                 let next = input.epoch() + 1;
                 input.advance_to(next);
                 while probe.less_than(input.time()) {
-                    worker.step();
+                    worker.step()?;
                 }
             }
         }
-
+        Ok(())
     }).unwrap(); // asserts error-free execution;
 }
 

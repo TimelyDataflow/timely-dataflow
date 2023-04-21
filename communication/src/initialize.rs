@@ -148,7 +148,7 @@ impl Config {
     }
 
     /// Attempts to assemble the described communication infrastructure.
-    pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
+    pub fn try_build(self) -> crate::Result<(Vec<GenericBuilder>, Box<dyn Any+Send>)> {
         match self {
             Config::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
@@ -160,12 +160,8 @@ impl Config {
                 Ok((ProcessBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect(), Box::new(())))
             },
             Config::Cluster { threads, process, addresses, report, log_fn } => {
-                match initialize_networking(addresses, process, threads, report, log_fn) {
-                    Ok((stuff, guard)) => {
-                        Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
-                    },
-                    Err(err) => Err(format!("failed to initialize networking: {}", err))
-                }
+                let (stuff, guard) = initialize_networking(addresses, process, threads, report, log_fn)?;
+                Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
             },
         }
     }
@@ -239,7 +235,7 @@ impl Config {
 pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
     config: Config,
     func: F,
-) -> Result<WorkerGuards<T>,String> {
+) -> crate::Result<WorkerGuards<T>> {
     let (allocators, others) = config.try_build()?;
     initialize_from(allocators, others, func)
 }
@@ -299,7 +295,7 @@ pub fn initialize_from<A, T, F>(
     builders: Vec<A>,
     others: Box<dyn Any+Send>,
     func: F,
-) -> Result<WorkerGuards<T>,String>
+) -> crate::Result<WorkerGuards<T>>
 where
     A: AllocateBuilder+'static,
     T: Send+'static,
@@ -314,8 +310,7 @@ where
                             .spawn(move || {
                                 let communicator = builder.build();
                                 (*clone)(communicator)
-                            })
-                            .map_err(|e| format!("{:?}", e))?);
+                            })?);
     }
 
     Ok(WorkerGuards { guards, others })

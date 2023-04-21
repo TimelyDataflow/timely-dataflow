@@ -97,6 +97,8 @@ pub mod buzzer;
 
 use std::any::Any;
 
+use crate::err::CommError;
+
 #[cfg(feature = "bincode")]
 use serde::{Serialize, Deserialize};
 #[cfg(not(feature = "bincode"))]
@@ -131,25 +133,25 @@ impl<T: Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
 /// another call to `push()` may not be coming.
 pub trait Push<T> {
     /// Pushes `element` with the opportunity to take ownership.
-    fn push(&mut self, element: &mut Option<T>);
+    fn push(&mut self, element: &mut Option<T>) -> Result<()>;
     /// Pushes `element` and drops any resulting resources.
     #[inline]
-    fn send(&mut self, element: T) { self.push(&mut Some(element)); }
+    fn send(&mut self, element: T) -> Result<()> { self.push(&mut Some(element)) }
     /// Pushes `None`, conventionally signalling a flush.
     #[inline]
-    fn done(&mut self) { self.push(&mut None); }
+    fn done(&mut self) -> Result<()> { self.push(&mut None) }
 }
 
 impl<T, P: ?Sized + Push<T>> Push<T> for Box<P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) { (**self).push(element) }
+    fn push(&mut self, element: &mut Option<T>) -> Result<()> { (**self).push(element) }
 }
 
 /// Pulling elements of type `T`.
 pub trait Pull<T> {
     /// Pulls an element and provides the opportunity to take ownership.
     ///
-    /// The puller may mutate the result, in particular take ownership of the data by
+    /// The puller may mutate the result, in particular take ownership of the data by
     /// replacing it with other data or even `None`. This allows the puller to return
     /// resources to the implementor.
     ///
@@ -188,4 +190,52 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
     }
 
     (senders, recvers)
+}
+
+/// Result type used throughout Timely communication.
+pub type Result<T> = std::result::Result<T, CommError>;
+
+pub mod err {
+    //! blubb
+    use std::io::Error as IOError;
+    use std::sync::{PoisonError, TryLockError};
+
+    /// blubb
+    #[derive(Debug)]
+    pub enum CommError {
+        /// blubb
+        Panic,
+        /// blubb
+        Poison,
+        /// blubb
+        IO(IOError),
+        /// blubb
+        UnexpectedData,
+        /// blubb
+        String(String),
+    }
+
+    impl From<IOError> for CommError {
+        fn from(value: IOError) -> Self {
+            Self::IO(value)
+        }
+    }
+
+    impl From<String> for CommError {
+        fn from(value: String) -> Self {
+            Self::String(value)
+        }
+    }
+
+    impl<M> From<PoisonError<M>> for CommError {
+        fn from(_value: PoisonError<M>) -> Self {
+            Self::Poison
+        }
+    }
+
+    impl<M> From<TryLockError<M>> for CommError {
+        fn from(_value: TryLockError<M>) -> Self {
+            Self::Poison
+        }
+    }
 }

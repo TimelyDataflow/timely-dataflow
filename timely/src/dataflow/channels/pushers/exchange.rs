@@ -31,12 +31,13 @@ impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&D) ->
         }
     }
     #[inline]
-    fn flush(&mut self, index: usize) {
+    fn flush(&mut self, index: usize) -> crate::Result<()> {
         if !self.buffers[index].is_empty() {
             if let Some(ref time) = self.current {
-                Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index]);
+                Message::push_at(&mut self.buffers[index], time.clone(), &mut self.pushers[index])?;
             }
         }
+        Ok(())
     }
 }
 
@@ -45,10 +46,10 @@ where
     C: PushPartitioned<Item=D>
 {
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<BundleCore<T, C>>) {
+    fn push(&mut self, message: &mut Option<BundleCore<T, C>>) -> crate::Result<()> {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
-            self.pushers[0].push(message);
+            self.pushers[0].push(message)?;
         }
         else if let Some(message) = message {
 
@@ -59,7 +60,7 @@ where
             // if the time isn't right, flush everything.
             if self.current.as_ref().map_or(false, |x| x != time) {
                 for index in 0..self.pushers.len() {
-                    self.flush(index);
+                    self.flush(index)?;
                 }
             }
             self.current = Some(time.clone());
@@ -74,9 +75,9 @@ where
                     &mut self.buffers,
                     move |datum| ((hash_func)(datum) & mask) as usize,
                     |index, buffer| {
-                            Message::push_at(buffer, time.clone(), &mut pushers[index]);
+                        Message::push_at(buffer, time.clone(), &mut pushers[index])
                     }
-                );
+                )?;
             }
             // as a last resort, use mod (%)
             else {
@@ -86,18 +87,19 @@ where
                     &mut self.buffers,
                     move |datum| ((hash_func)(datum) % num_pushers) as usize,
                     |index, buffer| {
-                        Message::push_at(buffer, time.clone(), &mut pushers[index]);
+                        Message::push_at(buffer, time.clone(), &mut pushers[index])
                     }
-                );
+                )?;
             }
 
         }
         else {
             // flush
             for index in 0..self.pushers.len() {
-                self.flush(index);
-                self.pushers[index].push(&mut None);
+                self.flush(index)?;
+                self.pushers[index].push(&mut None)?;
             }
         }
+        Ok(())
     }
 }

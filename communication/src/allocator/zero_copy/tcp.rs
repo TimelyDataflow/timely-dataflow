@@ -1,6 +1,6 @@
 //!
 
-use std::io::{self, Write};
+use std::io::Write;
 use crossbeam_channel::{Sender, Receiver};
 
 use crate::networking::MessageHeader;
@@ -11,15 +11,8 @@ use super::stream::Stream;
 
 use logging_core::Logger;
 
+use crate::err::CommError;
 use crate::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, StateEvent};
-
-fn tcp_panic(context: &'static str, cause: io::Error) -> ! {
-    // NOTE: some downstream crates sniff out "timely communication error:" from
-    // the panic message. Avoid removing or rewording this message if possible.
-    // It'd be nice to instead use `panic_any` here with a structured error
-    // type, but the panic message for `panic_any` is no good (Box<dyn Any>).
-    panic!("timely communication error: {}: {}", context, cause)
-}
 
 /// Repeatedly reads from a TcpStream and carves out messages.
 ///
@@ -36,6 +29,7 @@ pub fn recv_loop<S>(
     process: usize,
     remote: usize,
     mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
+-> crate::Result<()>
 where
     S: Stream,
 {
@@ -52,6 +46,28 @@ where
         stageds.push(Vec::new());
     }
 
+    let result = recv_loop_inner(&mut reader, worker_offset, &mut logger, &mut targets, &mut buffer, &mut stageds);
+
+    for target in &mut targets {
+        target.poison();
+    }
+
+    // Log the receive thread's end.
+    logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: false, }));
+    result
+}
+
+fn recv_loop_inner<S>(
+    reader: &mut S,
+    worker_offset: usize,
+    logger: &mut Option<Logger<CommunicationEvent, CommunicationSetup>>,
+    targets: &mut Vec<MergeQueue>,
+    buffer: &mut BytesSlab,
+    stageds: &mut Vec<Vec<bytes::arc::Bytes>>
+) -> crate::Result<()>
+where
+    S: Stream
+{
     // Each loop iteration adds to `self.Bytes` and consumes all complete messages.
     // At the start of each iteration, `self.buffer[..self.length]` represents valid
     // data, and the remaining capacity is available for reading from the reader.
@@ -67,15 +83,9 @@ where
         assert!(!buffer.empty().is_empty());
 
         // Attempt to read some more bytes into self.buffer.
-        let read = match reader.read(&mut buffer.empty()) {
-            Err(x) => tcp_panic("reading data", x),
-            Ok(n) if n == 0 => {
-                tcp_panic(
-                    "reading data",
-                    std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "socket closed"),
-                );
-            }
-            Ok(n) => n,
+        let read = match reader.read(&mut buffer.empty())? {
+            0 => { return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into()); },
+            n => n,
         };
 
         buffer.make_valid(read);
@@ -99,11 +109,11 @@ where
                 // Shutting down; confirm absence of subsequent data.
                 active = false;
                 if !buffer.valid().is_empty() {
-                    panic!("Clean shutdown followed by data.");
+                    return Err(CommError::UnexpectedData);
                 }
                 buffer.ensure_capacity(1);
-                if reader.read(&mut buffer.empty()).unwrap_or_else(|e| tcp_panic("reading EOF", e)) > 0 {
-                    panic!("Clean shutdown followed by data.");
+                if reader.read(&mut buffer.empty())? > 0 {
+                    return Err(CommError::UnexpectedData);
                 }
             }
         }
@@ -112,12 +122,10 @@ where
         for (index, staged) in stageds.iter_mut().enumerate() {
             // FIXME: try to merge `staged` before handing it to BytesPush::extend
             use crate::allocator::zero_copy::bytes_exchange::BytesPush;
-            targets[index].extend(staged.drain(..));
+            targets[index].extend(staged.drain(..))?;
         }
     }
-
-    // Log the receive thread's end.
-    logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: false, }));
+    Ok(())
 }
 
 /// Repeatedly sends messages into a TcpStream.
@@ -134,17 +142,18 @@ pub fn send_loop<S: Stream>(
     sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
+    mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>,
+) -> crate::Result<()>
 {
 
     // Log the send thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
 
-    let mut sources: Vec<MergeQueue> = sources.into_iter().map(|x| {
+    let mut sources: Vec<Option<MergeQueue>> = sources.into_iter().map(|x| {
         let buzzer = crate::buzzer::Buzzer::new();
         let queue = MergeQueue::new(buzzer);
         x.send(queue.clone()).expect("failed to send MergeQueue");
-        queue
+        Some(queue)
     }).collect();
 
     let mut writer = ::std::io::BufWriter::with_capacity(1 << 16, writer);
@@ -153,9 +162,9 @@ pub fn send_loop<S: Stream>(
     while !sources.is_empty() {
 
         // TODO: Round-robin better, to release resources fairly when overloaded.
-        for source in sources.iter_mut() {
+        for source in sources.iter_mut().flat_map(|s| s) {
             use crate::allocator::zero_copy::bytes_exchange::BytesPull;
-            source.drain_into(&mut stash);
+            source.drain_into(&mut stash)?;
         }
 
         if stash.is_empty() {
@@ -165,8 +174,15 @@ pub fn send_loop<S: Stream>(
             // still be a signal incoming.
             //
             // We could get awoken by more data, a channel closing, or spuriously perhaps.
-            writer.flush().unwrap_or_else(|e| tcp_panic("flushing writer", e));
-            sources.retain(|source| !source.is_complete());
+            writer.flush()?;
+            for source in sources.iter_mut() {
+                if let Some(s) = source {
+                    if s.is_complete()? {
+                        *source = None;
+                    }
+                }
+            }
+            sources.retain(Option::is_some);
             if !sources.is_empty() {
                 std::thread::park();
             }
@@ -184,7 +200,7 @@ pub fn send_loop<S: Stream>(
                     }
                 });
 
-                writer.write_all(&bytes[..]).unwrap_or_else(|e| tcp_panic("writing data", e));
+                writer.write_all(&bytes[..])?;
             }
         }
     }
@@ -199,11 +215,12 @@ pub fn send_loop<S: Stream>(
         length:     0,
         seqno:      0,
     };
-    header.write_to(&mut writer).unwrap_or_else(|e| tcp_panic("writing data", e));
-    writer.flush().unwrap_or_else(|e| tcp_panic("flushing writer", e));
-    writer.get_mut().shutdown(::std::net::Shutdown::Write).unwrap_or_else(|e| tcp_panic("shutting down writer", e));
+    header.write_to(&mut writer)?;
+    writer.flush()?;
+    writer.get_mut().shutdown(::std::net::Shutdown::Write)?;
     logger.as_mut().map(|logger| logger.log(MessageEvent { is_send: true, header }));
 
     // Log the send thread's end.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: false, }));
+    Ok(())
 }

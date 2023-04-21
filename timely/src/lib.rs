@@ -40,8 +40,9 @@
 //!     for round in 0..10 {
 //!         input.send(round);
 //!         input.advance_to(round + 1);
-//!         worker.step();
+//!         worker.step()?;
 //!     }
+//!     Ok(())
 //! });
 //! ```
 //!
@@ -86,6 +87,7 @@ pub mod container {
 pub mod communication {
     pub use timely_communication::*;
 }
+pub use communication::Result;
 
 /// Re-export of the `timely_bytes` crate.
 pub mod bytes {

@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use timely_communication::err::CommError;
 
 use crate::scheduling::{Schedule, Activator};
 
@@ -9,7 +10,7 @@ use crate::progress::frontier::Antichain;
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 
-use crate::{Container, Data};
+use crate::{Container, Data, Result};
 use crate::communication::Push;
 use crate::dataflow::{Stream, ScopeParent, Scope, StreamCore};
 use crate::dataflow::channels::pushers::{TeeCore, CounterCore};
@@ -54,9 +55,10 @@ pub trait Input : Scope {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     fn new_input<D: Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, Stream<Self, D>);
 
@@ -89,9 +91,10 @@ pub trait Input : Scope {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, StreamCore<Self, D>);
 
@@ -121,9 +124,10 @@ pub trait Input : Scope {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, D>;
 
@@ -153,9 +157,10 @@ pub trait Input : Scope {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> StreamCore<Self, D>;
 }
@@ -200,6 +205,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
             progress,
             messages: produced,
             copies,
+            error: Rc::clone(&handle.error),
         }), index);
 
         StreamCore::new(Source::new(index, 0), registrar, self.clone())
@@ -214,6 +220,7 @@ struct Operator<T:Timestamp> {
     progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
     messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
     copies:     usize,
+    error: Rc<RefCell<Option<CommError>>>,
 }
 
 impl<T:Timestamp> Schedule for Operator<T> {
@@ -222,11 +229,15 @@ impl<T:Timestamp> Schedule for Operator<T> {
 
     fn path(&self) -> &[usize] { &self.address[..] }
 
-    fn schedule(&mut self) -> bool {
+    fn schedule(&mut self) -> Result<bool> {
+        // Report any pending error
+        if let Some(err) = self.error.borrow_mut().take() {
+            return Err(err);
+        }
         let shared_progress = &mut *self.shared_progress.borrow_mut();
         self.progress.borrow_mut().drain_into(&mut shared_progress.internals[0]);
         self.messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
-        false
+        Ok(false)
     }
 }
 
@@ -253,6 +264,7 @@ pub struct HandleCore<T: Timestamp, C: Container> {
     buffer1: C,
     buffer2: C,
     now_at: T,
+    error: Rc<RefCell<Option<CommError>>>,
 }
 
 /// A handle specialized to vector-based containers.
@@ -281,9 +293,10 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn new() -> Self {
         Self {
@@ -293,6 +306,7 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
             buffer1: Default::default(),
             buffer2: Default::default(),
             now_at: T::minimum(),
+            error: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -318,9 +332,10 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> StreamCore<G, D>
     where
@@ -353,11 +368,15 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
         for index in 0 .. self.pushers.len() {
             if index < self.pushers.len() - 1 {
                 self.buffer2.clone_from(&self.buffer1);
-                Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
+                if let Err(e) = Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]) {
+                    *self.error.borrow_mut() = Some(e);
+                }
                 debug_assert!(self.buffer2.is_empty());
             }
             else {
-                Message::push_at(&mut self.buffer1, self.now_at.clone(), &mut self.pushers[index]);
+                if let Err(e) = Message::push_at(&mut self.buffer1, self.now_at.clone(), &mut self.pushers[index]) {
+                    *self.error.borrow_mut() = Some(e);
+                }
                 debug_assert!(self.buffer1.is_empty());
             }
         }
@@ -368,7 +387,9 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     fn close_epoch(&mut self) {
         if !self.buffer1.is_empty() { self.flush(); }
         for pusher in self.pushers.iter_mut() {
-            pusher.done();
+            if let Err(e) = pusher.done() {
+                *self.error.borrow_mut() = Some(e);
+            }
         }
         for progress in self.progress.iter() {
             progress.borrow_mut().update(self.now_at.clone(), -1);
@@ -403,9 +424,10 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     ///     for round in 0..10 {
     ///         input.send_batch(&mut vec![format!("{}", round)]);
     ///         input.advance_to(round + 1);
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn send_batch(&mut self, buffer: &mut D) {
 
@@ -417,11 +439,15 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
             for index in 0 .. self.pushers.len() {
                 if index < self.pushers.len() - 1 {
                     self.buffer2.clone_from(&buffer);
-                    Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
+                    if let Err(e) = Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]) {
+                        *self.error.borrow_mut() = Some(e);
+                    }
                     assert!(self.buffer2.is_empty());
                 }
                 else {
-                    Message::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
+                    if let Err(e) = Message::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]) {
+                        *self.error.borrow_mut() = Some(e);
+                    }
                     assert!(buffer.is_empty());
                 }
             }
@@ -487,9 +513,10 @@ impl<T: Timestamp, D: Data> Handle<T, D> {
     ///     for round in 0..10 {
     ///         input.send(round);
     ///         input.advance_to(round + 1);
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     pub fn send(&mut self, data: D) {
         // assert!(self.buffer1.capacity() == Message::<T, D>::default_length());

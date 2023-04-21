@@ -22,5 +22,6 @@ fn main() {
                   .branch_when(move |t| t < &iterations).1
                   .connect_loop(helper);
         });
+        Ok(())
     }).unwrap();
 }

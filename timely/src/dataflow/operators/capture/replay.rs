@@ -38,6 +38,8 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
 use crate::dataflow::channels::pushers::buffer::BufferCore as PushBuffer;
@@ -74,13 +76,17 @@ where I : IntoIterator,
 
         let (targets, stream) = builder.new_output();
 
-        let mut output = PushBuffer::new(PushCounter::new(targets));
+        let error = Rc::new(RefCell::new(None));
+        let mut output = PushBuffer::new(PushCounter::new(targets), Rc::clone(&error));
         let mut event_streams = self.into_iter().collect::<Vec<_>>();
         let mut started = false;
         let mut allocation: C = Default::default();
 
         builder.build(
             move |progress| {
+                if let Some(error) = error.borrow_mut().take() {
+                    return Err(error);
+                }
 
                 if !started {
                     // The first thing we do is modify our capabilities to match the number of streams we manage.
@@ -112,7 +118,7 @@ where I : IntoIterator,
                 output.cease();
                 output.inner().produced().borrow_mut().drain_into(&mut progress.produceds[0]);
 
-                false
+                Ok(false)
             }
         );
 

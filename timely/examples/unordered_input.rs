@@ -16,7 +16,8 @@ fn main() {
         for round in 0..10 {
             input.session(cap.clone()).give(round);
             cap = cap.delayed(&(round + 1));
-            worker.step();
+            worker.step()?;
         }
+        Ok(())
     }).unwrap();
 }

@@ -81,12 +81,13 @@ pub struct Pusher<T> {
 
 impl<T> Push<T> for Pusher<T> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) {
+    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()> {
         let mut borrow = self.target.borrow_mut();
         if let Some(element) = element.take() {
             borrow.0.push_back(element);
         }
         *element = borrow.1.pop_front();
+        Ok(())
     }
 }
 

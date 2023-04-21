@@ -1,5 +1,6 @@
 //! Barrier synchronization.
 
+use crate::Result;
 use crate::communication::Allocate;
 use crate::dataflow::{InputHandle, ProbeHandle};
 use crate::worker::Worker;
@@ -27,11 +28,12 @@ impl<A: Allocate> Barrier<A> {
     ///
     /// This method does *not* block dataflow execution, which continues
     /// to execute while we await the arrival of the other workers.
-    pub fn wait(&mut self) {
+    pub fn wait(&mut self) -> Result<()> {
         self.advance();
         while !self.reached() {
-            self.worker.step();
+            self.worker.step()?;
         }
+        Ok(())
     }
 
     /// Advances this worker to the next barrier stage.
@@ -51,4 +53,3 @@ impl<A: Allocate> Barrier<A> {
         !self.probe.less_than(self.input.time())
     }
 }
-

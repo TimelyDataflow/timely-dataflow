@@ -159,7 +159,7 @@ impl Allocate for ProcessAllocator {
 
     // Perform preparatory work, most likely reading binary buffers from self.recv.
     #[inline(never)]
-    fn receive(&mut self) {
+    fn receive(&mut self) -> crate::Result<()> {
 
         // Check for channels whose `Puller` has been dropped.
         let mut canaries = self.canaries.borrow_mut();
@@ -179,7 +179,7 @@ impl Allocate for ProcessAllocator {
         let mut events = self.events.borrow_mut();
 
         for recv in self.recvs.iter_mut() {
-            recv.drain_into(&mut self.staged);
+            recv.drain_into(&mut self.staged)?;
         }
 
         for mut bytes in self.staged.drain(..) {
@@ -218,13 +218,14 @@ impl Allocate for ProcessAllocator {
                 }
             }
         }
+        Ok(())
     }
 
     // Perform postparatory work, most likely sending un-full binary buffers.
-    fn release(&mut self) {
+    fn release(&mut self) -> crate::Result<()> {
         // Publish outgoing byte ledgers.
         for send in self.sends.iter_mut() {
-            send.borrow_mut().publish();
+            send.borrow_mut().publish()?;
         }
 
         // OPTIONAL: Tattle on channels sitting on borrowed data.
@@ -235,6 +236,7 @@ impl Allocate for ProcessAllocator {
         //         eprintln!("Warning: worker {}, undrained channel[{}].len() = {}", self.index, index, len);
         //     }
         // }
+        Ok(())
     }
 
     fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {

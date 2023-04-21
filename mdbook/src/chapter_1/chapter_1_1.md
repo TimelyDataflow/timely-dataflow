@@ -36,8 +36,9 @@ fn main() {
                 input.send(round);
             }
             input.advance_to(round + 1);
-            // worker.step_while(|| probe.less_than(input.time()));
+            // worker.step_while(|| probe.less_than(input.time()))?;
         }
+        Ok(())
     }).unwrap();
 }
 ```

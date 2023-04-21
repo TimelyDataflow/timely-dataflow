@@ -31,5 +31,6 @@ fn main() {
             .inspect_time(|t, d| eprintln!("@ {:?}: {:?}", t, d))
             .probe_with(&mut probe_handle);
         });
+        Ok(())
     }).unwrap();
 }

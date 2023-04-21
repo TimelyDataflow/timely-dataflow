@@ -171,7 +171,7 @@ fn main() {
         input.advance_to(1);
 
         while probe.less_than(input.time()) {
-            worker.step();
+            worker.step()?;
         }
 
         for i in 1 .. 1000 {
@@ -179,10 +179,10 @@ fn main() {
             input.send(((rng2.gen_range(0..nodes), rng2.gen_range(0..nodes)), -1));
             input.advance_to(i + 1);
             while probe.less_than(input.time()) {
-                worker.step();
+                worker.step()?;
             }
         }
-
+        Ok(())
     }).unwrap(); // asserts error-free execution;
 }
 

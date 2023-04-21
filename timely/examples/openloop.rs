@@ -16,7 +16,7 @@ fn main() {
         let peers = worker.peers();
 
         // re-synchronize all workers (account for start-up).
-        timely::synchronization::Barrier::new(worker).wait();
+        timely::synchronization::Barrier::new(worker).wait()?;
 
         let timer = std::time::Instant::now();
 
@@ -96,7 +96,7 @@ fn main() {
                 inserted_ns = target_ns;
             }
 
-            worker.step();
+            worker.step()?;
         }
 
         // Report observed latency measurements.
@@ -119,6 +119,6 @@ fn main() {
                 println!("{}\t{}", latency, fraction);
             }
         }
-
+        Ok(())
     }).unwrap();
 }

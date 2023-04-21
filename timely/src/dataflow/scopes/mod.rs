@@ -89,7 +89,8 @@ pub trait Scope: ScopeParent {
     ///         });
     ///         input
     ///     });
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     fn scoped<T, R, F>(&mut self, name: &str, func: F) -> R
     where
@@ -116,7 +117,8 @@ pub trait Scope: ScopeParent {
     ///         });
     ///         input
     ///     });
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     fn iterative<T, R, F>(&mut self, func: F) -> R
     where
@@ -146,7 +148,8 @@ pub trait Scope: ScopeParent {
     ///         });
     ///         input
     ///     });
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     fn region<R, F>(&mut self, func: F) -> R
     where
@@ -178,7 +181,8 @@ pub trait Scope: ScopeParent {
     ///         });
     ///         input
     ///     });
-    /// });
+    ///     Ok(())
+    /// }).unwrap();
     /// ```
     fn region_named<R, F>(&mut self, name: &str, func: F) -> R
     where

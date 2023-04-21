@@ -46,13 +46,13 @@ impl<T, D: Container> Message<T, D> {
     /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
     /// leaves in place, or the container's default element.
     #[inline]
-    pub fn push_at<P: Push<BundleCore<T, D>>>(buffer: &mut D, time: T, pusher: &mut P) {
+    pub fn push_at<P: Push<BundleCore<T, D>>>(buffer: &mut D, time: T, pusher: &mut P) -> crate::Result<()> {
 
         let data = ::std::mem::take(buffer);
         let message = Message::new(time, data, 0, 0);
         let mut bundle = Some(BundleCore::from_typed(message));
 
-        pusher.push(&mut bundle);
+        pusher.push(&mut bundle)?;
 
         if let Some(message) = bundle {
             if let Some(message) = message.if_typed() {
@@ -60,5 +60,6 @@ impl<T, D: Container> Message<T, D> {
                 buffer.clear();
             }
         }
+        Ok(())
     }
 }

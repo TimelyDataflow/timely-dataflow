@@ -23,6 +23,7 @@ fn main() {
                 .map(|x| x + 1)
                 .inspect(|x| println!("hello: {}", x));
         });
+        Ok(())
     }).unwrap();
 }
 ```
@@ -43,6 +44,7 @@ fn main() {
                 .map(|mut x| { x.truncate(5); x } )
                 .inspect(|x| println!("hello: {}", x));
         });
+        Ok(())
     }).unwrap();
 }
 ```
@@ -67,6 +69,7 @@ fn main() {
                 .map_in_place(|x| x.truncate(5))
                 .inspect(|x| println!("hello: {}", x));
         });
+        Ok(())
     }).unwrap();
 }
 ```
@@ -86,6 +89,7 @@ fn main() {
                 .flat_map(|x| 0 .. x)
                 .inspect(|x| println!("hello: {}", x));
         });
+        Ok(())
     }).unwrap();
 }
 ```
@@ -107,6 +111,7 @@ fn main() {
                 .filter(|x| *x % 2 == 0)
                 .inspect(|x| println!("hello: {}", x));
         });
+        Ok(())
     }).unwrap();
 }
 ```

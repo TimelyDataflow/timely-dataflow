@@ -16,6 +16,7 @@ fn main() {
                 .to_stream(scope)
                 .inspect(|x| println!("hello: {}", x));
         });
+        Ok(())
     }).unwrap();
 }
 ```
@@ -38,6 +39,7 @@ fn main() {
                 .to_stream(scope)
                 .inspect_batch(|t, xs| println!("hello: {:?} @ {:?}", xs, t));
         });
+        Ok(())
     }).unwrap();
 }
 ```

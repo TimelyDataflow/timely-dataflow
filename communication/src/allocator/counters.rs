@@ -31,7 +31,7 @@ impl<T, P: Push<T>>  Pusher<T, P> {
 
 impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) {
+    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()> {
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events
@@ -81,7 +81,7 @@ impl<T, P: Push<T>>  ArcPusher<T, P> {
 
 impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<T>) {
+    fn push(&mut self, element: &mut Option<T>) -> crate::Result<()> {
         // if element.is_none() {
         //     if self.count != 0 {
         //         self.events
@@ -98,11 +98,12 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
         // we first enqueue data, second enqueue interest in the channel,
         // and finally awaken the thread. Other orders are defective when
         // multiple threads are involved.
-        self.pusher.push(element);
+        self.pusher.push(element)?;
         let _ = self.events.send((self.index, Event::Pushed(1)));
             // TODO : Perhaps this shouldn't be a fatal error (e.g. in shutdown).
             // .expect("Failed to send message count");
         self.buzzer.buzz();
+        Ok(())
     }
 }
 

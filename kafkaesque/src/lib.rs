@@ -66,13 +66,14 @@ impl<T, D> EventProducerCore<T, D> {
 }
 
 impl<T: Abomonation, D: Abomonation> EventPusherCore<T, D> for EventProducerCore<T, D> {
-    fn push(&mut self, event: EventCore<T, D>) {
-        unsafe { ::abomonation::encode(&event, &mut self.buffer).expect("Encode failure"); }
+    fn push(&mut self, event: EventCore<T, D>) -> timely::Result<()> {
+        unsafe { ::abomonation::encode(&event, &mut self.buffer) }?;
         // println!("sending {:?} bytes", self.buffer.len());
         self.producer.send::<(),[u8]>(BaseRecord::to(self.topic.as_str()).payload(&self.buffer[..])).unwrap();
         self.counter.fetch_add(1, Ordering::SeqCst);
         self.producer.poll(std::time::Duration::from_millis(0));
         self.buffer.clear();
+        Ok(())
     }
 }
 

@@ -87,15 +87,16 @@ fn experiment_exchange(
             time += 1;
             input.advance_to(time);
             while probe.less_than(input.time()) {
-                worker.step();
+                worker.step()?;
             }
         }
-        timer.elapsed()
+        Ok(timer.elapsed())
     })
     .unwrap()
     .join()
     .into_iter()
     .next()
+    .unwrap()
     .unwrap()
     .unwrap()
 }

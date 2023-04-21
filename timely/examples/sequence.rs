@@ -19,8 +19,8 @@ fn main() {
             while let Some(element) = sequencer.next() {
                 println!("{:?}:\tWorker {:?}:\t recv'd: {:?}", timer.elapsed(), worker.index(), element);
             }
-            worker.step();
+            worker.step()?;
         }
-
+        Ok(())
     }).unwrap(); // asserts error-free execution;
 }

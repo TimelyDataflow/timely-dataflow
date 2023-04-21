@@ -316,10 +316,11 @@ mod container {
     }
 
     impl<T: Columnation + 'static> PushPartitioned for TimelyStack<T> {
-        fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
+        fn push_partitioned<I, F, E>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
+            -> Result<(), E>
         where
             I: FnMut(&Self::Item) -> usize,
-            F: FnMut(usize, &mut Self),
+            F: FnMut(usize, &mut Self) -> Result<(), E>,
         {
             fn ensure_capacity<E: Columnation>(this: &mut TimelyStack<E>) {
                 let capacity = this.local.capacity();
@@ -334,10 +335,11 @@ mod container {
                 ensure_capacity(&mut buffers[index]);
                 buffers[index].copy(datum);
                 if buffers[index].len() == buffers[index].local.capacity() {
-                    flush(index, &mut buffers[index]);
+                    flush(index, &mut buffers[index])?;
                 }
             }
             self.clear();
+            Ok(())
         }
     }
 }

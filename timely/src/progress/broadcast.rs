@@ -1,5 +1,6 @@
 //! Broadcasts progress information among workers.
 
+use crate::Result;
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::{Location, Port};
 use crate::communication::{Message, Push, Pull};
@@ -54,7 +55,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     }
 
     /// Sends pointstamp changes to all workers.
-    pub fn send(&mut self, changes: &mut ChangeBatch<(Location, T)>) {
+    pub fn send(&mut self, changes: &mut ChangeBatch<(Location, T)>) -> Result<()> {
 
         changes.compact();
         if !changes.is_empty() {
@@ -108,13 +109,14 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 }
 
                 // TODO: This should probably use a broadcast channel.
-                pusher.push(&mut self.to_push);
-                pusher.done();
+                pusher.push(&mut self.to_push)?;
+                pusher.done()?;
             }
 
             self.counter += 1;
             changes.clear();
         }
+        Ok(())
     }
 
     /// Receives pointstamp changes from all workers.

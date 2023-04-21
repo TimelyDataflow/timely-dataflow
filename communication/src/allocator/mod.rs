@@ -70,7 +70,7 @@ pub trait Allocate {
     /// present messages contained in otherwise scarce resources (for example
     /// network buffers), under the premise that someone is about to consume
     /// the messages and release the resources.
-    fn receive(&mut self) { }
+    fn receive(&mut self) -> crate::Result<()> { Ok(()) }
 
     /// Signal the completion of a batch of reads from channels.
     ///
@@ -79,7 +79,7 @@ pub trait Allocate {
     /// the fabric should consider re-acquiring scarce resources. This can
     /// lead to the fabric performing defensive copies out of un-consumed
     /// buffers, and can be a performance problem if invoked casually.
-    fn release(&mut self) { }
+    fn release(&mut self) -> crate::Result<()> { Ok(()) }
 
     /// Constructs a pipeline channel from the worker to itself.
     ///

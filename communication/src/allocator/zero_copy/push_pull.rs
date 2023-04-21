@@ -37,7 +37,7 @@ impl<T, P: BytesPush> Pusher<T, P> {
 
 impl<T:Data, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
     #[inline]
-    fn push(&mut self, element: &mut Option<Message<T>>) {
+    fn push(&mut self, element: &mut Option<Message<T>>) -> crate::Result<()> {
         if let Some(ref mut element) = *element {
 
             // determine byte lengths and build header.
@@ -49,14 +49,15 @@ impl<T:Data, P: BytesPush> Push<Message<T>> for Pusher<T, P> {
             // acquire byte buffer and write header, element.
             let mut borrow = self.sender.borrow_mut();
             {
-                let mut bytes = borrow.reserve(header.required_bytes());
+                let mut bytes = borrow.reserve(header.required_bytes())?;
                 assert!(bytes.len() >= header.required_bytes());
                 let writer = &mut bytes;
-                header.write_to(writer).expect("failed to write header!");
+                header.write_to(writer)?;
                 element.into_bytes(writer);
             }
-            borrow.make_valid(header.required_bytes());
+            borrow.make_valid(header.required_bytes())?;
         }
+        Ok(())
     }
 }
 

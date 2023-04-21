@@ -118,7 +118,7 @@ impl<T, D, P: Push<BundleCore<T, D>>> LogPusher<T, D, P> {
 
 impl<T, D: Container, P: Push<BundleCore<T, D>>> Push<BundleCore<T, D>> for LogPusher<T, D, P> {
     #[inline]
-    fn push(&mut self, pair: &mut Option<BundleCore<T, D>>) {
+    fn push(&mut self, pair: &mut Option<BundleCore<T, D>>) -> crate::Result<()> {
         if let Some(bundle) = pair {
             self.counter += 1;
 
@@ -141,7 +141,7 @@ impl<T, D: Container, P: Push<BundleCore<T, D>>> Push<BundleCore<T, D>> for LogP
             }
         }
 
-        self.pusher.push(pair);
+        self.pusher.push(pair)
     }
 }
 

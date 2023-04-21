@@ -22,15 +22,16 @@ pub type Counter<T, D, P> = CounterCore<T, Vec<D>, P>;
 
 impl<T: Timestamp, D: Container, P> Push<BundleCore<T, D>> for CounterCore<T, D, P> where P: Push<BundleCore<T, D>> {
     #[inline]
-    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) {
+    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) -> crate::Result<()>{
         if let Some(message) = message {
             self.produced.borrow_mut().update(message.time.clone(), message.data.len() as i64);
         }
 
         // only propagate `None` if dirty (indicates flush)
         if message.is_some() || !self.produced.borrow_mut().is_empty() {
-            self.pushee.push(message);
+            self.pushee.push(message)?;
         }
+        Ok(())
     }
 }
 

@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use timely_communication::err::CommError;
 use crate::Container;
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
@@ -11,7 +12,7 @@ use crate::progress::{Operate, operate::SharedProgress, Timestamp};
 use crate::progress::Source;
 use crate::progress::ChangeBatch;
 
-use crate::Data;
+use crate::{Data, Result};
 use crate::dataflow::channels::pushers::{CounterCore as PushCounter, TeeCore};
 use crate::dataflow::channels::pushers::buffer::{BufferCore as PushBuffer, AutoflushSessionCore};
 
@@ -65,8 +66,9 @@ pub trait UnorderedInput<G: Scope> {
     ///     for round in 0..10 {
     ///         input.session(cap.clone()).give(round);
     ///         cap = cap.delayed(&(round + 1));
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
+    ///     Ok(())
     /// }).unwrap();
     ///
     /// let extract = recv.extract();
@@ -133,8 +135,9 @@ pub trait UnorderedInputCore<G: Scope> {
     ///     for round in 0..10 {
     ///         input.session(cap.clone()).give(round);
     ///         cap = cap.delayed(&(round + 1));
-    ///         worker.step();
+    ///         worker.step()?;
     ///     }
+    ///     Ok(())
     /// }).unwrap();
     ///
     /// let extract = recv.extract();
@@ -162,8 +165,9 @@ impl<G: Scope> UnorderedInputCore<G> for G {
         address.push(index);
 
         let cap = ActivateCapability::new(cap, &address, self.activations());
+        let error = Rc::new(RefCell::new(None));
 
-        let helper = UnorderedHandleCore::new(counter);
+        let helper = UnorderedHandleCore::new(counter, Rc::clone(&error));
 
         self.add_operator_with_index(Box::new(UnorderedOperator {
             name: "UnorderedInput".to_owned(),
@@ -172,6 +176,7 @@ impl<G: Scope> UnorderedInputCore<G> for G {
             internal,
             produced,
             peers,
+            error,
         }), index);
 
         ((helper, cap), StreamCore::new(Source::new(index, 0), registrar, self.clone()))
@@ -185,16 +190,21 @@ struct UnorderedOperator<T:Timestamp> {
     internal:   Rc<RefCell<ChangeBatch<T>>>,
     produced:   Rc<RefCell<ChangeBatch<T>>>,
     peers:     usize,
+    error: Rc<RefCell<Option<CommError>>>,
 }
 
 impl<T:Timestamp> Schedule for UnorderedOperator<T> {
     fn name(&self) -> &str { &self.name }
     fn path(&self) -> &[usize] { &self.address[..] }
-    fn schedule(&mut self) -> bool {
+    fn schedule(&mut self) -> Result<bool> {
+        // Report any pending error
+        if let Some(err) = self.error.borrow_mut().take() {
+            return Err(err);
+        }
         let shared_progress = &mut *self.shared_progress.borrow_mut();
         self.internal.borrow_mut().drain_into(&mut shared_progress.internals[0]);
         self.produced.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
-        false
+        Ok(false)
     }
 }
 
@@ -220,14 +230,14 @@ pub struct UnorderedHandleCore<T: Timestamp, D: Container> {
 }
 
 impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
-    fn new(pusher: PushCounter<T, D, TeeCore<T, D>>) -> UnorderedHandleCore<T, D> {
+    fn new(pusher: PushCounter<T, D, TeeCore<T, D>>, error: Rc<RefCell<Option<CommError>>>) -> UnorderedHandleCore<T, D> {
         UnorderedHandleCore {
-            buffer: PushBuffer::new(pusher),
+            buffer: PushBuffer::new(pusher, error),
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, D, PushCounter<T, D, TeeCore<T, D>>>> {
+    pub fn session(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<T, D, PushCounter<T, D, TeeCore<T, D>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }

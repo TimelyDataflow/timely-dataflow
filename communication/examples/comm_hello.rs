@@ -1,7 +1,7 @@
 extern crate timely_communication;
 
 use std::ops::Deref;
-use timely_communication::{Message, Allocate};
+use timely_communication::{Message, Allocate, Result};
 
 fn main() {
 
@@ -16,8 +16,8 @@ fn main() {
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
-            senders[i].send(Message::from_typed(format!("hello, {}", i)));
-            senders[i].done();
+            senders[i].send(Message::from_typed(format!("hello, {}", i)))?;
+            senders[i].done()?;
         }
 
         // no support for termination notification,
@@ -25,23 +25,23 @@ fn main() {
         let mut received = 0;
         while received < allocator.peers() {
 
-            allocator.receive();
+            allocator.receive()?;
 
             if let Some(message) = receiver.recv() {
                 println!("worker {}: received: <{}>", allocator.index(), message.deref());
                 received += 1;
             }
 
-            allocator.release();
+            allocator.release()?;
         }
 
-        allocator.index()
+        Result::Ok(allocator.index())
     });
 
     // computation runs until guards are joined or dropped.
     if let Ok(guards) = guards {
         for guard in guards.join() {
-            println!("result: {:?}", guard);
+            println!("result: {:?}", guard.unwrap().unwrap());
         }
     }
     else { println!("error in computation"); }

@@ -27,5 +27,6 @@ fn main() {
             )
             .connect_loop(handle);
         });
+        Ok(())
     }).unwrap(); // asserts error-free execution;
 }

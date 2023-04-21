@@ -13,18 +13,18 @@ use super::stream::Stream;
 /// On drop, the guard joins with each of the threads to ensure that they complete
 /// cleanly and send all necessary data.
 pub struct CommsGuard {
-    send_guards: Vec<::std::thread::JoinHandle<()>>,
-    recv_guards: Vec<::std::thread::JoinHandle<()>>,
+    send_guards: Vec<::std::thread::JoinHandle<crate::Result<()>>>,
+    recv_guards: Vec<::std::thread::JoinHandle<crate::Result<()>>>,
 }
 
 impl Drop for CommsGuard {
     fn drop(&mut self) {
         for handle in self.send_guards.drain(..) {
-            handle.join().expect("Send thread panic");
+            handle.join().expect("Send thread panic").unwrap();
         }
         // println!("SEND THREADS JOINED");
         for handle in self.recv_guards.drain(..) {
-            handle.join().expect("Recv thread panic");
+            handle.join().expect("Recv thread panic").unwrap();
         }
         // println!("RECV THREADS JOINED");
     }
@@ -97,7 +97,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
                         remote: Some(index),
                     });
 
-                    send_loop(stream, remote_recv, my_index, index, logger);
+                    send_loop(stream, remote_recv, my_index, index, logger)
                 })?;
 
             send_guards.push(join_guard);
@@ -118,7 +118,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
                         sender: false,
                         remote: Some(index),
                     });
-                    recv_loop(stream, remote_send, threads * my_index, my_index, index, logger);
+                    recv_loop(stream, remote_send, threads * my_index, my_index, index, logger)
                 })?;
 
             recv_guards.push(join_guard);
