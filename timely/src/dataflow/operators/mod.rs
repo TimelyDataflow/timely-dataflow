@@ -26,6 +26,7 @@ pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
 pub use self::ok_err::OkErr;
 pub use self::result::ResultStream;
+pub use filter_map::FilterMap;
 
 pub use self::generic::Operator;
 pub use self::generic::{Notificator, FrontierNotificator};
@@ -53,6 +54,7 @@ pub mod branch;
 pub mod ok_err;
 pub mod rc;
 pub mod result;
+pub mod filter_map;
 
 pub mod aggregation;
 pub mod generic;
