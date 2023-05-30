@@ -46,15 +46,12 @@ impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D,
     #[inline]
     pub(crate) fn next_guarded(&mut self) -> Option<(ConsumedGuard<T>, &mut BundleCore<T, D>)> {
         if let Some(message) = self.pullable.pull() {
-            if message.data.len() > 0 {
-                let guard = ConsumedGuard {
-                    consumed: Rc::clone(&self.consumed),
-                    time: Some(message.time.clone()),
-                    len: message.data.len(),
-                };
-                Some((guard, message))
-            }
-            else { None }
+            let guard = ConsumedGuard {
+                consumed: Rc::clone(&self.consumed),
+                time: Some(message.time.clone()),
+                len: message.data.len(),
+            };
+            Some((guard, message))
         }
         else { None }
     }
