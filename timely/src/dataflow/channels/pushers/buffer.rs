@@ -71,11 +71,13 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
 
     // Gives an entire container at a specific time.
     fn give_container(&mut self, vector: &mut C) {
-        // flush to ensure fifo-ness
-        self.flush();
+        if !vector.is_empty() {
+            // flush to ensure fifo-ness
+            self.flush();
 
-        let time = self.time.as_ref().expect("Buffer::give_container(): time is None.").clone();
-        Message::push_at(vector, time, &mut self.pusher);
+            let time = self.time.as_ref().expect("Buffer::give_container(): time is None.").clone();
+            Message::push_at(vector, time, &mut self.pusher);
+        }
     }
 }
 
