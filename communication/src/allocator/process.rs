@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::time::Duration;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap};
 use crossbeam_channel::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
@@ -174,7 +174,7 @@ impl Allocate for Process {
         (sends, recv)
     }
 
-    fn events(&self) -> &Rc<RefCell<VecDeque<(usize, Event)>>> {
+    fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
         self.inner.events()
     }
 
@@ -184,8 +184,8 @@ impl Allocate for Process {
 
     fn receive(&mut self) {
         let mut events = self.inner.events().borrow_mut();
-        while let Ok((index, event)) = self.counters_recv.try_recv() {
-            events.push_back((index, event));
+        while let Ok((index, _event)) = self.counters_recv.try_recv() {
+            events.push(index);
         }
     }
 }
