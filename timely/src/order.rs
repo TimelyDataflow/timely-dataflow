@@ -182,6 +182,19 @@ mod tuple {
         }
     }
 
+    use crate::progress::timestamp::Refines;
+    impl<TOuter: Timestamp, TInner: Timestamp> Refines<TOuter> for (TOuter, TInner) {
+        fn to_inner(other: TOuter) -> Self {
+            (other, TInner::minimum())
+        }
+        fn to_outer(self: (TOuter, TInner)) -> TOuter {
+            self.0
+        }
+        fn summarize(path: <Self as Timestamp>::Summary) -> <TOuter as Timestamp>::Summary {
+            path.0
+        }
+    }
+
     use super::Empty;
     impl<T1: Empty, T2: Empty> Empty for (T1, T2) { }
 }
