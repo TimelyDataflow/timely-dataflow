@@ -1,8 +1,9 @@
 //! Filters a stream by a predicate.
 
+use crate::container::columnation::{Columnation, TimelyStack};
 use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Stream, Scope, StreamCore};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
@@ -31,6 +32,21 @@ impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
                 vector.retain(|x| predicate(x));
                 if !vector.is_empty() {
                     output.session(&time).give_vec(&mut vector);
+                }
+            });
+        })
+    }
+}
+
+impl<G: Scope, D: Columnation + Data> Filter<D> for StreamCore<G, TimelyStack<D>> {
+    fn filter<P: FnMut(&D)->bool+'static>(&self, mut predicate: P) -> StreamCore<G, TimelyStack<D>> {
+        let mut container = Default::default();
+        self.unary(Pipeline, "Filter TimelyStack", move |_,_| move |input, output| {
+            input.for_each(|time, data| {
+                data.swap(&mut container);
+                container.retain_from(0, &mut predicate);
+                if !container.is_empty() {
+                    output.session(&time).give_container(&mut container);
                 }
             });
         })
