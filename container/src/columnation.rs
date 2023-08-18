@@ -57,8 +57,6 @@ impl<T: Columnation> TimelyStack<T> {
         self.inner.reserve_regions(regions.map(|cs| &cs.inner));
     }
 
-
-
     /// Copies an element in to the region.
     ///
     /// The element can be read by indexing
@@ -69,6 +67,7 @@ impl<T: Columnation> TimelyStack<T> {
             self.local.push(self.inner.copy(item));
         }
     }
+
     /// Empties the collection.
     pub fn clear(&mut self) {
         unsafe {
@@ -78,6 +77,19 @@ impl<T: Columnation> TimelyStack<T> {
             self.inner.clear();
         }
     }
+
+    /// Shrinks the capacity of the local vector as much as possible.
+    /// See [`Vec::shrink_to_fit`] for details
+    pub fn shrink_to_fit(&mut self) {
+        self.local.shrink_to_fit();
+    }
+
+    /// Shrinks the capacity of the local vector with a lower bound
+    /// See [`Vec::shrink_to`] for details
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.local.shrink_to(min_capacity);
+    }
+
     /// Retain elements that pass a predicate, from a specified offset.
     ///
     /// This method may or may not reclaim memory in the inner region.
