@@ -3,7 +3,7 @@
 /// Type alias for logging timely events.
 pub type WorkerIdentifier = usize;
 /// Logger type for worker-local logging.
-pub type Logger<Event> = crate::logging_core::Logger<Event, WorkerIdentifier>;
+pub type Logger<Event> = crate::logging_core::Logger<Event>;
 /// Logger for timely dataflow system events.
 pub type TimelyLogger = Logger<TimelyEvent>;
 /// Logger for timely dataflow progress events (the "timely/progress" log stream).
@@ -14,14 +14,14 @@ use serde::{Deserialize, Serialize};
 use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
-pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
+pub struct BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> {
     // None when the logging stream is closed
     time: Duration,
     event_pusher: P,
-    _phantom: ::std::marker::PhantomData<(E, T)>,
+    _phantom: ::std::marker::PhantomData<T>,
 }
 
-impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
+impl<T, E, P> BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
         BatchLogger {
@@ -31,7 +31,7 @@ impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration,
         }
     }
     /// Publishes a batch of logged events and advances the capability.
-    pub fn publish_batch(&mut self, &time: &Duration, data: &mut Vec<(Duration, E, T)>) {
+    pub fn publish_batch(&mut self, &time: &Duration, data: &mut Vec<(Duration, T)>) {
         if !data.is_empty() {
             self.event_pusher.push(Event::Messages(self.time, std::mem::take(data)));
         }
@@ -43,7 +43,7 @@ impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration,
         self.time = time;
     }
 }
-impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
+impl<T, P> Drop for BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
     fn drop(&mut self) {
         self.event_pusher.push(Event::Progress(vec![(self.time, -1)]));
     }
