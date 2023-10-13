@@ -5,7 +5,6 @@ authors = ["Frank McSherry <fmcsherry@me.com>"]
 edition = "2018"
 
 [dependencies]
-clap="*"
 abomonation="0.7"
 timely = { path = "../timely" }
 
