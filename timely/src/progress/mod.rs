@@ -2,7 +2,7 @@
 
 pub use self::operate::Operate;
 pub use self::subgraph::{Subgraph, SubgraphBuilder};
-pub use self::timestamp::{Timestamp, PathSummary};
+pub use self::timestamp::{Timestamp, PathSummary, TimestampContainer};
 pub use self::change_batch::ChangeBatch;
 pub use self::frontier::Antichain;
 
