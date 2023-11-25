@@ -43,6 +43,32 @@ impl<T: PartialOrder> Antichain<T> {
         }
     }
 
+    /// Updates the `Antichain` if the element is not greater than or equal to some present element.
+    ///
+    /// Returns true if element is added to the set
+    ///
+    /// Accepts a reference to an element, which is cloned when inserting.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::new();
+    /// assert!(frontier.insert_ref(&2));
+    /// assert!(!frontier.insert(3));
+    ///```
+    pub fn insert_ref(&mut self, element: &T) -> bool where T: Clone {
+        if !self.elements.iter().any(|x| x.less_equal(element)) {
+            self.elements.retain(|x| !element.less_equal(x));
+            self.elements.push(element.clone());
+            true
+        }
+        else {
+            false
+        }
+    }
+
     /// Reserves capacity for at least additional more elements to be inserted in the given `Antichain`
     pub fn reserve(&mut self, additional: usize) {
         self.elements.reserve(additional);
