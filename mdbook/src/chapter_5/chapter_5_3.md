@@ -40,8 +40,6 @@ impl<T, E> Default for ResultContainer<T, E> {
 }
 
 impl<T: Clone + 'static, E: Clone + 'static> Container for ResultContainer<T, E> {
-    type Item = Result<T, E>;
-
     fn len(&self) -> usize {
         match self {
             ResultContainer::Ok(data) => data.len(),

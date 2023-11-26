@@ -9,7 +9,7 @@ use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
-pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
+pub trait Inspect<G: Scope, C: Container, I>: InspectCore<G, C> + Sized {
     /// Runs a supplied closure on each observed data element.
     ///
     /// # Examples
@@ -21,7 +21,7 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn inspect(&self, mut func: impl FnMut(&C::Item)+'static) -> Self {
+    fn inspect(&self, mut func: impl FnMut(&I)+'static) -> Self {
         self.inspect_batch(move |_, data| {
             for datum in data.iter() { func(datum); }
         })
@@ -38,7 +38,7 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///            .inspect_time(|t, x| println!("seen at: {:?}\t{:?}", t, x));
     /// });
     /// ```
-    fn inspect_time(&self, mut func: impl FnMut(&G::Timestamp, &C::Item)+'static) -> Self {
+    fn inspect_time(&self, mut func: impl FnMut(&G::Timestamp, &I)+'static) -> Self {
         self.inspect_batch(move |time, data| {
             for datum in data.iter() {
                 func(&time, &datum);
@@ -57,7 +57,7 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch(&self, mut func: impl FnMut(&G::Timestamp, &[C::Item])+'static) -> Self {
+    fn inspect_batch(&self, mut func: impl FnMut(&G::Timestamp, &[I])+'static) -> Self {
         self.inspect_core(move |event| {
             if let Ok((time, data)) = event {
                 func(time, data);
@@ -84,25 +84,25 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///             });
     /// });
     /// ```
-    fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &[C::Item]), &[G::Timestamp]>)+'static;
+    fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &[I]), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, D: Data> Inspect<G, Vec<D>> for StreamCore<G, Vec<D>> {
+impl<G: Scope, D: Data> Inspect<G, Vec<D>, D> for StreamCore<G, Vec<D>> {
     fn inspect_core<F>(&self, mut func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &[D]), &[G::Timestamp]>) + 'static {
         self.inspect_container(move |r| func(r.map(|(t, c)| (t, &c[..]))))
     }
 }
 
-impl<G: Scope, D: Data+Columnation> Inspect<G, TimelyStack<D>> for StreamCore<G, TimelyStack<D>> {
+impl<G: Scope, D: Data+Columnation> Inspect<G, TimelyStack<D>, D> for StreamCore<G, TimelyStack<D>> {
     fn inspect_core<F>(&self, mut func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &[D]), &[G::Timestamp]>) + 'static {
         self.inspect_container(move |r| func(r.map(|(t, c)| (t, &c[..]))))
     }
 }
 
-impl<G: Scope, C: Container> Inspect<G, Rc<C>> for StreamCore<G, Rc<C>>
-    where C: AsRef<[C::Item]>
+impl<G: Scope, C: Container> Inspect<G, Rc<C>, C> for StreamCore<G, Rc<C>>
+    where C: AsRef<[C]>
 {
-    fn inspect_core<F>(&self, mut func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &[C::Item]), &[G::Timestamp]>) + 'static {
+    fn inspect_core<F>(&self, mut func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &[C]), &[G::Timestamp]>) + 'static {
         self.inspect_container(move |r| func(r.map(|(t, c)| (t, c.as_ref().as_ref()))))
     }
 }

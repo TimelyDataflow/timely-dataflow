@@ -296,8 +296,6 @@ mod container {
     use crate::columnation::{Columnation, TimelyStack};
 
     impl<T: Columnation + 'static> Container for TimelyStack<T> {
-        type Item = T;
-
         fn len(&self) -> usize {
             self.local.len()
         }
@@ -316,6 +314,7 @@ mod container {
     }
 
     impl<T: Columnation + 'static> PushPartitioned for TimelyStack<T> {
+        type Item = T;
         fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
         where
             I: FnMut(&Self::Item) -> usize,

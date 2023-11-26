@@ -17,9 +17,6 @@ pub mod columnation;
 /// is efficient (which is not necessarily the case when deriving `Clone`.)
 /// TODO: Don't require `Container: Clone`
 pub trait Container: Default + Clone + 'static {
-    /// The type of elements this container holds.
-    type Item;
-
     /// The number of elements in this container
     ///
     /// The length of a container must be consistent between sending and receiving it.
@@ -41,8 +38,6 @@ pub trait Container: Default + Clone + 'static {
 }
 
 impl<T: Clone + 'static> Container for Vec<T> {
-    type Item = T;
-
     fn len(&self) -> usize {
         Vec::len(self)
     }
@@ -64,8 +59,6 @@ mod rc {
     use crate::Container;
 
     impl<T: Container> Container for Rc<T> {
-        type Item = T::Item;
-
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
         }
@@ -95,8 +88,6 @@ mod arc {
     use crate::Container;
 
     impl<T: Container> Container for Arc<T> {
-        type Item = T::Item;
-
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
         }
@@ -122,6 +113,9 @@ mod arc {
 
 /// A container that can partition itself into pieces.
 pub trait PushPartitioned: Container {
+    /// Type of item to distribute among containers.
+    type Item;
+
     /// Partition and push this container.
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
@@ -133,6 +127,7 @@ pub trait PushPartitioned: Container {
 }
 
 impl<T: Clone + 'static> PushPartitioned for Vec<T> {
+    type Item = T;
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
     where
         I: FnMut(&Self::Item) -> usize,
