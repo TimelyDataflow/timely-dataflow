@@ -573,7 +573,7 @@ impl<T:Timestamp> Tracker<T> {
                 .collect::<Vec<_>>();
 
             if !target_changes.is_empty() {
-                logger.log_target_updates(Box::new(target_changes));
+                logger.log_target_pointstamp_updates(Box::new(target_changes));
             }
 
             let source_changes =
@@ -583,7 +583,7 @@ impl<T:Timestamp> Tracker<T> {
                 .collect::<Vec<_>>();
 
             if !source_changes.is_empty() {
-                logger.log_source_updates(Box::new(source_changes));
+                logger.log_source_pointstamp_updates(Box::new(source_changes));
             }
         }
 
@@ -670,6 +670,7 @@ impl<T:Timestamp> Tracker<T> {
                             }
                             self.pushed_changes.update((location, time), diff);
                         }
+
                     }
                     // Update to an operator output.
                     // Propagate any changes forward along outgoing edges.
@@ -693,6 +694,30 @@ impl<T:Timestamp> Tracker<T> {
                         }
                     },
                 };
+            }
+        }
+
+        // Step 3: If logging is enabled, construct and log outbound changes.
+        if let Some(logger) = &mut self.logger {
+            let mut target_changes = Vec::new();
+            let mut source_changes = Vec::new();
+
+            for ((location, time), diff) in self.pushed_changes.iter() {
+                match location.port {
+                    Port::Target(port) => {
+                        target_changes.push((location.node, port, time.clone(), *diff))
+                    }
+                    Port::Source(port) => {
+                        source_changes.push((location.node, port, time.clone(), *diff))
+                    }
+                }
+            }
+
+            if !target_changes.is_empty() || !source_changes.is_empty() {
+                logger.log_frontier_updates(
+                    Box::new(target_changes),
+                    Box::new(source_changes),
+                );
             }
         }
 
@@ -839,56 +864,113 @@ pub mod logging {
             Self { path, logger }
         }
 
-        /// Log source update events with additional identifying information.
-        pub fn log_source_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
+        /// Log source pointstamp update events with additional identifying information.
+        pub fn log_source_pointstamp_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
             self.logger.log({
-                SourceUpdate {
+                SourcePointstampUpdate {
                     tracker_id: self.path.clone(),
                     updates,
                 }
             })
         }
-        /// Log target update events with additional identifying information.
-        pub fn log_target_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
+        /// Log target pointstamp update events with additional identifying information.
+        pub fn log_target_pointstamp_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
             self.logger.log({
-                TargetUpdate {
+                TargetPointstampUpdate {
                     tracker_id: self.path.clone(),
                     updates,
                 }
             })
+        }
+
+        /// Log frontier update events with additional identifying information.
+        ///
+        /// We want to log source and target updates at the same time to ensure callers observe
+        /// consistent frontiers at any point in time.
+        pub fn log_frontier_updates(
+            &mut self,
+            source_updates: Box<dyn ProgressEventTimestampVec>,
+            target_updates: Box<dyn ProgressEventTimestampVec>,
+        ) {
+            let source_event: TrackerEvent = SourceFrontierUpdate {
+                tracker_id: self.path.clone(),
+                updates: source_updates,
+            }.into();
+            let target_event: TrackerEvent = TargetFrontierUpdate {
+                tracker_id: self.path.clone(),
+                updates: target_updates,
+            }.into();
+
+            self.logger.log_many([source_event, target_event]);
         }
     }
 
     /// Events that the tracker may record.
     pub enum TrackerEvent {
-        /// Updates made at a source of data.
-        SourceUpdate(SourceUpdate),
-        /// Updates made at a target of data.
-        TargetUpdate(TargetUpdate),
+        /// Pointstamp updates made at a source of data.
+        SourcePointstampUpdate(SourcePointstampUpdate),
+        /// Pointstamp updates made at a target of data.
+        TargetPointstampUpdate(TargetPointstampUpdate),
+        /// Frontier updates made at a source of data.
+        SourceFrontierUpdate(SourceFrontierUpdate),
+        /// Frontier updates made at a target of data.
+        TargetFrontierUpdate(TargetFrontierUpdate),
     }
 
-    /// An update made at a source of data.
-    pub struct SourceUpdate {
+    /// A pointstamp update made at a source of data.
+    pub struct SourcePointstampUpdate {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
         pub updates: Box<dyn ProgressEventTimestampVec>,
     }
 
-    /// An update made at a target of data.
-    pub struct TargetUpdate {
+    /// A pointstamp update made at a target of data.
+    pub struct TargetPointstampUpdate {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
         pub updates: Box<dyn ProgressEventTimestampVec>,
     }
 
-    impl From<SourceUpdate> for TrackerEvent {
-        fn from(v: SourceUpdate) -> TrackerEvent { TrackerEvent::SourceUpdate(v) }
+    /// A frontier update at a source of data.
+    pub struct SourceFrontierUpdate {
+        /// An identifier for the tracker.
+        pub tracker_id: Vec<usize>,
+        /// Updates themselves, as `(node, port, time, diff)`.
+        pub updates: Box<dyn ProgressEventTimestampVec>,
     }
 
-    impl From<TargetUpdate> for TrackerEvent {
-        fn from(v: TargetUpdate) -> TrackerEvent { TrackerEvent::TargetUpdate(v) }
+    /// A frontier update at a target of data.
+    pub struct TargetFrontierUpdate {
+        /// An identifier for the tracker.
+        pub tracker_id: Vec<usize>,
+        /// Updates themselves, as `(node, port, time, diff)`.
+        pub updates: Box<dyn ProgressEventTimestampVec>,
+    }
+
+    impl From<SourcePointstampUpdate> for TrackerEvent {
+        fn from(v: SourcePointstampUpdate) -> Self {
+            Self::SourcePointstampUpdate(v)
+        }
+    }
+
+    impl From<TargetPointstampUpdate> for TrackerEvent {
+        fn from(v: TargetPointstampUpdate) -> Self {
+            Self::TargetPointstampUpdate(v)
+        }
+    }
+
+    impl From<SourceFrontierUpdate> for TrackerEvent {
+        fn from(v: SourceFrontierUpdate) -> Self {
+            Self::SourceFrontierUpdate(v)
+        }
+    }
+
+    impl From<TargetFrontierUpdate> for TrackerEvent {
+        fn from(v: TargetFrontierUpdate) -> Self {
+            Self::TargetFrontierUpdate(v)
+        }
     }
 }
 
@@ -906,32 +988,52 @@ impl<T: Timestamp> Drop for Tracker<T> {
         };
 
         // Retract pending data that `propagate_all` would normally log.
-        for (index, per_operator) in self.per_operator.iter_mut().enumerate() {
-            let target_changes = per_operator.targets
-                .iter_mut()
-                .enumerate()
-                .flat_map(|(port, target)| {
-                    target.pointstamps
-                        .updates()
-                        .map(move |(time, diff)| (index, port, time.clone(), -diff))
-                })
-                .collect::<Vec<_>>();
-            if !target_changes.is_empty() {
-                logger.log_target_updates(Box::new(target_changes));
-            }
+        let mut target_pointstamp_changes = Vec::new();
+        let mut source_pointstamp_changes = Vec::new();
+        let mut target_frontier_changes = Vec::new();
+        let mut source_frontier_changes = Vec::new();
 
-            let source_changes = per_operator.sources
-                .iter_mut()
-                .enumerate()
-                .flat_map(|(port, source)| {
-                    source.pointstamps
-                        .updates()
-                        .map(move |(time, diff)| (index, port, time.clone(), -diff))
-                })
-                .collect::<Vec<_>>();
-            if !source_changes.is_empty() {
-                logger.log_source_updates(Box::new(source_changes));
+        for (index, per_operator) in self.per_operator.iter_mut().enumerate() {
+            for (port, target) in per_operator.targets.iter_mut().enumerate() {
+                let pointstamp_retractions = target.pointstamps
+                    .updates()
+                    .map(|(time, diff)| (index, port, time.clone(), -diff));
+                target_pointstamp_changes.extend(pointstamp_retractions);
+
+                let frontier = target.implications.frontier().to_owned();
+                let frontier_retractions = frontier
+                    .into_iter()
+                    .map(|time| (index, port, time, -1));
+                target_frontier_changes.extend(frontier_retractions);
             }
+        }
+
+        for (index, per_operator) in self.per_operator.iter_mut().enumerate() {
+            for (port, source) in per_operator.sources.iter_mut().enumerate() {
+                let pointstamp_retractions = source.pointstamps
+                    .updates()
+                    .map(|(time, diff)| (index, port, time.clone(), -diff));
+                source_pointstamp_changes.extend(pointstamp_retractions);
+
+                let frontier = source.implications.frontier().to_owned();
+                let frontier_retractions = frontier
+                    .into_iter()
+                    .map(|time| (index, port, time, -1));
+                source_frontier_changes.extend(frontier_retractions);
+            }
+        }
+
+        if !target_pointstamp_changes.is_empty() {
+            logger.log_target_pointstamp_updates(Box::new(target_pointstamp_changes));
+        }
+        if !source_pointstamp_changes.is_empty() {
+            logger.log_source_pointstamp_updates(Box::new(source_pointstamp_changes));
+        }
+        if !source_frontier_changes.is_empty() || !target_frontier_changes.is_empty() {
+            logger.log_frontier_updates(
+                Box::new(source_frontier_changes),
+                Box::new(target_frontier_changes),
+            );
         }
     }
 }
