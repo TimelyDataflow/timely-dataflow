@@ -33,12 +33,9 @@
 //! tracker.update_source(Source::new(0, 0), 17, 1);
 //!
 //! // Propagate changes; until this call updates are simply buffered.
-//! tracker.propagate_all();
+//! let updates = tracker.propagate_all();
 //!
-//! let mut results =
-//! tracker
-//!     .pushed()
-//!     .drain()
+//! let mut results = updates
 //!     .filter(|((location, time), delta)| location.is_target())
 //!     .collect::<Vec<_>>();
 //!
@@ -55,12 +52,9 @@
 //! tracker.update_source(Source::new(0, 0), 17, -1);
 //!
 //! // Propagate changes; until this call updates are simply buffered.
-//! tracker.propagate_all();
+//! let updates = tracker.propagate_all();
 //!
-//! let mut results =
-//! tracker
-//!     .pushed()
-//!     .drain()
+//! let mut results = updates
 //!     .filter(|((location, time), delta)| location.is_target())
 //!     .collect::<Vec<_>>();
 //!
@@ -564,8 +558,10 @@ impl<T:Timestamp> Tracker<T> {
     /// Propagates all pending updates.
     ///
     /// The method drains `self.input_changes` and circulates their implications
-    /// until we cease deriving new implications.
-    pub fn propagate_all(&mut self) {
+    /// until we cease deriving new implications. It returns an iterator over updates
+    /// to implications.
+    pub fn propagate_all(&mut self) -> impl Iterator<Item = ((Location, T), i64)> + '_ {
+        self.pushed_changes.clear();
 
         // Step 0: If logging is enabled, construct and log inbound changes.
         if let Some(logger) = &mut self.logger {
@@ -699,16 +695,13 @@ impl<T:Timestamp> Tracker<T> {
                 };
             }
         }
+
+        self.pushed_changes.drain()
     }
 
     /// Implications of maintained capabilities projected to each output.
     pub fn pushed_output(&mut self) -> &mut [ChangeBatch<T>] {
         &mut self.output_changes[..]
-    }
-
-    /// A mutable reference to the pushed results of changes.
-    pub fn pushed(&mut self) -> &mut ChangeBatch<(Location, T)> {
-        &mut self.pushed_changes
     }
 
     /// Reveals per-operator frontier state.
