@@ -1,7 +1,7 @@
 //! Broadcasts progress information among workers.
 
 use crate::progress::{ChangeBatch, Timestamp};
-use crate::progress::{Location, Port};
+use crate::progress::Location;
 use crate::communication::{Message, Push, Pull};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
@@ -68,13 +68,10 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 let mut internal = Box::new(Vec::with_capacity(changes.len()));
 
                 for ((location, time), diff) in changes.iter() {
-                    match location.port {
-                        Port::Target(port) => {
-                            messages.push((location.node, port, time.clone(), *diff))
-                        },
-                        Port::Source(port) => {
-                            internal.push((location.node, port, time.clone(), *diff))
-                        }
+                    if location.is_target() {
+                        messages.push((*location, time.clone(), *diff))
+                    } else {
+                        internal.push((*location, time.clone(), *diff))
                     }
                 }
 
@@ -137,14 +134,10 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 let mut internal = Box::new(Vec::with_capacity(changes.len()));
 
                 for ((location, time), diff) in recv_changes.iter() {
-
-                    match location.port {
-                        Port::Target(port) => {
-                            messages.push((location.node, port, time.clone(), *diff))
-                        },
-                        Port::Source(port) => {
-                            internal.push((location.node, port, time.clone(), *diff))
-                        }
+                    if location.is_target() {
+                        messages.push((*location, time.clone(), *diff))
+                    } else {
+                        internal.push((*location, time.clone(), *diff))
                     }
                 }
 

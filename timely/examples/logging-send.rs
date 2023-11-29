@@ -29,13 +29,13 @@ fn main() {
                 println!("PROGRESS: {:?}", x);
                 let (_, _, ev) = x;
                 print!("PROGRESS: TYPED MESSAGES: ");
-                for (n, p, t, d) in ev.messages.iter() {
-                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                for (l, t, d) in ev.messages.iter() {
+                    print!("{:?}, ", (l, t.as_any().downcast_ref::<usize>(), d));
                 }
                 println!();
                 print!("PROGRESS: TYPED INTERNAL: ");
-                for (n, p, t, d) in ev.internal.iter() {
-                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                for (l, t, d) in ev.internal.iter() {
+                    print!("{:?}, ", (l, t.as_any().downcast_ref::<usize>(), d));
                 }
                 println!();
             })
