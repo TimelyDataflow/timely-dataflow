@@ -99,7 +99,7 @@ impl<G: Scope, D: Data+Columnation> Inspect<G, TimelyStack<D>> for StreamCore<G,
     }
 }
 
-impl<G: Scope, C: Container> Inspect<G, Rc<C>> for StreamCore<G, Rc<C>>
+impl<G: Scope, C: Container + Data> Inspect<G, Rc<C>> for StreamCore<G, Rc<C>>
     where C: AsRef<[C::Item]>
 {
     fn inspect_core<F>(&self, mut func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &[C::Item]), &[G::Timestamp]>) + 'static {
@@ -131,7 +131,7 @@ pub trait InspectCore<G: Scope, C: Container> {
     fn inspect_container<F>(&self, func: F) -> StreamCore<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container> InspectCore<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container + Data> InspectCore<G, C> for StreamCore<G, C> {
 
     fn inspect_container<F>(&self, mut func: F) -> StreamCore<G, C>
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static

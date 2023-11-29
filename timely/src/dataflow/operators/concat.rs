@@ -1,7 +1,7 @@
 //! Merges the contents of multiple streams.
 
 
-use crate::Container;
+use crate::{Container, Data};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{StreamCore, Scope};
 
@@ -23,7 +23,7 @@ pub trait Concat<G: Scope, D: Container> {
     fn concat(&self, _: &StreamCore<G, D>) -> StreamCore<G, D>;
 }
 
-impl<G: Scope, D: Container> Concat<G, D> for StreamCore<G, D> {
+impl<G: Scope, D: Container + Data> Concat<G, D> for StreamCore<G, D> {
     fn concat(&self, other: &StreamCore<G, D>) -> StreamCore<G, D> {
         self.scope().concatenate([self.clone(), other.clone()])
     }
@@ -52,7 +52,7 @@ pub trait Concatenate<G: Scope, D: Container> {
         I: IntoIterator<Item=StreamCore<G, D>>;
 }
 
-impl<G: Scope, D: Container> Concatenate<G, D> for StreamCore<G, D> {
+impl<G: Scope, D: Container + Data> Concatenate<G, D> for StreamCore<G, D> {
     fn concatenate<I>(&self, sources: I) -> StreamCore<G, D>
     where
         I: IntoIterator<Item=StreamCore<G, D>>
@@ -62,7 +62,7 @@ impl<G: Scope, D: Container> Concatenate<G, D> for StreamCore<G, D> {
     }
 }
 
-impl<G: Scope, D: Container> Concatenate<G, D> for G {
+impl<G: Scope, D: Container + Data> Concatenate<G, D> for G {
     fn concatenate<I>(&self, sources: I) -> StreamCore<G, D>
     where
         I: IntoIterator<Item=StreamCore<G, D>>
