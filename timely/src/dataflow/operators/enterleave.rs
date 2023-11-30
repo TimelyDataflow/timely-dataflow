@@ -28,12 +28,13 @@ use crate::progress::{Source, Target};
 use crate::order::Product;
 use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
+use crate::dataflow::channels::pushers::{CounterCore, PushOwned};
 use crate::dataflow::channels::{BundleCore, Message};
 
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope, Stream};
+use crate::dataflow::{OwnedStream, StreamLike, Scope};
 use crate::dataflow::scopes::{Child, ScopeParent};
+use crate::dataflow::scopes::child::Iterative;
 use crate::dataflow::operators::delay::Delay;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
@@ -52,10 +53,8 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(self, _: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C>;
 }
-
-use crate::dataflow::scopes::child::Iterative;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
 pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
@@ -73,22 +72,22 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, D> ;
+    fn enter_at<'a, F:FnMut(&D)->T+'static>(self, scope: &Iterative<'a, G, T>, initial: F) -> OwnedStream<Iterative<'a, G, T>, Vec<D>> ;
 }
 
 impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, Vec<D>>> EnterAt<G, T, D> for E {
-    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, mut initial: F) ->
-        Stream<Iterative<'a, G, T>, D> {
+    fn enter_at<'a, F:FnMut(&D)->T+'static>(self, scope: &Iterative<'a, G, T>, mut initial: F) ->
+        OwnedStream<Iterative<'a, G, T>, Vec<D>> {
             self.enter(scope).delay(move |datum, time| Product::new(time.clone().to_outer(), initial(datum)))
     }
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for StreamCore<G, C> {
-    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container+Data, S: StreamLike<G, C>> Enter<G, T, C> for S {
+    fn enter<'a>(self, scope: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
-        let (targets, registrar) = TeeCore::<T, C>::new();
+        let (targets, registrar) = PushOwned::<T, C>::new();
         let ingress = IngressNub {
             targets: CounterCore::new(targets),
             phantom: PhantomData,
@@ -106,7 +105,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
             self.connect_to(input, ingress, channel_id);
         }
 
-        StreamCore::new(
+        OwnedStream::new(
             Source::new(0, input.port),
             registrar,
             scope.clone(),
@@ -115,7 +114,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
 }
 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
-pub trait Leave<G: Scope, D: Container> {
+pub trait Leave<G: Scope, D: Container, T: Timestamp> {
     /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// # Examples
@@ -130,17 +129,23 @@ pub trait Leave<G: Scope, D: Container> {
     ///     });
     /// });
     /// ```
-    fn leave(&self) -> StreamCore<G, D>;
+    fn leave(self) -> OwnedStream<G, D>;
 }
 
-impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for StreamCore<Child<'a, G, T>, D> {
-    fn leave(&self) -> StreamCore<G, D> {
+impl<'a, G, D, T, S> Leave<G, D, T> for S
+where
+    G: Scope,
+    D: Container + Data,
+    T: Timestamp + Refines<G::Timestamp>,
+    S: StreamLike<Child<'a, G, T>, D>,
+{
+    fn leave(self) -> OwnedStream<G, D> {
 
         let scope = self.scope();
 
         let output = scope.subgraph.borrow_mut().new_output();
         let target = Target::new(0, output.port);
-        let (targets, registrar) = TeeCore::<G::Timestamp, D>::new();
+        let (targets, registrar) = PushOwned::<G::Timestamp, D>::new();
         let egress = EgressNub { targets, phantom: PhantomData };
         let channel_id = scope.clone().new_identifier();
 
@@ -151,7 +156,7 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
             self.connect_to(target, egress, channel_id);
         }
 
-        StreamCore::new(
+        OwnedStream::new(
             output,
             registrar,
             scope.parent,
@@ -160,14 +165,14 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+Data> {
+    targets: CounterCore<TInner, TData, PushOwned<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+Data> Push<BundleCore<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
     fn push(&mut self, element: &mut Option<BundleCore<TOuter, TData>>) {
         if let Some(message) = element {
             let outer_message = message.as_mut();
@@ -193,12 +198,16 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Pus
 
 
 struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> {
-    targets: TeeCore<TOuter, TData>,
+    targets: PushOwned<TOuter, TData>,
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData: Container> Push<BundleCore<TInner, TData>> for EgressNub<TOuter, TInner, TData>
-where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
+impl<TOuter, TInner, TData> Push<BundleCore<TInner, TData>> for EgressNub<TOuter, TInner, TData>
+where
+    TOuter: Timestamp,
+    TInner: Timestamp+Refines<TOuter>,
+    TData: Container + Data,
+{
     fn push(&mut self, message: &mut Option<BundleCore<TInner, TData>>) {
         if let Some(message) = message {
             let inner_message = message.as_mut();

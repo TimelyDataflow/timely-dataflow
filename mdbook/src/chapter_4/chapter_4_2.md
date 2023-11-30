@@ -24,7 +24,7 @@ fn main() {
         // circulate numbers, Collatz stepping each time.
         (1 .. 10)
             .to_stream(scope)
-            .concat(&stream)
+            .concat(stream)
             .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
             .inspect(|x| println!("{:?}", x))
             .filter(|x| *x != 1)
@@ -63,17 +63,17 @@ fn main() {
         let results1 = stream1.map(|x| 3 * x + 1);
 
         // partition the input and feedback streams by even-ness.
-        let parts =
+        let mut parts =
             (1 .. 10)
                 .to_stream(scope)
-                .concat(&results0)
-                .concat(&results1)
+                .concat(results0)
+                .concat(results1)
                 .inspect(|x| println!("{:?}", x))
                 .partition(2, |x| (x % 2, x));
 
         // connect each part appropriately.
-        parts[0].connect_loop(handle0);
-        parts[1].connect_loop(handle1);
+        parts.pop().unwrap().connect_loop(handle1);
+        parts.pop().unwrap().connect_loop(handle0);
     });
 }
 ```
@@ -103,7 +103,7 @@ fn main() {
 
             input
                 .enter(subscope)
-                .concat(&stream)
+                .concat(stream)
                 .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
                 .inspect(|x| println!("{:?}", x))
                 .filter(|x| *x != 1)

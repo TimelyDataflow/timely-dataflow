@@ -7,12 +7,12 @@ use crate::Container;
 
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::CapabilitySet;
-use crate::dataflow::{StreamCore, Scope, Stream};
+use crate::dataflow::{OwnedStream, Scope};
 use crate::progress::Timestamp;
 use crate::Data;
 
 /// Converts to a timely `Stream`.
-pub trait ToStream<T: Timestamp, D: Data> {
+pub trait ToStream<T: Timestamp, D> {
     /// Converts to a timely `Stream`.
     ///
     /// # Examples
@@ -29,11 +29,11 @@ pub trait ToStream<T: Timestamp, D: Data> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, D>;
+    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> OwnedStream<S, Vec<D>>;
 }
 
-impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::Item: Data {
-    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> Stream<S, I::Item> {
+impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I {
+    fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> OwnedStream<S, Vec<I::Item>> {
 
         source(scope, "ToStream", |capability, info| {
 
@@ -80,11 +80,11 @@ pub trait ToStreamCore<T: Timestamp, C: Container> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream_core<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C>;
+    fn to_stream_core<S: Scope<Timestamp=T>>(self, scope: &mut S) -> OwnedStream<S, C>;
 }
 
 impl<T: Timestamp, I: IntoIterator+'static> ToStreamCore<T, I::Item> for I where I::Item: Container {
-    fn to_stream_core<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, I::Item> {
+    fn to_stream_core<S: Scope<Timestamp=T>>(self, scope: &mut S) -> OwnedStream<S, I::Item> {
 
         source(scope, "ToStreamCore", |capability, info| {
 
@@ -150,7 +150,7 @@ pub trait ToStreamAsync<T: Timestamp, D: Data> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope<Timestamp = T>>(self, scope: &S) -> Stream<S, D>;
+    fn to_stream<S: Scope<Timestamp = T>>(self, scope: &S) -> OwnedStream<S, Vec<D>>;
 }
 
 impl<T, D, F, I> ToStreamAsync<T, D> for I
@@ -160,7 +160,7 @@ where
     F: IntoIterator<Item = T>,
     I: futures_util::stream::Stream<Item = Event<F, D>> + Unpin + 'static,
 {
-    fn to_stream<S: Scope<Timestamp = T>>(mut self, scope: &S) -> Stream<S, D> {
+    fn to_stream<S: Scope<Timestamp = T>>(mut self, scope: &S) -> OwnedStream<S, Vec<D>> {
         source(scope, "ToStreamAsync", move |capability, info| {
             let activator = Arc::new(scope.sync_activator_for(&info.address[..]));
 

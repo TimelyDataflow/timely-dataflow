@@ -20,7 +20,7 @@ pub struct TeeCore<T, D> {
 /// [TeeCore] specialized to `Vec`-based container.
 pub type Tee<T, D> = TeeCore<T, Vec<D>>;
 
-impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
+impl<T: Data, D: Container+Data> Push<BundleCore<T, D>> for TeeCore<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<BundleCore<T, D>>) {
         let mut pushers = self.shared.borrow_mut();

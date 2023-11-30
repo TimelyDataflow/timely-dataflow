@@ -11,12 +11,7 @@ pub mod columnation;
 ///
 /// A container must implement default. The default implementation is not required to allocate
 /// memory for variable-length components.
-///
-/// We require the container to be cloneable to enable efficient copies when providing references
-/// of containers to operators. Care must be taken that the type's `clone_from` implementation
-/// is efficient (which is not necessarily the case when deriving `Clone`.)
-/// TODO: Don't require `Container: Clone`
-pub trait Container: Default + Clone + 'static {
+pub trait Container: Default + 'static {
     /// The type of elements this container holds.
     type Item;
 
@@ -40,7 +35,7 @@ pub trait Container: Default + Clone + 'static {
     fn clear(&mut self);
 }
 
-impl<T: Clone + 'static> Container for Vec<T> {
+impl<T: 'static> Container for Vec<T> {
     type Item = T;
 
     fn len(&self) -> usize {
@@ -132,7 +127,7 @@ pub trait PushPartitioned: Container {
         F: FnMut(usize, &mut Self);
 }
 
-impl<T: Clone + 'static> PushPartitioned for Vec<T> {
+impl<T: 'static> PushPartitioned for Vec<T> {
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
     where
         I: FnMut(&Self::Item) -> usize,

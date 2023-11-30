@@ -183,7 +183,7 @@ fn main() {
         let in1 = (0 .. 10).to_stream(scope);
         let in2 = (0 .. 10).to_stream(scope);
 
-        in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
+        in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
             let mut notificator = FrontierNotificator::new();
             let mut stash = HashMap::new();
@@ -234,7 +234,7 @@ fn main() {
         let in1 = (0 .. 10).to_stream(scope);
         let in2 = (0 .. 10).to_stream(scope);
 
-        in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
+        in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
             let mut stash = HashMap::new();
 

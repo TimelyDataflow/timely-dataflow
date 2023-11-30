@@ -1,8 +1,8 @@
 use timely::Data;
-use timely::dataflow::{Scope, Stream};
+use timely::dataflow::{OwnedStream, Scope};
 use timely::dataflow::operators::Capability;
 use timely::dataflow::operators::generic::OutputHandle;
-use timely::dataflow::channels::pushers::Tee;
+use timely::dataflow::channels::pushers::PushOwned;
 
 use rdkafka::Message;
 use rdkafka::consumer::{ConsumerContext, BaseConsumer};
@@ -89,14 +89,14 @@ pub fn kafka_source<C, G, D, L>(
     name: &str,
     consumer: BaseConsumer<C>,
     logic: L
-) -> Stream<G, D>
+) -> OwnedStream<G, Vec<D>>
 where
     C: ConsumerContext+'static,
     G: Scope,
     D: Data,
     L: Fn(&[u8],
           &mut Capability<G::Timestamp>,
-          &mut OutputHandle<G::Timestamp, D, Tee<G::Timestamp, D>>) -> bool+'static,
+          &mut OutputHandle<G::Timestamp, D, PushOwned<G::Timestamp, Vec<D>>>) -> bool+'static,
 {
     use timely::dataflow::operators::generic::source;
     source(scope, name, move |capability, info| {

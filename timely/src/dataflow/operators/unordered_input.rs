@@ -142,12 +142,12 @@ pub trait UnorderedInputCore<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>);
+    fn new_unordered_input_core<D: Container+Data>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>);
 }
 
 
 impl<G: Scope> UnorderedInputCore<G> for G {
-    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>) {
+    fn new_unordered_input_core<D: Container+Data>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>) {
 
         let (output, registrar) = TeeCore::<G::Timestamp, D>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
@@ -215,11 +215,11 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 
 /// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct UnorderedHandleCore<T: Timestamp, D: Container> {
+pub struct UnorderedHandleCore<T: Timestamp, D: Container+Data> {
     buffer: PushBuffer<T, D, PushCounter<T, D, TeeCore<T, D>>>,
 }
 
-impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
+impl<T: Timestamp, D: Container+Data> UnorderedHandleCore<T, D> {
     fn new(pusher: PushCounter<T, D, TeeCore<T, D>>) -> UnorderedHandleCore<T, D> {
         UnorderedHandleCore {
             buffer: PushBuffer::new(pusher),
