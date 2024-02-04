@@ -17,7 +17,7 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
-            .unary(Pipeline, "increment", |capability, info| {
+            .unary::<Vec<_>, _, _, _>(Pipeline, "increment", |capability, info| {
 
                 let mut vector = Vec::new();
                 move |input, output| {
@@ -75,7 +75,7 @@ use timely::dataflow::operators::generic::operator::source;
 fn main() {
     timely::example(|scope| {
 
-        source(scope, "Source", |capability, info| {
+        source::<_, Vec<_>, _, _>(scope, "Source", |capability, info| {
 
             // Acquire a re-activator for this operator.
             use timely::scheduling::Scheduler;
@@ -131,7 +131,7 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
-            .unary(Pipeline, "increment", |capability, info| {
+            .unary::<Vec<_>, _, _, _>(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
                 let mut vector = Vec::new();

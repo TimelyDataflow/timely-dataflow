@@ -196,7 +196,7 @@ As before, I'm just going to show you the new code, which now lives just after `
 #                         .map(move |word| (word.to_owned(), diff))
 #                         .collect::<Vec<_>>()
 #                 )
-                .unary_frontier(
+                .unary_frontier::<Vec<_>, _, _, _>(
                     Exchange::new(|x: &(String, i64)| (x.0).len() as u64),
                     "WordCount",
                     |_capability, operator_info| {

@@ -1,12 +1,12 @@
 //! Filters a stream by a predicate.
 
-use crate::Data;
+use timely_container::{Container, PushContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
-pub trait Filter<D: Data> {
+pub trait Filter<C: Container> {
     /// Returns a new instance of `self` containing only records satisfying `predicate`.
     ///
     /// # Examples
@@ -19,18 +19,25 @@ pub trait Filter<D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn filter<P: FnMut(&D)->bool+'static>(&self, predicate: P) -> Self;
+    fn filter<P: 'static>(&self, predicate: P) -> Self
+    where
+        for<'a> P: FnMut(&C::Item<'a>)->bool;
 }
 
-impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
-    fn filter<P: FnMut(&D)->bool+'static>(&self, mut predicate: P) -> Stream<G, D> {
-        let mut vector = Vec::new();
+impl<G: Scope, C: PushContainer> Filter<C> for StreamCore<G, C>
+where
+    for<'a> C::Item<'a>: PushInto<C>,
+{
+    fn filter<P>(&self, mut predicate: P) -> StreamCore<G, C>
+    where
+        for<'a> P: FnMut(&C::Item<'a>)->bool+'static
+    {
+        let mut vector = Default::default();
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                vector.retain(|x| predicate(x));
                 if !vector.is_empty() {
-                    output.session(&time).give_vec(&mut vector);
+                    output.session(&time).give_iterator(vector.drain().filter(|x| predicate(&x)));
                 }
             });
         })

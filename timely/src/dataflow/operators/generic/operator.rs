@@ -30,7 +30,7 @@ pub trait Operator<G: Scope, D1: Container> {
     /// fn main() {
     ///     timely::example(|scope| {
     ///         (0u64..10).to_stream(scope)
-    ///             .unary_frontier(Pipeline, "example", |default_cap, _info| {
+    ///             .unary_frontier::<Vec<_>, _, _, _>(Pipeline, "example", |default_cap, _info| {
     ///                 let mut cap = Some(default_cap.delayed(&12));
     ///                 let mut notificator = FrontierNotificator::new();
     ///                 let mut stash = HashMap::new();
@@ -172,7 +172,7 @@ pub trait Operator<G: Scope, D1: Container> {
     ///                    }
     ///                });
     ///            }
-    ///        }).inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
+    ///        }).inspect_batch(|t, x: &Vec<_>| println!("{:?} -> {:?}", t, x));
     ///
     ///        (in1_handle, in2_handle)
     ///    });
@@ -529,7 +529,7 @@ impl<G: Scope, D1: Container> Operator<G, D1> for StreamCore<G, D1> {
 ///
 /// timely::example(|scope| {
 ///
-///     source(scope, "Source", |capability, info| {
+///     source::<_, Vec<_>, _, _>(scope, "Source", |capability, info| {
 ///
 ///         let activator = scope.activator_for(&info.address[..]);
 ///
