@@ -102,16 +102,16 @@ impl<T:Data> Pull<Message<T>> for Puller<T> {
 /// not the most efficient thing possible, which would probably instead be something
 /// like the `bytes` crate (../bytes/) which provides an exclusive view of a shared
 /// allocation.
-pub struct PullerInner<T> {
-    inner: Box<dyn Pull<Message<T>>>,               // inner pullable (e.g. intra-process typed queue)
+pub struct PullerInner<T, P> {
+    inner: P,
     _canary: Canary,
     current: Option<Message<T>>,
     receiver: Rc<RefCell<VecDeque<Bytes>>>,     // source of serialized buffers
 }
 
-impl<T:Data> PullerInner<T> {
+impl<T:Data, P: Pull<Message<T>>> PullerInner<T, P> {
     /// Creates a new `PullerInner` instance from a shared queue.
-    pub fn new(inner: Box<dyn Pull<Message<T>>>, receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
+    pub fn new(inner: P, receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
         PullerInner {
             inner,
             _canary,
@@ -121,7 +121,7 @@ impl<T:Data> PullerInner<T> {
     }
 }
 
-impl<T:Data> Pull<Message<T>> for PullerInner<T> {
+impl<T:Data, P: Pull<Message<T>>> Pull<Message<T>> for PullerInner<T, P> {
     #[inline]
     fn pull(&mut self) -> &mut Option<Message<T>> {
 

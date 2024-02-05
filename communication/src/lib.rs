@@ -16,7 +16,7 @@
 //!
 //! # Examples
 //! ```
-//! use timely_communication::Allocate;
+//! use timely_communication::{Allocate, Pull, Push};
 //!
 //! // configure for two threads, just one process.
 //! let config = timely_communication::Config::Process(2);

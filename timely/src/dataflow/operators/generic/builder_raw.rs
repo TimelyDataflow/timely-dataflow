@@ -105,7 +105,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P) -> P::Puller
+    pub fn new_input<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P) -> P::Puller<G>
         where
             P: ParallelizationContractCore<G::Timestamp, D> {
         let connection = vec![Antichain::from_elem(Default::default()); self.shape.outputs];
@@ -113,7 +113,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller
+    pub fn new_input_connection<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller<G>
     where
         P: ParallelizationContractCore<G::Timestamp, D> {
 
