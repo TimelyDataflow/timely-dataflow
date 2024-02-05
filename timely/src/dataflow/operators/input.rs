@@ -196,7 +196,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         self.add_operator_with_index(Box::new(Operator {
             name: "Input".to_owned(),
             address,
-            shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
+            shared_progress: SharedProgress::new(0, 1),
             progress,
             messages: produced,
             copies,
@@ -210,9 +210,11 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 struct Operator<T:Timestamp> {
     name: String,
     address: Vec<usize>,
-    shared_progress: Rc<RefCell<SharedProgress<T>>>,
-    progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
-    messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked
+    shared_progress: SharedProgress<T>,
+    /// Times closed since last asked
+    progress:   Rc<RefCell<ChangeBatch<T>>>,
+    /// Messages sent since last asked
+    messages:   Rc<RefCell<ChangeBatch<T>>>,
     copies:     usize,
 }
 
@@ -223,21 +225,23 @@ impl<T:Timestamp> Schedule for Operator<T> {
     fn path(&self) -> &[usize] { &self.address[..] }
 
     fn schedule(&mut self) -> bool {
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
-        self.progress.borrow_mut().drain_into(&mut shared_progress.internals[0]);
-        self.messages.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
+        self.progress.borrow_mut().drain_into(&mut self.shared_progress.internals[0]);
+        self.messages.borrow_mut().drain_into(&mut self.shared_progress.produceds[0]);
         false
     }
 }
 
 impl<T:Timestamp> Operate<T> for Operator<T> {
-
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
-        self.shared_progress.borrow_mut().internals[0].update(T::minimum(), self.copies as i64);
-        (Vec::new(), self.shared_progress.clone())
+    fn get_internal_summary(&mut self) -> Vec<Vec<Antichain<<T as Timestamp>::Summary>>> {
+        self.shared_progress.internals[0].update(T::minimum(), self.copies as i64);
+        Vec::new()
+    }
+
+    fn shared_progress_mut(&mut self) -> &mut SharedProgress<T> {
+        &mut self.shared_progress
     }
 
     fn notify_me(&self) -> bool { false }

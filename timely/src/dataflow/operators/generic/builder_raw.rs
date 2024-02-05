@@ -166,7 +166,7 @@ impl<G: Scope> OperatorBuilder<G> {
             address: self.address,
             activations: self.scope.activations(),
             logic,
-            shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
+            shared_progress: SharedProgress::new(inputs, outputs),
             summary: self.summary,
         };
 
@@ -187,7 +187,7 @@ where
     shape: OperatorShape,
     address: Vec<usize>,
     logic: L,
-    shared_progress: Rc<RefCell<SharedProgress<T>>>,
+    shared_progress: SharedProgress<T>,
     activations: Rc<RefCell<Activations>>,
     summary: Vec<Vec<Antichain<T::Summary>>>,
 }
@@ -200,8 +200,7 @@ where
     fn name(&self) -> &str { &self.shape.name }
     fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
-        (self.logic)(shared_progress)
+        (self.logic)(&mut self.shared_progress)
     }
 }
 
@@ -214,25 +213,27 @@ where
     fn outputs(&self) -> usize { self.shape.outputs }
 
     // announce internal topology as fully connected, and hold all default capabilities.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+    fn get_internal_summary(&mut self) -> Vec<Vec<Antichain<T::Summary>>> {
 
         // Request the operator to be scheduled at least once.
         self.activations.borrow_mut().activate(&self.address[..]);
 
         // by default, we reserve a capability for each output port at `Default::default()`.
-        self.shared_progress
-            .borrow_mut()
-            .internals
-            .iter_mut()
-            .for_each(|output| output.update(T::minimum(), self.shape.peers as i64));
+        for output in self.shared_progress.internals.iter_mut() {
+            output.update(T::minimum(), self.shape.peers as i64);
+        }
 
-        (self.summary.clone(), self.shared_progress.clone())
+        self.summary.clone()
     }
 
     // initialize self.frontier antichains as indicated by hosting scope.
     fn set_external_summary(&mut self) {
         // should we schedule the operator here, or just await the first invocation?
         self.schedule();
+    }
+
+    fn shared_progress_mut(&mut self) -> &mut SharedProgress<T> {
+        &mut self.shared_progress
     }
 
     fn notify_me(&self) -> bool { self.shape.notify }

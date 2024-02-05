@@ -210,7 +210,7 @@ where
             progcaster,
             pointstamp_tracker: tracker,
 
-            shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs, outputs))),
+            shared_progress: SharedProgress::new(inputs, outputs),
             scope_summary,
 
             progress_mode: worker.config().progress_mode,
@@ -262,7 +262,7 @@ where
     // channel / whatever used to communicate pointstamp updates to peers.
     progcaster: Progcaster<TInner>,
 
-    shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
+    shared_progress: SharedProgress<TOuter>,
     scope_summary: Vec<Vec<Antichain<TInner::Summary>>>,
 
     progress_mode: ProgressMode,
@@ -380,7 +380,7 @@ where
 
     /// Move frontier changes from parent into progress statements.
     fn accept_frontier(&mut self) {
-        for (port, changes) in self.shared_progress.borrow_mut().frontiers.iter_mut().enumerate() {
+        for (port, changes) in self.shared_progress.frontiers.iter_mut().enumerate() {
             let source = Source::new(0, port);
             for (time, value) in changes.drain() {
                 self.pointstamp_tracker.update_source(
@@ -438,7 +438,6 @@ where
                     //       Note the re-negation of delta, to make counts positive.
                     Port::Source(scope_input) => {
                         self.shared_progress
-                            .borrow_mut()
                             .consumeds[scope_input]
                             .update(timestamp.to_outer(), -delta);
                     },
@@ -447,7 +446,6 @@ where
                     //       and we do not want to present their implications upward.
                     Port::Target(scope_output) => {
                         self.shared_progress
-                            .borrow_mut()
                             .produceds[scope_output]
                             .update(timestamp.to_outer(), delta);
                     },
@@ -466,17 +464,21 @@ where
             self.maybe_shutdown.push(location.node);
             // Targets are actionable, sources are not.
             if let crate::progress::Port::Target(port) = location.port {
-                if self.children[location.node].notify {
+                let child = &mut self.children[location.node];
+                if child.notify {
                     self.temp_active.push(Reverse(location.node));
                 }
                 // TODO: This logic could also be guarded by `.notify`, but
                 // we want to be a bit careful to make sure all related logic
                 // agrees with this (e.g. initialization, operator logic, etc.)
-                self.children[location.node]
-                    .shared_progress
-                    .borrow_mut()
-                    .frontiers[port]
-                    .update(time, diff);
+                if let Some(operator) = child.operator.as_mut() {
+                    operator.shared_progress_mut().frontiers[port].update(time, diff);
+                } else {
+                    // If the operator is closed and we are reporting progress at it, something has surely gone wrong.
+                    println!("Operator prematurely shut down: {}", child.name);
+                    println!("  {:?}", child.notify);
+                    panic!();
+                }
             }
         }
 
@@ -493,7 +495,7 @@ where
         }
 
         // Extract child zero frontier changes and report as internal capability changes.
-        for (output, internal) in self.shared_progress.borrow_mut().internals.iter_mut().enumerate() {
+        for (output, internal) in self.shared_progress.internals.iter_mut().enumerate() {
             self.pointstamp_tracker
                 .pushed_output()[output]
                 .drain()
@@ -539,7 +541,7 @@ where
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
+    fn get_internal_summary(&mut self) -> Vec<Vec<Antichain<TOuter::Summary>>> {
 
         // double-check that child 0 (the outside world) is correctly shaped.
         assert_eq!(self.children[0].outputs, self.inputs());
@@ -576,8 +578,8 @@ where
 
         self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
 
-        // Return summaries and shared progress information.
-        (internal_summary, self.shared_progress.clone())
+        // Return summaries information.
+        internal_summary
     }
 
     fn set_external_summary(&mut self) {
@@ -587,6 +589,10 @@ where
             .iter_mut()
             .flat_map(|child| child.operator.as_mut())
             .for_each(|op| op.set_external_summary());
+    }
+
+    fn shared_progress_mut(&mut self) -> &mut SharedProgress<TOuter> {
+        &mut self.shared_progress
     }
 }
 
@@ -605,8 +611,6 @@ struct PerOperatorState<T: Timestamp> {
 
     edges: Vec<Vec<Target>>,    // edges from the outputs of the operator
 
-    shared_progress: Rc<RefCell<SharedProgress<T>>>,
-
     internal_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
 
     logging: Option<Logger>,
@@ -617,7 +621,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     fn empty(inputs: usize, outputs: usize) -> PerOperatorState<T> {
         PerOperatorState {
             name:       "External".to_owned(),
-            operator:   None,
+            operator:   Some(Box::new(EmptyOperator::new(inputs, outputs))),
             index:      0,
             id:         usize::max_value(),
             local:      false,
@@ -629,7 +633,6 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             logging: None,
 
-            shared_progress: Rc::new(RefCell::new(SharedProgress::new(inputs,outputs))),
             internal_summary: Vec::new(),
         }
     }
@@ -647,7 +650,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let outputs = scope.outputs();
         let notify = scope.notify_me();
 
-        let (internal_summary, shared_progress) = scope.get_internal_summary();
+        let internal_summary = scope.get_internal_summary();
 
         assert_eq!(
             internal_summary.len(),
@@ -674,13 +677,11 @@ impl<T: Timestamp> PerOperatorState<T> {
 
             logging,
 
-            shared_progress,
             internal_summary,
         }
     }
 
     pub fn schedule(&mut self) -> bool {
-
         if let Some(ref mut operator) = self.operator {
 
             // Perhaps log information about the start of the schedule call.
@@ -688,8 +689,8 @@ impl<T: Timestamp> PerOperatorState<T> {
                 // FIXME: There is no contract that the operator must consume frontier changes.
                 //        This report could be spurious.
                 // TODO:  Perhaps fold this in to `ScheduleEvent::start()` as a "reason"?
-                let frontiers = &mut self.shared_progress.borrow_mut().frontiers[..];
-                if frontiers.iter_mut().any(|buffer| !buffer.is_empty()) {
+                let mut frontiers = operator.shared_progress_mut().frontiers.iter_mut();
+                if frontiers.any(|buffer| !buffer.is_empty()) {
                     l.log(crate::logging::PushProgressEvent { op_id: self.id })
                 }
 
@@ -704,17 +705,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             }
 
             incomplete
-        }
-        else {
-
-            // If the operator is closed and we are reporting progress at it, something has surely gone wrong.
-            if self.shared_progress.borrow_mut().frontiers.iter_mut().any(|x| !x.is_empty()) {
-                println!("Operator prematurely shut down: {}", self.name);
-                println!("  {:?}", self.notify);
-                println!("  {:?}", self.shared_progress.borrow_mut().frontiers);
-                panic!();
-            }
-
+        } else {
             // A closed operator shouldn't keep anything open.
             false
         }
@@ -731,8 +722,10 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     /// Extracts shared progress information and converts to pointstamp changes.
     fn extract_progress(&mut self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>) {
-
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        let shared_progress = match self.operator.as_mut() {
+            Some(operator) => operator.shared_progress_mut(),
+            None => return,
+        };
 
         // Migrate consumeds, internals, produceds into progress statements.
         for (input, consumed) in shared_progress.consumeds.iter_mut().enumerate() {
@@ -763,8 +756,10 @@ impl<T: Timestamp> PerOperatorState<T> {
     /// internal capabilities, as events can occur that cannot be explained locally otherwise.
     #[allow(dead_code)]
     fn validate_progress(&mut self, child_state: &reachability::PerOperator<T>) {
-
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
+        let shared_progress = match self.operator.as_mut() {
+            Some(operator) => operator.shared_progress_mut(),
+            None => return,
+        };
 
         // Increments to internal capabilities require a consumed input message, a
         for (output, internal) in shared_progress.internals.iter_mut().enumerate() {
@@ -798,5 +793,54 @@ impl<T: Timestamp> PerOperatorState<T> {
 impl<T: Timestamp> Drop for PerOperatorState<T> {
     fn drop(&mut self) {
         self.shut_down();
+    }
+}
+
+/// An dummy operator to act as a represenantive of a scope
+struct EmptyOperator<T: Timestamp> {
+    inputs: usize,
+    outputs: usize,
+    shared_progress: SharedProgress<T>,
+}
+
+impl<T: Timestamp> EmptyOperator<T> {
+    fn new(inputs: usize, outputs: usize) -> Self {
+        EmptyOperator {
+            inputs,
+            outputs,
+            shared_progress: SharedProgress::new(inputs, outputs),
+        }
+    }
+}
+
+impl<T: Timestamp> Operate<T> for EmptyOperator<T> {
+    fn local(&self) -> bool {
+        false
+    }
+    fn inputs(&self)  -> usize {
+        self.inputs
+    }
+    fn outputs(&self) -> usize {
+        self.outputs
+    }
+    fn get_internal_summary(&mut self) -> Vec<Vec<Antichain<T::Summary>>> {
+        unreachable!("requested internal summary of empty operator");
+    }
+    fn set_external_summary(&mut self) {}
+
+    fn shared_progress_mut(&mut self) -> &mut SharedProgress<T> {
+        &mut self.shared_progress
+    }
+}
+
+impl<T: Timestamp> Schedule for EmptyOperator<T> {
+    fn name(&self) -> &str {
+        "External"
+    }
+    fn path(&self) -> &[usize] {
+        &[]
+    }
+    fn schedule(&mut self) -> bool {
+        false
     }
 }

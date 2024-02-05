@@ -168,7 +168,7 @@ impl<G: Scope> UnorderedInputCore<G> for G {
         self.add_operator_with_index(Box::new(UnorderedOperator {
             name: "UnorderedInput".to_owned(),
             address,
-            shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
+            shared_progress: SharedProgress::new(0, 1),
             internal,
             produced,
             peers,
@@ -181,7 +181,7 @@ impl<G: Scope> UnorderedInputCore<G> for G {
 struct UnorderedOperator<T:Timestamp> {
     name: String,
     address: Vec<usize>,
-    shared_progress: Rc<RefCell<SharedProgress<T>>>,
+    shared_progress: SharedProgress<T>,
     internal:   Rc<RefCell<ChangeBatch<T>>>,
     produced:   Rc<RefCell<ChangeBatch<T>>>,
     peers:     usize,
@@ -191,9 +191,8 @@ impl<T:Timestamp> Schedule for UnorderedOperator<T> {
     fn name(&self) -> &str { &self.name }
     fn path(&self) -> &[usize] { &self.address[..] }
     fn schedule(&mut self) -> bool {
-        let shared_progress = &mut *self.shared_progress.borrow_mut();
-        self.internal.borrow_mut().drain_into(&mut shared_progress.internals[0]);
-        self.produced.borrow_mut().drain_into(&mut shared_progress.produceds[0]);
+        self.internal.borrow_mut().drain_into(&mut self.shared_progress.internals[0]);
+        self.produced.borrow_mut().drain_into(&mut self.shared_progress.produceds[0]);
         false
     }
 }
@@ -202,12 +201,16 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+    fn get_internal_summary(&mut self) -> Vec<Vec<Antichain<<T as Timestamp>::Summary>>> {
         let mut borrow = self.internal.borrow_mut();
         for (time, count) in borrow.drain() {
-            self.shared_progress.borrow_mut().internals[0].update(time, count * (self.peers as i64));
+            self.shared_progress.internals[0].update(time, count * (self.peers as i64));
         }
-        (Vec::new(), self.shared_progress.clone())
+        Vec::new()
+    }
+
+    fn shared_progress_mut(&mut self) -> &mut SharedProgress<T> {
+        &mut self.shared_progress
     }
 
     fn notify_me(&self) -> bool { false }

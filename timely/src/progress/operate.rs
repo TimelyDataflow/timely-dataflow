@@ -1,8 +1,5 @@
 //! Methods which describe an operators topology, and the progress it makes.
 
-use std::rc::Rc;
-use std::cell::RefCell;
-
 use crate::scheduling::Schedule;
 use crate::progress::{Timestamp, ChangeBatch, Antichain};
 
@@ -44,7 +41,10 @@ pub trait Operate<T: Timestamp> : Schedule {
     ///
     /// The default behavior is to indicate that timestamps on any input can emerge unchanged on
     /// any output, and no initial capabilities are held.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>);
+    fn get_internal_summary(&mut self) -> Vec<Vec<Antichain<T::Summary>>>;
+
+    /// Provides temporary mutable access to the SharedProgress structure of this operator
+    fn shared_progress_mut(&mut self) -> &mut SharedProgress<T>;
 
     /// Signals that external frontiers have been set.
     ///
