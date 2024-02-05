@@ -141,6 +141,8 @@ pub trait ToStreamAsync<T: Timestamp, D: Data> {
     ///     Event::Progress(Some(0)),
     /// ]);
     ///
+    /// let native_stream = Box::pin(native_stream);
+    ///
     /// let (data1, data2) = timely::example(|scope| {
     ///     let data1 = native_stream.to_stream(scope).capture();
     ///     let data2 = vec![0,1,2].to_stream(scope).capture();
@@ -150,7 +152,7 @@ pub trait ToStreamAsync<T: Timestamp, D: Data> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope<Timestamp = T>>(self, scope: &S) -> Stream<S, D>;
+    fn to_stream<S: Scope<Timestamp = T>>(self: Pin<Box<Self>>, scope: &S) -> Stream<S, D>;
 }
 
 impl<T, D, F, I> ToStreamAsync<T, D> for I
@@ -158,9 +160,9 @@ where
     D: Data,
     T: Timestamp,
     F: IntoIterator<Item = T>,
-    I: futures_util::stream::Stream<Item = Event<F, D>> + Unpin + 'static,
+    I: futures_util::stream::Stream<Item = Event<F, D>> + ?Sized + 'static,
 {
-    fn to_stream<S: Scope<Timestamp = T>>(mut self, scope: &S) -> Stream<S, D> {
+    fn to_stream<S: Scope<Timestamp = T>>(mut self: Pin<Box<Self>>, scope: &S) -> Stream<S, D> {
         source(scope, "ToStreamAsync", move |capability, info| {
             let activator = Arc::new(scope.sync_activator_for(&info.address[..]));
 
@@ -171,7 +173,7 @@ where
                 let mut context = Context::from_waker(&waker);
 
                 // Consume all the ready items of the source_stream and issue them to the operator
-                while let Poll::Ready(item) = Pin::new(&mut self).poll_next(&mut context) {
+                while let Poll::Ready(item) = self.as_mut().poll_next(&mut context) {
                     match item {
                         Some(Event::Progress(time)) => {
                             cap_set.downgrade(time);
