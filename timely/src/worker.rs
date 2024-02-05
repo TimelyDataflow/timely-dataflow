@@ -341,7 +341,6 @@ impl<A: Allocate> Worker<A> {
             borrow.sort_unstable();
             borrow.dedup();
             for channel in borrow.drain(..) {
-                // TODO: Pay more attent to `_event`.
                 // Consider tracking whether a channel
                 // in non-empty, and only activating
                 // on the basis of non-empty channels.
