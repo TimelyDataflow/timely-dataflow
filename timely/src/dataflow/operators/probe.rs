@@ -139,7 +139,7 @@ impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
 }
 
 /// Reports information about progress at the probe.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Handle<T:Timestamp> {
     frontier: Rc<RefCell<MutableAntichain<T>>>
 }
@@ -170,14 +170,6 @@ impl<T: Timestamp> Handle<T> {
     #[inline]
     pub fn with_frontier<R, F: FnMut(AntichainRef<T>)->R>(&self, mut function: F) -> R {
         function(self.frontier.borrow().frontier())
-    }
-}
-
-impl<T: Timestamp> Clone for Handle<T> {
-    fn clone(&self) -> Self {
-        Handle {
-            frontier: self.frontier.clone()
-        }
     }
 }
 

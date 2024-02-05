@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::communication::{Data, Push, Pull};
+use crate::communication::{Data, Message, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
@@ -22,6 +22,7 @@ pub type Iterative<'a, G, T> = Child<'a, G, Product<<G as ScopeParent>::Timestam
 
 /// A `Child` wraps a `Subgraph` and a parent `G: Scope`. It manages the addition
 /// of `Operate`s to a subgraph, and the connection of edges between them.
+#[derive(Clone)]
 pub struct Child<'a, G, T>
 where
     G: ScopeParent,
@@ -133,22 +134,5 @@ where
         self.add_operator_with_index(Box::new(subscope), index);
 
         result
-    }
-}
-
-use crate::communication::Message;
-
-impl<'a, G, T> Clone for Child<'a, G, T>
-where
-    G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
-{
-    fn clone(&self) -> Self {
-        Child {
-            subgraph: self.subgraph,
-            parent: self.parent.clone(),
-            logging: self.logging.clone(),
-            progress_logging: self.progress_logging.clone(),
-        }
     }
 }
