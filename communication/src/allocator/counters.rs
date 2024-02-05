@@ -4,7 +4,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::{Push, Pull};
-use crate::allocator::Event;
 
 /// The push half of an intra-thread channel.
 pub struct Pusher<T, P: Push<T>> {
@@ -58,7 +57,7 @@ use crossbeam_channel::Sender;
 pub struct ArcPusher<T, P: Push<T>> {
     index: usize,
     // count: usize,
-    events: Sender<(usize, Event)>,
+    events: Sender<usize>,
     pusher: P,
     phantom: ::std::marker::PhantomData<T>,
     buzzer: crate::buzzer::Buzzer,
@@ -66,7 +65,7 @@ pub struct ArcPusher<T, P: Push<T>> {
 
 impl<T, P: Push<T>>  ArcPusher<T, P> {
     /// Wraps a pusher with a message counter.
-    pub fn new(pusher: P, index: usize, events: Sender<(usize, Event)>, buzzer: crate::buzzer::Buzzer) -> Self {
+    pub fn new(pusher: P, index: usize, events: Sender<usize>, buzzer: crate::buzzer::Buzzer) -> Self {
         ArcPusher {
             index,
             // count: 0,
@@ -98,7 +97,7 @@ impl<T, P: Push<T>> Push<T> for ArcPusher<T, P> {
         // and finally awaken the thread. Other orders are defective when
         // multiple threads are involved.
         self.pusher.push(element);
-        let _ = self.events.send((self.index, Event::Pushed(1)));
+        let _ = self.events.send(self.index);
             // TODO : Perhaps this shouldn't be a fatal error (e.g. in shutdown).
             // .expect("Failed to send message count");
         self.buzzer.buzz();

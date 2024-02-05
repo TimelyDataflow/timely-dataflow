@@ -91,11 +91,3 @@ pub trait Allocate {
         thread::Thread::new_from(identifier, self.events().clone())
     }
 }
-
-/// A communication channel event.
-pub enum Event {
-    /// A number of messages pushed into the channel.
-    Pushed(usize),
-    /// A number of messages pulled from the channel.
-    Pulled(usize),
-}

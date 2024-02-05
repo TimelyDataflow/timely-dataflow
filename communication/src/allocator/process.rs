@@ -9,7 +9,7 @@ use std::collections::{HashMap};
 use crossbeam_channel::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
-use crate::allocator::{Allocate, AllocateBuilder, Event, Thread};
+use crate::allocator::{Allocate, AllocateBuilder, Thread};
 use crate::{Push, Pull, Message};
 use crate::buzzer::Buzzer;
 
@@ -25,8 +25,8 @@ pub struct ProcessBuilder {
     buzzers_send: Vec<Sender<Buzzer>>,
     buzzers_recv: Vec<Receiver<Buzzer>>,
 
-    counters_send: Vec<Sender<(usize, Event)>>,
-    counters_recv: Receiver<(usize, Event)>,
+    counters_send: Vec<Sender<usize>>,
+    counters_recv: Receiver<usize>,
 }
 
 impl AllocateBuilder for ProcessBuilder {
@@ -63,8 +63,8 @@ pub struct Process {
     // below: `Box<Any+Send>` is a `Box<Vec<Option<(Vec<Sender<T>>, Receiver<T>)>>>`
     channels: Arc<Mutex<HashMap</* channel id */ usize, Box<dyn Any+Send>>>>,
     buzzers: Vec<Buzzer>,
-    counters_send: Vec<Sender<(usize, Event)>>,
-    counters_recv: Receiver<(usize, Event)>,
+    counters_send: Vec<Sender<usize>>,
+    counters_recv: Receiver<usize>,
 }
 
 impl Process {
@@ -184,7 +184,7 @@ impl Allocate for Process {
 
     fn receive(&mut self) {
         let mut events = self.inner.events().borrow_mut();
-        while let Ok((index, _event)) = self.counters_recv.try_recv() {
+        while let Ok(index) = self.counters_recv.try_recv() {
             events.push(index);
         }
     }
