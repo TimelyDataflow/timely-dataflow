@@ -14,7 +14,7 @@ pub use self::unordered_input::{UnorderedInput, UnorderedInputCore};
 pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
 pub use self::concat::{Concat, Concatenate};
 pub use self::partition::Partition;
-pub use self::map::Map;
+pub use self::map::{Map, MapCore};
 pub use self::inspect::{Inspect, InspectCore};
 pub use self::filter::Filter;
 pub use self::delay::Delay;

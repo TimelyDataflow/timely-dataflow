@@ -1,7 +1,10 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
+use timely_container::columnation::{Columnation, TimelyStack};
+use timely_container::MonotonicContainer;
 use crate::Data;
-use crate::dataflow::{Stream, Scope};
+use crate::communication::message::RefOrMut;
+use crate::dataflow::{Stream, Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
@@ -78,6 +81,92 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
                 data.swap(&mut vector);
                 output.session(&time).give_iterator(vector.drain(..).flat_map(|x| logic(x).into_iter()));
             });
+        })
+    }
+}
+
+/// Extension trait to `StreamCore` to map container elements while retaining the same container
+/// type.
+pub trait MapCore<S: Scope, C: MonotonicContainer<O>, O: Data> {
+    /// Consumes each element of the stream and yields a new element.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, MapCore, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .map_core(|x, _| *x + 1)
+    ///            .inspect(|x| println!("seen: {:?}", x));
+    /// });
+    /// ```
+    fn map_core<L: FnMut(RefOrMut<C::Item>, Option<O>)->O+'static>(&self, logic: L) -> StreamCore<S, C::Output>;
+    /// Consumes each element of the stream and yields a new element.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, MapCore, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .flat_map_core(|x, _| 0..*x)
+    ///            .inspect(|x| println!("seen: {:?}", x));
+    /// });
+    /// ```
+    fn flat_map_core<I: IntoIterator<Item=O>, L: FnMut(RefOrMut<C::Item>, Option<O>)->I+'static>(&self, logic: L) -> StreamCore<S, C::Output>;
+}
+
+impl<S: Scope, D: Data, O: Data> MapCore<S, Vec<D>, O> for StreamCore<S, Vec<D>> {
+    fn map_core<L: FnMut(RefOrMut<D>, Option<O>)->O+'static>(&self, mut logic: L) -> StreamCore<S, Vec<O>> {
+        let mut vector = Default::default();
+        self.unary(Pipeline, "MapCore Vec", move |_,_| move |input, output| {
+            input.for_each(|time, data| {
+                data.swap(&mut vector);
+                output.session(&time).give_iterator(vector.drain(..).map(|ref mut d| logic(RefOrMut::Mut(d), None)));
+            });
+        })
+    }
+    fn flat_map_core<I: IntoIterator<Item=O>, L: FnMut(RefOrMut<D>, Option<O>)->I+'static>(&self, mut logic: L) -> StreamCore<S, Vec<O>> {
+        let mut vector = Vec::new();
+        self.unary(Pipeline, "FlatMap Vec", move |_,_| move |input, output| {
+            while let Some((time, data)) = input.next() {
+                data.swap(&mut vector);
+                output.session(&time).give_iterator(vector.drain(..).flat_map(|ref mut x| logic(RefOrMut::Mut(x), None).into_iter()));
+            }
+        })
+    }
+}
+
+impl<S: Scope, D: Data + Columnation, O: Data + Columnation> MapCore<S, TimelyStack<D>, O> for StreamCore<S, TimelyStack<D>> {
+    fn map_core<L: FnMut(RefOrMut<D>, Option<O>)->O+'static>(&self, mut logic: L) -> StreamCore<S, TimelyStack<O>> {
+        let mut output_buffer = TimelyStack::default();
+        self.unary(Pipeline, "MapCore TimelyStack", move |_,_| move |input, output| {
+            let mut last = None;
+            while let Some((time, data)) = input.next() {
+                for datum in &**data {
+                    let o = logic(RefOrMut::Ref(datum), last);
+                    output_buffer.copy(&o);
+                    last = Some(o);
+                }
+                output.session(&time).give_container(&mut output_buffer);
+            }
+        })
+    }
+
+    fn flat_map_core<I: IntoIterator<Item=O>, L: FnMut(RefOrMut<D>, Option<O>)->I+'static>(&self, mut logic: L) -> StreamCore<S, TimelyStack<O>> {
+        let mut output_buffer = TimelyStack::default();
+        self.unary(Pipeline, "FlatMap Vec", move |_,_| move |input, output| {
+            while let Some((time, data)) = input.next() {
+                let mut last = None;
+                for datum in &**data {
+                    let o = logic(RefOrMut::Ref(datum), last.take());
+                    for item in o {
+                        output_buffer.copy(&item);
+                        last = Some(item);
+                    }
+                }
+                output.session(&time).give_container(&mut output_buffer);
+            }
         })
     }
 }
