@@ -78,7 +78,7 @@ pub trait ToStreamCore<T: Timestamp, C: Container> {
     fn to_stream_core<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C>;
 }
 
-impl<T: Timestamp, I: IntoIterator+'static> ToStreamCore<T, I::Item> for I where I::Item: Container {
+impl<T: Timestamp, I: IntoIterator+'static> ToStreamCore<T, I::Item> for I where I::Item: Container + Data {
     fn to_stream_core<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, I::Item> {
 
         source(scope, "ToStreamCore", |capability, info| {

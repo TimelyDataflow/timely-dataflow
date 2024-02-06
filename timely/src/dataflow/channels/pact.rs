@@ -10,9 +10,9 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use timely_container::PushPartitioned;
 
-use crate::communication::{Push, Pull, Data};
+use crate::communication::{Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::Container;
+use crate::{Container, ExchangeData};
 
 use crate::worker::AsWorker;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -33,14 +33,14 @@ pub trait ParallelizationContractCore<T, D> {
 
 /// A `ParallelizationContractCore` specialized for `Vec` containers
 /// TODO: Use trait aliases once stable.
-pub trait ParallelizationContract<T, D: Clone>: ParallelizationContractCore<T, Vec<D>> { }
-impl<T, D: Clone, P: ParallelizationContractCore<T, Vec<D>>> ParallelizationContract<T, D> for P { }
+pub trait ParallelizationContract<T, D>: ParallelizationContractCore<T, Vec<D>> { }
+impl<T, D, P: ParallelizationContractCore<T, Vec<D>>> ParallelizationContract<T, D> for P { }
 
 /// A direct connection
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, D: Container> ParallelizationContractCore<T, D> for Pipeline {
+impl<T: 'static, D: Container + 'static> ParallelizationContractCore<T, D> for Pipeline {
     type Pusher = LogPusher<T, D, ThreadPusher<BundleCore<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<BundleCore<T, D>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -69,9 +69,9 @@ impl<C, D, F: FnMut(&D)->u64+'static> ExchangeCore<C, D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Timestamp, C, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for ExchangeCore<C, D, F>
+impl<T: Timestamp, C, D: ExchangeData, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for ExchangeCore<C, D, F>
 where
-    C: Data + Container + PushPartitioned<Item=D>,
+    C: ExchangeData + Container + PushPartitioned<Item=D>,
 {
     type Pusher = ExchangePusher<T, C, D, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, F>;
     type Puller = LogPuller<T, C, Box<dyn Pull<BundleCore<T, C>>>>;

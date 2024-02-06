@@ -10,14 +10,14 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
-use crate::Container;
+use crate::{Container, Data};
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
 use super::{EventCore, EventPusherCore};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<T: Timestamp, D: Container> {
+pub trait Capture<T: Timestamp, D: Container + Data> {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -113,7 +113,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     }
 }
 
-impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
+impl<S: Scope, D: Container + Data> Capture<S::Timestamp, D> for StreamCore<S, D> {
     fn capture_into<P: EventPusherCore<S::Timestamp, D>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
@@ -142,7 +142,7 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
                         RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
-                    let vector = data.replace(Default::default());
+                    let vector = data.take();
                     event_pusher.push(EventCore::Messages(time.clone(), vector));
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
