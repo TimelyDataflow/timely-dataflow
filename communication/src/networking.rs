@@ -3,7 +3,7 @@
 use std::io;
 use std::io::{Read, Result};
 use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
@@ -68,8 +68,17 @@ pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> R
     let hosts1 = Arc::new(addresses);
     let hosts2 = hosts1.clone();
 
-    let start_task = thread::spawn(move || start_connections(hosts1, my_index, noisy));
-    let await_task = thread::spawn(move || await_connections(hosts2, my_index, noisy));
+    let nonce = Arc::new((Mutex::new(None), Condvar::new()));
+
+    if my_index == 0 {
+        let (nonce, _cvar) = &*nonce;
+        *nonce.lock().unwrap() = Some(rand::random());
+    }
+
+    let nonce1 = Arc::clone(&nonce);
+
+    let start_task = thread::spawn(move || start_connections(hosts1, my_index, noisy, nonce1));
+    let await_task = thread::spawn(move || await_connections(hosts2, my_index, noisy, nonce));
 
     let mut results = start_task.join().unwrap()?;
     results.push(None);
@@ -83,7 +92,8 @@ pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> R
 
 
 /// Result contains connections [0, my_index - 1].
-pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
+pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool, arc: Arc<(Mutex<Option<u64>>, Condvar)>) -> Result<Vec<Option<TcpStream>>> {
+    // let arc = &arc;
     let results = addresses.iter().take(my_index).enumerate().map(|(index, address)| {
         loop {
             match TcpStream::connect(address) {
@@ -91,6 +101,21 @@ pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
                     stream.set_nodelay(true).expect("set_nodelay call failed");
                     unsafe { encode(&HANDSHAKE_MAGIC, &mut stream) }.expect("failed to encode/send handshake magic");
                     unsafe { encode(&(my_index as u64), &mut stream) }.expect("failed to encode/send worker index");
+                    let mut buffer = [0u8;8];
+                    stream.read_exact(&mut buffer).expect("failed to read nonce");
+                    let received_nonce = unsafe { decode::<u64>(&mut buffer) }.expect("failed to decode nonce").0.clone();
+                    let (nonce, cvar) = &*arc;
+                    let mut nonce = nonce.lock().unwrap();
+                    let nonce = if let Some(known_nonce) = *nonce {
+                        known_nonce
+                    } else {
+                        *nonce = Some(received_nonce);
+                        cvar.notify_all();
+                        received_nonce
+                    };
+                    unsafe { encode(&nonce, &mut stream) }.expect("failed to encode/send worker index");
+                    assert_eq!(nonce, received_nonce, "nonce mismatch");
+
                     if noisy { println!("worker {}:\tconnection to worker {}", my_index, index); }
                     break Some(stream);
                 },
@@ -106,22 +131,32 @@ pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
 }
 
 /// Result contains connections [my_index + 1, addresses.len() - 1].
-pub fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
+pub fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool, nonce: Arc<(Mutex<Option<u64>>, Condvar)>) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..(addresses.len() - my_index - 1)).map(|_| None).collect();
     let listener = TcpListener::bind(&addresses[my_index][..])?;
+
+    let (lock, cvar) = &*nonce;
+    let mut nonce = lock.lock().unwrap();
+    while nonce.is_none() {
+        nonce = cvar.wait(nonce).unwrap();
+    }
+    let nonce = nonce.unwrap();
 
     for _ in (my_index + 1) .. addresses.len() {
         let mut stream = listener.accept()?.0;
         stream.set_nodelay(true).expect("set_nodelay call failed");
-        let mut buffer = [0u8;16];
+        unsafe { encode(&nonce, &mut stream) }.expect("failed to encode/send nonce");
+        let mut buffer = [0u8; 24];
         stream.read_exact(&mut buffer)?;
         let (magic, mut buffer) = unsafe { decode::<u64>(&mut buffer) }.expect("failed to decode magic");
         if magic != &HANDSHAKE_MAGIC {
             return Err(io::Error::new(io::ErrorKind::InvalidData,
                 "received incorrect timely handshake"));
         }
-        let identifier = unsafe { decode::<u64>(&mut buffer) }.expect("failed to decode worker index").0.clone() as usize;
-        results[identifier - my_index - 1] = Some(stream);
+        let (identifier, mut buffer) = unsafe { decode::<u64>(&mut buffer) }.expect("failed to decode worker index");
+        results[identifier.clone() as usize - my_index - 1] = Some(stream);
+        let child_nonce = unsafe { decode::<u64>(&mut buffer) }.expect("failed to decode child nonce").0.clone();
+        assert_eq!(nonce, child_nonce, "nonce mismatch");
         if noisy { println!("worker {}:\tconnection from worker {}", my_index, identifier); }
     }
 
