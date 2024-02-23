@@ -10,10 +10,13 @@
 /// `a.less_equal(b)` and `b.less_equal(a)`.
 pub trait PartialOrder : Eq {
     /// Returns true iff one element is strictly less than the other.
+    #[must_use]
     fn less_than(&self, other: &Self) -> bool {
         self.less_equal(other) && self != other
     }
+
     /// Returns true iff one element is less than or equal to the other.
+    #[must_use]
     fn less_equal(&self, other: &Self) -> bool;
 }
 
