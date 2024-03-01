@@ -1,10 +1,11 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use crate::dataflow::channels::{Bundle, BundleCore, Message};
-use crate::progress::Timestamp;
-use crate::dataflow::operators::Capability;
 use crate::communication::Push;
+use crate::container::{PushContainer, PushInto};
+use crate::dataflow::channels::{BundleCore, Message};
+use crate::dataflow::operators::Capability;
+use crate::progress::Timestamp;
 use crate::{Container, Data};
 
 /// Buffers data sent at the same time, for efficient communication.
@@ -81,21 +82,22 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
     }
 }
 
-impl<T, D: Data, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
+impl<T, C: PushContainer, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
     // internal method for use by `Session`.
     #[inline]
-    fn give(&mut self, data: D) {
-        if self.buffer.capacity() < crate::container::buffer::default_capacity::<D>() {
-            let to_reserve = crate::container::buffer::default_capacity::<D>() - self.buffer.capacity();
+    fn give<D: PushInto<C>>(&mut self, data: D) {
+        if self.buffer.capacity() < C::preferred_capacity() {
+            let to_reserve = C::preferred_capacity() - self.buffer.capacity();
             self.buffer.reserve(to_reserve);
         }
         self.buffer.push(data);
-        // assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
-        if self.buffer.len() == self.buffer.capacity() {
+        if self.buffer.len() >= C::preferred_capacity() {
             self.flush();
         }
     }
+}
 
+impl<T, D: Data, P: Push<BundleCore<T, Vec<D>>>> Buffer<T, D, P> where T: Eq+Clone {
     // Gives an entire message at a specific time.
     fn give_vec(&mut self, vector: &mut Vec<D>) {
         // flush to ensure fifo-ness

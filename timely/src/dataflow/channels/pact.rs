@@ -8,18 +8,16 @@
 //! The progress tracking logic assumes that this number is independent of the pact used.
 
 use std::{fmt::{self, Debug}, marker::PhantomData};
-use timely_container::PushPartitioned;
 
-use crate::communication::{Push, Pull, Data};
-use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::Container;
-
-use crate::worker::AsWorker;
+use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
+use crate::communication::{Push, Pull, Data};
+use crate::container::PushPartitioned;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
-use super::{BundleCore, Message};
-
+use crate::dataflow::channels::{BundleCore, Message};
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 use crate::progress::Timestamp;
+use crate::worker::AsWorker;
 
 /// A `ParallelizationContractCore` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContractCore<T, D> {
@@ -53,14 +51,18 @@ impl<T: 'static, D: Container> ParallelizationContractCore<T, D> for Pipeline {
 }
 
 /// An exchange between multiple observers by data
-pub struct ExchangeCore<C, D, F> { hash_func: F, phantom: PhantomData<(C, D)> }
+pub struct ExchangeCore<C, F> { hash_func: F, phantom: PhantomData<C> }
 
 /// [ExchangeCore] specialized to vector-based containers.
-pub type Exchange<D, F> = ExchangeCore<Vec<D>, D, F>;
+pub type Exchange<D, F> = ExchangeCore<Vec<D>, F>;
 
-impl<C, D, F: FnMut(&D)->u64+'static> ExchangeCore<C, D, F> {
+impl<C, F> ExchangeCore<C, F>
+where
+    C: PushPartitioned,
+    for<'a> F: FnMut(&C::Item<'a>)->u64
+{
     /// Allocates a new `Exchange` pact from a distribution function.
-    pub fn new(func: F) -> ExchangeCore<C, D, F> {
+    pub fn new(func: F) -> ExchangeCore<C, F> {
         ExchangeCore {
             hash_func:  func,
             phantom:    PhantomData,
@@ -69,11 +71,12 @@ impl<C, D, F: FnMut(&D)->u64+'static> ExchangeCore<C, D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Timestamp, C, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for ExchangeCore<C, D, F>
+impl<T: Timestamp, C, H: 'static> ParallelizationContractCore<T, C> for ExchangeCore<C, H>
 where
-    C: Data + Container + PushPartitioned<Item=D>,
+    C: Data + PushPartitioned,
+    for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
-    type Pusher = ExchangePusher<T, C, D, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, F>;
+    type Pusher = ExchangePusher<T, C, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, H>;
     type Puller = LogPuller<T, C, Box<dyn Pull<BundleCore<T, C>>>>;
 
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -83,7 +86,7 @@ where
     }
 }
 
-impl<C, D, F> Debug for ExchangeCore<C, D, F> {
+impl<C, F> Debug for ExchangeCore<C, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Exchange").finish()
     }
