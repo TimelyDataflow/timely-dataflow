@@ -1,5 +1,5 @@
 <!DOCTYPE HTML>
-<html lang="en" class="sidebar-visible no-js light">
+<html lang="en" class="light" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
@@ -10,7 +10,7 @@
         
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#ffffff">
 
         <link rel="icon" href="../favicon.svg">
         <link rel="shortcut icon" href="../favicon.png">
@@ -31,7 +31,7 @@
         <!-- Custom theme stylesheets -->
 
     </head>
-    <body>
+    <body class="sidebar-visible no-js">
     <div id="body-container">
         <!-- Provide site root to javascript -->
         <script>
@@ -61,40 +61,71 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             var html = document.querySelector('html');
-            html.classList.remove('no-js')
             html.classList.remove('light')
             html.classList.add(theme);
-            html.classList.add('js');
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
         </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
 
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
-            var html = document.querySelector('html');
-            var sidebar = 'hidden';
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
             }
-            html.classList.remove('sidebar-visible');
-            html.classList.add("sidebar-" + sidebar);
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
         </script>
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
                 <ol class="chapter"><li class="chapter-item expanded affix "><a href="../introduction.html">Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0.html"><strong aria-hidden="true">1.</strong> Motivation</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_0.html"><strong aria-hidden="true">1.1.</strong> A Simplest Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_1.html"><strong aria-hidden="true">1.2.</strong> A Simple Example</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_2.html"><strong aria-hidden="true">1.3.</strong> When to use Timely Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_0/chapter_0_3.html"><strong aria-hidden="true">1.4.</strong> When not to use Timely Dataflow</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1.html" class="active"><strong aria-hidden="true">2.</strong> Core Concepts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_1.html"><strong aria-hidden="true">2.1.</strong> Dataflow</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_2.html"><strong aria-hidden="true">2.2.</strong> Timestamps</a></li><li class="chapter-item expanded "><a href="../chapter_1/chapter_1_3.html"><strong aria-hidden="true">2.3.</strong> Progress</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2.html"><strong aria-hidden="true">3.</strong> Building Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_1.html"><strong aria-hidden="true">3.1.</strong> Creating Inputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_2.html"><strong aria-hidden="true">3.2.</strong> Observing Outputs</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_3.html"><strong aria-hidden="true">3.3.</strong> Adding Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_4.html"><strong aria-hidden="true">3.4.</strong> Creating Operators</a></li><li class="chapter-item expanded "><a href="../chapter_2/chapter_2_5.html"><strong aria-hidden="true">3.5.</strong> A Worked Example</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3.html"><strong aria-hidden="true">4.</strong> Running Timely Dataflows</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_1.html"><strong aria-hidden="true">4.1.</strong> Providing Input</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_2.html"><strong aria-hidden="true">4.2.</strong> Monitoring Probes</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_3.html"><strong aria-hidden="true">4.3.</strong> Operator Execution</a></li><li class="chapter-item expanded "><a href="../chapter_3/chapter_3_4.html"><strong aria-hidden="true">4.4.</strong> Extending Dataflows</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4.html"><strong aria-hidden="true">5.</strong> Advanced Timely Dataflow</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_1.html"><strong aria-hidden="true">5.1.</strong> Scopes</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_2.html"><strong aria-hidden="true">5.2.</strong> Iteration</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_3.html"><strong aria-hidden="true">5.3.</strong> Flow Control</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_4.html"><strong aria-hidden="true">5.4.</strong> Capture and Replay</a></li><li class="chapter-item expanded "><a href="../chapter_4/chapter_4_5.html"><strong aria-hidden="true">5.5.</strong> Custom Datatypes</a></li></ol></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5.html"><strong aria-hidden="true">6.</strong> Internals</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_1.html"><strong aria-hidden="true">6.1.</strong> Communication</a></li><li class="chapter-item expanded "><a href="../chapter_5/chapter_5_2.html"><strong aria-hidden="true">6.2.</strong> Progress Tracking</a></li></ol></li></ol>
             </div>
-            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
         </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
 
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
                                 <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky bordered">
+                <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
-                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
-                        </button>
+                        </label>
                         <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
                             <i class="fa fa-paint-brush"></i>
                         </button>
@@ -165,7 +196,7 @@
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next" href="../chapter_1/chapter_1_1.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../chapter_1/chapter_1_1.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -179,7 +210,7 @@
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next" href="../chapter_1/chapter_1_1.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../chapter_1/chapter_1_1.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>
