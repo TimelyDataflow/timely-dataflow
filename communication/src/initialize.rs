@@ -38,7 +38,7 @@ pub enum Config {
         /// Verbosely report connection process
         report: bool,
         /// Closure to create a new logger for a communication thread
-        log_fn: Box<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent, CommunicationSetup>> + Send + Sync>,
+        log_fn: Box<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent>> + Send + Sync>,
     }
 }
 

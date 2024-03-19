@@ -201,7 +201,7 @@ pub trait AsWorker : Scheduler {
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
     /// Provides access to named logging streams.
-    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>;
+    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry>;
     /// Provides access to the timely logging stream.
     fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().get("timely") }
 }
@@ -217,7 +217,7 @@ pub struct Worker<A: Allocate> {
     // dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflows: Rc<RefCell<HashMap<usize, Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Rc<RefCell<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>>,
+    logging: Rc<RefCell<crate::logging_core::Registry>>,
 
     activations: Rc<RefCell<Activations>>,
     active_dataflows: Vec<usize>,
@@ -247,7 +247,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
     }
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
-    fn log_register(&self) -> RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
+    fn log_register(&self) -> RefMut<crate::logging_core::Registry> {
         self.log_register()
     }
 }
@@ -262,7 +262,6 @@ impl<A: Allocate> Worker<A> {
     /// Allocates a new `Worker` bound to a channel allocator.
     pub fn new(config: Config, c: A) -> Worker<A> {
         let now = Instant::now();
-        let index = c.index();
         Worker {
             config,
             timer: now,
@@ -271,7 +270,7 @@ impl<A: Allocate> Worker<A> {
             identifiers:  Default::default(),
             dataflows: Default::default(),
             dataflow_counter:  Default::default(),
-            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now, index))),
+            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now))),
             activations: Rc::new(RefCell::new(Activations::new(now))),
             active_dataflows: Default::default(),
             temp_channel_ids:  Default::default(),
@@ -539,7 +538,7 @@ impl<A: Allocate> Worker<A> {
     ///           );
     /// });
     /// ```
-    pub fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
+    pub fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry> {
         self.logging.borrow_mut()
     }
 

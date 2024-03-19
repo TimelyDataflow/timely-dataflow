@@ -39,7 +39,7 @@ pub fn initialize_networking(
     my_index: usize,
     threads: usize,
     noisy: bool,
-    log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
+    log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync>)
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
     let sockets = create_sockets(addresses, my_index, noisy)?;
@@ -57,7 +57,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
     mut sockets: Vec<Option<S>>,
     my_index: usize,
     threads: usize,
-    log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
+    log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent>>+Send+Sync>)
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
     // Sockets are expected to be blocking,

@@ -1,5 +1,6 @@
 //! Starts a timely dataflow execution from configuration information and per-worker logic.
 
+use timely_communication::logging::CommunicationEvent;
 use crate::communication::{initialize_from, Allocator, allocator::AllocateBuilder, WorkerGuards};
 use crate::dataflow::scopes::Child;
 use crate::worker::Worker;
@@ -242,12 +243,13 @@ where
                 if let Ok(stream) = TcpStream::connect(&addr) {
                     let writer = EventWriterCore::new(stream);
                     let mut logger = BatchLogger::new(writer);
-                    result = Some(crate::logging_core::Logger::new(
+                    let logger = crate::logging_core::Logger::new(
                         ::std::time::Instant::now(),
                         ::std::time::Duration::default(),
-                        events_setup,
                         move |time, data| logger.publish_batch(time, data)
-                    ));
+                    );
+                    logger.log(CommunicationEvent::Setup(events_setup));
+                    result = Some(logger);
                 }
                 else {
                     panic!("Could not connect to communication log address: {:?}", addr);

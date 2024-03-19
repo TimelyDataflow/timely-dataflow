@@ -6,16 +6,14 @@ use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::fmt::{self, Debug};
 
-pub struct Registry<Id> {
-    /// A worker-specific identifier.
-    id: Id,
+pub struct Registry {
     /// A map from names to typed loggers.
     map: HashMap<String, (Box<dyn Any>, Box<dyn Flush>)>,
     /// An instant common to all logging statements.
     time: Instant,
 }
 
-impl<Id: Clone+'static> Registry<Id> {
+impl Registry {
     /// Binds a log name to an action on log event batches.
     ///
     /// This method also returns any pre-installed action, rather than overwriting it
@@ -27,12 +25,12 @@ impl<Id: Clone+'static> Registry<Id> {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
-    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, Id, T)>)+'static>(
+    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, T)>)+'static>(
         &mut self,
         name: &str,
         action: F) -> Option<Box<dyn Any>>
     {
-        let logger = Logger::<T, Id>::new(self.time, Duration::default(), self.id.clone(), action);
+        let logger = Logger::<T>::new(self.time, Duration::default(), action);
         self.insert_logger(name, logger)
     }
 
@@ -40,7 +38,7 @@ impl<Id: Clone+'static> Registry<Id> {
     pub fn insert_logger<T: 'static>(
         &mut self,
         name: &str,
-        logger: Logger<T, Id>) -> Option<Box<dyn Any>>
+        logger: Logger<T>) -> Option<Box<dyn Any>>
     {
         self.map.insert(name.to_owned(), (Box::new(logger.clone()), Box::new(logger))).map(|x| x.0)
     }
@@ -56,17 +54,16 @@ impl<Id: Clone+'static> Registry<Id> {
     }
 
     /// Retrieves a shared logger, if one has been inserted.
-    pub fn get<T: 'static>(&self, name: &str) -> Option<Logger<T, Id>> {
+    pub fn get<T: 'static>(&self, name: &str) -> Option<Logger<T>> {
         self.map
             .get(name)
-            .and_then(|entry| entry.0.downcast_ref::<Logger<T, Id>>())
+            .and_then(|entry| entry.0.downcast_ref::<Logger<T>>())
             .map(|x| (*x).clone())
     }
 
     /// Creates a new logger registry.
-    pub fn new(time: Instant, id: Id) -> Self {
+    pub fn new(time: Instant) -> Self {
         Registry {
-            id,
             time,
             map: HashMap::new(),
         }
@@ -78,7 +75,7 @@ impl<Id: Clone+'static> Registry<Id> {
     }
 }
 
-impl<Id> Flush for Registry<Id> {
+impl Flush for Registry {
     fn flush(&mut self) {
         for value in self.map.values_mut() {
             value.1.flush();
@@ -88,11 +85,11 @@ impl<Id> Flush for Registry<Id> {
 
 /// A buffering logger.
 #[derive(Debug)]
-pub struct Logger<T, E> {
-    inner: Rc<RefCell<LoggerInner<T, E, dyn FnMut(&Duration, &mut Vec<(Duration, E, T)>)>>>,
+pub struct Logger<T> {
+    inner: Rc<RefCell<LoggerInner<T, dyn FnMut(&Duration, &mut Vec<(Duration, T)>)>>>,
 }
 
-impl<T, E: Clone> Clone for Logger<T, E> {
+impl<T> Clone for Logger<T> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone()
@@ -100,30 +97,28 @@ impl<T, E: Clone> Clone for Logger<T, E> {
     }
 }
 
-struct LoggerInner<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> {
-    id:     E,
+struct LoggerInner<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> {
     /// common instant used for all loggers.
     time:   Instant,
     /// offset to allow re-calibration.
     offset: Duration,
     /// shared buffer of accumulated log events
-    buffer: Vec<(Duration, E, T)>,
+    buffer: Vec<(Duration, T)>,
     /// action to take on full log buffers.
     action: A,
 }
 
-impl<T, E: Clone> Logger<T, E> {
+impl<T> Logger<T> {
     /// Allocates a new shareable logger bound to a write destination.
-    pub fn new<F>(time: Instant, offset: Duration, id: E, action: F) -> Self
+    pub fn new<F>(time: Instant, offset: Duration, action: F) -> Self
     where
-        F: FnMut(&Duration, &mut Vec<(Duration, E, T)>)+'static
+        F: FnMut(&Duration, &mut Vec<(Duration, T)>)+'static
     {
         let inner = LoggerInner {
-            id,
             time,
             offset,
             action,
-            buffer: Vec::with_capacity(LoggerInner::<T, E, F>::buffer_capacity()),
+            buffer: Vec::with_capacity(LoggerInner::<T, F>::buffer_capacity()),
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
@@ -167,7 +162,7 @@ impl<T, E: Clone> Logger<T, E> {
     }
 }
 
-impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> LoggerInner<T, E, A> {
+impl<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> LoggerInner<T, A> {
 
     /// The upper limit for buffers to allocate, size in bytes. [Self::buffer_capacity] converts
     /// this to size in elements.
@@ -177,7 +172,7 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Logg
     /// and 1, inclusively.
     // TODO: This fn is not const because it cannot depend on non-Sized generic parameters
     fn buffer_capacity() -> usize {
-        let size =  ::std::mem::size_of::<(Duration, E, T)>();
+        let size =  ::std::mem::size_of::<(Duration, T)>();
         if size == 0 {
             Self::BUFFER_SIZE_BYTES
         } else if size <= Self::BUFFER_SIZE_BYTES {
@@ -192,7 +187,7 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Logg
     {
         let elapsed = self.time.elapsed() + self.offset;
         for event in events {
-            self.buffer.push((elapsed, self.id.clone(), event.into()));
+            self.buffer.push((elapsed, event.into()));
             if self.buffer.len() == self.buffer.capacity() {
                 // Would call `self.flush()`, but for `RefCell` panic.
                 (self.action)(&elapsed, &mut self.buffer);
@@ -209,7 +204,7 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Logg
 }
 
 /// Flush on the *last* drop of a logger.
-impl<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Drop for LoggerInner<T, E, A> {
+impl<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> Drop for LoggerInner<T, A> {
     fn drop(&mut self) {
         // Avoid sending out empty buffers just because of drops.
         if !self.buffer.is_empty() {
@@ -218,14 +213,12 @@ impl<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Drop for Lo
     }
 }
 
-impl<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Debug for LoggerInner<T, E, A>
+impl<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> Debug for LoggerInner<T, A>
 where
-    E: Debug,
     T: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LoggerInner")
-            .field("id", &self.id)
             .field("time", &self.time)
             .field("offset", &self.offset)
             .field("action", &"FnMut")
@@ -240,13 +233,13 @@ trait Flush {
     fn flush(&mut self);
 }
 
-impl<T, E> Flush for Logger<T, E> {
+impl<T> Flush for Logger<T> {
     fn flush(&mut self) {
         self.inner.borrow_mut().flush()
     }
 }
 
-impl<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Flush for LoggerInner<T, E, A> {
+impl<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> Flush for LoggerInner<T, A> {
     fn flush(&mut self) {
         let elapsed = self.time.elapsed() + self.offset;
         if !self.buffer.is_empty() {
