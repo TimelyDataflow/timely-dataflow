@@ -61,6 +61,67 @@ impl<'a, T: Clone+'a> RefOrMut<'a, T> {
     }
 }
 
+mod inner {
+    use crate::message::RefOrMut;
+
+    macro_rules! ref_or_mut_inner {
+        ( $($name:ident)+) => (
+            #[allow(non_snake_case)]
+            impl<'a, $($name,)*> RefOrMut<'a, ($($name,)*)> {
+                /// Destructure the referenced tuple into references of its components.
+                pub fn inner_ref(&'a self) -> ($(RefOrMut<'a, $name>,)*) {
+                    match self {
+                        RefOrMut::Ref(($($name,)*)) => ($(RefOrMut::Ref($name),)*),
+                        RefOrMut::Mut(($($name,)*)) => ($(RefOrMut::Ref($name),)*),
+                    }
+                }
+
+                /// Destructure the referenced tuple into possibly mutable references of its components.
+                pub fn inner_mut(&'a mut self) -> ($(RefOrMut<'a, $name>,)*) {
+                    match self {
+                        RefOrMut::Ref(($(ref $name,)*)) => ($(RefOrMut::Ref($name),)*),
+                        RefOrMut::Mut(($(ref mut $name,)*)) => ($(RefOrMut::Mut($name),)*),
+                    }
+                }
+            }
+        )
+    }
+
+    ref_or_mut_inner!(A);
+    ref_or_mut_inner!(A B);
+    ref_or_mut_inner!(A B C);
+    ref_or_mut_inner!(A B C D);
+    ref_or_mut_inner!(A B C D E);
+    ref_or_mut_inner!(A B C D E F);
+    ref_or_mut_inner!(A B C D E F G);
+    ref_or_mut_inner!(A B C D E F G H);
+    ref_or_mut_inner!(A B C D E F G H I);
+    ref_or_mut_inner!(A B C D E F G H I J);
+    ref_or_mut_inner!(A B C D E F G H I J K);
+    ref_or_mut_inner!(A B C D E F G H I J K L);
+    ref_or_mut_inner!(A B C D E F G H I J K L M);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X Y);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC AD);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC AD AE);
+    ref_or_mut_inner!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z AA AB AC AD AE AF);
+}
+
+
 /// A wrapped message which may be either typed or binary data.
 pub struct Message<T> {
     payload: MessageContents<T>,
