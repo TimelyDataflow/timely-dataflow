@@ -125,19 +125,26 @@ impl<'a, T, C: Container, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  wh
     }
 }
 
-impl<'a, T, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P>  where T: Eq+Clone+'a, D: 'a {
+impl<'a, T, C, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>
+where
+    T: Eq+Clone+'a,
+    C: 'a + PushContainer,
+{
     /// Provides one record at the time specified by the `Session`.
     #[inline]
-    pub fn give(&mut self, data: D) {
+    pub fn give<D: PushInto<C>>(&mut self, data: D) {
         self.buffer.give(data);
     }
     /// Provides an iterator of records at the time specified by the `Session`.
     #[inline]
-    pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
+    pub fn give_iterator<I: Iterator<Item=D>, D: PushInto<C>>(&mut self, iter: I) {
         for item in iter {
             self.give(item);
         }
     }
+}
+
+impl<'a, T, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P>  where T: Eq+Clone+'a, D: 'a {
     /// Provides a fully formed `Content<D>` message for senders which can use this type.
     ///
     /// The `Content` type is the backing memory for communication in timely, and it can
