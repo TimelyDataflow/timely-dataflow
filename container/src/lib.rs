@@ -3,6 +3,7 @@
 #![forbid(missing_docs)]
 
 pub mod columnation;
+pub mod flatcontainer;
 
 /// A container transferring data through dataflow edges
 ///

@@ -35,7 +35,7 @@ fn main() {
             let exchange2 = Exchange::new(|x: &(u64, u64)| x.0);
 
             stream1
-                .binary(&stream2, exchange1, exchange2, "HashJoin", |_capability, _info| {
+                .binary::<_, Vec<_>, _, _, _, _>(&stream2, exchange1, exchange2, "HashJoin", |_capability, _info| {
 
                     let mut map1 = HashMap::<u64, Vec<u64>>::new();
                     let mut map2 = HashMap::<u64, Vec<u64>>::new();

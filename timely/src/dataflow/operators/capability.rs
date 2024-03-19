@@ -413,7 +413,7 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///
     /// timely::example(|scope| {
     ///     vec![()].into_iter().to_stream(scope)
-    ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
+    ///         .unary_frontier::<Vec<_>, _, _, _>(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
     ///             let mut vector = Vec::new();
     ///             move |input, output| {

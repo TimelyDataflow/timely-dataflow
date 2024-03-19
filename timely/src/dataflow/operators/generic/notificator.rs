@@ -217,7 +217,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///                     }
 ///                 });
 ///             }
-///         }).inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
+///         }).inspect_batch(|t, x: &Vec<_>| println!("{:?} -> {:?}", t, x));
 ///
 ///         (in1_handle, in2_handle)
 ///     });

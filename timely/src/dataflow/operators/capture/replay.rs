@@ -40,7 +40,7 @@
 
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
-use crate::dataflow::channels::pushers::buffer::BufferCore as PushBuffer;
+use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;
 
@@ -50,7 +50,7 @@ use crate::Container;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
-    /// Replays `self` into the provided scope, as a `Stream<S, D>`.
+    /// Replays `self` into the provided scope, as a `StreamCore<S, C>`.
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }

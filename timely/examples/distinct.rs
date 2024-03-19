@@ -18,7 +18,7 @@ fn main() {
         worker.dataflow::<usize,_,_>(|scope| {
             let mut counts_by_time = HashMap::new();
             scope.input_from(&mut input)
-                .unary(Exchange::new(|x| *x), "Distinct", move |_, _|
+                .unary::<Vec<_>, _, _, _>(Exchange::new(|x| *x), "Distinct", move |_, _|
                     move |input, output| {
                         input.for_each(|time, data| {
                             let counts =
