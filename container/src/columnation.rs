@@ -124,6 +124,24 @@ impl<T: Columnation> TimelyStack<T> {
         });
         (length, capacity)
     }
+
+    /// The length in items.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.local.len()
+    }
+
+    /// The capacity of the local vector.
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.local.capacity()
+    }
+
+    /// Reserve space for `additional` elements.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) {
+        self.local.reserve(additional)
+    }
 }
 
 impl<A: Columnation, B: Columnation> TimelyStack<(A, B)> {
@@ -199,7 +217,7 @@ impl<T: Columnation + Eq> Eq for TimelyStack<T> {}
 
 impl<T: Columnation + std::fmt::Debug> std::fmt::Debug for TimelyStack<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        (&self[..]).fmt(f)
+        self[..].fmt(f)
     }
 }
 
@@ -291,12 +309,14 @@ mod serde {
 }
 
 mod container {
-    use crate::{Container, PushPartitioned};
+    use std::ops::Deref;
+    use crate::{Container, PushContainer};
 
     use crate::columnation::{Columnation, TimelyStack};
 
     impl<T: Columnation + 'static> Container for TimelyStack<T> {
-        type Item = T;
+        type ItemRef<'a> = &'a T where Self: 'a;
+        type Item<'a> = &'a T where Self: 'a;
 
         fn len(&self) -> usize {
             self.local.len()
@@ -306,38 +326,34 @@ mod container {
             self.local.is_empty()
         }
 
-        fn capacity(&self) -> usize {
-           self.local.capacity()
-        }
-
         fn clear(&mut self) {
             TimelyStack::clear(self)
         }
+
+        type Iter<'a> = std::slice::Iter<'a, T>;
+
+        fn iter(&self) -> Self::Iter<'_> {
+            self.deref().iter()
+        }
+
+        type DrainIter<'a> = std::slice::Iter<'a, T>;
+
+        fn drain(&mut self) -> Self::DrainIter<'_> {
+            (*self).iter()
+        }
     }
 
-    impl<T: Columnation + 'static> PushPartitioned for TimelyStack<T> {
-        fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
-        where
-            I: FnMut(&Self::Item) -> usize,
-            F: FnMut(usize, &mut Self),
-        {
-            fn ensure_capacity<E: Columnation>(this: &mut TimelyStack<E>) {
-                let capacity = this.local.capacity();
-                let desired_capacity = crate::buffer::default_capacity::<E>();
-                if capacity < desired_capacity {
-                    this.local.reserve(desired_capacity - capacity);
-                }
-            }
+    impl<T: Columnation + 'static> PushContainer for TimelyStack<T> {
+        fn capacity(&self) -> usize {
+            self.capacity()
+        }
 
-            for datum in &self[..] {
-                let index = index(&datum);
-                ensure_capacity(&mut buffers[index]);
-                buffers[index].copy(datum);
-                if buffers[index].len() == buffers[index].local.capacity() {
-                    flush(index, &mut buffers[index]);
-                }
-            }
-            self.clear();
+        fn preferred_capacity() -> usize {
+            crate::buffer::default_capacity::<T>()
+        }
+
+        fn reserve(&mut self, additional: usize) {
+            self.reserve(additional)
         }
     }
 }

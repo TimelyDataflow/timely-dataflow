@@ -17,14 +17,18 @@ pub mod columnation;
 /// is efficient (which is not necessarily the case when deriving `Clone`.)
 /// TODO: Don't require `Container: Clone`
 pub trait Container: Default + Clone + 'static {
-    /// The type of elements this container holds.
-    type Item;
+    /// The type of elements when reading non-destructively from the container.
+    type ItemRef<'a> where Self: 'a;
+
+    /// The type of elements when draining the continer.
+    type Item<'a> where Self: 'a;
 
     /// The number of elements in this container
     ///
     /// The length of a container must be consistent between sending and receiving it.
     /// When exchanging a container and partitioning it into pieces, the sum of the length
-    /// of all pieces must be equal to the length of the original container.
+    /// of all pieces must be equal to the length of the original container. When combining
+    /// containers, the length of the result must be the sum of the individual parts.
     fn len(&self) -> usize;
 
     /// Determine if the container contains any elements, corresponding to `len() == 0`.
@@ -32,16 +36,55 @@ pub trait Container: Default + Clone + 'static {
         self.len() == 0
     }
 
-    /// The capacity of the underlying container
-    fn capacity(&self) -> usize;
-
     /// Remove all contents from `self` while retaining allocated memory.
     /// After calling `clear`, `is_empty` must return `true` and `len` 0.
     fn clear(&mut self);
+
+    /// Iterator type when reading from the container.
+    type Iter<'a>: Iterator<Item=Self::ItemRef<'a>>;
+
+    /// Returns an iterator that reads the contents of this container.
+    fn iter(&self) -> Self::Iter<'_>;
+
+    /// Iterator type when draining the container.
+    type DrainIter<'a>: Iterator<Item=Self::Item<'a>>;
+
+    /// Returns an iterator that drains the contents of this container.
+    /// Drain leaves the container in an undefined state.
+    fn drain(&mut self) -> Self::DrainIter<'_>;
+}
+
+/// A type that can push itself into a container.
+pub trait PushInto<C> {
+    /// Push self into the target container.
+    fn push_into(self, target: &mut C);
+}
+
+/// A type that has the necessary infrastructure to push elements, without specifying how pushing
+/// itself works. For this, pushable types should implement [`PushInto`].
+// TODO: Reconsider this interface because it assumes
+//   * Containers have a capacity
+//   * Push presents single elements.
+//   * Instead of testing `len == cap`, we could have a `is_full` to test that we might
+//     not be able to absorb more data.
+//   * Example: A FlatStack with optimized offsets and deduplication can absorb many elements without reallocation. What does capacity mean in this context?
+pub trait PushContainer: Container {
+    /// Push `item` into self
+    #[inline]
+    fn push<T: PushInto<Self>>(&mut self, item: T) {
+        item.push_into(self)
+    }
+    /// Return the capacity of the container.
+    fn capacity(&self) -> usize;
+    /// Return the preferred capacity of the container.
+    fn preferred_capacity() -> usize;
+    /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
+    fn reserve(&mut self, additional: usize);
 }
 
 impl<T: Clone + 'static> Container for Vec<T> {
-    type Item = T;
+    type ItemRef<'a> = &'a T where T: 'a;
+    type Item<'a> = T where T: 'a;
 
     fn len(&self) -> usize {
         Vec::len(self)
@@ -51,20 +94,58 @@ impl<T: Clone + 'static> Container for Vec<T> {
         Vec::is_empty(self)
     }
 
-    fn capacity(&self) -> usize {
-        Vec::capacity(self)
+    fn clear(&mut self) { Vec::clear(self) }
+
+    type Iter<'a> = std::slice::Iter<'a, T>;
+
+    fn iter(&self) -> Self::Iter<'_> {
+        self.as_slice().iter()
     }
 
-    fn clear(&mut self) { Vec::clear(self) }
+    type DrainIter<'a> = std::vec::Drain<'a, T>;
+
+    fn drain(&mut self) -> Self::DrainIter<'_> {
+        self.drain(..)
+    }
+}
+
+impl<T: Clone + 'static> PushContainer for Vec<T> {
+    fn capacity(&self) -> usize {
+        self.capacity()
+    }
+
+    fn preferred_capacity() -> usize {
+        buffer::default_capacity::<T>()
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        self.reserve(additional);
+    }
+}
+
+impl<T> PushInto<Vec<T>> for T {
+    #[inline]
+    fn push_into(self, target: &mut Vec<T>) {
+        target.push(self)
+    }
+}
+
+impl<'a, T: Clone> PushInto<Vec<T>> for &'a T {
+    #[inline]
+    fn push_into(self, target: &mut Vec<T>) {
+        target.push(self.clone())
+    }
 }
 
 mod rc {
+    use std::ops::Deref;
     use std::rc::Rc;
 
     use crate::Container;
 
     impl<T: Container> Container for Rc<T> {
-        type Item = T::Item;
+        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
+        type Item<'a> = T::ItemRef<'a> where Self: 'a;
 
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
@@ -72,10 +153,6 @@ mod rc {
 
         fn is_empty(&self) -> bool {
             std::ops::Deref::deref(self).is_empty()
-        }
-
-        fn capacity(&self) -> usize {
-            std::ops::Deref::deref(self).capacity()
         }
 
         fn clear(&mut self) {
@@ -86,16 +163,30 @@ mod rc {
                 *self = Self::default();
             }
         }
+
+        type Iter<'a> = T::Iter<'a>;
+
+        fn iter(&self) -> Self::Iter<'_> {
+            self.deref().iter()
+        }
+
+        type DrainIter<'a> = T::Iter<'a>;
+
+        fn drain(&mut self) -> Self::DrainIter<'_> {
+            self.iter()
+        }
     }
 }
 
 mod arc {
+    use std::ops::Deref;
     use std::sync::Arc;
 
     use crate::Container;
 
     impl<T: Container> Container for Arc<T> {
-        type Item = T::Item;
+        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
+        type Item<'a> = T::ItemRef<'a> where Self: 'a;
 
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
@@ -103,10 +194,6 @@ mod arc {
 
         fn is_empty(&self) -> bool {
             std::ops::Deref::deref(self).is_empty()
-        }
-
-        fn capacity(&self) -> usize {
-            std::ops::Deref::deref(self).capacity()
         }
 
         fn clear(&mut self) {
@@ -117,43 +204,56 @@ mod arc {
                 *self = Self::default();
             }
         }
+
+        type Iter<'a> = T::Iter<'a>;
+
+        fn iter(&self) -> Self::Iter<'_> {
+            self.deref().iter()
+        }
+
+        type DrainIter<'a> = T::Iter<'a>;
+
+        fn drain(&mut self) -> Self::DrainIter<'_> {
+            self.iter()
+        }
     }
 }
 
 /// A container that can partition itself into pieces.
-pub trait PushPartitioned: Container {
+pub trait PushPartitioned: PushContainer {
     /// Partition and push this container.
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
     /// append an element to. Call `flush` with an index and a buffer to send the data downstream.
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], index: I, flush: F)
     where
-        I: FnMut(&Self::Item) -> usize,
+        for<'a> I: FnMut(&Self::Item<'a>) -> usize,
         F: FnMut(usize, &mut Self);
 }
 
-impl<T: Clone + 'static> PushPartitioned for Vec<T> {
+impl<T: PushContainer + 'static> PushPartitioned for T where for<'a> T::Item<'a>: PushInto<T> {
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
     where
-        I: FnMut(&Self::Item) -> usize,
+        for<'a> I: FnMut(&Self::Item<'a>) -> usize,
         F: FnMut(usize, &mut Self),
     {
-        fn ensure_capacity<E>(this: &mut Vec<E>) {
+        let ensure_capacity = |this: &mut Self| {
             let capacity = this.capacity();
-            let desired_capacity = buffer::default_capacity::<E>();
+            let desired_capacity = Self::preferred_capacity();
             if capacity < desired_capacity {
                 this.reserve(desired_capacity - capacity);
             }
-        }
+        };
 
-        for datum in self.drain(..) {
+        for datum in self.drain() {
             let index = index(&datum);
             ensure_capacity(&mut buffers[index]);
             buffers[index].push(datum);
-            if buffers[index].len() == buffers[index].capacity() {
+            if buffers[index].len() >= buffers[index].capacity() {
                 flush(index, &mut buffers[index]);
             }
         }
+        self.clear();
     }
 }
 

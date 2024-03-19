@@ -1,23 +1,28 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
-use timely_container::PushPartitioned;
-use crate::{Container, Data};
 use crate::communication::Push;
+use crate::container::PushPartitioned;
 use crate::dataflow::channels::{BundleCore, Message};
+use crate::{Container, Data};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, C: Container, D, P: Push<BundleCore<T, C>>, H: FnMut(&D) -> u64> {
+pub struct Exchange<T, C: PushPartitioned, P: Push<BundleCore<T, C>>, H>
+where
+    for<'a> H: FnMut(&C::Item<'a>) -> u64
+{
     pushers: Vec<P>,
     buffers: Vec<C>,
     current: Option<T>,
     hash_func: H,
-    phantom: std::marker::PhantomData<D>,
 }
 
-impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&D) -> u64>  Exchange<T, C, D, P, H> {
+impl<T: Clone, C: PushPartitioned, P: Push<BundleCore<T, C>>, H>  Exchange<T, C, P, H>
+where
+    for<'a> H: FnMut(&C::Item<'a>) -> u64
+{
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
-    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, D, P, H> {
+    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, P, H> {
         let mut buffers = vec![];
         for _ in 0..pushers.len() {
             buffers.push(Default::default());
@@ -27,7 +32,6 @@ impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&D) ->
             hash_func: key,
             buffers,
             current: None,
-            phantom: std::marker::PhantomData,
         }
     }
     #[inline]
@@ -40,9 +44,10 @@ impl<T: Clone, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&D) ->
     }
 }
 
-impl<T: Eq+Data, C: Container, D: Data, P: Push<BundleCore<T, C>>, H: FnMut(&D) -> u64> Push<BundleCore<T, C>> for Exchange<T, C, D, P, H>
+impl<T: Eq+Data, C: Container, P: Push<BundleCore<T, C>>, H, > Push<BundleCore<T, C>> for Exchange<T, C, P, H>
 where
-    C: PushPartitioned<Item=D>
+    C: PushPartitioned,
+    for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     #[inline(never)]
     fn push(&mut self, message: &mut Option<BundleCore<T, C>>) {

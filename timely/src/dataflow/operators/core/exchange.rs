@@ -7,7 +7,7 @@ use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::{Scope, StreamCore};
 
 /// Exchange records between workers.
-pub trait Exchange<D> {
+pub trait Exchange<C: PushPartitioned> {
     /// Exchange records between workers.
     ///
     /// The closure supplied should map a reference to a record to a `u64`,
@@ -23,15 +23,19 @@ pub trait Exchange<D> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn exchange(&self, route: impl FnMut(&D) -> u64 + 'static) -> Self;
+    fn exchange<F: 'static>(&self, route: F) -> Self
+    where
+        for<'a> F: FnMut(&C::Item<'a>) -> u64;
 }
 
-impl<G: Scope, C> Exchange<C::Item> for StreamCore<G, C>
+impl<G: Scope, C> Exchange<C> for StreamCore<G, C>
 where
     C: PushPartitioned + ExchangeData,
-    C::Item: ExchangeData,
 {
-    fn exchange(&self, route: impl FnMut(&C::Item) -> u64 + 'static) -> StreamCore<G, C> {
+    fn exchange<F: 'static>(&self, route: F) -> StreamCore<G, C>
+    where
+        for<'a> F: FnMut(&C::Item<'a>) -> u64,
+    {
         let mut container = Default::default();
         self.unary(ExchangeCore::new(route), "Exchange", |_, _| {
             move |input, output| {

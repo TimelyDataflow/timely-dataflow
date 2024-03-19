@@ -1,76 +1,34 @@
 # Containers
 
-Timely's core isn't tied to a specific representation of data that flows along dataflow edges.
-While some convenience operators make assumptions about the type of batches, the core infrastructure is generic in what containers are exchanged.
-This section explains what containers are and what their contract with the Timely APIs is.
+On a high level, Timely sends along dataflow edges. Underneath however, it needs to send and process batches of data to amortize processing overhead. In this section, we walk through the container abstraction, which is how Timely interfaces with batches of data.
 
-Many parts of Timely assume that data is organized into `Vec<T>`, i.e., batches store data as consecutive elements in memory.
-This abstractions works well for many cases but precludes some advanced techniques, such as transferring translated or columnar data between operators.
-With the container abstraction, Timely specifies a minimal interface it requires tracking progress and provide data to operators.
+A container represents a batch of data with an interface to enable progress tracking and extracting data. Progress tracking requires that containers have a length, which does not change independent of container modifications. Reading data out of a container is useful for several high-level operators and sessions, but not otherwise required.
+
+Progress tracking requires that the length of a container stays the same between sending and receiving a container. The length must be additive, meaning that two containers combined must result in a container that has the sum of the lengths of the original containers. (Vectors satisfy the properties, but sets do not.)
+
+The container trait defines two associated types, `Item` for moving data, and `ItemRef` for reading data. Both are lifetimed, meaning an implelemntation can select to return owned data or references, depending on the constraints imposed by its data representation. Related, the trait defines an `iter()` function that reads the contents, and a `drain()` that removes the contents.
+
+In timely, we decouple write- and read-halves of a containers, as expressed by the `PushInto` trait. It describes how a target can absorb a datum as self, without requiring that the container knows about self. This allows a container to absorb an owned type and merely present dereferenced variants of the owned type when reading. For example, a container could accept `String` objects, but only permit reading `&str`.
+
+## Capacity considerations
+
+Timely wants to send containers of consistent size. In the past, this was a vector of 1024 elements, but this concept scales poorly to data that has a different layout.
+
+What we want to achieve is:
+* Timely makes progress when processing large amounts of data. An implementation that buffers all data and only releases it once time advances does not have this property.
+* Containers have consistent size to minimize stress for the memory allocator.
 
 ## Core operators
 
-In Timely, we provide a set of `Core` operators that are generic on the container type they can handle.
-In most cases, the `Core` operators are a immediate generalization of their non-core variant, providing the semantically equivalent functionality.
+In Timely, we provide a set of `core` operators that are generic on the container type they can handle.
+In most cases, the `core` operators are an immediate generalization of their non-core variant, providing the semantically equivalent functionality.
 
 ## Limitations
 
-A challenge when genericizing Timely operators is that all interfaces need to be declared independent of a concrete type, for example as part of a trait.
-For this reason, Timely doesn't currently support operators that require knowledge of the elements of a container or how to partition a container, with the only exception being the `Vec` type.
+* Explain why it's hard to build container-generic operators from smaller operators (unless we have higher-kinded types).
 
-## A custom container
-
-Let's walk through an example container that resembles a `Result` type, but moves the storage to within the result.
-
-```rust
-extern crate timely_container;
-
-use timely_container::Container;
-
-#[derive(Clone)]
-enum ResultContainer<T, E> {
-    Ok(Vec<T>),
-    Err(E),
-}
-
-impl<T, E> Default for ResultContainer<T, E> {
-    fn default() -> Self {
-        Self::Ok(Default::default())
-    }
-}
-
-impl<T: Clone + 'static, E: Clone + 'static> Container for ResultContainer<T, E> {
-    type Item = Result<T, E>;
-
-    fn len(&self) -> usize {
-        match self {
-            ResultContainer::Ok(data) => data.len(),
-            ResultContainer::Err(_) => 1,
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        match self {
-            ResultContainer::Ok(data) => data.is_empty(),
-            ResultContainer::Err(_) => false,
-        }
-    }
-
-    fn capacity(&self) -> usize {
-        match self {
-            ResultContainer::Ok(data) => data.capacity(),
-            ResultContainer::Err(_) => 1,
-        }
-    }
-
-    fn clear(&mut self) {
-        match self {
-            ResultContainer::Ok(data) => data.clear(),
-            ResultContainer::Err(_) => {},
-        }
-    }
-}
-```
-
-The type can either store a vector of data, or a single error.
-Its length is the length of the vector, or 1 if it represents an error.
+Each operator over arbitrary containers either returns an equal container, or needs to be parameterized to indicate the desired output type.
+This is problematic when composing a high-level operator from smaller building blocks, such as the broadcast operator.
+The broadcast operator for vectors maps each datum to a `(target, datum)` pair, where it repeats `datum` for each target.
+Subsequent operators exchange the data and unwrap the `datum` from the tuple.
+Defining this with specific containers in mind is simple, however, we do not have a mechanism to express this for arbitrary containers.
