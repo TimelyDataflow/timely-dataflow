@@ -205,7 +205,7 @@ impl<T: Timestamp> Builder<T> {
         Tracker::allocate_from(self, logger)
     }
 
-    /// Tests whether the graph a cycle of default path summaries.
+    /// Tests whether the graph includes a cycle of default path summaries.
     ///
     /// Graphs containing cycles of default path summaries will most likely
     /// not work well with progress tracking, as a timestamp can result in
