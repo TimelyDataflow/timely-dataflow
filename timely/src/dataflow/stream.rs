@@ -9,7 +9,7 @@ use crate::progress::{Source, Target};
 use crate::communication::Push;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
-use crate::dataflow::channels::BundleCore;
+use crate::dataflow::channels::Bundle;
 use std::fmt::{self, Debug};
 use crate::Container;
 
@@ -25,7 +25,7 @@ pub struct StreamCore<S: Scope, D> {
     name: Source,
     /// The `Scope` containing the stream.
     scope: S,
-    /// Maintains a list of Push<Bundle<T, D>> interested in the stream's output.
+    /// Maintains a list of Push<Bundle<T, Vec<D>>> interested in the stream's output.
     ports: TeeHelper<S::Timestamp, D>,
 }
 
@@ -37,7 +37,7 @@ impl<S: Scope, D: Container> StreamCore<S, D> {
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<BundleCore<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
+    pub fn connect_to<P: Push<Bundle<S::Timestamp, D>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
