@@ -28,7 +28,7 @@ use crate::progress::{Source, Target};
 use crate::order::Product;
 use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
+use crate::dataflow::channels::pushers::{CounterCore, Tee};
 use crate::dataflow::channels::{Bundle, Message};
 
 use crate::worker::AsWorker;
@@ -88,7 +88,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
 
         use crate::scheduling::Scheduler;
 
-        let (targets, registrar) = TeeCore::<T, C>::new();
+        let (targets, registrar) = Tee::<T, C>::new();
         let ingress = IngressNub {
             targets: CounterCore::new(targets),
             phantom: PhantomData,
@@ -140,7 +140,7 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 
         let output = scope.subgraph.borrow_mut().new_output();
         let target = Target::new(0, output.port);
-        let (targets, registrar) = TeeCore::<G::Timestamp, D>::new();
+        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
         let egress = EgressNub { targets, phantom: PhantomData };
         let channel_id = scope.clone().new_identifier();
 
@@ -161,7 +161,7 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
+    targets: CounterCore<TInner, TData, Tee<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
@@ -193,7 +193,7 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Pus
 
 
 struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> {
-    targets: TeeCore<TOuter, TData>,
+    targets: Tee<TOuter, TData>,
     phantom: PhantomData<TInner>,
 }
 

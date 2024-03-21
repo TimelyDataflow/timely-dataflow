@@ -6,7 +6,7 @@ use crate::progress::{Timestamp, PathSummary};
 use crate::progress::frontier::Antichain;
 use crate::order::Product;
 
-use crate::dataflow::channels::pushers::TeeCore;
+use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{StreamCore, Scope, Stream};
 use crate::dataflow::scopes::child::Iterative;
@@ -162,7 +162,7 @@ impl<G: Scope, D: Container> ConnectLoop<G, D> for StreamCore<G, D> {
 pub struct HandleCore<G: Scope, D: Container> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
-    output: OutputWrapper<G::Timestamp, D, TeeCore<G::Timestamp, D>>,
+    output: OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>,
 }
 
 /// A `HandleCore` specialized for using `Vec` as container
