@@ -5,6 +5,7 @@ pub mod concat;
 pub mod exchange;
 pub mod feedback;
 pub mod inspect;
+pub mod rc;
 pub mod reclock;
 
 pub use concat::{Concat, Concatenate};
