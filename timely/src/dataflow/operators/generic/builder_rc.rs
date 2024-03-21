@@ -11,7 +11,7 @@ use crate::progress::frontier::{Antichain, MutableAntichain};
 use crate::Container;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::Tee;
-use crate::dataflow::channels::pushers::CounterCore as PushCounter;
+use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::channels::pullers::Counter as PullCounter;

@@ -28,7 +28,7 @@ use crate::progress::{Source, Target};
 use crate::order::Product;
 use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::channels::pushers::{CounterCore, Tee};
+use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::{Bundle, Message};
 
 use crate::worker::AsWorker;
@@ -90,7 +90,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
 
         let (targets, registrar) = Tee::<T, C>::new();
         let ingress = IngressNub {
-            targets: CounterCore::new(targets),
+            targets: Counter::new(targets),
             phantom: PhantomData,
             activator: scope.activator_for(&scope.addr()),
             active: false,
@@ -161,7 +161,7 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: CounterCore<TInner, TData, Tee<TInner, TData>>,
+    targets: Counter<TInner, TData, Tee<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,

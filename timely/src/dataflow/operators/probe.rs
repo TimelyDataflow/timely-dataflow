@@ -5,7 +5,7 @@ use std::cell::RefCell;
 
 use crate::progress::Timestamp;
 use crate::progress::frontier::{AntichainRef, MutableAntichain};
-use crate::dataflow::channels::pushers::CounterCore as PushCounter;
+use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;

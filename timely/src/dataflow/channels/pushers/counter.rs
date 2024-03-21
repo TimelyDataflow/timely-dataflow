@@ -11,16 +11,13 @@ use crate::Container;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
-pub struct CounterCore<T, D, P: Push<Bundle<T, D>>> {
+pub struct Counter<T, D, P: Push<Bundle<T, D>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
     phantom: PhantomData<D>,
 }
 
-/// A counter specialized to vector.
-pub type Counter<T, D, P> = CounterCore<T, Vec<D>, P>;
-
-impl<T: Timestamp, D: Container, P> Push<Bundle<T, D>> for CounterCore<T, D, P> where P: Push<Bundle<T, D>> {
+impl<T: Timestamp, D: Container, P> Push<Bundle<T, D>> for Counter<T, D, P> where P: Push<Bundle<T, D>> {
     #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, D>>) {
         if let Some(message) = message {
@@ -34,10 +31,10 @@ impl<T: Timestamp, D: Container, P> Push<Bundle<T, D>> for CounterCore<T, D, P> 
     }
 }
 
-impl<T, D, P: Push<Bundle<T, D>>> CounterCore<T, D, P> where T : Ord+Clone+'static {
+impl<T, D, P: Push<Bundle<T, D>>> Counter<T, D, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
-    pub fn new(pushee: P) -> CounterCore<T, D, P> {
-        CounterCore {
+    pub fn new(pushee: P) -> Counter<T, D, P> {
+        Counter {
             pushee,
             produced: Rc::new(RefCell::new(ChangeBatch::new())),
             phantom: PhantomData,

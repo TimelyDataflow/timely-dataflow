@@ -12,7 +12,7 @@ use crate::progress::Source;
 use crate::progress::ChangeBatch;
 
 use crate::Data;
-use crate::dataflow::channels::pushers::{CounterCore as PushCounter, Tee};
+use crate::dataflow::channels::pushers::{Counter as PushCounter, Tee};
 use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSessionCore};
 
 use crate::dataflow::operators::{ActivateCapability, Capability};
