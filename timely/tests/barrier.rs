@@ -17,7 +17,7 @@ fn barrier_sync_helper(comm_config: ::timely::CommunicationConfig) {
     };
     timely::execute(config, move |worker| {
         worker.dataflow(move |scope| {
-            let (handle, stream) = scope.feedback::<u64>(1);
+            let (handle, stream) = scope.feedback::<Vec<usize>>(1);
             stream.unary_notify(
                 Pipeline,
                 "Barrier",

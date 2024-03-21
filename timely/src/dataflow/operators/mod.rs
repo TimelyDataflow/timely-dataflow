@@ -11,7 +11,6 @@
 pub use self::enterleave::{Enter, EnterAt, Leave};
 pub use self::input::Input;
 pub use self::unordered_input::{UnorderedInput, UnorderedInputCore};
-pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
 pub use self::concat::{Concat, Concatenate};
 pub use self::partition::Partition;
 pub use self::map::Map;
@@ -39,7 +38,7 @@ pub mod enterleave;
 pub mod input;
 pub mod flow_controlled;
 pub mod unordered_input;
-pub mod feedback;
+pub use self::core::feedback::{self, Feedback, LoopVariable, ConnectLoop};
 pub mod concat;
 pub mod partition;
 pub mod map;
