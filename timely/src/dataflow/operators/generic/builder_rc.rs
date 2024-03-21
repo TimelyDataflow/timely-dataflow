@@ -13,7 +13,7 @@ use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
 use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
-use crate::dataflow::channels::pact::ParallelizationContractCore;
+use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::capability::Capability;
 use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_handle, OutputWrapper};
@@ -61,7 +61,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P) -> InputHandleCore<G::Timestamp, D, P::Puller>
     where
-        P: ParallelizationContractCore<G::Timestamp, D> {
+        P: ParallelizationContract<G::Timestamp, D> {
 
         let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().outputs()];
         self.new_input_connection(stream, pact, connection)
@@ -77,7 +77,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// antichain indicating that there is no connection from the input to the output.
     pub fn new_input_connection<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandleCore<G::Timestamp, D, P::Puller>
         where
-            P: ParallelizationContractCore<G::Timestamp, D> {
+            P: ParallelizationContract<G::Timestamp, D> {
 
         let puller = self.builder.new_input_connection(stream, pact, connection.clone());
 

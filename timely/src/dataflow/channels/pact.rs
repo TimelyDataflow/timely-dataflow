@@ -19,8 +19,8 @@ use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::worker::AsWorker;
 
-/// A `ParallelizationContractCore` allocates paired `Push` and `Pull` implementors.
-pub trait ParallelizationContractCore<T, D> {
+/// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
+pub trait ParallelizationContract<T, D> {
     /// Type implementing `Push` produced by this pact.
     type Pusher: Push<Bundle<T, D>>+'static;
     /// Type implementing `Pull` produced by this pact.
@@ -29,16 +29,11 @@ pub trait ParallelizationContractCore<T, D> {
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
 
-/// A `ParallelizationContractCore` specialized for `Vec` containers
-/// TODO: Use trait aliases once stable.
-pub trait ParallelizationContract<T, D: Clone>: ParallelizationContractCore<T, Vec<D>> { }
-impl<T, D: Clone, P: ParallelizationContractCore<T, Vec<D>>> ParallelizationContract<T, D> for P { }
-
 /// A direct connection
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, D: Container> ParallelizationContractCore<T, D> for Pipeline {
+impl<T: 'static, D: Container> ParallelizationContract<T, D> for Pipeline {
     type Pusher = LogPusher<T, D, ThreadPusher<Bundle<T, D>>>;
     type Puller = LogPuller<T, D, ThreadPuller<Bundle<T, D>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -71,7 +66,7 @@ where
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Timestamp, C, H: 'static> ParallelizationContractCore<T, C> for ExchangeCore<C, H>
+impl<T: Timestamp, C, H: 'static> ParallelizationContract<T, C> for ExchangeCore<C, H>
 where
     C: Data + PushPartitioned,
     for<'a> H: FnMut(&C::Item<'a>) -> u64

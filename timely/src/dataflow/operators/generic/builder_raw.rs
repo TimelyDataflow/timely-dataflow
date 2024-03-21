@@ -16,7 +16,7 @@ use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 use crate::Container;
 use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::channels::pushers::TeeCore;
-use crate::dataflow::channels::pact::ParallelizationContractCore;
+use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 
 /// Contains type-free information about the operator properties.
@@ -107,7 +107,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P) -> P::Puller
         where
-            P: ParallelizationContractCore<G::Timestamp, D> {
+            P: ParallelizationContract<G::Timestamp, D> {
         let connection = vec![Antichain::from_elem(Default::default()); self.shape.outputs];
         self.new_input_connection(stream, pact, connection)
     }
@@ -115,7 +115,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input_connection<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller
     where
-        P: ParallelizationContractCore<G::Timestamp, D> {
+        P: ParallelizationContract<G::Timestamp, D> {
 
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
