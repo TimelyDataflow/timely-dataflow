@@ -59,9 +59,9 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P) -> InputHandleCore<G::Timestamp, D, P::Puller>
+    pub fn new_input<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P) -> InputHandleCore<G::Timestamp, C, P::Puller>
     where
-        P: ParallelizationContract<G::Timestamp, D> {
+        P: ParallelizationContract<G::Timestamp, C> {
 
         let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().outputs()];
         self.new_input_connection(stream, pact, connection)
@@ -75,9 +75,9 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_input_connection<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandleCore<G::Timestamp, D, P::Puller>
+    pub fn new_input_connection<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandleCore<G::Timestamp, C, P::Puller>
         where
-            P: ParallelizationContract<G::Timestamp, D> {
+            P: ParallelizationContract<G::Timestamp, C> {
 
         let puller = self.builder.new_input_connection(stream, pact, connection.clone());
 
@@ -92,7 +92,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<D: Container>(&mut self) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, StreamCore<G, D>) {
+    pub fn new_output<C: Container>(&mut self) -> (OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>, StreamCore<G, C>) {
         let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().inputs()];
         self.new_output_connection(connection)
     }
@@ -105,7 +105,7 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_output_connection<D: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>, StreamCore<G, D>) {
+    pub fn new_output_connection<C: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>, StreamCore<G, C>) {
 
         let (tee, stream) = self.builder.new_output_connection(connection.clone());
 

@@ -13,11 +13,11 @@ use crate::{Container, Data};
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
 /// data must be flushed and creates a `Session` object which allows sending at the given time.
 #[derive(Debug)]
-pub struct Buffer<T, D: Container, P: Push<Bundle<T, D>>> {
+pub struct Buffer<T, C: Container, P: Push<Bundle<T, C>>> {
     /// the currently open time, if it is open
     time: Option<T>,
     /// a buffer for records, to send at self.time
-    buffer: D,
+    buffer: C,
     pusher: P,
 }
 

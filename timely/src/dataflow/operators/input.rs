@@ -93,7 +93,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, StreamCore<Self, D>);
+    fn new_input_core<C: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, C>, StreamCore<Self, C>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -157,7 +157,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> StreamCore<Self, D>;
+    fn input_from_core<C: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, C>) -> StreamCore<Self, C>;
 }
 
 use crate::order::TotalOrder;
@@ -170,14 +170,14 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         self.input_from_core(handle)
     }
 
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, StreamCore<G, D>) {
+    fn new_input_core<C: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, C>, StreamCore<G, C>) {
         let mut handle = HandleCore::new();
         let stream = self.input_from_core(&mut handle);
         (handle, stream)
     }
 
-    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> StreamCore<G, D> {
-        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, D>::new();
+    fn input_from_core<C: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, C>) -> StreamCore<G, C> {
+        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, C>::new();
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
@@ -258,7 +258,7 @@ pub struct HandleCore<T: Timestamp, C: Container> {
 /// A handle specialized to vector-based containers.
 pub type Handle<T, D> = HandleCore<T, Vec<D>>;
 
-impl<T: Timestamp, D: Container> HandleCore<T, D> {
+impl<T: Timestamp, C: Container> HandleCore<T, C> {
     /// Allocates a new input handle, from which one can create timely streams.
     ///
     /// # Examples
@@ -322,7 +322,7 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> StreamCore<G, D>
+    pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> StreamCore<G, C>
     where
         T: TotalOrder,
         G: ScopeParent<Timestamp=T>,
@@ -332,7 +332,7 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
 
     fn register(
         &mut self,
-        pusher: Counter<T, D, Tee<T, D>>,
+        pusher: Counter<T, C, Tee<T, C>>,
         progress: Rc<RefCell<ChangeBatch<T>>>,
     ) {
         // flush current contents, so new registrant does not see existing data.
@@ -407,7 +407,7 @@ impl<T: Timestamp, D: Container> HandleCore<T, D> {
     ///     }
     /// });
     /// ```
-    pub fn send_batch(&mut self, buffer: &mut D) {
+    pub fn send_batch(&mut self, buffer: &mut C) {
 
         if !buffer.is_empty() {
             // flush buffered elements to ensure local fifo.
