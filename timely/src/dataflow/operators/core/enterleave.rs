@@ -25,16 +25,14 @@ use crate::logging::{TimelyLogger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
-use crate::order::Product;
 use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::{Bundle, Message};
 
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope, Stream};
-use crate::dataflow::scopes::{Child, ScopeParent};
-use crate::dataflow::operators::delay::Delay;
+use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::scopes::Child;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
 pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
@@ -53,34 +51,6 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     /// });
     /// ```
     fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
-}
-
-use crate::dataflow::scopes::child::Iterative;
-
-/// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
-pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
-    /// Moves the `Stream` argument into a child of its current `Scope` setting the timestamp for each element by `initial`.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::scopes::Scope;
-    /// use timely::dataflow::operators::{EnterAt, Leave, ToStream};
-    ///
-    /// timely::example(|outer| {
-    ///     let stream = (0..9u64).to_stream(outer);
-    ///     let output = outer.iterative(|inner| {
-    ///         stream.enter_at(inner, |x| *x).leave()
-    ///     });
-    /// });
-    /// ```
-    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, D> ;
-}
-
-impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, Vec<D>>> EnterAt<G, T, D> for E {
-    fn enter_at<'a, F:FnMut(&D)->T+'static>(&self, scope: &Iterative<'a, G, T>, mut initial: F) ->
-        Stream<Iterative<'a, G, T>, D> {
-            self.enter(scope).delay(move |datum, time| Product::new(time.clone().to_outer(), initial(datum)))
-    }
 }
 
 impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for StreamCore<G, C> {

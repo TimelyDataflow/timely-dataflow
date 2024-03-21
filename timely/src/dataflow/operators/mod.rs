@@ -8,7 +8,6 @@
 //! operators whose behavior can be supplied using closures accepting input and output handles.
 //! Most of the operators in this module are defined using these two general operators.
 
-pub use self::enterleave::{Enter, EnterAt, Leave};
 pub use self::input::Input;
 pub use self::unordered_input::{UnorderedInput, UnorderedInputCore};
 pub use self::partition::Partition;
@@ -32,7 +31,7 @@ pub use self::count::Accumulate;
 
 pub mod core;
 
-pub mod enterleave;
+pub use self::core::enterleave::{self, Enter, Leave};
 pub mod input;
 pub mod flow_controlled;
 pub mod unordered_input;
