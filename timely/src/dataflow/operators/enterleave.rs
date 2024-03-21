@@ -115,7 +115,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
 }
 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
-pub trait Leave<G: Scope, D: Container> {
+pub trait Leave<G: Scope, C: Container> {
     /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// # Examples
@@ -130,17 +130,17 @@ pub trait Leave<G: Scope, D: Container> {
     ///     });
     /// });
     /// ```
-    fn leave(&self) -> StreamCore<G, D>;
+    fn leave(&self) -> StreamCore<G, C>;
 }
 
-impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, D> for StreamCore<Child<'a, G, T>, D> {
-    fn leave(&self) -> StreamCore<G, D> {
+impl<'a, G: Scope, C: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'a, G, T>, C> {
+    fn leave(&self) -> StreamCore<G, C> {
 
         let scope = self.scope();
 
         let output = scope.subgraph.borrow_mut().new_output();
         let target = Target::new(0, output.port);
-        let (targets, registrar) = Tee::<G::Timestamp, D>::new();
+        let (targets, registrar) = Tee::<G::Timestamp, C>::new();
         let egress = EgressNub { targets, phantom: PhantomData };
         let channel_id = scope.clone().new_identifier();
 
@@ -160,15 +160,15 @@ impl<'a, G: Scope, D: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> {
-    targets: Counter<TInner, TData, Tee<TInner, TData>>,
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> {
+    targets: Counter<TInner, TContainer, Tee<TInner, TContainer>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Push<Bundle<TOuter, TData>> for IngressNub<TOuter, TInner, TData> {
-    fn push(&mut self, element: &mut Option<Bundle<TOuter, TData>>) {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> Push<Bundle<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
+    fn push(&mut self, element: &mut Option<Bundle<TOuter, TContainer>>) {
         if let Some(message) = element {
             let outer_message = message.as_mut();
             let data = ::std::mem::take(&mut outer_message.data);
@@ -192,14 +192,14 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container> Pus
 }
 
 
-struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data> {
-    targets: Tee<TOuter, TData>,
+struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data> {
+    targets: Tee<TOuter, TContainer>,
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TData: Container> Push<Bundle<TInner, TData>> for EgressNub<TOuter, TInner, TData>
-where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Data {
-    fn push(&mut self, message: &mut Option<Bundle<TInner, TData>>) {
+impl<TOuter, TInner, TContainer: Container> Push<Bundle<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
+where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data {
+    fn push(&mut self, message: &mut Option<Bundle<TInner, TContainer>>) {
         if let Some(message) = message {
             let inner_message = message.as_mut();
             let data = ::std::mem::take(&mut inner_message.data);
@@ -241,12 +241,12 @@ impl<P> LogPusher<P> {
     }
 }
 
-impl<T, D, P> Push<Bundle<T, D>> for LogPusher<P>
+impl<T, C, P> Push<Bundle<T, C>> for LogPusher<P>
 where
-    D: Container,
-    P: Push<Bundle<T, D>>,
+    C: Container,
+    P: Push<Bundle<T, C>>,
 {
-    fn push(&mut self, element: &mut Option<Bundle<T, D>>) {
+    fn push(&mut self, element: &mut Option<Bundle<T, C>>) {
         if let Some(bundle) = element {
             let send_event = MessagesEvent {
                 is_send: true,

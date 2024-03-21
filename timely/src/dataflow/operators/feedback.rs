@@ -59,7 +59,7 @@ pub trait Feedback<G: Scope> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback_core<D: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (HandleCore<G, D>, StreamCore<G, D>);
+    fn feedback_core<C: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (HandleCore<G, C>, StreamCore<G, C>);
 }
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
@@ -87,7 +87,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<D: Container>(&mut self, summary: T::Summary) -> (HandleCore<Iterative<'a, G, T>, D>, StreamCore<Iterative<'a, G, T>, D>);
+    fn loop_variable<C: Container>(&mut self, summary: T::Summary) -> (HandleCore<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>);
 }
 
 impl<G: Scope> Feedback<G> for G {
@@ -95,7 +95,7 @@ impl<G: Scope> Feedback<G> for G {
         self.feedback_core(summary)
     }
 
-    fn feedback_core<D: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (HandleCore<G, D>, StreamCore<G, D>) {
+    fn feedback_core<C: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (HandleCore<G, C>, StreamCore<G, C>) {
 
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
         let (output, stream) = builder.new_output();
@@ -105,13 +105,13 @@ impl<G: Scope> Feedback<G> for G {
 }
 
 impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
-    fn loop_variable<D: Container>(&mut self, summary: T::Summary) -> (HandleCore<Iterative<'a, G, T>, D>, StreamCore<Iterative<'a, G, T>, D>) {
+    fn loop_variable<C: Container>(&mut self, summary: T::Summary) -> (HandleCore<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>) {
         self.feedback_core(Product::new(Default::default(), summary))
     }
 }
 
 /// Connect a `Stream` to the input of a loop variable.
-pub trait ConnectLoop<G: Scope, D: Container> {
+pub trait ConnectLoop<G: Scope, C: Container> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
     /// # Examples
@@ -129,11 +129,11 @@ pub trait ConnectLoop<G: Scope, D: Container> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn connect_loop(&self, _: HandleCore<G, D>);
+    fn connect_loop(&self, _: HandleCore<G, C>);
 }
 
-impl<G: Scope, D: Container> ConnectLoop<G, D> for StreamCore<G, D> {
-    fn connect_loop(&self, helper: HandleCore<G, D>) {
+impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
+    fn connect_loop(&self, helper: HandleCore<G, C>) {
 
         let mut builder = helper.builder;
         let summary = helper.summary;
@@ -159,10 +159,10 @@ impl<G: Scope, D: Container> ConnectLoop<G, D> for StreamCore<G, D> {
 
 /// A handle used to bind the source of a loop variable.
 #[derive(Debug)]
-pub struct HandleCore<G: Scope, D: Container> {
+pub struct HandleCore<G: Scope, C: Container> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
-    output: OutputWrapper<G::Timestamp, D, Tee<G::Timestamp, D>>,
+    output: OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>,
 }
 
 /// A `HandleCore` specialized for using `Vec` as container

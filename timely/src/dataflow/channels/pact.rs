@@ -20,11 +20,11 @@ use crate::progress::Timestamp;
 use crate::worker::AsWorker;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
-pub trait ParallelizationContract<T, D> {
+pub trait ParallelizationContract<T, C> {
     /// Type implementing `Push` produced by this pact.
-    type Pusher: Push<Bundle<T, D>>+'static;
+    type Pusher: Push<Bundle<T, C>>+'static;
     /// Type implementing `Pull` produced by this pact.
-    type Puller: Pull<Bundle<T, D>>+'static;
+    type Puller: Pull<Bundle<T, C>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
@@ -33,13 +33,11 @@ pub trait ParallelizationContract<T, D> {
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, D: Container> ParallelizationContract<T, D> for Pipeline {
-    type Pusher = LogPusher<T, D, ThreadPusher<Bundle<T, D>>>;
-    type Puller = LogPuller<T, D, ThreadPuller<Bundle<T, D>>>;
+impl<T: 'static, C: Container> ParallelizationContract<T, C> for Pipeline {
+    type Pusher = LogPusher<T, C, ThreadPusher<Bundle<T, C>>>;
+    type Puller = LogPuller<T, C, ThreadPuller<Bundle<T, C>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
-        let (pusher, puller) = allocator.pipeline::<Message<T, D>>(identifier, address);
-        // // ignore `&mut A` and use thread allocator
-        // let (pusher, puller) = Thread::new::<Bundle<T, Vec<D>>>();
+        let (pusher, puller) = allocator.pipeline::<Message<T, C>>(identifier, address);
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
          LogPuller::new(puller, allocator.index(), identifier, logging))
     }
@@ -89,17 +87,17 @@ impl<C, F> Debug for ExchangeCore<C, F> {
 
 /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
 #[derive(Debug)]
-pub struct LogPusher<T, D, P: Push<Bundle<T, D>>> {
+pub struct LogPusher<T, C, P: Push<Bundle<T, C>>> {
     pusher: P,
     channel: usize,
     counter: usize,
     source: usize,
     target: usize,
-    phantom: PhantomData<(T, D)>,
+    phantom: PhantomData<(T, C)>,
     logging: Option<Logger>,
 }
 
-impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
+impl<T, C, P: Push<Bundle<T, C>>> LogPusher<T, C, P> {
     /// Allocates a new pusher.
     pub fn new(pusher: P, source: usize, target: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPusher {
@@ -114,9 +112,9 @@ impl<T, D, P: Push<Bundle<T, D>>> LogPusher<T, D, P> {
     }
 }
 
-impl<T, D: Container, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T, D, P> {
+impl<T, C: Container, P: Push<Bundle<T, C>>> Push<Bundle<T, C>> for LogPusher<T, C, P> {
     #[inline]
-    fn push(&mut self, pair: &mut Option<Bundle<T, D>>) {
+    fn push(&mut self, pair: &mut Option<Bundle<T, C>>) {
         if let Some(bundle) = pair {
             self.counter += 1;
 
@@ -145,15 +143,15 @@ impl<T, D: Container, P: Push<Bundle<T, D>>> Push<Bundle<T, D>> for LogPusher<T,
 
 /// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
 #[derive(Debug)]
-pub struct LogPuller<T, D, P: Pull<Bundle<T, D>>> {
+pub struct LogPuller<T, C, P: Pull<Bundle<T, C>>> {
     puller: P,
     channel: usize,
     index: usize,
-    phantom: PhantomData<(T, D)>,
+    phantom: PhantomData<(T, C)>,
     logging: Option<Logger>,
 }
 
-impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
+impl<T, C, P: Pull<Bundle<T, C>>> LogPuller<T, C, P> {
     /// Allocates a new `Puller`.
     pub fn new(puller: P, index: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPuller {
@@ -166,9 +164,9 @@ impl<T, D, P: Pull<Bundle<T, D>>> LogPuller<T, D, P> {
     }
 }
 
-impl<T, D: Container, P: Pull<Bundle<T, D>>> Pull<Bundle<T, D>> for LogPuller<T, D, P> {
+impl<T, C: Container, P: Pull<Bundle<T, C>>> Pull<Bundle<T, C>> for LogPuller<T, C, P> {
     #[inline]
-    fn pull(&mut self) -> &mut Option<Bundle<T,D>> {
+    fn pull(&mut self) -> &mut Option<Bundle<T, C>> {
         let result = self.puller.pull();
         if let Some(bundle) = result {
             let channel = self.channel;

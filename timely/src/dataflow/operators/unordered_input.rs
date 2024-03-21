@@ -142,14 +142,14 @@ pub trait UnorderedInputCore<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>);
+    fn new_unordered_input_core<C: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>);
 }
 
 
 impl<G: Scope> UnorderedInputCore<G> for G {
-    fn new_unordered_input_core<D: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, D>, ActivateCapability<G::Timestamp>), StreamCore<G, D>) {
+    fn new_unordered_input_core<C: Container>(&mut self) -> ((UnorderedHandleCore<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>) {
 
-        let (output, registrar) = Tee::<G::Timestamp, D>::new();
+        let (output, registrar) = Tee::<G::Timestamp, C>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
@@ -215,19 +215,19 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 
 /// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct UnorderedHandleCore<T: Timestamp, D: Container> {
-    buffer: PushBuffer<T, D, PushCounter<T, D, Tee<T, D>>>,
+pub struct UnorderedHandleCore<T: Timestamp, C: Container> {
+    buffer: PushBuffer<T, C, PushCounter<T, C, Tee<T, C>>>,
 }
 
-impl<T: Timestamp, D: Container> UnorderedHandleCore<T, D> {
-    fn new(pusher: PushCounter<T, D, Tee<T, D>>) -> UnorderedHandleCore<T, D> {
+impl<T: Timestamp, C: Container> UnorderedHandleCore<T, C> {
+    fn new(pusher: PushCounter<T, C, Tee<T, C>>) -> UnorderedHandleCore<T, C> {
         UnorderedHandleCore {
             buffer: PushBuffer::new(pusher),
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, D, PushCounter<T, D, Tee<T, D>>>> {
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, C, PushCounter<T, C, Tee<T, C>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }
