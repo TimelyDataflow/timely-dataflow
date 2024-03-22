@@ -13,6 +13,7 @@ pub mod ok_err;
 pub mod probe;
 pub mod rc;
 pub mod reclock;
+pub mod to_stream;
 pub mod unordered_input;
 
 pub use concat::{Concat, Concatenate};
@@ -25,5 +26,6 @@ pub use inspect::{Inspect, InspectCore};
 pub use map::Map;
 pub use ok_err::OkErr;
 pub use probe::Probe;
+pub use to_stream::ToStream;
 pub use reclock::Reclock;
 pub use unordered_input::{UnorderedInput, UnorderedHandle};
