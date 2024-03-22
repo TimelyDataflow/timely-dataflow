@@ -20,6 +20,8 @@ pub use self::broadcast::Broadcast;
 pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
 pub use self::result::ResultStream;
+pub use self::to_stream::ToStream;
+
 
 pub use self::generic::Operator;
 pub use self::generic::{Notificator, FrontierNotificator};
@@ -43,7 +45,7 @@ pub mod delay;
 pub use self::core::exchange;
 pub mod broadcast;
 pub use self::core::probe::{self, Probe};
-pub use self::core::to_stream::ToStream;
+pub mod to_stream;
 pub mod capture;
 pub mod branch;
 pub use self::core::ok_err::{self, OkErr};

@@ -24,8 +24,8 @@ pub trait OkErr<S: Scope, C: Container> {
     ///         .to_stream(scope)
     ///         .ok_err(|x| if x % 2 == 0 { Ok(x) } else { Err(x) });
     ///
-    ///     even.inspect(|x| println!("even numbers: {:?}", x));
-    ///     odd.inspect(|x| println!("odd numbers: {:?}", x));
+    ///     even.container::<Vec<_>>().inspect(|x| println!("even: {:?}", x));
+    ///     odd.container::<Vec<_>>().inspect(|x| println!("odd: {:?}", x));
     /// });
     /// ```
     fn ok_err<C1, D1, C2, D2, L>(

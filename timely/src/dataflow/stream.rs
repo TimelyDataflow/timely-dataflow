@@ -58,6 +58,19 @@ impl<S: Scope, C: Container> StreamCore<S, C> {
     pub fn name(&self) -> &Source { &self.name }
     /// The scope immediately containing the stream.
     pub fn scope(&self) -> S { self.scope.clone() }
+
+    /// Allows the assertion of a container type, for the benefit of type inference.
+    pub fn container<D: Container>(self) -> StreamCore<S, D> where Self: AsStream<S, D> { self.as_stream() }
+}
+
+/// A type that can be translated to a [StreamCore].
+pub trait AsStream<S: Scope, C> {
+    /// Translate `self` to a [StreamCore].
+    fn as_stream(self) -> StreamCore<S, C>;
+}
+
+impl<S: Scope, C> AsStream<S, C> for StreamCore<S, C> {
+    fn as_stream(self) -> Self { self }
 }
 
 impl<S, C> Debug for StreamCore<S, C>
