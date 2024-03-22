@@ -20,7 +20,6 @@ pub use self::broadcast::Broadcast;
 pub use self::to_stream::{ToStream, ToStreamCore};
 pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
-pub use self::ok_err::OkErr;
 pub use self::result::ResultStream;
 
 pub use self::generic::Operator;
@@ -48,7 +47,7 @@ pub use self::core::probe::{self, Probe};
 pub mod to_stream;
 pub mod capture;
 pub mod branch;
-pub mod ok_err;
+pub use self::core::ok_err::{self, OkErr};
 pub use self::core::rc;
 pub mod result;
 
