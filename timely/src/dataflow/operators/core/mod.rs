@@ -13,6 +13,7 @@ pub mod ok_err;
 pub mod probe;
 pub mod rc;
 pub mod reclock;
+pub mod unordered_input;
 
 pub use concat::{Concat, Concatenate};
 pub use enterleave::{Enter, Leave};
@@ -25,3 +26,4 @@ pub use map::Map;
 pub use ok_err::OkErr;
 pub use probe::Probe;
 pub use reclock::Reclock;
+pub use unordered_input::{UnorderedInput, UnorderedHandle};

@@ -9,7 +9,7 @@
 //! Most of the operators in this module are defined using these two general operators.
 
 pub use self::input::Input;
-pub use self::unordered_input::{UnorderedInput, UnorderedInputCore};
+pub use self::unordered_input::UnorderedInput;
 pub use self::partition::Partition;
 pub use self::map::Map;
 pub use self::inspect::{Inspect, InspectCore};
