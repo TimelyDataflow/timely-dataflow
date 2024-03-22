@@ -9,7 +9,7 @@
 //! Most of the operators in this module are defined using these two general operators.
 
 pub use self::input::Input;
-pub use self::unordered_input::{UnorderedInput, UnorderedInputCore};
+pub use self::unordered_input::UnorderedInput;
 pub use self::partition::Partition;
 pub use self::map::Map;
 pub use self::inspect::{Inspect, InspectCore};
@@ -17,10 +17,8 @@ pub use self::filter::Filter;
 pub use self::delay::Delay;
 pub use self::exchange::Exchange;
 pub use self::broadcast::Broadcast;
-pub use self::to_stream::{ToStream, ToStreamCore};
 pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
-pub use self::ok_err::OkErr;
 pub use self::result::ResultStream;
 
 pub use self::generic::Operator;
@@ -45,10 +43,10 @@ pub mod delay;
 pub use self::core::exchange;
 pub mod broadcast;
 pub use self::core::probe::{self, Probe};
-pub mod to_stream;
+pub use self::core::to_stream::ToStream;
 pub mod capture;
 pub mod branch;
-pub mod ok_err;
+pub use self::core::ok_err::{self, OkErr};
 pub use self::core::rc;
 pub mod result;
 
