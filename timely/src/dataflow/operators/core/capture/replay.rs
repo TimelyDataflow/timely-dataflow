@@ -50,7 +50,7 @@ use crate::Container;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
-    /// Replays `self` into the provided scope, as a `StreamCore<S,CD>`.
+    /// Replays `self` into the provided scope, as a `StreamCore<S, C>`.
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }

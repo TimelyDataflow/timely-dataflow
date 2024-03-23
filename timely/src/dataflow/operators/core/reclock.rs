@@ -19,7 +19,7 @@ pub trait Reclock<S: Scope> {
     /// # Examples
     ///
     /// ```
-    /// use timely::dataflow::operators::{Inspect, ToStream, Delay, Map, Reclock, Capture};
+    /// use timely::dataflow::operators::{ToStream, Delay, Map, Reclock, Capture};
     /// use timely::dataflow::operators::capture::Extract;
     ///
     /// let captured = timely::example(|scope| {
@@ -36,7 +36,6 @@ pub trait Reclock<S: Scope> {
     ///
     ///     // reclock the data.
     ///     data.reclock(&clock)
-    ///         .inspect_batch(|t,x| println!("SEEN: {:?}, {:?}", t, x))
     ///         .capture()
     /// });
     ///
