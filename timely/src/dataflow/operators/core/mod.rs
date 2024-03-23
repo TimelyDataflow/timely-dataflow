@@ -1,6 +1,7 @@
 //! Extension traits for `StreamCore` implementing various operators that
 //! are independent of specific container types.
 
+pub mod capture;
 pub mod concat;
 pub mod enterleave;
 pub mod exchange;
@@ -16,6 +17,7 @@ pub mod reclock;
 pub mod to_stream;
 pub mod unordered_input;
 
+pub use capture::Capture;
 pub use concat::{Concat, Concatenate};
 pub use enterleave::{Enter, Leave};
 pub use exchange::Exchange;
