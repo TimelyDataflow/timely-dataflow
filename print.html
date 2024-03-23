@@ -837,7 +837,8 @@ fn main() {
                         }
                     }
                 }
-            });
+            })
+            .container::&lt;Vec&lt;_&gt;&gt;();
     });
 }</code></pre></pre>
 <p>What is going on here? The heart of the mess is the dataflow operator <code>unary</code>, which is a ready-to-assemble dataflow operator with one input and one output. The <code>unary</code> operator takes three arguments (it looks like so many more!): (i) instructions about how it should distribute its inputs, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.</p>
@@ -890,6 +891,7 @@ fn main() {
                 else    { activator.activate(); }
             }
         })
+        .container::&lt;Vec&lt;_&gt;&gt;()
         .inspect(|x| println!(&quot;number: {:?}&quot;, x));
     });
 }</code></pre></pre>
@@ -927,7 +929,8 @@ fn main() {
                         }
                     }
                 }
-            });
+            })
+            .container::&lt;Vec&lt;_&gt;&gt;();
     });
 }</code></pre></pre>
 <p>This example just captures an integer, but you could just as easily define and capture ownership of a <code>HashMap</code>, or whatever complicated state you would like repeated access to.</p>
@@ -1231,7 +1234,8 @@ fn main() {
                         }
                     }
                 })
-<span class="boring">                 .inspect(|x| println!(&quot;seen: {:?}&quot;, x))
+<span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
+</span><span class="boring">                 .inspect(|x| println!(&quot;seen: {:?}&quot;, x))
 </span><span class="boring">                 .probe_with(&amp;mut probe);
 </span><span class="boring">        });
 </span><span class="boring">
