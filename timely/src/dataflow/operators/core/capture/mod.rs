@@ -22,10 +22,10 @@
 //! use std::rc::Rc;
 //! use timely::dataflow::Scope;
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
-//! use timely::dataflow::operators::capture::{EventLinkCore, Replay};
+//! use timely::dataflow::operators::capture::{EventLink, Replay};
 //!
 //! timely::execute(timely::Config::thread(), |worker| {
-//!     let handle1 = Rc::new(EventLinkCore::new());
+//!     let handle1 = Rc::new(EventLink::new());
 //!     let handle2 = Some(handle1.clone());
 //!
 //!     worker.dataflow::<u64,_,_>(|scope1|
@@ -66,7 +66,7 @@
 //!     );
 //!
 //!     worker.dataflow::<u64,_,_>(|scope2| {
-//!         Some(EventReader::<_,u64,_>::new(recv))
+//!         Some(EventReader::<_,Vec<u64>,_>::new(recv))
 //!             .replay_into(scope2)
 //!             .inspect(|x| println!("replayed: {:?}", x));
 //!     })
@@ -75,11 +75,11 @@
 
 pub use self::capture::Capture;
 pub use self::replay::Replay;
-pub use self::extract::{Extract, ExtractCore};
-pub use self::event::{Event, EventCore, EventPusher, EventPusherCore};
-pub use self::event::link::{EventLink, EventLinkCore};
-pub use self::event::binary::{EventReader, EventReaderCore};
-pub use self::event::binary::{EventWriter, EventWriterCore};
+pub use self::extract::Extract;
+pub use self::event::{Event, EventPusher};
+pub use self::event::link::EventLink;
+pub use self::event::binary::EventReader;
+pub use self::event::binary::EventWriter;
 
 pub mod capture;
 pub mod replay;

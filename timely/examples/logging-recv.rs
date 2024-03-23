@@ -20,7 +20,7 @@ fn main() {
             .collect::<Vec<_>>()
             .into_iter()
             .map(|l| l.incoming().next().unwrap().unwrap())
-            .map(|r| EventReader::<Duration,(Duration,TimelySetup,TimelyEvent),_>::new(r))
+            .map(|r| EventReader::<Duration,Vec<(Duration,TimelySetup,TimelyEvent)>,_>::new(r))
             .collect::<Vec<_>>();
 
         worker.dataflow(|scope| {

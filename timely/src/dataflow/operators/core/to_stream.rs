@@ -12,13 +12,12 @@ pub trait ToStream<C: Container> {
     /// # Examples
     ///
     /// ```
-    /// use timely::dataflow::operators::core::ToStream;
-    /// use timely::dataflow::operators::Capture;
-    /// use timely::dataflow::operators::capture::Extract;
+    /// use timely::dataflow::operators::core::{ToStream, Capture};
+    /// use timely::dataflow::operators::core::capture::Extract;
     ///
     /// let (data1, data2) = timely::example(|scope| {
-    ///     let data1 = (0..3).to_stream(scope).capture();
-    ///     let data2 = vec![0,1,2].to_stream(scope).capture();
+    ///     let data1 = (0..3).to_stream(scope).container::<Vec<_>>().capture();
+    ///     let data2 = vec![0,1,2].to_stream(scope).container::<Vec<_>>().capture();
     ///     (data1, data2)
     /// });
     ///
