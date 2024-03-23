@@ -17,7 +17,7 @@ fn main() {
             .collect::<Vec<_>>()
             .into_iter()
             .map(|l| l.incoming().next().unwrap().unwrap())
-            .map(|r| EventReader::<_,u64,_>::new(r))
+            .map(|r| EventReader::<_,Vec<u64>,_>::new(r))
             .collect::<Vec<_>>();
 
         worker.dataflow::<u64,_,_>(|scope| {

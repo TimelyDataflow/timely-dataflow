@@ -12,7 +12,7 @@ pub trait ToStream<C: Container> {
     /// # Examples
     ///
     /// ```
-    /// use timely::dataflow::operators::core::ToStream;
+    /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::Capture;
     /// use timely::dataflow::operators::capture::Extract;
     ///

@@ -72,6 +72,7 @@ mod test {
                         }
                     }),
                 ])
+                .container::<Vec<_>>()
                 .capture()
         });
         let output = &mut output.extract()[0].1;
