@@ -29,7 +29,8 @@ fn main() {
                         }
                     }
                 }
-            });
+            })
+            .container::<Vec<_>>();
     });
 }
 ```
@@ -101,6 +102,7 @@ fn main() {
                 else    { activator.activate(); }
             }
         })
+        .container::<Vec<_>>()
         .inspect(|x| println!("number: {:?}", x));
     });
 }
@@ -148,7 +150,8 @@ fn main() {
                         }
                     }
                 }
-            });
+            })
+            .container::<Vec<_>>();
     });
 }
 ```

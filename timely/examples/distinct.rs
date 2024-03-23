@@ -35,6 +35,7 @@ fn main() {
                             }
                         })
                     })
+                .container::<Vec<_>>()
                 .inspect(move |x| println!("worker {}:\tvalue {}", index, x))
                 .probe_with(&mut probe);
         });

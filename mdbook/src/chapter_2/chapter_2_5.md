@@ -240,6 +240,7 @@ As before, I'm just going to show you the new code, which now lives just after `
                         }
                     }
                 })
+#                  .container::<Vec<_>>()
 #                  .inspect(|x| println!("seen: {:?}", x))
 #                  .probe_with(&mut probe);
 #         });

@@ -18,6 +18,7 @@ pub trait Map<S: Scope, C: Container> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .map(|x| x + 1)
+    ///            .container::<Vec<_>>()
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
@@ -39,6 +40,7 @@ pub trait Map<S: Scope, C: Container> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .flat_map(|x| (0..x))
+    ///            .container::<Vec<_>>()
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```

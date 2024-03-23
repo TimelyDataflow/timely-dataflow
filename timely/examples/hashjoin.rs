@@ -76,6 +76,7 @@ fn main() {
                         });
                     }
                 })
+                .container::<Vec<_>>()
                 .probe_with(&mut probe);
         });
 

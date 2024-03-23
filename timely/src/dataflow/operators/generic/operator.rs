@@ -51,7 +51,8 @@ pub trait Operator<G: Scope, C1: Container> {
     ///                         }
     ///                     });
     ///                 }
-    ///             });
+    ///             })
+    ///             .container::<Vec<_>>();
     ///     });
     /// }
     /// ```
@@ -172,7 +173,9 @@ pub trait Operator<G: Scope, C1: Container> {
     ///                    }
     ///                });
     ///            }
-    ///        }).inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
+    ///        })
+    ///        .container::<Vec<_>>()
+    ///        .inspect_batch(|t, x| println!("{:?} -> {:?}", t, x));
     ///
     ///        (in1_handle, in2_handle)
     ///    });
@@ -552,6 +555,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
 ///             else    { activator.activate(); }
 ///         }
 ///     })
+///     .container::<Vec<_>>()
 ///     .inspect(|x| println!("number: {:?}", x));
 /// });
 /// ```

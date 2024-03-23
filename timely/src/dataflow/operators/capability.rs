@@ -426,7 +426,8 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///                     output.session(a_cap).give(());
     ///                 }
     ///             }
-    ///         });
+    ///         })
+    ///         .container::<Vec<_>>();
     /// });
     /// ```
     pub fn from_elem(cap: Capability<T>) -> Self {

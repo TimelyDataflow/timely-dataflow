@@ -81,6 +81,7 @@ pub trait Input : Scope {
     ///     let mut input = Handle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
+    ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
     ///
@@ -198,6 +199,7 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
     ///     let mut input = Handle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
+    ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
     ///
@@ -235,6 +237,7 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
     ///     let mut input = Handle::new();
     ///     worker.dataflow(|scope| {
     ///         input.to_stream(scope)
+    ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
     ///
@@ -404,6 +407,7 @@ impl<T: Timestamp, C: PushContainer> Handle<T, C> {
     ///     let mut input = Handle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
+    ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
     ///
