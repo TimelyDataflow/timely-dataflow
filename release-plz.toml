@@ -1,0 +1,10 @@
+[workspace]
+# disable the changelog for all packages
+changelog_update = false
+
+[[package]]
+name = "timely"
+# enable the changelog for this package
+changelog_update = true
+# set the path of the changelog to the root of the repository
+changelog_path = "./CHANGELOG.md"
