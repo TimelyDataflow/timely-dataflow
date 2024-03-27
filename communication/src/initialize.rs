@@ -54,8 +54,7 @@ impl Debug for Config {
                 .field("process", process)
                 .field("addresses", addresses)
                 .field("report", report)
-                // TODO: Use `.finish_non_exhaustive()` after rust/#67364 lands
-                .finish()
+                .finish_non_exhaustive()
         }
     }
 }
