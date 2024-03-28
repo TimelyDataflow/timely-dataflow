@@ -11,6 +11,7 @@ pub type TimelyProgressLogger = Logger<TimelyProgressEvent>;
 
 use std::time::Duration;
 use crate::dataflow::operators::capture::{Event, EventPusher};
+use crate::progress::Location;
 
 /// Logs events as a timely stream, with progress statements.
 pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
@@ -80,10 +81,15 @@ pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
     ///
     /// # Example
     /// ```rust
-    /// let ts = vec![(0usize, 0usize, (23u64, 10u64), -4i64), (0usize, 0usize, (23u64, 11u64), 1i64)];
+    /// use timely::progress::Location;
+    ///
+    /// let ts = vec![
+    ///     (Location::new_target(0, 0), (23u64, 10u64), -4i64),
+    ///     (Location::new_target(0, 0), (23u64, 11u64), 1i64),
+    /// ];
     /// let ts: &timely::logging::ProgressEventTimestampVec = &ts;
-    /// for (n, p, t, d) in ts.iter() {
-    ///     print!("{:?}, ", (n, p, t.as_any().downcast_ref::<(u64, u64)>(), d));
+    /// for (l, t, d) in ts.iter() {
+    ///     print!("{:?}, ", (l, t.as_any().downcast_ref::<(u64, u64)>(), d));
     /// }
     /// println!();
     /// ```
@@ -114,14 +120,14 @@ impl<T: crate::Data + std::fmt::Debug + std::any::Any> ProgressEventTimestamp fo
 /// for each dynamically typed element).
 pub trait ProgressEventTimestampVec: std::fmt::Debug + std::any::Any {
     /// Iterate over the contents of the vector
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a>;
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a Location, &'a dyn ProgressEventTimestamp, &'a i64)>+'a>;
 }
 
-impl<T: ProgressEventTimestamp> ProgressEventTimestampVec for Vec<(usize, usize, T, i64)> {
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a> {
-        Box::new(<[(usize, usize, T, i64)]>::iter(&self[..]).map(|(n, p, t, d)| {
+impl<T: ProgressEventTimestamp> ProgressEventTimestampVec for Vec<(Location, T, i64)> {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a Location, &'a dyn ProgressEventTimestamp, &'a i64)>+'a> {
+        Box::new(<[_]>::iter(&self[..]).map(|(l, t, d)| {
             let t: &dyn ProgressEventTimestamp = t;
-            (n, p, t, d)
+            (l, t, d)
         }))
     }
 }
