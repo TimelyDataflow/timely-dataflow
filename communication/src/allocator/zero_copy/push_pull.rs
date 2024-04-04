@@ -85,6 +85,7 @@ impl<T:Data> Puller<T> {
 
 impl<T:Data> Pull<Message<T>> for Puller<T> {
     #[inline]
+    #[allow(unused_unsafe)]
     fn pull(&mut self) -> &mut Option<Message<T>> {
         self.current =
         self.receiver
@@ -123,6 +124,7 @@ impl<T:Data> PullerInner<T> {
 
 impl<T:Data> Pull<Message<T>> for PullerInner<T> {
     #[inline]
+    #[allow(unused_unsafe)]
     fn pull(&mut self) -> &mut Option<Message<T>> {
 
         let inner = self.inner.pull();
