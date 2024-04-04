@@ -16,7 +16,13 @@ jobs:
         toolchain:
           - stable
           - 1.72
-    name: cargo test on ${{ matrix.os }}, rust ${{ matrix.toolchain }}
+        feature:
+          - default
+        include:
+          - os: ubuntu
+            toolchain: stable
+            feature: bincode
+    name: cargo test ${{ matrix.os }}, ${{ matrix.toolchain }}, ${{ matrix.feature }}
     runs-on: ${{ matrix.os }}-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,9 +30,7 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
       - name: Cargo test
-        run: cargo test
-      - name: Cargo test bincode
-        run: cargo test --features bincode
+        run: cargo test --features ${{ matrix.feature }}
 
   # Check mdbook
   mdbook:
