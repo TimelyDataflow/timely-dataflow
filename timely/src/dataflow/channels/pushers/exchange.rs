@@ -3,7 +3,7 @@
 use crate::communication::Push;
 use crate::container::PushPartitioned;
 use crate::dataflow::channels::{Bundle, Message};
-use crate::{Container, Data};
+use crate::Data;
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
@@ -44,9 +44,9 @@ where
     }
 }
 
-impl<T: Eq+Data, C: Container, P: Push<Bundle<T, C>>, H, > Push<Bundle<T, C>> for Exchange<T, C, P, H>
+impl<T: Eq+Data, C, P: Push<Bundle<T, C>>, H, > Push<Bundle<T, C>> for Exchange<T, C, P, H>
 where
-    C: PushPartitioned,
+    C: PushPartitioned+Data,
     for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     #[inline(never)]

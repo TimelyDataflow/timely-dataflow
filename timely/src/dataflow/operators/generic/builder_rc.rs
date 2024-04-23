@@ -8,7 +8,7 @@ use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
-use crate::Container;
+use crate::{Container, Data};
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
@@ -92,7 +92,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: Container>(&mut self) -> (OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>, StreamCore<G, C>) {
+    pub fn new_output<C: Container+Data>(&mut self) -> (OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>, StreamCore<G, C>) {
         let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().inputs()];
         self.new_output_connection(connection)
     }
@@ -105,7 +105,7 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_output_connection<C: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>, StreamCore<G, C>) {
+    pub fn new_output_connection<C: Container+Data>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>, StreamCore<G, C>) {
 
         let (tee, stream) = self.builder.new_output_connection(connection.clone());
 

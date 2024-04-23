@@ -11,7 +11,7 @@ use crate::progress::frontier::Antichain;
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 
-use crate::Container;
+use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::{Scope, ScopeParent, StreamCore};
 use crate::dataflow::channels::pushers::{Tee, Counter};
@@ -60,7 +60,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<C: Container>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, C>, StreamCore<Self, C>);
+    fn new_input<C: Container+Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, C>, StreamCore<Self, C>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -93,18 +93,18 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<C: Container>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, C>) -> StreamCore<Self, C>;
+    fn input_from<C: Container+Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, C>) -> StreamCore<Self, C>;
 }
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<C: Container>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, C>, StreamCore<G, C>) {
+    fn new_input<C: Container+Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, C>, StreamCore<G, C>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn input_from<C: Container>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, C>) -> StreamCore<G, C> {
+    fn input_from<C: Container+Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, C>) -> StreamCore<G, C> {
         let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, C>::new();
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
@@ -174,7 +174,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `StreamCore`, used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct Handle<T: Timestamp, C: Container> {
+pub struct Handle<T: Timestamp, C: Container+Data> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     pushers: Vec<Counter<T, C, Tee<T, C>>>,
@@ -183,7 +183,7 @@ pub struct Handle<T: Timestamp, C: Container> {
     now_at: T,
 }
 
-impl<T: Timestamp, C: Container> Handle<T, C> {
+impl<T: Timestamp, C: Container+Data> Handle<T, C> {
     /// Allocates a new input handle, from which one can create timely streams.
     ///
     /// # Examples
@@ -390,7 +390,7 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
     }
 }
 
-impl<T: Timestamp, C: PushContainer> Handle<T, C> {
+impl<T: Timestamp, C: PushContainer+Data> Handle<T, C> {
     #[inline]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     ///
@@ -427,13 +427,13 @@ impl<T: Timestamp, C: PushContainer> Handle<T, C> {
     }
 }
 
-impl<T: Timestamp, C: Container> Default for Handle<T, C> {
+impl<T: Timestamp, C: Container+Data> Default for Handle<T, C> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T:Timestamp, C: Container> Drop for Handle<T, C> {
+impl<T:Timestamp, C: Container+Data> Drop for Handle<T, C> {
     fn drop(&mut self) {
         self.close_epoch();
     }

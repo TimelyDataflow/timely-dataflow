@@ -1,6 +1,7 @@
 //! Operators that separate one stream into two streams based on some condition
 
 use timely_container::{Container, PushContainer, PushInto};
+use crate::Data;
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
@@ -33,23 +34,23 @@ pub trait OkErr<S: Scope, C: Container> {
         logic: L,
     ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
     where
-        C1: PushContainer,
+        C1: PushContainer+Data,
         D1: PushInto<C1>,
-        C2: PushContainer,
+        C2: PushContainer+Data,
         D2: PushInto<C2>,
         L: FnMut(C::Item<'_>) -> Result<D1,D2>+'static
     ;
 }
 
-impl<S: Scope, C: Container> OkErr<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container+Data> OkErr<S, C> for StreamCore<S, C> {
     fn ok_err<C1, D1, C2, D2, L>(
         &self,
         mut logic: L,
     ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
     where
-        C1: PushContainer,
+        C1: PushContainer+Data,
         D1: PushInto<C1>,
-        C2: PushContainer,
+        C2: PushContainer+Data,
         D2: PushInto<C2>,
         L: FnMut(C::Item<'_>) -> Result<D1,D2>+'static
     {

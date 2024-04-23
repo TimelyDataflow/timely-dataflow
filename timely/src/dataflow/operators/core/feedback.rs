@@ -1,6 +1,6 @@
 //! Create cycles in a timely dataflow graph.
 
-use crate::Container;
+use crate::{Container, Data};
 
 use crate::progress::{Timestamp, PathSummary};
 use crate::progress::frontier::Antichain;
@@ -37,7 +37,7 @@ pub trait Feedback<G: Scope> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback<C: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, StreamCore<G, C>);
+    fn feedback<C: Container+Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, StreamCore<G, C>);
 }
 
 /// Creates a `StreamCore` and a `Handle` to later bind the source of that `StreamCore`.
@@ -65,12 +65,12 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<C: Container>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>);
+    fn loop_variable<C: Container+Data>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>);
 }
 
 impl<G: Scope> Feedback<G> for G {
 
-    fn feedback<C: Container>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, StreamCore<G, C>) {
+    fn feedback<C: Container+Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, StreamCore<G, C>) {
 
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
         let (output, stream) = builder.new_output();
@@ -80,13 +80,13 @@ impl<G: Scope> Feedback<G> for G {
 }
 
 impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
-    fn loop_variable<C: Container>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>) {
+    fn loop_variable<C: Container+Data>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>) {
         self.feedback(Product::new(Default::default(), summary))
     }
 }
 
 /// Connect a `Stream` to the input of a loop variable.
-pub trait ConnectLoop<G: Scope, C: Container> {
+pub trait ConnectLoop<G: Scope, C: Container+Data> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
     /// # Examples
@@ -107,7 +107,7 @@ pub trait ConnectLoop<G: Scope, C: Container> {
     fn connect_loop(&self, handle: Handle<G, C>);
 }
 
-impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container+Data> ConnectLoop<G, C> for StreamCore<G, C> {
     fn connect_loop(&self, handle: Handle<G, C>) {
 
         let mut builder = handle.builder;
@@ -134,7 +134,7 @@ impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
 
 /// A handle used to bind the source of a loop variable.
 #[derive(Debug)]
-pub struct Handle<G: Scope, C: Container> {
+pub struct Handle<G: Scope, C: Container+Data> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
     output: OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>,

@@ -1,5 +1,6 @@
 //! Filters a stream by a predicate.
 use timely_container::{Container, PushContainer, PushInto};
+use crate::Data;
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
@@ -23,7 +24,7 @@ pub trait Filter<C: Container> {
     fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(&self, predicate: P) -> Self;
 }
 
-impl<G: Scope, C: PushContainer> Filter<C> for StreamCore<G, C> 
+impl<G: Scope, C: PushContainer+Data> Filter<C> for StreamCore<G, C>
 where
     for<'a> C::Item<'a>: PushInto<C>
 {

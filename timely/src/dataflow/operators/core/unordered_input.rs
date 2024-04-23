@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::Container;
+use crate::{Container, Data};
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
 
@@ -73,11 +73,11 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<C: Container>(&mut self) -> ((UnorderedHandle<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>);
+    fn new_unordered_input<C: Container+Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>);
 }
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<C: Container>(&mut self) -> ((UnorderedHandle<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>) {
+    fn new_unordered_input<C: Container+Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>) {
 
         let (output, registrar) = Tee::<G::Timestamp, C>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
@@ -145,11 +145,11 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 
 /// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct UnorderedHandle<T: Timestamp, C: Container> {
+pub struct UnorderedHandle<T: Timestamp, C: Container+Data> {
     buffer: PushBuffer<T, C, Counter<T, C, Tee<T, C>>>,
 }
 
-impl<T: Timestamp, C: Container> UnorderedHandle<T, C> {
+impl<T: Timestamp, C: Container+Data> UnorderedHandle<T, C> {
     fn new(pusher: Counter<T, C, Tee<T, C>>) -> UnorderedHandle<T, C> {
         UnorderedHandle {
             buffer: PushBuffer::new(pusher),

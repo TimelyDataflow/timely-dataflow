@@ -9,9 +9,9 @@
 
 use std::{fmt::{self, Debug}, marker::PhantomData};
 
-use crate::Container;
+use crate::{Container, ExchangeData};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::communication::{Push, Pull, Data};
+use crate::communication::{Push, Pull};
 use crate::container::PushPartitioned;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use crate::dataflow::channels::{Bundle, Message};
@@ -33,7 +33,7 @@ pub trait ParallelizationContract<T, C> {
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, C: Container> ParallelizationContract<T, C> for Pipeline {
+impl<T: 'static, C: Container + 'static> ParallelizationContract<T, C> for Pipeline {
     type Pusher = LogPusher<T, C, ThreadPusher<Bundle<T, C>>>;
     type Puller = LogPuller<T, C, ThreadPuller<Bundle<T, C>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: &[usize], logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -66,7 +66,7 @@ where
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Timestamp, C, H: 'static> ParallelizationContract<T, C> for ExchangeCore<C, H>
 where
-    C: Data + PushPartitioned,
+    C: PushPartitioned + ExchangeData,
     for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, C, LogPusher<T, C, Box<dyn Push<Bundle<T, C>>>>, H>;

@@ -17,7 +17,7 @@ pub struct Tee<T, C> {
     shared: PushList<T, C>,
 }
 
-impl<T: Data, C: Container> Push<Bundle<T, C>> for Tee<T, C> {
+impl<T: Data, C: Container+Data> Push<Bundle<T, C>> for Tee<T, C> {
     #[inline]
     fn push(&mut self, message: &mut Option<Bundle<T, C>>) {
         let mut pushers = self.shared.borrow_mut();

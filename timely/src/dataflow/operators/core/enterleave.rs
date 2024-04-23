@@ -103,7 +103,7 @@ pub trait Leave<G: Scope, C: Container> {
     fn leave(&self) -> StreamCore<G, C>;
 }
 
-impl<'a, G: Scope, C: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'a, G, T>, C> {
+impl<'a, G: Scope, C: Container+Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'a, G, T>, C> {
     fn leave(&self) -> StreamCore<G, C> {
 
         let scope = self.scope();
@@ -130,14 +130,14 @@ impl<'a, G: Scope, C: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> {
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container+Data> {
     targets: Counter<TInner, TContainer, Tee<TInner, TContainer>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> Push<Bundle<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container+Data> Push<Bundle<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
     fn push(&mut self, element: &mut Option<Bundle<TOuter, TContainer>>) {
         if let Some(message) = element {
             let outer_message = message.as_mut();
