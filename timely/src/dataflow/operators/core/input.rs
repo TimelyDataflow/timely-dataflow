@@ -424,8 +424,8 @@ impl<T: Timestamp, C: PushContainer> Handle<T, C> {
             let to_reserve = C::preferred_capacity() - self.buffer1.capacity();
             self.buffer1.reserve(to_reserve);
         }
-        self.buffer1.push(data);
-        if self.buffer1.should_flush() {
+        let should_flush = self.buffer1.push(data);
+        if should_flush {
             self.flush();
         }
     }

@@ -70,10 +70,12 @@ pub trait PushInto<C> {
 //     not be able to absorb more data.
 //   * Example: A FlatStack with optimized offsets and deduplication can absorb many elements without reallocation. What does capacity mean in this context?
 pub trait PushContainer: Container {
-    /// Push `item` into self
+    /// Push `item` into self. Returns `true` if the container is full after pushing.
     #[inline]
-    fn push<T: PushInto<Self>>(&mut self, item: T) {
-        item.push_into(self)
+    #[must_use]
+    fn push<T: PushInto<Self>>(&mut self, item: T) -> bool {
+        item.push_into(self);
+        Self::preferred_capacity() <= self.len()
     }
     /// Return the capacity of the container.
     fn capacity(&self) -> usize;
@@ -81,14 +83,6 @@ pub trait PushContainer: Container {
     fn preferred_capacity() -> usize;
     /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
     fn reserve(&mut self, additional: usize);
-    /// Return `true` if the container should be flushed.
-    ///
-    /// The default implementation returns `true` if the length is larger or equal
-    /// to the [`preferred_capacity`].
-    #[inline]
-    fn should_flush(&self) -> bool {
-        Self::preferred_capacity() <= self.len()
-    }
 }
 
 impl<T: Clone + 'static> Container for Vec<T> {
@@ -257,8 +251,8 @@ impl<T: PushContainer + 'static> PushPartitioned for T where for<'a> T::Item<'a>
         for datum in self.drain() {
             let index = index(&datum);
             ensure_capacity(&mut buffers[index]);
-            buffers[index].push(datum);
-            if buffers[index].len() >= buffers[index].capacity() {
+            let should_flush = buffers[index].push(datum);
+            if should_flush {
                 flush(index, &mut buffers[index]);
             }
         }

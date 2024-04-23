@@ -69,8 +69,10 @@ where
             }
             to_sort.sort();
             let mut sorted = C::default();
+            sorted.reserve(to_sort.len());
             for datum in to_sort.into_iter() {
-                sorted.push(datum);
+                let should_flush = sorted.push(datum);
+                assert!(!should_flush);
             }
             if !sorted.is_empty() {
                 result.push((time, sorted));
