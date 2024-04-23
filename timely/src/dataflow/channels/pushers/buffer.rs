@@ -88,7 +88,7 @@ impl<T, C: PushContainer, P: Push<Bundle<T, C>>> Buffer<T, C, P> where T: Eq+Clo
             self.buffer.reserve(to_reserve);
         }
         self.buffer.push(data);
-        if self.buffer.len() >= C::preferred_capacity() {
+        if self.buffer.should_flush() {
             self.flush();
         }
     }

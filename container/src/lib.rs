@@ -81,6 +81,14 @@ pub trait PushContainer: Container {
     fn preferred_capacity() -> usize;
     /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
     fn reserve(&mut self, additional: usize);
+    /// Return `true` if the container should be flushed.
+    ///
+    /// The default implementation returns `true` if the length is larger or equal
+    /// to the [`preferred_capacity`].
+    #[inline]
+    fn should_flush(&self) -> bool {
+        Self::preferred_capacity() <= self.len()
+    }
 }
 
 impl<T: Clone + 'static> Container for Vec<T> {

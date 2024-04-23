@@ -420,8 +420,12 @@ impl<T: Timestamp, C: PushContainer> Handle<T, C> {
     /// });
     /// ```
     pub fn send<D: PushInto<C>>(&mut self, data: D) {
+        if self.buffer1.capacity() < C::preferred_capacity() {
+            let to_reserve = C::preferred_capacity() - self.buffer1.capacity();
+            self.buffer1.reserve(to_reserve);
+        }
         self.buffer1.push(data);
-        if self.buffer1.len() == self.buffer1.capacity() {
+        if self.buffer1.should_flush() {
             self.flush();
         }
     }
