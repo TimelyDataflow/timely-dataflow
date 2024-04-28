@@ -1,7 +1,7 @@
 //! Present a [`FlatStack`] as a timely container.
 
 pub use flatcontainer::*;
-use crate::{Container, PushContainer, PushInto};
+use crate::{buffer, Container, PushContainer, PushInto};
 
 impl<R: Region + Clone + 'static> Container for FlatStack<R> {
     type ItemRef<'a> = R::ReadItem<'a>  where Self: 'a;
@@ -34,7 +34,7 @@ impl<R: Region + Clone + 'static> PushContainer for FlatStack<R> {
     }
 
     fn preferred_capacity() -> usize {
-        crate::buffer::default_capacity::<R::Index>()
+        buffer::default_capacity::<R::Index>()
     }
 
     fn reserve(&mut self, additional: usize) {

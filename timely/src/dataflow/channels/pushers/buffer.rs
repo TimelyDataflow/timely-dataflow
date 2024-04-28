@@ -13,11 +13,12 @@ use crate::{Container, Data};
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
 /// data must be flushed and creates a `Session` object which allows sending at the given time.
 #[derive(Debug)]
-pub struct Buffer<T, B, P> {
-    /// the currently open time, if it is open
+pub struct Buffer<T, CB, P> {
+    /// The currently open time, if it is open.
     time: Option<T>,
-    /// a buffer for records, to send at self.time
-    buffer: B,
+    /// A builder for containers, to send at `self.time`.
+    builder: CB,
+    /// The pusher to send data downstream.
     pusher: P,
 }
 
@@ -26,7 +27,7 @@ impl<T, B: Default, P> Buffer<T, B, P> {
     pub fn new(pusher: P) -> Self {
         Self {
             time: None,
-            buffer: Default::default(),
+            builder: Default::default(),
             pusher,
         }
     }
@@ -83,7 +84,7 @@ impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> w
     /// moves the contents of
     #[inline]
     fn flush(&mut self) {
-        for mut container in self.buffer.finish() {
+        for mut container in self.builder.finish() {
             let time = self.time.as_ref().unwrap().clone();
             Message::push_at(&mut container, time, &mut self.pusher);
         }
@@ -109,11 +110,11 @@ where
     // internal method for use by `Session`.
     #[inline]
     fn give<D: PushInto<B::Container>>(&mut self, data: D) {
-        self.buffer.push(data);
+        self.builder.push(data);
 
         // Extract finished data, but leave unfinished data behind. This is different
         // from calling `flush`!
-        for mut container in self.buffer.extract() {
+        for mut container in self.builder.extract() {
             let time = self.time.as_ref().unwrap().clone();
             Message::push_at(&mut container, time, &mut self.pusher);
         }
