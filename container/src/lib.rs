@@ -102,7 +102,39 @@ pub trait ContainerBuilder: Default {
     fn finish(&mut self) -> impl Iterator<Item=Self::Container>;
 }
 
-/// TODO
+impl<C: PushContainer> ContainerBuilder for C {
+    type Container = C;
+
+    #[inline]
+    fn push<T: PushInto<Self::Container>>(&mut self, item: T) where Self::Container: PushContainer {
+        // Ensure capacity
+        if self.capacity() < C::preferred_capacity() {
+            self.reserve(C::preferred_capacity() - self.len());
+        }
+
+        // Push data
+        item.push_into(self);
+
+        // We cannot flush because `C` doesn't have any storage, so let's hope someone
+        // calls `extract` soon!
+    }
+
+    #[inline]
+    fn extract(&mut self) -> impl Iterator<Item=Self::Container> {
+        if self.len() > 0 && self.len() == self.capacity() {
+            Some(std::mem::take(self)).into_iter()
+        } else {
+            None.into_iter()
+        }
+    }
+
+    #[inline]
+    fn finish(&mut self) -> impl Iterator<Item=Self::Container> {
+        std::iter::once(std::mem::take(self))
+    }
+}
+
+/// A default container builder that uses length and preferred capacity to chunk data.
 #[derive(Default)]
 pub struct DefaultContainerBuilder<C>{
     current: C,
@@ -128,10 +160,12 @@ impl<C: Container> ContainerBuilder for DefaultContainerBuilder<C> {
         }
     }
 
+    #[inline]
     fn extract(&mut self) -> impl Iterator<Item=Self::Container> {
         self.pending.drain(..)
     }
 
+    #[inline]
     fn finish(&mut self) -> impl Iterator<Item=Self::Container> {
         if self.current.len() > 0 {
             self.pending.push(std::mem::take(&mut self.current));
@@ -178,80 +212,6 @@ impl<T: Clone + 'static> PushContainer for Vec<T> {
 
     fn reserve(&mut self, additional: usize) {
         self.reserve(additional);
-    }
-}
-
-// struct PushContainerBuilder<C> {
-//     current: C,
-//     pending: Vec<C>,
-// }
-//
-// impl<C: Default> Default for PushContainerBuilder<C> {
-//     fn default() -> Self {
-//         Self {
-//             current: C::default(),
-//             pending: Vec::default(),
-//         }
-//     }
-// }
-//
-// impl<C: Container> ContainerBuilder for PushContainerBuilder<C> {
-//     type Container = C;
-//
-//     fn push<D: PushInto<Self::Container>>(&mut self, item: D) where C: PushContainer {
-//         let preferred_capacity = C::preferred_capacity();
-//         if self.current.capacity() < preferred_capacity {
-//             self.current.reserve(preferred_capacity - self.current.capacity());
-//         }
-//         item.push_into(&mut self.current);
-//         if self.current.len() == self.current.capacity() {
-//             self.pending.push(std::mem::take(&mut self.current));
-//         }
-//     }
-//
-//     fn extract(&mut self) -> impl Iterator<Item=Self::Container> {
-//         self.pending.drain(..)
-//     }
-//
-//     fn finish(&mut self) -> impl Iterator<Item=Self::Container> {
-//         self.pending.drain(..).chain(std::iter::once(std::mem::take(&mut self.current)))
-//     }
-// }
-
-struct VecContainerBuilder<T> {
-    current: Vec<T>,
-    pending: Vec<Vec<T>>,
-}
-
-impl<T> Default for VecContainerBuilder<T> {
-    fn default() -> Self {
-        Self {
-            current: Vec::default(),
-            pending: Vec::default(),
-        }
-    }
-}
-
-impl<T: Clone + 'static> ContainerBuilder for VecContainerBuilder<T> {
-    type Container = Vec<T>;
-
-    fn push<D: PushInto<Self::Container>>(&mut self, item: D) {
-        let preferred_capacity = crate::buffer::default_capacity::<T>();
-        if self.current.capacity() < preferred_capacity {
-            self.current.reserve(preferred_capacity - self.current.capacity());
-        }
-        item.push_into(&mut self.current);
-        if self.current.len() == self.current.capacity() {
-            self.pending.push(std::mem::take(&mut self.current));
-        }
-    }
-
-    fn extract(&mut self) -> impl Iterator<Item=Self::Container> {
-        self.pending.drain(..)
-    }
-
-    fn finish(&mut self) -> impl Iterator<Item=Self::Container> {
-        self.pending.drain(..).chain(std::iter::once(std::mem::take(&mut self.current)))
     }
 }
 

@@ -48,32 +48,3 @@ impl<R: Region + Clone + 'static, T: CopyOnto<R>> PushInto<FlatStack<R>> for T {
         target.copy(self);
     }
 }
-
-#[derive(Default)]
-struct DefaultFlatStackBuilder<R: Region> {
-    current: FlatStack<R>,
-    pending: Vec<FlatStack<R>>,
-}
-
-impl<R: Region + Clone + 'static> ContainerBuilder for DefaultFlatStackBuilder<R> {
-    type Container = FlatStack<R>;
-
-    fn push<T: PushInto<Self::Container>>(&mut self, item: T) {
-        let preferred_capacity = crate::buffer::default_capacity::<R::Index>();
-        if self.pending.capacity() < preferred_capacity {
-            self.pending.reserve(preferred_capacity - self.pending.capacity());
-        }
-        item.push_into(&mut self.current);
-        if self.current.len() == self.current.capacity() {
-            self.pending.push(std::mem::take(&mut self.current));
-        }
-    }
-
-    fn extract(&mut self) -> impl Iterator<Item=Self::Container> {
-        self.pending.drain(..)
-    }
-
-    fn finish(&mut self) -> impl Iterator<Item=Self::Container> {
-        self.pending.drain(..).chain(std::iter::once(std::mem::take(&mut self.current)))
-    }
-}

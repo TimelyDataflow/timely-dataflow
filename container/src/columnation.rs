@@ -356,41 +356,4 @@ mod container {
             self.reserve(additional)
         }
     }
-
-    struct TimelyStackBuilder<T: Columnation> {
-        current: TimelyStack<T>,
-        pending: Vec<TimelyStack<T>>,
-    }
-
-    impl<T: Columnation> Default for TimelyStackBuilder<T> {
-        fn default() -> Self {
-            Self {
-                current: TimelyStack::default(),
-                pending: Vec::default(),
-            }
-        }
-    }
-
-    impl<T: Columnation + 'static> ContainerBuilder for TimelyStackBuilder<T> {
-        type Container = TimelyStack<T>;
-
-        fn push<D: PushInto<Self::Container>>(&mut self, item: D) {
-            let preferred_capacity = crate::buffer::default_capacity::<T>();
-            if self.current.capacity() < preferred_capacity {
-                self.current.reserve(preferred_capacity - self.current.capacity());
-            }
-            item.push_into(&mut self.current);
-            if self.current.len() == self.current.capacity() {
-                self.pending.push(std::mem::take(&mut self.current));
-            }
-        }
-
-        fn extract(&mut self) -> impl Iterator<Item=Self::Container> {
-            self.pending.drain(..)
-        }
-
-        fn finish(&mut self) -> impl Iterator<Item=Self::Container> {
-            self.pending.drain(..).chain(std::iter::once(std::mem::take(&mut self.current)))
-        }
-    }
 }
