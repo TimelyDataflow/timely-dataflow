@@ -1,6 +1,7 @@
 //! Merges the contents of multiple streams.
 
 
+use timely_container::DefaultContainerBuilder;
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{StreamCore, Scope};
@@ -76,7 +77,7 @@ impl<G: Scope, C: Container> Concatenate<G, C> for G {
         let mut handles = sources.into_iter().map(|s| builder.new_input(&s, Pipeline)).collect::<Vec<_>>();
 
         // create one output handle for the concatenated results.
-        let (mut output, result) = builder.new_output();
+        let (mut output, result) = builder.new_output::<DefaultContainerBuilder<_>>();
 
         // build an operator that plays out all input data.
         builder.build(move |_capability| {

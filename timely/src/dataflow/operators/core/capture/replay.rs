@@ -38,6 +38,7 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
+use timely_container::DefaultContainerBuilder;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
@@ -76,7 +77,7 @@ where
 
         let (targets, stream) = builder.new_output();
 
-        let mut output = PushBuffer::new(PushCounter::new(targets));
+        let mut output = <PushBuffer<_, DefaultContainerBuilder<C>, _>>::new(PushCounter::new(targets));
         let mut event_streams = self.into_iter().collect::<Vec<_>>();
         let mut started = false;
         let mut allocation: C = Default::default();
