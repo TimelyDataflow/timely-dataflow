@@ -89,6 +89,10 @@ pub trait PushContainer: Container {
 /// chunked into individual containers, but is free to change the data representation to
 /// better fit the properties of the container.
 ///
+/// The owner extracts data in two ways. The opportunistic [`Self::extract`] method returns
+/// any ready data, but doesn't need to produce partial outputs. In contrast, [`Self::finish`]
+/// needs to produce all outputs, even partial ones.
+///
 /// For example, a consolidating builder can aggregate differences in-place, but it has
 /// to ensure that it preserves the intended information.
 pub trait ContainerBuilder: Default + 'static {
@@ -100,38 +104,6 @@ pub trait ContainerBuilder: Default + 'static {
     fn extract(&mut self) -> impl Iterator<Item=Self::Container>;
     /// Extract assembled containers and any unfinished data.
     fn finish(&mut self) -> impl Iterator<Item=Self::Container>;
-}
-
-impl<C: PushContainer> ContainerBuilder for C {
-    type Container = C;
-
-    #[inline]
-    fn push<T: PushInto<Self::Container>>(&mut self, item: T) where Self::Container: PushContainer {
-        // Ensure capacity
-        if self.capacity() < C::preferred_capacity() {
-            self.reserve(C::preferred_capacity() - self.len());
-        }
-
-        // Push data
-        item.push_into(self);
-
-        // We cannot flush because `C` doesn't have any storage, so let's hope someone
-        // calls `extract` soon!
-    }
-
-    #[inline]
-    fn extract(&mut self) -> impl Iterator<Item=Self::Container> {
-        if self.len() > 0 && self.len() == self.capacity() {
-            Some(std::mem::take(self)).into_iter()
-        } else {
-            None.into_iter()
-        }
-    }
-
-    #[inline]
-    fn finish(&mut self) -> impl Iterator<Item=Self::Container> {
-        std::iter::once(std::mem::take(self))
-    }
 }
 
 /// A default container builder that uses length and preferred capacity to chunk data.
