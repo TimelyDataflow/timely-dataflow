@@ -198,7 +198,6 @@ impl<T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Output
     }
 }
 
-
 /// Handle to an operator's output stream.
 pub struct OutputHandleCore<'a, T: Timestamp, B: ContainerBuilder+'a, P: Push<Bundle<T, B::Container>>+'a> {
     push_buffer: &'a mut Buffer<T, B, PushCounter<T, B::Container, P>>,
@@ -208,7 +207,7 @@ pub struct OutputHandleCore<'a, T: Timestamp, B: ContainerBuilder+'a, P: Push<Bu
 /// Handle specialized to `Vec`-based container.
 pub type OutputHandle<'a, T, D, P> = OutputHandleCore<'a, T, DefaultContainerBuilder<Vec<D>>, P>;
 
-impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> OutputHandleCore<'a, T, B, P> {
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a, T, DefaultContainerBuilder<C>, P> {
     /// Obtains a session that can send data at the timestamp associated with capability `cap`.
     ///
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp
@@ -231,7 +230,7 @@ impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Ou
     ///            });
     /// });
     /// ```
-    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, B, PushCounter<T, B::Container, P>> where 'a: 'b {
+    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, DefaultContainerBuilder<C>, PushCounter<T, C, P>> where 'a: 'b {
         assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
         self.push_buffer.session(cap.time())
     }

@@ -1,6 +1,5 @@
 //! Create new `Streams` connected to external inputs.
 
-use timely_container::DefaultContainerBuilder;
 use crate::Data;
 
 use crate::dataflow::operators::{ActivateCapability};
@@ -73,4 +72,4 @@ impl<G: Scope> UnorderedInput<G> for G {
 }
 
 /// An unordered handle specialized to vectors.
-pub type UnorderedHandle<T, D> = UnorderedHandleCore<T, DefaultContainerBuilder<Vec<D>>>;
+pub type UnorderedHandle<T, D> = UnorderedHandleCore<T, Vec<D>>;

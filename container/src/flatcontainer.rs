@@ -1,7 +1,7 @@
 //! Present a [`FlatStack`] as a timely container.
 
 pub use flatcontainer::*;
-use crate::{Container, ContainerBuilder, PushContainer, PushInto};
+use crate::{Container, PushContainer, PushInto};
 
 impl<R: Region + Clone + 'static> Container for FlatStack<R> {
     type ItemRef<'a> = R::ReadItem<'a>  where Self: 'a;

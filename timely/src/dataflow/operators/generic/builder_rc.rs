@@ -93,7 +93,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<B: ContainerBuilder>(&mut self) -> (OutputWrapper<G::Timestamp, B, Tee<G::Timestamp, B::Container>>, StreamCore<G, B::Container>) {
+    pub fn new_output<CB: ContainerBuilder>(&mut self) -> (OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>, StreamCore<G, CB::Container>) {
         let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().inputs()];
         self.new_output_connection(connection)
     }
@@ -106,7 +106,13 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_output_connection<B: ContainerBuilder>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (OutputWrapper<G::Timestamp, B, Tee<G::Timestamp, B::Container>>, StreamCore<G, B::Container>) {
+    pub fn new_output_connection<CB: ContainerBuilder>(
+        &mut self,
+        connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>
+    ) -> (
+        OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
+        StreamCore<G, CB::Container>
+    ) {
 
         let (tee, stream) = self.builder.new_output_connection(connection.clone());
 
@@ -219,6 +225,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
 #[cfg(test)]
 mod tests {
+    use timely_container::DefaultContainerBuilder;
 
     #[test]
     #[should_panic]
@@ -234,8 +241,8 @@ mod tests {
             let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
 
             // let mut input = builder.new_input(stream, Pipeline);
-            let (mut output1, _stream1) = builder.new_output::<Vec<()>>();
-            let (mut output2, _stream2) = builder.new_output::<Vec<()>>();
+            let (mut output1, _stream1) = builder.new_output::<DefaultContainerBuilder<Vec<()>>>();
+            let (mut output2, _stream2) = builder.new_output::<DefaultContainerBuilder<Vec<()>>>();
 
             builder.build(move |capabilities| {
                 move |_frontiers| {
@@ -264,8 +271,8 @@ mod tests {
             let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
 
             // let mut input = builder.new_input(stream, Pipeline);
-            let (mut output1, _stream1) = builder.new_output::<Vec<()>>();
-            let (mut output2, _stream2) = builder.new_output::<Vec<()>>();
+            let (mut output1, _stream1) = builder.new_output::<DefaultContainerBuilder<Vec<()>>>();
+            let (mut output2, _stream2) = builder.new_output::<DefaultContainerBuilder<Vec<()>>>();
 
             builder.build(move |mut capabilities| {
                 move |_frontiers| {

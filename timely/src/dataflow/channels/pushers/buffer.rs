@@ -1,7 +1,7 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use timely_container::ContainerBuilder;
+use timely_container::{ContainerBuilder, DefaultContainerBuilder};
 use crate::communication::Push;
 use crate::container::{PushContainer, PushInto};
 use crate::dataflow::channels::{Bundle, Message};
@@ -14,7 +14,7 @@ use crate::{Container, Data};
 /// The `Buffer` type should be used by calling `session` with a time, which checks whether
 /// data must be flushed and creates a `Session` object which allows sending at the given time.
 #[derive(Debug)]
-pub struct Buffer<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> {
+pub struct Buffer<T, B, P> {
     /// the currently open time, if it is open
     time: Option<T>,
     /// a buffer for records, to send at self.time
@@ -22,8 +22,7 @@ pub struct Buffer<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> {
     pusher: P,
 }
 
-impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> where T: Eq+Clone {
-
+impl<T, B: Default, P> Buffer<T, B, P> {
     /// Creates a new `Buffer`.
     pub fn new(pusher: P) -> Self {
         Self {
@@ -33,14 +32,21 @@ impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> w
         }
     }
 
+    /// Returns a reference to the inner `P: Push` type.
+    ///
+    /// This is currently used internally, and should not be used without some care.
+    pub fn inner(&mut self) -> &mut P { &mut self.pusher }
+}
+
+impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, DefaultContainerBuilder<C>, P> where T: Eq+Clone {
     /// Returns a `Session`, which accepts data to send at the associated time
-    pub fn session(&mut self, time: &T) -> Session<T, B, P> {
+    pub fn session(&mut self, time: &T) -> Session<T, DefaultContainerBuilder<C>, P> {
         if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
         self.time = Some(time.clone());
         Session { buffer: self }
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
-    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, B, P> where T: Timestamp {
+    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, DefaultContainerBuilder<C>, P> where T: Timestamp {
         if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
         self.time = Some(cap.time().clone());
         AutoflushSession {
@@ -48,12 +54,8 @@ impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> w
             _capability: cap,
         }
     }
-
-    /// Returns a reference to the inner `P: Push` type.
-    ///
-    /// This is currently used internally, and should not be used without some care.
-    pub fn inner(&mut self) -> &mut P { &mut self.pusher }
-
+}
+impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> where T: Eq+Clone {
     /// Flushes all data and pushes a `None` to `self.pusher`, indicating a flush.
     pub fn cease(&mut self) {
         self.flush();
@@ -62,14 +64,14 @@ impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> w
 
     /// moves the contents of
     fn flush(&mut self) {
-        if !self.buffer.is_empty() {
+        for mut container in self.buffer.finish() {
             let time = self.time.as_ref().unwrap().clone();
-            Message::push_at(&mut self.buffer, time, &mut self.pusher);
+            Message::push_at(&mut container, time, &mut self.pusher);
         }
     }
 
     // Gives an entire container at a specific time.
-    fn give_container(&mut self, vector: &mut B) {
+    fn give_container(&mut self, vector: &mut B::Container) {
         if !vector.is_empty() {
             // flush to ensure fifo-ness
             self.flush();
@@ -87,14 +89,11 @@ where
 {
     // internal method for use by `Session`.
     #[inline]
-    fn give<D: PushInto<B>>(&mut self, data: D) {
-        if self.buffer.capacity() < B::preferred_capacity() {
-            let to_reserve = B::preferred_capacity() - self.buffer.capacity();
-            self.buffer.reserve(to_reserve);
-        }
+    fn give<D: PushInto<B::Container>>(&mut self, data: D) {
         self.buffer.push(data);
-        if self.buffer.len() >= B::preferred_capacity() {
-            self.flush();
+        for mut container in self.buffer.extract() {
+            let time = self.time.as_ref().unwrap().clone();
+            Message::push_at(&mut container, time, &mut self.pusher);
         }
     }
 }
@@ -201,7 +200,7 @@ where
 impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>+'a> AutoflushSession<'a, T, B, P> where T: Eq+Clone+'a, B: 'a {
     /// Transmits a single record.
     #[inline]
-    pub fn give<D: PushInto<B::Container>>(&mut self, data: D) {
+    pub fn give<D: PushInto<B::Container>>(&mut self, data: D) where B::Container: PushContainer {
         self.buffer.give(data);
     }
     /// Transmits records produced by an iterator.
@@ -210,6 +209,7 @@ impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>+'a>
         where
             I: Iterator<Item=D>,
             D: PushInto<B::Container>,
+            B::Container: PushContainer,
     {
         for item in iter {
             self.give(item);
@@ -219,7 +219,7 @@ impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>+'a>
     #[inline]
     pub fn give_content(&mut self, message: &mut B::Container) {
         if !message.is_empty() {
-            self.buffer.give_vec(message);
+            self.buffer.give_container(message);
         }
     }
 }

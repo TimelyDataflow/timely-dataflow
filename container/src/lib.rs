@@ -91,7 +91,7 @@ pub trait PushContainer: Container {
 ///
 /// For example, a consolidating builder can aggregate differences in-place, but it has
 /// to ensure that it preserves the intended information.
-pub trait ContainerBuilder: Default {
+pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
     type Container: Container;
     /// Add an item to a container.
@@ -135,7 +135,7 @@ impl<C: PushContainer> ContainerBuilder for C {
 }
 
 /// A default container builder that uses length and preferred capacity to chunk data.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DefaultContainerBuilder<C>{
     current: C,
     pending: Vec<C>,
