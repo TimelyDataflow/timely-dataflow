@@ -3,13 +3,13 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::default::Default;
-use timely_container::ContainerBuilder;
 
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
 use crate::Container;
+use crate::container::ContainerBuilder;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
@@ -225,7 +225,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
 #[cfg(test)]
 mod tests {
-    use timely_container::DefaultContainerBuilder;
+    use crate::container::CapacityContainerBuilder;
 
     #[test]
     #[should_panic]
@@ -241,8 +241,8 @@ mod tests {
             let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
 
             // let mut input = builder.new_input(stream, Pipeline);
-            let (mut output1, _stream1) = builder.new_output::<DefaultContainerBuilder<Vec<()>>>();
-            let (mut output2, _stream2) = builder.new_output::<DefaultContainerBuilder<Vec<()>>>();
+            let (mut output1, _stream1) = builder.new_output::<CapacityContainerBuilder<Vec<()>>>();
+            let (mut output2, _stream2) = builder.new_output::<CapacityContainerBuilder<Vec<()>>>();
 
             builder.build(move |capabilities| {
                 move |_frontiers| {
@@ -271,8 +271,8 @@ mod tests {
             let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
 
             // let mut input = builder.new_input(stream, Pipeline);
-            let (mut output1, _stream1) = builder.new_output::<DefaultContainerBuilder<Vec<()>>>();
-            let (mut output2, _stream2) = builder.new_output::<DefaultContainerBuilder<Vec<()>>>();
+            let (mut output1, _stream1) = builder.new_output::<CapacityContainerBuilder<Vec<()>>>();
+            let (mut output2, _stream2) = builder.new_output::<CapacityContainerBuilder<Vec<()>>>();
 
             builder.build(move |mut capabilities| {
                 move |_frontiers| {

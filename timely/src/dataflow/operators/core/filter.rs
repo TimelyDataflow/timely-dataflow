@@ -1,6 +1,5 @@
 //! Filters a stream by a predicate.
-use timely_container::{Container, PushContainer, PushInto};
-
+use crate::container::{Container, PushContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::operator::Operator;

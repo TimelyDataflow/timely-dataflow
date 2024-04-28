@@ -2,8 +2,8 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use timely_container::DefaultContainerBuilder;
 use crate::Container;
+use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
 
@@ -76,13 +76,13 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<C: Container>(&mut self) -> ((UnorderedHandle<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>);
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), StreamCore<G, CB::Container>);
 }
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<C: Container>(&mut self) -> ((UnorderedHandle<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>) {
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), StreamCore<G, CB::Container>) {
 
-        let (output, registrar) = Tee::<G::Timestamp, C>::new();
+        let (output, registrar) = Tee::<G::Timestamp, CB::Container>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
@@ -148,19 +148,26 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 
 /// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct UnorderedHandle<T: Timestamp, C: Container> {
-    buffer: PushBuffer<T, DefaultContainerBuilder<C>, Counter<T, C, Tee<T, C>>>,
+pub struct UnorderedHandle<T: Timestamp, CB: ContainerBuilder> {
+    buffer: PushBuffer<T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>,
 }
 
-impl<T: Timestamp, C: Container> UnorderedHandle<T, C> {
-    fn new(pusher: Counter<T, C, Tee<T, C>>) -> UnorderedHandle<T, C> {
+impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
+    fn new(pusher: Counter<T, CB::Container, Tee<T, CB::Container>>) -> UnorderedHandle<T, CB> {
         UnorderedHandle {
             buffer: PushBuffer::new(pusher),
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, DefaultContainerBuilder<C>, Counter<T, C, Tee<T, C>>>> {
+    pub fn session_with_builder<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>> {
+        ActivateOnDrop::new(self.buffer.autoflush_session_with_builder(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
+    }
+}
+
+impl<T: Timestamp, C: Container> UnorderedHandle<T, CapacityContainerBuilder<C>> {
+    /// Allocates a new automatically flushing session based on the supplied capability.
+    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, CapacityContainerBuilder<C>, Counter<T, C, Tee<T, C>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }

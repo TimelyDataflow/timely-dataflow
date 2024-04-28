@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use timely_container::{PushContainer, PushInto};
+use crate::container::{PushContainer, PushInto};
 
 use crate::scheduling::{Schedule, Activator};
 

@@ -2,6 +2,7 @@
 
 use crate::Data;
 
+use crate::container::CapacityContainerBuilder;
 use crate::dataflow::operators::{ActivateCapability};
 use crate::dataflow::operators::core::{UnorderedInput as UnorderedInputCore, UnorderedHandle as UnorderedHandleCore};
 use crate::dataflow::{Stream, Scope};
@@ -72,4 +73,4 @@ impl<G: Scope> UnorderedInput<G> for G {
 }
 
 /// An unordered handle specialized to vectors.
-pub type UnorderedHandle<T, D> = UnorderedHandleCore<T, Vec<D>>;
+pub type UnorderedHandle<T, D> = UnorderedHandleCore<T, CapacityContainerBuilder<Vec<D>>>;

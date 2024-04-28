@@ -5,7 +5,6 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use timely_container::{ContainerBuilder, DefaultContainerBuilder};
 
 use crate::progress::Antichain;
 use crate::progress::Timestamp;
@@ -17,6 +16,7 @@ use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Bundle;
 use crate::communication::{Push, Pull, message::RefOrMut};
 use crate::Container;
+use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 use crate::logging::TimelyLogger as Logger;
 
 use crate::dataflow::operators::InputCapability;
@@ -205,9 +205,39 @@ pub struct OutputHandleCore<'a, T: Timestamp, B: ContainerBuilder+'a, P: Push<Bu
 }
 
 /// Handle specialized to `Vec`-based container.
-pub type OutputHandle<'a, T, D, P> = OutputHandleCore<'a, T, DefaultContainerBuilder<Vec<D>>, P>;
+pub type OutputHandle<'a, T, D, P> = OutputHandleCore<'a, T, CapacityContainerBuilder<Vec<D>>, P>;
 
-impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a, T, DefaultContainerBuilder<C>, P> {
+impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> OutputHandleCore<'a, T, CB, P> {
+    /// Obtains a session that can send data at the timestamp associated with capability `cap`.
+    ///
+    /// In order to send data at a future timestamp, obtain a capability for the new timestamp
+    /// first, as show in the example.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::Operator;
+    /// use timely::dataflow::channels::pact::Pipeline;
+    /// use timely::container::CapacityContainerBuilder;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary::<CapacityContainerBuilder<_>, _, _, _>(Pipeline, "example", |_cap, _info| |input, output| {
+    ///                input.for_each(|cap, data| {
+    ///                    let time = cap.time().clone() + 1;
+    ///                    output.session_with_builder(&cap.delayed(&time))
+    ///                          .give_container(&mut data.replace(Vec::new()));
+    ///                });
+    ///            });
+    /// });
+    /// ```
+    pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CB, PushCounter<T, CB::Container, P>> where 'a: 'b {
+        assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
+        self.push_buffer.session_with_builder(cap.time())
+    }
+}
+
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a, T, CapacityContainerBuilder<C>, P> {
     /// Obtains a session that can send data at the timestamp associated with capability `cap`.
     ///
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp
@@ -230,7 +260,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a,
     ///            });
     /// });
     /// ```
-    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, DefaultContainerBuilder<C>, PushCounter<T, C, P>> where 'a: 'b {
+    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CapacityContainerBuilder<C>, PushCounter<T, C, P>> where 'a: 'b {
         assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
         self.push_buffer.session(cap.time())
     }

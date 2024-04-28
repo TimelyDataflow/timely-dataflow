@@ -1,9 +1,8 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use timely_container::{ContainerBuilder, DefaultContainerBuilder};
 use crate::communication::Push;
-use crate::container::{PushContainer, PushInto};
+use crate::container::{ContainerBuilder, CapacityContainerBuilder, PushContainer, PushInto};
 use crate::dataflow::channels::{Bundle, Message};
 use crate::dataflow::operators::Capability;
 use crate::progress::Timestamp;
@@ -38,15 +37,15 @@ impl<T, B: Default, P> Buffer<T, B, P> {
     pub fn inner(&mut self) -> &mut P { &mut self.pusher }
 }
 
-impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, DefaultContainerBuilder<C>, P> where T: Eq+Clone {
+impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, CapacityContainerBuilder<C>, P> where T: Eq+Clone {
     /// Returns a `Session`, which accepts data to send at the associated time
-    pub fn session(&mut self, time: &T) -> Session<T, DefaultContainerBuilder<C>, P> {
+    pub fn session(&mut self, time: &T) -> Session<T, CapacityContainerBuilder<C>, P> {
         if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
         self.time = Some(time.clone());
         Session { buffer: self }
     }
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
-    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, DefaultContainerBuilder<C>, P> where T: Timestamp {
+    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, CapacityContainerBuilder<C>, P> where T: Timestamp {
         if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
         self.time = Some(cap.time().clone());
         AutoflushSession {
@@ -55,6 +54,25 @@ impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, DefaultContainerBuilder<C
         }
     }
 }
+
+impl<T, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> Buffer<T, CB, P> where T: Eq+Clone {
+    /// Returns a `Session`, which accepts data to send at the associated time
+    pub fn session_with_builder(&mut self, time: &T) -> Session<T, CB, P> {
+        if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
+        self.time = Some(time.clone());
+        Session { buffer: self }
+    }
+    /// Allocates a new `AutoflushSession` which flushes itself on drop.
+    pub fn autoflush_session_with_builder(&mut self, cap: Capability<T>) -> AutoflushSession<T, CB, P> where T: Timestamp {
+        if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
+        self.time = Some(cap.time().clone());
+        AutoflushSession {
+            buffer: self,
+            _capability: cap,
+        }
+    }
+}
+
 impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> where T: Eq+Clone {
     /// Flushes all data and pushes a `None` to `self.pusher`, indicating a flush.
     pub fn cease(&mut self) {
@@ -63,6 +81,7 @@ impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> w
     }
 
     /// moves the contents of
+    #[inline]
     fn flush(&mut self) {
         for mut container in self.buffer.finish() {
             let time = self.time.as_ref().unwrap().clone();
@@ -71,13 +90,13 @@ impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> w
     }
 
     // Gives an entire container at a specific time.
-    fn give_container(&mut self, vector: &mut B::Container) {
-        if !vector.is_empty() {
+    fn give_container(&mut self, container: &mut B::Container) {
+        if !container.is_empty() {
             // flush to ensure fifo-ness
             self.flush();
 
             let time = self.time.as_ref().expect("Buffer::give_container(): time is None.").clone();
-            Message::push_at(vector, time, &mut self.pusher);
+            Message::push_at(container, time, &mut self.pusher);
         }
     }
 }
@@ -91,6 +110,9 @@ where
     #[inline]
     fn give<D: PushInto<B::Container>>(&mut self, data: D) {
         self.buffer.push(data);
+
+        // Extract finished data, but leave unfinished data behind. This is different
+        // from calling `flush`!
         for mut container in self.buffer.extract() {
             let time = self.time.as_ref().unwrap().clone();
             Message::push_at(&mut container, time, &mut self.pusher);
@@ -213,13 +235,6 @@ impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>+'a>
     {
         for item in iter {
             self.give(item);
-        }
-    }
-    /// Transmits a pre-packed batch of data.
-    #[inline]
-    pub fn give_content(&mut self, message: &mut B::Container) {
-        if !message.is_empty() {
-            self.buffer.give_container(message);
         }
     }
 }

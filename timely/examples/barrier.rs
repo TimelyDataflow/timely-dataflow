@@ -3,7 +3,7 @@ extern crate timely;
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::{Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
-use timely_container::DefaultContainerBuilder;
+use timely::container::CapacityContainerBuilder;
 
 fn main() {
 
@@ -13,7 +13,7 @@ fn main() {
 
         worker.dataflow(move |scope| {
             let (handle, stream) = scope.feedback::<Vec<usize>>(1);
-            stream.unary_notify::<DefaultContainerBuilder<_>, _, _>(
+            stream.unary_notify::<CapacityContainerBuilder<_>, _, _>(
                 Pipeline,
                 "Barrier",
                 vec![0],

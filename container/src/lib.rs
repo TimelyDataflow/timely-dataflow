@@ -136,12 +136,12 @@ impl<C: PushContainer> ContainerBuilder for C {
 
 /// A default container builder that uses length and preferred capacity to chunk data.
 #[derive(Default, Debug)]
-pub struct DefaultContainerBuilder<C>{
+pub struct CapacityContainerBuilder<C>{
     current: C,
     pending: Vec<C>,
 }
 
-impl<C: Container> ContainerBuilder for DefaultContainerBuilder<C> {
+impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]

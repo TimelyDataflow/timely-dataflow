@@ -1,7 +1,6 @@
 
 //! Methods to construct generic streaming and blocking unary operators.
 
-use timely_container::{ContainerBuilder, DefaultContainerBuilder};
 use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::channels::pact::ParallelizationContract;
 
@@ -14,6 +13,7 @@ use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 use crate::Container;
+use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, C1: Container> {
@@ -605,7 +605,7 @@ where
 /// });
 /// ```
 pub fn empty<G: Scope, C: Container>(scope: &G) -> StreamCore<G, C> {
-    source::<_, DefaultContainerBuilder<C>, _, _>(scope, "Empty", |_capability, _info| |_output| {
+    source::<_, CapacityContainerBuilder<C>, _, _>(scope, "Empty", |_capability, _info| |_output| {
         // drop capability, do nothing
     })
 }
