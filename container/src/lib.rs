@@ -2,6 +2,8 @@
 
 #![forbid(missing_docs)]
 
+use std::collections::VecDeque;
+
 pub mod columnation;
 pub mod flatcontainer;
 
@@ -63,12 +65,6 @@ pub trait PushInto<C> {
 
 /// A type that has the necessary infrastructure to push elements, without specifying how pushing
 /// itself works. For this, pushable types should implement [`PushInto`].
-// TODO: Reconsider this interface because it assumes
-//   * Containers have a capacity
-//   * Push presents single elements.
-//   * Instead of testing `len == cap`, we could have a `is_full` to test that we might
-//     not be able to absorb more data.
-//   * Example: A FlatStack with optimized offsets and deduplication can absorb many elements without reallocation. What does capacity mean in this context?
 pub trait PushContainer: Container {
     /// Push `item` into self
     #[inline]
@@ -100,21 +96,23 @@ pub trait ContainerBuilder: Default + 'static {
     type Container: Container;
     /// Add an item to a container.
     fn push<T: PushInto<Self::Container>>(&mut self, item: T) where Self::Container: PushContainer;
-    /// The iterator returned by [`Self::extract`].
-    type ExtractIter<'a>: IntoIterator<Item=Self::Container>;
+    /// Push a pre-built container.
+    fn push_container(&mut self, container: &mut Self::Container);
     /// Extract assembled containers, potentially leaving unfinished data behind.
-    fn extract(&mut self) -> Self::ExtractIter<'_>;
-    /// The iterator returned by [`Self::finish`].
-    type FinishIter<'a>: IntoIterator<Item=Self::Container>;
+    fn extract(&mut self) -> Option<&mut Self::Container>;
     /// Extract assembled containers and any unfinished data.
-    fn finish(&mut self) -> Self::FinishIter<'_>;
+    fn finish(&mut self) -> Option<&mut Self::Container>;
 }
 
 /// A default container builder that uses length and preferred capacity to chunk data.
 #[derive(Default, Debug)]
 pub struct CapacityContainerBuilder<C>{
+    /// Container that we're writing to.
     current: C,
-    pending: Vec<C>,
+    /// Emtpy allocation.
+    empty: Option<C>,
+    /// Completed containers pending to be sent.
+    pending: VecDeque<C>,
 }
 
 impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
@@ -122,6 +120,9 @@ impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
 
     #[inline]
     fn push<T: PushInto<Self::Container>>(&mut self, item: T) where C: PushContainer {
+        if self.current.capacity() == 0 {
+            self.current = self.empty.take().unwrap_or_default();
+        }
         // Ensure capacity
         if self.current.capacity() < C::preferred_capacity() {
             self.current.reserve(C::preferred_capacity() - self.current.len());
@@ -132,21 +133,32 @@ impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
 
         // Maybe flush
         if self.current.len() == self.current.capacity() {
-            self.pending.push(std::mem::take(&mut self.current));
+            self.pending.push_back(std::mem::take(&mut self.current));
         }
     }
 
-    type ExtractIter<'a> = std::vec::Drain<'a, C>;
     #[inline]
-    fn extract(&mut self) -> Self::ExtractIter<'_> {
-        self.pending.drain(..)
+    fn push_container(&mut self, container: &mut Self::Container) {
+        if self.current.len() > 0 {
+            self.pending.push_back(std::mem::take(&mut self.current));
+        }
+        self.pending.push_back(std::mem::replace(container, self.empty.take().unwrap_or_default()));
     }
 
-    type FinishIter<'a> = std::vec::Drain<'a, C>;
     #[inline]
-    fn finish(&mut self) -> Self::FinishIter<'_> {
+    fn extract(&mut self) -> Option<&mut C> {
+        if let Some(container) = self.pending.pop_front() {
+            self.empty = Some(container);
+            self.empty.as_mut()
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn finish(&mut self) -> Option<&mut C> {
         if self.current.len() > 0 {
-            self.pending.push(std::mem::take(&mut self.current));
+            self.pending.push_back(std::mem::take(&mut self.current));
         }
         self.extract()
     }

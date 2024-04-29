@@ -81,23 +81,29 @@ impl<T, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>> Buffer<T, B, P> w
         self.pusher.push(&mut None);
     }
 
-    /// moves the contents of
+    /// Extract pending data from the builder, but not forcing a flush.
+    #[inline]
+    fn extract(&mut self) {
+        while let Some(container) = self.builder.extract() {
+            let time = self.time.as_ref().unwrap().clone();
+            Message::push_at(container, time, &mut self.pusher);
+        }
+    }
+
+    /// Flush the builder, forcing all its contents to be written.
     #[inline]
     fn flush(&mut self) {
-        for mut container in self.builder.finish() {
+        while let Some(container) = self.builder.finish() {
             let time = self.time.as_ref().unwrap().clone();
-            Message::push_at(&mut container, time, &mut self.pusher);
+            Message::push_at(container, time, &mut self.pusher);
         }
     }
 
     // Gives an entire container at a specific time.
     fn give_container(&mut self, container: &mut B::Container) {
         if !container.is_empty() {
-            // flush to ensure fifo-ness
-            self.flush();
-
-            let time = self.time.as_ref().expect("Buffer::give_container(): time is None.").clone();
-            Message::push_at(container, time, &mut self.pusher);
+            self.builder.push_container(container);
+            self.extract();
         }
     }
 }
@@ -107,35 +113,13 @@ where
     T: Eq+Clone,
     B::Container: PushContainer,
 {
-    // internal method for use by `Session`.
+    // Push a single item into the builder. Internal method for use by `Session`.
     #[inline]
     fn give<D: PushInto<B::Container>>(&mut self, data: D) {
         self.builder.push(data);
-
-        // Extract finished data, but leave unfinished data behind. This is different
-        // from calling `flush`!
-        for mut container in self.builder.extract() {
-            let time = self.time.as_ref().unwrap().clone();
-            Message::push_at(&mut container, time, &mut self.pusher);
-        }
+        self.extract();
     }
 }
-
-impl<T, B, D: Data, P: Push<Bundle<T, Vec<D>>>> Buffer<T, B, P>
-where
-    T: Eq+Clone,
-    B: ContainerBuilder<Container=Vec<D>>,
-{
-    // Gives an entire message at a specific time.
-    fn give_vec(&mut self, vector: &mut Vec<D>) {
-        // flush to ensure fifo-ness
-        self.flush();
-
-        let time = self.time.as_ref().expect("Buffer::give_vec(): time is None.").clone();
-        Message::push_at(vector, time, &mut self.pusher);
-    }
-}
-
 
 /// An output session for sending records at a specified time.
 ///
@@ -160,6 +144,12 @@ where
     /// Provide a container at the time specified by the [Session].
     pub fn give_container(&mut self, container: &mut B::Container) {
         self.buffer.give_container(container)
+    }
+
+    /// Access the builder. Immutable access to prevent races with flushing
+    /// the underlying buffer.
+    pub fn builder(&self) -> &B {
+        &self.buffer.builder
     }
 }
 
@@ -202,7 +192,7 @@ where
     #[inline]
     pub fn give_vec(&mut self, message: &mut Vec<D>) {
         if !message.is_empty() {
-            self.buffer.give_vec(message);
+            self.buffer.give_container(message);
         }
     }
 }
