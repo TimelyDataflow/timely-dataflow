@@ -100,10 +100,14 @@ pub trait ContainerBuilder: Default + 'static {
     type Container: Container;
     /// Add an item to a container.
     fn push<T: PushInto<Self::Container>>(&mut self, item: T) where Self::Container: PushContainer;
+    /// The iterator returned by [`Self::extract`].
+    type ExtractIter<'a>: IntoIterator<Item=Self::Container>;
     /// Extract assembled containers, potentially leaving unfinished data behind.
-    fn extract(&mut self) -> impl Iterator<Item=Self::Container>;
+    fn extract(&mut self) -> Self::ExtractIter<'_>;
+    /// The iterator returned by [`Self::finish`].
+    type FinishIter<'a>: IntoIterator<Item=Self::Container>;
     /// Extract assembled containers and any unfinished data.
-    fn finish(&mut self) -> impl Iterator<Item=Self::Container>;
+    fn finish(&mut self) -> Self::FinishIter<'_>;
 }
 
 /// A default container builder that uses length and preferred capacity to chunk data.
@@ -132,13 +136,15 @@ impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
         }
     }
 
+    type ExtractIter<'a> = std::vec::Drain<'a, C>;
     #[inline]
-    fn extract(&mut self) -> impl Iterator<Item=Self::Container> {
+    fn extract(&mut self) -> Self::ExtractIter<'_> {
         self.pending.drain(..)
     }
 
+    type FinishIter<'a> = std::vec::Drain<'a, C>;
     #[inline]
-    fn finish(&mut self) -> impl Iterator<Item=Self::Container> {
+    fn finish(&mut self) -> Self::FinishIter<'_> {
         if self.current.len() > 0 {
             self.pending.push(std::mem::take(&mut self.current));
         }
