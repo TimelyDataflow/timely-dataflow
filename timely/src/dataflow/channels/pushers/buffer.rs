@@ -220,7 +220,12 @@ where
     _capability: Capability<T>,
 }
 
-impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>+'a> AutoflushSession<'a, T, B, P> where T: Eq+Clone+'a, B: 'a {
+impl<'a, T, B, P> AutoflushSession<'a, T, B, P>
+where
+    T: Timestamp + 'a,
+    B: ContainerBuilder + 'a,
+    P: Push<Bundle<T, B::Container>> + 'a,
+{
     /// Transmits a single record.
     #[inline]
     pub fn give<D: PushInto<B::Container>>(&mut self, data: D) where B::Container: PushContainer {
@@ -240,7 +245,12 @@ impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>+'a>
     }
 }
 
-impl<'a, T: Timestamp, B: ContainerBuilder, P: Push<Bundle<T, B::Container>>+'a> Drop for AutoflushSession<'a, T, B, P> where T: Eq+Clone+'a, B: 'a {
+impl<'a, T, B, P> Drop for AutoflushSession<'a, T, B, P>
+where
+    T: Timestamp + 'a,
+    B: ContainerBuilder + 'a,
+    P: Push<Bundle<T, B::Container>> + 'a,
+{
     fn drop(&mut self) {
         self.buffer.cease();
     }
