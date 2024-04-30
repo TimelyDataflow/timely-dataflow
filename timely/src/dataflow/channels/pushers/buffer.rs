@@ -46,20 +46,15 @@ impl<T, CB: Default, P> Buffer<T, CB, P> {
 
 impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, CapacityContainerBuilder<C>, P> where T: Eq+Clone {
     /// Returns a `Session`, which accepts data to send at the associated time
+    #[inline]
     pub fn session(&mut self, time: &T) -> Session<T, CapacityContainerBuilder<C>, P> {
-        if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
-        self.time = Some(time.clone());
-        Session { buffer: self }
+        self.session_with_builder(time)
     }
 
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
+    #[inline]
     pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, CapacityContainerBuilder<C>, P> where T: Timestamp {
-        if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
-        self.time = Some(cap.time().clone());
-        AutoflushSession {
-            buffer: self,
-            _capability: cap,
-        }
+        self.autoflush_session_with_builder(cap)
     }
 }
 
@@ -107,7 +102,7 @@ impl<T, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> Buffer<T, CB, P
         }
     }
 
-    // Gives an entire container at a specific time.
+    /// Gives an entire container at the current time.
     fn give_container(&mut self, container: &mut CB::Container) {
         if !container.is_empty() {
             self.builder.push_container(container);

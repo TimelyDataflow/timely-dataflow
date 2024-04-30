@@ -91,6 +91,10 @@ pub trait PushContainer: Container {
 ///
 /// For example, a consolidating builder can aggregate differences in-place, but it has
 /// to ensure that it preserves the intended information.
+///
+/// The trait does not prescribe any specific ordering guarantees, and each implementation can
+/// decide to represent a `push`/`push_container` order for `extract` and `finish`, or not.
+// TODO: Consider adding `push_iterator` to receive an iterator of data.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
     type Container: Container;
@@ -98,13 +102,17 @@ pub trait ContainerBuilder: Default + 'static {
     fn push<T: PushInto<Self::Container>>(&mut self, item: T) where Self::Container: PushContainer;
     /// Push a pre-built container.
     fn push_container(&mut self, container: &mut Self::Container);
-    /// Extract assembled containers, potentially leaving unfinished data behind.
+    /// Extract assembled containers, potentially leaving unfinished data behind. The caller
+    /// has to leave an empty (possibly non-allocated) container behind.
     fn extract(&mut self) -> Option<&mut Self::Container>;
-    /// Extract assembled containers and any unfinished data.
+    /// Extract assembled containers and any unfinished data. The caller
+    /// has to leave an empty (possibly non-allocated) container behind.
     fn finish(&mut self) -> Option<&mut Self::Container>;
 }
 
 /// A default container builder that uses length and preferred capacity to chunk data.
+///
+/// Maintains FIFO order.
 #[derive(Default, Debug)]
 pub struct CapacityContainerBuilder<C>{
     /// Container that we're writing to.
@@ -122,6 +130,12 @@ impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
     fn push<T: PushInto<Self::Container>>(&mut self, item: T) where C: PushContainer {
         if self.current.capacity() == 0 {
             self.current = self.empty.take().unwrap_or_default();
+            // Discard any non-uniform capacity container.
+            if self.current.capacity() != C::preferred_capacity() {
+                self.current = C::default();
+            }
+            // Protect against non-emptied containers.
+            self.current.clear();
         }
         // Ensure capacity
         if self.current.capacity() < C::preferred_capacity() {
@@ -139,10 +153,19 @@ impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
 
     #[inline]
     fn push_container(&mut self, container: &mut Self::Container) {
-        if self.current.len() > 0 {
-            self.pending.push_back(std::mem::take(&mut self.current));
+        if !container.is_empty() {
+            // Flush to maintain FIFO ordering.
+            if self.current.len() > 0 {
+                self.pending.push_back(std::mem::take(&mut self.current));
+            }
+
+            let mut empty = self.empty.take().unwrap_or_default();
+            // Ideally, we'd discard non-uniformly sized containers, but we don't have
+            // access to `len`/`capacity` of the container.
+            empty.clear();
+
+            self.pending.push_back(std::mem::replace(container, empty));
         }
-        self.pending.push_back(std::mem::replace(container, self.empty.take().unwrap_or_default()));
     }
 
     #[inline]
