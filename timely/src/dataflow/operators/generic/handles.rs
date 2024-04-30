@@ -16,6 +16,7 @@ use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Bundle;
 use crate::communication::{Push, Pull, message::RefOrMut};
 use crate::Container;
+use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 use crate::logging::TimelyLogger as Logger;
 
 use crate::dataflow::operators::InputCapability;
@@ -81,7 +82,7 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>> InputHandleCore<T, C
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
+    ///                    output.session(&cap).give_container(&mut data.replace(Vec::new()));
     ///                });
     ///            });
     /// });
@@ -129,7 +130,7 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>+'a> FrontieredInputHa
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
+    ///                    output.session(&cap).give_container(&mut data.replace(Vec::new()));
     ///                });
     ///            });
     /// });
@@ -172,14 +173,14 @@ pub fn new_input_handle<T: Timestamp, C: Container, P: Pull<Bundle<T, C>>>(
 /// than with an `OutputHandle`, whose methods ensure that capabilities are used and that the
 /// pusher is flushed (via the `cease` method) once it is no longer used.
 #[derive(Debug)]
-pub struct OutputWrapper<T: Timestamp, C: Container, P: Push<Bundle<T, C>>> {
-    push_buffer: Buffer<T, C, PushCounter<T, C, P>>,
+pub struct OutputWrapper<T: Timestamp, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> {
+    push_buffer: Buffer<T, CB, PushCounter<T, CB::Container, P>>,
     internal_buffer: Rc<RefCell<ChangeBatch<T>>>,
 }
 
-impl<T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputWrapper<T, C, P> {
+impl<T: Timestamp, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> OutputWrapper<T, CB, P> {
     /// Creates a new output wrapper from a push buffer.
-    pub fn new(push_buffer: Buffer<T, C, PushCounter<T, C, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>) -> Self {
+    pub fn new(push_buffer: Buffer<T, CB, PushCounter<T, CB::Container, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>) -> Self {
         OutputWrapper {
             push_buffer,
             internal_buffer,
@@ -189,7 +190,7 @@ impl<T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputWrapper<T, C, P> {
     ///
     /// This method ensures that the only access to the push buffer is through the `OutputHandle`
     /// type which ensures the use of capabilities, and which calls `cease` when it is dropped.
-    pub fn activate(&mut self) -> OutputHandleCore<T, C, P> {
+    pub fn activate(&mut self) -> OutputHandleCore<T, CB, P> {
         OutputHandleCore {
             push_buffer: &mut self.push_buffer,
             internal_buffer: &self.internal_buffer,
@@ -197,17 +198,46 @@ impl<T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputWrapper<T, C, P> {
     }
 }
 
-
 /// Handle to an operator's output stream.
-pub struct OutputHandleCore<'a, T: Timestamp, C: Container+'a, P: Push<Bundle<T, C>>+'a> {
-    push_buffer: &'a mut Buffer<T, C, PushCounter<T, C, P>>,
+pub struct OutputHandleCore<'a, T: Timestamp, CB: ContainerBuilder+'a, P: Push<Bundle<T, CB::Container>>+'a> {
+    push_buffer: &'a mut Buffer<T, CB, PushCounter<T, CB::Container, P>>,
     internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
 }
 
 /// Handle specialized to `Vec`-based container.
-pub type OutputHandle<'a, T, D, P> = OutputHandleCore<'a, T, Vec<D>, P>;
+pub type OutputHandle<'a, T, D, P> = OutputHandleCore<'a, T, CapacityContainerBuilder<Vec<D>>, P>;
 
-impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a, T, C, P> {
+impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> OutputHandleCore<'a, T, CB, P> {
+    /// Obtains a session that can send data at the timestamp associated with capability `cap`.
+    ///
+    /// In order to send data at a future timestamp, obtain a capability for the new timestamp
+    /// first, as show in the example.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::operators::ToStream;
+    /// use timely::dataflow::operators::generic::Operator;
+    /// use timely::dataflow::channels::pact::Pipeline;
+    /// use timely::container::CapacityContainerBuilder;
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .unary::<CapacityContainerBuilder<_>, _, _, _>(Pipeline, "example", |_cap, _info| |input, output| {
+    ///                input.for_each(|cap, data| {
+    ///                    let time = cap.time().clone() + 1;
+    ///                    output.session_with_builder(&cap.delayed(&time))
+    ///                          .give_container(&mut data.replace(Vec::new()));
+    ///                });
+    ///            });
+    /// });
+    /// ```
+    pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CB, PushCounter<T, CB::Container, P>> where 'a: 'b {
+        assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
+        self.push_buffer.session_with_builder(cap.time())
+    }
+}
+
+impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a, T, CapacityContainerBuilder<C>, P> {
     /// Obtains a session that can send data at the timestamp associated with capability `cap`.
     ///
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp
@@ -225,14 +255,14 @@ impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a,
     ///                input.for_each(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session(&cap.delayed(&time))
-    ///                          .give_vec(&mut data.replace(Vec::new()));
+    ///                          .give_container(&mut data.replace(Vec::new()));
     ///                });
     ///            });
     /// });
     /// ```
-    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, C, PushCounter<T, C, P>> where 'a: 'b {
-        assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
-        self.push_buffer.session(cap.time())
+    #[inline]
+    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CapacityContainerBuilder<C>, PushCounter<T, C, P>> where 'a: 'b {
+        self.session_with_builder(cap)
     }
 
     /// Flushes all pending data and indicate that no more data immediately follows.
@@ -241,7 +271,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a,
     }
 }
 
-impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> Drop for OutputHandleCore<'a, T, C, P> {
+impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> Drop for OutputHandleCore<'a, T, CB, P> {
     fn drop(&mut self) {
         self.push_buffer.cease();
     }

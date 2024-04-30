@@ -30,7 +30,7 @@ impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
                 data.swap(&mut vector);
                 vector.retain(|x| predicate(x));
                 if !vector.is_empty() {
-                    output.session(&time).give_vec(&mut vector);
+                    output.session(&time).give_container(&mut vector);
                 }
             });
         })

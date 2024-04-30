@@ -58,7 +58,7 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
                 for datum in vector.iter_mut() { logic(datum); }
-                output.session(&time).give_vec(&mut vector);
+                output.session(&time).give_container(&mut vector);
             })
         })
     }

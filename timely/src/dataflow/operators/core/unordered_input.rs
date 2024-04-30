@@ -3,6 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::Container;
+use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
 
@@ -12,7 +13,7 @@ use crate::progress::Source;
 use crate::progress::ChangeBatch;
 
 use crate::dataflow::channels::pushers::{Counter, Tee};
-use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSessionCore};
+use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
 
 use crate::dataflow::operators::{ActivateCapability, Capability};
 
@@ -56,7 +57,9 @@ pub trait UnorderedInput<G: Scope> {
     ///     // create and capture the unordered input.
     ///     let (mut input, mut cap) = worker.dataflow::<usize,_,_>(|scope| {
     ///         let (input, stream) = scope.new_unordered_input();
-    ///         stream.capture_into(send);
+    ///         stream
+    ///             .container::<Vec<_>>()
+    ///             .capture_into(send);
     ///         input
     ///     });
     ///
@@ -73,13 +76,13 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<C: Container>(&mut self) -> ((UnorderedHandle<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>);
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), StreamCore<G, CB::Container>);
 }
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<C: Container>(&mut self) -> ((UnorderedHandle<G::Timestamp, C>, ActivateCapability<G::Timestamp>), StreamCore<G, C>) {
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), StreamCore<G, CB::Container>) {
 
-        let (output, registrar) = Tee::<G::Timestamp, C>::new();
+        let (output, registrar) = Tee::<G::Timestamp, CB::Container>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
         let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
@@ -145,19 +148,28 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 
 /// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct UnorderedHandle<T: Timestamp, C: Container> {
-    buffer: PushBuffer<T, C, Counter<T, C, Tee<T, C>>>,
+pub struct UnorderedHandle<T: Timestamp, CB: ContainerBuilder> {
+    buffer: PushBuffer<T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>,
 }
 
-impl<T: Timestamp, C: Container> UnorderedHandle<T, C> {
-    fn new(pusher: Counter<T, C, Tee<T, C>>) -> UnorderedHandle<T, C> {
+impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
+    fn new(pusher: Counter<T, CB::Container, Tee<T, CB::Container>>) -> UnorderedHandle<T, CB> {
         UnorderedHandle {
             buffer: PushBuffer::new(pusher),
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSessionCore<'b, T, C, Counter<T, C, Tee<T, C>>>> {
-        ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
+    #[inline]
+    pub fn session_with_builder(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>> {
+        ActivateOnDrop::new(self.buffer.autoflush_session_with_builder(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
+    }
+}
+
+impl<T: Timestamp, C: Container> UnorderedHandle<T, CapacityContainerBuilder<C>> {
+    /// Allocates a new automatically flushing session based on the supplied capability.
+    #[inline]
+    pub fn session(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<T, CapacityContainerBuilder<C>, Counter<T, C, Tee<T, C>>>> {
+        self.session_with_builder(cap)
     }
 }

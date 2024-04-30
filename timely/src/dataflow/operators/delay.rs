@@ -140,7 +140,7 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
             notificator.for_each(|time,_,_| {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain(..) {
-                        output.session(&time).give_vec(&mut data);
+                        output.session(&time).give_container(&mut data);
                     }
                 }
             });

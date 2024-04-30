@@ -59,7 +59,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     ///     (0..10).to_stream(scope)
     ///            .unary_notify(Pipeline, "example", Some(0), |input, output, notificator| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
+    ///                    output.session(&cap).give_container(&mut data.replace(Vec::new()));
     ///                    let time = cap.time().clone() + 1;
     ///                    notificator.notify_at(cap.delayed(&time));
     ///                });
@@ -275,7 +275,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///                let mut notificator = FrontierNotificator::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
+    ///                        output.session(&cap).give_container(&mut data.replace(Vec::new()));
     ///                        let time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));
     ///                    });
@@ -405,7 +405,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///                let mut notificator = FrontierNotificator::new();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_vec(&mut data.replace(Vec::new()));
+    ///                        output.session(&cap).give_container(&mut data.replace(Vec::new()));
     ///                        let time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));
     ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);

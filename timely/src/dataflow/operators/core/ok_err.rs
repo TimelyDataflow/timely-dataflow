@@ -1,7 +1,6 @@
 //! Operators that separate one stream into two streams based on some condition
 
-use timely_container::{Container, PushContainer, PushInto};
-
+use crate::container::{Container, PushContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, StreamCore};

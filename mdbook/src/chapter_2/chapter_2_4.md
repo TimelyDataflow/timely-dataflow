@@ -209,7 +209,7 @@ fn main() {
                     let mut session = output.session(&time);
                     if let Some(list) = stash.remove(time.time()) {
                         for mut vector in list.into_iter() {
-                            session.give_vec(&mut vector);
+                            session.give_container(&mut vector);
                         }
                     }
                 });
@@ -261,7 +261,7 @@ fn main() {
                     if frontiers.iter().all(|f| !f.less_equal(time.time())) {
                         let mut session = output.session(&time);
                         for mut vector in list.drain(..) {
-                            session.give_vec(&mut vector);
+                            session.give_container(&mut vector);
                         }
                     }
                 }

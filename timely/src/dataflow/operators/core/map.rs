@@ -1,7 +1,6 @@
 //! Extension methods for `StreamCore` based on record-by-record transformation.
 
-use timely_container::{Container, PushContainer, PushInto};
-
+use crate::container::{Container, PushContainer, PushInto};
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;

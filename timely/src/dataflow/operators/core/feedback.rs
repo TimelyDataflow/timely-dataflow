@@ -1,17 +1,16 @@
 //! Create cycles in a timely dataflow graph.
 
 use crate::Container;
-
-use crate::progress::{Timestamp, PathSummary};
-use crate::progress::frontier::Antichain;
-use crate::order::Product;
-
-use crate::dataflow::channels::pushers::Tee;
+use crate::container::CapacityContainerBuilder;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{StreamCore, Scope};
-use crate::dataflow::scopes::child::Iterative;
-use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::operators::generic::OutputWrapper;
+use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::scopes::child::Iterative;
+use crate::dataflow::{StreamCore, Scope};
+use crate::order::Product;
+use crate::progress::frontier::Antichain;
+use crate::progress::{Timestamp, PathSummary};
 
 /// Creates a `StreamCore` and a `Handle` to later bind the source of that `StreamCore`.
 pub trait Feedback<G: Scope> {
@@ -137,5 +136,5 @@ impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
 pub struct Handle<G: Scope, C: Container> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
-    output: OutputWrapper<G::Timestamp, C, Tee<G::Timestamp, C>>,
+    output: OutputWrapper<G::Timestamp, CapacityContainerBuilder<C>, Tee<G::Timestamp, C>>,
 }
