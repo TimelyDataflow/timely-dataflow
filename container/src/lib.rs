@@ -102,11 +102,9 @@ pub trait ContainerBuilder: Default + 'static {
     fn push<T: PushInto<Self::Container>>(&mut self, item: T) where Self::Container: PushContainer;
     /// Push a pre-built container.
     fn push_container(&mut self, container: &mut Self::Container);
-    /// Extract assembled containers, potentially leaving unfinished data behind. The caller
-    /// has to leave an empty (possibly non-allocated) container behind.
+    /// Extract assembled containers, potentially leaving unfinished data behind.
     fn extract(&mut self) -> Option<&mut Self::Container>;
-    /// Extract assembled containers and any unfinished data. The caller
-    /// has to leave an empty (possibly non-allocated) container behind.
+    /// Extract assembled containers and any unfinished data.
     fn finish(&mut self) -> Option<&mut Self::Container>;
 }
 
