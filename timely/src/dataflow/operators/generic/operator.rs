@@ -84,7 +84,7 @@ pub trait Operator<G: Scope, C1: Container> {
     ///             .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
     ///                 input.for_each(|time, data| {
     ///                     data.swap(&mut vector);
-    ///                     output.session(&time).give_vec(&mut vector);
+    ///                     output.session(&time).give_container(&mut vector);
     ///                     notificator.notify_at(time.retain());
     ///                 });
     ///                 notificator.for_each(|time, _cnt, _not| {
@@ -123,7 +123,7 @@ pub trait Operator<G: Scope, C1: Container> {
     ///                 }
     ///                 while let Some((time, data)) = input.next() {
     ///                     data.swap(&mut vector);
-    ///                     output.session(&time).give_vec(&mut vector);
+    ///                     output.session(&time).give_container(&mut vector);
     ///                 }
     ///             }
     ///         });
@@ -221,12 +221,12 @@ pub trait Operator<G: Scope, C1: Container> {
     ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
     ///            input1.for_each(|time, data| {
     ///                data.swap(&mut vector1);
-    ///                output.session(&time).give_vec(&mut vector1);
+    ///                output.session(&time).give_container(&mut vector1);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            input2.for_each(|time, data| {
     ///                data.swap(&mut vector2);
-    ///                output.session(&time).give_vec(&mut vector2);
+    ///                output.session(&time).give_container(&mut vector2);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            notificator.for_each(|time, _cnt, _not| {
@@ -279,11 +279,11 @@ pub trait Operator<G: Scope, C1: Container> {
     ///                 }
     ///                 while let Some((time, data)) = input1.next() {
     ///                     data.swap(&mut vector1);
-    ///                     output.session(&time).give_vec(&mut vector1);
+    ///                     output.session(&time).give_container(&mut vector1);
     ///                 }
     ///                 while let Some((time, data)) = input2.next() {
     ///                     data.swap(&mut vector2);
-    ///                     output.session(&time).give_vec(&mut vector2);
+    ///                     output.session(&time).give_container(&mut vector2);
     ///                 }
     ///             }
     ///         }).inspect(|x| println!("{:?}", x));

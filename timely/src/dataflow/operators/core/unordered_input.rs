@@ -160,14 +160,14 @@ impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session_with_builder<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>> {
+    pub fn session_with_builder(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session_with_builder(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }
 
 impl<T: Timestamp, C: Container> UnorderedHandle<T, CapacityContainerBuilder<C>> {
     /// Allocates a new automatically flushing session based on the supplied capability.
-    pub fn session<'b>(&'b mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'b, T, CapacityContainerBuilder<C>, Counter<T, C, Tee<T, C>>>> {
+    pub fn session(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<T, CapacityContainerBuilder<C>, Counter<T, C, Tee<T, C>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
     }
 }

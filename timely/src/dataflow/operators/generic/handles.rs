@@ -82,7 +82,7 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>> InputHandleCore<T, C
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
+    ///                    output.session(&cap).give_container(&mut data.replace(Vec::new()));
     ///                });
     ///            });
     /// });
@@ -130,7 +130,7 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>+'a> FrontieredInputHa
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_vec(&mut data.replace(Vec::new()));
+    ///                    output.session(&cap).give_container(&mut data.replace(Vec::new()));
     ///                });
     ///            });
     /// });
@@ -255,7 +255,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a,
     ///                input.for_each(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session(&cap.delayed(&time))
-    ///                          .give_vec(&mut data.replace(Vec::new()));
+    ///                          .give_container(&mut data.replace(Vec::new()));
     ///                });
     ///            });
     /// });
