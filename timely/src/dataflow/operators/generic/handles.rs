@@ -235,6 +235,11 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> 
         assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
         self.push_buffer.session_with_builder(cap.time())
     }
+
+    /// Flushes all pending data and indicate that no more data immediately follows.
+    pub fn cease(&mut self) {
+        self.push_buffer.cease();
+    }
 }
 
 impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a, T, CapacityContainerBuilder<C>, P> {
@@ -263,11 +268,6 @@ impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a,
     #[inline]
     pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CapacityContainerBuilder<C>, PushCounter<T, C, P>> where 'a: 'b {
         self.session_with_builder(cap)
-    }
-
-    /// Flushes all pending data and indicate that no more data immediately follows.
-    pub fn cease(&mut self) {
-        self.push_buffer.cease();
     }
 }
 
