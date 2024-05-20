@@ -4,6 +4,8 @@ use std::iter::FromIterator;
 
 pub use columnation::*;
 
+use crate::PushInto;
+
 /// An append-only vector that store records as columns.
 ///
 /// This container maintains elements that might conventionally own
@@ -235,6 +237,27 @@ impl<T: Columnation> Clone for TimelyStack<T> {
         for item in &source[..] {
             self.copy(item);
         }
+    }
+}
+
+impl<T: Columnation> PushInto<TimelyStack<T>> for T {
+    #[inline]
+    fn push_into(self, target: &mut TimelyStack<T>) {
+        target.copy(&self);
+    }
+}
+
+impl<T: Columnation> PushInto<TimelyStack<T>> for &T {
+    #[inline]
+    fn push_into(self, target: &mut TimelyStack<T>) {
+        target.copy(self);
+    }
+}
+
+impl<T: Columnation> PushInto<TimelyStack<T>> for &&T {
+    #[inline]
+    fn push_into(self, target: &mut TimelyStack<T>) {
+        target.copy(self);
     }
 }
 

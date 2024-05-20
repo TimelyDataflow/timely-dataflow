@@ -233,10 +233,17 @@ impl<T> PushInto<Vec<T>> for T {
     }
 }
 
-impl<'a, T: Clone> PushInto<Vec<T>> for &'a T {
+impl<T: Clone> PushInto<Vec<T>> for &T {
     #[inline]
     fn push_into(self, target: &mut Vec<T>) {
         target.push(self.clone())
+    }
+}
+
+impl<T: Clone> PushInto<Vec<T>> for &&T {
+    #[inline]
+    fn push_into(self, target: &mut Vec<T>) {
+        (*self).push_into(target);
     }
 }
 
