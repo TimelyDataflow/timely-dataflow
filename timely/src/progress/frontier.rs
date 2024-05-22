@@ -81,10 +81,10 @@ impl<T: PartialOrder> Antichain<T> {
     /// use timely::progress::frontier::Antichain;
     ///
     /// let mut frontier = Antichain::new();
-    /// assert!(frontier.insert_or_else(&2, |x| *x));
+    /// assert!(frontier.insert_with(&2, |x| *x));
     /// assert!(!frontier.insert(3));
     ///```
-    pub fn insert_or_else<O: PartialOrder<T>, F: FnOnce(&O) -> T>(&mut self, element: &O, to_owned: F) -> bool where T: Clone + PartialOrder<O> {
+    pub fn insert_with<O: PartialOrder<T>, F: FnOnce(&O) -> T>(&mut self, element: &O, to_owned: F) -> bool where T: PartialOrder<O> {
         if !self.elements.iter().any(|x| x.less_equal(element)) {
             self.elements.retain(|x| !element.less_equal(x));
             self.elements.push(to_owned(element));
@@ -478,7 +478,6 @@ impl<T> MutableAntichain<T> {
     #[inline]
     pub fn less_than<O>(&self, time: &O) -> bool
     where
-        O: PartialOrder<T>,
         T: PartialOrder<O>,
     {
         self.frontier().less_than(time)
@@ -499,7 +498,6 @@ impl<T> MutableAntichain<T> {
     #[inline]
     pub fn less_equal<O>(&self, time: &O) -> bool
     where
-        O: PartialOrder<T>,
         T: PartialOrder<O>,
     {
         self.frontier().less_equal(time)
