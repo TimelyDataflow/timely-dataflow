@@ -5,13 +5,13 @@
 /// This trait is distinct from Rust's `PartialOrd` trait, because the implementation
 /// of that trait precludes a distinct `Ord` implementation. We need an independent
 /// trait if we want to have a partially ordered type that can also be sorted.
-pub trait PartialOrder : Eq {
+pub trait PartialOrder<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     /// Returns true iff one element is strictly less than the other.
-    fn less_than(&self, other: &Self) -> bool {
+    fn less_than(&self, other: &Rhs) -> bool {
         self.less_equal(other) && self != other
     }
     /// Returns true iff one element is less than or equal to the other.
-    fn less_equal(&self, other: &Self) -> bool;
+    fn less_equal(&self, other: &Rhs) -> bool;
 }
 
 /// A type that is totally ordered.
@@ -97,9 +97,14 @@ mod product {
     }
 
     use super::PartialOrder;
-    impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for Product<TOuter, TInner> {
+    impl<TOuter, TOuter2, TInner, TInner2> PartialOrder<Product<TOuter2, TInner2>> for Product<TOuter, TInner>
+    where
+        TOuter: PartialOrder<TOuter2>,
+        TInner: PartialOrder<TInner2>,
+        Self: PartialEq<Product<TOuter2, TInner2>>,
+    {
         #[inline]
-        fn less_equal(&self, other: &Self) -> bool {
+        fn less_equal(&self, other: &Product<TOuter2, TInner2>) -> bool {
             self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
         }
     }
@@ -189,9 +194,14 @@ mod product {
 mod tuple {
 
     use super::PartialOrder;
-    impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for (TOuter, TInner) {
+    impl<TOuter, TOuter2, TInner, TInner2> PartialOrder<(TOuter2, TInner2)> for (TOuter, TInner)
+    where
+        TOuter: PartialOrder<TOuter2>,
+        TInner: PartialOrder<TInner2>,
+        (TOuter, TInner): PartialEq<(TOuter2, TInner2)>,
+    {
         #[inline]
-        fn less_equal(&self, other: &Self) -> bool {
+        fn less_equal(&self, other: &(TOuter2, TInner2)) -> bool {
             // We avoid Rust's `PartialOrd` implementation, for reasons of correctness.
             self.0.less_than(&other.0) || (self.0.eq(&other.0) && self.1.less_equal(&other.1))
         }

@@ -69,6 +69,32 @@ impl<T: PartialOrder> Antichain<T> {
         }
     }
 
+    /// Updates the `Antichain` if the element is not greater than or equal to some present element.
+    /// If the antichain needs updating, it uses the `to_owned` closure to convert the element into
+    /// a `T`.
+    ///
+    /// Returns true if element is added to the set
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::frontier::Antichain;
+    ///
+    /// let mut frontier = Antichain::new();
+    /// assert!(frontier.insert_with(&2, |x| *x));
+    /// assert!(!frontier.insert(3));
+    ///```
+    pub fn insert_with<O: PartialOrder<T>, F: FnOnce(&O) -> T>(&mut self, element: &O, to_owned: F) -> bool where T: PartialOrder<O> {
+        if !self.elements.iter().any(|x| x.less_equal(element)) {
+            self.elements.retain(|x| !element.less_equal(x));
+            self.elements.push(to_owned(element));
+            true
+        }
+        else {
+            false
+        }
+    }
+
     /// Reserves capacity for at least additional more elements to be inserted in the given `Antichain`
     pub fn reserve(&mut self, additional: usize) {
         self.elements.reserve(additional);
@@ -450,9 +476,9 @@ impl<T> MutableAntichain<T> {
     /// assert!(frontier.less_than(&2));
     ///```
     #[inline]
-    pub fn less_than(&self, time: &T) -> bool
+    pub fn less_than<O>(&self, time: &O) -> bool
     where
-        T: PartialOrder,
+        T: PartialOrder<O>,
     {
         self.frontier().less_than(time)
     }
@@ -470,9 +496,9 @@ impl<T> MutableAntichain<T> {
     /// assert!(frontier.less_equal(&2));
     ///```
     #[inline]
-    pub fn less_equal(&self, time: &T) -> bool
+    pub fn less_equal<O>(&self, time: &O) -> bool
     where
-        T: PartialOrder,
+        T: PartialOrder<O>,
     {
         self.frontier().less_equal(time)
     }
@@ -549,9 +575,9 @@ impl<T> MutableAntichain<T> {
     }
 
     /// Reports the count for a queried time.
-    pub fn count_for(&self, query_time: &T) -> i64
+    pub fn count_for<O>(&self, query_time: &O) -> i64
     where
-        T: Ord,
+        T: PartialEq<O>,
     {
         self.updates
             .unstable_internal_updates()
@@ -679,7 +705,7 @@ impl<'a, T: 'a> AntichainRef<'a, T> {
     }
 }
 
-impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
+impl<T> AntichainRef<'_, T> {
 
     /// Returns true if any item in the `AntichainRef` is strictly less than the argument.
     ///
@@ -694,7 +720,7 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
     /// assert!(frontier.less_than(&2));
     ///```
     #[inline]
-    pub fn less_than(&self, time: &T) -> bool {
+    pub fn less_than<O>(&self, time: &O) -> bool where T: PartialOrder<O> {
         self.iter().any(|x| x.less_than(time))
     }
 
@@ -711,7 +737,7 @@ impl<'a, T: 'a+PartialOrder> AntichainRef<'a, T> {
     /// assert!(frontier.less_equal(&1));
     /// assert!(frontier.less_equal(&2));
     ///```
-    pub fn less_equal(&self, time: &T) -> bool {
+    pub fn less_equal<O>(&self, time: &O) -> bool where T: PartialOrder<O> {
         self.iter().any(|x| x.less_equal(time))
     }
 }
