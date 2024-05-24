@@ -1,7 +1,7 @@
 //! Present a [`FlatStack`] as a timely container.
 
 pub use flatcontainer::*;
-use crate::{buffer, Container, PushContainer, PushInto};
+use crate::{buffer, Container, SizableContainer, PushInto};
 
 impl<R: Region + Clone + 'static> Container for FlatStack<R> {
     type ItemRef<'a> = R::ReadItem<'a>  where Self: 'a;
@@ -28,7 +28,7 @@ impl<R: Region + Clone + 'static> Container for FlatStack<R> {
     }
 }
 
-impl<R: Region + Clone + 'static> PushContainer for FlatStack<R> {
+impl<R: Region + Clone + 'static> SizableContainer for FlatStack<R> {
     fn capacity(&self) -> usize {
         self.capacity()
     }
@@ -42,9 +42,9 @@ impl<R: Region + Clone + 'static> PushContainer for FlatStack<R> {
     }
 }
 
-impl<R: Region + Clone + 'static, T: CopyOnto<R>> PushInto<FlatStack<R>> for T {
+impl<R: Region + Push<T> + Clone + 'static, T> PushInto<T> for FlatStack<R> {
     #[inline]
-    fn push_into(self, target: &mut FlatStack<R>) {
-        target.copy(self);
+    fn push_into(&mut self, item: T) {
+        self.copy(item);
     }
 }

@@ -1,6 +1,6 @@
 //! Extension methods for `StreamCore` based on record-by-record transformation.
 
-use crate::container::{Container, PushContainer, PushInto};
+use crate::container::{Container, SizableContainer, PushInto};
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
@@ -22,9 +22,8 @@ pub trait Map<S: Scope, C: Container> {
     /// });
     /// ```
     fn map<C2, D2, L>(&self, mut logic: L) -> StreamCore<S, C2>
-    where 
-        C2: PushContainer, 
-        D2: PushInto<C2>,
+    where
+        C2: SizableContainer + PushInto<D2>,
         L: FnMut(C::Item<'_>)->D2 + 'static,
     {
         self.flat_map(move |x| std::iter::once(logic(x)))
@@ -43,11 +42,10 @@ pub trait Map<S: Scope, C: Container> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<C2, I, L>(&self, logic: L) -> StreamCore<S, C2> 
-    where 
-        C2: PushContainer,
+    fn flat_map<C2, I, L>(&self, logic: L) -> StreamCore<S, C2>
+    where
         I: IntoIterator,
-        I::Item: PushInto<C2>,
+        C2: SizableContainer + PushInto<I::Item>,
         L: FnMut(C::Item<'_>)->I + 'static,
     ;
 }
@@ -56,11 +54,10 @@ impl<S: Scope, C: Container> Map<S, C> for StreamCore<S, C> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<C2, I, L>(&self, mut logic: L) -> StreamCore<S, C2> 
-    where 
-        C2: PushContainer,
+    fn flat_map<C2, I, L>(&self, mut logic: L) -> StreamCore<S, C2>
+    where
         I: IntoIterator,
-        I::Item: PushInto<C2>,
+        C2: SizableContainer + PushInto<I::Item>,
         L: FnMut(C::Item<'_>)->I + 'static,
     {
         let mut container = Default::default();

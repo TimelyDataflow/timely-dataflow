@@ -37,9 +37,10 @@ impl<T: Columnation> TimelyStack<T> {
     /// The argument `items` may be cloned and iterated multiple times.
     /// Please be careful if it contains side effects.
     #[inline(always)]
-    pub fn reserve_items<'a, I>(&'a mut self, items: I)
+    pub fn reserve_items<'a, I>(&mut self, items: I)
         where
             I: Iterator<Item= &'a T>+Clone,
+            T: 'a,
     {
         self.local.reserve(items.clone().count());
         self.inner.reserve_items(items);
@@ -240,24 +241,25 @@ impl<T: Columnation> Clone for TimelyStack<T> {
     }
 }
 
-impl<T: Columnation> PushInto<TimelyStack<T>> for T {
+impl<T: Columnation> PushInto<T> for TimelyStack<T> {
     #[inline]
-    fn push_into(self, target: &mut TimelyStack<T>) {
-        target.copy(&self);
+    fn push_into(&mut self, item: T) {
+        self.copy(&item);
     }
 }
 
-impl<T: Columnation> PushInto<TimelyStack<T>> for &T {
+impl<T: Columnation> PushInto<&T> for TimelyStack<T> {
     #[inline]
-    fn push_into(self, target: &mut TimelyStack<T>) {
-        target.copy(self);
+    fn push_into(&mut self, item: &T) {
+        self.copy(item);
     }
 }
 
-impl<T: Columnation> PushInto<TimelyStack<T>> for &&T {
+
+impl<T: Columnation> PushInto<&&T> for TimelyStack<T> {
     #[inline]
-    fn push_into(self, target: &mut TimelyStack<T>) {
-        target.copy(self);
+    fn push_into(&mut self, item: &&T) {
+        self.copy(*item);
     }
 }
 
@@ -333,7 +335,7 @@ mod serde {
 
 mod container {
     use std::ops::Deref;
-    use crate::{Container, PushContainer};
+    use crate::{Container, SizableContainer};
 
     use crate::columnation::{Columnation, TimelyStack};
 
@@ -366,7 +368,7 @@ mod container {
         }
     }
 
-    impl<T: Columnation + 'static> PushContainer for TimelyStack<T> {
+    impl<T: Columnation + 'static> SizableContainer for TimelyStack<T> {
         fn capacity(&self) -> usize {
             self.capacity()
         }
@@ -377,6 +379,79 @@ mod container {
 
         fn reserve(&mut self, additional: usize) {
             self.reserve(additional)
+        }
+    }
+}
+
+mod flatcontainer {
+    //! A bare-bones flatcontainer region implementation for [`TimelyStack`].
+
+    use columnation::Columnation;
+    use flatcontainer::{Push, Region, ReserveItems};
+    use crate::columnation::TimelyStack;
+
+    #[derive(Debug, Clone)]
+    struct ColumnationRegion<T: Columnation> {
+        inner: TimelyStack<T>,
+    }
+
+    impl<T: Columnation> Default for ColumnationRegion<T> {
+        fn default() -> Self {
+            Self { inner: Default::default() }
+        }
+    }
+
+    impl<T: Columnation> Region for ColumnationRegion<T> {
+        type ReadItem<'a> = &'a T where Self: 'a;
+        type Index = usize;
+
+        fn merge_regions<'a>(regions: impl Iterator<Item=&'a Self> + Clone) -> Self where Self: 'a {
+            let mut inner = TimelyStack::default();
+            inner.reserve_regions(regions.map(|r| &r.inner));
+            Self { inner}
+        }
+
+        fn index(&self, index: Self::Index) -> Self::ReadItem<'_> {
+            &self.inner[index]
+        }
+
+        fn reserve_regions<'a, I>(&mut self, regions: I) where Self: 'a, I: Iterator<Item=&'a Self> + Clone {
+            self.inner.reserve_regions(regions.map(|r| &r.inner));
+        }
+
+        fn clear(&mut self) {
+            self.inner.clear();
+        }
+
+        fn heap_size<F: FnMut(usize, usize)>(&self, callback: F) {
+            self.inner.heap_size(callback);
+        }
+    }
+
+    impl<T: Columnation> Push<T> for ColumnationRegion<T> {
+        fn push(&mut self, item: T) -> Self::Index {
+            self.inner.copy(&item);
+            self.inner.len() - 1
+        }
+    }
+
+    impl<T: Columnation> Push<&T> for ColumnationRegion<T> {
+        fn push(&mut self, item: &T) -> Self::Index {
+            self.inner.copy(item);
+            self.inner.len() - 1
+        }
+    }
+
+    impl<T: Columnation> Push<&&T> for ColumnationRegion<T> {
+        fn push(&mut self, item: &&T) -> Self::Index {
+            self.inner.copy(*item);
+            self.inner.len() - 1
+        }
+    }
+
+    impl<'a, T: Columnation + 'a> ReserveItems<&'a T> for ColumnationRegion<T> {
+        fn reserve_items<I>(&mut self, items: I) where I: Iterator<Item=&'a T> + Clone {
+            self.inner.reserve_items(items);
         }
     }
 }
