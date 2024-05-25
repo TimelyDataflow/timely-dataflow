@@ -26,6 +26,12 @@ pub trait Container: Default + Clone + 'static {
     /// The type of elements when draining the continer.
     type Item<'a> where Self: 'a;
 
+    /// Push `item` into self
+    #[inline]
+    fn push<T>(&mut self, item: T) where Self: PushInto<T> {
+        self.push_into(item)
+    }
+
     /// The number of elements in this container
     ///
     /// The length of a container must be consistent between sending and receiving it.
@@ -57,26 +63,10 @@ pub trait Container: Default + Clone + 'static {
     fn drain(&mut self) -> Self::DrainIter<'_>;
 }
 
-/// A type that can push itself into a container.
-pub trait PushInto<C> {
-    /// Push self into the target container.
-    fn push_into(self, target: &mut C);
-}
-
-/// A type that has the necessary infrastructure to push elements, without specifying how pushing
-/// itself works. For this, pushable types should implement [`PushInto`].
-pub trait PushContainer: Container {
-    /// Push `item` into self
-    #[inline]
-    fn push<T: PushInto<Self>>(&mut self, item: T) {
-        item.push_into(self)
-    }
-    /// Return the capacity of the container.
-    fn capacity(&self) -> usize;
-    /// Return the preferred capacity of the container.
-    fn preferred_capacity() -> usize;
-    /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
-    fn reserve(&mut self, additional: usize);
+/// A container that can absorb items of a specific type.
+pub trait PushInto<T> {
+    /// Push item into self.
+    fn push_into(&mut self, item: T);
 }
 
 /// A type that can build containers from items.
@@ -99,7 +89,12 @@ pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
     type Container: Container;
     /// Add an item to a container.
-    fn push<T: PushInto<Self::Container>>(&mut self, item: T) where Self::Container: PushContainer;
+    ///
+    /// The restriction to [`SizeableContainer`] only exists so that types
+    /// relying on [`CapacityContainerBuilder`] only need to constrain their container
+    /// to [`Container`] instead of [`SizableContainer`], which otherwise would be a pervasive
+    /// requirement.
+    fn push<T>(&mut self, item: T) where Self::Container: SizableContainer + PushInto<T>;
     /// Push a pre-built container.
     fn push_container(&mut self, container: &mut Self::Container);
     /// Extract assembled containers, potentially leaving unfinished data behind.
@@ -121,11 +116,21 @@ pub struct CapacityContainerBuilder<C>{
     pending: VecDeque<C>,
 }
 
+/// A container that can be sized and reveals its capacity.
+pub trait SizableContainer: Container {
+    /// Return the capacity of the container.
+    fn capacity(&self) -> usize;
+    /// Return the preferred capacity of the container.
+    fn preferred_capacity() -> usize;
+    /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
+    fn reserve(&mut self, additional: usize);
+}
+
 impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
-    fn push<T: PushInto<Self::Container>>(&mut self, item: T) where C: PushContainer {
+    fn push<T>(&mut self, item: T) where C: SizableContainer + PushInto<T> {
         if self.current.capacity() == 0 {
             self.current = self.empty.take().unwrap_or_default();
             // Discard any non-uniform capacity container.
@@ -212,7 +217,7 @@ impl<T: Clone + 'static> Container for Vec<T> {
     }
 }
 
-impl<T: Clone + 'static> PushContainer for Vec<T> {
+impl<T: Clone + 'static> SizableContainer for Vec<T> {
     fn capacity(&self) -> usize {
         self.capacity()
     }
@@ -226,24 +231,25 @@ impl<T: Clone + 'static> PushContainer for Vec<T> {
     }
 }
 
-impl<T> PushInto<Vec<T>> for T {
+impl<T> PushInto<T> for Vec<T> {
     #[inline]
-    fn push_into(self, target: &mut Vec<T>) {
-        target.push(self)
+    fn push_into(&mut self, item: T) {
+        self.push(item)
     }
 }
 
-impl<T: Clone> PushInto<Vec<T>> for &T {
+
+impl<T: Clone> PushInto<&T> for Vec<T> {
     #[inline]
-    fn push_into(self, target: &mut Vec<T>) {
-        target.push(self.clone())
+    fn push_into(&mut self, item: &T) {
+        self.push(item.clone())
     }
 }
 
-impl<T: Clone> PushInto<Vec<T>> for &&T {
+impl<T: Clone> PushInto<&&T> for Vec<T> {
     #[inline]
-    fn push_into(self, target: &mut Vec<T>) {
-        (*self).push_into(target);
+    fn push_into(&mut self, item: &&T) {
+        self.push_into(*item)
     }
 }
 
@@ -330,7 +336,7 @@ mod arc {
 }
 
 /// A container that can partition itself into pieces.
-pub trait PushPartitioned: PushContainer {
+pub trait PushPartitioned: SizableContainer {
     /// Partition and push this container.
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
@@ -341,7 +347,7 @@ pub trait PushPartitioned: PushContainer {
         F: FnMut(usize, &mut Self);
 }
 
-impl<T: PushContainer + 'static> PushPartitioned for T where for<'a> T::Item<'a>: PushInto<T> {
+impl<T: SizableContainer> PushPartitioned for T where for<'a> T: PushInto<T::Item<'a>> {
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
     where
         for<'a> I: FnMut(&Self::Item<'a>) -> usize,

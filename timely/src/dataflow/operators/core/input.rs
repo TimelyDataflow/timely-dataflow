@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::container::{PushContainer, PushInto};
+use crate::container::{SizableContainer, PushInto};
 
 use crate::scheduling::{Schedule, Activator};
 
@@ -390,7 +390,7 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
     }
 }
 
-impl<T: Timestamp, C: PushContainer> Handle<T, C> {
+impl<T: Timestamp, C: SizableContainer> Handle<T, C> {
     #[inline]
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     ///
@@ -419,7 +419,7 @@ impl<T: Timestamp, C: PushContainer> Handle<T, C> {
     ///     }
     /// });
     /// ```
-    pub fn send<D: PushInto<C>>(&mut self, data: D) {
+    pub fn send<D>(&mut self, data: D) where C: PushInto<D> {
         self.buffer1.push(data);
         if self.buffer1.len() == self.buffer1.capacity() {
             self.flush();
