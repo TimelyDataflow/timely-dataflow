@@ -246,6 +246,13 @@ impl<T: Clone> PushInto<&T> for Vec<T> {
     }
 }
 
+impl<T: Clone> PushInto<&&T> for Vec<T> {
+    #[inline]
+    fn push_into(&mut self, item: &&T) {
+        self.push_into(*item)
+    }
+}
+
 mod rc {
     use std::ops::Deref;
     use std::rc::Rc;
