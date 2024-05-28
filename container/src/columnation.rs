@@ -401,7 +401,8 @@ mod flatcontainer {
         }
     }
 
-    impl<T: Columnation> Region for ColumnationRegion<T> {
+    impl<T: Columnation + Clone> Region for ColumnationRegion<T> {
+        type Owned = T;
         type ReadItem<'a> = &'a T where Self: 'a;
         type Index = usize;
 
@@ -426,30 +427,34 @@ mod flatcontainer {
         fn heap_size<F: FnMut(usize, usize)>(&self, callback: F) {
             self.inner.heap_size(callback);
         }
+
+        fn reborrow<'b, 'a: 'b>(item: Self::ReadItem<'a>) -> Self::ReadItem<'b> where Self: 'a {
+            item
+        }
     }
 
-    impl<T: Columnation> Push<T> for ColumnationRegion<T> {
+    impl<T: Columnation + Clone> Push<T> for ColumnationRegion<T> {
         fn push(&mut self, item: T) -> Self::Index {
             self.inner.copy(&item);
             self.inner.len() - 1
         }
     }
 
-    impl<T: Columnation> Push<&T> for ColumnationRegion<T> {
+    impl<T: Columnation + Clone> Push<&T> for ColumnationRegion<T> {
         fn push(&mut self, item: &T) -> Self::Index {
             self.inner.copy(item);
             self.inner.len() - 1
         }
     }
 
-    impl<T: Columnation> Push<&&T> for ColumnationRegion<T> {
+    impl<T: Columnation + Clone> Push<&&T> for ColumnationRegion<T> {
         fn push(&mut self, item: &&T) -> Self::Index {
             self.inner.copy(*item);
             self.inner.len() - 1
         }
     }
 
-    impl<'a, T: Columnation + 'a> ReserveItems<&'a T> for ColumnationRegion<T> {
+    impl<'a, T: Columnation + Clone + 'a> ReserveItems<&'a T> for ColumnationRegion<T> {
         fn reserve_items<I>(&mut self, items: I) where I: Iterator<Item=&'a T> + Clone {
             self.inner.reserve_items(items);
         }
