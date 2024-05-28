@@ -42,7 +42,7 @@ impl<R: Region + Clone + 'static> SizableContainer for FlatStack<R> {
     }
 }
 
-impl<R: Region + Push<T> + Clone + 'static, T> PushInto<T> for FlatStack<R> {
+impl<R: Region + Push<T>, T> PushInto<T> for FlatStack<R> {
     #[inline]
     fn push_into(&mut self, item: T) {
         self.copy(item);
