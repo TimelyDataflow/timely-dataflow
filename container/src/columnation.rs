@@ -366,6 +366,16 @@ mod container {
         fn drain(&mut self) -> Self::DrainIter<'_> {
             (*self).iter()
         }
+
+        #[inline(always)]
+        fn reborrow<'b, 'a: 'b>(item: Self::Item<'a>) -> Self::Item<'b> where Self: 'a {
+            item
+        }
+
+        #[inline(always)]
+        fn reborrow_ref<'b, 'a: 'b>(item: Self::ItemRef<'a>) -> Self::ItemRef<'b> where Self: 'a {
+            item
+        }
     }
 
     impl<T: Columnation + 'static> SizableContainer for TimelyStack<T> {
