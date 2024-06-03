@@ -26,6 +26,16 @@ impl<R: Region + Clone + 'static> Container for FlatStack<R> {
     fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> {
         IntoIterator::into_iter(&*self)
     }
+
+    #[inline(always)]
+    fn reborrow<'b, 'a: 'b>(item: Self::Item<'a>) -> Self::Item<'b> where Self: 'a {
+        R::reborrow(item)
+    }
+
+    #[inline(always)]
+    fn reborrow_ref<'b, 'a: 'b>(item: Self::ItemRef<'a>) -> Self::ItemRef<'b> where Self: 'a {
+        R::reborrow(item)
+    }
 }
 
 impl<R: Region + Clone + 'static> SizableContainer for FlatStack<R> {

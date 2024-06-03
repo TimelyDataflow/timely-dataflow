@@ -61,6 +61,12 @@ pub trait Container: Default + Clone + 'static {
     /// Returns an iterator that drains the contents of this container.
     /// Drain leaves the container in an undefined state.
     fn drain(&mut self) -> Self::DrainIter<'_>;
+
+    /// Reborrow [`Item`](Container::Item) with a shorter lifetime.
+    fn reborrow<'b, 'a: 'b>(item: Self::Item<'a>) -> Self::Item<'b> where Self: 'a;
+
+    /// Reborrow [`ItemRef`](Container::ItemRef) with a shorter lifetime.
+    fn reborrow_ref<'b, 'a: 'b>(item: Self::ItemRef<'a>) -> Self::ItemRef<'b> where Self: 'a;
 }
 
 /// A container that can absorb items of a specific type.
@@ -90,7 +96,7 @@ pub trait ContainerBuilder: Default + 'static {
     type Container: Container;
     /// Add an item to a container.
     ///
-    /// The restriction to [`SizeableContainer`] only exists so that types
+    /// The restriction to [`SizableContainer`] only exists so that types
     /// relying on [`CapacityContainerBuilder`] only need to constrain their container
     /// to [`Container`] instead of [`SizableContainer`], which otherwise would be a pervasive
     /// requirement.
@@ -215,6 +221,16 @@ impl<T: Clone + 'static> Container for Vec<T> {
     fn drain(&mut self) -> Self::DrainIter<'_> {
         self.drain(..)
     }
+
+    #[inline(always)]
+    fn reborrow<'b, 'a: 'b>(item: Self::Item<'a>) -> Self::Item<'b> where Self: 'a {
+        item
+    }
+
+    #[inline(always)]
+    fn reborrow_ref<'b, 'a: 'b>(item: Self::ItemRef<'a>) -> Self::ItemRef<'b> where Self: 'a {
+        item
+    }
 }
 
 impl<T: Clone + 'static> SizableContainer for Vec<T> {
@@ -291,6 +307,16 @@ mod rc {
         fn drain(&mut self) -> Self::DrainIter<'_> {
             self.iter()
         }
+
+        #[inline(always)]
+        fn reborrow<'b, 'a: 'b>(item: Self::Item<'a>) -> Self::Item<'b> where Self: 'a {
+            T::reborrow_ref(item)
+        }
+
+        #[inline(always)]
+        fn reborrow_ref<'b, 'a: 'b>(item: Self::ItemRef<'a>) -> Self::ItemRef<'b> where Self: 'a {
+            T::reborrow_ref(item)
+        }
     }
 }
 
@@ -331,6 +357,16 @@ mod arc {
 
         fn drain(&mut self) -> Self::DrainIter<'_> {
             self.iter()
+        }
+
+        #[inline(always)]
+        fn reborrow<'b, 'a: 'b>(item: Self::Item<'a>) -> Self::Item<'b> where Self: 'a {
+            T::reborrow_ref(item)
+        }
+
+        #[inline(always)]
+        fn reborrow_ref<'b, 'a: 'b>(item: Self::ItemRef<'a>) -> Self::ItemRef<'b> where Self: 'a {
+            T::reborrow_ref(item)
         }
     }
 }
