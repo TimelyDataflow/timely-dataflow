@@ -1,5 +1,6 @@
 //! Shared containers
 
+use crate::container::BufferingContainerBuilder;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::Operator;
 use crate::dataflow::{Scope, StreamCore};
@@ -27,13 +28,13 @@ pub trait SharedStream<S: Scope, C: Container> {
 impl<S: Scope, C: Container> SharedStream<S, C> for StreamCore<S, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>> {
         let mut container = Default::default();
-        self.unary(Pipeline, "Shared", move |_, _| {
+        self.unary::<BufferingContainerBuilder<_>, _, _, _>(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each(|time, data| {
                     data.swap(&mut container);
                     output
-                        .session(&time)
-                        .give_container(&mut Rc::new(std::mem::take(&mut container)));
+                        .session_with_builder(&time)
+                        .give(&mut Rc::new(std::mem::take(&mut container)));
                 });
             }
         })

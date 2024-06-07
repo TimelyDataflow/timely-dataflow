@@ -23,7 +23,7 @@ pub trait Container: Default + Clone + 'static {
     /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
 
-    /// The type of elements when draining the continer.
+    /// The type of elements when draining the container.
     type Item<'a> where Self: 'a;
 
     /// Push `item` into self
@@ -75,6 +75,9 @@ pub trait PushInto<T> {
 /// chunked into individual containers, but is free to change the data representation to
 /// better fit the properties of the container.
 ///
+/// Types implementing this trait should provide appropriate [`PushInto`] implementations such
+/// that users can push the expected item types.
+///
 /// The owner extracts data in two ways. The opportunistic [`Self::extract`] method returns
 /// any ready data, but doesn't need to produce partial outputs. In contrast, [`Self::finish`]
 /// needs to produce all outputs, even partial ones.
@@ -83,23 +86,15 @@ pub trait PushInto<T> {
 /// to ensure that it preserves the intended information.
 ///
 /// The trait does not prescribe any specific ordering guarantees, and each implementation can
-/// decide to represent a `push`/`push_container` order for `extract` and `finish`, or not.
-// TODO: Consider adding `push_iterator` to receive an iterator of data.
+/// decide to represent a push order for `extract` and `finish`, or not.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
     type Container: Container;
-    /// Add an item to a container.
-    ///
-    /// The restriction to [`SizeableContainer`] only exists so that types
-    /// relying on [`CapacityContainerBuilder`] only need to constrain their container
-    /// to [`Container`] instead of [`SizableContainer`], which otherwise would be a pervasive
-    /// requirement.
-    fn push<T>(&mut self, item: T) where Self::Container: SizableContainer + PushInto<T>;
-    /// Push a pre-built container.
-    fn push_container(&mut self, container: &mut Self::Container);
-    /// Extract assembled containers, potentially leaving unfinished data behind.
+    /// Extract assembled containers, potentially leaving unfinished data behind. Should
+    /// be called repeatedly until it returns `None`.
     fn extract(&mut self) -> Option<&mut Self::Container>;
-    /// Extract assembled containers and any unfinished data.
+    /// Extract assembled containers and any unfinished data. Should
+    /// be called repeatedly until it returns `None`.
     fn finish(&mut self) -> Option<&mut Self::Container>;
 }
 
@@ -126,11 +121,8 @@ pub trait SizableContainer: Container {
     fn reserve(&mut self, additional: usize);
 }
 
-impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
-    type Container = C;
-
-    #[inline]
-    fn push<T>(&mut self, item: T) where C: SizableContainer + PushInto<T> {
+impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuilder<C> {
+    fn push_into(&mut self, item: T) {
         if self.current.capacity() == 0 {
             self.current = self.empty.take().unwrap_or_default();
             // Discard any non-uniform capacity container.
@@ -153,23 +145,10 @@ impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
             self.pending.push_back(std::mem::take(&mut self.current));
         }
     }
+}
 
-    #[inline]
-    fn push_container(&mut self, container: &mut Self::Container) {
-        if !container.is_empty() {
-            // Flush to maintain FIFO ordering.
-            if self.current.len() > 0 {
-                self.pending.push_back(std::mem::take(&mut self.current));
-            }
-
-            let mut empty = self.empty.take().unwrap_or_default();
-            // Ideally, we'd discard non-uniformly sized containers, but we don't have
-            // access to `len`/`capacity` of the container.
-            empty.clear();
-
-            self.pending.push_back(std::mem::replace(container, empty));
-        }
-    }
+impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
+    type Container = C;
 
     #[inline]
     fn extract(&mut self) -> Option<&mut C> {
@@ -187,6 +166,77 @@ impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
             self.pending.push_back(std::mem::take(&mut self.current));
         }
         self.extract()
+    }
+}
+
+impl<C: Container> CapacityContainerBuilder<C> {
+    /// Push a pre-formed container at this builder. This exists to maintain
+    /// API compatibility.
+    #[inline]
+    pub fn push_container(&mut self, container: &mut C) {
+        if !container.is_empty() {
+            // Flush to maintain FIFO ordering.
+            if self.current.len() > 0 {
+                self.pending.push_back(std::mem::take(&mut self.current));
+            }
+
+            let mut empty = self.empty.take().unwrap_or_default();
+            // Ideally, we'd discard non-uniformly sized containers, but we don't have
+            // access to `len`/`capacity` of the container.
+            empty.clear();
+
+            self.pending.push_back(std::mem::replace(container, empty));
+        }
+    }
+}
+
+/// A container builder that absorbs entire containers. Maintains FIFO order.
+pub struct BufferingContainerBuilder<C> {
+    /// Container that we're extracting.
+    current: Option<C>,
+    /// Completed containers pending to be sent.
+    pending: VecDeque<C>,
+}
+
+impl<C> Default for BufferingContainerBuilder<C> {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            current: None,
+            pending: VecDeque::default(),
+        }
+    }
+}
+
+impl<C: Container> ContainerBuilder for BufferingContainerBuilder<C> {
+    type Container = C;
+
+    #[inline]
+    fn extract(&mut self) -> Option<&mut Self::Container> {
+        if let Some(container) = self.pending.pop_front() {
+            self.current = Some(container);
+            self.current.as_mut()
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn finish(&mut self) -> Option<&mut Self::Container> {
+        self.extract()
+    }
+}
+
+impl<C: Container> PushInto<&mut C> for BufferingContainerBuilder<C> {
+    #[inline]
+    fn push_into(&mut self, item: &mut C) {
+        if !item.is_empty() {
+            // Grab the last returned container, or a default one, to pass back to the caller
+            let mut empty = self.current.take().unwrap_or_default();
+            empty.clear();
+            let container = std::mem::replace(item, empty);
+            self.pending.push_back(container);
+        }
     }
 }
 
@@ -347,7 +397,7 @@ pub trait PushPartitioned: SizableContainer {
         F: FnMut(usize, &mut Self);
 }
 
-impl<T: SizableContainer> PushPartitioned for T where for<'a> T: PushInto<T::Item<'a>> {
+impl<C: SizableContainer> PushPartitioned for C where for<'a> C: PushInto<C::Item<'a>> {
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
     where
         for<'a> I: FnMut(&Self::Item<'a>) -> usize,
@@ -383,7 +433,7 @@ pub mod buffer {
     /// The maximum buffer capacity in elements. Returns a number between [BUFFER_SIZE_BYTES]
     /// and 1, inclusively.
     pub const fn default_capacity<T>() -> usize {
-        let size = ::std::mem::size_of::<T>();
+        let size = std::mem::size_of::<T>();
         if size == 0 {
             BUFFER_SIZE_BYTES
         } else if size <= BUFFER_SIZE_BYTES {

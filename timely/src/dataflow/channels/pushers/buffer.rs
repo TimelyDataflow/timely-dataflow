@@ -2,7 +2,7 @@
 //! with the performance of batched sends.
 
 use crate::communication::Push;
-use crate::container::{ContainerBuilder, CapacityContainerBuilder, SizableContainer, PushInto};
+use crate::container::{ContainerBuilder, CapacityContainerBuilder, PushInto};
 use crate::dataflow::channels::{Bundle, Message};
 use crate::dataflow::operators::Capability;
 use crate::progress::Timestamp;
@@ -56,6 +56,16 @@ impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, CapacityContainerBuilder<
     pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, CapacityContainerBuilder<C>, P> where T: Timestamp {
         self.autoflush_session_with_builder(cap)
     }
+
+    /// Gives an entire container at the current time. Only provided for
+    /// buffers of [`CapacityContainerBuilder`]s. Other container builders
+    /// should use [`PushInto`] instead.
+    fn give_container(&mut self, container: &mut C) {
+        if !container.is_empty() {
+            self.builder.push_container(container);
+            self.extract();
+        }
+    }
 }
 
 impl<T, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> Buffer<T, CB, P> where T: Eq+Clone {
@@ -101,25 +111,18 @@ impl<T, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> Buffer<T, CB, P
             Message::push_at(container, time, &mut self.pusher);
         }
     }
-
-    /// Gives an entire container at the current time.
-    fn give_container(&mut self, container: &mut CB::Container) {
-        if !container.is_empty() {
-            self.builder.push_container(container);
-            self.extract();
-        }
-    }
 }
 
-impl<T, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> Buffer<T, CB, P>
+impl<T, CB, P> Buffer<T, CB, P>
 where
     T: Eq+Clone,
-    CB::Container: SizableContainer,
+    CB: ContainerBuilder,
+    P: Push<Bundle<T, CB::Container>>
 {
     // Push a single item into the builder. Internal method for use by `Session`.
     #[inline]
-    fn give<D>(&mut self, data: D) where CB::Container: PushInto<D> {
-        self.builder.push(data);
+    fn give<D>(&mut self, data: D) where CB: PushInto<D> {
+        self.builder.push_into(data);
         self.extract();
     }
 }
@@ -133,33 +136,34 @@ pub struct Session<'a, T, CB, P> {
     buffer: &'a mut Buffer<T, CB, P>,
 }
 
+impl<'a, T, C: Container, P> Session<'a, T, CapacityContainerBuilder<C>, P>
+where
+    T: Eq + Clone + 'a,
+    P: Push<Bundle<T, C>> + 'a,
+{
+    /// Provide a container at the time specified by the [Session]. Only provided for
+    /// buffers of [`CapacityContainerBuilder`]s. Other container builders
+    /// should use [`PushInto`] instead.
+    pub fn give_container(&mut self, container: &mut C) {
+        self.buffer.give_container(container)
+    }
+}
+
 impl<'a, T, CB, P> Session<'a, T, CB, P>
 where
     T: Eq + Clone + 'a,
     CB: ContainerBuilder + 'a,
     P: Push<Bundle<T, CB::Container>> + 'a
 {
-    /// Provide a container at the time specified by the [Session].
-    pub fn give_container(&mut self, container: &mut CB::Container) {
-        self.buffer.give_container(container)
-    }
-
     /// Access the builder. Immutable access to prevent races with flushing
     /// the underlying buffer.
     pub fn builder(&self) -> &CB {
         self.buffer.builder()
     }
-}
 
-impl<'a, T, CB, P: Push<Bundle<T, CB::Container>>+'a> Session<'a, T, CB, P>
-where
-    T: Eq + Clone + 'a,
-    CB: ContainerBuilder + 'a,
-    CB::Container: SizableContainer,
-{
     /// Provides one record at the time specified by the `Session`.
     #[inline]
-    pub fn give<D>(&mut self, data: D) where CB::Container: PushInto<D> {
+    pub fn give<D>(&mut self, data: D) where CB: PushInto<D> {
         self.buffer.give(data);
     }
 
@@ -168,7 +172,7 @@ where
     pub fn give_iterator<I>(&mut self, iter: I)
     where
         I: Iterator,
-        CB::Container: PushInto<I::Item>,
+        CB: PushInto<I::Item>,
     {
         for item in iter {
             self.give(item);
@@ -197,15 +201,19 @@ where
 {
     /// Transmits a single record.
     #[inline]
-    pub fn give<D>(&mut self, data: D) where CB::Container: SizableContainer + PushInto<D> {
+    pub fn give<D>(&mut self, data: D)
+    where
+        CB: PushInto<D>,
+    {
         self.buffer.give(data);
     }
+
     /// Transmits records produced by an iterator.
     #[inline]
     pub fn give_iterator<I, D>(&mut self, iter: I)
     where
         I: Iterator<Item=D>,
-        CB::Container: SizableContainer + PushInto<D>,
+        CB: PushInto<D>,
     {
         for item in iter {
             self.give(item);
