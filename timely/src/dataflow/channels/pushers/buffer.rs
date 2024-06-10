@@ -113,16 +113,15 @@ impl<T, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> Buffer<T, CB, P
     }
 }
 
-impl<T, CB, P> Buffer<T, CB, P>
+impl<T, CB, P, D> PushInto<D> for Buffer<T, CB, P>
 where
     T: Eq+Clone,
-    CB: ContainerBuilder,
+    CB: ContainerBuilder + PushInto<D>,
     P: Push<Bundle<T, CB::Container>>
 {
-    // Push a single item into the builder. Internal method for use by `Session`.
     #[inline]
-    fn give<D>(&mut self, data: D) where CB: PushInto<D> {
-        self.builder.push_into(data);
+    fn push_into(&mut self, item: D) {
+        self.builder.push_into(item);
         self.extract();
     }
 }
@@ -164,7 +163,7 @@ where
     /// Provides one record at the time specified by the `Session`.
     #[inline]
     pub fn give<D>(&mut self, data: D) where CB: PushInto<D> {
-        self.buffer.give(data);
+        self.push_into(data);
     }
 
     /// Provides an iterator of records at the time specified by the `Session`.
@@ -175,8 +174,20 @@ where
         CB: PushInto<I::Item>,
     {
         for item in iter {
-            self.give(item);
+            self.push_into(item);
         }
+    }
+}
+
+impl<'a, T, CB, P, D> PushInto<D> for Session<'a, T, CB, P>
+where
+    T: Eq + Clone + 'a,
+    CB: ContainerBuilder + PushInto<D> + 'a,
+    P: Push<Bundle<T, CB::Container>> + 'a,
+{
+    #[inline]
+    fn push_into(&mut self, item: D) {
+        self.buffer.push_into(item);
     }
 }
 
@@ -205,7 +216,7 @@ where
     where
         CB: PushInto<D>,
     {
-        self.buffer.give(data);
+        self.push_into(data);
     }
 
     /// Transmits records produced by an iterator.
@@ -216,8 +227,19 @@ where
         CB: PushInto<D>,
     {
         for item in iter {
-            self.give(item);
+            self.push_into(item);
         }
+    }
+}
+impl<'a, T, CB, P, D> PushInto<D> for AutoflushSession<'a, T, CB, P>
+where
+    T: Timestamp + 'a,
+    CB: ContainerBuilder + PushInto<D> + 'a,
+    P: Push<Bundle<T, CB::Container>> + 'a,
+{
+    #[inline]
+    fn push_into(&mut self, item: D) {
+        self.buffer.push_into(item);
     }
 }
 
