@@ -57,12 +57,14 @@ implement_partial!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isiz
 implement_total!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, (), ::std::time::Duration,);
 
 pub use product::Product;
+pub use product::flatcontainer::{ProductRef, ProductRegion as FlatProductRegion};
 /// A pair of timestamps, partially ordered by the product order.
 mod product {
     use std::fmt::{Formatter, Error, Debug};
 
     use crate::container::columnation::{Columnation, Region};
     use crate::order::{Empty, TotalOrder};
+    use crate::order::product::flatcontainer::ProductRef;
     use crate::progress::Timestamp;
     use crate::progress::timestamp::PathSummary;
     use crate::progress::timestamp::Refines;
@@ -106,6 +108,33 @@ mod product {
         #[inline]
         fn less_equal(&self, other: &Product<TOuter2, TInner2>) -> bool {
             self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
+        }
+    }
+
+    impl<'a, TOuter, RO, TInner, RI> PartialOrder<ProductRef<'a, RO, RI>> for Product<TOuter, TInner>
+    where
+        TOuter: PartialOrder<RO::ReadItem<'a>>,
+        RO: crate::container::flatcontainer::Region,
+        TInner: PartialOrder<RI::ReadItem<'a>>,
+        RI: crate::container::flatcontainer::Region,
+        Self: PartialEq<ProductRef<'a, RO, RI>>,
+    {
+        #[inline]
+        fn less_equal(&self, other: &ProductRef<'a, RO, RI>) -> bool {
+            self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
+        }
+    }
+
+    impl<'a, TOuter, RO, TInner, RI> PartialEq<ProductRef<'a, RO, RI>> for Product<TOuter, TInner>
+    where
+        TOuter: PartialEq<RO::ReadItem<'a>>,
+        RO: crate::container::flatcontainer::Region,
+        TInner: PartialEq<RI::ReadItem<'a>>,
+        RI: crate::container::flatcontainer::Region,
+    {
+        #[inline]
+        fn eq(&self, other: &ProductRef<'a, RO, RI>) -> bool {
+            self.outer.eq(&other.outer) && self.inner.eq(&other.inner)
         }
     }
 
@@ -186,6 +215,220 @@ mod product {
         fn heap_size(&self, mut callback: impl FnMut(usize, usize)) {
             self.outer_region.heap_size(&mut callback);
             self.inner_region.heap_size(callback);
+        }
+    }
+
+    pub mod flatcontainer {
+        use timely_container::flatcontainer::{Containerized, IntoOwned, Push, Region, ReserveItems};
+        use crate::PartialOrder;
+        use super::Product;
+
+        impl<TO: Containerized, TI: Containerized> Containerized for Product<TO, TI> {
+            type Region = ProductRegion<TO::Region, TI::Region>;
+        }
+
+        /// Region to store [`Product`] timestamps.
+        #[derive(Default, Clone, Debug)]
+        pub struct ProductRegion<RO: Region, RI: Region> {
+            outer_region: RO,
+            inner_region: RI,
+        }
+
+        impl<RO: Region, RI: Region> Region for ProductRegion<RO, RI> {
+            type Owned = Product<RO::Owned, RI::Owned>;
+            type ReadItem<'a> = ProductRef<'a, RO, RI> where Self: 'a;
+            type Index = (RO::Index, RI::Index);
+
+            #[inline]
+            fn merge_regions<'a>(regions: impl Iterator<Item=&'a Self> + Clone) -> Self where Self: 'a {
+                let outer_region = RO::merge_regions(regions.clone().map(|r| &r.outer_region));
+                let inner_region = RI::merge_regions(regions.map(|r| &r.inner_region));
+                Self { outer_region, inner_region }
+            }
+
+            #[inline]
+            fn index(&self, (outer, inner): Self::Index) -> Self::ReadItem<'_> {
+                ProductRef { outer: self.outer_region.index(outer), inner: self.inner_region.index(inner) }
+            }
+
+            #[inline]
+            fn reserve_regions<'a, I>(&mut self, regions: I) where Self: 'a, I: Iterator<Item=&'a Self> + Clone {
+                self.outer_region.reserve_regions(regions.clone().map(|r| &r.outer_region));
+                self.inner_region.reserve_regions(regions.map(|r| &r.inner_region));
+            }
+
+            #[inline]
+            fn clear(&mut self) {
+                self.outer_region.clear();
+                self.inner_region.clear();
+            }
+
+            #[inline]
+            fn heap_size<F: FnMut(usize, usize)>(&self, mut callback: F) {
+                self.outer_region.heap_size(&mut callback);
+                self.inner_region.heap_size(callback);
+            }
+
+            #[inline]
+            fn reborrow<'b, 'a: 'b>(item: Self::ReadItem<'a>) -> Self::ReadItem<'b> where Self: 'a {
+                ProductRef { outer: RO::reborrow(item.outer), inner: RI::reborrow(item.inner) }
+            }
+        }
+
+        impl<'a, RO, RI> ReserveItems<ProductRef<'a, RO, RI>> for ProductRegion<RO, RI>
+        where
+            RO: Region + ReserveItems<<RO as Region>::ReadItem<'a>> + 'a,
+            RI: Region + ReserveItems<<RI as Region>::ReadItem<'a>> + 'a,
+        {
+            #[inline]
+            fn reserve_items<I>(&mut self, items: I) where I: Iterator<Item=ProductRef<'a, RO, RI>> + Clone {
+                self.outer_region.reserve_items(items.clone().map(|i| i.outer));
+                self.inner_region.reserve_items(items.clone().map(|i| i.inner));
+            }
+        }
+
+        impl<TO, TI, RO, RI> Push<Product<TO, TI>> for ProductRegion<RO, RI>
+        where
+            RO: Region + Push<TO>,
+            RI: Region + Push<TI>,
+        {
+            #[inline]
+            fn push(&mut self, item: Product<TO, TI>) -> Self::Index {
+                (
+                    self.outer_region.push(item.outer),
+                    self.inner_region.push(item.inner)
+                )
+            }
+        }
+
+        impl<'a, TO, TI, RO, RI> Push<&'a Product<TO, TI>> for ProductRegion<RO, RI>
+        where
+            RO: Region + Push<&'a TO>,
+            RI: Region + Push<&'a TI>,
+        {
+            #[inline]
+            fn push(&mut self, item: &'a Product<TO, TI>) -> Self::Index {
+                (
+                    self.outer_region.push(&item.outer),
+                    self.inner_region.push(&item.inner)
+                )
+            }
+        }
+
+        impl<'a, TO, TI, RO, RI> Push<&&'a Product<TO, TI>> for ProductRegion<RO, RI>
+        where
+            RO: Region + Push<&'a TO>,
+            RI: Region + Push<&'a TI>,
+        {
+            #[inline]
+            fn push(&mut self, item: && 'a Product<TO, TI>) -> Self::Index {
+                (
+                    self.outer_region.push(&item.outer),
+                    self.inner_region.push(&item.inner)
+                )
+            }
+        }
+
+        impl<'a, RO, RI> Push<ProductRef<'a, RO, RI>> for ProductRegion<RO, RI>
+        where
+            RO: Region + Push<<RO as Region>::ReadItem<'a>>,
+            RI: Region + Push<<RI as Region>::ReadItem<'a>>,
+        {
+            #[inline]
+            fn push(&mut self, item: ProductRef<'a, RO, RI>) -> Self::Index {
+                (
+                    self.outer_region.push(item.outer),
+                    self.inner_region.push(item.inner)
+                )
+            }
+        }
+
+        /// A reference type similar to [`Product`]
+        #[derive(Ord, PartialOrd, Eq, PartialEq)]
+        pub struct ProductRef<'a, RO: Region + 'a, RI: Region + 'a> {
+            /// Outer timestamp.
+            pub outer: RO::ReadItem<'a>,
+            /// Inner timestamp.
+            pub inner: RI::ReadItem<'a>,
+        }
+
+        impl<'a, RO, RI> std::fmt::Debug for ProductRef<'a, RO, RI>
+        where
+            RO: Region + 'a,
+            RO::ReadItem<'a>: std::fmt::Debug,
+            RI: Region + 'a,
+            RI::ReadItem<'a>: std::fmt::Debug,
+        {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "({:?}, {:?})", self.outer, self.inner)
+            }
+        }
+
+        impl<'a, RO, RI> Clone for ProductRef<'a, RO, RI>
+        where
+            RO: Region + 'a,
+            RO::ReadItem<'a>: Copy,
+            RI: Region + 'a,
+            RI::ReadItem<'a>: Copy,
+        {
+            #[inline]
+            fn clone(&self) -> Self {
+                Self { outer: self.outer, inner: self.inner }
+            }
+        }
+
+        impl<'a, RO, RI> Copy for ProductRef<'a, RO, RI>
+        where
+            RO: Region + 'a,
+            RO::ReadItem<'a>: Copy,
+            RI: Region + 'a,
+            RI::ReadItem<'a>: Copy,
+        {}
+
+        impl<'a, RO: Region, RI: Region> IntoOwned<'a> for ProductRef<'a, RO, RI> {
+            type Owned = Product<RO::Owned, RI::Owned>;
+
+            #[inline]
+            fn into_owned(self) -> Self::Owned {
+                Product::new(self.outer.into_owned(), self.inner.into_owned())
+            }
+
+            #[inline]
+            fn clone_onto(self, other: &mut Self::Owned) {
+                self.outer.clone_onto(&mut other.outer);
+                self.inner.clone_onto(&mut other.inner);
+            }
+
+            #[inline]
+            fn borrow_as(owned: &'a Self::Owned) -> Self {
+                Self { outer: IntoOwned::borrow_as(&owned.outer), inner: IntoOwned::borrow_as(&owned.inner) }
+            }
+        }
+
+        impl<'a, TOuter, RO, TInner, RI> PartialOrder<Product<TOuter, TInner>> for ProductRef<'a, RO, RI>
+        where
+            RO: Region,
+            RO::ReadItem<'a>: PartialOrder<TOuter>,
+            RI: Region,
+            RI::ReadItem<'a>: PartialOrder<TInner>,
+        {
+            #[inline]
+            fn less_equal(&self, other: &Product<TOuter, TInner>) -> bool {
+                self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
+            }
+        }
+
+        impl<'a, TOuter, RO, TInner, RI> PartialEq<Product<TOuter, TInner>> for ProductRef<'a, RO, RI>
+        where
+            RO: Region,
+            RO::ReadItem<'a>: PartialEq<TOuter>,
+            RI: Region,
+            RI::ReadItem<'a>: PartialEq<TInner>,
+        {
+            #[inline]
+            fn eq(&self, other: &Product<TOuter, TInner>) -> bool {
+                self.outer.eq(&other.outer) && self.inner.eq(&other.inner)
+            }
         }
     }
 }
