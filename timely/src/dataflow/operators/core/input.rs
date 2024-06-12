@@ -77,21 +77,21 @@ pub trait Input : Scope {
     /// use std::rc::Rc;
     /// use timely::*;
     /// use timely::dataflow::operators::core::{Input, Inspect};
-    /// use timely::container::BufferingContainerBuilder;
+    /// use timely::container::CapacityContainerBuilder;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
-    ///         let (input, stream) = scope.new_input_with_builder::<BufferingContainerBuilder<Rc<Vec<_>>>>();
+    ///         let (input, stream) = scope.new_input_with_builder::<CapacityContainerBuilder<Rc<Vec<_>>>>();
     ///         stream.inspect(|x| println!("hello {:?}", x));
     ///         input
     ///     });
     ///
     ///     // introduce input, advance computation
     ///     for round in 0..10 {
-    ///         input.send(&mut Rc::new(vec![round]));
+    ///         input.send_batch(&mut Rc::new(vec![round]));
     ///         input.advance_to(round + 1);
     ///         worker.step();
     ///     }
@@ -274,12 +274,13 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
     /// use timely::*;
     /// use timely::dataflow::operators::core::{Input, Inspect};
     /// use timely::dataflow::operators::core::input::Handle;
+    /// use timely_container::CapacityContainerBuilder;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = Handle::new();
+    ///     let mut input = Handle::<_, CapacityContainerBuilder<_>>::new_with_builder();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
     ///              .container::<Vec<_>>()
@@ -361,7 +362,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
     #[inline]
     fn extract(&mut self) {
         while let Some(container) = self.builder.extract() {
-            Self::flush_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
+            Self::send_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
         }
     }
 
@@ -369,14 +370,15 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
     #[inline]
     fn flush(&mut self) {
         while let Some(container) = self.builder.finish() {
-            Self::flush_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
+            Self::send_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
         }
     }
 
-    /// flushes our buffer at each of the destinations. there can be more than one; clone if needed.
+    /// Sends a container at each of the destinations. There can be more than one; clone if needed.
     /// Does not take `self` because `flush` and `extract` borrow `self` mutably.
-    #[inline(never)]
-    fn flush_container(
+    /// Clears the container.
+    // TODO: Find a better name for this function.
+    fn send_container(
         container: &mut CB::Container,
         buffer: &mut CB::Container,
         pushers: &mut [Counter<T, CB::Container, Tee<T, CB::Container>>],
@@ -386,17 +388,16 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
             if index < pushers.len() - 1 {
                 buffer.clone_from(container);
                 Message::push_at(buffer, now_at.clone(), &mut pushers[index]);
-                debug_assert!(buffer.is_empty());
             }
             else {
                 Message::push_at(container, now_at.clone(), &mut pushers[index]);
-                debug_assert!(container.is_empty());
             }
         }
         container.clear();
     }
 
-    // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
+    /// closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
+    // TODO: Find a better name for this function.
     fn close_epoch(&mut self) {
         self.flush();
         for pusher in self.pushers.iter_mut() {
@@ -443,7 +444,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
         if !buffer.is_empty() {
             // flush buffered elements to ensure local fifo.
             self.flush();
-            Self::flush_container(buffer, &mut self.buffer, &mut self.pushers, &self.now_at);
+            Self::send_container(buffer, &mut self.buffer, &mut self.pushers, &self.now_at);
         }
     }
 

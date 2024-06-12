@@ -57,13 +57,11 @@ impl<T, C: Container, P: Push<Bundle<T, C>>> Buffer<T, CapacityContainerBuilder<
         self.autoflush_session_with_builder(cap)
     }
 
-    /// Gives an entire container at the current time. Only provided for
-    /// buffers of [`CapacityContainerBuilder`]s. Other container builders
-    /// should use [`PushInto`] instead.
+    /// Gives an entire container at the current time.
     fn give_container(&mut self, container: &mut C) {
         if !container.is_empty() {
             self.builder.push_container(container);
-            self.extract();
+            self.extract_and_send();
         }
     }
 }
@@ -96,7 +94,7 @@ impl<T, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> Buffer<T, CB, P
 
     /// Extract pending data from the builder, but not forcing a flush.
     #[inline]
-    fn extract(&mut self) {
+    fn extract_and_send(&mut self) {
         while let Some(container) = self.builder.extract() {
             let time = self.time.as_ref().unwrap().clone();
             Message::push_at(container, time, &mut self.pusher);
@@ -122,7 +120,7 @@ where
     #[inline]
     fn push_into(&mut self, item: D) {
         self.builder.push_into(item);
-        self.extract();
+        self.extract_and_send();
     }
 }
 
@@ -140,9 +138,7 @@ where
     T: Eq + Clone + 'a,
     P: Push<Bundle<T, C>> + 'a,
 {
-    /// Provide a container at the time specified by the [Session]. Only provided for
-    /// buffers of [`CapacityContainerBuilder`]s. Other container builders
-    /// should use [`PushInto`] instead.
+    /// Provide a container at the time specified by the [Session].
     pub fn give_container(&mut self, container: &mut C) {
         self.buffer.give_container(container)
     }

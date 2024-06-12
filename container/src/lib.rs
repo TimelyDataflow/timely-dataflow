@@ -63,6 +63,16 @@ pub trait Container: Default + Clone + 'static {
     fn drain(&mut self) -> Self::DrainIter<'_>;
 }
 
+/// A container that can be sized and reveals its capacity.
+pub trait SizableContainer: Container {
+    /// Return the capacity of the container.
+    fn capacity(&self) -> usize;
+    /// Return the preferred capacity of the container.
+    fn preferred_capacity() -> usize;
+    /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
+    fn reserve(&mut self, additional: usize);
+}
+
 /// A container that can absorb items of a specific type.
 pub trait PushInto<T> {
     /// Push item into self.
@@ -80,7 +90,12 @@ pub trait PushInto<T> {
 ///
 /// The owner extracts data in two ways. The opportunistic [`Self::extract`] method returns
 /// any ready data, but doesn't need to produce partial outputs. In contrast, [`Self::finish`]
-/// needs to produce all outputs, even partial ones.
+/// needs to produce all outputs, even partial ones. Caller should repeatedly call the functions
+/// to drain pending or finished data.
+///
+/// The caller is responsible to fully consume the containers returned by [`Self::extract`] and
+/// [`Self::finish`]. Implementations can recycle buffers, but should ensure that they clear
+/// any remaining elements.
 ///
 /// For example, a consolidating builder can aggregate differences in-place, but it has
 /// to ensure that it preserves the intended information.
@@ -90,8 +105,10 @@ pub trait PushInto<T> {
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
     type Container: Container;
-    /// Extract assembled containers, potentially leaving unfinished data behind. Should
-    /// be called repeatedly until it returns `None`.
+    /// Extract assembled containers, potentially leaving unfinished data behind. Can
+    /// be called repeatedly, for example while the caller can send data.
+    ///
+    /// Returns a `Some` if there is data ready to be shipped, and `None` otherwise.
     fn extract(&mut self) -> Option<&mut Self::Container>;
     /// Extract assembled containers and any unfinished data. Should
     /// be called repeatedly until it returns `None`.
@@ -99,6 +116,9 @@ pub trait ContainerBuilder: Default + 'static {
 }
 
 /// A default container builder that uses length and preferred capacity to chunk data.
+///
+/// Maintains a single empty allocation between [`Self::push_into`] and [`Self::extract`], but not
+/// across [`Self::finish`] to maintain a low memory footprint.
 ///
 /// Maintains FIFO order.
 #[derive(Default, Debug)]
@@ -109,16 +129,6 @@ pub struct CapacityContainerBuilder<C>{
     empty: Option<C>,
     /// Completed containers pending to be sent.
     pending: VecDeque<C>,
-}
-
-/// A container that can be sized and reveals its capacity.
-pub trait SizableContainer: Container {
-    /// Return the capacity of the container.
-    fn capacity(&self) -> usize;
-    /// Return the preferred capacity of the container.
-    fn preferred_capacity() -> usize;
-    /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
-    fn reserve(&mut self, additional: usize);
 }
 
 impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuilder<C> {
@@ -162,10 +172,11 @@ impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
 
     #[inline]
     fn finish(&mut self) -> Option<&mut C> {
-        if self.current.len() > 0 {
+        if !self.current.is_empty() {
             self.pending.push_back(std::mem::take(&mut self.current));
         }
-        self.extract()
+        self.empty = self.pending.pop_front();
+        self.empty.as_mut()
     }
 }
 
@@ -186,56 +197,6 @@ impl<C: Container> CapacityContainerBuilder<C> {
             empty.clear();
 
             self.pending.push_back(std::mem::replace(container, empty));
-        }
-    }
-}
-
-/// A container builder that absorbs entire containers. Maintains FIFO order.
-pub struct BufferingContainerBuilder<C> {
-    /// Container that we're extracting.
-    current: Option<C>,
-    /// Completed containers pending to be sent.
-    pending: VecDeque<C>,
-}
-
-impl<C> Default for BufferingContainerBuilder<C> {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            current: None,
-            pending: VecDeque::default(),
-        }
-    }
-}
-
-impl<C: Container> ContainerBuilder for BufferingContainerBuilder<C> {
-    type Container = C;
-
-    #[inline]
-    fn extract(&mut self) -> Option<&mut Self::Container> {
-        if let Some(container) = self.pending.pop_front() {
-            self.current = Some(container);
-            self.current.as_mut()
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn finish(&mut self) -> Option<&mut Self::Container> {
-        self.extract()
-    }
-}
-
-impl<C: Container> PushInto<&mut C> for BufferingContainerBuilder<C> {
-    #[inline]
-    fn push_into(&mut self, item: &mut C) {
-        if !item.is_empty() {
-            // Grab the last returned container, or a default one, to pass back to the caller
-            let mut empty = self.current.take().unwrap_or_default();
-            empty.clear();
-            let container = std::mem::replace(item, empty);
-            self.pending.push_back(container);
         }
     }
 }

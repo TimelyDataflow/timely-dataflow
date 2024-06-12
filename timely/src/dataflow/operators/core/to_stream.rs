@@ -48,9 +48,7 @@ impl<CB: ContainerBuilder, I: IntoIterator+'static> ToStreamBuilder<CB> for I wh
                     let mut session = output.session_with_builder(capability.as_ref().unwrap());
                     session.give(element);
                     let n = 256 * crate::container::buffer::default_capacity::<I::Item>();
-                    for element in iterator.by_ref().take(n - 1) {
-                        session.give(element);
-                    }
+                    session.give_iterator(iterator.by_ref().take(n - 1));
                     activator.activate();
                 }
                 else {
