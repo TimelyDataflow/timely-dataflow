@@ -93,7 +93,7 @@ pub trait PushInto<T> {
 /// needs to produce all outputs, even partial ones. Caller should repeatedly call the functions
 /// to drain pending or finished data.
 ///
-/// The caller is responsible to fully consume the containers returned by [`Self::extract`] and
+/// The caller should consume the containers returned by [`Self::extract`] and
 /// [`Self::finish`]. Implementations can recycle buffers, but should ensure that they clear
 /// any remaining elements.
 ///
@@ -109,9 +109,11 @@ pub trait ContainerBuilder: Default + 'static {
     /// be called repeatedly, for example while the caller can send data.
     ///
     /// Returns a `Some` if there is data ready to be shipped, and `None` otherwise.
+    #[must_use]
     fn extract(&mut self) -> Option<&mut Self::Container>;
     /// Extract assembled containers and any unfinished data. Should
     /// be called repeatedly until it returns `None`.
+    #[must_use]
     fn finish(&mut self) -> Option<&mut Self::Container>;
 }
 
@@ -132,6 +134,7 @@ pub struct CapacityContainerBuilder<C>{
 }
 
 impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuilder<C> {
+    #[inline]
     fn push_into(&mut self, item: T) {
         if self.current.capacity() == 0 {
             self.current = self.empty.take().unwrap_or_default();

@@ -360,7 +360,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
 
     /// Extract all ready contents from the builder and distribute to downstream operators.
     #[inline]
-    fn extract(&mut self) {
+    fn extract_and_send(&mut self) {
         while let Some(container) = self.builder.extract() {
             Self::send_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
         }
@@ -378,6 +378,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
     /// Does not take `self` because `flush` and `extract` borrow `self` mutably.
     /// Clears the container.
     // TODO: Find a better name for this function.
+    #[inline]
     fn send_container(
         container: &mut CB::Container,
         buffer: &mut CB::Container,
@@ -396,7 +397,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
         container.clear();
     }
 
-    /// closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
+    /// Closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
     // TODO: Find a better name for this function.
     fn close_epoch(&mut self) {
         self.flush();
@@ -490,7 +491,7 @@ where
     #[inline]
     fn push_into(&mut self, item: D) {
         self.builder.push_into(item);
-        self.extract();
+        self.extract_and_send();
     }
 }
 
