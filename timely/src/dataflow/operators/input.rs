@@ -1,6 +1,7 @@
 //! Create new `Streams` connected to external inputs.
 
 use crate::Data;
+use crate::container::CapacityContainerBuilder;
 use crate::dataflow::{Stream, ScopeParent, Scope};
 use crate::dataflow::operators::core::{Input as InputCore};
 
@@ -93,4 +94,4 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 }
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
-pub type Handle<T, D> = crate::dataflow::operators::core::input::Handle<T, Vec<D>>;
+pub type Handle<T, D> = crate::dataflow::operators::core::input::Handle<T, CapacityContainerBuilder<Vec<D>>>;

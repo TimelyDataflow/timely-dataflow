@@ -28,6 +28,6 @@ pub use inspect::{Inspect, InspectCore};
 pub use map::Map;
 pub use ok_err::OkErr;
 pub use probe::Probe;
-pub use to_stream::ToStream;
+pub use to_stream::{ToStream, ToStreamBuilder};
 pub use reclock::Reclock;
 pub use unordered_input::{UnorderedInput, UnorderedHandle};

@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::container::{SizableContainer, PushInto};
+use crate::container::{CapacityContainerBuilder, ContainerBuilder, PushInto};
 
 use crate::scheduling::{Schedule, Activator};
 
@@ -60,7 +60,44 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<C: Container>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, C>, StreamCore<Self, C>);
+    fn new_input<C: Container>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<Self, C>);
+
+    /// Create a new [StreamCore] and [Handle] through which to supply input.
+    ///
+    /// The `new_input` method returns a pair `(Handle, StreamCore)` where the [StreamCore] can be used
+    /// immediately for timely dataflow construction, and the `Handle` is later used to introduce
+    /// data into the timely dataflow computation.
+    ///
+    /// The `Handle` also provides a means to indicate
+    /// to timely dataflow that the input has advanced beyond certain timestamps, allowing timely
+    /// to issue progress notifications.
+    ///
+    /// # Examples
+    /// ```
+    /// use std::rc::Rc;
+    /// use timely::*;
+    /// use timely::dataflow::operators::core::{Input, Inspect};
+    /// use timely::container::CapacityContainerBuilder;
+    ///
+    /// // construct and execute a timely dataflow
+    /// timely::execute(Config::thread(), |worker| {
+    ///
+    ///     // add an input and base computation off of it
+    ///     let mut input = worker.dataflow(|scope| {
+    ///         let (input, stream) = scope.new_input_with_builder::<CapacityContainerBuilder<Rc<Vec<_>>>>();
+    ///         stream.inspect(|x| println!("hello {:?}", x));
+    ///         input
+    ///     });
+    ///
+    ///     // introduce input, advance computation
+    ///     for round in 0..10 {
+    ///         input.send_batch(&mut Rc::new(vec![round]));
+    ///         input.advance_to(round + 1);
+    ///         worker.step();
+    ///     }
+    /// });
+    /// ```
+    fn new_input_with_builder<CB: ContainerBuilder>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CB>, StreamCore<Self, CB::Container>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -93,19 +130,25 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<C: Container>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, C>) -> StreamCore<Self, C>;
+    fn input_from<CB: ContainerBuilder>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, CB>) -> StreamCore<Self, CB::Container>;
 }
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<C: Container>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, C>, StreamCore<G, C>) {
+    fn new_input<C: Container>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<G, C>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn input_from<C: Container>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, C>) -> StreamCore<G, C> {
-        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, C>::new();
+    fn new_input_with_builder<CB: ContainerBuilder>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CB>, StreamCore<G, CB::Container>) {
+        let mut handle = Handle::new_with_builder();
+        let stream = self.input_from(&mut handle);
+        (handle, stream)
+    }
+
+    fn input_from<CB: ContainerBuilder>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, CB>) -> StreamCore<G, CB::Container> {
+        let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, CB::Container>::new();
         let counter = Counter::new(output);
         let produced = counter.produced().clone();
 
@@ -174,16 +217,16 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `StreamCore`, used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct Handle<T: Timestamp, C: Container> {
+pub struct Handle<T: Timestamp, CB: ContainerBuilder> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
-    pushers: Vec<Counter<T, C, Tee<T, C>>>,
-    buffer1: C,
-    buffer2: C,
+    pushers: Vec<Counter<T, CB::Container, Tee<T, CB::Container>>>,
+    builder: CB,
+    buffer: CB::Container,
     now_at: T,
 }
 
-impl<T: Timestamp, C: Container> Handle<T, C> {
+impl<T: Timestamp, C: Container> Handle<T, CapacityContainerBuilder<C>> {
     /// Allocates a new input handle, from which one can create timely streams.
     ///
     /// # Examples
@@ -216,8 +259,49 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
             activate: Vec::new(),
             progress: Vec::new(),
             pushers: Vec::new(),
-            buffer1: Default::default(),
-            buffer2: Default::default(),
+            builder: CapacityContainerBuilder::default(),
+            buffer: Default::default(),
+            now_at: T::minimum(),
+        }
+    }
+}
+
+impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
+    /// Allocates a new input handle, from which one can create timely streams.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::*;
+    /// use timely::dataflow::operators::core::{Input, Inspect};
+    /// use timely::dataflow::operators::core::input::Handle;
+    /// use timely_container::CapacityContainerBuilder;
+    ///
+    /// // construct and execute a timely dataflow
+    /// timely::execute(Config::thread(), |worker| {
+    ///
+    ///     // add an input and base computation off of it
+    ///     let mut input = Handle::<_, CapacityContainerBuilder<_>>::new_with_builder();
+    ///     worker.dataflow(|scope| {
+    ///         scope.input_from(&mut input)
+    ///              .container::<Vec<_>>()
+    ///              .inspect(|x| println!("hello {:?}", x));
+    ///     });
+    ///
+    ///     // introduce input, advance computation
+    ///     for round in 0..10 {
+    ///         input.send(round);
+    ///         input.advance_to(round + 1);
+    ///         worker.step();
+    ///     }
+    /// });
+    /// ```
+    pub fn new_with_builder() -> Self {
+        Self {
+            activate: Vec::new(),
+            progress: Vec::new(),
+            pushers: Vec::new(),
+            builder: CB::default(),
+            buffer: Default::default(),
             now_at: T::minimum(),
         }
     }
@@ -249,21 +333,21 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<G: Scope>(&mut self, scope: &mut G) -> StreamCore<G, C>
+    pub fn to_stream<G>(&mut self, scope: &mut G) -> StreamCore<G, CB::Container>
     where
         T: TotalOrder,
-        G: ScopeParent<Timestamp=T>,
+        G: Scope<Timestamp=T>,
     {
         scope.input_from(self)
     }
 
     fn register(
         &mut self,
-        pusher: Counter<T, C, Tee<T, C>>,
+        pusher: Counter<T, CB::Container, Tee<T, CB::Container>>,
         progress: Rc<RefCell<ChangeBatch<T>>>,
     ) {
         // flush current contents, so new registrant does not see existing data.
-        if !self.buffer1.is_empty() { self.flush(); }
+        self.flush();
 
         // we need to produce an appropriate update to the capabilities for `progress`, in case a
         // user has decided to drive the handle around a bit before registering it.
@@ -274,26 +358,49 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
         self.pushers.push(pusher);
     }
 
-    // flushes our buffer at each of the destinations. there can be more than one; clone if needed.
-    #[inline(never)]
-    fn flush(&mut self) {
-        for index in 0 .. self.pushers.len() {
-            if index < self.pushers.len() - 1 {
-                self.buffer2.clone_from(&self.buffer1);
-                Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
-                debug_assert!(self.buffer2.is_empty());
-            }
-            else {
-                Message::push_at(&mut self.buffer1, self.now_at.clone(), &mut self.pushers[index]);
-                debug_assert!(self.buffer1.is_empty());
-            }
+    /// Extract all ready contents from the builder and distribute to downstream operators.
+    #[inline]
+    fn extract_and_send(&mut self) {
+        while let Some(container) = self.builder.extract() {
+            Self::send_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
         }
-        self.buffer1.clear();
     }
 
-    // closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
+    /// Flush all contents and distribute to downstream operators.
+    #[inline]
+    fn flush(&mut self) {
+        while let Some(container) = self.builder.finish() {
+            Self::send_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
+        }
+    }
+
+    /// Sends a container at each of the destinations. There can be more than one; clone if needed.
+    /// Does not take `self` because `flush` and `extract` borrow `self` mutably.
+    /// Clears the container.
+    // TODO: Find a better name for this function.
+    #[inline]
+    fn send_container(
+        container: &mut CB::Container,
+        buffer: &mut CB::Container,
+        pushers: &mut [Counter<T, CB::Container, Tee<T, CB::Container>>],
+        now_at: &T
+    ) {
+        for index in 0 .. pushers.len() {
+            if index < pushers.len() - 1 {
+                buffer.clone_from(container);
+                Message::push_at(buffer, now_at.clone(), &mut pushers[index]);
+            }
+            else {
+                Message::push_at(container, now_at.clone(), &mut pushers[index]);
+            }
+        }
+        container.clear();
+    }
+
+    /// Closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.
+    // TODO: Find a better name for this function.
     fn close_epoch(&mut self) {
-        if !self.buffer1.is_empty() { self.flush(); }
+        self.flush();
         for pusher in self.pushers.iter_mut() {
             pusher.done();
         }
@@ -334,25 +441,11 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
     ///     }
     /// });
     /// ```
-    pub fn send_batch(&mut self, buffer: &mut C) {
-
+    pub fn send_batch(&mut self, buffer: &mut CB::Container) {
         if !buffer.is_empty() {
             // flush buffered elements to ensure local fifo.
-            if !self.buffer1.is_empty() { self.flush(); }
-
-            // push buffer (or clone of buffer) at each destination.
-            for index in 0 .. self.pushers.len() {
-                if index < self.pushers.len() - 1 {
-                    self.buffer2.clone_from(&buffer);
-                    Message::push_at(&mut self.buffer2, self.now_at.clone(), &mut self.pushers[index]);
-                    assert!(self.buffer2.is_empty());
-                }
-                else {
-                    Message::push_at(buffer, self.now_at.clone(), &mut self.pushers[index]);
-                    assert!(buffer.is_empty());
-                }
-            }
-            buffer.clear();
+            self.flush();
+            Self::send_container(buffer, &mut self.buffer, &mut self.pushers, &self.now_at);
         }
     }
 
@@ -390,8 +483,19 @@ impl<T: Timestamp, C: Container> Handle<T, C> {
     }
 }
 
-impl<T: Timestamp, C: SizableContainer> Handle<T, C> {
+impl<T, CB, D> PushInto<D> for Handle<T, CB>
+where
+    T: Timestamp,
+    CB: ContainerBuilder + PushInto<D>,
+{
     #[inline]
+    fn push_into(&mut self, item: D) {
+        self.builder.push_into(item);
+        self.extract_and_send();
+    }
+}
+
+impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
     /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     ///
     /// # Examples
@@ -419,21 +523,19 @@ impl<T: Timestamp, C: SizableContainer> Handle<T, C> {
     ///     }
     /// });
     /// ```
-    pub fn send<D>(&mut self, data: D) where C: PushInto<D> {
-        self.buffer1.push(data);
-        if self.buffer1.len() == self.buffer1.capacity() {
-            self.flush();
-        }
+    #[inline]
+    pub fn send<D>(&mut self, data: D) where CB: PushInto<D> {
+        self.push_into(data)
     }
 }
 
-impl<T: Timestamp, C: Container> Default for Handle<T, C> {
+impl<T: Timestamp, CB: ContainerBuilder> Default for Handle<T, CB> {
     fn default() -> Self {
-        Self::new()
+        Self::new_with_builder()
     }
 }
 
-impl<T:Timestamp, C: Container> Drop for Handle<T, C> {
+impl<T:Timestamp, CB: ContainerBuilder> Drop for Handle<T, CB> {
     fn drop(&mut self) {
         self.close_epoch();
     }
