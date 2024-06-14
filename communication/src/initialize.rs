@@ -20,6 +20,7 @@ use std::fmt::{Debug, Formatter};
 
 
 /// Possible configurations for the communication infrastructure.
+#[derive(Clone)]
 pub enum Config {
     /// Use one thread.
     Thread,
@@ -38,7 +39,7 @@ pub enum Config {
         /// Verbosely report connection process
         report: bool,
         /// Closure to create a new logger for a communication thread
-        log_fn: Box<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent, CommunicationSetup>> + Send + Sync>,
+        log_fn: Arc<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent, CommunicationSetup>> + Send + Sync>,
     }
 }
 
@@ -120,7 +121,7 @@ impl Config {
                 process,
                 addresses,
                 report,
-                log_fn: Box::new( | _ | None),
+                log_fn: Arc::new(|_| None),
             })
         } else if threads > 1 {
             if zerocopy {

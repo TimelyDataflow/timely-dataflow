@@ -39,7 +39,8 @@ pub fn initialize_networking(
     my_index: usize,
     threads: usize,
     noisy: bool,
-    log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
+    log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>,
+)
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
     let sockets = create_sockets(addresses, my_index, noisy)?;
@@ -57,7 +58,8 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
     mut sockets: Vec<Option<S>>,
     my_index: usize,
     threads: usize,
-    log_sender: Box<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>)
+    log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEvent, CommunicationSetup>>+Send+Sync>,
+)
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
     // Sockets are expected to be blocking,
@@ -67,7 +69,6 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
         }
     }
 
-    let log_sender = Arc::new(log_sender);
     let processes = sockets.len();
 
     let process_allocators = crate::allocator::process::Process::new_vector(threads);

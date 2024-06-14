@@ -6,6 +6,7 @@ use crate::worker::Worker;
 use crate::{CommunicationConfig, WorkerConfig};
 
 /// Configures the execution of a timely dataflow computation.
+#[derive(Clone, Debug)]
 pub struct Config {
     /// Configuration for the communication infrastructure.
     pub communication: CommunicationConfig,
@@ -218,78 +219,13 @@ where
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
-pub fn execute<T, F>(
-    mut config: Config,
-    func: F
-) -> Result<WorkerGuards<T>,String>
+pub fn execute<T, F>(config: Config, func: F) -> Result<WorkerGuards<T>,String>
 where
     T:Send+'static,
-    F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static {
-
-    if let CommunicationConfig::Cluster { ref mut log_fn, .. } = config.communication {
-
-        *log_fn = Box::new(|events_setup| {
-
-            let mut result = None;
-            if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
-
-                use ::std::net::TcpStream;
-                use crate::logging::BatchLogger;
-                use crate::dataflow::operators::capture::EventWriter;
-
-                eprintln!("enabled COMM logging to {}", addr);
-
-                if let Ok(stream) = TcpStream::connect(&addr) {
-                    let writer = EventWriter::new(stream);
-                    let mut logger = BatchLogger::new(writer);
-                    result = Some(crate::logging_core::Logger::new(
-                        ::std::time::Instant::now(),
-                        ::std::time::Duration::default(),
-                        events_setup,
-                        move |time, data| logger.publish_batch(time, data)
-                    ));
-                }
-                else {
-                    panic!("Could not connect to communication log address: {:?}", addr);
-                }
-            }
-            result
-        });
-    }
-
+    F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static,
+{
     let (allocators, other) = config.communication.try_build()?;
-
-    let worker_config = config.worker;
-    initialize_from(allocators, other, move |allocator| {
-
-        let mut worker = Worker::new(worker_config.clone(), allocator);
-
-        // If an environment variable is set, use it as the default timely logging.
-        if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
-
-            use ::std::net::TcpStream;
-            use crate::logging::{BatchLogger, TimelyEvent};
-            use crate::dataflow::operators::capture::EventWriter;
-
-            if let Ok(stream) = TcpStream::connect(&addr) {
-                let writer = EventWriter::new(stream);
-                let mut logger = BatchLogger::new(writer);
-                worker.log_register()
-                    .insert::<TimelyEvent,_>("timely", move |time, data|
-                        logger.publish_batch(time, data)
-                    );
-            }
-            else {
-                panic!("Could not connect logging stream to: {:?}", addr);
-            }
-        }
-
-        let result = func(&mut worker);
-        while worker.has_dataflows() {
-            worker.step_or_park(None);
-        }
-        result
-    })
+    execute_from(allocators, other, config.worker, func)
 }
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
