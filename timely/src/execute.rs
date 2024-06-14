@@ -6,6 +6,7 @@ use crate::worker::Worker;
 use crate::{CommunicationConfig, WorkerConfig};
 
 /// Configures the execution of a timely dataflow computation.
+#[derive(Clone, Debug)]
 pub struct Config {
     /// Configuration for the communication infrastructure.
     pub communication: CommunicationConfig,
@@ -218,6 +219,17 @@ where
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
+///
+/// ### Communication logging
+///
+/// For multi-process (cluster) configurations, this functions installs a custom log
+/// function, replacing any previous function. The function connects to the host in
+/// the environment symbol `TIMELY_COMM_LOG_ADDR`.
+///
+/// ### Timely logging
+///
+/// If the environment symbol `TIMELY_WORKER_LOG_ADDR` is set, each worker will try to
+/// connect to this address to send its worker logs.
 pub fn execute<T, F>(
     mut config: Config,
     func: F
@@ -228,7 +240,7 @@ where
 
     if let CommunicationConfig::Cluster { ref mut log_fn, .. } = config.communication {
 
-        *log_fn = Box::new(|events_setup| {
+        *log_fn = std::sync::Arc::new(Box::new(|events_setup| {
 
             let mut result = None;
             if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
@@ -254,16 +266,12 @@ where
                 }
             }
             result
-        });
+        }));
     }
 
     let (allocators, other) = config.communication.try_build()?;
 
-    let worker_config = config.worker;
-    initialize_from(allocators, other, move |allocator| {
-
-        let mut worker = Worker::new(worker_config.clone(), allocator);
-
+    execute_from(allocators, other, config.worker, move |worker| {
         // If an environment variable is set, use it as the default timely logging.
         if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
 
@@ -283,12 +291,7 @@ where
                 panic!("Could not connect logging stream to: {:?}", addr);
             }
         }
-
-        let result = func(&mut worker);
-        while worker.has_dataflows() {
-            worker.step_or_park(None);
-        }
-        result
+        func(worker)
     })
 }
 
