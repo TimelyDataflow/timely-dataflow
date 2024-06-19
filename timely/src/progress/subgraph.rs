@@ -459,10 +459,10 @@ where
         }
 
         // Propagate implications of progress changes.
-        self.pointstamp_tracker.propagate_all();
+        let updates = self.pointstamp_tracker.propagate_all();
 
         // Drain propagated information into shared progress structure.
-        for ((location, time), diff) in self.pointstamp_tracker.pushed().drain() {
+        for ((location, time), diff) in updates {
             self.maybe_shutdown.push(location.node);
             // Targets are actionable, sources are not.
             if let crate::progress::Port::Target(port) = location.port {
