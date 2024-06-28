@@ -7,5 +7,5 @@ license = "MIT"
 
 [dependencies]
 columnation = { git = "https://github.com/frankmcsherry/columnation" }
-flatcontainer = "0.4"
+flatcontainer = "0.5"
 serde = { version = "1.0"}
