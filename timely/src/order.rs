@@ -191,10 +191,11 @@ mod product {
     }
 
     pub mod flatcontainer {
-        use timely_container::flatcontainer::{Containerized, IntoOwned, Push, Region, ReserveItems};
+        use timely_container::flatcontainer::{IntoOwned, Push, Region, RegionPreference, ReserveItems};
         use super::Product;
 
-        impl<TO: Containerized, TI: Containerized> Containerized for Product<TO, TI> {
+        impl<TO: RegionPreference, TI: RegionPreference> RegionPreference for Product<TO, TI> {
+            type Owned = Product<TO::Owned, TI::Owned>;
             type Region = ProductRegion<TO::Region, TI::Region>;
         }
 
