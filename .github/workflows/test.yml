@@ -16,3 +16,4 @@ jobs:
       # clutter target/debug/deps with multiple copies of things.
       run: for file in $(find mdbook -name '*.md'); do rustdoc --test $file  -L ./target/debug/deps; done
     - run: cargo test
+    - run: cargo test --features bincode

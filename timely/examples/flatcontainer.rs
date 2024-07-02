@@ -3,7 +3,8 @@
 #[cfg(feature = "bincode")]
 use {
     std::collections::HashMap,
-    timely::container::flatcontainer::{Containerized, FlatStack},
+    timely::container::CapacityContainerBuilder,
+    timely::container::flatcontainer::{RegionPreference, FlatStack},
     timely::dataflow::channels::pact::{ExchangeCore, Pipeline},
     timely::dataflow::InputHandleCore,
     timely::dataflow::operators::{Inspect, Operator, Probe},
@@ -13,18 +14,18 @@ use {
 #[cfg(feature = "bincode")]
 fn main() {
 
-    type Container = FlatStack<<(String, i64) as Containerized>::Region>;
+    type Container = FlatStack<<(String, i64) as RegionPreference>::Region>;
 
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
-        let mut input = <InputHandleCore<_, Container>>::new();
+        let mut input = <InputHandleCore<_, CapacityContainerBuilder<Container>>>::new();
         let mut probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
         worker.dataflow::<usize, _, _>(|scope| {
             input
                 .to_stream(scope)
-                .unary::<Container, _, _, _>(
+                .unary(
                     Pipeline,
                     "Split",
                     |_cap, _info| {
@@ -40,7 +41,8 @@ fn main() {
                         }
                     },
                 )
-                .unary_frontier::<Container, _, _, _>(
+                .container::<Container>()
+                .unary_frontier(
                     ExchangeCore::new(|(s, _): &(&str, _)| s.len() as u64),
                     "WordCount",
                     |_capability, _info| {
@@ -79,6 +81,7 @@ fn main() {
                         }
                     },
                 )
+                .container::<Container>()
                 .inspect(|x| println!("seen: {:?}", x))
                 .probe_with(&mut probe);
         });
