@@ -280,6 +280,18 @@ mod product {
             }
         }
 
+        impl<'a, 'b, RO, RI> ReserveItems<&'b Product<RO::ReadItem<'a>, RI::ReadItem<'a>>> for ProductRegion<RO, RI>
+        where
+            RO: Region + ReserveItems<&'b <RO as Region>::ReadItem<'a>> + 'a,
+            RI: Region + ReserveItems<&'b <RI as Region>::ReadItem<'a>> + 'a,
+        {
+            #[inline]
+            fn reserve_items<I>(&mut self, items: I) where I: Iterator<Item=&'b Product<RO::ReadItem<'a>, RI::ReadItem<'a>>> + Clone {
+                self.outer_region.reserve_items(items.clone().map(|i| &i.outer));
+                self.inner_region.reserve_items(items.clone().map(|i| &i.inner));
+            }
+        }
+
         impl<TO, TI, RO, RI> Push<Product<TO, TI>> for ProductRegion<RO, RI>
         where
             RO: Region + Push<TO>,
