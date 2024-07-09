@@ -73,6 +73,18 @@ pub trait SizableContainer: Container {
     fn reserve(&mut self, additional: usize);
 }
 
+/// A container that has a preferred capacity and can ensure it has said capacity.
+///
+// TODO: This trait shouldn't exist, but @antiguru cannot come up with a better way to encode that
+// we might want to preallocate a buffer :(
+pub trait CapacityContainer {
+    /// The preferred capacity
+    fn preferred_capacity() -> usize;
+
+    /// Ensure that the container has sufficient capacity to absorb `preferred_capacity` elements.
+    fn ensure_preferred_capacity(&mut self);
+}
+
 /// A container that can absorb items of a specific type.
 pub trait PushInto<T> {
     /// Push item into self.
@@ -244,6 +256,20 @@ impl<T: Clone + 'static> SizableContainer for Vec<T> {
         self.reserve(additional);
     }
 }
+
+impl<T> CapacityContainer for Vec<T> {
+    fn preferred_capacity() -> usize {
+        buffer::default_capacity::<T>()
+    }
+
+    #[inline]
+    fn ensure_preferred_capacity(&mut self) {
+        if self.capacity() < <Self as CapacityContainer>::preferred_capacity() {
+            self.reserve(<Self as CapacityContainer>::preferred_capacity() - self.capacity());
+        }
+    }
+}
+
 
 impl<T> PushInto<T> for Vec<T> {
     #[inline]
