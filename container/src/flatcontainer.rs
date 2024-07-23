@@ -48,7 +48,7 @@ impl<R: Region + Clone + 'static> SizableContainer for FlatStack<R> {
     }
 }
 
-impl<R, S> CapacityContainer for FlatStack<R, S>
+impl<R: Region> CapacityContainer for FlatStack<R>
 {
     fn preferred_capacity() -> usize {
         // We don't have a good way to present any pre-defined capacity here, since it's a
@@ -62,8 +62,9 @@ impl<R, S> CapacityContainer for FlatStack<R, S>
     }
 
     fn ensure_preferred_capacity(&mut self) {
-        // Nop, same reasoning as for `preferred_capacity`. We don't know how to ensure capacity
-        // for a certain number of elements.
+        if self.capacity() < Self::preferred_capacity() {
+            self.reserve(Self::preferred_capacity() - self.capacity());
+        }
     }
 }
 
