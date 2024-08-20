@@ -8,8 +8,7 @@
 //! receive endpoint. Messages sent into a send endpoint will eventually be received by the corresponding worker,
 //! if it receives often enough. The point-to-point channels are each FIFO, but with no fairness guarantees.
 //!
-//! To be communicated, a type must implement the [`Serialize`](serde::Serialize) trait when using the
-//! `bincode` feature or the [`Abomonation`](abomonation::Abomonation) trait when not.
+//! To be communicated, a type must implement the [`Serialize`](serde::Serialize) trait.
 //!
 //! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`](Push) and [`Pull`](Pull)
 //! traits), which is used for more precise control of resources.
@@ -77,13 +76,8 @@
 
 #[cfg(feature = "getopts")]
 extern crate getopts;
-#[cfg(feature = "bincode")]
 extern crate bincode;
-#[cfg(feature = "bincode")]
 extern crate serde;
-
-extern crate abomonation;
-#[macro_use] extern crate abomonation_derive;
 
 extern crate timely_bytes as bytes;
 extern crate timely_logging as logging_core;
@@ -97,10 +91,7 @@ pub mod buzzer;
 
 use std::any::Any;
 
-#[cfg(feature = "bincode")]
 use serde::{Serialize, Deserialize};
-#[cfg(not(feature = "bincode"))]
-use abomonation::Abomonation;
 
 pub use allocator::Generic as Allocator;
 pub use allocator::Allocate;
@@ -108,15 +99,7 @@ pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
 pub use message::Message;
 
 /// A composite trait for types that may be used with channels.
-#[cfg(not(feature = "bincode"))]
-pub trait Data : Send+Sync+Any+Abomonation+'static { }
-#[cfg(not(feature = "bincode"))]
-impl<T: Send+Sync+Any+Abomonation+'static> Data for T { }
-
-/// A composite trait for types that may be used with channels.
-#[cfg(feature = "bincode")]
 pub trait Data : Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static { }
-#[cfg(feature = "bincode")]
 impl<T: Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
 
 /// Pushing elements of type `T`.

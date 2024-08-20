@@ -21,7 +21,7 @@ type ByteOrder = byteorder::BigEndian;
 /// Framing data for each `Vec<u8>` transmission, indicating a typed channel, the source and
 /// destination workers, and the length in bytes.
 // *Warning*: Adding, removing and altering fields requires to adjust the implementation below!
-#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct MessageHeader {
     /// index of channel.
     pub channel:    usize,

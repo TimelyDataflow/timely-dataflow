@@ -2,8 +2,7 @@
 //!
 //! The code is organized in crates and modules that are meant to depend as little as possible on each other.
 //!
-//! **Serialization**: The [`abomonation`] crate contains simple and highly unsafe
-//! serialization routines.
+//! **Serialization**: Timely uses the `bincode` crate for serialization. Performance could be improved.
 //!
 //! **Communication**: The [`timely_communication`] crate defines several primitives for
 //! communicating between dataflow workers, and across machine boundaries.
@@ -57,9 +56,7 @@
 
 #![forbid(missing_docs)]
 
-#[macro_use]
-extern crate abomonation_derive;
-extern crate abomonation;
+extern crate bincode;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;

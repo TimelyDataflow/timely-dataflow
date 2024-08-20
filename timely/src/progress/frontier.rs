@@ -15,7 +15,7 @@ use crate::order::{PartialOrder, TotalOrder};
 /// Two antichains are equal if they contain the same set of elements, even if in different orders.
 /// This can make equality testing quadratic, though linear in the common case that the sequences
 /// are identical.
-#[derive(Debug, Abomonation, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Antichain<T> {
     elements: SmallVec<[T; 1]>
 }
@@ -372,7 +372,7 @@ impl<T> ::std::iter::IntoIterator for Antichain<T> {
 /// The `MutableAntichain` implementation is done with the intent that updates to it are done in batches,
 /// and it is acceptable to rebuild the frontier from scratch when a batch of updates change it. This means
 /// that it can be expensive to maintain a large number of counts and change few elements near the frontier.
-#[derive(Clone, Debug, Abomonation, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MutableAntichain<T> {
     updates: ChangeBatch<T>,
     frontier: Vec<T>,

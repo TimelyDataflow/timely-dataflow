@@ -72,7 +72,7 @@ mod product {
     ///
     /// We use `Product` rather than `(TOuter, TInner)` so that we can derive our own `PartialOrder`,
     /// because Rust just uses the lexicographic total order.
-    #[derive(Abomonation, Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd, Serialize, Deserialize)]
     pub struct Product<TOuter, TInner> {
         /// Outer timestamp.
         pub outer: TOuter,

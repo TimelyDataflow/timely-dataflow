@@ -1,6 +1,5 @@
 //! Wordcount based on flatcontainer.
 
-#[cfg(feature = "bincode")]
 use {
     std::collections::HashMap,
     timely::container::CapacityContainerBuilder,
@@ -11,7 +10,6 @@ use {
     timely::dataflow::ProbeHandle,
 };
 
-#[cfg(feature = "bincode")]
 fn main() {
 
     type Container = FlatStack<<(String, i64) as RegionPreference>::Region>;
@@ -96,9 +94,4 @@ fn main() {
         }
     })
     .unwrap();
-}
-
-#[cfg(not(feature = "bincode"))]
-fn main() {
-    eprintln!("Example requires feature bincode.");
 }

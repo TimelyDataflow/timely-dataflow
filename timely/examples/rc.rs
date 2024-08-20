@@ -1,19 +1,12 @@
-extern crate abomonation;
 extern crate timely;
 
 use std::rc::Rc;
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Inspect, Probe};
-use abomonation::Abomonation;
 
 #[derive(Debug, Clone)]
 pub struct Test {
     _field: Rc<usize>,
-}
-
-impl Abomonation for Test {
-    unsafe fn entomb<W: ::std::io::Write>(&self, _write: &mut W) -> ::std::io::Result<()> { panic!() }
-    unsafe fn exhume<'a,'b>(&'a mut self, _bytes: &'b mut [u8]) -> Option<&'b mut [u8]> { panic!()  }
 }
 
 fn main() {
