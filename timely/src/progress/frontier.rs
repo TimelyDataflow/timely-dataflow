@@ -10,7 +10,7 @@ use crate::order::{PartialOrder, TotalOrder};
 /// which will evict larger elements to maintain the *minimal* antichain, those incomparable elements
 /// no greater than any other element.
 ///
-/// Two antichains are equal if the contain the same set of elements, even if in different orders.
+/// Two antichains are equal if they contain the same set of elements, even if in different orders.
 /// This can make equality testing quadratic, though linear in the common case that the sequences
 /// are identical.
 #[derive(Debug, Abomonation, Serialize, Deserialize)]
