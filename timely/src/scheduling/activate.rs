@@ -48,14 +48,14 @@ pub struct Activations {
     rx: Receiver<Vec<usize>>,
 
     // Delayed activations.
-    timer: Instant,
+    timer: Option<Instant>,
     queue: BinaryHeap<Reverse<(Duration, Vec<usize>)>>,
 }
 
 impl Activations {
 
     /// Creates a new activation tracker.
-    pub fn new(timer: Instant) -> Self {
+    pub fn new(timer: Option<Instant>) -> Self {
         let (tx, rx) = crossbeam_channel::unbounded();
         Self {
             clean: 0,
@@ -77,13 +77,18 @@ impl Activations {
 
     /// Schedules a future activation for the task addressed by `path`.
     pub fn activate_after(&mut self, path: &[usize], delay: Duration) {
-        // TODO: We could have a minimum delay and immediately schedule anything less than that delay.
-        if delay == Duration::new(0, 0) {
-            self.activate(path);
-        }
+        if let Some(timer) = self.timer {
+            // TODO: We could have a minimum delay and immediately schedule anything less than that delay.
+            if delay == Duration::new(0, 0) {
+                self.activate(path);
+            }
+            else {
+                let moment = timer.elapsed() + delay;
+                self.queue.push(Reverse((moment, path.to_vec())));
+            }
+        } 
         else {
-            let moment = self.timer.elapsed() + delay;
-            self.queue.push(Reverse((moment, path.to_vec())));
+            self.activate(path);
         }
     }
 
@@ -96,10 +101,12 @@ impl Activations {
         }
 
         // Drain timer-based activations.
-        let now = self.timer.elapsed();
-        while self.queue.peek().map(|Reverse((t,_))| t <= &now) == Some(true) {
-            let Reverse((_time, path)) = self.queue.pop().unwrap();
-            self.activate(&path[..]);
+        if let Some(timer) = self.timer {
+            let now = timer.elapsed();
+            while self.queue.peek().map(|Reverse((t,_))| t <= &now) == Some(true) {
+                let Reverse((_time, path)) = self.queue.pop().unwrap();
+                self.activate(&path[..]);
+            }
         }
 
         self.bounds.drain(.. self.clean);
@@ -171,12 +178,12 @@ impl Activations {
     /// indicates the amount of time before the thread should be unparked for the
     /// next scheduled activation.
     pub fn empty_for(&self) -> Option<Duration> {
-        if !self.bounds.is_empty() {
+        if !self.bounds.is_empty() || self.timer.is_none() {
             Some(Duration::new(0,0))
         }
         else {
             self.queue.peek().map(|Reverse((t,_a))| {
-                let elapsed = self.timer.elapsed();
+                let elapsed = self.timer.unwrap().elapsed();
                 if t < &elapsed { Duration::new(0,0) }
                 else { *t - elapsed }
             })
