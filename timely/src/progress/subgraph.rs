@@ -183,9 +183,12 @@ where
         let type_name = std::any::type_name::<TInner>();
         let reachability_logging =
         worker.log_register()
-            .get::<reachability::logging::TrackerEventBuilder<TInner>>(&format!("timely/reachability/{type_name}"))
-            .map(|logger| reachability::logging::TrackerLogger::new(self.identifier, logger));
-        let progress_logging = worker.log_register().get::<TimelyProgressEventBuilder<TInner>>(&format!("timely/progress/{type_name}"));
+            .as_ref()
+            .and_then(|l| 
+                l.get::<reachability::logging::TrackerEventBuilder<TInner>>(&format!("timely/reachability/{type_name}"))
+                .map(|logger| reachability::logging::TrackerLogger::new(self.identifier, logger))
+        );
+        let progress_logging = worker.log_register().as_ref().and_then(|l| l.get::<TimelyProgressEventBuilder<TInner>>(&format!("timely/progress/{type_name}")));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
         let progcaster = Progcaster::new(worker, Rc::clone(&self.path), self.identifier, self.logging.clone(), progress_logging);

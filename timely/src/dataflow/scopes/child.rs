@@ -73,7 +73,7 @@ where
     fn peek_identifier(&self) -> usize {
         self.parent.peek_identifier()
     }
-    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry> {
+    fn log_register(&self) -> Option<::std::cell::RefMut<crate::logging_core::Registry>> {
         self.parent.log_register()
     }
 }
@@ -135,8 +135,8 @@ where
         let path = self.addr_for_child(index);
 
         let type_name = std::any::type_name::<T2>();
-        let progress_logging = self.log_register().get(&format!("timely/progress/{type_name}"));
-        let summary_logging = self.log_register().get(&format!("timely/summary/{type_name}"));
+        let progress_logging = self.log_register().as_ref().and_then(|l| l.get(&format!("timely/progress/{type_name}")));
+        let summary_logging  = self.log_register().as_ref().and_then(|l| l.get(&format!("timely/summary/{type_name}")));
 
         let subscope = RefCell::new(SubgraphBuilder::new_from(path, identifier, self.logging(), summary_logging, name));
         let result = {
