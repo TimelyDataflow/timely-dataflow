@@ -51,7 +51,7 @@ This is a very simple example (it's in the name), which only just suggests at ho
 
 ## Doing more things
 
-For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/examples/hello.rs), which creates and drives the dataflow separately:
+For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/timely/examples/hello.rs), which creates and drives the dataflow separately:
 
 ```rust
 extern crate timely;
