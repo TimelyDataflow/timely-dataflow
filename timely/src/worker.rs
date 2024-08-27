@@ -346,7 +346,7 @@ impl<A: Allocate> Worker<A> {
     ///     worker.step_or_park(Some(Duration::from_secs(1)));
     /// });
     /// ```
-    pub fn step_or_park(&mut self, duration: Option<Duration>) -> bool {
+    pub fn step_or_park(&mut self, timeout: Option<Duration>) -> bool {
 
         {   // Process channel events. Activate responders.
             let mut allocator = self.allocator.borrow_mut();
@@ -375,28 +375,23 @@ impl<A: Allocate> Worker<A> {
             .borrow_mut()
             .advance();
 
-        // Consider parking only if we have no pending events, some dataflows, and a non-zero duration.
-        let empty_for = self.activations.borrow().empty_for();
-        // Determine the minimum park duration, where `None` are an absence of a constraint.
-        let delay = match (duration, empty_for) {
-            (Some(x), Some(y)) => Some(std::cmp::min(x,y)),
-            (x, y) => x.or(y),
-        };
+        if self.activations.borrow().is_idle() {
+            // If the timeout is zero, don't bother trying to park.
+            // More generally, we could put some threshold in here.
+            if timeout != Some(Duration::new(0, 0)) {
+                // Log parking and flush log.
+                if let Some(l) = self.logging().as_mut() {
+                    l.log(crate::logging::ParkEvent::park(timeout));
+                    l.flush();
+                }
 
-        if delay != Some(Duration::new(0,0)) {
+                // We have just drained `allocator.events()` up above;
+                // otherwise we should first check it for emptiness.
+                self.activations.borrow().park_timeout(timeout);
 
-            // Log parking and flush log.
-            if let Some(l) = self.logging().as_mut() {
-                l.log(crate::logging::ParkEvent::park(delay));
-                l.flush();
+                // Log return from unpark.
+                self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));
             }
-
-            self.allocator
-                .borrow()
-                .await_events(delay);
-
-            // Log return from unpark.
-            self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));
         }
         else {   // Schedule active dataflows.
 
