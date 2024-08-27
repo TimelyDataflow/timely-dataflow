@@ -177,7 +177,7 @@ impl Activations {
     /// This method should be used before putting a worker thread to sleep, as it
     /// indicates the amount of time before the thread should be unparked for the
     /// next scheduled activation.
-    pub fn empty_for(&self) -> Option<Duration> {
+    fn empty_for(&self) -> Option<Duration> {
         if !self.bounds.is_empty() || self.timer.is_none() {
             Some(Duration::new(0,0))
         }
@@ -188,6 +188,34 @@ impl Activations {
                 else { *t - elapsed }
             })
         }
+    }
+
+    /// Indicates that there is nothing to do for `timeout`, and that the scheduler
+    /// can allow the thread to sleep until then.
+    ///
+    /// The method does not *need* to park the thread, and indeed it may elect to
+    /// unpark earlier if there are deferred activations.
+    pub fn park_timeout(&self, timeout: Option<Duration>) {
+        let empty_for = self.empty_for();
+        let timeout = match (timeout, empty_for) {
+            (Some(x), Some(y)) => Some(std::cmp::min(x,y)),
+            (x, y) => x.or(y),
+        };
+
+        if let Some(timeout) = timeout {
+            std::thread::park_timeout(timeout);
+        }
+        else {
+            std::thread::park();
+        }
+    }
+
+    /// True iff there are no immediate activations.
+    ///
+    /// Used by others to guard work done in anticipation of potentially parking.
+    /// An alternate method name could be `would_park`.
+    pub fn is_idle(&self) -> bool {
+        self.bounds.is_empty() && self.timer.is_none()
     }
 }
 
