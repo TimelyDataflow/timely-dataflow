@@ -2,10 +2,11 @@
 
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
+use std::cmp::Reverse;
 use std::any::Any;
 use std::str::FromStr;
 use std::time::{Instant, Duration};
-use std::collections::HashMap;
+use std::collections::{HashMap, BinaryHeap};
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
@@ -221,7 +222,7 @@ pub struct Worker<A: Allocate> {
     logging: Option<Rc<RefCell<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>>>,
 
     activations: Rc<RefCell<Activations>>,
-    active_dataflows: Vec<usize>,
+    active_dataflows: BinaryHeap<Reverse<usize>>,
 
     // Temporary storage for channel identifiers during dataflow construction.
     // These are then associated with a dataflow once constructed.
@@ -355,12 +356,20 @@ impl<A: Allocate> Worker<A> {
             }
         }
 
-        // Organize activations.
-        self.activations
-            .borrow_mut()
-            .advance();
+        // Commence a new round of scheduling, starting with dataflows.
+        // We probe the scheduler for active prefixes, where an empty response
+        // indicates that the scheduler has no work for us at the moment.
+        {   // Scoped to let borrow of `self.active_dataflows` drop.
+            use crate::scheduling::activate::Scheduler;
+            let active_dataflows = &mut self.active_dataflows;
+            self.activations
+                .borrow_mut()
+                .extensions(&[], active_dataflows);
+        }
 
-        if self.activations.borrow().is_idle() {
+        // If no dataflows are active, there is nothing to do. Consider parking.
+        if self.active_dataflows.is_empty() {
+
             // If the timeout is zero, don't bother trying to park.
             // More generally, we could put some threshold in here.
             if timeout != Some(Duration::new(0, 0)) {
@@ -378,15 +387,10 @@ impl<A: Allocate> Worker<A> {
                 self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));
             }
         }
-        else {   // Schedule active dataflows.
-
-            let active_dataflows = &mut self.active_dataflows;
-            self.activations
-                .borrow_mut()
-                .for_extensions(&[], |index| active_dataflows.push(index));
+        else {   // Schedule all active dataflows.
 
             let mut dataflows = self.dataflows.borrow_mut();
-            for index in active_dataflows.drain(..) {
+            for Reverse(index) in self.active_dataflows.drain() {
                 // Step dataflow if it exists, remove if not incomplete.
                 if let Entry::Occupied(mut entry) = dataflows.entry(index) {
                     // TODO: This is a moment at which a scheduling decision is being made.
@@ -725,7 +729,7 @@ impl<A: Allocate> Clone for Worker<A> {
             dataflow_counter: self.dataflow_counter.clone(),
             logging: self.logging.clone(),
             activations: self.activations.clone(),
-            active_dataflows: Vec::new(),
+            active_dataflows: Default::default(),
             temp_channel_ids: self.temp_channel_ids.clone(),
         }
     }
