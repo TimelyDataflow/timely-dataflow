@@ -8,30 +8,45 @@ use std::time::{Duration, Instant};
 use std::cmp::Reverse;
 use crossbeam_channel::{Sender, Receiver};
 
-/// Methods required to act as a timely scheduler.
+/// Methods required to act as a scheduler for timely operators.
 ///
-/// The core methods are the activation of "paths", sequences of integers, and
-/// the enumeration of active paths by prefix. A scheduler may delay the report
-/// of a path indefinitely, but it should report at least one extension for the
-/// empty path `&[]` or risk parking the worker thread without a certain unpark.
+/// Operators are described by "paths" of integers, indicating the path along
+/// a tree of regions, arriving at the the operator. Each path is either "idle"
+/// or "active", where the latter indicates that someone has requested that the
+/// operator be scheduled by the worker. Operators go from idle to active when
+/// the `activate(path)` method is called, and from active to idle when the path
+/// is returned through a call to `extensions(path, _)`.
 ///
-/// There is no known harm to "spurious wake-ups" where a not-active path is
-/// returned through `extensions()`.
+/// The worker will continually probe for extensions to the root empty path `[]`,
+/// and then follow all returned addresses, recursively. A scheduler need not
+/// schedule all active paths, but it should return *some* active path when the
+/// worker probes the empty path, or the worker may put the thread to sleep.
+///
+/// There is no known harm to scheduling an idle path.
+/// The worker may speculatively schedule paths of its own accord.
 pub trait Scheduler {
     /// Mark a path as immediately scheduleable.
+    ///
+    /// The scheduler is not required to immediately schedule the path, but it
+    /// should not signal that it has no work until the path has been scheduled.
     fn activate(&mut self, path: &[usize]);
     /// Populates `dest` with next identifiers on active extensions of `path`.
     ///
     /// This method is where a scheduler is allowed to exercise some discretion,
     /// in that it does not need to present *all* extensions, but it can instead
-    /// present only those that the runtime should schedule.
-    fn extensions(&mut self, path: &[usize], dest: &mut Vec<usize>);
+    /// present only those that the runtime should immediately schedule.
+    ///
+    /// The worker *will* schedule all extensions before probing new prefixes.
+    /// The scheduler is invited to rely on this, and to schedule in "batches",
+    /// where the next time the worker probes for extensions to the empty path
+    /// then all addresses in the batch have certainly been scheduled.
+    fn extensions(&mut self, path: &[usize], dest: &mut BinaryHeap<Reverse<usize>>);
 }
 
 // Trait objects can be schedulers too.
 impl Scheduler for Box<dyn Scheduler> {
     fn activate(&mut self, path: &[usize]) { (**self).activate(path) }
-    fn extensions(&mut self, path: &[usize], dest: &mut Vec<usize>) { (**self).extensions(path, dest) }
+    fn extensions(&mut self, path: &[usize], dest: &mut BinaryHeap<Reverse<usize>>) { (**self).extensions(path, dest) }
 }
 
 /// Allocation-free activation tracker.
@@ -93,7 +108,7 @@ impl Activations {
     }
 
     /// Discards the current active set and presents the next active set.
-    pub fn advance(&mut self) {
+    fn advance(&mut self) {
 
         // Drain inter-thread activations.
         while let Ok(path) = self.rx.try_recv() {
@@ -130,15 +145,15 @@ impl Activations {
         self.clean = self.bounds.len();
     }
 
-    /// Maps a function across activated paths.
-    pub fn map_active(&self, logic: impl Fn(&[usize])) {
-        for (offset, length) in self.bounds.iter() {
-            logic(&self.slices[*offset .. (*offset + *length)]);
-        }
-    }
-
     /// Sets as active any symbols that follow `path`.
-    pub fn for_extensions(&self, path: &[usize], mut action: impl FnMut(usize)) {
+    fn for_extensions(&mut self, path: &[usize], mut action: impl FnMut(usize)) {
+
+        // Each call for the root path is a moment where the worker has reset.
+        // This relies on a worker implementation that follows the scheduling
+        // instructions perfectly; if any offered paths are not explored, oops.
+        if path.is_empty() {
+            self.advance();
+        }
 
         let position =
         self.bounds[..self.clean]
@@ -211,13 +226,14 @@ impl Activations {
             std::thread::park();
         }
     }
+}
 
-    /// True iff there are no immediate activations.
-    ///
-    /// Used by others to guard work done in anticipation of potentially parking.
-    /// An alternate method name could be `would_park`.
-    pub fn is_idle(&self) -> bool {
-        self.bounds.is_empty() && self.timer.is_none()
+impl Scheduler for Activations {
+    fn activate(&mut self, path: &[usize]) {
+        self.activate(path);
+    }
+    fn extensions(&mut self, path: &[usize], dest: &mut BinaryHeap<Reverse<usize>>) {
+        self.for_extensions(path, |index| dest.push(Reverse(index)));
     }
 }
 
