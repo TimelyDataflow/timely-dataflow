@@ -2,7 +2,6 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::time::Duration;
 use std::collections::VecDeque;
 
 use crate::allocator::{Allocate, AllocateBuilder};
@@ -34,16 +33,6 @@ impl Allocate for Thread {
     }
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
         &self.events
-    }
-    fn await_events(&self, duration: Option<Duration>) {
-        if self.events.borrow().is_empty() {
-            if let Some(duration) = duration {
-                std::thread::park_timeout(duration);
-            }
-            else {
-                std::thread::park();
-            }
-        }
     }
 }
 

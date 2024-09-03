@@ -17,14 +17,14 @@ fn main() {
         let mut probe = ProbeHandle::new();
 
         // Register timely worker logging.
-        worker.log_register().insert::<TimelyEvent,_>("timely", |_time, data|
+        worker.log_register().unwrap().insert::<TimelyEvent,_>("timely", |_time, data|
             data.iter().for_each(|x| println!("LOG1: {:?}", x))
         );
 
         // Register timely progress logging.
         // Less generally useful: intended for debugging advanced custom operators or timely
         // internals.
-        worker.log_register().insert::<TimelyProgressEvent,_>("timely/progress", |_time, data|
+        worker.log_register().unwrap().insert::<TimelyProgressEvent,_>("timely/progress", |_time, data|
             data.iter().for_each(|x| {
                 println!("PROGRESS: {:?}", x);
                 let (_, _, ev) = x;
@@ -50,7 +50,7 @@ fn main() {
         });
 
         // Register timely worker logging.
-        worker.log_register().insert::<TimelyEvent,_>("timely", |_time, data|
+        worker.log_register().unwrap().insert::<TimelyEvent,_>("timely", |_time, data|
             data.iter().for_each(|x| println!("LOG2: {:?}", x))
         );
 
@@ -63,13 +63,13 @@ fn main() {
         });
 
         // Register user-level logging.
-        worker.log_register().insert::<(),_>("input", |_time, data|
+        worker.log_register().unwrap().insert::<(),_>("input", |_time, data|
             for element in data.iter() {
                 println!("Round tick at: {:?}", element.0);
             }
         );
 
-        let input_logger = worker.log_register().get::<()>("input").expect("Input logger absent");
+        let input_logger = worker.log_register().unwrap().get::<()>("input").expect("Input logger absent");
 
         let timer = std::time::Instant::now();
 

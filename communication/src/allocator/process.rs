@@ -4,7 +4,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::any::Any;
-use std::time::Duration;
 use std::collections::{HashMap};
 use crossbeam_channel::{Sender, Receiver};
 
@@ -176,10 +175,6 @@ impl Allocate for Process {
 
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
         self.inner.events()
-    }
-
-    fn await_events(&self, duration: Option<Duration>) {
-        self.inner.await_events(duration);
     }
 
     fn receive(&mut self) {

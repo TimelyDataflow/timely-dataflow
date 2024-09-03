@@ -154,7 +154,7 @@ where
     F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
 {
     let alloc = crate::communication::allocator::thread::Thread::new();
-    let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc);
+    let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc, Some(std::time::Instant::now()));
     let result = func(&mut worker);
     while worker.has_dataflows() {
         worker.step_or_park(None);
@@ -320,7 +320,7 @@ where
     T: Send+'static,
     F: Fn(&mut Worker<<A as AllocateBuilder>::Allocator>)->T+Send+Sync+'static {
     initialize_from(builders, others, move |allocator| {
-        let mut worker = Worker::new(worker_config.clone(), allocator);
+        let mut worker = Worker::new(worker_config.clone(), allocator, Some(std::time::Instant::now()));
         let result = func(&mut worker);
         while worker.has_dataflows() {
             worker.step_or_park(None);

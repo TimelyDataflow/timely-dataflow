@@ -8,7 +8,7 @@ fn main() {
 
     // create a naked single-threaded worker.
     let allocator = timely::communication::allocator::Thread::new();
-    let mut worker = timely::worker::Worker::new(WorkerConfig::default(), allocator);
+    let mut worker = timely::worker::Worker::new(WorkerConfig::default(), allocator, None);
 
     // create input and probe handles.
     let mut input = InputHandle::new();

@@ -67,7 +67,7 @@ where
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
     }
-    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
+    fn log_register(&self) -> Option<::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>> {
         self.parent.log_register()
     }
 }
