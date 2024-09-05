@@ -255,7 +255,7 @@ impl<T> Antichain<T> {
     /// let mut frontier = Antichain::from_elem(2);
     /// assert_eq!(frontier.elements(), &[2]);
     ///```
-    #[inline] pub fn elements(&self) -> &[T] { &self[..] }
+    #[inline] pub fn elements(&self) -> &Vec<T> { &self.elements }
 
     /// Reveals the elements in the antichain.
     ///
