@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use crate::allocator::{Allocate, AllocateBuilder};
 use crate::allocator::counters::Pusher as CountPusher;
 use crate::allocator::counters::Puller as CountPuller;
-use crate::{Push, Pull, Message};
+use crate::{Data, Push, Pull, Message};
 
 /// Builder for single-threaded allocator.
 pub struct ThreadBuilder;
@@ -26,11 +26,14 @@ pub struct Thread {
 }
 
 impl Allocate for Thread {
+    type Pusher<T: Data> = ThreadPusher<Message<T>>;
+    type Puller<T: Data> = ThreadPuller<Message<T>>;
+
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
-    fn allocate<T: 'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Self::Pusher<T>>, Self::Puller<T>) {
         let (pusher, puller) = Thread::new_from(identifier, self.events.clone());
-        (vec![Box::new(pusher)], Box::new(puller))
+        (vec![pusher], puller)
     }
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
         &self.events

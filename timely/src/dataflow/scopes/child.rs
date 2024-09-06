@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::communication::{Data, Push, Pull};
+use crate::communication::Data;
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
@@ -55,10 +55,13 @@ where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>
 {
+    type Pusher<D: Data> = G::Pusher<D>;
+    type Puller<D: Data> = G::Puller<D>;
+
     fn config(&self) -> &Config { self.parent.config() }
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize, address: Vec<usize>) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
+    fn allocate<D: Data>(&mut self, identifier: usize, address: Vec<usize>) -> (Vec<Self::Pusher<D>>, Self::Puller<D>) {
         self.parent.allocate(identifier, address)
     }
     fn pipeline<D: 'static>(&mut self, identifier: usize, address: Vec<usize>) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {

@@ -9,9 +9,10 @@ use bytes::arc::Bytes;
 
 use crate::networking::MessageHeader;
 
-use crate::{Allocate, Message, Data, Push, Pull};
+use crate::{Allocate, Message, Data};
 use crate::allocator::{AllocateBuilder};
 use crate::allocator::canary::Canary;
+use crate::allocator::counters::Puller as CountPuller;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 
@@ -117,9 +118,12 @@ pub struct ProcessAllocator {
 }
 
 impl Allocate for ProcessAllocator {
+    type Pusher<T: Data> = Pusher<T, MergeQueue>;
+    type Puller<T: Data> = CountPuller<Message<T>, Puller<T>>;
+
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Self::Pusher<T>>, Self::Puller<T>) {
 
         // Assume and enforce in-order identifier allocation.
         if let Some(bound) = self.channel_id_bound {
@@ -127,7 +131,7 @@ impl Allocate for ProcessAllocator {
         }
         self.channel_id_bound = Some(identifier);
 
-        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::with_capacity(self.peers());
+        let mut pushes = Vec::with_capacity(self.peers());
 
         for target_index in 0 .. self.peers() {
 
@@ -140,8 +144,8 @@ impl Allocate for ProcessAllocator {
                 seqno:      0,
             };
 
-            // create, box, and stash new process_binary pusher.
-            pushes.push(Box::new(Pusher::new(header, self.sends[target_index].clone())));
+            // create and stash new process_binary pusher.
+            pushes.push(Pusher::new(header, self.sends[target_index].clone()));
         }
 
         let channel =
@@ -150,9 +154,8 @@ impl Allocate for ProcessAllocator {
             .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
             .clone();
 
-        use crate::allocator::counters::Puller as CountPuller;
         let canary = Canary::new(identifier, self.canaries.clone());
-        let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, self.events().clone()));
+        let puller = CountPuller::new(Puller::new(channel, canary), identifier, self.events().clone());
 
         (pushes, puller)
     }

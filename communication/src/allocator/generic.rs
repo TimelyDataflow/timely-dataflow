@@ -27,6 +27,54 @@ pub enum Generic {
     ZeroCopy(TcpAllocator<Process>),
 }
 
+/// Enumerates known implementors of `Allocate::Pusher`.
+/// Passes trait method calls on to members.
+pub enum GenericPusher<T: Data> {
+    /// Intra-thread pusher
+    Thread(<Thread as Allocate>::Pusher<T>),
+    /// Inter-thread, intra-process pusher
+    Process(<Process as Allocate>::Pusher<T>),
+    /// Inter-thread, intra-process serializing pusher
+    ProcessBinary(<ProcessAllocator as Allocate>::Pusher<T>),
+    /// Inter-process pusher
+    ZeroCopy(<TcpAllocator<Process> as Allocate>::Pusher<T>),
+}
+
+impl<T: Data> Push<Message<T>> for GenericPusher<T> {
+    fn push(&mut self, element: &mut Option<Message<T>>) {
+        match self {
+            Self::Thread(t) => t.push(element),
+            Self::Process(p) => p.push(element),
+            Self::ProcessBinary(pb) => pb.push(element),
+            Self::ZeroCopy(z) => z.push(element),
+        }
+    }
+}
+
+/// Enumerates known implementors of `Allocate::Puller`.
+/// Passes trait method calls on to members.
+pub enum GenericPuller<T: Data> {
+    /// Intra-thread puller
+    Thread(<Thread as Allocate>::Puller<T>),
+    /// Inter-thread, intra-process puller
+    Process(<Process as Allocate>::Puller<T>),
+    /// Inter-thread, intra-process serializing puller
+    ProcessBinary(<ProcessAllocator as Allocate>::Puller<T>),
+    /// Inter-process puller
+    ZeroCopy(<TcpAllocator<Process> as Allocate>::Puller<T>),
+}
+
+impl<T: Data> Pull<Message<T>> for GenericPuller<T> {
+    fn pull(&mut self) -> &mut Option<Message<T>> {
+        match self {
+            Self::Thread(t) => t.pull(),
+            Self::Process(p) => p.pull(),
+            Self::ProcessBinary(pb) => pb.pull(),
+            Self::ZeroCopy(z) => z.pull(),
+        }
+    }
+}
+
 impl Generic {
     /// The index of the worker out of `(0..self.peers())`.
     pub fn index(&self) -> usize {
@@ -47,12 +95,24 @@ impl Generic {
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<GenericPusher<T>>, GenericPuller<T>) {
         match self {
-            Generic::Thread(t) => t.allocate(identifier),
-            Generic::Process(p) => p.allocate(identifier),
-            Generic::ProcessBinary(pb) => pb.allocate(identifier),
-            Generic::ZeroCopy(z) => z.allocate(identifier),
+            Generic::Thread(t) => {
+                let (pushers, puller) = t.allocate(identifier);
+                (pushers.into_iter().map(GenericPusher::Thread).collect(), GenericPuller::Thread(puller))
+            }
+            Generic::Process(p) => {
+                let (pushers, puller) = p.allocate(identifier);
+                (pushers.into_iter().map(GenericPusher::Process).collect(), GenericPuller::Process(puller))
+            }
+            Generic::ProcessBinary(pb) => {
+                let (pushers, puller) = pb.allocate(identifier);
+                (pushers.into_iter().map(GenericPusher::ProcessBinary).collect(), GenericPuller::ProcessBinary(puller))
+            }
+            Generic::ZeroCopy(z) => {
+                let (pushers, puller) = z.allocate(identifier);
+                (pushers.into_iter().map(GenericPusher::ZeroCopy).collect(), GenericPuller::ZeroCopy(puller))
+            }
         }
     }
     /// Perform work before scheduling operators.
@@ -84,9 +144,12 @@ impl Generic {
 }
 
 impl Allocate for Generic {
+    type Pusher<T: Data> = GenericPusher<T>;
+    type Puller<T: Data> = GenericPuller<T>;
+
     fn index(&self) -> usize { self.index() }
     fn peers(&self) -> usize { self.peers() }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Self::Pusher<T>>, Self::Puller<T>) {
         self.allocate(identifier)
     }
 

@@ -37,12 +37,17 @@ pub trait AllocateBuilder : Send {
 /// There is some feature creep, in that this contains several convenience methods about the nature
 /// of the allocated channels, and maintenance methods to ensure that they move records around.
 pub trait Allocate {
+    /// The Pusher returned by allocate
+    type Pusher<T: Data>: Push<Message<T>> + 'static;
+    /// The Puller returned by allocate
+    type Puller<T: Data>: Pull<Message<T>> + 'static;
+
     /// The index of the worker out of `(0..self.peers())`.
     fn index(&self) -> usize;
     /// The number of workers in the communication group.
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>);
+    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Self::Pusher<T>>, Self::Puller<T>);
     /// A shared queue of communication events with channel identifier.
     ///
     /// It is expected that users of the channel allocator will regularly
