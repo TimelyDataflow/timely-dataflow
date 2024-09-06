@@ -72,7 +72,7 @@ where
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
 
         let address = builder.operator_info().address;
-        let activator = scope.activator_for(&address[..]);
+        let activator = scope.activator_for(address);
 
         let (targets, stream) = builder.new_output();
 

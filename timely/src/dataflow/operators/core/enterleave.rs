@@ -62,7 +62,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
         let ingress = IngressNub {
             targets: Counter::new(targets),
             phantom: PhantomData,
-            activator: scope.activator_for(&scope.addr()),
+            activator: scope.activator_for(scope.addr()),
             active: false,
         };
         let produced = ingress.targets.produced().clone();

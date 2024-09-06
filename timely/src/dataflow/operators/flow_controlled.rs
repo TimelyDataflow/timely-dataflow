@@ -87,7 +87,7 @@ pub fn iterator_source<
     let mut target = G::Timestamp::minimum();
     source(scope, name, |cap, info| {
         let mut cap = Some(cap);
-        let activator = scope.activator_for(&info.address[..]);
+        let activator = scope.activator_for(info.address);
         move |output| {
             cap = cap.take().and_then(|mut cap| {
                 loop {

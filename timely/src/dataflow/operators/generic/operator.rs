@@ -535,7 +535,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
 ///
 ///     source(scope, "Source", |capability, info| {
 ///
-///         let activator = scope.activator_for(&info.address[..]);
+///         let activator = scope.activator_for(info.address);
 ///
 ///         let mut cap = Some(capability);
 ///         move |output| {

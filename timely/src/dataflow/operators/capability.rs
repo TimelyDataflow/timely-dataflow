@@ -347,10 +347,10 @@ impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
 
 impl<T: Timestamp> ActivateCapability<T> {
     /// Creates a new activating capability.
-    pub fn new(capability: Capability<T>, address: &[usize], activations: Rc<RefCell<Activations>>) -> Self {
+    pub fn new(capability: Capability<T>, address: Vec<usize>, activations: Rc<RefCell<Activations>>) -> Self {
         Self {
             capability,
-            address: Rc::new(address.to_vec()),
+            address: Rc::new(address),
             activations,
         }
     }

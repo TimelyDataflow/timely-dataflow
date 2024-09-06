@@ -12,11 +12,11 @@ pub struct OperatorInfo {
 
 impl OperatorInfo {
     /// Construct a new `OperatorInfo`.
-    pub fn new(local_id: usize, global_id: usize, address: &[usize]) -> OperatorInfo {
+    pub fn new(local_id: usize, global_id: usize, address: Vec<usize>) -> OperatorInfo {
         OperatorInfo {
             local_id,
             global_id,
-            address: address.to_vec(),
+            address,
         }
     }
 }

@@ -58,10 +58,10 @@ where
     fn config(&self) -> &Config { self.parent.config() }
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize, address: &[usize]) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
+    fn allocate<D: Data>(&mut self, identifier: usize, address: Vec<usize>) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
         self.parent.allocate(identifier, address)
     }
-    fn pipeline<D: 'static>(&mut self, identifier: usize, address: &[usize]) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
+    fn pipeline<D: 'static>(&mut self, identifier: usize, address: Vec<usize>) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
         self.parent.pipeline(identifier, address)
     }
     fn new_identifier(&mut self) -> usize {
@@ -97,6 +97,15 @@ where
 {
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
     fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
+
+    fn addr_for_child(&self, index: usize) -> Vec<usize> {
+        let path = &self.subgraph.borrow().path[..];
+        let mut addr = Vec::with_capacity(path.len() + 1);
+        addr.extend_from_slice(path);
+        addr.push(index);
+        addr
+    }
+
     fn add_edge(&self, source: Source, target: Target) {
         self.subgraph.borrow_mut().connect(source, target);
     }
