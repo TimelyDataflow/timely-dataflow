@@ -58,10 +58,10 @@ where
     fn config(&self) -> &Config { self.parent.config() }
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize, address: Vec<usize>) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
+    fn allocate<D: Data>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
         self.parent.allocate(identifier, address)
     }
-    fn pipeline<D: 'static>(&mut self, identifier: usize, address: Vec<usize>) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
+    fn pipeline<D: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
         self.parent.pipeline(identifier, address)
     }
     fn new_identifier(&mut self) -> usize {
@@ -96,14 +96,14 @@ where
     T: Timestamp+Refines<G::Timestamp>,
 {
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
-    fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
+    fn addr(&self) -> Rc<[usize]> { Rc::clone(&self.subgraph.borrow().path) }
 
-    fn addr_for_child(&self, index: usize) -> Vec<usize> {
+    fn addr_for_child(&self, index: usize) -> Rc<[usize]> {
         let path = &self.subgraph.borrow().path[..];
         let mut addr = Vec::with_capacity(path.len() + 1);
         addr.extend_from_slice(path);
         addr.push(index);
-        addr
+        addr.into()
     }
 
     fn add_edge(&self, source: Source, target: Target) {
@@ -125,9 +125,9 @@ where
         F: FnOnce(&mut Child<Self, T2>) -> R,
     {
         let index = self.subgraph.borrow_mut().allocate_child_id();
-        let path = self.subgraph.borrow().path.clone();
+        let path = self.addr_for_child(index);
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging(), self.progress_logging.clone(), name));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(path, self.logging(), self.progress_logging.clone(), name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,

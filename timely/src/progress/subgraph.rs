@@ -45,7 +45,7 @@ where
     pub name: String,
 
     /// A sequence of integers uniquely identifying the subgraph.
-    pub path: Vec<usize>,
+    pub path: Rc<[usize]>,
 
     /// The index assigned to the subgraph by its parent.
     index: usize,
@@ -94,20 +94,19 @@ where
         self.edge_stash.push((source, target));
     }
 
-    /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
+    /// Creates a `SubgraphBuilder` from a path of indexes from the dataflow root to the subgraph,
+    /// terminating with the local index of the new subgraph itself.
     pub fn new_from(
-        index: usize,
-        mut path: Vec<usize>,
+        path: Rc<[usize]>,
         logging: Option<Logger>,
         progress_logging: Option<ProgressLogger>,
         name: &str,
     )
         -> SubgraphBuilder<TOuter, TInner>
     {
-        path.push(index);
-
         // Put an empty placeholder for "outer scope" representative.
         let children = vec![PerOperatorState::empty(0, 0)];
+        let index = path[path.len() - 1];
 
         SubgraphBuilder {
             name: name.to_owned(),
@@ -142,7 +141,7 @@ where
                 name: child.name().to_owned(),
             });
         }
-        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
+        self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone()))
     }
 
     /// Now that initialization is complete, actually build a subgraph.
@@ -233,7 +232,7 @@ where
 {
     name: String,           // an informative name.
     /// Path of identifiers from the root.
-    pub path: Vec<usize>,
+    pub path: Rc<[usize]>,
     inputs: usize,          // number of inputs.
     outputs: usize,         // number of outputs.
 
@@ -640,7 +639,6 @@ impl<T: Timestamp> PerOperatorState<T> {
     pub fn new(
         mut scope: Box<dyn Operate<T>>,
         index: usize,
-        mut _path: Vec<usize>,
         identifier: usize,
         logging: Option<Logger>
     ) -> PerOperatorState<T>

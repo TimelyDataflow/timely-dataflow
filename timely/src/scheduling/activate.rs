@@ -218,13 +218,13 @@ impl SyncActivations {
 /// A capability to activate a specific path.
 #[derive(Clone, Debug)]
 pub struct Activator {
-    path: Vec<usize>,
+    path: Rc<[usize]>,
     queue: Rc<RefCell<Activations>>,
 }
 
 impl Activator {
     /// Creates a new activation handle
-    pub fn new(path: Vec<usize>, queue: Rc<RefCell<Activations>>) -> Self {
+    pub fn new(path: Rc<[usize]>, queue: Rc<RefCell<Activations>>) -> Self {
         Self {
             path,
             queue,
@@ -289,7 +289,7 @@ impl std::error::Error for SyncActivationError {}
 #[derive(Clone, Debug)]
 pub struct ActivateOnDrop<T>  {
     wrapped: T,
-    address: Rc<Vec<usize>>,
+    address: Rc<[usize]>,
     activator: Rc<RefCell<Activations>>,
 }
 
@@ -297,7 +297,7 @@ use std::ops::{Deref, DerefMut};
 
 impl<T> ActivateOnDrop<T> {
     /// Wraps an element so that it is unparked on drop.
-    pub fn new(wrapped: T, address: Rc<Vec<usize>>, activator: Rc<RefCell<Activations>>) -> Self {
+    pub fn new(wrapped: T, address: Rc<[usize]>, activator: Rc<RefCell<Activations>>) -> Self {
         Self { wrapped, address, activator }
     }
 }

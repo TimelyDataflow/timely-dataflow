@@ -1,5 +1,6 @@
 //! Broadcasts progress information among workers.
 
+use std::rc::Rc;
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::{Location, Port};
 use crate::communication::{Message, Push, Pull};
@@ -22,7 +23,7 @@ pub struct Progcaster<T:Timestamp> {
     /// Sequence number counter
     counter: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this subgraph
-    addr: Vec<usize>,
+    addr: Rc<[usize]>,
     /// Communication channel identifier
     channel_identifier: usize,
 
@@ -31,7 +32,7 @@ pub struct Progcaster<T:Timestamp> {
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Vec<usize>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
+    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         let (pushers, puller) = worker.allocate(channel_identifier, addr.clone());
@@ -82,7 +83,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     source: self.source,
                     channel: self.channel_identifier,
                     seq_no: self.counter,
-                    addr: self.addr.clone(),
+                    addr: self.addr.to_vec(),
                     messages,
                     internal,
                 });
@@ -152,7 +153,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     source: source,
                     seq_no: counter,
                     channel,
-                    addr: addr.clone(),
+                    addr: addr.to_vec(),
                     messages,
                     internal,
                 });
