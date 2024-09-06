@@ -94,8 +94,8 @@ where
         self.edge_stash.push((source, target));
     }
 
-    /// Creates a new Subgraph from a channel allocator and "descriptive" indices. The Subgraph's
-    /// index is the last element of `path`.
+    /// Creates a `SubgraphBuilder` from a path of indexes from the dataflow root to the subgraph,
+    /// terminating with the local index of the new subgraph itself.
     pub fn new_from(
         path: Rc<[usize]>,
         logging: Option<Logger>,
