@@ -80,7 +80,7 @@ fn main() {
 
             // Acquire a re-activator for this operator.
             use timely::scheduling::Scheduler;
-            let activator = scope.activator_for(&info.address[..]);
+            let activator = scope.activator_for(info.address);
 
             let mut cap = Some(capability);
             move |output| {
