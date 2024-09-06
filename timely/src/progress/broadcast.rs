@@ -103,7 +103,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     self.to_push = Some(Message::from_typed((
                         self.source,
                         self.counter,
-                        changes.clone().into_inner(),
+                        changes.clone().into_inner().to_vec(),
                     )));
                 }
 
