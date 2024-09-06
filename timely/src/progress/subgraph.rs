@@ -94,9 +94,9 @@ where
         self.edge_stash.push((source, target));
     }
 
-    /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
+    /// Creates a new Subgraph from a channel allocator and "descriptive" indices. The Subgraph's
+    /// index is the last element of `path`.
     pub fn new_from(
-        index: usize,
         path: Rc<[usize]>,
         logging: Option<Logger>,
         progress_logging: Option<ProgressLogger>,
@@ -106,6 +106,7 @@ where
     {
         // Put an empty placeholder for "outer scope" representative.
         let children = vec![PerOperatorState::empty(0, 0)];
+        let index = path[path.len() - 1];
 
         SubgraphBuilder {
             name: name.to_owned(),

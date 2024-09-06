@@ -127,7 +127,7 @@ where
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.addr_for_child(index);
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(index, path, self.logging(), self.progress_logging.clone(), name));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(path, self.logging(), self.progress_logging.clone(), name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
