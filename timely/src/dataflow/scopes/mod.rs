@@ -1,5 +1,6 @@
 //! Hierarchical organization of timely dataflow graphs.
 
+use std::rc::Rc;
 use crate::progress::{Timestamp, Operate, Source, Target};
 use crate::order::Product;
 use crate::progress::timestamp::Refines;
@@ -31,11 +32,11 @@ pub trait Scope: ScopeParent {
     fn name(&self) -> String;
 
     /// A sequence of scope identifiers describing the path from the worker root to this scope.
-    fn addr(&self) -> Vec<usize>;
+    fn addr(&self) -> Rc<[usize]>;
 
     /// A sequence of scope identifiers describing the path from the worker root to the child
     /// indicated by `index`.
-    fn addr_for_child(&self, index: usize) -> Vec<usize>;
+    fn addr_for_child(&self, index: usize) -> Rc<[usize]>;
 
     /// Connects a source of data with a target of the data. This only links the two for
     /// the purposes of tracking progress, rather than effect any data movement itself.

@@ -179,7 +179,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 #[derive(Debug)]
 struct Operator<T:Timestamp> {
     name: String,
-    address: Vec<usize>,
+    address: Rc<[usize]>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     progress:   Rc<RefCell<ChangeBatch<T>>>,           // times closed since last asked
     messages:   Rc<RefCell<ChangeBatch<T>>>,           // messages sent since last asked

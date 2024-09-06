@@ -112,7 +112,7 @@ impl<G: Scope> UnorderedInput<G> for G {
 
 struct UnorderedOperator<T:Timestamp> {
     name: String,
-    address: Vec<usize>,
+    address: Rc<[usize]>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     internal:   Rc<RefCell<ChangeBatch<T>>>,
     produced:   Rc<RefCell<ChangeBatch<T>>>,

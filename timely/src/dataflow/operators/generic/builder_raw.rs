@@ -58,7 +58,7 @@ pub struct OperatorBuilder<G: Scope> {
     scope: G,
     index: usize,
     global: usize,
-    address: Vec<usize>,    // path to the operator (ending with index).
+    address: Rc<[usize]>,    // path to the operator (ending with index).
     shape: OperatorShape,
     summary: Vec<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>,
 }
@@ -184,7 +184,7 @@ where
     L: FnMut(&mut SharedProgress<T>)->bool+'static,
 {
     shape: OperatorShape,
-    address: Vec<usize>,
+    address: Rc<[usize]>,
     logic: L,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     activations: Rc<RefCell<Activations>>,

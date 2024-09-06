@@ -334,7 +334,7 @@ impl<T: Timestamp> Debug for InputCapability<T> {
 #[derive(Clone, Debug)]
 pub struct ActivateCapability<T: Timestamp> {
     pub(crate) capability: Capability<T>,
-    pub(crate) address: Rc<Vec<usize>>,
+    pub(crate) address: Rc<[usize]>,
     pub(crate) activations: Rc<RefCell<Activations>>,
 }
 
@@ -347,10 +347,10 @@ impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
 
 impl<T: Timestamp> ActivateCapability<T> {
     /// Creates a new activating capability.
-    pub fn new(capability: Capability<T>, address: Vec<usize>, activations: Rc<RefCell<Activations>>) -> Self {
+    pub fn new(capability: Capability<T>, address: Rc<[usize]>, activations: Rc<RefCell<Activations>>) -> Self {
         Self {
             capability,
-            address: Rc::new(address),
+            address,
             activations,
         }
     }

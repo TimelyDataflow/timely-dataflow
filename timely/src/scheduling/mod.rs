@@ -26,7 +26,7 @@ pub trait Scheduler {
     fn activations(&self) -> Rc<RefCell<Activations>>;
 
     /// Constructs an `Activator` tied to the specified operator address.
-    fn activator_for(&self, path: Vec<usize>) -> Activator {
+    fn activator_for(&self, path: Rc<[usize]>) -> Activator {
         Activator::new(path, self.activations())
     }
 

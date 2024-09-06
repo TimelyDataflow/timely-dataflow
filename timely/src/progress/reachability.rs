@@ -831,18 +831,18 @@ fn summarize_outputs<T: Timestamp>(
 
 /// Logging types for reachability tracking events.
 pub mod logging {
-
+    use std::rc::Rc;
     use crate::logging::{Logger, ProgressEventTimestampVec};
 
     /// A logger with additional identifying information about the tracker.
     pub struct TrackerLogger {
-        path: Vec<usize>,
+        path: Rc<[usize]>,
         logger: Logger<TrackerEvent>,
     }
 
     impl TrackerLogger {
         /// Create a new tracker logger from its fields.
-        pub fn new(path: Vec<usize>, logger: Logger<TrackerEvent>) -> Self {
+        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEvent>) -> Self {
             Self { path, logger }
         }
 
@@ -850,7 +850,7 @@ pub mod logging {
         pub fn log_source_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
             self.logger.log({
                 SourceUpdate {
-                    tracker_id: self.path.clone(),
+                    tracker_id: self.path.to_vec(),
                     updates,
                 }
             })
@@ -859,7 +859,7 @@ pub mod logging {
         pub fn log_target_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
             self.logger.log({
                 TargetUpdate {
-                    tracker_id: self.path.clone(),
+                    tracker_id: self.path.to_vec(),
                     updates,
                 }
             })

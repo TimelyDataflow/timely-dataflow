@@ -42,7 +42,7 @@ impl<S: Scope, C: Container> StreamCore<S, C> {
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
             id: identifier,
-            scope_addr: self.scope.addr(),
+            scope_addr: self.scope.addr().to_vec(),
             source: (self.name.node, self.name.port),
             target: (target.node, target.port),
         }));
