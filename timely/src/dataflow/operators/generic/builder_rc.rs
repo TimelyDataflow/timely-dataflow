@@ -64,7 +64,7 @@ impl<G: Scope> OperatorBuilder<G> {
     where
         P: ParallelizationContract<G::Timestamp, C> {
 
-        let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().outputs()];
+        let connection = (0..self.builder.shape().outputs()).map(|_| Antichain::from_elem(Default::default())).collect();
         self.new_input_connection(stream, pact, connection)
     }
 
@@ -94,7 +94,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output<CB: ContainerBuilder>(&mut self) -> (OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>, StreamCore<G, CB::Container>) {
-        let connection = vec![Antichain::from_elem(Default::default()); self.builder.shape().inputs()];
+        let connection = (0..self.builder.shape().inputs()).map(|_| Antichain::from_elem(Default::default())).collect();
         self.new_output_connection(connection)
     }
 

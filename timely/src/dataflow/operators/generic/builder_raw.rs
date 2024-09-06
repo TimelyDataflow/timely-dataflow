@@ -70,8 +70,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let global = scope.new_identifier();
         let index = scope.allocate_operator_index();
-        let mut address = scope.addr();
-        address.push(index);
+        let address = scope.addr_for(index);
         let peers = scope.peers();
 
         OperatorBuilder {
@@ -119,7 +118,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, &self.address[..], logging);
+        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, self.address.clone(), logging);
         let target = Target::new(self.index, self.shape.inputs);
         stream.connect_to(target, sender, channel_id);
 
@@ -175,7 +174,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Information describing the operator.
     pub fn operator_info(&self) -> OperatorInfo {
-        OperatorInfo::new(self.index, self.global, &self.address[..])
+        OperatorInfo::new(self.index, self.global, self.address.clone())
     }
 }
 

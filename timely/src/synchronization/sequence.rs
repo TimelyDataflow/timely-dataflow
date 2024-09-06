@@ -128,7 +128,7 @@ impl<T: ExchangeData> Sequencer<T> {
                 activator_source
                     .borrow_mut()
                     .replace(CatchupActivator {
-                        activator: scope.activator_for(&info.address[..]),
+                        activator: scope.activator_for(info.address),
                         catchup_until: None,
                     });
 

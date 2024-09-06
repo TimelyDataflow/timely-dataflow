@@ -224,9 +224,9 @@ pub struct Activator {
 
 impl Activator {
     /// Creates a new activation handle
-    pub fn new(path: &[usize], queue: Rc<RefCell<Activations>>) -> Self {
+    pub fn new(path: Vec<usize>, queue: Rc<RefCell<Activations>>) -> Self {
         Self {
-            path: path.to_vec(),
+            path,
             queue,
         }
     }
@@ -259,9 +259,9 @@ pub struct SyncActivator {
 
 impl SyncActivator {
     /// Creates a new thread-safe activation handle.
-    pub fn new(path: &[usize], queue: SyncActivations) -> Self {
+    pub fn new(path: Vec<usize>, queue: SyncActivations) -> Self {
         Self {
-            path: path.to_vec(),
+            path,
             queue,
         }
     }

@@ -91,10 +91,9 @@ impl<G: Scope> UnorderedInput<G> for G {
         let peers = self.peers();
 
         let index = self.allocate_operator_index();
-        let mut address = self.addr();
-        address.push(index);
+        let address = self.addr_for(index);
 
-        let cap = ActivateCapability::new(cap, &address, self.activations());
+        let cap = ActivateCapability::new(cap, address.clone(), self.activations());
 
         let helper = UnorderedHandle::new(counter);
 

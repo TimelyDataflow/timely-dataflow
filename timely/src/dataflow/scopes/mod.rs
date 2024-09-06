@@ -33,6 +33,10 @@ pub trait Scope: ScopeParent {
     /// A sequence of scope identifiers describing the path from the worker root to this scope.
     fn addr(&self) -> Vec<usize>;
 
+    /// A sequence of scope identifiers describing the path from the worker root to the index in
+    /// this scope.
+    fn addr_for(&self, index: usize) -> Vec<usize>;
+
     /// Connects a source of data with a target of the data. This only links the two for
     /// the purposes of tracking progress, rather than effect any data movement itself.
     fn add_edge(&self, source: Source, target: Target);
