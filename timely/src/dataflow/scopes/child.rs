@@ -98,7 +98,7 @@ where
     fn name(&self) -> String { self.subgraph.borrow().name.clone() }
     fn addr(&self) -> Vec<usize> { self.subgraph.borrow().path.clone() }
 
-    fn addr_for(&self, index: usize) -> Vec<usize> {
+    fn addr_for_child(&self, index: usize) -> Vec<usize> {
         let path = &self.subgraph.borrow().path[..];
         let mut addr = Vec::with_capacity(path.len() + 1);
         addr.extend_from_slice(path);

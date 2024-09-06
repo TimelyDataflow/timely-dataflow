@@ -153,7 +153,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         let produced = counter.produced().clone();
 
         let index = self.allocate_operator_index();
-        let address = self.addr_for(index);
+        let address = self.addr_for_child(index);
 
         handle.activate.push(self.activator_for(address.clone()));
 

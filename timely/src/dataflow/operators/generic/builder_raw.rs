@@ -70,7 +70,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let global = scope.new_identifier();
         let index = scope.allocate_operator_index();
-        let address = scope.addr_for(index);
+        let address = scope.addr_for_child(index);
         let peers = scope.peers();
 
         OperatorBuilder {
