@@ -131,7 +131,7 @@ impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
                 if !progress.frontiers[0].is_empty() {
                     // transmit any frontier progress.
                     let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
-                    event_pusher.push(Event::Progress(to_send.into_inner()));
+                    event_pusher.push(Event::Progress(to_send.into_inner().to_vec()));
                 }
 
                 use crate::communication::message::RefOrMut;

@@ -1,5 +1,7 @@
 //! A collection of updates of the form `(T, i64)`.
 
+use smallvec::SmallVec;
+
 /// A collection of updates of the form `(T, i64)`.
 ///
 /// A `ChangeBatch` accumulates updates of the form `(T, i64)`, where it is capable of consolidating
@@ -10,14 +12,14 @@
 /// that they may provoke a compaction. I've tried to prevent exposing methods that allow surprisingly
 /// expensive operations; all operations should take an amortized constant or logarithmic time.
 #[derive(Clone, Debug, Eq, PartialEq, Abomonation, Serialize, Deserialize)]
-pub struct ChangeBatch<T> {
+pub struct ChangeBatch<T, const X: usize = 2> {
     // A list of updates to which we append.
-    updates: Vec<(T, i64)>,
+    updates: SmallVec<[(T, i64); X]>,
     // The length of the prefix of `self.updates` known to be compact.
     clean: usize,
 }
 
-impl<T> ChangeBatch<T> {
+impl<T, const X: usize> ChangeBatch<T, X> {
 
     /// Allocates a new empty `ChangeBatch`.
     ///
@@ -29,9 +31,9 @@ impl<T> ChangeBatch<T> {
     /// let mut batch = ChangeBatch::<usize>::new();
     /// assert!(batch.is_empty());
     ///```
-    pub fn new() -> ChangeBatch<T> {
+    pub fn new() -> Self {
         ChangeBatch {
-            updates: Vec::new(),
+            updates: SmallVec::new(),
             clean: 0,
         }
     }
@@ -46,9 +48,9 @@ impl<T> ChangeBatch<T> {
     /// let mut batch = ChangeBatch::<usize>::with_capacity(10);
     /// assert!(batch.is_empty());
     ///```
-    pub fn with_capacity(capacity: usize) -> ChangeBatch<T> {
+    pub fn with_capacity(capacity: usize) -> Self {
         ChangeBatch {
-            updates: Vec::with_capacity(capacity),
+            updates: SmallVec::with_capacity(capacity),
             clean: 0,
         }
     }
@@ -59,7 +61,7 @@ impl<T> ChangeBatch<T> {
     }
 
     /// Expose the internal vector of updates.
-    pub fn unstable_internal_updates(&self) -> &Vec<(T, i64)> { &self.updates }
+    pub fn unstable_internal_updates(&self) -> &SmallVec<[(T, i64); X]> { &self.updates }
 
     /// Expose the internal value of `clean`.
     pub fn unstable_internal_clean(&self) -> usize { self.clean }
@@ -82,7 +84,7 @@ impl<T> ChangeBatch<T> {
     }
 }
 
-impl<T> ChangeBatch<T>
+impl<T, const X: usize> ChangeBatch<T, X>
 where
     T: Ord,
 {
@@ -97,7 +99,7 @@ where
     /// let mut batch = ChangeBatch::<usize>::new_from(17, 1);
     /// assert!(!batch.is_empty());
     ///```
-    pub fn new_from(key: T, val: i64) -> ChangeBatch<T> {
+    pub fn new_from(key: T, val: i64) -> Self {
         let mut result = ChangeBatch::new();
         result.update(key, val);
         result
@@ -150,9 +152,9 @@ where
     /// use timely::progress::ChangeBatch;
     ///
     /// let batch = ChangeBatch::<usize>::new_from(17, 1);
-    /// assert_eq!(batch.into_inner(), vec![(17, 1)]);
+    /// assert_eq!(batch.into_inner().to_vec(), vec![(17, 1)]);
     ///```
-    pub fn into_inner(mut self) -> Vec<(T, i64)> {
+    pub fn into_inner(mut self) -> SmallVec<[(T, i64); X]> {
         self.compact();
         self.updates
     }
@@ -197,7 +199,7 @@ where
     /// assert!(batch.is_empty());
     ///```
     #[inline]
-    pub fn drain(&mut self) -> ::std::vec::Drain<(T, i64)> {
+    pub fn drain(&mut self) -> smallvec::Drain<[(T, i64); X]> {
         self.compact();
         self.clean = 0;
         self.updates.drain(..)
@@ -270,7 +272,7 @@ where
     /// assert!(!batch2.is_empty());
     ///```
     #[inline]
-    pub fn drain_into(&mut self, other: &mut ChangeBatch<T>) where T: Clone {
+    pub fn drain_into(&mut self, other: &mut ChangeBatch<T, X>) where T: Clone {
         if other.updates.is_empty() {
             ::std::mem::swap(self, other);
         }
@@ -311,7 +313,7 @@ where
     }
 }
 
-impl<T> Default for ChangeBatch<T> {
+impl<T, const X: usize> Default for ChangeBatch<T, X> {
     fn default() -> Self {
         Self::new()
     }
