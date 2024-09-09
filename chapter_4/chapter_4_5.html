@@ -182,23 +182,12 @@
 <pre><code class="language-rust ignore">#[derive(Clone)]
 struct YourStruct { .. }</code></pre>
 <h2 id="the-exchangedata-trait"><a class="header" href="#the-exchangedata-trait">The <code>ExchangeData</code> trait</a></h2>
-<p>The <code>ExchangeData</code> trait is more complicated, and is established in the <code>communication/</code> module. There are two options for this trait, which are determined by whether you use the <code>--bincode</code> feature at compilation, or not.</p>
-<ul>
-<li>
-<p>If you use <code>--bincode</code> then the trait is a synonym for</p>
+<p>The <code>ExchangeData</code> trait is more complicated, and is established in the <code>communication/</code> module. The trait is a synonym for</p>
 <pre><code class="language-rust ignore">Send+Sync+Any+serde::Serialize+for&lt;'a&gt;serde::Deserialize&lt;'a&gt;+'static</code></pre>
 <p>where <code>serde</code> is Rust's most popular serialization and deserialization crate. A great many types implement these traits. If your types does not, you should add these decorators to their definition:</p>
 <pre><code class="language-rust ignore">#[derive(Serialize, Deserialize)]</code></pre>
 <p>You must include the <code>serde</code> crate, and if not on Rust 2018 the <code>serde_derive</code> crate.</p>
-<p>The downside to the <code>--bincode</code> flag is that deserialization will always involve a clone of the data, which has the potential to adversely impact performance. For example, if you have structures that contain lots of strings, timely dataflow will create allocations for each string even if you do not plan to use all of them.</p>
-</li>
-<li>
-<p>If you do not use the <code>--bincode</code> feature, then the <code>Serialize</code> and <code>Deserialize</code> requirements are replaced by <code>Abomonation</code>, from the <code>abomonation</code> crate. This trait allows in-place deserialization, but is implemented for fewer types, and has the potential to be a bit scarier (due to in-place pointer correction).</p>
-<p>Your types likely do not implement <code>Abomonation</code> by default, but you can similarly use</p>
-<pre><code class="language-rust ignore">#[derive(Abomonation)]</code></pre>
-<p>You must include the <code>abomonation</code> and <code>abomonation_derive</code> crate for this to work correctly.</p>
-</li>
-</ul>
+<p>The downside to is that deserialization will always involve a clone of the data, which has the potential to adversely impact performance. For example, if you have structures that contain lots of strings, timely dataflow will create allocations for each string even if you do not plan to use all of them.</p>
 <h2 id="an-example"><a class="header" href="#an-example">An example</a></h2>
 <p>Let's imagine you would like to play around with a tree data structure as something you might send around in timely dataflow. I've written the following candidate example:</p>
 <pre><code class="language-rust ignore">extern crate timely;
@@ -278,7 +267,7 @@ impl&lt;D&gt; TreeNode&lt;D&gt; {
     }
 }</code></pre>
 <p>We get a new error. A not especially helpful error. It says that it cannot find an <code>exchange</code> method, or more specifically that one exists but it doesn't apply to our type at hand. This is because the data need to satisfy the <code>ExchangeData</code> trait but do not. It would be better if this were clearer in the error messages, I agree.</p>
-<p>We can fix the problem two ways. First, if you would like to use <code>bincode</code>, then we update the source like so:</p>
+<p>The fix is to update the source like so:</p>
 <pre><code class="language-rust ignore">#[macro_use]
 extern crate serde_derive;
 extern crate serde;
@@ -288,8 +277,8 @@ struct TreeNode&lt;D&gt; {
     data: D,
     children: Vec&lt;TreeNode&lt;D&gt;&gt;,
 }</code></pre>
-<p>and make sure to include the <code>serde_derive</code> and <code>serde</code> crates. Now when we run things (notice the <code>--features</code> flag) we see:</p>
-<pre><code class="language-ignore">    Echidnatron% cargo run --example types --features bincode
+<p>and make sure to include the <code>serde_derive</code> and <code>serde</code> crates.</p>
+<pre><code class="language-ignore">    Echidnatron% cargo run --example types
         Finished dev [unoptimized + debuginfo] target(s) in 0.07s
          Running `target/debug/examples/types`
     seen: TreeNode { data: 0, children: [] }
