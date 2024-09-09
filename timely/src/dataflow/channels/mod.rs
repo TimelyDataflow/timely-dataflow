@@ -14,7 +14,7 @@ pub mod pact;
 pub type Bundle<T, C> = crate::communication::Message<Message<T, C>>;
 
 /// A serializable representation of timestamped data.
-#[derive(Clone, Abomonation, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Message<T, C> {
     /// The timestamp associated with the message.
     pub time: T,

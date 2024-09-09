@@ -15,7 +15,7 @@ pub mod reachability;
 pub mod subgraph;
 
 /// A timely dataflow location.
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Abomonation, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub struct Location {
     /// A scope-local operator identifier.
     pub node: usize,
@@ -57,7 +57,7 @@ impl From<Source> for Location {
 }
 
 /// An operator port.
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Abomonation, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
 pub enum Port {
     /// An operator input.
     Target(usize),

@@ -5,7 +5,7 @@
 //! of timestamps.
 
 /// Data and progress events of the captured stream.
-#[derive(Debug, Clone, Abomonation, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub enum Event<T, C> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
@@ -118,8 +118,8 @@ pub mod link {
 /// A binary event pusher and iterator.
 pub mod binary {
 
-    use std::io::Write;
-    use abomonation::Abomonation;
+    use serde::{de::DeserializeOwned, Serialize};
+
     use super::{Event, EventPusher, EventIterator};
 
     /// A wrapper for `W: Write` implementing `EventPusher<T, C>`.
@@ -138,22 +138,17 @@ pub mod binary {
         }
     }
 
-    impl<T: Abomonation, C: Abomonation, W: ::std::io::Write> EventPusher<T, C> for EventWriter<T, C, W> {
+    impl<T: Serialize, C: Serialize, W: ::std::io::Write> EventPusher<T, C> for EventWriter<T, C, W> {
         fn push(&mut self, event: Event<T, C>) {
             // TODO: `push` has no mechanism to report errors, so we `unwrap`.
-            unsafe { ::abomonation::encode(&event, &mut self.stream).expect("Event abomonation/write failed"); }
+            ::bincode::serialize_into(&mut self.stream, &event).expect("Event bincode/write failed");
         }
     }
 
     /// A Wrapper for `R: Read` implementing `EventIterator<T, D>`.
     pub struct EventReader<T, C, R: ::std::io::Read> {
         reader: R,
-        bytes: Vec<u8>,
-        buff1: Vec<u8>,
-        buff2: Vec<u8>,
-        consumed: usize,
-        valid: usize,
-        phant: ::std::marker::PhantomData<(T, C)>,
+        decoded: Option<Event<T, C>>,
     }
 
     impl<T, C, R: ::std::io::Read> EventReader<T, C, R> {
@@ -161,40 +156,15 @@ pub mod binary {
         pub fn new(r: R) -> Self {
             Self {
                 reader: r,
-                bytes: vec![0u8; 1 << 20],
-                buff1: vec![],
-                buff2: vec![],
-                consumed: 0,
-                valid: 0,
-                phant: ::std::marker::PhantomData,
+                decoded: None,
             }
         }
     }
 
-    impl<T: Abomonation, C: Abomonation, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
+    impl<T: DeserializeOwned, C: DeserializeOwned, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
         fn next(&mut self) -> Option<&Event<T, C>> {
-
-            // if we can decode something, we should just return it! :D
-            if unsafe { ::abomonation::decode::<Event<T, C>>(&mut self.buff1[self.consumed..]) }.is_some() {
-                let (item, rest) = unsafe { ::abomonation::decode::<Event<T, C>>(&mut self.buff1[self.consumed..]) }.unwrap();
-                self.consumed = self.valid - rest.len();
-                return Some(item);
-            }
-            // if we exhaust data we should shift back (if any shifting to do)
-            if self.consumed > 0 {
-                self.buff2.clear();
-                self.buff2.write_all(&self.buff1[self.consumed..]).unwrap();
-                ::std::mem::swap(&mut self.buff1, &mut self.buff2);
-                self.valid = self.buff1.len();
-                self.consumed = 0;
-            }
-
-            if let Ok(len) = self.reader.read(&mut self.bytes[..]) {
-                self.buff1.write_all(&self.bytes[..len]).unwrap();
-                self.valid = self.buff1.len();
-            }
-
-            None
+            self.decoded = ::bincode::deserialize_from(&mut self.reader).ok();
+            self.decoded.as_ref()
         }
     }
 }

@@ -17,15 +17,13 @@ license = "MIT"
 
 [features]
 default = ["getopts"]
-bincode= ["timely_communication/bincode"]
 getopts = ["getopts-dep", "timely_communication/getopts"]
 
 [dependencies]
 getopts-dep = { package = "getopts", version = "0.2.14", optional = true }
+bincode = { version = "1.0" }
 serde = "1.0"
 serde_derive = "1.0"
-abomonation = "0.7.3"
-abomonation_derive = "0.5"
 timely_bytes = { path = "../bytes", version = "0.12" }
 timely_logging = { path = "../logging", version = "0.12" }
 timely_communication = { path = "../communication", version = "0.12", default-features = false }

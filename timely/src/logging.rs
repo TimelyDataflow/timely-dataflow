@@ -48,7 +48,7 @@ impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(
     }
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// The creation of an `Operate` implementor.
 pub struct OperatesEvent {
     /// Worker-unique identifier for the operator.
@@ -59,7 +59,7 @@ pub struct OperatesEvent {
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// The creation of a channel between operators.
 pub struct ChannelsEvent {
     /// Worker-unique identifier for the channel
@@ -145,14 +145,14 @@ pub struct TimelyProgressEvent {
     pub internal: Box<dyn ProgressEventTimestampVec>,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// External progress pushed onto an operator
 pub struct PushProgressEvent {
     /// Worker-unique operator identifier
     pub op_id: usize,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Message send or receive event
 pub struct MessagesEvent {
     /// `true` if send event, `false` if receive event.
@@ -170,7 +170,7 @@ pub struct MessagesEvent {
 }
 
 /// Records the starting and stopping of an operator.
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum StartStop {
     /// Operator starts.
     Start,
@@ -178,7 +178,7 @@ pub enum StartStop {
     Stop,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Operator start or stop.
 pub struct ScheduleEvent {
     /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
@@ -196,14 +196,14 @@ impl ScheduleEvent {
     pub fn stop(id: usize) -> Self { ScheduleEvent { id, start_stop: StartStop::Stop } }
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Operator shutdown.
 pub struct ShutdownEvent {
     /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
     pub id: usize,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct ApplicationEvent {
     /// Unique event type identifier
@@ -212,28 +212,28 @@ pub struct ApplicationEvent {
     pub is_start: bool,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct GuardedMessageEvent {
     /// True when activity begins, false when it stops
     pub is_start: bool,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct GuardedProgressEvent {
     /// True when activity begins, false when it stops
     pub is_start: bool,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// Identifier of the worker that generated a log line
 pub struct TimelySetup {
     /// Worker index
     pub index: usize,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Kind of communication channel
 pub enum CommChannelKind {
     /// Communication channel carrying progress information
@@ -242,7 +242,7 @@ pub enum CommChannelKind {
     Data,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Event on a communication channel
 pub struct CommChannelsEvent {
     /// Communication channel identifier
@@ -251,7 +251,7 @@ pub struct CommChannelsEvent {
     pub kind: CommChannelKind,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Input logic start/stop
 pub struct InputEvent {
     /// True when activity begins, false when it stops
@@ -259,7 +259,7 @@ pub struct InputEvent {
 }
 
 /// Records the starting and stopping of an operator.
-#[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ParkEvent {
     /// Worker parks.
     Park(Option<Duration>),
@@ -274,7 +274,7 @@ impl ParkEvent {
     pub fn unpark() -> Self { ParkEvent::Unpark }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Abomonation, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// An event in a timely worker
 pub enum TimelyEvent {
     /// Operator creation.

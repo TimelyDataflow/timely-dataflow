@@ -1,7 +1,9 @@
 //! Configuration and events for communication logging.
 
+use serde::{Serialize, Deserialize};
+
 /// Configuration information about a communication thread.
-#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct CommunicationSetup {
     /// True when this is a send thread (or the receive thread).
     pub sender: bool,
@@ -12,7 +14,7 @@ pub struct CommunicationSetup {
 }
 
 /// Various communication events.
-#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub enum CommunicationEvent {
     /// An observed message.
     Message(MessageEvent),
@@ -21,7 +23,7 @@ pub enum CommunicationEvent {
 }
 
 /// An observed message.
-#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct MessageEvent {
     /// true for send event, false for receive event
     pub is_send: bool,
@@ -30,7 +32,7 @@ pub struct MessageEvent {
 }
 
 /// Starting or stopping communication threads.
-#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct StateEvent {
     /// Is the thread a send (vs a recv) thread.
     pub send: bool,

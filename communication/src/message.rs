@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 use bytes::arc::Bytes;
-use abomonation;
 use crate::Data;
 
 /// Either an immutable or mutable reference.
@@ -68,8 +67,6 @@ pub struct Message<T> {
 
 /// Possible returned representations from a channel.
 enum MessageContents<T> {
-    /// Binary representation. Only available as a reference.
-    Binary(abomonation::abomonated::Abomonated<T, Bytes>),
     /// Rust typed instance. Available for ownership.
     Owned(T),
     /// Atomic reference counted. Only available as a reference.
@@ -88,7 +85,6 @@ impl<T> Message<T> {
     /// Destructures and returns any typed data.
     pub fn if_typed(self) -> Option<T> {
         match self.payload {
-            MessageContents::Binary(_) => None,
             MessageContents::Owned(typed) => Some(typed),
             MessageContents::Arc(_) => None,
         }
@@ -96,7 +92,6 @@ impl<T> Message<T> {
     /// Returns a mutable reference, if typed.
     pub fn if_mut(&mut self) -> Option<&mut T> {
         match &mut self.payload {
-            MessageContents::Binary(_) => None,
             MessageContents::Owned(typed) => Some(typed),
             MessageContents::Arc(_) => None,
         }
@@ -108,54 +103,12 @@ impl<T> Message<T> {
     /// data are serialized binary data.
     pub fn as_ref_or_mut(&mut self) -> RefOrMut<T> {
         match &mut self.payload {
-            MessageContents::Binary(bytes) => { RefOrMut::Ref(bytes) },
             MessageContents::Owned(typed) => { RefOrMut::Mut(typed) },
             MessageContents::Arc(typed) => { RefOrMut::Ref(typed) },
         }
     }
 }
 
-// These methods require `T` to implement `Abomonation`, for serialization functionality.
-#[cfg(not(feature = "bincode"))]
-impl<T: Data> Message<T> {
-    /// Wrap bytes as a message.
-    ///
-    /// # Safety
-    ///
-    /// This method is unsafe, in that `Abomonated::new()` is unsafe: it presumes that
-    /// the binary data can be safely decoded, which is unsafe for e.g. UTF8 data and
-    /// enumerations (perhaps among many other types).
-    pub unsafe fn from_bytes(bytes: Bytes) -> Self {
-        let abomonated = abomonation::abomonated::Abomonated::new(bytes).expect("Abomonated::new() failed.");
-        Message { payload: MessageContents::Binary(abomonated) }
-    }
-
-    /// The number of bytes required to serialize the data.
-    pub fn length_in_bytes(&self) -> usize {
-        match &self.payload {
-            MessageContents::Binary(bytes) => { bytes.as_bytes().len() },
-            MessageContents::Owned(typed) => { abomonation::measure(typed) },
-            MessageContents::Arc(typed) =>{ abomonation::measure::<T>(&**typed) } ,
-        }
-    }
-
-    /// Writes the binary representation into `writer`.
-    pub fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
-        match &self.payload {
-            MessageContents::Binary(bytes) => {
-                writer.write_all(bytes.as_bytes()).expect("Message::into_bytes(): write_all failed.");
-            },
-            MessageContents::Owned(typed) => {
-                unsafe { abomonation::encode(typed, writer).expect("Message::into_bytes(): Abomonation::encode failed"); }
-            },
-            MessageContents::Arc(typed) => {
-                unsafe { abomonation::encode(&**typed, writer).expect("Message::into_bytes(): Abomonation::encode failed"); }
-            },
-        }
-    }
-}
-
-#[cfg(feature = "bincode")]
 impl<T: Data> Message<T> {
     /// Wrap bytes as a message.
     pub fn from_bytes(bytes: Bytes) -> Self {
@@ -166,7 +119,6 @@ impl<T: Data> Message<T> {
     /// The number of bytes required to serialize the data.
     pub fn length_in_bytes(&self) -> usize {
         match &self.payload {
-            MessageContents::Binary(bytes) => { bytes.as_bytes().len() },
             MessageContents::Owned(typed) => {
                 ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize
             },
@@ -179,9 +131,6 @@ impl<T: Data> Message<T> {
     /// Writes the binary representation into `writer`.
     pub fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
         match &self.payload {
-            MessageContents::Binary(bytes) => {
-                writer.write_all(bytes.as_bytes()).expect("Message::into_bytes(): write_all failed.");
-            },
             MessageContents::Owned(typed) => {
                 ::bincode::serialize_into(writer, &typed).expect("bincode::serialize_into() failed");
             },
@@ -197,7 +146,6 @@ impl<T> ::std::ops::Deref for Message<T> {
     fn deref(&self) -> &Self::Target {
         // TODO: In principle we have aready decoded, but let's go again
         match &self.payload {
-            MessageContents::Binary(bytes) => { bytes },
             MessageContents::Owned(typed) => { typed },
             MessageContents::Arc(typed) => { typed },
         }
@@ -208,7 +156,6 @@ impl<T: Clone> Message<T> {
     /// Produces a typed instance of the wrapped element.
     pub fn into_typed(self) -> T {
         match self.payload {
-            MessageContents::Binary(bytes) => bytes.clone(),
             MessageContents::Owned(instance) => instance,
             // TODO: Could attempt `Arc::try_unwrap()` here.
             MessageContents::Arc(instance) => (*instance).clone(),
@@ -218,7 +165,6 @@ impl<T: Clone> Message<T> {
     pub fn as_mut(&mut self) -> &mut T {
 
         let cloned: Option<T> = match &self.payload {
-            MessageContents::Binary(bytes) => Some((*bytes).clone()),
             MessageContents::Owned(_) => None,
             // TODO: Could attempt `Arc::try_unwrap()` here.
             MessageContents::Arc(typed) => Some((**typed).clone()),

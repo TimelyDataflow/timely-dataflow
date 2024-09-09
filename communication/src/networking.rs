@@ -9,6 +9,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use serde::{Deserialize, Serialize};
 
 // This constant is sent along immediately after establishing a TCP stream, so
 // that it is easy to sniff out Timely traffic when it is multiplexed with
@@ -21,7 +22,7 @@ type ByteOrder = byteorder::BigEndian;
 /// Framing data for each `Vec<u8>` transmission, indicating a typed channel, the source and
 /// destination workers, and the length in bytes.
 // *Warning*: Adding, removing and altering fields requires to adjust the implementation below!
-#[derive(Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct MessageHeader {
     /// index of channel.
     pub channel:    usize,
