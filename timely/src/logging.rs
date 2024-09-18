@@ -10,6 +10,7 @@ pub type TimelyLogger = Logger<TimelyEvent>;
 pub type TimelyProgressLogger = Logger<TimelyProgressEvent>;
 
 use std::time::Duration;
+use serde::{Deserialize, Serialize};
 use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
@@ -81,7 +82,7 @@ pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
     /// # Example
     /// ```rust
     /// let ts = vec![(0usize, 0usize, (23u64, 10u64), -4i64), (0usize, 0usize, (23u64, 11u64), 1i64)];
-    /// let ts: &timely::logging::ProgressEventTimestampVec = &ts;
+    /// let ts: &dyn timely::logging::ProgressEventTimestampVec = &ts;
     /// for (n, p, t, d) in ts.iter() {
     ///     print!("{:?}, ", (n, p, t.as_any().downcast_ref::<(u64, u64)>(), d));
     /// }
