@@ -1,5 +1,6 @@
 //! Progress tracking mechanisms to support notification in timely dataflow
 
+use serde::{Deserialize, Serialize};
 pub use self::operate::Operate;
 pub use self::subgraph::{Subgraph, SubgraphBuilder};
 pub use self::timestamp::{Timestamp, PathSummary};

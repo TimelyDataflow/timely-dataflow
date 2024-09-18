@@ -1,5 +1,6 @@
 //! Tracks minimal sets of mutually incomparable elements of a partial order.
 
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 use crate::progress::ChangeBatch;

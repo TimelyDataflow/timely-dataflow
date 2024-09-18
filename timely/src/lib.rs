@@ -58,8 +58,6 @@
 
 extern crate bincode;
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 extern crate timely_communication;
 extern crate timely_bytes;
 extern crate timely_logging;

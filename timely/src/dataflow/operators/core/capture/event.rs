@@ -4,6 +4,8 @@
 //! stream. There are two types of events, (i) the receipt of data and (ii) reports of progress
 //! of timestamps.
 
+use serde::{Deserialize, Serialize};
+
 /// Data and progress events of the captured stream.
 #[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
 pub enum Event<T, C> {

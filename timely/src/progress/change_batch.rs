@@ -1,5 +1,6 @@
 //! A collection of updates of the form `(T, i64)`.
 
+use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
 /// A collection of updates of the form `(T, i64)`.

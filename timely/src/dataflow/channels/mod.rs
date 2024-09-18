@@ -1,5 +1,6 @@
 //! Structured communication between timely dataflow operators.
 
+use serde::{Deserialize, Serialize};
 use crate::communication::Push;
 use crate::Container;
 

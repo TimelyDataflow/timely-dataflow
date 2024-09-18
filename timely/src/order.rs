@@ -61,6 +61,7 @@ pub use product::flatcontainer::ProductRegion as FlatProductRegion;
 /// A pair of timestamps, partially ordered by the product order.
 mod product {
     use std::fmt::{Formatter, Error, Debug};
+    use serde::{Deserialize, Serialize};
 
     use crate::container::columnation::{Columnation, Region};
     use crate::order::{Empty, TotalOrder};
