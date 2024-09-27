@@ -560,6 +560,7 @@ impl<T> MutableAntichain<T> {
     /// This method is meant to be used for bulk updates to the frontier, and does more work than one might do
     /// for single updates, but is meant to be an efficient way to process multiple updates together. This is
     /// especially true when we want to apply very large numbers of updates.
+    #[inline]
     fn rebuild(&mut self)
     where
         T: Clone + PartialOrder + Ord,
