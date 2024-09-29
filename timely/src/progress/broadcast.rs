@@ -62,7 +62,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
             self.progress_logging.as_ref().map(|l| {
 
                 // Pre-allocate enough space; we transfer ownership, so there is not
-                // an apportunity to re-use allocations (w/o changing the logging
+                // an opportunity to re-use allocations (w/o changing the logging
                 // interface to accept references).
                 let mut messages = Box::new(Vec::with_capacity(changes.len()));
                 let mut internal = Box::new(Vec::with_capacity(changes.len()));

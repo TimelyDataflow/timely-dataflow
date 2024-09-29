@@ -50,7 +50,7 @@ The address associated with each operator, a `[usize]` used to start with the id
 
 The `Worker` and the `Subgraph` operator no longer schedules all of their child dataflows and scopes by default. Instead, they track "active" children and schedule only those. Operators become active by receiving a message, a progress update, or by explicit activation. Some operators, source as `source`, have no inputs and will require explicit activation to run more than once. Operators that yield before completing all of their work (good for you!) should explicitly re-activate themselves to ensure they are re-scheduled even if they receive no further messages or progress updates. Documentation examples for the `source` method demonstrate this.
 
-The `dataflow_using` method has been generalized to support arbitrary dataflow names, loggers, and additional resources the dataflow should keep alive. Its name has been chaged to `dataflow_core`.
+The `dataflow_using` method has been generalized to support arbitrary dataflow names, loggers, and additional resources the dataflow should keep alive. Its name has been changed to `dataflow_core`.
 
 You can now construct `feedback` operators with a `Default::default()` path summary, which has the ability to not increment timestamps. Instead of panicking, Timely's reachability module will inform you if a non-incrementing cycle is detected, at which point you should probably double check your code. It is not 100% known what the system will do in this case (e.g., the progress tracker may enter a non-terminating loop; this is on you, not us ;)).
 

@@ -23,7 +23,7 @@ fn main() {
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();
 
-        // Create a dataflow that discards input data (just syncronizes).
+        // Create a dataflow that discards input data (just synchronizes).
         worker.dataflow(|scope| {
             scope
                 .input_from(&mut input)     // read input.

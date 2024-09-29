@@ -158,7 +158,7 @@ where
         let inputs = self.input_messages.len();
         let outputs = self.output_capabilities.len();
 
-        // Create empty child zero represenative.
+        // Create empty child zero representative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
         let mut builder = reachability::Builder::new();
