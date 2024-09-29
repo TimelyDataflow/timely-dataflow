@@ -56,7 +56,7 @@ where
     // At the start of each iteration, `self.buffer[..self.length]` represents valid
     // data, and the remaining capacity is available for reading from the reader.
     //
-    // Once the buffer fills, we need to copy uncomplete messages to a new shared
+    // Once the buffer fills, we need to copy incomplete messages to a new shared
     // allocation and place the existing Bytes into `self.in_progress`, so that it
     // can be recovered once all readers have read what they need to.
     let mut active = true;

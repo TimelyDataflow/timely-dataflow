@@ -124,7 +124,7 @@ impl<T: ExchangeData> Sequencer<T> {
             // a source that attempts to pull from `recv` and produce commands for everyone
             source(dataflow, "SequenceInput", move |capability, info| {
 
-                // intialize activator, now that we have the address
+                // initialize activator, now that we have the address
                 activator_source
                     .borrow_mut()
                     .replace(CatchupActivator {

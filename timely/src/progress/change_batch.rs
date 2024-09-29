@@ -184,7 +184,7 @@ where
     /// Drains the set of updates.
     ///
     /// This operation first compacts the set of updates so that the drained results
-    /// have at most one occurence of each item.
+    /// have at most one occurrence of each item.
     ///
     /// # Examples
     ///

@@ -195,7 +195,7 @@ pub trait AsWorker : Scheduler {
     /// Constructs a pipeline channel from the worker to itself.
     ///
     /// By default this method uses the native channel allocation mechanism, but the expectation is
-    /// that this behavior will be overriden to be more efficient.
+    /// that this behavior will be overridden to be more efficient.
     fn pipeline<T: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>);
 
     /// Allocates a new worker-unique identifier.

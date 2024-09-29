@@ -144,7 +144,7 @@ impl<T: Data> Message<T> {
 impl<T> ::std::ops::Deref for Message<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        // TODO: In principle we have aready decoded, but let's go again
+        // TODO: In principle we have already decoded, but let's go again
         match &self.payload {
             MessageContents::Owned(typed) => { typed },
             MessageContents::Arc(typed) => { typed },

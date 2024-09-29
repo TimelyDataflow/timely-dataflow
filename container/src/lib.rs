@@ -127,7 +127,7 @@ pub trait ContainerBuilder: Default + 'static {
 pub struct CapacityContainerBuilder<C>{
     /// Container that we're writing to.
     current: C,
-    /// Emtpy allocation.
+    /// Empty allocation.
     empty: Option<C>,
     /// Completed containers pending to be sent.
     pending: VecDeque<C>,

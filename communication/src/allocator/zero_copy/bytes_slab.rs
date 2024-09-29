@@ -10,7 +10,7 @@ use bytes::arc::Bytes;
 pub struct BytesSlab {
     buffer:         Bytes,                      // current working buffer.
     in_progress:    Vec<Option<Bytes>>,         // buffers shared with workers.
-    stash:          Vec<Bytes>,                 // reclaimed and resuable buffers.
+    stash:          Vec<Bytes>,                 // reclaimed and reusable buffers.
     shift:          usize,                      // current buffer allocation size.
     valid:          usize,                      // buffer[..valid] are valid bytes.
 }
