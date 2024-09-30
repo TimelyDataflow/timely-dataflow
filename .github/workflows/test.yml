@@ -1,18 +1,43 @@
-name: test
-
-on: [push, pull_request]
+name: "Test Suite"
+on:
+  push:
+    branches:
+      - master
+  pull_request:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        os:
+          - ubuntu
+          - macos
+          - windows
+        toolchain:
+          - stable
+          - 1.78
+    name: cargo test on ${{ matrix.os }}, rust ${{ matrix.toolchain }}
+    runs-on: ${{ matrix.os }}-latest
     steps:
-    - uses: actions/checkout@v4
-    - run: rustup update 1.65 --no-self-update && rustup default 1.65
-    - run: cargo build
-    - name: test mdBook
-      # rustdoc doesn't build dependencies, so it needs to run after `cargo build`,
-      # but its dependency search gets confused if there are multiple copies of any
-      # dependency in target/debug/deps, so it needs to run before `cargo test` et al.
-      # clutter target/debug/deps with multiple copies of things.
-      run: for file in $(find mdbook -name '*.md'); do rustdoc --test $file  -L ./target/debug/deps; done
-    - run: cargo test
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - name: Cargo test
+        run: cargo test --workspace --all-targets
+
+  # Check mdbook files for errors
+  mdbook:
+    name: test mdBook
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        # rustdoc doesn't build dependencies, so it needs to run after `cargo build`,
+        # but its dependency search gets confused if there are multiple copies of any
+        # dependency in target/debug/deps, so it needs to run before `cargo test` et al.
+        # clutter target/debug/deps with multiple copies of things.
+      - run: cargo clean
+      - run: cargo build
+      - name: test mdBook
+        run: for file in $(find mdbook -name '*.md' | sort); do rustdoc --test $file  -L ./target/debug/deps; done
