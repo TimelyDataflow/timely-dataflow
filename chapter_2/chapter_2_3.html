@@ -176,7 +176,7 @@
                         <h1 id="introducing-operators"><a class="header" href="#introducing-operators">Introducing Operators</a></h1>
 <p>In between introducing streams of data and inspecting or capturing the output, we'll probably want to do some computation on those data. There are a lot of things that you can do, and timely comes with a set of generally useful operators built in. We will survey a few of these, but this list will be necessarily incomplete: the operators are pretty easy to write, and keep showing up.</p>
 <h2 id="mapping"><a class="header" href="#mapping">Mapping</a></h2>
-<p>One of the simplest things one can do with a stream of data is to transform each record into a new record. In database terminology this would be called &quot;projection&quot;, where you extract some fields from a larger record, but as we are in a more rich programming language we can perform arbitrary transformations.</p>
+<p>One of the simplest things one can do with a stream of data is to transform each record into a new record. In database terminology this would be called "projection", where you extract some fields from a larger record, but as we are in a more rich programming language we can perform arbitrary transformations.</p>
 <p>The <code>map</code> operator takes as an argument a closure from the input data type to an output data type that you get to define. The result is the stream of records corresponding to the application of your closure to each record in the input stream.</p>
 <p>The following program should print out the numbers one through ten.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
@@ -189,7 +189,7 @@ fn main() {
             (0 .. 9)
                 .to_stream(scope)
                 .map(|x| x + 1)
-                .inspect(|x| println!(&quot;hello: {}&quot;, x));
+                .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
 }</code></pre></pre>
@@ -205,7 +205,7 @@ fn main() {
                 .to_stream(scope)
                 .map(|x| x.to_string())
                 .map(|mut x| { x.truncate(5); x } )
-                .inspect(|x| println!(&quot;hello: {}&quot;, x));
+                .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
 }</code></pre></pre>
@@ -223,7 +223,7 @@ fn main() {
                 .to_stream(scope)
                 .map(|x| x.to_string())
                 .map_in_place(|x| x.truncate(5))
-                .inspect(|x| println!(&quot;hello: {}&quot;, x));
+                .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
 }</code></pre></pre>
@@ -238,7 +238,7 @@ fn main() {
             (0 .. 9)
                 .to_stream(scope)
                 .flat_map(|x| 0 .. x)
-                .inspect(|x| println!(&quot;hello: {}&quot;, x));
+                .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
 }</code></pre></pre>
@@ -254,7 +254,7 @@ fn main() {
             (0 .. 9)
                 .to_stream(scope)
                 .filter(|x| *x % 2 == 0)
-                .inspect(|x| println!(&quot;hello: {}&quot;, x));
+                .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
 }</code></pre></pre>
@@ -271,9 +271,9 @@ fn main() {
         let streams = (0..10).to_stream(scope)
                              .partition(3, |x| (x % 3, x));
 
-        streams[0].inspect(|x| println!(&quot;seen 0: {:?}&quot;, x));
-        streams[1].inspect(|x| println!(&quot;seen 1: {:?}&quot;, x));
-        streams[2].inspect(|x| println!(&quot;seen 2: {:?}&quot;, x));
+        streams[0].inspect(|x| println!("seen 0: {:?}", x));
+        streams[1].inspect(|x| println!("seen 1: {:?}", x));
+        streams[2].inspect(|x| println!("seen 2: {:?}", x));
     });
 }</code></pre></pre>
 <p>This example breaks the input stream apart into three logical streams, which are then subjected to different <code>inspect</code> operators. Importantly, <code>partition</code> only <em>logically</em> partitions the data, it does not move the data between workers. In the example above, each worker partitions its stream into three parts and no data are exchanged at all (as <code>inspect</code> does not require that of its inputs).</p>
@@ -289,7 +289,7 @@ fn main() {
         streams[0]
             .concat(&amp;streams[1])
             .concat(&amp;streams[2])
-            .inspect(|x| println!(&quot;seen: {:?}&quot;, x));
+            .inspect(|x| println!("seen: {:?}", x));
     });
 }</code></pre></pre>
 <p>There is also a <code>concatenate</code> method defined for scopes which collects all streams from a supplied vector, effectively undoing the work of <code>partition</code> in one operator.</p>
@@ -303,7 +303,7 @@ fn main() {
                              .partition(3, |x| (x % 3, x));
 
         scope.concatenate(streams)
-             .inspect(|x| println!(&quot;seen: {:?}&quot;, x));
+             .inspect(|x| println!("seen: {:?}", x));
     });
 }</code></pre></pre>
 <p>Both <code>concat</code> and <code>concatenate</code> are efficient operations that exchange no data between workers, operate only on batches of stream elements, and do not make further copies of the data.</p>

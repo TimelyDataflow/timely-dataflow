@@ -194,7 +194,7 @@ fn main() {
             .to_stream(scope)
             .concat(&amp;stream)
             .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
-            .inspect(|x| println!(&quot;{:?}&quot;, x))
+            .inspect(|x| println!("{:?}", x))
             .filter(|x| *x != 1)
             .branch_when(|t| t &lt; &amp;100).1
             .connect_loop(handle);
@@ -227,7 +227,7 @@ fn main() {
                 .to_stream(scope)
                 .concat(&amp;results0)
                 .concat(&amp;results1)
-                .inspect(|x| println!(&quot;{:?}&quot;, x))
+                .inspect(|x| println!("{:?}", x))
                 .partition(2, |x| (x % 2, x));
 
         // connect each part appropriately.
@@ -258,7 +258,7 @@ fn main() {
                 .enter(subscope)
                 .concat(&amp;stream)
                 .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
-                .inspect(|x| println!(&quot;{:?}&quot;, x))
+                .inspect(|x| println!("{:?}", x))
                 .filter(|x| *x != 1)
                 .connect_loop(handle);
         })

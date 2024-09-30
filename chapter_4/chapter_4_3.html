@@ -192,7 +192,7 @@ fn main() {
     });
 }</code></pre></pre>
 <p>Each number that you put into this dataflow (those <code>0 .. 10</code> folks) can produce a larger number of output records. Let's say you put <code>1000 .. 1010</code> as input instead? We'd have ten thousand records flowing around. What about <code>1000 .. 2000</code>?</p>
-<p>This dataflow can greatly increase the amount of data moving around. We might have thought &quot;let's process just 1000 records&quot;, but this turned into one million records. Perhaps we have a few of these operators in a row (don't ask; it happens), we can pretty quickly overwhelm the system if we aren't careful.</p>
+<p>This dataflow can greatly increase the amount of data moving around. We might have thought "let's process just 1000 records", but this turned into one million records. Perhaps we have a few of these operators in a row (don't ask; it happens), we can pretty quickly overwhelm the system if we aren't careful.</p>
 <p>In most systems this is mitigated by <em>flow control</em>, mechanisms that push back when it seems like operators are producing more data than can be consumed in the same amount of time.</p>
 <p>Timely dataflow doesn't have a built in notion of flow control. Sometimes you want it, sometimes you don't, so we didn't make you have it. Also, it is hard to get right, for similar reasons. Instead, timely dataflow scopes can be used for application-level flow control.</p>
 <p>Let's take a simple example, where we have a stream of timestamped numbers coming at us, performing the <code>flat_map</code> up above. Our goal is to process all of the data, but to do so in a controlled manner where we never overwhelm the computation. For example, we might want to do approximately this:</p>
@@ -212,7 +212,7 @@ fn main() {
 }</code></pre></pre>
 <p>but without actually producing the 4,999,950,000 intermediate records all at once.</p>
 <p>One way to do this is to build a self-regulating dataflow, into which we can immediately dump all the records, but which will buffer records until it is certain that the work for prior records has drained. We will write this out in all the gory details, but these operators are certainly things that could be packaged up and reused.</p>
-<p>The idea here is to take our stream of work, and to use the <code>delay</code> operator to assign new timestamps to the records. We will spread the work out so that each timestamp has at most (in this case) 100 numbers. We can write a <code>binary</code> operator that will buffer received records until their timestamp is &quot;next&quot;, meaning all strictly prior work has drained from the dataflow fragment. How do we do this? We turn our previously unary operator into a binary operator that has a feedback edge connected to its second input. We use the frontier of that feedback input to control when we emit data.</p>
+<p>The idea here is to take our stream of work, and to use the <code>delay</code> operator to assign new timestamps to the records. We will spread the work out so that each timestamp has at most (in this case) 100 numbers. We can write a <code>binary</code> operator that will buffer received records until their timestamp is "next", meaning all strictly prior work has drained from the dataflow fragment. How do we do this? We turn our previously unary operator into a binary operator that has a feedback edge connected to its second input. We use the frontier of that feedback input to control when we emit data.</p>
 <pre><pre class="playground"><code class="language-rust no_run">extern crate timely;
 
 use timely::dataflow::operators::*;
@@ -232,7 +232,7 @@ fn main() {
             // Assign timestamps to records so that not much work is in each time.
             .delay(|number, time| number / 100 )
             // Buffer records until all prior timestamps have completed.
-            .binary_frontier(&amp;cycle, Pipeline, Pipeline, &quot;Buffer&quot;, move |capability, info| {
+            .binary_frontier(&amp;cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 
                 let mut vector = Vec::new();
 

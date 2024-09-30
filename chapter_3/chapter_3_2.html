@@ -185,7 +185,7 @@
 <li>The <code>done()</code> method returns true if no times are possible.</li>
 </ol>
 <p>Probe handles also have a <code>with_frontier</code> method that allows you to provide a closure that can observe the frontier and return arbitrary results. This is a bit of a song and dance, because the frontier is shared mutable state and cannot be trivially handed back up to your code without peril (you would gain a <code>RefMut</code> that may cause the system to panic if you do not drop before calling <code>worker.step()</code>).</p>
-<p>The most common thing to do with a probe handle is to check whether we are &quot;caught up&quot; to the input times. The following is a very safe idiom for doing this:</p>
+<p>The most common thing to do with a probe handle is to check whether we are "caught up" to the input times. The following is a very safe idiom for doing this:</p>
 <pre><code class="language-rust ignore">probe.less_than(input.time())</code></pre>
 <p>This checks if there are any times strictly less than what the input is positioned to provide next. If so, it means we could keep doing work and making progress, because we know that the system <em>could</em> catch up to <code>input.time()</code> as we can't produce anything less than this from <code>input</code>.</p>
 <p>However, you are free to use whatever logic you like. Perhaps you just want to check this test a few times, rather than iterating for as long as it is true (which we commonly do). This would give the dataflow a chance to catch up, but it would start work on the next batch of data anyhow, to keep things moving along. There is a trade-off between overloading the system (if you provide data faster than you can retire it) and underloading it by constantly waiting rather than working.</p>

@@ -192,7 +192,7 @@ fn main() {
         let probe = worker.dataflow(|scope|
             scope.input_from(&amp;mut input)
                  .exchange(|x| *x)
-                 .inspect(move |x| println!(&quot;worker {}:\thello {}&quot;, index, x))
+                 .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()
         );
 

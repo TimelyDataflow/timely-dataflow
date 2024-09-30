@@ -185,7 +185,7 @@ fn main() {
         worker.dataflow::&lt;(),_,_&gt;(|scope| {
             (0 .. 9)
                 .to_stream(scope)
-                .inspect(|x| println!(&quot;hello: {}&quot;, x));
+                .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
 }</code></pre></pre>
@@ -201,13 +201,13 @@ fn main() {
         worker.dataflow::&lt;(),_,_&gt;(|scope| {
             (0 .. 10)
                 .to_stream(scope)
-                .inspect_batch(|t, xs| println!(&quot;hello: {:?} @ {:?}&quot;, xs, t));
+                .inspect_batch(|t, xs| println!("hello: {:?} @ {:?}", xs, t));
         });
     }).unwrap();
 }</code></pre></pre>
 <h2 id="capturing-streams"><a class="header" href="#capturing-streams">Capturing Streams</a></h2>
 <p>The <code>Capture</code> trait provides a mechanism for exfiltrating a stream from a dataflow, into information that can be replayed in other dataflows. The trait is pretty general, and can even capture a stream to a binary writer that can be read back from to reconstruct the stream (see <code>examples/capture_send.rs</code> and <code>examples/capture_recv.rs</code>).</p>
-<p>The simplest form of capture is the <code>capture()</code> method, which turns the stream into a shared queue of &quot;events&quot;, which are the sequence of events the operator is exposed to: data arriving and notification of progress through the input stream. The <code>capture</code> method is used in many of timely's documentation tests, to extract a stream and verify that it is correct.</p>
+<p>The simplest form of capture is the <code>capture()</code> method, which turns the stream into a shared queue of "events", which are the sequence of events the operator is exposed to: data arriving and notification of progress through the input stream. The <code>capture</code> method is used in many of timely's documentation tests, to extract a stream and verify that it is correct.</p>
 <p>Consider the documentation test for the <code>ToStream</code> trait:</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 

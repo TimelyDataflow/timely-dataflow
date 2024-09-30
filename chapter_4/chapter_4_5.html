@@ -198,7 +198,7 @@ fn main() {
     timely::example(|scope| {
         (0..10).to_stream(scope)
                .map(|x| TreeNode::new(x))
-               .inspect(|x| println!(&quot;seen: {:?}&quot;, x));
+               .inspect(|x| println!("seen: {:?}", x));
     });
 }
 
@@ -251,7 +251,7 @@ fn main() {
         (0..10).to_stream(scope)
                .map(|x| TreeNode::new(x))
                .exchange(|x| x.data)
-               .inspect(|x| println!(&quot;seen: {:?}&quot;, x));
+               .inspect(|x| println!("seen: {:?}", x));
     });
 }
 

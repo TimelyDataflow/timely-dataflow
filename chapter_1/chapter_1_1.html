@@ -195,7 +195,7 @@ fn main() {
         let probe = worker.dataflow(|scope|
             scope.input_from(&amp;mut input)
                  .exchange(|x| *x)
-                 .inspect(move |x| println!(&quot;worker {}:\thello {}&quot;, index, x))
+                 .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()
         );
 
@@ -233,7 +233,7 @@ fn main() {
     // we only need to test factors up to sqrt(x)
     let limit = (*x as f64).sqrt() as u64;
     if *x &gt; 1 &amp;&amp; (2 .. limit + 1).all(|i| x % i &gt; 0) {
-        println!(&quot;{} is prime&quot;, x);
+        println!("{} is prime", x);
     }
 })</code></pre>
 <p>We don't really care that much about the order (we just want the results), and we have written such a simple primality test that we are going to be thrilled if we can distribute the work across multiple cores.</p>
@@ -272,7 +272,7 @@ fn main() {
 <p>This is also a fine time to point out that dataflow programming is not religion. There is an important part of our program up above that is imperative:</p>
 <pre><code class="language-ignore  rust">    let limit = (*x as f64).sqrt() as u64;
     if *x &gt; 1 &amp;&amp; (2 .. limit + 1).all(|i| x % i &gt; 0) {
-        println!(&quot;{} is prime&quot;, x);
+        println!("{} is prime", x);
     }
 </code></pre>
 <p>This is an imperative fragment telling the <code>inspect</code> operator what to do. We <em>could</em> write this as a dataflow fragment if we wanted, but it is frustrating to do so, and less efficient. The control flow fragment lets us do something important, something that dataflow is bad at: the <code>all</code> method above <em>stops</em> as soon as it sees a factor of <code>x</code>.</p>

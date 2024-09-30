@@ -180,7 +180,7 @@
 <p>The <code>capture_into</code> method is relative simple, and we can just look at it:</p>
 <pre><code class="language-rust ignore">    fn capture_into&lt;P: EventPusher&lt;S::Timestamp, D&gt;+'static&gt;(&amp;self, event_pusher: P) {
 
-        let mut builder = OperatorBuilder::new(&quot;Capture&quot;.to_owned(), self.scope());
+        let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let mut started = false;
 
@@ -215,7 +215,7 @@
 <p>At <em>its</em> core, <code>replay_into</code> takes some sequence of <code>Event&lt;T, D&gt;</code> items and reproduces the stream, as it was recorded. It is also fairly simple, and we can just look at its implementation as well:</p>
 <pre><code class="language-rust ignore">    fn replay_into&lt;S: Scope&lt;Timestamp=T&gt;&gt;(self, scope: &amp;mut S) -&gt; Stream&lt;S, D&gt;{
 
-        let mut builder = OperatorBuilder::new(&quot;Replay&quot;.to_owned(), scope.clone());
+        let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
         let (targets, stream) = builder.new_output();
 
         let mut output = PushBuffer::new(PushCounter::new(targets));
@@ -273,7 +273,7 @@ use timely::dataflow::operators::capture::{Capture, EventWriter};
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
-        let addr = format!(&quot;127.0.0.1:{}&quot;, 8000 + worker.index());
+        let addr = format!("127.0.0.1:{}", 8000 + worker.index());
         let send = TcpStream::connect(addr).unwrap();
 
         worker.dataflow::&lt;u64,_,_&gt;(|scope|
@@ -299,7 +299,7 @@ fn main() {
         let replayers =
         (0 .. source_peers)
             .filter(|i| i % worker.peers() == worker.index())
-            .map(|i| TcpListener::bind(format!(&quot;127.0.0.1:{}&quot;, 8000 + i)).unwrap())
+            .map(|i| TcpListener::bind(format!("127.0.0.1:{}", 8000 + i)).unwrap())
             .collect::&lt;Vec&lt;_&gt;&gt;()
             .into_iter()
             .map(|l| l.incoming().next().unwrap().unwrap())
@@ -309,7 +309,7 @@ fn main() {
         worker.dataflow::&lt;u64,_,_&gt;(|scope| {
             replayers
                 .replay_into(scope)
-                .inspect(|x| println!(&quot;replayed: {:?}&quot;, x));
+                .inspect(|x| println!("replayed: {:?}", x));
         })
     }).unwrap(); // asserts error-free execution
 }</code></pre>

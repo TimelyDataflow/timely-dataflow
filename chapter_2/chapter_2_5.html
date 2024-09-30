@@ -174,7 +174,7 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="a-worked-example"><a class="header" href="#a-worked-example">A Worked Example</a></h1>
-<p>You may have heard of <code>word_count</code> as the archetypical &quot;big data&quot; problem: you have a large collection of text, and what you want most in life is to know how many of each word are present in the text. The data are too large to load into memory, but let's assume that the set of distinct words, each with an associated count, is small enough to fit in memory.</p>
+<p>You may have heard of <code>word_count</code> as the archetypical "big data" problem: you have a large collection of text, and what you want most in life is to know how many of each word are present in the text. The data are too large to load into memory, but let's assume that the set of distinct words, each with an associated count, is small enough to fit in memory.</p>
 <p>Let's take the <code>word_count</code> example in the streaming direction. For whatever reason, your collection of text <em>changes</em>. As time moves along, some new texts are added and some old texts are retracted. We don't know why this happens, we just get told about the changes. Our new job is to <em>maintain</em> the <code>word_count</code> computation, in the face of arbitrary changes to the collection of texts, as promptly as possible.</p>
 <p>Let's model a changing corpus of text as a list of pairs of <em>times</em> which will be <code>u64</code> integers with a list of <em>changes</em> which are each pairs <code>(String, i64)</code> indicating the text and whether it has been added (+1) or removed (-1).</p>
 <p>We are going to write a program that is the moral equivalent of the following sequential Rust program:</p>
@@ -190,7 +190,7 @@ fn word_count(mut history: Vec&lt;(u64, Vec&lt;(String, i64)&gt;)&gt;) {
                 let mut entry = counts.entry(word.to_owned())
                                       .or_insert(0i64);
                 *entry += diff;
-                println!(&quot;seen: {:?}&quot;, (word, *entry));
+                println!("seen: {:?}", (word, *entry));
             }
         }
     }
@@ -216,13 +216,13 @@ fn main() {
         // build a new dataflow.
         worker.dataflow(|scope| {
             input.to_stream(scope)
-                 .inspect(|x| println!(&quot;seen: {:?}&quot;, x))
+                 .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&amp;mut probe);
         });
 
         // feed the dataflow with data.
         for round in 0..10 {
-            input.send((&quot;round&quot;.to_owned(), 1));
+            input.send(("round".to_owned(), 1));
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
                 worker.step();
@@ -235,19 +235,19 @@ fn main() {
 <pre><code class="language-rust ignore">        // create input and output handles.
         let mut input = InputHandle::new();
         let mut probe = ProbeHandle::new();</code></pre>
-<p>The input handle is how we supply data to the computation, and the probe handle is how we check whether the computation is complete up through certain inputs. Since a streaming computation may never &quot;finish&quot;, <code>probe</code> is the only way to understand how much progress we've made.</p>
+<p>The input handle is how we supply data to the computation, and the probe handle is how we check whether the computation is complete up through certain inputs. Since a streaming computation may never "finish", <code>probe</code> is the only way to understand how much progress we've made.</p>
 <p>The next step is to build a timely dataflow. Here we use <code>input</code> as a source of data, and attach <code>probe</code> to the end so that we can watch for completion of work.</p>
 <pre><code class="language-rust ignore">        // build a new dataflow.
         worker.dataflow(|scope| {
             input.to_stream(scope)
-                 .inspect(|x| println!(&quot;seen: {:?}&quot;, x))
+                 .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&amp;mut probe);
         });</code></pre>
 <p>This computation is pretty simple: it just prints out the inputs we send at it.</p>
 <p>Having constructed the dataflow, we feed it some data.</p>
 <pre><code class="language-rust ignore">        // feed the dataflow with data.
         for round in 0..10 {
-            input.send((&quot;round&quot;.to_owned(), 1));
+            input.send(("round".to_owned(), 1));
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
                 worker.step();
@@ -279,13 +279,13 @@ fn main() {
                          .map(move |word| (word.to_owned(), diff))
                          .collect::&lt;Vec&lt;_&gt;&gt;()
                  )
-<span class="boring">                 .inspect(|x| println!(&quot;seen: {:?}&quot;, x))
+<span class="boring">                 .inspect(|x| println!("seen: {:?}", x))
 </span><span class="boring">                 .probe_with(&amp;mut probe);
 </span><span class="boring">        });
 </span><span class="boring">
 </span><span class="boring">        // feed the dataflow with data.
 </span><span class="boring">        for round in 0..10 {
-</span><span class="boring">            input.send((&quot;round&quot;.to_owned(), 1));
+</span><span class="boring">            input.send(("round".to_owned(), 1));
 </span><span class="boring">            input.advance_to(round + 1);
 </span><span class="boring">            while probe.less_than(input.time()) {
 </span><span class="boring">                worker.step();
@@ -299,7 +299,7 @@ fn main() {
 <p>This gets a bit more interesting. We don't have an operator to maintain word counts, so we are going to write one.</p>
 <p>We start with a stream of words and differences coming at us. This stream has no particular structure, and in particular if the stream is distributed across multiple workers we have no assurance that all instances of the same word are at the same worker. This means that if each worker just adds up the counts for each word, we will get a bunch of partial results, local to each worker.</p>
 <p>We will need to introduce <em>data exchange</em>, where the workers communicate with each other to shuffle the data so that the resulting distribution provides correct results. Specifically, we are going to distribute the data so that each individual word goes to the same worker, but the words themselves may be distributed across workers.</p>
-<p>Having exchanged the data, each worker will need a moment of care when it processes its inputs. Because the data are coming in from multiple workers, they may no longer be in &quot;time order&quot;; some workers may have moved through their inputs faster than others, and may be producing data for the next time while others lag behind. This operator means to produce the word count changes <em>as if processed sequentially</em>, and it will need to delay processing changes that come early.</p>
+<p>Having exchanged the data, each worker will need a moment of care when it processes its inputs. Because the data are coming in from multiple workers, they may no longer be in "time order"; some workers may have moved through their inputs faster than others, and may be producing data for the next time while others lag behind. This operator means to produce the word count changes <em>as if processed sequentially</em>, and it will need to delay processing changes that come early.</p>
 <p>As before, I'm just going to show you the new code, which now lives just after <code>flat_map</code> and just before <code>inspect</code>:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
 </span><span class="boring">
@@ -329,7 +329,7 @@ fn main() {
 </span><span class="boring">                )
 </span>                .unary_frontier(
                     Exchange::new(|x: &amp;(String, i64)| (x.0).len() as u64),
-                    &quot;WordCount&quot;,
+                    "WordCount",
                     |_capability, operator_info| {
 
                     // allocate operator-local storage.
@@ -372,13 +372,13 @@ fn main() {
                     }
                 })
 <span class="boring">                 .container::&lt;Vec&lt;_&gt;&gt;()
-</span><span class="boring">                 .inspect(|x| println!(&quot;seen: {:?}&quot;, x))
+</span><span class="boring">                 .inspect(|x| println!("seen: {:?}", x))
 </span><span class="boring">                 .probe_with(&amp;mut probe);
 </span><span class="boring">        });
 </span><span class="boring">
 </span><span class="boring">        // feed the dataflow with data.
 </span><span class="boring">        for round in 0..10 {
-</span><span class="boring">            input.send((&quot;round&quot;.to_owned(), 1));
+</span><span class="boring">            input.send(("round".to_owned(), 1));
 </span><span class="boring">            input.advance_to(round + 1);
 </span><span class="boring">            while probe.less_than(input.time()) {
 </span><span class="boring">                worker.step();
@@ -389,15 +389,15 @@ fn main() {
 <p>That was probably a lot to see all at once. So let's break down each of the things we did.</p>
 <pre><code class="language-rust ignore">.unary_frontier(
     Exchange::new(|x: &amp;(String, i64)| (x.0).len() as u64),
-    &quot;WordCount&quot;,
+    "WordCount",
     |_capability, operator_info| {
         // coming soon!
     }
 )</code></pre>
 <p>The very first thing we did was state that we are going to build a new unary dataflow operator. Timely lets you build your own operators just by specifying the logic for them as a closure. So easy! But, we have to explain a few things to the operator.</p>
-<p>First, we tell it how it should distribute the data (pairs of strings and differences) between workers. Here we are saying &quot;by the length of the text&quot; which is a deranged way to do it, but we'd need about five more lines to properly write hashing code for the string.</p>
+<p>First, we tell it how it should distribute the data (pairs of strings and differences) between workers. Here we are saying "by the length of the text" which is a deranged way to do it, but we'd need about five more lines to properly write hashing code for the string.</p>
 <p>Second, we give a descriptive name so that the operator is recognizable in logging and diagnostic code; you probably don't care at the moment, but you might later on if you wonder what is going on.</p>
-<p>Third and finally, we specify a closure. The closure has an argument, which we ignore in the code (it has to do with writing operators that can send output data before they receive any input data) and we will ignore it now. This closure is actually a &quot;closure builder&quot;: it is a closure that just returns another closure:</p>
+<p>Third and finally, we specify a closure. The closure has an argument, which we ignore in the code (it has to do with writing operators that can send output data before they receive any input data) and we will ignore it now. This closure is actually a "closure builder": it is a closure that just returns another closure:</p>
 <pre><code class="language-rust ignore">    // allocate operator-local storage.
     let mut queues = HashMap::new();
     let mut counts = HashMap::new();
@@ -449,30 +449,30 @@ fn main() {
 <pre><code class="language-ignore">    Echidnatron% cargo run --example wordcount
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/wordcount`
-    seen: (&quot;round&quot;, 1)
-    seen: (&quot;round&quot;, 2)
-    seen: (&quot;round&quot;, 3)
-    seen: (&quot;round&quot;, 4)
-    seen: (&quot;round&quot;, 5)
-    seen: (&quot;round&quot;, 6)
-    seen: (&quot;round&quot;, 7)
-    seen: (&quot;round&quot;, 8)
-    seen: (&quot;round&quot;, 9)
-    seen: (&quot;round&quot;, 10)
+    seen: ("round", 1)
+    seen: ("round", 2)
+    seen: ("round", 3)
+    seen: ("round", 4)
+    seen: ("round", 5)
+    seen: ("round", 6)
+    seen: ("round", 7)
+    seen: ("round", 8)
+    seen: ("round", 9)
+    seen: ("round", 10)
     Echidnatron%
 </code></pre>
 <p>We kept sending the same word over and over, so its count went up. Neat. If you'd like to run it with two workers, you just need to put <code>-- -w2</code> at the end of the command, like so:</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example wordcount -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/wordcount -w2`
-    seen: (&quot;round&quot;, 1)
-    seen: (&quot;round&quot;, 2)
+    seen: ("round", 1)
+    seen: ("round", 2)
     ...
-    seen: (&quot;round&quot;, 19)
-    seen: (&quot;round&quot;, 20)
+    seen: ("round", 19)
+    seen: ("round", 20)
     Echidnatron%
 </code></pre>
-<p>Because there are two workers, each inputting <code>&quot;round&quot;</code> repeatedly, we count up to twenty. By the end of this text you should be able to produce more interesting examples, for example reading the contents of directories and divvying up responsibility for the files between the workers.</p>
+<p>Because there are two workers, each inputting <code>"round"</code> repeatedly, we count up to twenty. By the end of this text you should be able to produce more interesting examples, for example reading the contents of directories and divvying up responsibility for the files between the workers.</p>
 
                     </main>
 

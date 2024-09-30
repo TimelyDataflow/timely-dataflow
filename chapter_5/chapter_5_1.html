@@ -185,14 +185,14 @@ fn main() {
     let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
     let guards = timely_communication::initialize(config, |mut allocator| {
 
-        println!(&quot;worker {} of {} started&quot;, allocator.index(), allocator.peers());
+        println!("worker {} of {} started", allocator.index(), allocator.peers());
 
         // allocates a pair of senders list and one receiver.
         let (mut senders, mut receiver) = allocator.allocate();
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
-            senders[i].send(format!(&quot;hello, {}&quot;, i));
+            senders[i].send(format!("hello, {}", i));
             senders[i].done();
         }
 
@@ -201,7 +201,7 @@ fn main() {
         let mut received = 0;
         while received &lt; allocator.peers() {
             if let Some(message) = receiver.recv() {
-                println!(&quot;worker {}: received: &lt;{}&gt;&quot;, allocator.index(), message);
+                println!("worker {}: received: &lt;{}&gt;", allocator.index(), message);
                 received += 1;
             }
         }
@@ -212,10 +212,10 @@ fn main() {
     // computation runs until guards are joined or dropped.
     if let Ok(guards) = guards {
         for guard in guards.join() {
-            println!(&quot;result: {:?}&quot;, guard);
+            println!("result: {:?}", guard);
         }
     }
-    else { println!(&quot;error in computation&quot;); }
+    else { println!("error in computation"); }
 }</code></pre>
 <p>There are a few steps here, and we'll talk through the important parts in each of them.</p>
 <h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
@@ -237,9 +237,9 @@ fn main() {
 }</code></pre>
 <p>These methods are the only functionality provided by <code>allocator</code>. A worker can ask for its own index, which is a number from zero up to the number of total peer workers (including itself), which it can also ask for. Perhaps most importantly, the worker can also request the allocation of a typed channel, which is returned as a pair of (i) a list of <code>Push</code> endpoints into which it can send data, and (ii) a single <code>Pull</code> endpoint from which it can extract data. The list has length equal to the number of peers, and data sent into push endpoint <code>i</code> will eventually be received by the worker with index <code>i</code>, if it keeps pulling on its pull endpoint.</p>
 <p>The channels are various and interesting, but should be smartly arranged. The channel from the worker back to itself is just a queue, the channels within the same process are Rust's inter-thread channels, and the channels between processes will automatically serialize and deserialize the type <code>T</code> for you (this is part of the <code>T: Data</code> requirement).</p>
-<p>One crucial assumption made in this design is that the channels can be identified by their order of creation. If two workers start executing in different processes, allocating multiple channels, the only way we will know how to align these channels is by identifiers handed out as the channels are allocated. I strongly recommend against non-deterministic channel construction, or &quot;optimizing out&quot; some channels from some workers.</p>
+<p>One crucial assumption made in this design is that the channels can be identified by their order of creation. If two workers start executing in different processes, allocating multiple channels, the only way we will know how to align these channels is by identifiers handed out as the channels are allocated. I strongly recommend against non-deterministic channel construction, or "optimizing out" some channels from some workers.</p>
 <h3 id="the-data-trait"><a class="header" href="#the-data-trait">The Data Trait</a></h3>
-<p>The <code>Data</code> trait that we impose on all types that we exchange is a &quot;marker trait&quot;: it wraps several constraints together, like so</p>
+<p>The <code>Data</code> trait that we impose on all types that we exchange is a "marker trait": it wraps several constraints together, like so</p>
 <pre><code class="language-rust ignore">pub trait Data : Send+Any+Serialize+Clone+'static { }
 impl&lt;T: Clone+Send+Any+Serialize+'static&gt; Data for T { }</code></pre>
 <p>These traits are all Rust traits, except for <code>Serialize</code>, and they mostly just say that we can clone and send the data around. The <code>Serialize</code> trait is something we introduce, and asks for methods to get into and out of a sequence of bytes.</p>
