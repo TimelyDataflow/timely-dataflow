@@ -20,8 +20,8 @@ pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: I
 }
 
 /// Construct a source that repeatedly calls the provided function to ingest input.
-/// - The function can return None to signal the end of the input;
-/// - otherwise, it should return a `IteratorSourceInput`, where:
+/// - The function can return `None` to signal the end of the input;
+/// - otherwise, it should return a [`IteratorSourceInput`], where:
 ///   * `lower_bound` is a lower bound on timestamps that can be emitted by this input in the future,
 ///   `Default::default()` can be used if this isn't needed (the source will assume that
 ///   the timestamps in `data` are monotonically increasing and will release capabilities

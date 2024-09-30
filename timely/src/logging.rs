@@ -182,7 +182,7 @@ pub enum StartStop {
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Operator start or stop.
 pub struct ScheduleEvent {
-    /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
+    /// Worker-unique identifier for the operator, linkable to the identifiers in [`OperatesEvent`].
     pub id: usize,
     /// `Start` if the operator is starting, `Stop` if it is stopping.
     /// activity is true if it looks like some useful work was performed during this call (data was
@@ -200,7 +200,7 @@ impl ScheduleEvent {
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Operator shutdown.
 pub struct ShutdownEvent {
-    /// Worker-unique identifier for the operator, linkable to the identifiers in `OperatesEvent`.
+    /// Worker-unique identifier for the operator, linkable to the identifiers in [`OperatesEvent`].
     pub id: usize,
 }
 
@@ -209,21 +209,21 @@ pub struct ShutdownEvent {
 pub struct ApplicationEvent {
     /// Unique event type identifier
     pub id: usize,
-    /// True when activity begins, false when it stops
+    /// `true` when activity begins, `false` when it stops
     pub is_start: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct GuardedMessageEvent {
-    /// True when activity begins, false when it stops
+    /// `true` when activity begins, `false` when it stops
     pub is_start: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Application-defined code start or stop
 pub struct GuardedProgressEvent {
-    /// True when activity begins, false when it stops
+    /// `true` when activity begins, `false` when it stops
     pub is_start: bool,
 }
 

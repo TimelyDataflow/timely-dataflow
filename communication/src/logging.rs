@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 /// Configuration information about a communication thread.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct CommunicationSetup {
-    /// True when this is a send thread (or the receive thread).
+    /// `true` when this is a send thread (or the receive thread).
     pub sender: bool,
     /// The process id of the thread.
     pub process: usize,
@@ -25,7 +25,7 @@ pub enum CommunicationEvent {
 /// An observed message.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct MessageEvent {
-    /// true for send event, false for receive event
+    /// `true` for send event, `false` for receive event
     pub is_send: bool,
     /// associated message header.
     pub header: crate::networking::MessageHeader,
