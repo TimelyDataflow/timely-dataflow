@@ -92,7 +92,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Installs options into a [getopts_dep::Options] struct that correspond
+    /// Installs options into a [getopts::Options] struct that correspond
     /// to the parameters in the configuration.
     ///
     /// It is the caller's responsibility to ensure that the installed options
@@ -102,20 +102,20 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn install_options(opts: &mut getopts_dep::Options) {
+    pub fn install_options(opts: &mut getopts::Options) {
         opts.optopt("", "progress-mode", "progress tracking mode (eager or demand)", "MODE");
     }
 
     /// Instantiates a configuration based upon the parsed options in `matches`.
     ///
     /// The `matches` object must have been constructed from a
-    /// [getopts_dep::Options] which contained at least the options installed by
+    /// [getopts::Options] which contained at least the options installed by
     /// [Self::install_options].
     ///
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config, String> {
+    pub fn from_matches(matches: &getopts::Matches) -> Result<Config, String> {
         let progress_mode = matches
             .opt_get_default("progress-mode", ProgressMode::Eager)?;
         Ok(Config::default().progress_mode(progress_mode))
