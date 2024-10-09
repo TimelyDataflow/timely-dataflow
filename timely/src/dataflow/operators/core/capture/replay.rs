@@ -54,11 +54,11 @@ pub trait Replay<T: Timestamp, C> : Sized {
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }
-    /// Replays `self` into the provided scope, as a `StreamCore<S, C>'.
+    /// Replays `self` into the provided scope, as a `StreamCore<S, C>`.
     ///
     /// The `period` argument allows the specification of a re-activation period, where the operator
     /// will re-activate itself every so often. The `None` argument instructs the operator not to
-    /// re-activate itself.us
+    /// re-activate itself.
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>;
 }
 

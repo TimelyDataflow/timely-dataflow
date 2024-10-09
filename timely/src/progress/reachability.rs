@@ -446,12 +446,12 @@ impl<T: Timestamp> PortInformation<T> {
         }
     }
 
-    /// True if updates at this pointstamp uniquely block progress.
+    /// Returns `true` if updates at this pointstamp uniquely block progress.
     ///
-    /// This method returns true if the currently maintained pointstamp
+    /// This method returns `true` if the currently maintained pointstamp
     /// counts are such that zeroing out outstanding updates at *this*
     /// pointstamp would change the frontiers at this operator. When the
-    /// method returns false it means that, temporarily at least, there
+    /// method returns `false` it means that, temporarily at least, there
     /// are outstanding pointstamp updates that are strictly less than
     /// this pointstamp.
     #[inline]

@@ -145,11 +145,11 @@ pub struct Handle<T:Timestamp> {
 }
 
 impl<T: Timestamp> Handle<T> {
-    /// returns true iff the frontier is strictly less than `time`.
+    /// Returns `true` iff the frontier is strictly less than `time`.
     #[inline] pub fn less_than(&self, time: &T) -> bool { self.frontier.borrow().less_than(time) }
-    /// returns true iff the frontier is less than or equal to `time`.
+    /// Returns `true` iff the frontier is less than or equal to `time`.
     #[inline] pub fn less_equal(&self, time: &T) -> bool { self.frontier.borrow().less_equal(time) }
-    /// returns true iff the frontier is empty.
+    /// Returns `true` iff the frontier is empty.
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().is_empty() }
     /// Allocates a new handle.
     #[inline] pub fn new() -> Self { Handle { frontier: Rc::new(RefCell::new(MutableAntichain::new())) } }

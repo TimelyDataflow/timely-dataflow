@@ -45,7 +45,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     ///
     /// It is possible that the two composed paths result in an invalid summary, for example when
     /// integer additions overflow. If it is correct that all timestamps moved along these paths
-    /// would also result in overflow and be discarded, `followed_by` can return `None. It is very
+    /// would also result in overflow and be discarded, `followed_by` can return `None`. It is very
     /// important that this not be used casually, as this does not prevent the actual movement of
     /// data.
     ///
@@ -67,7 +67,7 @@ impl PathSummary<()> for () {
     #[inline] fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
 }
 
-/// Implements Timestamp and PathSummary for types with a `checked_add` method.
+/// Implements [`Timestamp`] and [`PathSummary`] for types with a `checked_add` method.
 macro_rules! implement_timestamp_add {
     ($($index_type:ty,)*) => (
         $(

@@ -9,7 +9,7 @@ use crate::{Container, Data};
 pub trait Branch<S: Scope, D: Data> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
-    /// the data and its time. If it returns true, the record will be sent
+    /// the data and its time. If it returns `true`, the record will be sent
     /// to the second returned stream, otherwise it will be sent to the first.
     ///
     /// If the result of the closure only depends on the time, not the data,
@@ -73,7 +73,7 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
 /// Extension trait for `Stream`.
 pub trait BranchWhen<T>: Sized {
     /// Takes one input stream and splits it into two output streams.
-    /// For each time, the supplied closure is called. If it returns true,
+    /// For each time, the supplied closure is called. If it returns `true`,
     /// the records for that will be sent to the second returned stream, otherwise
     /// they will be sent to the first.
     ///

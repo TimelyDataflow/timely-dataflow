@@ -87,8 +87,8 @@ impl MessageHeader {
 
 /// Creates socket connections from a list of host addresses.
 ///
-/// The item at index i in the resulting vec, is a Some(TcpSocket) to process i, except
-/// for item `my_index` which is None (no socket to self).
+/// The item at index `i` in the resulting vec, is a `Some(TcpSocket)` to process `i`, except
+/// for item `my_index` which is `None` (no socket to self).
 pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
 
     let hosts1 = Arc::new(addresses);
@@ -108,7 +108,7 @@ pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> R
 }
 
 
-/// Result contains connections [0, my_index - 1].
+/// Result contains connections `[0, my_index - 1]`.
 pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
     let results = addresses.iter().take(my_index).enumerate().map(|(index, address)| {
         loop {
@@ -131,7 +131,7 @@ pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
     Ok(results)
 }
 
-/// Result contains connections [my_index + 1, addresses.len() - 1].
+/// Result contains connections `[my_index + 1, addresses.len() - 1]`.
 pub fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
     let mut results: Vec<_> = (0..(addresses.len() - my_index - 1)).map(|_| None).collect();
     let listener = TcpListener::bind(&addresses[my_index][..])?;
