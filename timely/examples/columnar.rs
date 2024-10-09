@@ -10,10 +10,19 @@ use {
     timely::dataflow::ProbeHandle,
 };
 
+// Creates `WordCountContainer` and `WordCountReference` structs,
+// as well as various implementations relating them to `WordCount`.
+#[derive(Columnar)]
+struct WordCount {
+    text: String,
+    diff: i64,
+}
+
 fn main() {
 
-    use timely_container::columnar::Strings;
-    type Container = Columnar<(Strings, Vec<i64>)>;
+    type Container = Columnar<<WordCount as columnar::Columnar>::Container>;
+
+    use columnar::Len;
 
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
@@ -31,10 +40,10 @@ fn main() {
                         move |input, output| {
                             while let Some((time, data)) = input.next() {
                                 let mut session = output.session(&time);
-                                for (text, diff) in data.iter().flat_map(|(text, diff)| {
-                                    text.split_whitespace().map(move |s| (s, diff))
+                                for wordcount in data.iter().flat_map(|wordcount| {
+                                    wordcount.text.split_whitespace().map(move |text| WordCountReference { text, diff: wordcount.diff })
                                 }) {
-                                    session.give((text, diff));
+                                    session.give(wordcount);
                                 }
                             }
                         }
@@ -42,7 +51,7 @@ fn main() {
                 )
                 .container::<Container>()
                 .unary_frontier(
-                    ExchangeCore::new(|(s, _): &(&str, _)| s.len() as u64),
+                    ExchangeCore::new(|x: &WordCountReference<&str,&i64>| x.text.len() as u64),
                     "WordCount",
                     |_capability, _info| {
                         let mut queues = HashMap::new();
@@ -60,17 +69,17 @@ fn main() {
                                 if !input.frontier().less_equal(key.time()) {
                                     let mut session = output.session(key);
                                     for batch in val.drain(..) {
-                                        for (word, diff) in batch.iter() {
+                                        for wordcount in batch.iter() {
                                             let total =
-                                            if let Some(count) = counts.get_mut(word) {
-                                                *count += diff;
+                                            if let Some(count) = counts.get_mut(wordcount.text) {
+                                                *count += wordcount.diff;
                                                 *count
                                             }
                                             else {
-                                                counts.insert(word.to_string(), *diff);
-                                                *diff
+                                                counts.insert(wordcount.text.to_string(), *wordcount.diff);
+                                                *wordcount.diff
                                             };
-                                            session.give((word, total));
+                                            session.give(WordCountReference { text: wordcount.text, diff: total });
                                         }
                                     }
                                 }
@@ -87,7 +96,7 @@ fn main() {
 
         // introduce data and watch!
         for round in 0..10 {
-            input.send(("flat container", 1));
+            input.send(WordCountReference { text: "flat container", diff: 1 });
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
                 worker.step();
