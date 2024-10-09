@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 
 pub mod columnation;
 pub mod flatcontainer;
+pub mod columnar;
 
 /// A container transferring data through dataflow edges
 ///

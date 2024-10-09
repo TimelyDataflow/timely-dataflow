@@ -9,3 +9,5 @@ edition.workspace = true
 columnation = { git = "https://github.com/frankmcsherry/columnation" }
 flatcontainer = "0.5"
 serde = { version = "1.0", features = ["derive"] }
+# columnar = { path = "../../columnar" }
+columnar = { git = "https://github.com/frankmcsherry/columnar" }

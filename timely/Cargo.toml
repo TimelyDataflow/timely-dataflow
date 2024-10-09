@@ -32,3 +32,4 @@ smallvec = { version = "1.13.2", features = ["serde", "const_generics"] }
 [dev-dependencies]
 # timely_sort="0.1.6"
 rand = { version = "0.8", features = ["small_rng"] }
+columnar = { git = "https://github.com/frankmcsherry/columnar" }
