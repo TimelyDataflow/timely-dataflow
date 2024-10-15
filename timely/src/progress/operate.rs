@@ -46,14 +46,6 @@ pub trait Operate<T: Timestamp> : Schedule {
     /// any output, and no initial capabilities are held.
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>);
 
-    /// Signals that external frontiers have been set.
-    ///
-    /// By default this method does nothing, and leaves all changes in the `frontiers` element
-    /// of the shared progress state. An operator should be able to consult `frontiers` at any
-    /// point and read out the current frontier information, or the changes from the last time
-    /// that `frontiers` was drained.
-    fn set_external_summary(&mut self) { }
-
     /// Indicates of whether the operator requires `push_external_progress` information or not.
     fn notify_me(&self) -> bool { true }
 }
