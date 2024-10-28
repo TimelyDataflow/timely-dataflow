@@ -200,6 +200,8 @@ pub trait AsWorker : Scheduler {
 
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
+    /// The next worker-unique identifier to be allocated.
+    fn peek_identifier(&self) -> usize;
     /// Provides access to named logging streams.
     fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>;
     /// Provides access to the timely logging stream.
@@ -247,6 +249,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
     }
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
+    fn peek_identifier(&self) -> usize { self.peek_identifier() }
     fn log_register(&self) -> RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
         self.log_register()
     }
@@ -524,6 +527,11 @@ impl<A: Allocate> Worker<A> {
     pub fn new_identifier(&mut self) -> usize {
         *self.identifiers.borrow_mut() += 1;
         *self.identifiers.borrow() - 1
+    }
+
+    /// The next worker-unique identifier to be allocated.
+    pub fn peek_identifier(&self) -> usize {
+        *self.identifiers.borrow()
     }
 
     /// Access to named loggers.
