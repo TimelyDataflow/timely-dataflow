@@ -27,12 +27,10 @@ where
     for<'a> C: PushInto<C::Item<'a>>
 {
     fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(&self, mut predicate: P) -> StreamCore<G, C> {
-        let mut container = Default::default();
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                data.swap(&mut container);
-                if !container.is_empty() {
-                    output.session(&time).give_iterator(container.drain().filter(&mut predicate));
+                if !data.is_empty() {
+                    output.session(&time).give_iterator(data.drain().filter(&mut predicate));
                 }
             });
         })

@@ -36,12 +36,10 @@ where
     where
         for<'a> F: FnMut(&C::Item<'a>) -> u64,
     {
-        let mut container = Default::default();
         self.unary(ExchangeCore::new(route), "Exchange", |_, _| {
             move |input, output| {
                 input.for_each(|time, data| {
-                    data.swap(&mut container);
-                    output.session(&time).give_container(&mut container);
+                    output.session(&time).give_container(data);
                 });
             }
         })

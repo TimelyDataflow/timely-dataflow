@@ -78,16 +78,13 @@ fn main() {
             // Buffer records until all prior timestamps have completed.
             .binary_frontier(&cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 
-                let mut vector = Vec::new();
-
                 move |input1, input2, output| {
 
                     // Stash received data.
                     input1.for_each(|time, data| {
-                        data.swap(&mut vector);
                         stash.entry(time.retain())
                              .or_insert(Vec::new())
-                             .extend(vector.drain(..));
+                             .extend(data.drain(..));
                     });
 
                     // Consider sending stashed data.

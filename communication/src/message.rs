@@ -3,57 +3,6 @@
 use bytes::arc::Bytes;
 use crate::Data;
 
-/// Either an immutable or mutable reference.
-pub enum RefOrMut<'a, T> where T: 'a {
-    /// A mutable reference.
-    Mut(&'a mut T),
-}
-
-impl<'a, T: 'a> ::std::ops::Deref for RefOrMut<'a, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        match self {
-            RefOrMut::Mut(reference) => reference,
-        }
-    }
-}
-
-impl<'a, T: 'a> ::std::borrow::Borrow<T> for RefOrMut<'a, T> {
-    fn borrow(&self) -> &T {
-        match self {
-            RefOrMut::Mut(reference) => reference,
-        }
-    }
-}
-
-impl<'a, T: Clone+'a> RefOrMut<'a, T> {
-    /// Extracts the contents of `self`, either by cloning or swapping.
-    ///
-    /// This consumes `self` because its contents are now in an unknown state.
-    pub fn swap<'b>(self, element: &'b mut T) {
-        match self {
-            RefOrMut::Mut(reference) => ::std::mem::swap(reference, element),
-        };
-    }
-    /// Extracts the contents of `self`, either by cloning or swapping.
-    ///
-    /// This consumes `self` because its contents are now in an unknown state.
-    pub fn replace(self, mut element: T) -> T {
-        self.swap(&mut element);
-        element
-    }
-
-    /// Extracts the contents of `self`, either by cloning, or swapping and leaving a default
-    /// element in place.
-    ///
-    /// This consumes `self` because its contents are now in an unknown state.
-    pub fn take(self) -> T where T: Default {
-        let mut element = Default::default();
-        self.swap(&mut element);
-        element
-    }
-}
-
 /// A wrapped message which may be either typed or binary data.
 pub struct Message<T> {
     payload: T,
@@ -71,14 +20,6 @@ impl<T> Message<T> {
     /// Returns a mutable reference, if typed.
     pub fn if_mut(&mut self) -> Option<&mut T> {
         Some(&mut self.payload)
-    }
-    /// Returns an immutable or mutable typed reference.
-    ///
-    /// This method returns a mutable reference if the underlying data are typed Rust
-    /// instances, which admit mutation, and it returns an immutable reference if the
-    /// data are serialized binary data.
-    pub fn as_ref_or_mut(&mut self) -> RefOrMut<T> {
-        RefOrMut::Mut(&mut self.payload)
     }
 }
 

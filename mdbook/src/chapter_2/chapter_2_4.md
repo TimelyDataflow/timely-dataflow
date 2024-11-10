@@ -19,12 +19,10 @@ fn main() {
             .to_stream(scope)
             .unary(Pipeline, "increment", |capability, info| {
 
-                let mut vector = Vec::new();
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
-                        data.swap(&mut vector);
                         let mut session = output.session(&time);
-                        for datum in vector.drain(..) {
+                        for datum in data.drain(..) {
                             session.give(datum + 1);
                         }
                     }
@@ -136,13 +134,11 @@ fn main() {
             .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
-                let mut vector = Vec::new();
 
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
-                        data.swap(&mut vector);
                         let mut session = output.session(&time);
-                        for datum in vector.drain(..) {
+                        for datum in data.drain(..) {
                             if datum > maximum {
                                 session.give(datum + 1);
                                 maximum = datum;

@@ -7,17 +7,15 @@ use timely::Config;
 fn gh_523() {
     timely::execute(Config::thread(), |worker| {
         let mut input = InputHandle::new();
-        let mut buf = Vec::new();
         let probe = worker.dataflow::<u64, _, _>(|scope| {
             scope
                 .input_from(&mut input)
                 .unary(Pipeline, "Test", move |_, _| {
                     move |input, output| {
                         input.for_each(|cap, data| {
-                            data.swap(&mut buf);
                             let mut session = output.session(&cap);
                             session.give_container(&mut Vec::new());
-                            session.give_container(&mut buf);
+                            session.give_container(data);
                         });
                     }
                 })

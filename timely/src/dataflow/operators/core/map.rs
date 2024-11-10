@@ -60,11 +60,9 @@ impl<S: Scope, C: Container> Map<S, C> for StreamCore<S, C> {
         C2: SizableContainer + PushInto<I::Item>,
         L: FnMut(C::Item<'_>)->I + 'static,
     {
-        let mut container = Default::default();
         self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                data.swap(&mut container);
-                output.session(&time).give_iterator(container.drain().flat_map(&mut logic));
+                output.session(&time).give_iterator(data.drain().flat_map(&mut logic));
             });
         })
     }

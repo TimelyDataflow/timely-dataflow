@@ -52,7 +52,7 @@ fn main() {
                                 queues
                                     .entry(time.retain())
                                     .or_insert(Vec::new())
-                                    .push(data.take());
+                                    .push(std::mem::take(data));
                             }
 
                             for (key, val) in queues.iter_mut() {

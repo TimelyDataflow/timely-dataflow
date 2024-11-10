@@ -26,14 +26,12 @@ pub trait SharedStream<S: Scope, C: Container> {
 
 impl<S: Scope, C: Container> SharedStream<S, C> for StreamCore<S, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>> {
-        let mut container = Default::default();
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each(|time, data| {
-                    data.swap(&mut container);
                     output
                         .session(&time)
-                        .give_container(&mut Rc::new(std::mem::take(&mut container)));
+                        .give_container(&mut Rc::new(std::mem::take(data)));
                 });
             }
         })
@@ -54,20 +52,16 @@ mod test {
             scope
                 .concatenate([
                     shared.unary(Pipeline, "read shared 1", |_, _| {
-                        let mut container = Default::default();
                         move |input, output| {
                             input.for_each(|time, data| {
-                                data.swap(&mut container);
-                                output.session(&time).give(container.as_ptr() as usize);
+                                output.session(&time).give(data.as_ptr() as usize);
                             });
                         }
                     }),
                     shared.unary(Pipeline, "read shared 2", |_, _| {
-                        let mut container = Default::default();
                         move |input, output| {
                             input.for_each(|time, data| {
-                                data.swap(&mut container);
-                                output.session(&time).give(container.as_ptr() as usize);
+                                output.session(&time).give(data.as_ptr() as usize);
                             });
                         }
                     }),

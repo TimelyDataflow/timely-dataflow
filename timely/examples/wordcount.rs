@@ -35,7 +35,7 @@ fn main() {
                         while let Some((time, data)) = input.next() {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
-                                  .push(data.replace(Vec::new()));
+                                  .push(std::mem::take(data));
                         }
 
                         for (key, val) in queues.iter_mut() {

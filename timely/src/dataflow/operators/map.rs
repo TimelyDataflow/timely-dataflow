@@ -53,12 +53,10 @@ pub trait Map<S: Scope, D: Data> {
 
 impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn map_in_place<L: FnMut(&mut D)+'static>(&self, mut logic: L) -> Stream<S, D> {
-        let mut vector = Vec::new();
         self.unary(Pipeline, "MapInPlace", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                data.swap(&mut vector);
-                for datum in vector.iter_mut() { logic(datum); }
-                output.session(&time).give_container(&mut vector);
+                for datum in data.iter_mut() { logic(datum); }
+                output.session(&time).give_container(data);
             })
         })
     }

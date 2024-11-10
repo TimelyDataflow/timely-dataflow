@@ -415,11 +415,9 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///     vec![()].into_iter().to_stream(scope)
     ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
-    ///             let mut vector = Vec::new();
     ///             move |input, output| {
     ///                 cap.downgrade(&input.frontier().frontier());
     ///                 while let Some((time, data)) = input.next() {
-    ///                     data.swap(&mut vector);
     ///                 }
     ///                 let a_cap = cap.first();
     ///                 if let Some(a_cap) = a_cap.as_ref() {
