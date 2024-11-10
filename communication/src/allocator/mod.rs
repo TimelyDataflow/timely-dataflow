@@ -85,8 +85,8 @@ pub trait Allocate {
     /// By default, this method uses the thread-local channel constructor
     /// based on a shared `VecDeque` which updates the event queue.
     fn pipeline<T: 'static>(&mut self, identifier: usize) ->
-        (thread::ThreadPusher<Message<T>>,
-         thread::ThreadPuller<Message<T>>)
+        (thread::ThreadPusher<T>,
+         thread::ThreadPuller<T>)
     {
         thread::Thread::new_from(identifier, self.events().clone())
     }

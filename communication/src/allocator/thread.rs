@@ -62,9 +62,9 @@ impl Thread {
 
     /// Creates a new thread-local channel from an identifier and shared counts.
     pub fn new_from<T: 'static>(identifier: usize, events: Rc<RefCell<Vec<usize>>>)
-        -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>)
+        -> (ThreadPusher<T>, ThreadPuller<T>)
     {
-        let shared = Rc::new(RefCell::new((VecDeque::<Message<T>>::new(), VecDeque::<Message<T>>::new())));
+        let shared = Rc::new(RefCell::new((VecDeque::<T>::new(), VecDeque::<T>::new())));
         let pusher = Pusher { target: shared.clone() };
         let pusher = CountPusher::new(pusher, identifier, events.clone());
         let puller = Puller { source: shared, current: None };
