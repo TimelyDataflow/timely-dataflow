@@ -191,13 +191,13 @@ fn main() {
                 while let Some((time, data)) = input1.next() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                     notificator.notify_at(time.retain());
                 }
                 while let Some((time, data)) = input2.next() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                     notificator.notify_at(time.retain());
                 }
 
@@ -242,12 +242,12 @@ fn main() {
                 while let Some((time, data)) = input1.next() {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                 }
                 while let Some((time, data)) = input2.next() {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                 }
 
                 // consider sending everything in `stash`.
