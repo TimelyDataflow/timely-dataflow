@@ -118,7 +118,6 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
 
                 while let Some(message) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
                     data.swap(&mut vector);

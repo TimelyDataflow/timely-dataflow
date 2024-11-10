@@ -139,7 +139,6 @@ impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
                 // turn each received message into an event.
                 while let Some(message) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
                     let vector = data.replace(Default::default());

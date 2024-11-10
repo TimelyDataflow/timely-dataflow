@@ -59,9 +59,6 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>> InputHandleCore<T, C
         let summaries = &self.summaries;
         self.pull_counter.next_guarded().map(|(guard, bundle)| {
             match bundle.as_ref_or_mut() {
-                RefOrMut::Ref(bundle) => {
-                    (InputCapability::new(internal.clone(), summaries.clone(), guard), RefOrMut::Ref(&bundle.data))
-                },
                 RefOrMut::Mut(bundle) => {
                     (InputCapability::new(internal.clone(), summaries.clone(), guard), RefOrMut::Mut(&mut bundle.data))
                 },

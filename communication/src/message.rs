@@ -5,8 +5,6 @@ use crate::Data;
 
 /// Either an immutable or mutable reference.
 pub enum RefOrMut<'a, T> where T: 'a {
-    /// An immutable reference.
-    Ref(&'a T),
     /// A mutable reference.
     Mut(&'a mut T),
 }
@@ -15,7 +13,6 @@ impl<'a, T: 'a> ::std::ops::Deref for RefOrMut<'a, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         match self {
-            RefOrMut::Ref(reference) => reference,
             RefOrMut::Mut(reference) => reference,
         }
     }
@@ -24,7 +21,6 @@ impl<'a, T: 'a> ::std::ops::Deref for RefOrMut<'a, T> {
 impl<'a, T: 'a> ::std::borrow::Borrow<T> for RefOrMut<'a, T> {
     fn borrow(&self) -> &T {
         match self {
-            RefOrMut::Ref(reference) => reference,
             RefOrMut::Mut(reference) => reference,
         }
     }
@@ -36,7 +32,6 @@ impl<'a, T: Clone+'a> RefOrMut<'a, T> {
     /// This consumes `self` because its contents are now in an unknown state.
     pub fn swap<'b>(self, element: &'b mut T) {
         match self {
-            RefOrMut::Ref(reference) => element.clone_from(reference),
             RefOrMut::Mut(reference) => ::std::mem::swap(reference, element),
         };
     }
