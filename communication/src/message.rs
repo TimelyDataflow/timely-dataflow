@@ -1,6 +1,5 @@
 //! Types wrapping typed data.
 
-use std::sync::Arc;
 use bytes::arc::Bytes;
 use crate::Data;
 
@@ -69,8 +68,6 @@ pub struct Message<T> {
 enum MessageContents<T> {
     /// Rust typed instance. Available for ownership.
     Owned(T),
-    /// Atomic reference counted. Only available as a reference.
-    Arc(Arc<T>),
 }
 
 impl<T> Message<T> {
@@ -78,22 +75,16 @@ impl<T> Message<T> {
     pub fn from_typed(typed: T) -> Self {
         Message { payload: MessageContents::Owned(typed) }
     }
-    /// Wrap a shared typed item as a message.
-    pub fn from_arc(typed: Arc<T>) -> Self {
-        Message { payload: MessageContents::Arc(typed) }
-    }
     /// Destructures and returns any typed data.
     pub fn if_typed(self) -> Option<T> {
         match self.payload {
             MessageContents::Owned(typed) => Some(typed),
-            MessageContents::Arc(_) => None,
         }
     }
     /// Returns a mutable reference, if typed.
     pub fn if_mut(&mut self) -> Option<&mut T> {
         match &mut self.payload {
             MessageContents::Owned(typed) => Some(typed),
-            MessageContents::Arc(_) => None,
         }
     }
     /// Returns an immutable or mutable typed reference.
@@ -104,7 +95,6 @@ impl<T> Message<T> {
     pub fn as_ref_or_mut(&mut self) -> RefOrMut<T> {
         match &mut self.payload {
             MessageContents::Owned(typed) => { RefOrMut::Mut(typed) },
-            MessageContents::Arc(typed) => { RefOrMut::Ref(typed) },
         }
     }
 }
@@ -122,9 +112,6 @@ impl<T: Data> Message<T> {
             MessageContents::Owned(typed) => {
                 ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize
             },
-            MessageContents::Arc(typed) => {
-                ::bincode::serialized_size(&**typed).expect("bincode::serialized_size() failed") as usize
-            },
         }
     }
 
@@ -133,9 +120,6 @@ impl<T: Data> Message<T> {
         match &self.payload {
             MessageContents::Owned(typed) => {
                 ::bincode::serialize_into(writer, &typed).expect("bincode::serialize_into() failed");
-            },
-            MessageContents::Arc(typed) => {
-                ::bincode::serialize_into(writer, &**typed).expect("bincode::serialize_into() failed");
             },
         }
     }
@@ -147,7 +131,6 @@ impl<T> ::std::ops::Deref for Message<T> {
         // TODO: In principle we have already decoded, but let's go again
         match &self.payload {
             MessageContents::Owned(typed) => { typed },
-            MessageContents::Arc(typed) => { typed },
         }
     }
 }
@@ -157,8 +140,6 @@ impl<T: Clone> Message<T> {
     pub fn into_typed(self) -> T {
         match self.payload {
             MessageContents::Owned(instance) => instance,
-            // TODO: Could attempt `Arc::try_unwrap()` here.
-            MessageContents::Arc(instance) => (*instance).clone(),
         }
     }
     /// Ensures the message is typed data and returns a mutable reference to it.
@@ -166,19 +147,13 @@ impl<T: Clone> Message<T> {
 
         let cloned: Option<T> = match &self.payload {
             MessageContents::Owned(_) => None,
-            // TODO: Could attempt `Arc::try_unwrap()` here.
-            MessageContents::Arc(typed) => Some((**typed).clone()),
         };
 
         if let Some(cloned) = cloned {
             self.payload = MessageContents::Owned(cloned);
         }
 
-        if let MessageContents::Owned(typed) = &mut self.payload {
-            typed
-        }
-        else {
-            unreachable!()
-        }
+        let MessageContents::Owned(typed) = &mut self.payload;
+        typed
     }
 }
