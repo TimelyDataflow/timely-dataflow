@@ -113,9 +113,8 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
                 }
 
                 while let Some(message) = input.next() {
-                    let reference = message.as_mut();
-                    let time = &reference.time;
-                    let data = &mut reference.data;
+                    let time = &message.payload.time;
+                    let data = &mut message.payload.data;
                     output.session(time).give_container(data);
                 }
                 output.cease();

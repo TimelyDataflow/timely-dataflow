@@ -53,10 +53,8 @@ impl<T, C: Container> Message<T, C> {
         pusher.push(&mut bundle);
 
         if let Some(message) = bundle {
-            if let Some(message) = message.if_typed() {
-                *buffer = message.data;
-                buffer.clear();
-            }
+            *buffer = message.payload.data;
+            buffer.clear();
         }
     }
 }

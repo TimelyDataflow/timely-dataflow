@@ -3,23 +3,16 @@
 use bytes::arc::Bytes;
 use crate::Data;
 
-/// A wrapped message which may be either typed or binary data.
+/// A wrapped message which supports serialization and deserialization.
 pub struct Message<T> {
-    payload: T,
+    /// Message contents.
+    pub payload: T,
 }
 
 impl<T> Message<T> {
     /// Wrap a typed item as a message.
     pub fn from_typed(typed: T) -> Self {
         Message { payload: typed }
-    }
-    /// Destructures and returns any typed data.
-    pub fn if_typed(self) -> Option<T> {
-        Some(self.payload)
-    }
-    /// Returns a mutable reference, if typed.
-    pub fn if_mut(&mut self) -> Option<&mut T> {
-        Some(&mut self.payload)
     }
 }
 
@@ -45,16 +38,5 @@ impl<T> ::std::ops::Deref for Message<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.payload
-    }
-}
-
-impl<T: Clone> Message<T> {
-    /// Produces a typed instance of the wrapped element.
-    pub fn into_typed(self) -> T {
-        self.payload
-    }
-    /// Ensures the message is typed data and returns a mutable reference to it.
-    pub fn as_mut(&mut self) -> &mut T {
-        &mut self.payload
     }
 }
