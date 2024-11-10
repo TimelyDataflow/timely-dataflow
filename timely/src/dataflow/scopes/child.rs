@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::communication::{Data, Push, Pull};
+use crate::communication::{Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
@@ -14,6 +14,7 @@ use crate::order::Product;
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::worker::{AsWorker, Config};
+use crate::ExchangeData;
 
 use super::{ScopeParent, Scope};
 
@@ -58,7 +59,7 @@ where
     fn config(&self) -> &Config { self.parent.config() }
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
+    fn allocate<D: ExchangeData>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
         self.parent.allocate(identifier, address)
     }
     fn pipeline<D: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<Message<D>>, ThreadPuller<Message<D>>) {
@@ -148,7 +149,7 @@ where
     }
 }
 
-use crate::communication::Message;
+use crate::Message;
 
 impl<'a, G, T> Clone for Child<'a, G, T>
 where

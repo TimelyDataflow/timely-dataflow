@@ -12,13 +12,14 @@ use std::rc::Rc;
 
 use crate::Container;
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::communication::{Push, Pull, Data};
+use crate::communication::{Push, Pull};
 use crate::container::PushPartitioned;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use crate::dataflow::channels::{Bundle, Message};
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::worker::AsWorker;
+use crate::ExchangeData;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T, C> {
@@ -67,7 +68,7 @@ where
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Timestamp, C, H: 'static> ParallelizationContract<T, C> for ExchangeCore<C, H>
 where
-    C: Data + PushPartitioned,
+    C: ExchangeData + PushPartitioned,
     for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, C, LogPusher<T, C, Box<dyn Push<Bundle<T, C>>>>, H>;

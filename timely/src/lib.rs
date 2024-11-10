@@ -108,9 +108,59 @@ impl<T: Clone+'static> Data for T { }
 ///
 /// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`
 /// `Data` trait, which describes requirements for communication along channels.
-pub trait ExchangeData: Data + communication::Data { }
-impl<T: Data + communication::Data> ExchangeData for T { }
+pub trait ExchangeData: Data + encoding::Data { }
+impl<T: Data + encoding::Data> ExchangeData for T { }
 
 #[doc = include_str!("../../README.md")]
 #[cfg(doctest)]
 pub struct ReadmeDoctests;
+
+/// A wrapper that indicates a serialization/deserialization strategy.
+use encoding::Bincode as Message;
+
+mod encoding {
+
+    use std::any::Any;
+    use serde::{Serialize, Deserialize};
+    use timely_bytes::arc::Bytes;
+    use timely_communication::Bytesable;
+
+    /// A composite trait for types that may be used with channels.
+    pub trait Data : Send+Any+Serialize+for<'a>Deserialize<'a>+'static { }
+    impl<T: Send+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
+
+    /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
+    pub struct Bincode<T> {
+        /// Bincode contents.
+        pub payload: T,
+    }
+
+    impl<T> Bincode<T> {
+        /// Wrap a typed item as a Bincode.
+        pub fn from_typed(typed: T) -> Self {
+            Bincode { payload: typed }
+        }
+    }
+
+    impl<T: Data> Bytesable for Bincode<T> {
+        fn from_bytes(bytes: Bytes) -> Self {
+            let typed = ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed");
+            Bincode { payload: typed }
+        }
+
+        fn length_in_bytes(&self) -> usize {
+            ::bincode::serialized_size(&self.payload).expect("bincode::serialized_size() failed") as usize
+        }
+
+        fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+            ::bincode::serialize_into(writer, &self.payload).expect("bincode::serialize_into() failed");
+        }
+    }
+
+    impl<T> ::std::ops::Deref for Bincode<T> {
+        type Target = T;
+        fn deref(&self) -> &Self::Target {
+            &self.payload
+        }
+    }
+}

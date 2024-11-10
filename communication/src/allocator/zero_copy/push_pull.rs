@@ -8,8 +8,7 @@ use timely_bytes::arc::Bytes;
 
 use crate::allocator::canary::Canary;
 use crate::networking::MessageHeader;
-use crate::message::Bytesable;
-use crate::{Push, Pull};
+use crate::{Bytesable, Push, Pull};
 
 use super::bytes_exchange::{BytesPush, SendEndpoint};
 

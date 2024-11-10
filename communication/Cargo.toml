@@ -18,7 +18,6 @@ default = ["getopts"]
 
 [dependencies]
 getopts = { version = "0.2.21", optional = true }
-bincode = { version = "1.0" }
 byteorder = "1.5"
 serde = { version = "1.0", features = ["derive"] }
 timely_bytes = { path = "../bytes", version = "0.12" }
