@@ -8,8 +8,8 @@ use timely_bytes::arc::Bytes;
 
 use crate::networking::MessageHeader;
 
-use crate::{Allocate, Message, Data, Push, Pull};
-use crate::allocator::AllocateBuilder;
+use crate::{Allocate, Push, Pull};
+use crate::allocator::{AllocateBuilder, Exchangeable};
 use crate::allocator::canary::Canary;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
@@ -135,7 +135,7 @@ pub struct TcpAllocator<A: Allocate> {
 impl<A: Allocate> Allocate for TcpAllocator<A> {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
 
         // Assume and enforce in-order identifier allocation.
         if let Some(bound) = self.channel_id_bound {
@@ -144,7 +144,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
         self.channel_id_bound = Some(identifier);
 
         // Result list of boxed pushers.
-        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::new();
+        let mut pushes = Vec::<Box<dyn Push<T>>>::new();
 
         // Inner exchange allocations.
         let inner_peers = self.inner.peers();

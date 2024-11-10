@@ -17,7 +17,7 @@ pub mod counters;
 
 pub mod zero_copy;
 
-use crate::{Data, Push, Pull, Message};
+use crate::{Push, Pull};
 
 /// A proto-allocator, which implements `Send` and can be completed with `build`.
 ///
@@ -32,6 +32,13 @@ pub trait AllocateBuilder : Send {
     fn build(self) -> Self::Allocator;
 }
 
+use std::any::Any;
+use crate::message::Bytesable;
+
+/// A type that can be sent along an allocated channel.
+pub trait Exchangeable : Send+Sync+Any+Bytesable+'static { }
+impl<T: Send+Sync+Any+Bytesable+'static> Exchangeable for T { }
+
 /// A type capable of allocating channels.
 ///
 /// There is some feature creep, in that this contains several convenience methods about the nature
@@ -42,7 +49,7 @@ pub trait Allocate {
     /// The number of workers in the communication group.
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>);
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>);
     /// A shared queue of communication events with channel identifier.
     ///
     /// It is expected that users of the channel allocator will regularly
