@@ -11,7 +11,7 @@ use crate::networking::MessageHeader;
 
 use crate::{Data, Push, Pull};
 use crate::allocator::Message;
-
+use crate::message::Bytesable;
 use super::bytes_exchange::{BytesPush, SendEndpoint};
 
 /// An adapter into which one may push elements of type `T`.
