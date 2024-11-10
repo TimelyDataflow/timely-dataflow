@@ -343,7 +343,7 @@ fn main() {
                         while let Some((time, data)) = input.next() {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
-                                  .extend(data.replace(Vec::new()));
+                                  .extend(std::mem::take(data));
                         }
 
                         // enable each stashed time if ready.
@@ -412,7 +412,7 @@ fn main() {
         while let Some((time, data)) = input.next() {
             queues.entry(time.retain())
                   .or_insert(Vec::new())
-                  .extend(data.replace(Vec::new()));
+                  .extend(std::mem::take(data));
         }</code></pre>
 <p>The <code>input</code> handle has a <code>next</code> method, and it optionally returns a pair of <code>time</code> and <code>data</code>, representing a timely dataflow timestamp and a hunk of data bearing that timestamp, respectively. Our plan is to iterate through all available input (the <code>next()</code> method doesn't block, it just returns <code>None</code> when it runs out of data), accepting it from the timely dataflow system and moving it into our <code>queue</code> hash map.</p>
 <p>Why do we do this? Because this is a streaming system, we could be getting data out of order. Our goal is to update the counts in time order, and to do this we'll need to enqueue what we get until we also get word that the associated <code>time</code> is complete. That happens in the next few hunks of code</p>

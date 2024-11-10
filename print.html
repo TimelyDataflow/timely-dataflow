@@ -827,12 +827,10 @@ fn main() {
             .to_stream(scope)
             .unary(Pipeline, "increment", |capability, info| {
 
-                let mut vector = Vec::new();
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
-                        data.swap(&amp;mut vector);
                         let mut session = output.session(&amp;time);
-                        for datum in vector.drain(..) {
+                        for datum in data.drain(..) {
                             session.give(datum + 1);
                         }
                     }
@@ -915,13 +913,11 @@ fn main() {
             .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
-                let mut vector = Vec::new();
 
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
-                        data.swap(&amp;mut vector);
                         let mut session = output.session(&amp;time);
-                        for datum in vector.drain(..) {
+                        for datum in data.drain(..) {
                             if datum &gt; maximum {
                                 session.give(datum + 1);
                                 maximum = datum;
@@ -963,13 +959,13 @@ fn main() {
                 while let Some((time, data)) = input1.next() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                     notificator.notify_at(time.retain());
                 }
                 while let Some((time, data)) = input2.next() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                     notificator.notify_at(time.retain());
                 }
 
@@ -1009,12 +1005,12 @@ fn main() {
                 while let Some((time, data)) = input1.next() {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                 }
                 while let Some((time, data)) = input2.next() {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                 }
 
                 // consider sending everything in `stash`.
@@ -1206,7 +1202,7 @@ fn main() {
                         while let Some((time, data)) = input.next() {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
-                                  .extend(data.replace(Vec::new()));
+                                  .extend(std::mem::take(data));
                         }
 
                         // enable each stashed time if ready.
@@ -1275,7 +1271,7 @@ fn main() {
         while let Some((time, data)) = input.next() {
             queues.entry(time.retain())
                   .or_insert(Vec::new())
-                  .extend(data.replace(Vec::new()));
+                  .extend(std::mem::take(data));
         }</code></pre>
 <p>The <code>input</code> handle has a <code>next</code> method, and it optionally returns a pair of <code>time</code> and <code>data</code>, representing a timely dataflow timestamp and a hunk of data bearing that timestamp, respectively. Our plan is to iterate through all available input (the <code>next()</code> method doesn't block, it just returns <code>None</code> when it runs out of data), accepting it from the timely dataflow system and moving it into our <code>queue</code> hash map.</p>
 <p>Why do we do this? Because this is a streaming system, we could be getting data out of order. Our goal is to update the counts in time order, and to do this we'll need to enqueue what we get until we also get word that the associated <code>time</code> is complete. That happens in the next few hunks of code</p>
@@ -1642,16 +1638,13 @@ fn main() {
             // Buffer records until all prior timestamps have completed.
             .binary_frontier(&amp;cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 
-                let mut vector = Vec::new();
-
                 move |input1, input2, output| {
 
                     // Stash received data.
                     input1.for_each(|time, data| {
-                        data.swap(&amp;mut vector);
                         stash.entry(time.retain())
                              .or_insert(Vec::new())
-                             .extend(vector.drain(..));
+                             .extend(data.drain(..));
                     });
 
                     // Consider sending stashed data.
