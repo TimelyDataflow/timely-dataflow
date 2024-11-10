@@ -93,10 +93,10 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
                 // Attempt to reuse allocations, if possible.
                 if let Some(tuple) = &mut self.to_push {
-                    let tuple = tuple.as_mut();
-                    tuple.0 = self.source;
-                    tuple.1 = self.counter;
-                    tuple.2.clear(); tuple.2.extend(changes.iter().cloned());
+                    tuple.payload.0 = self.source;
+                    tuple.payload.1 = self.counter;
+                    tuple.payload.2.clear(); 
+                    tuple.payload.2.extend(changes.iter().cloned());
                 }
                 // If we don't have an allocation ...
                 if self.to_push.is_none() {

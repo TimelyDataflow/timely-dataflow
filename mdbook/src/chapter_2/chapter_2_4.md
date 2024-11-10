@@ -19,12 +19,10 @@ fn main() {
             .to_stream(scope)
             .unary(Pipeline, "increment", |capability, info| {
 
-                let mut vector = Vec::new();
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
-                        data.swap(&mut vector);
                         let mut session = output.session(&time);
-                        for datum in vector.drain(..) {
+                        for datum in data.drain(..) {
                             session.give(datum + 1);
                         }
                     }
@@ -136,13 +134,11 @@ fn main() {
             .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
-                let mut vector = Vec::new();
 
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
-                        data.swap(&mut vector);
                         let mut session = output.session(&time);
-                        for datum in vector.drain(..) {
+                        for datum in data.drain(..) {
                             if datum > maximum {
                                 session.give(datum + 1);
                                 maximum = datum;
@@ -195,13 +191,13 @@ fn main() {
                 while let Some((time, data)) = input1.next() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                     notificator.notify_at(time.retain());
                 }
                 while let Some((time, data)) = input2.next() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                     notificator.notify_at(time.retain());
                 }
 
@@ -246,12 +242,12 @@ fn main() {
                 while let Some((time, data)) = input1.next() {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                 }
                 while let Some((time, data)) = input2.next() {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                 }
 
                 // consider sending everything in `stash`.

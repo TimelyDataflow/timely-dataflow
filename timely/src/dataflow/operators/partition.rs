@@ -40,14 +40,12 @@ impl<G: Scope, D: Data, D2: Data, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D
         }
 
         builder.build(move |_| {
-            let mut vector = Vec::new();
             move |_frontiers| {
                 let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
                 input.for_each(|time, data| {
-                    data.swap(&mut vector);
                     let mut sessions = handles.iter_mut().map(|h| h.session(&time)).collect::<Vec<_>>();
 
-                    for datum in vector.drain(..) {
+                    for datum in data.drain(..) {
                         let (part, datum2) = route(datum);
                         sessions[part as usize].give(datum2);
                     }

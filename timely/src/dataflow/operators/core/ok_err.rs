@@ -55,16 +55,14 @@ impl<S: Scope, C: Container> OkErr<S, C> for StreamCore<S, C> {
         let (mut output2, stream2) = builder.new_output();
 
         builder.build(move |_| {
-            let mut container = Default::default();
             move |_frontiers| {
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
                 input.for_each(|time, data| {
-                    data.swap(&mut container);
                     let mut out1 = output1_handle.session(&time);
                     let mut out2 = output2_handle.session(&time);
-                    for datum in container.drain() {
+                    for datum in data.drain() {
                         match logic(datum) {
                             Ok(datum) => out1.give(datum),
                             Err(datum) => out2.give(datum),

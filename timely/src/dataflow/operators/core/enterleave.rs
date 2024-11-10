@@ -140,14 +140,12 @@ struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContain
 impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> Push<Bundle<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
     fn push(&mut self, element: &mut Option<Bundle<TOuter, TContainer>>) {
         if let Some(message) = element {
-            let outer_message = message.as_mut();
+            let outer_message = &mut message.payload;
             let data = ::std::mem::take(&mut outer_message.data);
             let mut inner_message = Some(Bundle::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
-                if let Some(inner_message) = inner_message.if_typed() {
-                    outer_message.data = inner_message.data;
-                }
+                outer_message.data = inner_message.payload.data;
             }
             self.active = true;
         }
@@ -171,14 +169,12 @@ impl<TOuter, TInner, TContainer: Container> Push<Bundle<TInner, TContainer>> for
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data {
     fn push(&mut self, message: &mut Option<Bundle<TInner, TContainer>>) {
         if let Some(message) = message {
-            let inner_message = message.as_mut();
+            let inner_message = &mut message.payload;
             let data = ::std::mem::take(&mut inner_message.data);
             let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
-                if let Some(outer_message) = outer_message.if_typed() {
-                    inner_message.data = outer_message.data;
-                }
+                inner_message.data = outer_message.payload.data;
             }
         }
         else { self.targets.done(); }

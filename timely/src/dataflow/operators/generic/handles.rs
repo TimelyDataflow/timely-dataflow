@@ -14,7 +14,7 @@ use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Bundle;
-use crate::communication::{Push, Pull, message::RefOrMut};
+use crate::communication::{Push, Pull};
 use crate::Container;
 use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 use crate::logging::TimelyLogger as Logger;
@@ -54,18 +54,11 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>> InputHandleCore<T, C
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(InputCapability<T>, RefOrMut<C>)> {
+    pub fn next(&mut self) -> Option<(InputCapability<T>, &mut C)> {
         let internal = &self.internal;
         let summaries = &self.summaries;
         self.pull_counter.next_guarded().map(|(guard, bundle)| {
-            match bundle.as_ref_or_mut() {
-                RefOrMut::Ref(bundle) => {
-                    (InputCapability::new(internal.clone(), summaries.clone(), guard), RefOrMut::Ref(&bundle.data))
-                },
-                RefOrMut::Mut(bundle) => {
-                    (InputCapability::new(internal.clone(), summaries.clone(), guard), RefOrMut::Mut(&mut bundle.data))
-                },
-            }
+            (InputCapability::new(internal.clone(), summaries.clone(), guard), &mut bundle.payload.data)
         })
     }
 
@@ -82,13 +75,13 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>> InputHandleCore<T, C
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_container(&mut data.replace(Vec::new()));
+    ///                    output.session(&cap).give_container(data);
     ///                });
     ///            });
     /// });
     /// ```
     #[inline]
-    pub fn for_each<F: FnMut(InputCapability<T>, RefOrMut<C>)>(&mut self, mut logic: F) {
+    pub fn for_each<F: FnMut(InputCapability<T>, &mut C)>(&mut self, mut logic: F) {
         let mut logging = self.logging.take();
         while let Some((cap, data)) = self.next() {
             logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
@@ -113,7 +106,7 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>+'a> FrontieredInputHa
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(InputCapability<T>, RefOrMut<C>)> {
+    pub fn next(&mut self) -> Option<(InputCapability<T>, &mut C)> {
         self.handle.next()
     }
 
@@ -130,13 +123,13 @@ impl<'a, T: Timestamp, C: Container, P: Pull<Bundle<T, C>>+'a> FrontieredInputHa
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_container(&mut data.replace(Vec::new()));
+    ///                    output.session(&cap).give_container(data);
     ///                });
     ///            });
     /// });
     /// ```
     #[inline]
-    pub fn for_each<F: FnMut(InputCapability<T>, RefOrMut<C>)>(&mut self, logic: F) {
+    pub fn for_each<F: FnMut(InputCapability<T>, &mut C)>(&mut self, logic: F) {
         self.handle.for_each(logic)
     }
 
@@ -226,7 +219,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Bundle<T, CB::Container>>> 
     ///                input.for_each(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session_with_builder(&cap.delayed(&time))
-    ///                          .give_container(&mut data.replace(Vec::new()));
+    ///                          .give_container(data);
     ///                });
     ///            });
     /// });
@@ -260,7 +253,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Bundle<T, C>>> OutputHandleCore<'a,
     ///                input.for_each(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session(&cap.delayed(&time))
-    ///                          .give_container(&mut data.replace(Vec::new()));
+    ///                          .give_container(data);
     ///                });
     ///            });
     /// });

@@ -97,8 +97,6 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
         let shared_frontier = Rc::downgrade(&handle.frontier);
         let mut started = false;
 
-        let mut vector = Default::default();
-
         builder.build(
             move |progress| {
 
@@ -114,15 +112,10 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
                     started = true;
                 }
 
-                use crate::communication::message::RefOrMut;
-
                 while let Some(message) = input.next() {
-                    let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
-                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
-                    };
-                    data.swap(&mut vector);
-                    output.session(time).give_container(&mut vector);
+                    let time = &message.payload.time;
+                    let data = &mut message.payload.data;
+                    output.session(time).give_container(data);
                 }
                 output.cease();
 

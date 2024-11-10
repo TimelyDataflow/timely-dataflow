@@ -121,10 +121,8 @@ impl<T, C: Container, P: Push<Bundle<T, C>>> Push<Bundle<T, C>> for LogPusher<T,
 
             // Stamp the sequence number and source.
             // FIXME: Awkward moment/logic.
-            if let Some(message) = bundle.if_mut() {
-                message.seq = self.counter - 1;
-                message.from = self.source;
-            }
+            bundle.payload.seq = self.counter - 1;
+            bundle.payload.from = self.source;
 
             if let Some(logger) = self.logging.as_ref() {
                 logger.log(MessagesEvent {

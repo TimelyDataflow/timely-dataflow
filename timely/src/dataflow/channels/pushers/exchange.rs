@@ -57,9 +57,8 @@ where
         }
         else if let Some(message) = message {
 
-            let message = message.as_mut();
-            let time = &message.time;
-            let data = &mut message.data;
+            let time = &message.payload.time;
+            let data = &mut message.payload.data;
 
             // if the time isn't right, flush everything.
             if self.current.as_ref().map_or(false, |x| x != time) {
