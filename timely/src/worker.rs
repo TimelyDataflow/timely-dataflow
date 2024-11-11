@@ -9,9 +9,8 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-use crate::communication::{Allocate, Push, Pull};
+use crate::communication::{Allocate, Exchangeable, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::communication::allocator::Exchangeable;
 use crate::scheduling::{Schedule, Scheduler, Activations};
 use crate::progress::timestamp::{Refines};
 use crate::progress::SubgraphBuilder;

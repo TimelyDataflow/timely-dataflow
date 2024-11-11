@@ -3,9 +3,8 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::communication::{Push, Pull};
+use crate::communication::{Exchangeable, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::communication::allocator::Exchangeable;
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
 use crate::progress::{Timestamp, Operate, SubgraphBuilder};

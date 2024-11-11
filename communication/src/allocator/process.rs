@@ -110,7 +110,7 @@ impl Process {
 impl Allocate for Process {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Any+Send+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
+    fn allocate<T: Any+Send>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
 
         // this is race-y global initialisation of all channels for all workers, performed by the
         // first worker that enters this critical section

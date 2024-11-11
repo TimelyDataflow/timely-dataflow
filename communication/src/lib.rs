@@ -104,7 +104,7 @@ pub mod logging;
 pub mod buzzer;
 
 pub use allocator::Generic as Allocator;
-pub use allocator::Allocate;
+pub use allocator::{Allocate, Exchangeable};
 pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
 
 use timely_bytes::arc::Bytes;

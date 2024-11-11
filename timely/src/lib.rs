@@ -126,8 +126,8 @@ mod encoding {
     use timely_communication::Bytesable;
 
     /// A composite trait for types that may be used with channels.
-    pub trait Data : Send+Any+Serialize+for<'a>Deserialize<'a>+'static { }
-    impl<T: Send+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
+    pub trait Data : Send+Any+Serialize+for<'a>Deserialize<'a> { }
+    impl<T: Send+Any+Serialize+for<'a>Deserialize<'a>> Data for T { }
 
     /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
     pub struct Bincode<T> {

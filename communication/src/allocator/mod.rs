@@ -35,8 +35,8 @@ pub trait AllocateBuilder : Send {
 use std::any::Any;
 
 /// A type that can be sent along an allocated channel.
-pub trait Exchangeable : Send+Any+Bytesable+'static { }
-impl<T: Send+Any+Bytesable+'static> Exchangeable for T { }
+pub trait Exchangeable : Send+Any+Bytesable { }
+impl<T: Send+Any+Bytesable> Exchangeable for T { }
 
 /// A type capable of allocating channels.
 ///

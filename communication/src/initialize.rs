@@ -184,7 +184,7 @@ impl Config {
 /// ```
 /// use timely_communication::{Allocate, Bytesable};
 /// 
-/// /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
+/// /// A wrapper that indicates the serialization/deserialization strategy.
 /// pub struct Message {
 ///     /// Text contents.
 ///     pub payload: String,

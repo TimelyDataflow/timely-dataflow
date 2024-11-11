@@ -7,17 +7,35 @@ Before continuing, I want to remind you that this is the *internals* section; yo
 That being said, let's take a look at the example from the `timely_communication` documentation, which is not brief but shouldn't be wildly surprising either.
 
 ```rust,no_run
+extern crate timely_bytes;
 extern crate timely_communication;
 
-use std::ops::Deref;
+use timely_communication::{Allocate, Bytesable};
 
-use timely_communication::{Allocate, Message};
+/// A wrapper that indicates the serialization/deserialization strategy.
+pub struct Message {
+    /// Text contents.
+    pub payload: String,
+}
+
+impl Bytesable for Message {
+    fn from_bytes(bytes: timely_bytes::arc::Bytes) -> Self {
+        Message { payload: std::str::from_utf8(&bytes[..]).unwrap().to_string() }
+    }
+
+    fn length_in_bytes(&self) -> usize {
+        self.payload.len()
+    }
+
+    fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+        writer.write_all(self.payload.as_bytes()).unwrap();
+    }
+}
 
 fn main() {
 
     // extract the configuration from user-supplied arguments, initialize the computation.
-    // configure for two threads, just one process.
-    let config = timely_communication::Config::Process(2);
+    let config = timely_communication::Config::from_args(std::env::args()).unwrap();
     let guards = timely_communication::initialize(config, |mut allocator| {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());
@@ -27,7 +45,7 @@ fn main() {
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
-            senders[i].send(Message::from_typed(format!("hello, {}", i)));
+            senders[i].send(Message { payload: format!("hello, {}", i)});
             senders[i].done();
         }
 
@@ -35,10 +53,15 @@ fn main() {
         // we have to count down ourselves.
         let mut received = 0;
         while received < allocator.peers() {
+
+            allocator.receive();
+
             if let Some(message) = receiver.recv() {
-                println!("worker {}: received: <{}>", allocator.index(), message.deref());
+                println!("worker {}: received: <{}>", allocator.index(), message.payload);
                 received += 1;
             }
+
+            allocator.release();
         }
 
         allocator.index()
@@ -92,25 +115,26 @@ The channels are various and interesting, but should be smartly arranged. The ch
 
 One crucial assumption made in this design is that the channels can be identified by their order of creation. If two workers start executing in different processes, allocating multiple channels, the only way we will know how to align these channels is by identifiers handed out as the channels are allocated. I strongly recommend against non-deterministic channel construction, or "optimizing out" some channels from some workers.
 
-### The Data Trait
+### The Bytesable Trait
 
-The `Data` trait that we impose on all types that we exchange is a "marker trait": it wraps several constraints together, like so
+The `Bytesable` trait that we impose on all types that we exchange is a "marker trait": it wraps several constraints together, like so
 
 ```rust,ignore
-pub trait Data : Send+Any+Serialize+Clone+'static { }
-impl<T: Clone+Send+Any+Serialize+'static> Data for T { }
+pub trait Exchangeable : Send+Any+Bytesable { }
+impl<T: Send+Any+Bytesable> Exchangeable for T { }
 ```
 
-These traits are all Rust traits, except for `Serialize`, and they mostly just say that we can clone and send the data around. The `Serialize` trait is something we introduce, and asks for methods to get into and out of a sequence of bytes.
+These traits are all Rust traits, except for `Bytesable`, and they mostly just say that we can send the data around. The `Bytesable` trait is something we introduce, and asks for methods to get into and out of a sequence of bytes.
 
 ```rust,ignore
-pub trait Serialize {
+pub trait Bytesable {
     fn into_bytes(&mut self, &mut Vec<u8>);
     fn from_bytes(&mut Vec<u8>) -> Self;
 }
 ```
 
-We have a blanket implementation of `Serialize` for any type that implements `Abomonation`. Ideally, you shouldn't have to worry about this, unless you are introducing a new type and need an `Abomonation` implementation or you are hoping to move some types containing fields that do not satisfy those Rust traits.
+The timely crate has a `Bincode` wrapper type that implements `Bytesable` for any types that implement `serde::Serialize + for<'a> serde::Deserialize<'a>`.
+You can also implement them on your own though, as we have done in the example.
 
 ## Push and Pull
 
