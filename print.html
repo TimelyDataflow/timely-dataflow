@@ -1970,17 +1970,35 @@ struct TreeNode&lt;D&gt; {
 <p>Communication in timely dataflow starts from the <code>timely_communication</code> crate. This crate includes not only communication, but is actually where we start up the various worker threads and establish their identities. As in timely dataflow, everything starts by providing a per-worker closure, but this time we are given only a channel allocator as an argument.</p>
 <p>Before continuing, I want to remind you that this is the <em>internals</em> section; you could write your code against this crate if you really want, but one of the nice features of timely dataflow is that you don't have to. You can use a nice higher level layer, as discussed previously in the document.</p>
 <p>That being said, let's take a look at the example from the <code>timely_communication</code> documentation, which is not brief but shouldn't be wildly surprising either.</p>
-<pre><pre class="playground"><code class="language-rust no_run">extern crate timely_communication;
+<pre><pre class="playground"><code class="language-rust no_run">extern crate timely_bytes;
+extern crate timely_communication;
 
-use std::ops::Deref;
+use timely_communication::{Allocate, Bytesable};
 
-use timely_communication::{Allocate, Message};
+/// A wrapper that indicates the serialization/deserialization strategy.
+pub struct Message {
+    /// Text contents.
+    pub payload: String,
+}
+
+impl Bytesable for Message {
+    fn from_bytes(bytes: timely_bytes::arc::Bytes) -&gt; Self {
+        Message { payload: std::str::from_utf8(&amp;bytes[..]).unwrap().to_string() }
+    }
+
+    fn length_in_bytes(&amp;self) -&gt; usize {
+        self.payload.len()
+    }
+
+    fn into_bytes&lt;W: ::std::io::Write&gt;(&amp;self, writer: &amp;mut W) {
+        writer.write_all(self.payload.as_bytes()).unwrap();
+    }
+}
 
 fn main() {
 
     // extract the configuration from user-supplied arguments, initialize the computation.
-    // configure for two threads, just one process.
-    let config = timely_communication::Config::Process(2);
+    let config = timely_communication::Config::from_args(std::env::args()).unwrap();
     let guards = timely_communication::initialize(config, |mut allocator| {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());
@@ -1990,7 +2008,7 @@ fn main() {
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
-            senders[i].send(Message::from_typed(format!("hello, {}", i)));
+            senders[i].send(Message { payload: format!("hello, {}", i)});
             senders[i].done();
         }
 
@@ -1998,10 +2016,15 @@ fn main() {
         // we have to count down ourselves.
         let mut received = 0;
         while received &lt; allocator.peers() {
+
+            allocator.receive();
+
             if let Some(message) = receiver.recv() {
-                println!("worker {}: received: &lt;{}&gt;", allocator.index(), message.deref());
+                println!("worker {}: received: &lt;{}&gt;", allocator.index(), message.payload);
                 received += 1;
             }
+
+            allocator.release();
         }
 
         allocator.index()
@@ -2036,16 +2059,17 @@ fn main() {
 <p>These methods are the only functionality provided by <code>allocator</code>. A worker can ask for its own index, which is a number from zero up to the number of total peer workers (including itself), which it can also ask for. Perhaps most importantly, the worker can also request the allocation of a typed channel, which is returned as a pair of (i) a list of <code>Push</code> endpoints into which it can send data, and (ii) a single <code>Pull</code> endpoint from which it can extract data. The list has length equal to the number of peers, and data sent into push endpoint <code>i</code> will eventually be received by the worker with index <code>i</code>, if it keeps pulling on its pull endpoint.</p>
 <p>The channels are various and interesting, but should be smartly arranged. The channel from the worker back to itself is just a queue, the channels within the same process are Rust's inter-thread channels, and the channels between processes will automatically serialize and deserialize the type <code>T</code> for you (this is part of the <code>T: Data</code> requirement).</p>
 <p>One crucial assumption made in this design is that the channels can be identified by their order of creation. If two workers start executing in different processes, allocating multiple channels, the only way we will know how to align these channels is by identifiers handed out as the channels are allocated. I strongly recommend against non-deterministic channel construction, or "optimizing out" some channels from some workers.</p>
-<h3 id="the-data-trait-1"><a class="header" href="#the-data-trait-1">The Data Trait</a></h3>
-<p>The <code>Data</code> trait that we impose on all types that we exchange is a "marker trait": it wraps several constraints together, like so</p>
-<pre><code class="language-rust ignore">pub trait Data : Send+Any+Serialize+Clone+'static { }
-impl&lt;T: Clone+Send+Any+Serialize+'static&gt; Data for T { }</code></pre>
-<p>These traits are all Rust traits, except for <code>Serialize</code>, and they mostly just say that we can clone and send the data around. The <code>Serialize</code> trait is something we introduce, and asks for methods to get into and out of a sequence of bytes.</p>
-<pre><code class="language-rust ignore">pub trait Serialize {
+<h3 id="the-bytesable-trait"><a class="header" href="#the-bytesable-trait">The Bytesable Trait</a></h3>
+<p>The <code>Bytesable</code> trait that we impose on all types that we exchange is a "marker trait": it wraps several constraints together, like so</p>
+<pre><code class="language-rust ignore">pub trait Exchangeable : Send+Any+Bytesable { }
+impl&lt;T: Send+Any+Bytesable&gt; Exchangeable for T { }</code></pre>
+<p>These traits are all Rust traits, except for <code>Bytesable</code>, and they mostly just say that we can send the data around. The <code>Bytesable</code> trait is something we introduce, and asks for methods to get into and out of a sequence of bytes.</p>
+<pre><code class="language-rust ignore">pub trait Bytesable {
     fn into_bytes(&amp;mut self, &amp;mut Vec&lt;u8&gt;);
     fn from_bytes(&amp;mut Vec&lt;u8&gt;) -&gt; Self;
 }</code></pre>
-<p>We have a blanket implementation of <code>Serialize</code> for any type that implements <code>Abomonation</code>. Ideally, you shouldn't have to worry about this, unless you are introducing a new type and need an <code>Abomonation</code> implementation or you are hoping to move some types containing fields that do not satisfy those Rust traits.</p>
+<p>The timely crate has a <code>Bincode</code> wrapper type that implements <code>Bytesable</code> for any types that implement <code>serde::Serialize + for&lt;'a&gt; serde::Deserialize&lt;'a&gt;</code>.
+You can also implement them on your own though, as we have done in the example.</p>
 <h2 id="push-and-pull"><a class="header" href="#push-and-pull">Push and Pull</a></h2>
 <p>The two traits <code>Push</code> and <code>Pull</code> are the heart of the communication underlying timely dataflow. They are very simple, but relatively subtle and interesting and perhaps even under-exploited.</p>
 <h3 id="push"><a class="header" href="#push">Push</a></h3>
