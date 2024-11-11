@@ -10,7 +10,7 @@
 //!
 //! To be communicated, a type must implement the [`Serialize`](serde::Serialize) trait.
 //!
-//! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`](Push) and [`Pull`](Pull)
+//! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`] and [`Pull`]
 //! traits), which is used for more precise control of resources.
 //!
 //! # Examples
@@ -59,7 +59,7 @@
 //! else { println!("error in computation"); }
 //! ```
 //!
-//! The should produce output like:
+//! This should produce output like:
 //!
 //! ```ignore
 //! worker 0 started
@@ -73,14 +73,6 @@
 //! ```
 
 #![forbid(missing_docs)]
-
-#[cfg(feature = "getopts")]
-extern crate getopts;
-extern crate bincode;
-extern crate serde;
-
-extern crate timely_bytes as bytes;
-extern crate timely_logging as logging_core;
 
 pub mod allocator;
 pub mod networking;

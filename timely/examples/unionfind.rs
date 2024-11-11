@@ -1,6 +1,3 @@
-extern crate rand;
-extern crate timely;
-
 use std::cmp::Ordering;
 
 use rand::{Rng, SeedableRng, rngs::SmallRng};

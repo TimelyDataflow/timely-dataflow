@@ -1,5 +1,3 @@
-extern crate timely;
-
 use timely::dataflow::operators::*;
 
 fn main() {

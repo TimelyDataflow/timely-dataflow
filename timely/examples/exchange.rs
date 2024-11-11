@@ -1,5 +1,3 @@
-extern crate timely;
-
 use timely::dataflow::InputHandle;
 use timely::dataflow::operators::{Input, Exchange, Probe};
 

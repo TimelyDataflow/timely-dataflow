@@ -1,6 +1,3 @@
-extern crate rand;
-extern crate timely;
-
 use std::collections::HashMap;
 
 use rand::{Rng, SeedableRng, rngs::SmallRng};

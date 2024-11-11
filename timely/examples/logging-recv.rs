@@ -1,5 +1,3 @@
-extern crate timely;
-
 use std::net::TcpListener;
 use std::time::Duration;
 

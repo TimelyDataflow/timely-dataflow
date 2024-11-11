@@ -1,6 +1,6 @@
 //! A large binary allocation for writing and sharing.
 
-use bytes::arc::Bytes;
+use timely_bytes::arc::Bytes;
 
 /// A large binary allocation for writing and sharing.
 ///

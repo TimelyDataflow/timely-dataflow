@@ -9,7 +9,7 @@ use super::bytes_slab::BytesSlab;
 use super::bytes_exchange::MergeQueue;
 use super::stream::Stream;
 
-use logging_core::Logger;
+use timely_logging::Logger;
 
 use crate::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, StateEvent};
 

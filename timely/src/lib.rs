@@ -56,12 +56,6 @@
 
 #![forbid(missing_docs)]
 
-extern crate bincode;
-extern crate serde;
-extern crate timely_communication;
-extern crate timely_bytes;
-extern crate timely_logging;
-
 pub use execute::{execute, execute_directly, example};
 #[cfg(feature = "getopts")]
 pub use execute::execute_from_args;
@@ -116,3 +110,7 @@ impl<T: Clone+'static> Data for T { }
 /// `Data` trait, which describes requirements for communication along channels.
 pub trait ExchangeData: Data + communication::Data { }
 impl<T: Data + communication::Data> ExchangeData for T { }
+
+#[doc = include_str!("../../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;

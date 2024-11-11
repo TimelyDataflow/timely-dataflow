@@ -10,7 +10,7 @@ Be sure to read the [documentation for timely dataflow](https://docs.rs/timely).
 
 To use timely dataflow, add the following to the dependencies section of your project's `Cargo.toml` file:
 
-```
+```toml
 [dependencies]
 timely="*"
 ```
@@ -18,8 +18,6 @@ timely="*"
 This will bring in the [`timely` crate](https://crates.io/crates/timely) from [crates.io](http://crates.io), which should allow you to start writing timely dataflow programs like this one (also available in [timely/examples/simple.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/timely/examples/simple.rs)):
 
 ```rust
-extern crate timely;
-
 use timely::dataflow::operators::*;
 
 fn main() {
@@ -32,7 +30,7 @@ fn main() {
 
 You can run this example from the root directory of the `timely-dataflow` repository by typing
 
-```
+```text
 % cargo run --example simple
 Running `target/debug/examples/simple`
 seen: 0
@@ -54,8 +52,6 @@ This is a very simple example (it's in the name), which only just suggests at ho
 For a more involved example, consider the very similar (but more explicit) [examples/hello.rs](https://github.com/timelydataflow/timely-dataflow/blob/master/timely/examples/hello.rs), which creates and drives the dataflow separately:
 
 ```rust
-extern crate timely;
-
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
@@ -96,7 +92,7 @@ We first build a dataflow graph creating an input stream (with `input_from`), wh
 We then drive the computation by repeatedly introducing rounds of data, where the `round` itself is used as the data. In each round, each worker introduces the same data, and then repeatedly takes dataflow steps until the `probe` reveals that all workers have processed all work for that epoch, at which point the computation proceeds.
 
 With two workers, the output looks like
-```
+```text
 % cargo run --example hello -- -w2
 Running `target/debug/examples/hello -w2`
 worker 0:   hello 0
@@ -120,7 +116,7 @@ The `hello.rs` program above will by default use a single worker thread. To use 
 To use multiple processes, you will need to use the `-h` or `--hostfile` option to specify a text file whose lines are `hostname:port` entries corresponding to the locations you plan on spawning the processes. You will need to use the `-n` or `--processes` argument to indicate how many processes you will spawn (a prefix of the host file), and each process must use the `-p` or `--process` argument to indicate their index out of this number.
 
 Said differently, you want a hostfile that looks like so,
-```
+```text
 % cat hostfile.txt
 host0:port
 host1:port
@@ -129,7 +125,7 @@ host3:port
 ...
 ```
 and then to launch the processes like so:
-```
+```text
 host0% cargo run -- -w 2 -h hostfile.txt -n 4 -p 0
 host1% cargo run -- -w 2 -h hostfile.txt -n 4 -p 1
 host2% cargo run -- -w 2 -h hostfile.txt -n 4 -p 2
@@ -187,7 +183,7 @@ The communication layer is based on a type `Content<T>` which can be backed by t
 
 **NOTE**: Differential dataflow demonstrates how to do this at the user level in its `operators/arrange.rs`, if somewhat sketchily (with a wrapper that lies about the properties of the type it transports).
 
-This would allow us to safely pass Rc<T> types around, as long as we use the `Pipeline` parallelization contract.
+This would allow us to safely pass `Rc<T>` types around, as long as we use the `Pipeline` parallelization contract.
 
 ## Coarse- vs fine-grained timestamps
 

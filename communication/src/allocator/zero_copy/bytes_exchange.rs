@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 
-use bytes::arc::Bytes;
+use timely_bytes::arc::Bytes;
 use super::bytes_slab::BytesSlab;
 
 /// A target for `Bytes`.
@@ -177,4 +177,3 @@ impl<P: BytesPush> Drop for SendEndpoint<P> {
         self.send_buffer();
     }
 }
-
