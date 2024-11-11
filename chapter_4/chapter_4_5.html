@@ -185,12 +185,18 @@ struct YourStruct { .. }</code></pre>
 <p>The <code>ExchangeData</code> trait is more complicated, and is established in the <code>communication/</code> module. The trait is a synonym for</p>
 <pre><code class="language-rust ignore">Send+Sync+Any+serde::Serialize+for&lt;'a&gt;serde::Deserialize&lt;'a&gt;+'static</code></pre>
 <p>where <code>serde</code> is Rust's most popular serialization and deserialization crate. A great many types implement these traits. If your types does not, you should add these decorators to their definition:</p>
-<pre><code class="language-rust ignore">#[derive(Serialize, Deserialize)]</code></pre>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate serde;
+</span><span class="boring">use serde::{Serialize, Deserialize};
+</span>#[derive(Serialize, Deserialize)]
+<span class="boring">struct Dummy {}
+</span><span class="boring">}</span></code></pre></pre>
 <p>You must include the <code>serde</code> crate, and if not on Rust 2018 the <code>serde_derive</code> crate.</p>
 <p>The downside to is that deserialization will always involve a clone of the data, which has the potential to adversely impact performance. For example, if you have structures that contain lots of strings, timely dataflow will create allocations for each string even if you do not plan to use all of them.</p>
 <h2 id="an-example"><a class="header" href="#an-example">An example</a></h2>
 <p>Let's imagine you would like to play around with a tree data structure as something you might send around in timely dataflow. I've written the following candidate example:</p>
-<pre><code class="language-rust ignore">extern crate timely;
+<pre><pre class="playground"><code class="language-rust compile_fail">extern crate timely;
 
 use timely::dataflow::operators::*;
 
@@ -212,7 +218,7 @@ impl&lt;D&gt; TreeNode&lt;D&gt; {
     fn new(data: D) -&gt; Self {
         Self { data, children: Vec::new() }
     }
-}</code></pre>
+}</code></pre></pre>
 <p>This doesn't work. You'll probably get two errors, that <code>TreeNode</code> doesn't implement <code>Clone</code>, nor does it implement <code>Debug</code>. Timely data types need to implement <code>Clone</code>, and our attempt to print out the trees requires an implementation of <code>Debug</code>. We can create these implementations by decorating the <code>struct</code> declaration like so:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -242,7 +248,7 @@ struct TreeNode&lt;D&gt; {
 <h3 id="exchanging-data"><a class="header" href="#exchanging-data">Exchanging data</a></h3>
 <p>Let's up the level a bit and try and shuffle our tree data between workers.</p>
 <p>If we replace our <code>main</code> method with this new one:</p>
-<pre><code class="language-rust ignore">extern crate timely;
+<pre><pre class="playground"><code class="language-rust compile_fail">extern crate timely;
 
 use timely::dataflow::operators::*;
 
@@ -265,19 +271,22 @@ impl&lt;D&gt; TreeNode&lt;D&gt; {
     fn new(data: D) -&gt; Self {
         Self { data, children: Vec::new() }
     }
-}</code></pre>
+}</code></pre></pre>
 <p>We get a new error. A not especially helpful error. It says that it cannot find an <code>exchange</code> method, or more specifically that one exists but it doesn't apply to our type at hand. This is because the data need to satisfy the <code>ExchangeData</code> trait but do not. It would be better if this were clearer in the error messages, I agree.</p>
 <p>The fix is to update the source like so:</p>
-<pre><code class="language-rust ignore">#[macro_use]
-extern crate serde_derive;
-extern crate serde;
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>extern crate serde;
+
+use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct TreeNode&lt;D&gt; {
     data: D,
     children: Vec&lt;TreeNode&lt;D&gt;&gt;,
-}</code></pre>
-<p>and make sure to include the <code>serde_derive</code> and <code>serde</code> crates.</p>
+}
+<span class="boring">}</span></code></pre></pre>
+<p>and make sure to include <code>serde</code> crate with the <code>derive</code> feature on.</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example types
         Finished dev [unoptimized + debuginfo] target(s) in 0.07s
          Running `target/debug/examples/types`

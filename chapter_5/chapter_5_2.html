@@ -184,7 +184,9 @@
 <h2 id="dataflow-structure"><a class="header" href="#dataflow-structure">Dataflow Structure</a></h2>
 <p>A dataflow graph hosts some number of operators. For progress tracking, these operators are simply identified by their index. Each operator has some number of <em>input ports</em>, and some number of <em>output ports</em>. The dataflow operators are connected by connecting each input port to a single output port (typically of another operator). Each output port may be connected to multiple distinct input ports (a message produced at an output port is to be delivered to all attached input ports).</p>
 <p>In timely dataflow progress tracking, we identify output ports by the type <code>Source</code> and input ports by the type <code>Target</code>, as from the progress coordinator's point of view, an operator's output port is a <em>source</em> of timestamped data, and an operator's input port is a <em>target</em> of timestamped data. Each source and target can be described by their operator index and then an operator-local index of the corresponding port. The use of distinct types helps us avoid mistaking input and output ports.</p>
-<pre><code class="language-rust ignore">pub struct Source {
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub struct Source {
     /// Index of the source operator.
     pub index: usize,
     /// Number of the output port from the operator.
@@ -196,7 +198,8 @@ pub struct Target {
     pub index: usize,
     /// Number of the input port to the operator.
     pub port: usize,
-}</code></pre>
+}
+<span class="boring">}</span></code></pre></pre>
 <p>The structure of the dataflow graph can be described by a list of all of the connections in the graph, a <code>Vec&lt;(Source, Target)&gt;</code>. From this, we could infer the number of operators and their numbers of input and output ports, as well as enumerate all of the connections themselves.</p>
 <p>At this point we have the structure of a dataflow graph. We can draw a circle for each operator, a stub for each input and output port, and edges connecting the output ports to their destination input ports. Importantly, we have names for every location in the dataflow graph, which will either be a <code>Source</code> or a <code>Target</code>.</p>
 <h2 id="maintaining-capabilities"><a class="header" href="#maintaining-capabilities">Maintaining Capabilities</a></h2>

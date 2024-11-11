@@ -175,16 +175,17 @@
                     <main>
                         <h2 id="a-simplest-example"><a class="header" href="#a-simplest-example">A simplest example</a></h2>
 <p>Let's start with what may be the simplest non-trivial timely dataflow program.</p>
-<pre><pre class="playground"><code class="language-rust">extern crate timely;
-
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">extern crate timely;
+</span>
 use timely::dataflow::operators::{ToStream, Inspect};
 
-fn main() {
-    timely::example(|scope| {
-        (0..10).to_stream(scope)
-               .inspect(|x| println!("seen: {:?}", x));
-    });
-}</code></pre></pre>
+timely::example(|scope| {
+    (0..10).to_stream(scope)
+           .inspect(|x| println!("seen: {:?}", x));
+});
+<span class="boring">}</span></code></pre></pre>
 <p>This program gives us a bit of a flavor for what a timely dataflow program might look like, including a bit of what Rust looks like, without getting too bogged down in weird stream processing details. Not to worry; we will do that in just a moment!</p>
 <p>If we run the program up above, we see it print out the numbers zero through nine.</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example simple
@@ -203,9 +204,10 @@ fn main() {
     Echidnatron%
 </code></pre>
 <p>This isn't very different from a Rust program that would do this much more simply, namely the program</p>
-<pre><pre class="playground"><code class="language-rust">fn main() {
-    (0..10).for_each(|x| println!("seen: {:?}", x));
-}</code></pre></pre>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>(0..10).for_each(|x| println!("seen: {:?}", x));
+<span class="boring">}</span></code></pre></pre>
 <p>Why would we want to make our life so complicated? The main reason is that we can make our program <em>reactive</em>, so that we can run it without knowing ahead of time the data we will use, and it will respond as we produce new data.</p>
 
                     </main>

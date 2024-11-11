@@ -264,7 +264,7 @@
 <h2 id="an-example"><a class="header" href="#an-example">An Example</a></h2>
 <p>We can check out the examples <code>examples/capture_send.rs</code> and <code>examples/capture_recv.rs</code> to see a paired use of capture and receive demonstrating the generality.</p>
 <p>The <code>capture_send</code> example creates a new TCP connection for each worker, which it wraps and uses as an <code>EventPusher</code>. Timely dataflow takes care of all the serialization and stuff like that (warning: it uses abomonation, so this is not great for long-term storage).</p>
-<pre><code class="language-rust ignore">extern crate timely;
+<pre><pre class="playground"><code class="language-rust no_run">extern crate timely;
 
 use std::net::TcpStream;
 use timely::dataflow::operators::ToStream;
@@ -282,9 +282,9 @@ fn main() {
                 .capture_into(EventWriter::new(send))
         );
     }).unwrap();
-}</code></pre>
+}</code></pre></pre>
 <p>The <code>capture_recv</code> example is more complicated, because we may have a different number of workers replaying the stream than initially captured it.</p>
-<pre><code class="language-rust ignore">extern crate timely;
+<pre><pre class="playground"><code class="language-rust no_run">extern crate timely;
 
 use std::net::TcpListener;
 use timely::dataflow::operators::Inspect;
@@ -303,16 +303,16 @@ fn main() {
             .collect::&lt;Vec&lt;_&gt;&gt;()
             .into_iter()
             .map(|l| l.incoming().next().unwrap().unwrap())
-            .map(|r| EventReader::&lt;_,u64,_&gt;::new(r))
+            .map(|r| EventReader::&lt;_,Vec&lt;u64&gt;,_&gt;::new(r))
             .collect::&lt;Vec&lt;_&gt;&gt;();
 
-        worker.dataflow::&lt;u64,_,_&gt;(|scope| {
+        worker.dataflow::&lt;u64,_,_&gt;(move |scope| {
             replayers
                 .replay_into(scope)
                 .inspect(|x| println!("replayed: {:?}", x));
         })
     }).unwrap(); // asserts error-free execution
-}</code></pre>
+}</code></pre></pre>
 <p>Almost all of the code up above is assigning responsibility for the replaying between the workers we have (from <code>worker.peers()</code>). We partition responsibility for <code>0 .. source_peers</code> among the workers, create <code>TcpListener</code>s to handle the connection requests, wrap them in <code>EventReader</code>s, and then collect them up as a vector. The workers have collectively partitioned the incoming captured streams between themselves.</p>
 <p>Finally, each worker just uses the list of <code>EventReader</code>s as the argument to <code>replay_into</code>, and we get the stream magically transported into a new dataflow, in a different process, with a potentially different number of workers.</p>
 <p>If you want to try it out, make sure to start up the <code>capture_recv</code> example first (otherwise the connections will be refused for <code>capture_send</code>) and specify the expected number of source workers, modifying the number of received workers if you like. Here we are expecting five source workers, and distributing them among three receive workers (to make life complicated):</p>
