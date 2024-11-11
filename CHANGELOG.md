@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [0.14.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.13.0...timely-v0.14.0) - 2024-11-11
 
+### Added
+
+The trait `communication::Bytesable`, for types that must be serialized into or from a `Bytes`, and stands in for "timely appropriate serialization".
+The trait `communication::Exchangeable`, a composite trait bringing together the requirements on a type for it to be sent along a general purpose communication channel.
+
+### Removed
+
+The communication `Message` and `RefOrMut` types have been removed.
+The `RefOrMut` type wrapped either a `&T` or a `&mut T`, but with the removal of `abomonation` it is always a `&mut T`.
+The `Message` type was used to indicate the serialization / deserialization behavior, and these opinions (e.g. "use `bincode`") have been migrated to the core `timely` crate.
+
 ### Other
 
 - Move opinions about encoding from `communication` to `timely`. ([#597](https://github.com/TimelyDataflow/timely-dataflow/pull/597))
