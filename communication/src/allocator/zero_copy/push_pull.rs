@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use bytes::arc::Bytes;
+use timely_bytes::arc::Bytes;
 
 use crate::allocator::canary::Canary;
 use crate::networking::MessageHeader;

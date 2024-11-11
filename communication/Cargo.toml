@@ -17,10 +17,10 @@ license = "MIT"
 default = ["getopts"]
 
 [dependencies]
-getopts = { version = "0.2.14", optional = true }
+getopts = { version = "0.2.21", optional = true }
 bincode = { version = "1.0" }
 byteorder = "1.5"
 serde = { version = "1.0", features = ["derive"] }
 timely_bytes = { path = "../bytes", version = "0.12" }
 timely_logging = { path = "../logging", version = "0.12" }
-crossbeam-channel = "0.5.0"
+crossbeam-channel = "0.5"

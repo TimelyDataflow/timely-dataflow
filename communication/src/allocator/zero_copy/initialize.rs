@@ -31,7 +31,7 @@ impl Drop for CommsGuard {
 }
 
 use crate::logging::{CommunicationSetup, CommunicationEvent};
-use logging_core::Logger;
+use timely_logging::Logger;
 
 /// Initializes network connections
 pub fn initialize_networking(

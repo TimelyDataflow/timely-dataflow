@@ -15,7 +15,7 @@ use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
 use crate::allocator::zero_copy::initialize::initialize_networking;
 
 use crate::logging::{CommunicationSetup, CommunicationEvent};
-use logging_core::Logger;
+use timely_logging::Logger;
 use std::fmt::{Debug, Formatter};
 
 

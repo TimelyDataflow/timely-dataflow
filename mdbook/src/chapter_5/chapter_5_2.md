@@ -20,7 +20,7 @@ A dataflow graph hosts some number of operators. For progress tracking, these op
 
 In timely dataflow progress tracking, we identify output ports by the type `Source` and input ports by the type `Target`, as from the progress coordinator's point of view, an operator's output port is a *source* of timestamped data, and an operator's input port is a *target* of timestamped data. Each source and target can be described by their operator index and then an operator-local index of the corresponding port. The use of distinct types helps us avoid mistaking input and output ports.
 
-```rust,ignore
+```rust
 pub struct Source {
     /// Index of the source operator.
     pub index: usize,

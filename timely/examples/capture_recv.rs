@@ -1,5 +1,3 @@
-extern crate timely;
-
 use std::net::TcpListener;
 use timely::dataflow::operators::Inspect;
 use timely::dataflow::operators::capture::{EventReader, Replay};

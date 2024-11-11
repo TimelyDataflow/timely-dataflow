@@ -114,7 +114,7 @@ We can check out the examples `examples/capture_send.rs` and `examples/capture_r
 
 The `capture_send` example creates a new TCP connection for each worker, which it wraps and uses as an `EventPusher`. Timely dataflow takes care of all the serialization and stuff like that (warning: it uses abomonation, so this is not great for long-term storage).
 
-```rust,ignore
+```rust,no_run
 extern crate timely;
 
 use std::net::TcpStream;
@@ -138,7 +138,7 @@ fn main() {
 
 The `capture_recv` example is more complicated, because we may have a different number of workers replaying the stream than initially captured it.
 
-```rust,ignore
+```rust,no_run
 extern crate timely;
 
 use std::net::TcpListener;
@@ -158,10 +158,10 @@ fn main() {
             .collect::<Vec<_>>()
             .into_iter()
             .map(|l| l.incoming().next().unwrap().unwrap())
-            .map(|r| EventReader::<_,u64,_>::new(r))
+            .map(|r| EventReader::<_,Vec<u64>,_>::new(r))
             .collect::<Vec<_>>();
 
-        worker.dataflow::<u64,_,_>(|scope| {
+        worker.dataflow::<u64,_,_>(move |scope| {
             replayers
                 .replay_into(scope)
                 .inspect(|x| println!("replayed: {:?}", x));

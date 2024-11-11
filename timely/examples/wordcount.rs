@@ -1,5 +1,3 @@
-extern crate timely;
-
 use std::collections::HashMap;
 
 use timely::dataflow::{InputHandle, ProbeHandle};

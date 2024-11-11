@@ -25,8 +25,11 @@ Send+Sync+Any+serde::Serialize+for<'a>serde::Deserialize<'a>+'static
 
 where `serde` is Rust's most popular serialization and deserialization crate. A great many types implement these traits. If your types does not, you should add these decorators to their definition:
 
-```rust,ignore
+```rust
+# extern crate serde;
+# use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize)]
+# struct Dummy {}
 ```
 
 You must include the `serde` crate, and if not on Rust 2018 the `serde_derive` crate.
@@ -37,7 +40,7 @@ The downside to is that deserialization will always involve a clone of the data,
 
 Let's imagine you would like to play around with a tree data structure as something you might send around in timely dataflow. I've written the following candidate example:
 
-```rust,ignore
+```rust,compile_fail
 extern crate timely;
 
 use timely::dataflow::operators::*;
@@ -99,7 +102,7 @@ Let's up the level a bit and try and shuffle our tree data between workers.
 
 If we replace our `main` method with this new one:
 
-```rust,ignore
+```rust,compile_fail
 extern crate timely;
 
 use timely::dataflow::operators::*;
@@ -130,10 +133,10 @@ We get a new error. A not especially helpful error. It says that it cannot find 
 
 The fix is to update the source like so:
 
-```rust,ignore
-#[macro_use]
-extern crate serde_derive;
+```rust
 extern crate serde;
+
+use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct TreeNode<D> {
@@ -142,7 +145,7 @@ struct TreeNode<D> {
 }
 ```
 
-and make sure to include the `serde_derive` and `serde` crates.
+and make sure to include `serde` crate with the `derive` feature on.
 
 ```ignore
     Echidnatron% cargo run --example types

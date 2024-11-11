@@ -35,8 +35,6 @@ pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: I
 ///
 /// # Example
 /// ```rust
-/// extern crate timely;
-///
 /// use timely::dataflow::operators::flow_controlled::{iterator_source, IteratorSourceInput};
 /// use timely::dataflow::operators::{probe, Probe, Inspect};
 ///

@@ -1,6 +1,6 @@
 //! Types wrapping typed data.
 
-use bytes::arc::Bytes;
+use timely_bytes::arc::Bytes;
 use crate::Data;
 
 /// A wrapped message which supports serialization and deserialization.

@@ -6,23 +6,28 @@ Before continuing, I want to remind you that this is the *internals* section; yo
 
 That being said, let's take a look at the example from the `timely_communication` documentation, which is not brief but shouldn't be wildly surprising either.
 
-```rust,ignore
+```rust,no_run
 extern crate timely_communication;
+
+use std::ops::Deref;
+
+use timely_communication::{Allocate, Message};
 
 fn main() {
 
     // extract the configuration from user-supplied arguments, initialize the computation.
-    let config = timely_communication::Configuration::from_args(std::env::args()).unwrap();
+    // configure for two threads, just one process.
+    let config = timely_communication::Config::Process(2);
     let guards = timely_communication::initialize(config, |mut allocator| {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());
 
         // allocates a pair of senders list and one receiver.
-        let (mut senders, mut receiver) = allocator.allocate();
+        let (mut senders, mut receiver) = allocator.allocate(0);
 
         // send typed data along each channel
         for i in 0 .. allocator.peers() {
-            senders[i].send(format!("hello, {}", i));
+            senders[i].send(Message::from_typed(format!("hello, {}", i)));
             senders[i].done();
         }
 
@@ -31,7 +36,7 @@ fn main() {
         let mut received = 0;
         while received < allocator.peers() {
             if let Some(message) = receiver.recv() {
-                println!("worker {}: received: <{}>", allocator.index(), message);
+                println!("worker {}: received: <{}>", allocator.index(), message.deref());
                 received += 1;
             }
         }

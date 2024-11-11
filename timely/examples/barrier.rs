@@ -1,5 +1,3 @@
-extern crate timely;
-
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::{Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
