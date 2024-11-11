@@ -17,7 +17,7 @@ pub mod counters;
 
 pub mod zero_copy;
 
-use crate::{Data, Push, Pull, Message};
+use crate::{Bytesable, Push, Pull};
 
 /// A proto-allocator, which implements `Send` and can be completed with `build`.
 ///
@@ -32,6 +32,12 @@ pub trait AllocateBuilder : Send {
     fn build(self) -> Self::Allocator;
 }
 
+use std::any::Any;
+
+/// A type that can be sent along an allocated channel.
+pub trait Exchangeable : Send+Any+Bytesable { }
+impl<T: Send+Any+Bytesable> Exchangeable for T { }
+
 /// A type capable of allocating channels.
 ///
 /// There is some feature creep, in that this contains several convenience methods about the nature
@@ -42,7 +48,7 @@ pub trait Allocate {
     /// The number of workers in the communication group.
     fn peers(&self) -> usize;
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>);
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>);
     /// A shared queue of communication events with channel identifier.
     ///
     /// It is expected that users of the channel allocator will regularly
@@ -85,8 +91,8 @@ pub trait Allocate {
     /// By default, this method uses the thread-local channel constructor
     /// based on a shared `VecDeque` which updates the event queue.
     fn pipeline<T: 'static>(&mut self, identifier: usize) ->
-        (thread::ThreadPusher<Message<T>>,
-         thread::ThreadPuller<Message<T>>)
+        (thread::ThreadPusher<T>,
+         thread::ThreadPuller<T>)
     {
         thread::Thread::new_from(identifier, self.events().clone())
     }

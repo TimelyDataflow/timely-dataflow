@@ -10,7 +10,7 @@ use crossbeam_channel::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
 use crate::allocator::{Allocate, AllocateBuilder, Thread};
-use crate::{Push, Pull, Message};
+use crate::{Push, Pull};
 use crate::buzzer::Buzzer;
 
 /// An allocator for inter-thread, intra-process communication
@@ -110,7 +110,7 @@ impl Process {
 impl Allocate for Process {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Any+Send+Sync+'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Any+Send>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
 
         // this is race-y global initialisation of all channels for all workers, performed by the
         // first worker that enters this critical section
@@ -126,7 +126,7 @@ impl Allocate for Process {
                 let mut pushers = Vec::with_capacity(self.peers);
                 let mut pullers = Vec::with_capacity(self.peers);
                 for buzzer in self.buzzers.iter() {
-                    let (s, r): (Sender<Message<T>>, Receiver<Message<T>>) = crossbeam_channel::unbounded();
+                    let (s, r): (Sender<T>, Receiver<T>) = crossbeam_channel::unbounded();
                     // TODO: the buzzer in the pusher may be redundant, because we need to buzz post-counter.
                     pushers.push((Pusher { target: s }, buzzer.clone()));
                     pullers.push(Puller { source: r, current: None });
@@ -142,7 +142,7 @@ impl Allocate for Process {
 
             let vector =
             entry
-                .downcast_mut::<Vec<Option<(Vec<(Pusher<Message<T>>, Buzzer)>, Puller<Message<T>>)>>>()
+                .downcast_mut::<Vec<Option<(Vec<(Pusher<T>, Buzzer)>, Puller<T>)>>>()
                 .expect("failed to correctly cast channel");
 
             let (sends, recv) =
@@ -166,10 +166,10 @@ impl Allocate for Process {
         sends.into_iter()
              .zip(self.counters_send.iter())
              .map(|((s,b), sender)| CountPusher::new(s, identifier, sender.clone(), b))
-             .map(|s| Box::new(s) as Box<dyn Push<super::Message<T>>>)
+             .map(|s| Box::new(s) as Box<dyn Push<T>>)
              .collect::<Vec<_>>();
 
-        let recv = Box::new(CountPuller::new(recv, identifier, self.inner.events().clone())) as Box<dyn Pull<super::Message<T>>>;
+        let recv = Box::new(CountPuller::new(recv, identifier, self.inner.events().clone())) as Box<dyn Pull<T>>;
 
         (sends, recv)
     }

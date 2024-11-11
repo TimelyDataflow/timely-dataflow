@@ -3,9 +3,10 @@
 use std::rc::Rc;
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::{Location, Port};
-use crate::communication::{Message, Push, Pull};
+use crate::communication::{Push, Pull};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
+use crate::Message;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
