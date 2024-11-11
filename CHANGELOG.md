@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.13.0...timely-v0.14.0) - 2024-11-11
+
+### Other
+
+- Move opinions about encoding from `communication` to `timely`. ([#597](https://github.com/TimelyDataflow/timely-dataflow/pull/597))
+- Rust updates, better doc testing ([#598](https://github.com/TimelyDataflow/timely-dataflow/pull/598))
+- Simplify communication `Message` type ([#596](https://github.com/TimelyDataflow/timely-dataflow/pull/596))
+
 ## 0.13.0 - 2024-10-29
 
 Changelog bankruptcy declared.
