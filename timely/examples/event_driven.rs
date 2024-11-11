@@ -34,7 +34,7 @@ fn main() {
 
         println!("{:?}\tdataflows built ({} x {})", timer.elapsed(), dataflows, length);
 
-        for round in 0 .. {
+        for round in 0 .. 10 {
             let dataflow = round % dataflows;
             if record {
                 inputs[dataflow].send(());
