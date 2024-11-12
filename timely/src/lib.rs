@@ -116,7 +116,7 @@ impl<T: Data + encoding::Data> ExchangeData for T { }
 pub struct ReadmeDoctests;
 
 /// A wrapper that indicates a serialization/deserialization strategy.
-use encoding::Bincode as Message;
+pub use encoding::Bincode as Message;
 
 mod encoding {
 
