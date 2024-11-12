@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [0.14.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.14.0...timely-v0.14.1) - 2024-11-12
 
+### Added
+
+The type `timely::Message` is now publicly re-exported.
+
 ### Other
 
 - Public Message type ([#599](https://github.com/TimelyDataflow/timely-dataflow/pull/599))
