@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.14.0...timely-v0.14.1) - 2024-11-12
+
+### Other
+
+- Public Message type ([#599](https://github.com/TimelyDataflow/timely-dataflow/pull/599))
+
 ## [0.14.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.13.0...timely-v0.14.0) - 2024-11-11
 
 ### Added
