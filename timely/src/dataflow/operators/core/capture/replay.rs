@@ -62,7 +62,7 @@ pub trait Replay<T: Timestamp, C> : Sized {
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>;
 }
 
-impl<T: Timestamp, C: Container, I> Replay<T, C> for I
+impl<T: Timestamp, C: Container + Clone + 'static, I> Replay<T, C> for I
 where
     I : IntoIterator,
     <I as IntoIterator>::Item: EventIterator<T, C>+'static,

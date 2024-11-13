@@ -1,6 +1,7 @@
 //! Operators that separate one stream into two streams based on some condition
 
 use crate::container::{Container, SizableContainer, PushInto};
+use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, StreamCore};
@@ -32,20 +33,20 @@ pub trait OkErr<S: Scope, C: Container> {
         logic: L,
     ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
     where
-        C1: SizableContainer + PushInto<D1>,
-        C2: SizableContainer + PushInto<D2>,
+        C1: SizableContainer + PushInto<D1> + Data,
+        C2: SizableContainer + PushInto<D2> + Data,
         L: FnMut(C::Item<'_>) -> Result<D1,D2>+'static
     ;
 }
 
-impl<S: Scope, C: Container> OkErr<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + Data> OkErr<S, C> for StreamCore<S, C> {
     fn ok_err<C1, D1, C2, D2, L>(
         &self,
         mut logic: L,
     ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
     where
-        C1: SizableContainer + PushInto<D1>,
-        C2: SizableContainer + PushInto<D2>,
+        C1: SizableContainer + PushInto<D1> + Data,
+        C2: SizableContainer + PushInto<D2> + Data,
         L: FnMut(C::Item<'_>) -> Result<D1,D2>+'static
     {
         let mut builder = OperatorBuilder::new("OkErr".to_owned(), self.scope());

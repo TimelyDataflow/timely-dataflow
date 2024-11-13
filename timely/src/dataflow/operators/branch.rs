@@ -92,7 +92,7 @@ pub trait BranchWhen<T>: Sized {
     fn branch_when(&self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
+impl<S: Scope, C: Container + Data> BranchWhen<S::Timestamp> for StreamCore<S, C> {
     fn branch_when(&self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
