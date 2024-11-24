@@ -54,7 +54,7 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
                     let mut out1 = output1_handle.session(&time);
                     let mut out2 = output2_handle.session(&time);
                     for datum in data.drain(..) {
-                        if condition(&time.time(), &datum) {
+                        if condition(time.time(), &datum) {
                             out2.give(datum);
                         } else {
                             out1.give(datum);
@@ -107,7 +107,7 @@ impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
                 let mut output2_handle = output2.activate();
 
                 input.for_each(|time, data| {
-                    let mut out = if condition(&time.time()) {
+                    let mut out = if condition(time.time()) {
                         output2_handle.session(&time)
                     } else {
                         output1_handle.session(&time)

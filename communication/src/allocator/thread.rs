@@ -15,11 +15,12 @@ pub struct ThreadBuilder;
 
 impl AllocateBuilder for ThreadBuilder {
     type Allocator = Thread;
-    fn build(self) -> Self::Allocator { Thread::new() }
+    fn build(self) -> Self::Allocator { Thread::default() }
 }
 
 
 /// An allocator for intra-thread communication.
+#[derive(Default)]
 pub struct Thread {
     /// Shared counts of messages in channels.
     events: Rc<RefCell<Vec<usize>>>,
@@ -53,13 +54,6 @@ pub type ThreadPusher<T> = CountPusher<T, Pusher<T>>;
 pub type ThreadPuller<T> = CountPuller<T, Puller<T>>;
 
 impl Thread {
-    /// Allocates a new thread-local channel allocator.
-    pub fn new() -> Self {
-        Thread {
-            events: Rc::new(RefCell::new(Default::default())),
-        }
-    }
-
     /// Creates a new thread-local channel from an identifier and shared counts.
     pub fn new_from<T: 'static>(identifier: usize, events: Rc<RefCell<Vec<usize>>>)
         -> (ThreadPusher<T>, ThreadPuller<T>)

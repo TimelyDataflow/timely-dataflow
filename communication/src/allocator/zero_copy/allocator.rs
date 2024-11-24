@@ -82,7 +82,7 @@ impl<A: AllocateBuilder> TcpBuilder<A> {
         // Fulfill puller obligations.
         let mut recvs = Vec::with_capacity(self.peers);
         for promise in self.promises.into_iter() {
-            let buzzer = crate::buzzer::Buzzer::new();
+            let buzzer = crate::buzzer::Buzzer::default();
             let queue = MergeQueue::new(buzzer);
             promise.send(queue.clone()).expect("Failed to send MergeQueue");
             recvs.push(queue.clone());

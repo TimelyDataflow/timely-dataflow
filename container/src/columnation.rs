@@ -200,9 +200,9 @@ impl<T: Columnation> Default for TimelyStack<T> {
 
 impl<'a, A: 'a + Columnation> FromIterator<&'a A> for TimelyStack<A> {
     fn from_iter<T: IntoIterator<Item = &'a A>>(iter: T) -> Self {
-        let mut iter = iter.into_iter();
+        let iter = iter.into_iter();
         let mut c = TimelyStack::<A>::with_capacity(iter.size_hint().0);
-        while let Some(element) = iter.next() {
+        for element in iter {
             c.copy(element);
         }
 

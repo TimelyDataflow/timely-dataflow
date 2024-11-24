@@ -17,13 +17,13 @@ impl<R: Region + Clone + 'static> Container for FlatStack<R> {
 
     type Iter<'a> = <&'a Self as IntoIterator>::IntoIter;
 
-    fn iter<'a>(&'a self) -> Self::Iter<'a> {
+    fn iter(&self) -> Self::Iter<'_> {
         IntoIterator::into_iter(self)
     }
 
     type DrainIter<'a> = Self::Iter<'a>;
 
-    fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> {
+    fn drain(&mut self) -> Self::DrainIter<'_> {
         IntoIterator::into_iter(&*self)
     }
 }

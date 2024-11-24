@@ -89,7 +89,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     }
 }
 
-impl<'a, T: Timestamp> Iterator for Notificator<'a, T> {
+impl<T: Timestamp> Iterator for Notificator<'_, T> {
     type Item = (Capability<T>, u64);
 
     /// Retrieve the next available notification.
@@ -196,7 +196,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///         let (in1_handle, in1) = scope.new_input();
 ///         let (in2_handle, in2) = scope.new_input();
 ///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
-///             let mut notificator = FrontierNotificator::new();
+///             let mut notificator = FrontierNotificator::default();
 ///             let mut stash = HashMap::new();
 ///             move |input1, input2, output| {
 ///                 while let Some((time, data)) = input1.next() {
@@ -236,15 +236,16 @@ pub struct FrontierNotificator<T: Timestamp> {
     available: ::std::collections::BinaryHeap<OrderReversed<T>>,
 }
 
-impl<T: Timestamp> FrontierNotificator<T> {
-    /// Allocates a new `FrontierNotificator`.
-    pub fn new() -> Self {
+impl<T: Timestamp> Default for FrontierNotificator<T> {
+    fn default() -> Self {
         FrontierNotificator {
             pending: Vec::new(),
             available: ::std::collections::BinaryHeap::new(),
         }
     }
+}
 
+impl<T: Timestamp> FrontierNotificator<T> {
     /// Allocates a new `FrontierNotificator` with initial capabilities.
     pub fn from<I: IntoIterator<Item=Capability<T>>>(iter: I) -> Self {
         FrontierNotificator {
@@ -268,7 +269,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_frontier(Pipeline, "example", |_, _| {
-    ///                let mut notificator = FrontierNotificator::new();
+    ///                let mut notificator = FrontierNotificator::default();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_container(data);
@@ -398,7 +399,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_frontier(Pipeline, "example", |_, _| {
-    ///                let mut notificator = FrontierNotificator::new();
+    ///                let mut notificator = FrontierNotificator::default();
     ///                move |input, output| {
     ///                    input.for_each(|cap, data| {
     ///                        output.session(&cap).give_container(data);
@@ -430,7 +431,7 @@ impl<T: Timestamp> OrderReversed<T> {
 
 impl<T: Timestamp> PartialOrd for OrderReversed<T> {
     fn partial_cmp(&self, other: &Self) -> Option<::std::cmp::Ordering> {
-        other.element.time().partial_cmp(self.element.time())
+        Some(self.cmp(other))
     }
 }
 impl<T: Timestamp> Ord for OrderReversed<T> {

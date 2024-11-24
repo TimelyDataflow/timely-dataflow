@@ -33,7 +33,7 @@ impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, Vec<(Duration,
     /// Publishes a batch of logged events and advances the capability.
     pub fn publish_batch(&mut self, &time: &Duration, data: &mut Vec<(Duration, E, T)>) {
         if !data.is_empty() {
-            self.event_pusher.push(Event::Messages(self.time, data.drain(..).collect()));
+            self.event_pusher.push(Event::Messages(self.time, std::mem::take(data)));
         }
         if self.time < time {
             let new_frontier = time;

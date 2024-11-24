@@ -153,7 +153,7 @@ where
     T: Send+'static,
     F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
 {
-    let alloc = crate::communication::allocator::thread::Thread::new();
+    let alloc = crate::communication::allocator::thread::Thread::default();
     let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc);
     let result = func(&mut worker);
     while worker.has_dataflows() {

@@ -34,7 +34,7 @@ use crate::logging::TimelyLogger;
 /// If you are not certain which option to use, prefer `Demand`, and
 /// perhaps monitor the progress messages through timely's logging
 /// infrastructure to see if their volume is surprisingly high.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub enum ProgressMode {
     /// Eagerly transmit all progress updates produced by a worker.
     ///
@@ -61,13 +61,8 @@ pub enum ProgressMode {
     /// the messages can affect. Once the capability is released, the
     /// progress messages are unblocked and transmitted, in accumulated
     /// form.
+    #[default]
     Demand,
-}
-
-impl Default for ProgressMode {
-    fn default() -> ProgressMode {
-        ProgressMode::Demand
-    }
 }
 
 impl FromStr for ProgressMode {

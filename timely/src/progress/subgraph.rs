@@ -621,7 +621,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             name:       "External".to_owned(),
             operator:   None,
             index:      0,
-            id:         usize::max_value(),
+            id:         usize::MAX,
             local:      false,
             notify:     true,
             inputs,

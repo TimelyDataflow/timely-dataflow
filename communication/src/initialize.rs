@@ -155,15 +155,15 @@ impl Config {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
             },
             Config::Process(threads) => {
-                Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
+                Ok((Process::new_vector(threads).into_iter().map(GenericBuilder::Process).collect(), Box::new(())))
             },
             Config::ProcessBinary(threads) => {
-                Ok((ProcessBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect(), Box::new(())))
+                Ok((ProcessBuilder::new_vector(threads).into_iter().map(GenericBuilder::ProcessBinary).collect(), Box::new(())))
             },
             Config::Cluster { threads, process, addresses, report, log_fn } => {
                 match initialize_networking(addresses, process, threads, report, log_fn) {
                     Ok((stuff, guard)) => {
-                        Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
+                        Ok((stuff.into_iter().map(GenericBuilder::ZeroCopy).collect(), Box::new(guard)))
                     },
                     Err(err) => Err(format!("failed to initialize networking: {}", err))
                 }

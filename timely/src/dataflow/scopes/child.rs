@@ -37,7 +37,7 @@ where
     pub progress_logging:  Option<ProgressLogger>,
 }
 
-impl<'a, G, T> Child<'a, G, T>
+impl<G, T> Child<'_, G, T>
 where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>
@@ -50,7 +50,7 @@ where
     pub fn peers(&self) -> usize { self.parent.peers() }
 }
 
-impl<'a, G, T> AsWorker for Child<'a, G, T>
+impl<G, T> AsWorker for Child<'_, G, T>
 where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>
@@ -75,7 +75,7 @@ where
     }
 }
 
-impl<'a, G, T> Scheduler for Child<'a, G, T>
+impl<G, T> Scheduler for Child<'_, G, T>
 where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>
@@ -85,7 +85,7 @@ where
     }
 }
 
-impl<'a, G, T> ScopeParent for Child<'a, G, T>
+impl<G, T> ScopeParent for Child<'_, G, T>
 where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>
@@ -93,7 +93,7 @@ where
     type Timestamp = T;
 }
 
-impl<'a, G, T> Scope for Child<'a, G, T>
+impl<G, T> Scope for Child<'_, G, T>
 where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>,
@@ -148,7 +148,7 @@ where
     }
 }
 
-impl<'a, G, T> Clone for Child<'a, G, T>
+impl<G, T> Clone for Child<'_, G, T>
 where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>

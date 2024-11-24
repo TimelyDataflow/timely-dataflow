@@ -151,7 +151,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
                 l.log(crate::logging::TimelyProgressEvent {
                     is_send: false,
-                    source: source,
+                    source,
                     seq_no: counter,
                     channel,
                     addr: addr.to_vec(),

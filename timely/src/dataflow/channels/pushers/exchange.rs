@@ -71,7 +71,7 @@ where
             let hash_func = &mut self.hash_func;
 
             // if the number of pushers is a power of two, use a mask
-            if (self.pushers.len() & (self.pushers.len() - 1)) == 0 {
+            if self.pushers.len().is_power_of_two() {
                 let mask = (self.pushers.len() - 1) as u64;
                 let pushers = &mut self.pushers;
                 data.push_partitioned(

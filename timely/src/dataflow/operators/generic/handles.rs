@@ -48,7 +48,7 @@ pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: Container+'a, P: Pull<
 /// Handle to an operator's input stream and frontier, specialized to vectors.
 pub type FrontieredInputHandle<'a, T, D, P> = FrontieredInputHandleCore<'a, T, Vec<D>, P>;
 
-impl<'a, T: Timestamp, C: Container, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
+impl<T: Timestamp, C: Container, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
 
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
@@ -225,7 +225,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     /// });
     /// ```
     pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CB, PushCounter<T, CB::Container, P>> where 'a: 'b {
-        assert!(cap.valid_for_output(&self.internal_buffer), "Attempted to open output session with invalid capability");
+        assert!(cap.valid_for_output(self.internal_buffer), "Attempted to open output session with invalid capability");
         self.push_buffer.session_with_builder(cap.time())
     }
 
@@ -264,7 +264,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Message<T, C>>> OutputHandleCore<'a
     }
 }
 
-impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Drop for OutputHandleCore<'a, T, CB, P> {
+impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Drop for OutputHandleCore<'_, T, CB, P> {
     fn drop(&mut self) {
         self.push_buffer.cease();
     }

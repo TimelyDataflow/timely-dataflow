@@ -738,8 +738,8 @@ impl<T:Timestamp> Tracker<T> {
 /// Graph locations may be missing from the output, in which case they have no
 /// paths to scope outputs.
 fn summarize_outputs<T: Timestamp>(
-    nodes: &Vec<Vec<Vec<Antichain<T::Summary>>>>,
-    edges: &Vec<Vec<Vec<Target>>>,
+    nodes: &[Vec<Vec<Antichain<T::Summary>>>],
+    edges: &[Vec<Vec<Target>>],
     ) -> HashMap<Location, Vec<Antichain<T::Summary>>>
 {
     // A reverse edge map, to allow us to walk back up the dataflow graph.

@@ -184,7 +184,7 @@ fn main() {
 
         in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
-            let mut notificator = FrontierNotificator::new();
+            let mut notificator = FrontierNotificator::default();
             let mut stash = HashMap::new();
 
             move |input1, input2, output| {

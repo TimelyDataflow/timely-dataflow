@@ -18,9 +18,9 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn inspect<F: 'static>(&self, mut func: F) -> Self
+    fn inspect<F>(&self, mut func: F) -> Self
     where
-        for<'a> F: FnMut(C::ItemRef<'a>)
+        F: for<'a> FnMut(C::ItemRef<'a>) + 'static,
     {
         self.inspect_batch(move |_, data| {
             for datum in data.iter() { func(datum); }
@@ -38,13 +38,13 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///            .inspect_time(|t, x| println!("seen at: {:?}\t{:?}", t, x));
     /// });
     /// ```
-    fn inspect_time<F: 'static>(&self, mut func: F) -> Self
+    fn inspect_time<F>(&self, mut func: F) -> Self
     where
-        for <'a> F: FnMut(&G::Timestamp, C::ItemRef<'a>),
+        F: for<'a> FnMut(&G::Timestamp, C::ItemRef<'a>) + 'static,
     {
         self.inspect_batch(move |time, data| {
             for datum in data.iter() {
-                func(&time, datum);
+                func(time, datum);
             }
         })
     }
@@ -91,8 +91,8 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
 }
 
 impl<G: Scope, C: Container> Inspect<G, C> for StreamCore<G, C> {
-    fn inspect_core<F>(&self, mut func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
-        self.inspect_container(move |r| func(r))
+    fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
+        self.inspect_container(func)
     }
 }
 

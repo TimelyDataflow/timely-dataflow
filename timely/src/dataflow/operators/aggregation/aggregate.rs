@@ -76,7 +76,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for 
         hash: H) -> Stream<S, R> where S::Timestamp: Eq {
 
         let mut aggregates = HashMap::new();
-        self.unary_notify(Exchange::new(move |&(ref k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {
+        self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {
 
             // read each input, fold into aggregates
             input.for_each(|time, data| {

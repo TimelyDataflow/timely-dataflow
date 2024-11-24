@@ -61,7 +61,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     fn followed_by(&self, other: &Self) -> Option<Self>;
 }
 
-impl Timestamp for () { type Summary = (); fn minimum() -> Self { () }}
+impl Timestamp for () { type Summary = (); fn minimum() -> Self { }}
 impl PathSummary<()> for () {
     #[inline] fn results_in(&self, _src: &()) -> Option<()> { Some(()) }
     #[inline] fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
@@ -73,7 +73,7 @@ macro_rules! implement_timestamp_add {
         $(
             impl Timestamp for $index_type {
                 type Summary = $index_type;
-                fn minimum() -> Self { Self::min_value() }
+                fn minimum() -> Self { Self::MIN }
             }
             impl PathSummary<$index_type> for $index_type {
                 #[inline]
@@ -140,8 +140,8 @@ mod refines {
             $(
                 impl Refines<()> for $index_type {
                     fn to_inner(_: ()) -> $index_type { Default::default() }
-                    fn to_outer(self) -> () { () }
-                    fn summarize(_: <$index_type as Timestamp>::Summary) -> () { () }
+                    fn to_outer(self) -> () { }
+                    fn summarize(_: <$index_type as Timestamp>::Summary) -> () { }
                 }
             )*
         )
