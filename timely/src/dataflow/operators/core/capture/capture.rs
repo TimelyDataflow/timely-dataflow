@@ -136,8 +136,8 @@ impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
 
                 // turn each received message into an event.
                 while let Some(message) = input.next() {
-                    let time = &message.payload.time;
-                    let data = &mut message.payload.data;
+                    let time = &message.time;
+                    let data = &mut message.data;
                     let vector = std::mem::take(data);
                     event_pusher.push(Event::Messages(time.clone(), vector));
                 }

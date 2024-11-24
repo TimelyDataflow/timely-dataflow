@@ -11,9 +11,6 @@ pub mod pullers;
 /// Parallelization contracts, describing how data must be exchanged between operators.
 pub mod pact;
 
-/// The input to and output from timely dataflow communication channels.
-pub type Bundle<T, C> = crate::Bincode<Message<T, C>>;
-
 /// A serializable representation of timestamped data.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Message<T, C> {
@@ -44,17 +41,37 @@ impl<T, C: Container> Message<T, C> {
     /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
     /// leaves in place, or the container's default element. The buffer is cleared.
     #[inline]
-    pub fn push_at<P: Push<Bundle<T, C>>>(buffer: &mut C, time: T, pusher: &mut P) {
+    pub fn push_at<P: Push<Message<T, C>>>(buffer: &mut C, time: T, pusher: &mut P) {
 
         let data = ::std::mem::take(buffer);
         let message = Message::new(time, data, 0, 0);
-        let mut bundle = Some(Bundle::from(message));
+        let mut bundle = Some(message);
 
         pusher.push(&mut bundle);
 
         if let Some(message) = bundle {
-            *buffer = message.payload.data;
+            *buffer = message.data;
             buffer.clear();
         }
+    }
+}
+
+// Instructions for serialization of `Message`.
+// Intended to swap out the constraint on `C` for `C: Bytesable`.
+impl<T, C> crate::communication::Bytesable for Message<T, C>
+where
+    T: Serialize + for<'a> Deserialize<'a>,
+    C: Serialize + for<'a> Deserialize<'a>,
+{
+    fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
+        ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")
+    }
+
+    fn length_in_bytes(&self) -> usize {
+        ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize
+    }
+
+    fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+        ::bincode::serialize_into(writer, &self).expect("bincode::serialize_into() failed");
     }
 }

@@ -28,7 +28,7 @@ use crate::progress::{Source, Target};
 use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
-use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::channels::Message;
 
 use crate::worker::AsWorker;
 use crate::dataflow::{StreamCore, Scope};
@@ -137,15 +137,14 @@ struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContain
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> Push<Bundle<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
-    fn push(&mut self, element: &mut Option<Bundle<TOuter, TContainer>>) {
-        if let Some(message) = element {
-            let outer_message = &mut message.payload;
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> Push<Message<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
+    fn push(&mut self, element: &mut Option<Message<TOuter, TContainer>>) {
+        if let Some(outer_message) = element {
             let data = ::std::mem::take(&mut outer_message.data);
-            let mut inner_message = Some(Bundle::from(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
+            let mut inner_message = Some(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
-                outer_message.data = inner_message.payload.data;
+                outer_message.data = inner_message.data;
             }
             self.active = true;
         }
@@ -165,16 +164,15 @@ struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContaine
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TContainer: Container> Push<Bundle<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
+impl<TOuter, TInner, TContainer: Container> Push<Message<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data {
-    fn push(&mut self, message: &mut Option<Bundle<TInner, TContainer>>) {
-        if let Some(message) = message {
-            let inner_message = &mut message.payload;
+    fn push(&mut self, message: &mut Option<Message<TInner, TContainer>>) {
+        if let Some(inner_message) = message {
             let data = ::std::mem::take(&mut inner_message.data);
-            let mut outer_message = Some(Bundle::from(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
+            let mut outer_message = Some(Message::new(inner_message.time.clone().to_outer(), data, 0, 0));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
-                inner_message.data = outer_message.payload.data;
+                inner_message.data = outer_message.data;
             }
         }
         else { self.targets.done(); }
@@ -207,12 +205,12 @@ impl<P> LogPusher<P> {
     }
 }
 
-impl<T, C, P> Push<Bundle<T, C>> for LogPusher<P>
+impl<T, C, P> Push<Message<T, C>> for LogPusher<P>
 where
     C: Container,
-    P: Push<Bundle<T, C>>,
+    P: Push<Message<T, C>>,
 {
-    fn push(&mut self, element: &mut Option<Bundle<T, C>>) {
+    fn push(&mut self, element: &mut Option<Message<T, C>>) {
         if let Some(bundle) = element {
             let send_event = MessagesEvent {
                 is_send: true,
