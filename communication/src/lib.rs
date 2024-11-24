@@ -181,11 +181,11 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
     let mut senders: Vec<_> = (0 .. sends).map(|_| Vec::with_capacity(recvs)).collect();
     let mut recvers: Vec<_> = (0 .. recvs).map(|_| Vec::with_capacity(sends)).collect();
 
-    for sender in 0 .. sends {
-        for recver in 0 .. recvs {
+    for sender in senders.iter_mut() {
+        for recver in recvers.iter_mut() {
             let (send, recv) = crossbeam_channel::unbounded();
-            senders[sender].push(send);
-            recvers[recver].push(recv);
+            sender.push(send);
+            recver.push(recv);
         }
     }
 

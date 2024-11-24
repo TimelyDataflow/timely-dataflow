@@ -54,7 +54,7 @@ impl<G: Scope, D: Data> Accumulate<G, D> for Stream<G, D> {
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
-                logic(&mut accums.entry(time.time().clone()).or_insert_with(|| default.clone()), data);
+                logic(accums.entry(time.time().clone()).or_insert_with(|| default.clone()), data);
                 notificator.notify_at(time.retain());
             });
 

@@ -35,7 +35,7 @@ impl AllocateBuilder for ProcessBuilder {
 
         // Initialize buzzers; send first, then recv.
         for worker in self.buzzers_send.iter() {
-            let buzzer = Buzzer::new();
+            let buzzer = Buzzer::default();
             worker.send(buzzer).expect("Failed to send buzzer");
         }
         let mut buzzers = Vec::with_capacity(self.buzzers_recv.len());
@@ -88,8 +88,8 @@ impl Process {
 
         counters_recv
             .into_iter()
-            .zip(buzzers_send.into_iter())
-            .zip(buzzers_recv.into_iter())
+            .zip(buzzers_send)
+            .zip(buzzers_recv)
             .enumerate()
             .map(|(index, ((recv, bsend), brecv))| {
                 ProcessBuilder {

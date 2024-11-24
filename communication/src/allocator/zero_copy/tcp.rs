@@ -1,4 +1,4 @@
-//!
+//! Methods related to reading from and writing to TCP connections
 
 use std::io::{self, Write};
 use crossbeam_channel::{Sender, Receiver};
@@ -67,9 +67,9 @@ where
         assert!(!buffer.empty().is_empty());
 
         // Attempt to read some more bytes into self.buffer.
-        let read = match reader.read(&mut buffer.empty()) {
+        let read = match reader.read(buffer.empty()) {
             Err(x) => tcp_panic("reading data", x),
-            Ok(n) if n == 0 => {
+            Ok(0) => {
                 tcp_panic(
                     "reading data",
                     std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "socket closed"),
@@ -102,7 +102,7 @@ where
                     panic!("Clean shutdown followed by data.");
                 }
                 buffer.ensure_capacity(1);
-                if reader.read(&mut buffer.empty()).unwrap_or_else(|e| tcp_panic("reading EOF", e)) > 0 {
+                if reader.read(buffer.empty()).unwrap_or_else(|e| tcp_panic("reading EOF", e)) > 0 {
                     panic!("Clean shutdown followed by data.");
                 }
             }
@@ -141,7 +141,7 @@ pub fn send_loop<S: Stream>(
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
 
     let mut sources: Vec<MergeQueue> = sources.into_iter().map(|x| {
-        let buzzer = crate::buzzer::Buzzer::new();
+        let buzzer = crate::buzzer::Buzzer::default();
         let queue = MergeQueue::new(buzzer);
         x.send(queue.clone()).expect("failed to send MergeQueue");
         queue

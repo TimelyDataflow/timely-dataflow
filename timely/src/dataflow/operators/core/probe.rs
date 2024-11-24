@@ -83,8 +83,8 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
     fn probe(&self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
-        let mut handle = Handle::<G::Timestamp>::new();
-        self.probe_with(&mut handle);
+        let handle = Handle::<G::Timestamp>::new();
+        self.probe_with(&handle);
         handle
     }
     fn probe_with(&self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C> {

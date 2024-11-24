@@ -33,7 +33,7 @@ pub trait Operator<G: Scope, C1: Container> {
     ///         (0u64..10).to_stream(scope)
     ///             .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///                 let mut cap = Some(default_cap.delayed(&12));
-    ///                 let mut notificator = FrontierNotificator::new();
+    ///                 let mut notificator = FrontierNotificator::default();
     ///                 let mut stash = HashMap::new();
     ///                 move |input, output| {
     ///                     if let Some(ref c) = cap.take() {
@@ -147,7 +147,7 @@ pub trait Operator<G: Scope, C1: Container> {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///        in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
-    ///            let mut notificator = FrontierNotificator::new();
+    ///            let mut notificator = FrontierNotificator::default();
     ///            let mut stash = HashMap::new();
     ///            move |input1, input2, output| {
     ///                while let Some((time, data)) = input1.next() {
@@ -349,7 +349,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
              (&self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> StreamCore<G, CB::Container> {
 
         self.unary_frontier(pact, name, move |capability, _info| {
-            let mut notificator = FrontierNotificator::new();
+            let mut notificator = FrontierNotificator::default();
             for time in init {
                 notificator.notify_at(capability.delayed(&time));
             }
@@ -358,7 +358,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
             move |input, output| {
                 let frontier = &[input.frontier()];
                 let notificator = &mut Notificator::new(frontier, &mut notificator, &logging);
-                logic(&mut input.handle, output, notificator);
+                logic(input.handle, output, notificator);
             }
         })
     }
@@ -435,7 +435,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
             (&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> StreamCore<G, CB::Container> {
 
         self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
-            let mut notificator = FrontierNotificator::new();
+            let mut notificator = FrontierNotificator::default();
             for time in init {
                 notificator.notify_at(capability.delayed(&time));
             }
@@ -444,7 +444,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
             move |input1, input2, output| {
                 let frontiers = &[input1.frontier(), input2.frontier()];
                 let notificator = &mut Notificator::new(frontiers, &mut notificator, &logging);
-                logic(&mut input1.handle, &mut input2.handle, output, notificator);
+                logic(input1.handle, input2.handle, output, notificator);
             }
         })
 

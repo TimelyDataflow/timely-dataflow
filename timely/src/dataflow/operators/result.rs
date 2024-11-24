@@ -105,19 +105,19 @@ impl<S: Scope, T: Data, E: Data> ResultStream<S, T, E> for Stream<S, Result<T, E
     }
 
     fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(&self, mut logic: L) -> Stream<S, Result<T2, E>> {
-        self.map(move |r| r.map(|x| logic(x)))
+        self.map(move |r| r.map(&mut logic))
     }
 
     fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(&self, mut logic: L) -> Stream<S, Result<T, E2>> {
-        self.map(move |r| r.map_err(|x| logic(x)))
+        self.map(move |r| r.map_err(&mut logic))
     }
 
     fn and_then<T2: Data, L: FnMut(T) -> Result<T2, E> + 'static>(&self, mut logic: L) -> Stream<S, Result<T2, E>> {
-        self.map(move |r| r.and_then(|x| logic(x)))
+        self.map(move |r| r.and_then(&mut logic))
     }
 
     fn unwrap_or_else<L: FnMut(E) -> T + 'static>(&self, mut logic: L) -> Stream<S, T> {
-        self.map(move |r| r.unwrap_or_else(|err| logic(err)))
+        self.map(move |r| r.unwrap_or_else(&mut logic))
     }
 }
 

@@ -24,7 +24,7 @@ pub struct ConsumedGuard<T: Ord + Clone + 'static> {
 
 impl<T:Ord+Clone+'static> ConsumedGuard<T> {
     pub(crate) fn time(&self) -> &T {
-        &self.time.as_ref().unwrap()
+        self.time.as_ref().unwrap()
     }
 }
 

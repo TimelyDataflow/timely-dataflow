@@ -337,9 +337,9 @@ impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
     }
 }
 
-impl<T> Into<SmallVec<[T; 1]>> for Antichain<T> {
-    fn into(self) -> SmallVec<[T; 1]> {
-        self.elements
+impl<T> From<Antichain<T>> for SmallVec<[T; 1]> {
+    fn from(val: Antichain<T>) -> Self {
+        val.elements
     }
 }
 
@@ -634,7 +634,7 @@ pub trait MutableAntichainFilter<T: PartialOrder+Ord+Clone> {
 
 impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainFilter<T> for I {
     fn filter_through(self, antichain: &mut MutableAntichain<T>) -> smallvec::Drain<[(T,i64); 2]> {
-        antichain.update_iter(self.into_iter())
+        antichain.update_iter(self)
     }
 }
 
@@ -675,11 +675,7 @@ pub struct AntichainRef<'a, T: 'a> {
 }
 
 impl<'a, T: 'a> Clone for AntichainRef<'a, T> {
-    fn clone(&self) -> Self {
-        Self {
-            frontier: self.frontier,
-        }
-    }
+    fn clone(&self) -> Self { *self }
 }
 
 impl<'a, T: 'a> Copy for AntichainRef<'a, T> { }
@@ -749,7 +745,7 @@ impl<T> AntichainRef<'_, T> {
     }
 }
 
-impl<'a, T: PartialEq> PartialEq for AntichainRef<'a, T> {
+impl<T: PartialEq> PartialEq for AntichainRef<'_, T> {
     fn eq(&self, other: &Self) -> bool {
         // Lengths should be the same, with the option for fast acceptance if identical.
         self.len() == other.len() &&
@@ -760,17 +756,17 @@ impl<'a, T: PartialEq> PartialEq for AntichainRef<'a, T> {
     }
 }
 
-impl<'a, T: Eq> Eq for AntichainRef<'a, T> { }
+impl<T: Eq> Eq for AntichainRef<'_, T> { }
 
-impl<'a, T: PartialOrder> PartialOrder for AntichainRef<'a, T> {
+impl<T: PartialOrder> PartialOrder for AntichainRef<'_, T> {
     fn less_equal(&self, other: &Self) -> bool {
         other.iter().all(|t2| self.iter().any(|t1| t1.less_equal(t2)))
     }
 }
 
-impl<'a, T: TotalOrder> TotalOrder for AntichainRef<'a, T> { }
+impl<T: TotalOrder> TotalOrder for AntichainRef<'_, T> { }
 
-impl<'a, T: TotalOrder> AntichainRef<'a, T> {
+impl<T: TotalOrder> AntichainRef<'_, T> {
     /// Return a reference to the at most one element the antichain contains.
     pub fn as_option(&self) -> Option<&T> {
         debug_assert!(self.len() <= 1);
@@ -778,7 +774,7 @@ impl<'a, T: TotalOrder> AntichainRef<'a, T> {
     }
 }
 
-impl<'a, T> ::std::ops::Deref for AntichainRef<'a, T> {
+impl<T> ::std::ops::Deref for AntichainRef<'_, T> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {
         self.frontier

@@ -179,7 +179,7 @@ impl<T: ExchangeData> Sequencer<T> {
                     input.for_each(|time, data| {
                         recvd.reserve(data.len());
                         for (worker, counter, element) in data.drain(..) {
-                            recvd.push(((time.time().clone(), worker, counter), element));
+                            recvd.push(((*time.time(), worker, counter), element));
                         }
                     });
 

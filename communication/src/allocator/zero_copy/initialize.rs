@@ -63,10 +63,8 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
     // Sockets are expected to be blocking,
-    for socket in sockets.iter_mut() {
-        if let Some(socket) = socket {
-            socket.set_nonblocking(false).expect("failed to set socket to blocking");
-        }
+    for socket in sockets.iter_mut().flatten() {
+        socket.set_nonblocking(false).expect("failed to set socket to blocking");
     }
 
     let processes = sockets.len();

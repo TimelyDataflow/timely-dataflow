@@ -100,7 +100,7 @@ pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> R
     let mut results = start_task.join().unwrap()?;
     results.push(None);
     let to_extend = await_task.join().unwrap()?;
-    results.extend(to_extend.into_iter());
+    results.extend(to_extend);
 
     if noisy { println!("worker {}:\tinitialization complete", my_index) }
 

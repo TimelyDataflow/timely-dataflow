@@ -103,7 +103,7 @@ pub trait Leave<G: Scope, C: Container> {
     fn leave(&self) -> StreamCore<G, C>;
 }
 
-impl<'a, G: Scope, C: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'a, G, T>, C> {
+impl<G: Scope, C: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
     fn leave(&self) -> StreamCore<G, C> {
 
         let scope = self.scope();

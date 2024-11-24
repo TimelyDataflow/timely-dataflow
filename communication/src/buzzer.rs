@@ -8,13 +8,11 @@ pub struct Buzzer {
     thread: Thread,
 }
 
+impl Default for Buzzer {
+    fn default() -> Self { Self { thread: std::thread::current() } }
+}
+
 impl Buzzer {
-    /// Creates a new buzzer for the current thread.
-    pub fn new() -> Self {
-        Self {
-            thread: std::thread::current()
-        }
-    }
     /// Unparks the target thread.
     pub fn buzz(&self) {
         self.thread.unpark()

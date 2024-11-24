@@ -60,7 +60,7 @@ impl ProcessBuilder {
         // Fulfill puller obligations.
         let mut recvs = Vec::with_capacity(self.peers);
         for puller in self.pullers.into_iter() {
-            let buzzer = crate::buzzer::Buzzer::new();
+            let buzzer = crate::buzzer::Buzzer::default();
             let queue = MergeQueue::new(buzzer);
             puller.send(queue.clone()).expect("Failed to send MergeQueue");
             recvs.push(queue.clone());
