@@ -4,12 +4,12 @@ use std::cell::RefCell;
 use std::fmt::{self, Debug};
 use std::rc::Rc;
 
-use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::channels::Message;
 
 use crate::communication::Push;
 use crate::{Container, Data};
 
-type PushList<T, C> = Rc<RefCell<Vec<Box<dyn Push<Bundle<T, C>>>>>>;
+type PushList<T, C> = Rc<RefCell<Vec<Box<dyn Push<Message<T, C>>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct Tee<T, C> {
@@ -17,9 +17,9 @@ pub struct Tee<T, C> {
     shared: PushList<T, C>,
 }
 
-impl<T: Data, C: Container> Push<Bundle<T, C>> for Tee<T, C> {
+impl<T: Data, C: Container> Push<Message<T, C>> for Tee<T, C> {
     #[inline]
-    fn push(&mut self, message: &mut Option<Bundle<T, C>>) {
+    fn push(&mut self, message: &mut Option<Message<T, C>>) {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = message {
             for index in 1..pushers.len() {
@@ -86,7 +86,7 @@ pub struct TeeHelper<T, C> {
 
 impl<T, C> TeeHelper<T, C> {
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
-    pub fn add_pusher<P: Push<Bundle<T, C>>+'static>(&self, pusher: P) {
+    pub fn add_pusher<P: Push<Message<T, C>>+'static>(&self, pusher: P) {
         self.shared.borrow_mut().push(Box::new(pusher));
     }
 }

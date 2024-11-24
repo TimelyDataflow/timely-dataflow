@@ -116,7 +116,7 @@ impl<T: Data + encoding::Data> ExchangeData for T { }
 pub struct ReadmeDoctests;
 
 /// A wrapper that indicates a serialization/deserialization strategy.
-pub use encoding::Bincode as Message;
+pub use encoding::Bincode;
 
 mod encoding {
 
@@ -135,10 +135,9 @@ mod encoding {
         pub payload: T,
     }
 
-    impl<T> Bincode<T> {
-        /// Wrap a typed item as a Bincode.
-        pub fn from_typed(typed: T) -> Self {
-            Bincode { payload: typed }
+    impl<T> From<T> for Bincode<T> {
+        fn from(payload: T) -> Self {
+            Self { payload }
         }
     }
 
@@ -161,6 +160,11 @@ mod encoding {
         type Target = T;
         fn deref(&self) -> &Self::Target {
             &self.payload
+        }
+    }
+    impl<T> ::std::ops::DerefMut for Bincode<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.payload
         }
     }
 }

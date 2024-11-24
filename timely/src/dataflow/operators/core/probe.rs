@@ -113,8 +113,8 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
                 }
 
                 while let Some(message) = input.next() {
-                    let time = &message.payload.time;
-                    let data = &mut message.payload.data;
+                    let time = &message.time;
+                    let data = &mut message.data;
                     output.session(time).give_container(data);
                 }
                 output.cease();

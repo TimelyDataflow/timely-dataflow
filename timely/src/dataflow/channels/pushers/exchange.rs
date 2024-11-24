@@ -2,12 +2,12 @@
 
 use crate::communication::Push;
 use crate::container::PushPartitioned;
-use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::channels::Message;
 use crate::{Container, Data};
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, C: PushPartitioned, P: Push<Bundle<T, C>>, H>
+pub struct Exchange<T, C: PushPartitioned, P: Push<Message<T, C>>, H>
 where
     for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
@@ -17,7 +17,7 @@ where
     hash_func: H,
 }
 
-impl<T: Clone, C: PushPartitioned, P: Push<Bundle<T, C>>, H>  Exchange<T, C, P, H>
+impl<T: Clone, C: PushPartitioned, P: Push<Message<T, C>>, H>  Exchange<T, C, P, H>
 where
     for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
@@ -44,21 +44,21 @@ where
     }
 }
 
-impl<T: Eq+Data, C: Container, P: Push<Bundle<T, C>>, H, > Push<Bundle<T, C>> for Exchange<T, C, P, H>
+impl<T: Eq+Data, C: Container, P: Push<Message<T, C>>, H, > Push<Message<T, C>> for Exchange<T, C, P, H>
 where
     C: PushPartitioned,
     for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<Bundle<T, C>>) {
+    fn push(&mut self, message: &mut Option<Message<T, C>>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);
         }
         else if let Some(message) = message {
 
-            let time = &message.payload.time;
-            let data = &mut message.payload.data;
+            let time = &message.time;
+            let data = &mut message.data;
 
             // if the time isn't right, flush everything.
             if self.current.as_ref().map_or(false, |x| x != time) {
