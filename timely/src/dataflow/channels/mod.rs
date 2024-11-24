@@ -48,7 +48,7 @@ impl<T, C: Container> Message<T, C> {
 
         let data = ::std::mem::take(buffer);
         let message = Message::new(time, data, 0, 0);
-        let mut bundle = Some(Bundle::from_typed(message));
+        let mut bundle = Some(Bundle::from(message));
 
         pusher.push(&mut bundle);
 

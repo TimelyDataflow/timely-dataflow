@@ -142,7 +142,7 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container
         if let Some(message) = element {
             let outer_message = &mut message.payload;
             let data = ::std::mem::take(&mut outer_message.data);
-            let mut inner_message = Some(Bundle::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
+            let mut inner_message = Some(Bundle::from(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
                 outer_message.data = inner_message.payload.data;
@@ -171,7 +171,7 @@ where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data {
         if let Some(message) = message {
             let inner_message = &mut message.payload;
             let data = ::std::mem::take(&mut inner_message.data);
-            let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
+            let mut outer_message = Some(Bundle::from(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
                 inner_message.data = outer_message.payload.data;

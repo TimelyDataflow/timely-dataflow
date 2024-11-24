@@ -101,7 +101,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 }
                 // If we don't have an allocation ...
                 if self.to_push.is_none() {
-                    self.to_push = Some(Bincode::from_typed((
+                    self.to_push = Some(Bincode::from((
                         self.source,
                         self.counter,
                         changes.clone().into_inner().to_vec(),
