@@ -6,13 +6,13 @@ use crate::progress::{Location, Port};
 use crate::communication::{Push, Pull};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
-use crate::Message;
+use crate::Bincode;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
 /// A progress update message consisting of source worker id, sequence number and lists of
 /// message and internal updates
-pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
+pub type ProgressMsg<T> = Bincode<(usize, usize, ProgressVec<T>)>;
 
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
@@ -101,7 +101,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 }
                 // If we don't have an allocation ...
                 if self.to_push.is_none() {
-                    self.to_push = Some(Message::from_typed((
+                    self.to_push = Some(Bincode::from_typed((
                         self.source,
                         self.counter,
                         changes.clone().into_inner().to_vec(),

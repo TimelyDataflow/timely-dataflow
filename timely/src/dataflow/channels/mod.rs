@@ -12,7 +12,7 @@ pub mod pullers;
 pub mod pact;
 
 /// The input to and output from timely dataflow communication channels.
-pub type Bundle<T, C> = crate::Message<Message<T, C>>;
+pub type Bundle<T, C> = crate::Bincode<Message<T, C>>;
 
 /// A serializable representation of timestamped data.
 #[derive(Clone, Serialize, Deserialize)]
