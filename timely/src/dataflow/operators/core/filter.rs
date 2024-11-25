@@ -1,5 +1,6 @@
 //! Filters a stream by a predicate.
 use crate::container::{Container, SizableContainer, PushInto};
+use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::operator::Operator;
@@ -22,7 +23,7 @@ pub trait Filter<C: Container> {
     fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(&self, predicate: P) -> Self;
 }
 
-impl<G: Scope, C: SizableContainer> Filter<C> for StreamCore<G, C>
+impl<G: Scope, C: SizableContainer + Data> Filter<C> for StreamCore<G, C>
 where
     for<'a> C: PushInto<C::Item<'a>>
 {

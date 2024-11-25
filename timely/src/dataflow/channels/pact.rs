@@ -35,7 +35,7 @@ pub trait ParallelizationContract<T, C> {
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, C: Container> ParallelizationContract<T, C> for Pipeline {
+impl<T: 'static, C: Container + 'static> ParallelizationContract<T, C> for Pipeline {
     type Pusher = LogPusher<T, C, ThreadPusher<Message<T, C>>>;
     type Puller = LogPuller<T, C, ThreadPuller<Message<T, C>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {

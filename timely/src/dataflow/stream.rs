@@ -19,7 +19,6 @@ use crate::Container;
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-#[derive(Clone)]
 pub struct StreamCore<S: Scope, C> {
     /// The progress identifier of the stream's data source.
     name: Source,
@@ -27,6 +26,22 @@ pub struct StreamCore<S: Scope, C> {
     scope: S,
     /// Maintains a list of Push<Message<T, C>> interested in the stream's output.
     ports: TeeHelper<S::Timestamp, C>,
+}
+
+impl<S: Scope, C> Clone for StreamCore<S, C> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            scope: self.scope.clone(),
+            ports: self.ports.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.name.clone_from(&source.name);
+        self.scope.clone_from(&source.scope);
+        self.ports.clone_from(&source.ports);
+    }
 }
 
 /// A stream batching data in vectors.

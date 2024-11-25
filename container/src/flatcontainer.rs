@@ -3,7 +3,7 @@
 pub use flatcontainer::*;
 use crate::{buffer, Container, SizableContainer, PushInto};
 
-impl<R: Region + Clone + 'static> Container for FlatStack<R> {
+impl<R: Region> Container for FlatStack<R> {
     type ItemRef<'a> = R::ReadItem<'a>  where Self: 'a;
     type Item<'a> = R::ReadItem<'a> where Self: 'a;
 
@@ -15,20 +15,20 @@ impl<R: Region + Clone + 'static> Container for FlatStack<R> {
         self.clear()
     }
 
-    type Iter<'a> = <&'a Self as IntoIterator>::IntoIter;
+    type Iter<'a> = <&'a Self as IntoIterator>::IntoIter where Self: 'a;
 
     fn iter(&self) -> Self::Iter<'_> {
         IntoIterator::into_iter(self)
     }
 
-    type DrainIter<'a> = Self::Iter<'a>;
+    type DrainIter<'a> = Self::Iter<'a> where Self: 'a;
 
     fn drain(&mut self) -> Self::DrainIter<'_> {
         IntoIterator::into_iter(&*self)
     }
 }
 
-impl<R: Region + Clone + 'static> SizableContainer for FlatStack<R> {
+impl<R: Region> SizableContainer for FlatStack<R> {
     fn capacity(&self) -> usize {
         self.capacity()
     }

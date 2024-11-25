@@ -18,8 +18,7 @@ pub mod flatcontainer;
 /// We require the container to be cloneable to enable efficient copies when providing references
 /// of containers to operators. Care must be taken that the type's `clone_from` implementation
 /// is efficient (which is not necessarily the case when deriving `Clone`.)
-/// TODO: Don't require `Container: Clone`
-pub trait Container: Default + Clone + 'static {
+pub trait Container: Default {
     /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
 
@@ -50,13 +49,13 @@ pub trait Container: Default + Clone + 'static {
     fn clear(&mut self);
 
     /// Iterator type when reading from the container.
-    type Iter<'a>: Iterator<Item=Self::ItemRef<'a>>;
+    type Iter<'a>: Iterator<Item=Self::ItemRef<'a>> where Self: 'a;
 
     /// Returns an iterator that reads the contents of this container.
     fn iter(&self) -> Self::Iter<'_>;
 
     /// Iterator type when draining the container.
-    type DrainIter<'a>: Iterator<Item=Self::Item<'a>>;
+    type DrainIter<'a>: Iterator<Item=Self::Item<'a>> where Self: 'a;
 
     /// Returns an iterator that drains the contents of this container.
     /// Drain leaves the container in an undefined state.
@@ -104,7 +103,7 @@ pub trait PushInto<T> {
 /// decide to represent a push order for `extract` and `finish`, or not.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
-    type Container: Container;
+    type Container: Container + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -160,7 +159,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
     }
 }
 
-impl<C: Container> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
@@ -204,7 +203,7 @@ impl<C: Container> CapacityContainerBuilder<C> {
     }
 }
 
-impl<T: Clone + 'static> Container for Vec<T> {
+impl<T> Container for Vec<T> {
     type ItemRef<'a> = &'a T where T: 'a;
     type Item<'a> = T where T: 'a;
 
@@ -218,20 +217,20 @@ impl<T: Clone + 'static> Container for Vec<T> {
 
     fn clear(&mut self) { Vec::clear(self) }
 
-    type Iter<'a> = std::slice::Iter<'a, T>;
+    type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
 
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
 
-    type DrainIter<'a> = std::vec::Drain<'a, T>;
+    type DrainIter<'a> = std::vec::Drain<'a, T> where Self: 'a;
 
     fn drain(&mut self) -> Self::DrainIter<'_> {
         self.drain(..)
     }
 }
 
-impl<T: Clone + 'static> SizableContainer for Vec<T> {
+impl<T> SizableContainer for Vec<T> {
     fn capacity(&self) -> usize {
         self.capacity()
     }
@@ -294,13 +293,13 @@ mod rc {
             }
         }
 
-        type Iter<'a> = T::Iter<'a>;
+        type Iter<'a> = T::Iter<'a> where Self: 'a;
 
         fn iter(&self) -> Self::Iter<'_> {
             self.deref().iter()
         }
 
-        type DrainIter<'a> = T::Iter<'a>;
+        type DrainIter<'a> = T::Iter<'a> where Self: 'a;
 
         fn drain(&mut self) -> Self::DrainIter<'_> {
             self.iter()
@@ -335,13 +334,13 @@ mod arc {
             }
         }
 
-        type Iter<'a> = T::Iter<'a>;
+        type Iter<'a> = T::Iter<'a> where Self: 'a;
 
         fn iter(&self) -> Self::Iter<'_> {
             self.deref().iter()
         }
 
-        type DrainIter<'a> = T::Iter<'a>;
+        type DrainIter<'a> = T::Iter<'a> where Self: 'a;
 
         fn drain(&mut self) -> Self::DrainIter<'_> {
             self.iter()

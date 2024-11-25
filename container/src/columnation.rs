@@ -339,7 +339,7 @@ mod container {
 
     use crate::columnation::{Columnation, TimelyStack};
 
-    impl<T: Columnation + 'static> Container for TimelyStack<T> {
+    impl<T: Columnation> Container for TimelyStack<T> {
         type ItemRef<'a> = &'a T where Self: 'a;
         type Item<'a> = &'a T where Self: 'a;
 
@@ -355,20 +355,20 @@ mod container {
             TimelyStack::clear(self)
         }
 
-        type Iter<'a> = std::slice::Iter<'a, T>;
+        type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
 
         fn iter(&self) -> Self::Iter<'_> {
             self.deref().iter()
         }
 
-        type DrainIter<'a> = std::slice::Iter<'a, T>;
+        type DrainIter<'a> = std::slice::Iter<'a, T> where Self: 'a;
 
         fn drain(&mut self) -> Self::DrainIter<'_> {
             (*self).iter()
         }
     }
 
-    impl<T: Columnation + 'static> SizableContainer for TimelyStack<T> {
+    impl<T: Columnation> SizableContainer for TimelyStack<T> {
         fn capacity(&self) -> usize {
             self.capacity()
         }

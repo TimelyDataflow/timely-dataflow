@@ -15,7 +15,7 @@ use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Message;
 use crate::communication::{Push, Pull};
-use crate::Container;
+use crate::{Container, Data};
 use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 use crate::logging::TimelyLogger as Logger;
 
@@ -235,7 +235,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     }
 }
 
-impl<'a, T: Timestamp, C: Container, P: Push<Message<T, C>>> OutputHandleCore<'a, T, CapacityContainerBuilder<C>, P> {
+impl<'a, T: Timestamp, C: Container + Data, P: Push<Message<T, C>>> OutputHandleCore<'a, T, CapacityContainerBuilder<C>, P> {
     /// Obtains a session that can send data at the timestamp associated with capability `cap`.
     ///
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp
