@@ -68,7 +68,7 @@ where
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Timestamp, C, H: 'static> ParallelizationContract<T, C> for ExchangeCore<C, H>
 where
-    C: ExchangeData + PushPartitioned,
+    C: ExchangeData + PushPartitioned + crate::dataflow::channels::ContainerBytes,
     for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, C, LogPusher<T, C, Box<dyn Push<Message<T, C>>>>, H>;

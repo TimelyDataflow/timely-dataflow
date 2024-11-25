@@ -61,17 +61,78 @@ impl<T, C: Container> Message<T, C> {
 impl<T, C> crate::communication::Bytesable for Message<T, C>
 where
     T: Serialize + for<'a> Deserialize<'a>,
-    C: Serialize + for<'a> Deserialize<'a>,
+    C: ContainerBytes,
 {
-    fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
-        ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")
+    fn from_bytes(mut bytes: crate::bytes::arc::Bytes) -> Self {
+        let mut slice = &bytes[..];
+        let from: usize = ::bincode::deserialize(&mut slice).expect("bincode::deserialize() failed");
+        let seq: usize = ::bincode::deserialize(&mut slice).expect("bincode::deserialize() failed");
+        let time: T = ::bincode::deserialize(&mut slice).expect("bincode::deserialize() failed");
+        let bytes_read = bytes.len() - slice.len();
+        bytes.extract_to(bytes_read);
+        let data: C = ContainerBytes::from_bytes(bytes);
+        Self { time, data, from, seq }
     }
 
     fn length_in_bytes(&self) -> usize {
-        ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize
+        ::bincode::serialized_size(&self.from).expect("bincode::serialized_size() failed") as usize +
+        ::bincode::serialized_size(&self.seq).expect("bincode::serialized_size() failed") as usize +
+        ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize +
+        self.data.length_in_bytes()
     }
 
     fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
-        ::bincode::serialize_into(writer, &self).expect("bincode::serialize_into() failed");
+        ::bincode::serialize_into(&mut *writer, &self.from).expect("bincode::serialize_into() failed");
+        ::bincode::serialize_into(&mut *writer, &self.seq).expect("bincode::serialize_into() failed");
+        ::bincode::serialize_into(&mut *writer, &self.time).expect("bincode::serialize_into() failed");
+        self.data.into_bytes(&mut *writer);
+    }
+}
+
+
+/// A container-oriented version of `Bytesable` that can be implemented here for `Vec<T>` and other containers.
+pub trait ContainerBytes {
+    /// Wrap bytes as `Self`.
+    fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self;
+
+    /// The number of bytes required to serialize the data.
+    fn length_in_bytes(&self) -> usize;
+
+    /// Writes the binary representation into `writer`.
+    fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W);
+}
+
+mod implementations {
+
+    use serde::{Serialize, Deserialize};
+    use crate::dataflow::channels::ContainerBytes;
+
+    impl<T: Serialize + for<'a> Deserialize<'a>> ContainerBytes for Vec<T> {
+        fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
+            ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")
+        }
+
+        fn length_in_bytes(&self) -> usize {
+            ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize
+        }
+
+        fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+            ::bincode::serialize_into(writer, &self).expect("bincode::serialize_into() failed");
+        }
+    }
+
+    use crate::container::flatcontainer::FlatStack;
+    impl<T: Serialize + for<'a> Deserialize<'a> + crate::container::flatcontainer::Region> ContainerBytes for FlatStack<T> {
+        fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
+            ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")
+        }
+
+        fn length_in_bytes(&self) -> usize {
+            ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize
+        }
+
+        fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+            ::bincode::serialize_into(writer, &self).expect("bincode::serialize_into() failed");
+        }
     }
 }

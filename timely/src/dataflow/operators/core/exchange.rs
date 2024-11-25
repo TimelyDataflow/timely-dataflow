@@ -30,7 +30,7 @@ pub trait Exchange<C: PushPartitioned> {
 
 impl<G: Scope, C> Exchange<C> for StreamCore<G, C>
 where
-    C: PushPartitioned + ExchangeData,
+    C: PushPartitioned + ExchangeData + crate::dataflow::channels::ContainerBytes,
 {
     fn exchange<F>(&self, route: F) -> StreamCore<G, C>
     where
