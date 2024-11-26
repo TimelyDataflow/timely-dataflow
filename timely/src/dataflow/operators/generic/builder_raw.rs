@@ -228,11 +228,5 @@ where
         (self.summary.clone(), self.shared_progress.clone())
     }
 
-    // initialize self.frontier antichains as indicated by hosting scope.
-    fn set_external_summary(&mut self) {
-        // should we schedule the operator here, or just await the first invocation?
-        self.schedule();
-    }
-
     fn notify_me(&self) -> bool { self.shape.notify }
 }
