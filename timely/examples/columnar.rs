@@ -23,8 +23,13 @@ fn main() {
 
     use columnar::Len;
 
+    let config = timely::Config {
+        communication: timely::CommunicationConfig::ProcessBinary(7),
+        worker: timely::WorkerConfig::default(),
+    };
+
     // initializes and runs a timely dataflow.
-    timely::execute_from_args(std::env::args(), |worker| {
+    timely::execute(config, |worker| {
         let mut input = <InputHandleCore<_, CapacityContainerBuilder<Container>>>::new();
         let mut probe = ProbeHandle::new();
 
@@ -117,6 +122,11 @@ mod container {
         Typed(C),
         /// The binary variant of the container.
         Bytes(Bytes),
+        /// Relocated, aligned binary data, if `Bytes` doesn't work for some reason.
+        ///
+        /// Reasons could include misalignment, cloning of data, or wanting
+        /// to release the `Bytes` as a scarce resource.
+        Align(Box<[u64]>),
     }
 
     impl<C: Default> Default for Column<C> {
@@ -128,6 +138,7 @@ mod container {
             match self {
                 Column::Typed(t) => Column::Typed(t.clone()),
                 Column::Bytes(_) => unimplemented!(),
+                Column::Align(a) => Column::Align(a.clone()),
             }
         }
     }
@@ -144,16 +155,17 @@ mod container {
         fn len(&self) -> usize {
             match self {
                 Column::Typed(t) => t.len(),
-                Column::Bytes(b) => <C::Borrowed<'_> as FromBytes>::from_bytes(&mut decode(bytemuck::cast_slice(&b[..]))).len(),
+                Column::Bytes(b) => <C::Borrowed<'_> as FromBytes>::from_bytes(&mut decode(bytemuck::cast_slice(b))).len(),
+                Column::Align(a) => <C::Borrowed<'_> as FromBytes>::from_bytes(&mut decode(a)).len(),
             }
         }
-        // Perhpas this should be an enum that allows the bytes to be un-set, but .. not sure what this should do.
+        // This sets the `Bytes` variant to be an empty `Typed` variant, appropriate for pushing into.
         fn clear(&mut self) {
             match self {
                 Column::Typed(t) => t.clear(),
-                Column::Bytes(_) => unimplemented!(),
+                Column::Bytes(_) => *self = Column::Typed(C::default()),
+                Column::Align(_) => *self = Column::Typed(C::default()),
             }
-            // unimplemented!()
         }
 
         type ItemRef<'a> = <C::Borrowed<'a> as Index>::Ref where Self: 'a;
@@ -161,7 +173,8 @@ mod container {
         fn iter<'a>(&'a self) -> Self::Iter<'a> {
             match self {
                 Column::Typed(t) => <C::Borrowed<'a> as FromBytes>::from_bytes(&mut t.as_bytes().map(|(_, x)| x)).into_iter(),
-                Column::Bytes(b) => <C::Borrowed<'a> as FromBytes>::from_bytes(&mut decode(bytemuck::cast_slice(&b[..]))).into_iter()
+                Column::Bytes(b) => <C::Borrowed<'a> as FromBytes>::from_bytes(&mut decode(bytemuck::cast_slice(b))).into_iter(),
+                Column::Align(a) => <C::Borrowed<'a> as FromBytes>::from_bytes(&mut decode(a)).into_iter(),
             }
         }
 
@@ -170,7 +183,8 @@ mod container {
         fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> {
             match self {
                 Column::Typed(t) => <C::Borrowed<'a> as FromBytes>::from_bytes(&mut t.as_bytes().map(|(_, x)| x)).into_iter(),
-                Column::Bytes(b) => <C::Borrowed<'a> as FromBytes>::from_bytes(&mut decode(bytemuck::cast_slice(&b[..]))).into_iter()
+                Column::Bytes(b) => <C::Borrowed<'a> as FromBytes>::from_bytes(&mut decode(bytemuck::cast_slice(b))).into_iter(),
+                Column::Align(a) => <C::Borrowed<'a> as FromBytes>::from_bytes(&mut decode(a)).into_iter(),
             }
         }
     }
@@ -191,7 +205,11 @@ mod container {
         fn push_into(&mut self, item: T) {
             match self {
                 Column::Typed(t) => t.push(item),
-                Column::Bytes(_) => unimplemented!(),
+                Column::Align(_) | Column::Bytes(_) => {
+                    // We really oughtn't be calling this in this case.
+                    // We could convert to owned, but need more constraints on `C`.
+                    unimplemented!("Pushing into Column::Bytes without first clearing");
+                }
             }
         }
     }
@@ -199,7 +217,18 @@ mod container {
     use timely::dataflow::channels::ContainerBytes;
     impl<C: columnar::bytes::AsBytes> ContainerBytes for Column<C> {
         fn from_bytes(bytes: timely::bytes::arc::Bytes) -> Self {
-            Self::Bytes(bytes)
+            // Our expectation / hope is that `bytes` is `u64` aligned and sized.
+            // If the alignment is borked, we can relocate. IF the size is borked,
+            // not sure what we do in that case.
+            assert!(bytes.len() % 8 == 0);
+            if let Ok(_) = bytemuck::try_cast_slice::<_, u64>(&bytes) {
+                Self::Bytes(bytes)
+            }
+            else {
+                let mut alloc: Vec<u64> = vec![0; bytes.len() / 8];
+                bytemuck::cast_slice_mut(&mut alloc[..]).copy_from_slice(&bytes[..]);
+                Self::Align(alloc.into())
+            }
         }
 
         fn length_in_bytes(&self) -> usize {
@@ -207,19 +236,27 @@ mod container {
                 // We'll need one u64 for the length, then the length rounded up to a multiple of 8.
                 Column::Typed(t) => t.as_bytes().map(|(_, x)| 8 * (1 + (x.len()/8) + if x.len() % 8 == 0 { 0 } else { 1 })).sum(),
                 Column::Bytes(b) => b.len(),
+                Column::Align(a) => 8 * a.len(),
             }
         }
 
         fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
             match self {
                 Column::Typed(t) => {
-                    for (_align, _bytes) in t.as_bytes() {
-                        // Each byte slice is a u64 length in bytes,
-                        // followed by bytes padded to a multiple of eight bytes.
-                        // writer.write_all(&)
+                    // Columnar data is serialized as a sequence of `u64` values, with each `[u8]` slice
+                    // serialize as first its length in bytes, and then as many `u64` values as needed.
+                    // Padding should be added, but only for alignment; no specific values are required.
+                    for (align, bytes) in t.as_bytes() {
+                        assert!(align <= 8);
+                        let length: u64 = bytes.len().try_into().unwrap();
+                        writer.write_all(bytemuck::cast_slice(std::slice::from_ref(&length))).unwrap();
+                        writer.write_all(bytes).unwrap();
+                        let padding: usize = ((8 - (length % 8)) % 8).try_into().unwrap();
+                        writer.write_all(&[0; 8][..padding]).unwrap();
                     }
                 },
-                Column::Bytes(b) => writer.write_all(&b[..]).unwrap(),
+                Column::Bytes(b) => writer.write_all(b).unwrap(),
+                Column::Align(a) => writer.write_all(bytemuck::cast_slice(a)).unwrap(),
             }
         }
     }
