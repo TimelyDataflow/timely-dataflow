@@ -65,9 +65,9 @@ where
 {
     fn from_bytes(mut bytes: crate::bytes::arc::Bytes) -> Self {
         let mut slice = &bytes[..];
-        let from: usize = ::bincode::deserialize(&mut slice).expect("bincode::deserialize() failed");
-        let seq: usize = ::bincode::deserialize(&mut slice).expect("bincode::deserialize() failed");
-        let time: T = ::bincode::deserialize(&mut slice).expect("bincode::deserialize() failed");
+        let from: usize = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
+        let seq: usize = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
+        let time: T = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
         let bytes_read = bytes.len() - slice.len();
         bytes.extract_to(bytes_read);
         let data: C = ContainerBytes::from_bytes(bytes);
