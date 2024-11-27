@@ -19,7 +19,7 @@ use crate::dataflow::channels::Message;
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::worker::AsWorker;
-use crate::ExchangeData;
+use crate::Data;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T, C> {
@@ -68,7 +68,7 @@ where
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Timestamp, C, H: 'static> ParallelizationContract<T, C> for ExchangeCore<C, H>
 where
-    C: ExchangeData + PushPartitioned + crate::dataflow::channels::ContainerBytes,
+    C: Data + Send + PushPartitioned + crate::dataflow::channels::ContainerBytes,
     for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, C, LogPusher<T, C, Box<dyn Push<Message<T, C>>>>, H>;
