@@ -271,7 +271,4 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
         self.inner.events()
     }
-    fn await_events(&self, duration: Option<std::time::Duration>) {
-        self.inner.await_events(duration);
-    }
 }

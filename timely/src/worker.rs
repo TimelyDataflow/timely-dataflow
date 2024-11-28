@@ -2,10 +2,11 @@
 
 use std::rc::Rc;
 use std::cell::{RefCell, RefMut};
+use std::cmp::Reverse;
 use std::any::Any;
 use std::str::FromStr;
 use std::time::{Instant, Duration};
-use std::collections::HashMap;
+use std::collections::{HashMap, BinaryHeap};
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
@@ -198,26 +199,30 @@ pub trait AsWorker : Scheduler {
     /// The next worker-unique identifier to be allocated.
     fn peek_identifier(&self) -> usize;
     /// Provides access to named logging streams.
-    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>;
+    fn log_register(&self) -> Option<::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>>;
     /// Provides access to the timely logging stream.
-    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().get("timely") }
+    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().and_then(|l| l.get("timely")) }
 }
 
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
 /// and has a list of dataflows that it manages.
 pub struct Worker<A: Allocate> {
     config: Config,
-    timer: Instant,
+    /// An optional instant from which the start of the computation should be reckoned.
+    ///
+    /// If this is set to none, system time-based functionality will be unavailable or work badly.
+    /// For example, logging will be unavailable, and activation after a delay will be unavailable.
+    timer: Option<Instant>,
     paths: Rc<RefCell<HashMap<usize, Rc<[usize]>>>>,
     allocator: Rc<RefCell<A>>,
     identifiers: Rc<RefCell<usize>>,
     // dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflows: Rc<RefCell<HashMap<usize, Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Rc<RefCell<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>>,
+    logging: Option<Rc<RefCell<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>>>,
 
     activations: Rc<RefCell<Activations>>,
-    active_dataflows: Vec<usize>,
+    active_dataflows: BinaryHeap<Reverse<usize>>,
 
     // Temporary storage for channel identifiers during dataflow construction.
     // These are then associated with a dataflow once constructed.
@@ -245,7 +250,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
     fn peek_identifier(&self) -> usize { self.peek_identifier() }
-    fn log_register(&self) -> RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
+    fn log_register(&self) -> Option<RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>> {
         self.log_register()
     }
 }
@@ -258,8 +263,7 @@ impl<A: Allocate> Scheduler for Worker<A> {
 
 impl<A: Allocate> Worker<A> {
     /// Allocates a new `Worker` bound to a channel allocator.
-    pub fn new(config: Config, c: A) -> Worker<A> {
-        let now = Instant::now();
+    pub fn new(config: Config, c: A, now: Option<std::time::Instant>) -> Worker<A> {
         let index = c.index();
         Worker {
             config,
@@ -269,7 +273,7 @@ impl<A: Allocate> Worker<A> {
             identifiers:  Default::default(),
             dataflows: Default::default(),
             dataflow_counter:  Default::default(),
-            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now, index))),
+            logging: now.map(|now| Rc::new(RefCell::new(crate::logging_core::Registry::new(now, index)))),
             activations: Rc::new(RefCell::new(Activations::new(now))),
             active_dataflows: Default::default(),
             temp_channel_ids:  Default::default(),
@@ -328,7 +332,7 @@ impl<A: Allocate> Worker<A> {
     ///     worker.step_or_park(Some(Duration::from_secs(1)));
     /// });
     /// ```
-    pub fn step_or_park(&mut self, duration: Option<Duration>) -> bool {
+    pub fn step_or_park(&mut self, timeout: Option<Duration>) -> bool {
 
         {   // Process channel events. Activate responders.
             let mut allocator = self.allocator.borrow_mut();
@@ -352,43 +356,41 @@ impl<A: Allocate> Worker<A> {
             }
         }
 
-        // Organize activations.
-        self.activations
-            .borrow_mut()
-            .advance();
-
-        // Consider parking only if we have no pending events, some dataflows, and a non-zero duration.
-        let empty_for = self.activations.borrow().empty_for();
-        // Determine the minimum park duration, where `None` are an absence of a constraint.
-        let delay = match (duration, empty_for) {
-            (Some(x), Some(y)) => Some(std::cmp::min(x,y)),
-            (x, y) => x.or(y),
-        };
-
-        if delay != Some(Duration::new(0,0)) {
-
-            // Log parking and flush log.
-            if let Some(l) = self.logging().as_mut() {
-                l.log(crate::logging::ParkEvent::park(delay));
-                l.flush();
-            }
-
-            self.allocator
-                .borrow()
-                .await_events(delay);
-
-            // Log return from unpark.
-            self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));
-        }
-        else {   // Schedule active dataflows.
-
+        // Commence a new round of scheduling, starting with dataflows.
+        // We probe the scheduler for active prefixes, where an empty response
+        // indicates that the scheduler has no work for us at the moment.
+        {   // Scoped to let borrow of `self.active_dataflows` drop.
+            use crate::scheduling::activate::Scheduler;
             let active_dataflows = &mut self.active_dataflows;
             self.activations
                 .borrow_mut()
-                .for_extensions(&[], |index| active_dataflows.push(index));
+                .extensions(&[], active_dataflows);
+        }
+
+        // If no dataflows are active, there is nothing to do. Consider parking.
+        if self.active_dataflows.is_empty() {
+
+            // If the timeout is zero, don't bother trying to park.
+            // More generally, we could put some threshold in here.
+            if timeout != Some(Duration::new(0, 0)) {
+                // Log parking and flush log.
+                if let Some(l) = self.logging().as_mut() {
+                    l.log(crate::logging::ParkEvent::park(timeout));
+                    l.flush();
+                }
+
+                // We have just drained `allocator.events()` up above;
+                // otherwise we should first check it for emptiness.
+                self.activations.borrow().park_timeout(timeout);
+
+                // Log return from unpark.
+                self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));
+            }
+        }
+        else {   // Schedule all active dataflows.
 
             let mut dataflows = self.dataflows.borrow_mut();
-            for index in active_dataflows.drain(..) {
+            for Reverse(index) in self.active_dataflows.drain() {
                 // Step dataflow if it exists, remove if not incomplete.
                 if let Entry::Occupied(mut entry) = dataflows.entry(index) {
                     // TODO: This is a moment at which a scheduling decision is being made.
@@ -405,7 +407,7 @@ impl<A: Allocate> Worker<A> {
         }
 
         // Clean up, indicate if dataflows remain.
-        self.logging.borrow_mut().flush();
+        self.logging.as_ref().map(|l| l.borrow_mut().flush());
         self.allocator.borrow_mut().release();
         !self.dataflows.borrow().is_empty()
     }
@@ -476,7 +478,7 @@ impl<A: Allocate> Worker<A> {
     ///
     ///     let index = worker.index();
     ///     let peers = worker.peers();
-    ///     let timer = worker.timer();
+    ///     let timer = worker.timer().unwrap();
     ///
     ///     println!("{:?}\tWorker {} of {}", timer.elapsed(), index, peers);
     ///
@@ -491,7 +493,7 @@ impl<A: Allocate> Worker<A> {
     ///
     ///     let index = worker.index();
     ///     let peers = worker.peers();
-    ///     let timer = worker.timer();
+    ///     let timer = worker.timer().unwrap();
     ///
     ///     println!("{:?}\tWorker {} of {}", timer.elapsed(), index, peers);
     ///
@@ -507,13 +509,13 @@ impl<A: Allocate> Worker<A> {
     ///
     ///     let index = worker.index();
     ///     let peers = worker.peers();
-    ///     let timer = worker.timer();
+    ///     let timer = worker.timer().unwrap();
     ///
     ///     println!("{:?}\tWorker {} of {}", timer.elapsed(), index, peers);
     ///
     /// });
     /// ```
-    pub fn timer(&self) -> Instant { self.timer }
+    pub fn timer(&self) -> Option<Instant> { self.timer }
 
     /// Allocate a new worker-unique identifier.
     ///
@@ -537,13 +539,14 @@ impl<A: Allocate> Worker<A> {
     /// timely::execute_from_args(::std::env::args(), |worker| {
     ///
     ///     worker.log_register()
+    ///           .unwrap()
     ///           .insert::<timely::logging::TimelyEvent,_>("timely", |time, data|
     ///               println!("{:?}\t{:?}", time, data)
     ///           );
     /// });
     /// ```
-    pub fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
-        self.logging.borrow_mut()
+    pub fn log_register(&self) -> Option<::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>> {
+        self.logging.as_ref().map(|l| l.borrow_mut())
     }
 
     /// Construct a new dataflow.
@@ -566,7 +569,7 @@ impl<A: Allocate> Worker<A> {
         T: Refines<()>,
         F: FnOnce(&mut Child<Self, T>)->R,
     {
-        let logging = self.logging.borrow_mut().get("timely");
+        let logging = self.logging.as_ref().map(|l| l.borrow_mut()).and_then(|l| l.get("timely"));
         self.dataflow_core("Dataflow", logging, Box::new(()), |_, child| func(child))
     }
 
@@ -590,7 +593,7 @@ impl<A: Allocate> Worker<A> {
         T: Refines<()>,
         F: FnOnce(&mut Child<Self, T>)->R,
     {
-        let logging = self.logging.borrow_mut().get("timely");
+        let logging = self.logging.as_ref().map(|l| l.borrow_mut()).and_then(|l| l.get("timely"));
         self.dataflow_core(name, logging, Box::new(()), |_, child| func(child))
     }
 
@@ -629,7 +632,7 @@ impl<A: Allocate> Worker<A> {
         let addr = vec![dataflow_index].into();
         let identifier = self.new_identifier();
 
-        let progress_logging = self.logging.borrow_mut().get("timely/progress");
+        let progress_logging = self.logging.as_ref().map(|l| l.borrow_mut()).and_then(|l| l.get("timely/progress"));
         let subscope = SubgraphBuilder::new_from(addr, logging.clone(), progress_logging.clone(), name);
         let subscope = RefCell::new(subscope);
 
@@ -726,7 +729,7 @@ impl<A: Allocate> Clone for Worker<A> {
             dataflow_counter: self.dataflow_counter.clone(),
             logging: self.logging.clone(),
             activations: self.activations.clone(),
-            active_dataflows: Vec::new(),
+            active_dataflows: Default::default(),
             temp_channel_ids: self.temp_channel_ids.clone(),
         }
     }
