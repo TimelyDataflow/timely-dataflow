@@ -116,6 +116,19 @@ pub trait ContainerBuilder: Default + 'static {
     /// be called repeatedly until it returns `None`.
     #[must_use]
     fn finish(&mut self) -> Option<&mut Self::Container>;
+    /// Partitions `container` among `builders`, using the function `index` to direct items.
+    fn partition<I>(container: &mut Self::Container, builders: &mut [Self], mut index: I)
+    where
+        Self: for<'a> PushInto<<Self::Container as Container>::Item<'a>>,
+        Self::Container: SizableContainer,
+        I: for<'a> FnMut(&<Self::Container as Container>::Item<'a>) -> usize,
+    {
+        for datum in container.drain() {
+            let index = index(&datum);
+            builders[index].push_into(datum);
+        }
+        container.clear();
+    }
 }
 
 /// A default container builder that uses length and preferred capacity to chunk data.
@@ -338,36 +351,6 @@ mod arc {
         fn drain(&mut self) -> Self::DrainIter<'_> {
             self.iter()
         }
-    }
-}
-
-/// A container that can partition itself into pieces.
-pub trait PushPartitioned : Container {
-    /// Partition and push this container.
-    ///
-    /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
-    /// append an element to. Call `flush` with an index and a buffer to send the data downstream.
-    fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], index: I, flush: F)
-    where
-        for<'a> I: FnMut(&Self::Item<'a>) -> usize,
-        F: FnMut(usize, &mut Self);
-}
-
-impl<C: SizableContainer> PushPartitioned for C where for<'a> C: PushInto<C::Item<'a>> {
-    fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
-    where
-        for<'a> I: FnMut(&Self::Item<'a>) -> usize,
-        F: FnMut(usize, &mut Self),
-    {
-        for datum in self.drain() {
-            let index = index(&datum);
-            buffers[index].ensure_capacity(&mut None);
-            buffers[index].push(datum);
-            if buffers[index].at_capacity() {
-                flush(index, &mut buffers[index]);
-            }
-        }
-        self.clear();
     }
 }
 
