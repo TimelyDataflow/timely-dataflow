@@ -64,12 +64,14 @@ pub trait Container: Default {
 
 /// A container that can be sized and reveals its capacity.
 pub trait SizableContainer: Container {
-    /// Return the capacity of the container.
-    fn capacity(&self) -> usize;
-    /// Return the preferred capacity of the container.
-    fn preferred_capacity() -> usize;
-    /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
-    fn reserve(&mut self, additional: usize);
+    /// Indicates that the container is "full" and should be shipped.
+    fn at_capacity(&self) -> bool;
+    /// Restores `self` to its desired capacity, if it has one.
+    ///
+    /// The `stash` argument is available, and may have the intended capacity.
+    /// However, it may be non-empty, and may be of the wrong capacity. The
+    /// method should guard against these cases.
+    fn ensure_capacity(&mut self, stash: &mut Option<Self>);
 }
 
 /// A container that can absorb items of a specific type.
@@ -135,25 +137,14 @@ pub struct CapacityContainerBuilder<C>{
 impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuilder<C> {
     #[inline]
     fn push_into(&mut self, item: T) {
-        if self.current.capacity() == 0 {
-            self.current = self.empty.take().unwrap_or_default();
-            // Discard any non-uniform capacity container.
-            if self.current.capacity() != C::preferred_capacity() {
-                self.current = C::default();
-            }
-            // Protect against non-emptied containers.
-            self.current.clear();
-        }
         // Ensure capacity
-        if self.current.capacity() < C::preferred_capacity() {
-            self.current.reserve(C::preferred_capacity() - self.current.len());
-        }
+        self.current.ensure_capacity(&mut self.empty);
 
         // Push item
         self.current.push(item);
 
         // Maybe flush
-        if self.current.len() == self.current.capacity() {
+        if self.current.at_capacity() {
             self.pending.push_back(std::mem::take(&mut self.current));
         }
     }
@@ -231,16 +222,18 @@ impl<T> Container for Vec<T> {
 }
 
 impl<T> SizableContainer for Vec<T> {
-    fn capacity(&self) -> usize {
-        self.capacity()
+    fn at_capacity(&self) -> bool {
+        self.len() == self.capacity()
     }
-
-    fn preferred_capacity() -> usize {
-        buffer::default_capacity::<T>()
-    }
-
-    fn reserve(&mut self, additional: usize) {
-        self.reserve(additional);
+    fn ensure_capacity(&mut self, stash: &mut Option<Self>) {
+        if self.capacity() == 0 {
+            *self = stash.take().unwrap_or_default();
+            self.clear();
+        }
+        let preferred = buffer::default_capacity::<T>();
+        if self.capacity() < preferred {
+            self.reserve(preferred - self.capacity());
+        }
     }
 }
 
@@ -349,7 +342,7 @@ mod arc {
 }
 
 /// A container that can partition itself into pieces.
-pub trait PushPartitioned: SizableContainer {
+pub trait PushPartitioned : Container {
     /// Partition and push this container.
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
@@ -366,19 +359,11 @@ impl<C: SizableContainer> PushPartitioned for C where for<'a> C: PushInto<C::Ite
         for<'a> I: FnMut(&Self::Item<'a>) -> usize,
         F: FnMut(usize, &mut Self),
     {
-        let ensure_capacity = |this: &mut Self| {
-            let capacity = this.capacity();
-            let desired_capacity = Self::preferred_capacity();
-            if capacity < desired_capacity {
-                this.reserve(desired_capacity - capacity);
-            }
-        };
-
         for datum in self.drain() {
             let index = index(&datum);
-            ensure_capacity(&mut buffers[index]);
+            buffers[index].ensure_capacity(&mut None);
             buffers[index].push(datum);
-            if buffers[index].len() >= buffers[index].capacity() {
+            if buffers[index].at_capacity() {
                 flush(index, &mut buffers[index]);
             }
         }

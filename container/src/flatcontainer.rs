@@ -29,16 +29,18 @@ impl<R: Region> Container for FlatStack<R> {
 }
 
 impl<R: Region> SizableContainer for FlatStack<R> {
-    fn capacity(&self) -> usize {
-        self.capacity()
+    fn at_capacity(&self) -> bool {
+        self.len() == self.capacity()
     }
-
-    fn preferred_capacity() -> usize {
-        buffer::default_capacity::<R::Index>()
-    }
-
-    fn reserve(&mut self, additional: usize) {
-        self.reserve(additional);
+    fn ensure_capacity(&mut self, stash: &mut Option<Self>) {
+        if self.capacity() == 0 {
+            *self = stash.take().unwrap_or_default();
+            self.clear();
+        }
+        let preferred = buffer::default_capacity::<R::Index>();
+        if self.capacity() < preferred {
+            self.reserve(preferred - self.capacity());
+        }
     }
 }
 

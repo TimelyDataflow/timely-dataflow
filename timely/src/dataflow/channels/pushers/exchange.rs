@@ -78,7 +78,7 @@ where
                     &mut self.buffers,
                     move |datum| ((hash_func)(datum) & mask) as usize,
                     |index, buffer| {
-                            Message::push_at(buffer, time.clone(), &mut pushers[index]);
+                        Message::push_at(buffer, time.clone(), &mut pushers[index]);
                     }
                 );
             }
