@@ -24,7 +24,7 @@ fn main() {
     use columnar::Len;
 
     let config = timely::Config {
-        communication: timely::CommunicationConfig::ProcessBinary(7),
+        communication: timely::CommunicationConfig::ProcessBinary(3),
         worker: timely::WorkerConfig::default(),
     };
 
@@ -137,7 +137,12 @@ mod container {
         fn clone(&self) -> Self {
             match self {
                 Column::Typed(t) => Column::Typed(t.clone()),
-                Column::Bytes(_) => unimplemented!(),
+                Column::Bytes(b) => {
+                    assert!(b.len() % 8 == 0);
+                    let mut alloc: Vec<u64> = vec![0; b.len() / 8];
+                    bytemuck::cast_slice_mut(&mut alloc[..]).copy_from_slice(&b[..]);
+                    Self::Align(alloc.into())
+                },
                 Column::Align(a) => Column::Align(a.clone()),
             }
         }
@@ -194,9 +199,20 @@ mod container {
     where
         for<'a> C::Borrowed<'a> : Len + Index,
     {
-        fn capacity(&self) -> usize { 1024 }
-        fn preferred_capacity() -> usize { 1024 }
-        fn reserve(&mut self, _additional: usize) { }
+        fn at_capacity(&self) -> bool {
+            match self {
+                Self::Typed(t) => {
+                    let length_in_bytes: usize = 
+                    t.as_bytes()
+                        .map(|(_, x)| 8 * (1 + (x.len()/8) + if x.len() % 8 == 0 { 0 } else { 1 }))
+                        .sum();
+                    length_in_bytes >= (1 << 20)
+                },
+                Self::Bytes(_) => true,
+                Self::Align(_) => true,
+            }
+        }
+        fn ensure_capacity(&mut self, _stash: &mut Option<Self>) { }
     }
 
     use timely::container::PushInto;
@@ -225,6 +241,7 @@ mod container {
                 Self::Bytes(bytes)
             }
             else {
+                println!("Re-locating bytes for alignment reasons");
                 let mut alloc: Vec<u64> = vec![0; bytes.len() / 8];
                 bytemuck::cast_slice_mut(&mut alloc[..]).copy_from_slice(&bytes[..]);
                 Self::Align(alloc.into())
