@@ -10,7 +10,7 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use std::rc::Rc;
 
-use crate::{Container, container::{ContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto}};
+use crate::{Container, container::{ContainerBuilder, LengthPreservingContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto}};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -52,7 +52,7 @@ pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 
 impl<CB, F> ExchangeCore<CB, F>
 where
-    CB: ContainerBuilder,
+    CB: LengthPreservingContainerBuilder,
     CB::Container: SizableContainer,
     for<'a> F: FnMut(&<CB::Container as Container>::Item<'a>)->u64
 {

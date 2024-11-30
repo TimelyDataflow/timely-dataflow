@@ -315,7 +315,7 @@ mod builder {
         }
     }
 
-    use timely::container::ContainerBuilder;
+    use timely::container::{ContainerBuilder, LengthPreservingContainerBuilder};
     impl<C: AsBytes + Clear + Len + Clone + Default + 'static> ContainerBuilder for ColumnBuilder<C>
     where
         for<'a> C::Borrowed<'a> : Len + Index,
@@ -341,4 +341,9 @@ mod builder {
             self.empty.as_mut()
         }
     }
+
+    impl<C: AsBytes + Clear + Len + Clone + Default + 'static> LengthPreservingContainerBuilder for ColumnBuilder<C>
+    where
+        for<'a> C::Borrowed<'a> : Len + Index,
+    { }
 }

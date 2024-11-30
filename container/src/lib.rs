@@ -33,10 +33,10 @@ pub trait Container: Default {
 
     /// The number of elements in this container
     ///
-    /// The length of a container must be consistent between sending and receiving it.
-    /// When exchanging a container and partitioning it into pieces, the sum of the length
-    /// of all pieces must be equal to the length of the original container. When combining
-    /// containers, the length of the result must be the sum of the individual parts.
+    /// This number is used in progress tracking to confirm the receipt of some number
+    /// of outstanding records, and it is highly load bearing. The main restriction is
+    /// imposed on the `LengthPreservingContainerBuilder` trait, whose implementors
+    /// must preserve the number of items.
     fn len(&self) -> usize;
 
     /// Determine if the container contains any elements, corresponding to `len() == 0`.
@@ -131,6 +131,13 @@ pub trait ContainerBuilder: Default + 'static {
     }
 }
 
+/// A wrapper trait indicating that the container building will preserve the number of records.
+///
+/// Specifically, the sum of lengths of all extracted and finished containers must equal the
+/// number of times that `push_into` is called on the container builder.
+/// If you have any questions about this trait you are best off not implementing it.
+pub trait LengthPreservingContainerBuilder : ContainerBuilder { }
+
 /// A default container builder that uses length and preferred capacity to chunk data.
 ///
 /// Maintains a single empty allocation between [`Self::push_into`] and [`Self::extract`], but not
@@ -185,6 +192,8 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
         self.empty.as_mut()
     }
 }
+
+impl<C: Container + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
 impl<C: Container> CapacityContainerBuilder<C> {
     /// Push a pre-formed container at this builder. This exists to maintain
