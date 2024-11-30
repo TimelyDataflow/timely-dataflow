@@ -55,7 +55,7 @@ fn main() {
                 )
                 .container::<Container>()
                 .unary_frontier(
-                    ExchangeCore::new(|x: &WordCountReference<&str,&i64>| x.text.len() as u64),
+                    ExchangeCore::<ColumnBuilder<<WordCount as columnar::Columnar>::Container>,_>::new_core(|x: &WordCountReference<&str,&i64>| x.text.len() as u64),
                     "WordCount",
                     |_capability, _info| {
                         let mut queues = HashMap::new();
@@ -275,6 +275,70 @@ mod container {
                 Column::Bytes(b) => writer.write_all(b).unwrap(),
                 Column::Align(a) => writer.write_all(bytemuck::cast_slice(a)).unwrap(),
             }
+        }
+    }
+}
+
+
+use builder::ColumnBuilder;
+mod builder {
+
+    use std::collections::VecDeque;
+    use columnar::{Clear, Len, Index, bytes::AsBytes};
+    use super::Column;
+
+    /// A container builder for `Column<C>`.
+    #[derive(Default)]
+    pub struct ColumnBuilder<C> {
+        /// Container that we're writing to.
+        current: C,
+        /// Empty allocation.
+        empty: Option<Column<C>>,
+        /// Completed containers pending to be sent.
+        pending: VecDeque<Column<C>>,
+    }
+
+    use timely::container::PushInto;
+    impl<C: columnar::Push<T> + Clear + AsBytes, T> PushInto<T> for ColumnBuilder<C> {
+        #[inline]
+        fn push_into(&mut self, item: T) {
+            self.current.push(item);
+            // If there is less than 10% slop with 2MB backing allocations, mint a container.
+            let len: usize = self.current.as_bytes().map(|(_, x)| 8 * (1 + (x.len()/8) + if x.len() % 8 == 0 { 0 } else { 1 })).sum();
+            let up: usize = (len + ((1 << 20) - 1)) & !((1 << 20) - 1);
+            if up - len < up / 10 {
+                let mut alloc = Vec::with_capacity(up/8);
+                columnar::bytes::serialization::encode(&mut alloc, self.current.as_bytes());
+                self.pending.push_back(Column::Align(alloc.into_boxed_slice()));
+                self.current.clear();
+            }
+        }
+    }
+
+    use timely::container::ContainerBuilder;
+    impl<C: AsBytes + Clear + Len + Clone + Default + 'static> ContainerBuilder for ColumnBuilder<C>
+    where
+        for<'a> C::Borrowed<'a> : Len + Index,
+    {
+        type Container = Column<C>;
+
+        #[inline]
+        fn extract(&mut self) -> Option<&mut Self::Container> {
+            if let Some(container) = self.pending.pop_front() {
+                self.empty = Some(container);
+                self.empty.as_mut()
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn finish(&mut self) -> Option<&mut Self::Container> {
+            if !self.current.is_empty() {
+                self.pending.push_back(Column::Typed(std::mem::take(&mut self.current)));
+            }
+            self.empty = self.pending.pop_front();
+            self.empty.as_mut()
         }
     }
 }
