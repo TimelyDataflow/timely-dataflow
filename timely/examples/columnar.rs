@@ -251,7 +251,7 @@ mod container {
         fn length_in_bytes(&self) -> usize {
             match self {
                 // We'll need one u64 for the length, then the length rounded up to a multiple of 8.
-                Column::Typed(t) => t.as_bytes().map(|(_, x)| 8 * (1 + (x.len()/8) + if x.len() % 8 == 0 { 0 } else { 1 })).sum(),
+                Column::Typed(t) => 8 * t.length_in_words(),
                 Column::Bytes(b) => b.len(),
                 Column::Align(a) => 8 * a.len(),
             }
@@ -304,10 +304,10 @@ mod builder {
         fn push_into(&mut self, item: T) {
             self.current.push(item);
             // If there is less than 10% slop with 2MB backing allocations, mint a container.
-            let len: usize = self.current.as_bytes().map(|(_, x)| 8 * (1 + (x.len()/8) + if x.len() % 8 == 0 { 0 } else { 1 })).sum();
-            let up: usize = (len + ((1 << 20) - 1)) & !((1 << 20) - 1);
-            if up - len < up / 10 {
-                let mut alloc = Vec::with_capacity(up/8);
+            let words = self.current.length_in_words();
+            let round = (words + ((1 << 18) - 1)) & !((1 << 18) - 1);
+            if round - words < round / 10 {
+                let mut alloc = Vec::with_capacity(round);
                 columnar::bytes::serialization::encode(&mut alloc, self.current.as_bytes());
                 self.pending.push_back(Column::Align(alloc.into_boxed_slice()));
                 self.current.clear();
