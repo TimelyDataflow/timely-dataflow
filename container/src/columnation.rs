@@ -369,16 +369,18 @@ mod container {
     }
 
     impl<T: Columnation> SizableContainer for TimelyStack<T> {
-        fn capacity(&self) -> usize {
-            self.capacity()
+        fn at_capacity(&self) -> bool {
+            self.len() == self.capacity()
         }
-
-        fn preferred_capacity() -> usize {
-            crate::buffer::default_capacity::<T>()
-        }
-
-        fn reserve(&mut self, additional: usize) {
-            self.reserve(additional)
+        fn ensure_capacity(&mut self, stash: &mut Option<Self>) {
+            if self.capacity() == 0 {
+                *self = stash.take().unwrap_or_default();
+                self.clear();
+            }
+            let preferred = crate::buffer::default_capacity::<T>();
+            if self.capacity() < preferred {
+                self.reserve(preferred - self.capacity());
+            }
         }
     }
 }

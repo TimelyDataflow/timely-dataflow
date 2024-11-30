@@ -33,10 +33,10 @@ pub trait Container: Default {
 
     /// The number of elements in this container
     ///
-    /// The length of a container must be consistent between sending and receiving it.
-    /// When exchanging a container and partitioning it into pieces, the sum of the length
-    /// of all pieces must be equal to the length of the original container. When combining
-    /// containers, the length of the result must be the sum of the individual parts.
+    /// This number is used in progress tracking to confirm the receipt of some number
+    /// of outstanding records, and it is highly load bearing. The main restriction is
+    /// imposed on the `LengthPreservingContainerBuilder` trait, whose implementors
+    /// must preserve the number of items.
     fn len(&self) -> usize;
 
     /// Determine if the container contains any elements, corresponding to `len() == 0`.
@@ -64,12 +64,14 @@ pub trait Container: Default {
 
 /// A container that can be sized and reveals its capacity.
 pub trait SizableContainer: Container {
-    /// Return the capacity of the container.
-    fn capacity(&self) -> usize;
-    /// Return the preferred capacity of the container.
-    fn preferred_capacity() -> usize;
-    /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
-    fn reserve(&mut self, additional: usize);
+    /// Indicates that the container is "full" and should be shipped.
+    fn at_capacity(&self) -> bool;
+    /// Restores `self` to its desired capacity, if it has one.
+    ///
+    /// The `stash` argument is available, and may have the intended capacity.
+    /// However, it may be non-empty, and may be of the wrong capacity. The
+    /// method should guard against these cases.
+    fn ensure_capacity(&mut self, stash: &mut Option<Self>);
 }
 
 /// A container that can absorb items of a specific type.
@@ -114,7 +116,27 @@ pub trait ContainerBuilder: Default + 'static {
     /// be called repeatedly until it returns `None`.
     #[must_use]
     fn finish(&mut self) -> Option<&mut Self::Container>;
+    /// Partitions `container` among `builders`, using the function `index` to direct items.
+    fn partition<I>(container: &mut Self::Container, builders: &mut [Self], mut index: I)
+    where
+        Self: for<'a> PushInto<<Self::Container as Container>::Item<'a>>,
+        Self::Container: SizableContainer,
+        I: for<'a> FnMut(&<Self::Container as Container>::Item<'a>) -> usize,
+    {
+        for datum in container.drain() {
+            let index = index(&datum);
+            builders[index].push_into(datum);
+        }
+        container.clear();
+    }
 }
+
+/// A wrapper trait indicating that the container building will preserve the number of records.
+///
+/// Specifically, the sum of lengths of all extracted and finished containers must equal the
+/// number of times that `push_into` is called on the container builder.
+/// If you have any questions about this trait you are best off not implementing it.
+pub trait LengthPreservingContainerBuilder : ContainerBuilder { }
 
 /// A default container builder that uses length and preferred capacity to chunk data.
 ///
@@ -135,25 +157,14 @@ pub struct CapacityContainerBuilder<C>{
 impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuilder<C> {
     #[inline]
     fn push_into(&mut self, item: T) {
-        if self.current.capacity() == 0 {
-            self.current = self.empty.take().unwrap_or_default();
-            // Discard any non-uniform capacity container.
-            if self.current.capacity() != C::preferred_capacity() {
-                self.current = C::default();
-            }
-            // Protect against non-emptied containers.
-            self.current.clear();
-        }
         // Ensure capacity
-        if self.current.capacity() < C::preferred_capacity() {
-            self.current.reserve(C::preferred_capacity() - self.current.len());
-        }
+        self.current.ensure_capacity(&mut self.empty);
 
         // Push item
         self.current.push(item);
 
         // Maybe flush
-        if self.current.len() == self.current.capacity() {
+        if self.current.at_capacity() {
             self.pending.push_back(std::mem::take(&mut self.current));
         }
     }
@@ -181,6 +192,8 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
         self.empty.as_mut()
     }
 }
+
+impl<C: Container + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
 impl<C: Container> CapacityContainerBuilder<C> {
     /// Push a pre-formed container at this builder. This exists to maintain
@@ -231,16 +244,18 @@ impl<T> Container for Vec<T> {
 }
 
 impl<T> SizableContainer for Vec<T> {
-    fn capacity(&self) -> usize {
-        self.capacity()
+    fn at_capacity(&self) -> bool {
+        self.len() == self.capacity()
     }
-
-    fn preferred_capacity() -> usize {
-        buffer::default_capacity::<T>()
-    }
-
-    fn reserve(&mut self, additional: usize) {
-        self.reserve(additional);
+    fn ensure_capacity(&mut self, stash: &mut Option<Self>) {
+        if self.capacity() == 0 {
+            *self = stash.take().unwrap_or_default();
+            self.clear();
+        }
+        let preferred = buffer::default_capacity::<T>();
+        if self.capacity() < preferred {
+            self.reserve(preferred - self.capacity());
+        }
     }
 }
 
@@ -345,44 +360,6 @@ mod arc {
         fn drain(&mut self) -> Self::DrainIter<'_> {
             self.iter()
         }
-    }
-}
-
-/// A container that can partition itself into pieces.
-pub trait PushPartitioned: SizableContainer {
-    /// Partition and push this container.
-    ///
-    /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
-    /// append an element to. Call `flush` with an index and a buffer to send the data downstream.
-    fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], index: I, flush: F)
-    where
-        for<'a> I: FnMut(&Self::Item<'a>) -> usize,
-        F: FnMut(usize, &mut Self);
-}
-
-impl<C: SizableContainer> PushPartitioned for C where for<'a> C: PushInto<C::Item<'a>> {
-    fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
-    where
-        for<'a> I: FnMut(&Self::Item<'a>) -> usize,
-        F: FnMut(usize, &mut Self),
-    {
-        let ensure_capacity = |this: &mut Self| {
-            let capacity = this.capacity();
-            let desired_capacity = Self::preferred_capacity();
-            if capacity < desired_capacity {
-                this.reserve(desired_capacity - capacity);
-            }
-        };
-
-        for datum in self.drain() {
-            let index = index(&datum);
-            ensure_capacity(&mut buffers[index]);
-            buffers[index].push(datum);
-            if buffers[index].len() >= buffers[index].capacity() {
-                flush(index, &mut buffers[index]);
-            }
-        }
-        self.clear();
     }
 }
 

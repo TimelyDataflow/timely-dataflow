@@ -10,10 +10,9 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use std::rc::Rc;
 
-use crate::Container;
+use crate::{Container, container::{ContainerBuilder, LengthPreservingContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto}};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
-use crate::container::PushPartitioned;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use crate::dataflow::channels::Message;
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
@@ -46,18 +45,33 @@ impl<T: 'static, C: Container + 'static> ParallelizationContract<T, C> for Pipel
 }
 
 /// An exchange between multiple observers by data
-pub struct ExchangeCore<C, F> { hash_func: F, phantom: PhantomData<C> }
+pub struct ExchangeCore<CB, F> { hash_func: F, phantom: PhantomData<CB> }
 
 /// [ExchangeCore] specialized to vector-based containers.
-pub type Exchange<D, F> = ExchangeCore<Vec<D>, F>;
+pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 
-impl<C, F> ExchangeCore<C, F>
+impl<CB, F> ExchangeCore<CB, F>
 where
-    C: PushPartitioned,
+    CB: LengthPreservingContainerBuilder,
+    CB::Container: SizableContainer,
+    for<'a> F: FnMut(&<CB::Container as Container>::Item<'a>)->u64
+{
+    /// Allocates a new `Exchange` pact from a distribution function.
+    pub fn new_core(func: F) -> ExchangeCore<CB, F> {
+        ExchangeCore {
+            hash_func:  func,
+            phantom:    PhantomData,
+        }
+    }
+}
+
+impl<C, F> ExchangeCore<CapacityContainerBuilder<C>, F>
+where
+    C: SizableContainer,
     for<'a> F: FnMut(&C::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
-    pub fn new(func: F) -> ExchangeCore<C, F> {
+    pub fn new(func: F) -> ExchangeCore<CapacityContainerBuilder<C>, F> {
         ExchangeCore {
             hash_func:  func,
             phantom:    PhantomData,
@@ -66,16 +80,18 @@ where
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Timestamp, C, H: 'static> ParallelizationContract<T, C> for ExchangeCore<C, H>
+impl<T: Timestamp, CB, H: 'static> ParallelizationContract<T, CB::Container> for ExchangeCore<CB, H>
 where
-    C: Data + Send + PushPartitioned + crate::dataflow::channels::ContainerBytes,
-    for<'a> H: FnMut(&C::Item<'a>) -> u64
+    CB: ContainerBuilder,
+    CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
+    CB::Container: Data + Send + SizableContainer + crate::dataflow::channels::ContainerBytes,
+    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
-    type Pusher = ExchangePusher<T, C, LogPusher<T, C, Box<dyn Push<Message<T, C>>>>, H>;
-    type Puller = LogPuller<T, C, Box<dyn Pull<Message<T, C>>>>;
+    type Pusher = ExchangePusher<T, CB, LogPusher<T, CB::Container, Box<dyn Push<Message<T, CB::Container>>>>, H>;
+    type Puller = LogPuller<T, CB::Container, Box<dyn Pull<Message<T, CB::Container>>>>;
 
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
-        let (senders, receiver) = allocator.allocate::<Message<T, C>>(identifier, address);
+        let (senders, receiver) = allocator.allocate::<Message<T, CB::Container>>(identifier, address);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
         (ExchangePusher::new(senders, self.hash_func), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
     }
