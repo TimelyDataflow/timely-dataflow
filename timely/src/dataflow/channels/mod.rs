@@ -64,9 +64,10 @@ where
     C: ContainerBytes,
 {
     fn from_bytes(mut bytes: crate::bytes::arc::Bytes) -> Self {
+        use byteorder::ReadBytesExt;
         let mut slice = &bytes[..];
-        let from: usize = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
-        let seq: usize = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
+        let from: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
+        let seq: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
         let time: T = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
         let bytes_read = bytes.len() - slice.len();
         bytes.extract_to(bytes_read);
@@ -75,15 +76,16 @@ where
     }
 
     fn length_in_bytes(&self) -> usize {
-        ::bincode::serialized_size(&self.from).expect("bincode::serialized_size() failed") as usize +
-        ::bincode::serialized_size(&self.seq).expect("bincode::serialized_size() failed") as usize +
+        // 16 comes from the two `u64` fields: `from` and `seq`.
+        16 +
         ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize +
         self.data.length_in_bytes()
     }
 
     fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
-        ::bincode::serialize_into(&mut *writer, &self.from).expect("bincode::serialize_into() failed");
-        ::bincode::serialize_into(&mut *writer, &self.seq).expect("bincode::serialize_into() failed");
+        use byteorder::WriteBytesExt;
+        writer.write_u64::<byteorder::LittleEndian>(self.from.try_into().unwrap()).unwrap();
+        writer.write_u64::<byteorder::LittleEndian>(self.seq.try_into().unwrap()).unwrap();
         ::bincode::serialize_into(&mut *writer, &self.time).expect("bincode::serialize_into() failed");
         self.data.into_bytes(&mut *writer);
     }
