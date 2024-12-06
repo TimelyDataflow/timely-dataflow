@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.14.1...timely-v0.15.0) - 2024-12-05
+
+### Other
+
+- Prefer byteorder in place of bincode ([#607](https://github.com/TimelyDataflow/timely-dataflow/pull/607))
+- Use help from columnar 0.1.1 ([#606](https://github.com/TimelyDataflow/timely-dataflow/pull/606))
+- Reorganize `Container` traits ([#605](https://github.com/TimelyDataflow/timely-dataflow/pull/605))
+- Robustify potential Bytes alignment
+- Correct bincode call to use and update reader
+- Demonstrate `columnar` stuff ([#586](https://github.com/TimelyDataflow/timely-dataflow/pull/586))
+- Allow containers to specify their own serialization ([#604](https://github.com/TimelyDataflow/timely-dataflow/pull/604))
+- Remove Container: Clone + 'static ([#540](https://github.com/TimelyDataflow/timely-dataflow/pull/540))
+- Apply various Clippy recommendations ([#603](https://github.com/TimelyDataflow/timely-dataflow/pull/603))
+- Several improvements around `Bytesable` and `Message`. ([#601](https://github.com/TimelyDataflow/timely-dataflow/pull/601))
+
 ## [0.14.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.14.0...timely-v0.14.1) - 2024-11-12
 
 ### Added
