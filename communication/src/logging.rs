@@ -20,6 +20,8 @@ pub enum CommunicationEvent {
     Message(MessageEvent),
     /// A state transition.
     State(StateEvent),
+    /// Setup event
+    Setup(CommunicationSetup)
 }
 
 /// An observed message.

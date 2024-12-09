@@ -25,7 +25,7 @@ fn main() {
         worker.log_register().insert::<TimelyProgressEvent,_>("timely/progress", |_time, data|
             data.iter().for_each(|x| {
                 println!("PROGRESS: {:?}", x);
-                let (_, _, ev) = x;
+                let (_, ev) = x;
                 print!("PROGRESS: TYPED MESSAGES: ");
                 for (n, p, t, d) in ev.messages.iter() {
                     print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
