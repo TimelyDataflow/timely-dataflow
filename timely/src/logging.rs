@@ -21,7 +21,7 @@ pub struct BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> 
     _phantom: ::std::marker::PhantomData<T>,
 }
 
-impl<T, E, P> BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> {
+impl<T, P> BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
         BatchLogger {
@@ -43,7 +43,7 @@ impl<T, E, P> BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)
         self.time = time;
     }
 }
-impl<T, P> Drop for BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, E, T)>> {
+impl<T, P> Drop for BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> {
     fn drop(&mut self) {
         self.event_pusher.push(Event::Progress(vec![(self.time, -1)]));
     }
