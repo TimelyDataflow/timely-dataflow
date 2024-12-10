@@ -101,7 +101,7 @@ pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
     /// `"std::option::Option<std::string::String>"`.
     fn type_name(&self) -> &'static str;
 }
-impl<T: crate::Data + std::fmt::Debug + std::any::Any> ProgressEventTimestamp for T {
+impl<T: std::fmt::Debug + std::any::Any> ProgressEventTimestamp for T {
     fn as_any(&self) -> &dyn std::any::Any { self }
 
     fn type_name(&self) -> &'static str { std::any::type_name::<T>() }

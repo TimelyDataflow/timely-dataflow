@@ -10,10 +10,8 @@ use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
-
-
 use crate::dataflow::{Scope, OwnedStream, StreamLike};
-use crate::{Container, Data};
+use crate::Container;
 
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, C: Container> {
@@ -79,7 +77,7 @@ pub trait Probe<G: Scope, C: Container> {
     fn probe_with(self, handle: &Handle<G::Timestamp>) -> OwnedStream<G, C>;
 }
 
-impl<G: Scope, C: Container + Data, S: StreamLike<G, C>> Probe<G, C> for S {
+impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> Probe<G, C> for S {
     fn probe(self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.

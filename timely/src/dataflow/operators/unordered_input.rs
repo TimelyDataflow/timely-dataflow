@@ -1,7 +1,5 @@
 //! Create new `Streams` connected to external inputs.
 
-use crate::Data;
-
 use crate::container::CapacityContainerBuilder;
 use crate::dataflow::operators::{ActivateCapability};
 use crate::dataflow::operators::core::{UnorderedInput as UnorderedInputCore, UnorderedHandle as UnorderedHandleCore};
@@ -62,12 +60,12 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), OwnedStream<G, Vec<D>>);
+    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), OwnedStream<G, Vec<D>>);
 }
 
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<D:Data>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), OwnedStream<G, Vec<D>>) {
+    fn new_unordered_input<D: 'static>(&mut self) -> ((UnorderedHandle<G::Timestamp, D>, ActivateCapability<G::Timestamp>), OwnedStream<G, Vec<D>>) {
         UnorderedInputCore::new_unordered_input(self)
     }
 }

@@ -1,10 +1,10 @@
 //! Shared containers
+use std::rc::Rc;
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::Operator;
 use crate::dataflow::{OwnedStream, Scope, StreamLike};
-use crate::{Container, Data};
-use std::rc::Rc;
+use crate::Container;
 
 /// Convert a stream into a stream of shared containers
 pub trait SharedStream<G: Scope, C: Container> {
@@ -24,7 +24,7 @@ pub trait SharedStream<G: Scope, C: Container> {
     fn shared(self) -> OwnedStream<G, Rc<C>>;
 }
 
-impl<G: Scope, C: Container + Data, S: StreamLike<G, C>> SharedStream<G, C> for S {
+impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> SharedStream<G, C> for S {
     fn shared(self) -> OwnedStream<G, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {

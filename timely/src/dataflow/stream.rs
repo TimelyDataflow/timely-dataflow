@@ -185,7 +185,7 @@ mod tests {
                 .sink(Pipeline, "check non-clone", |input| {
                     while let Some((_time, data)) = input.next() {
                         for datum in data.drain(..) {
-                            assert_eq!(datum, &NotClone);
+                            assert_eq!(datum, NotClone);
                         }
                     }
                 });

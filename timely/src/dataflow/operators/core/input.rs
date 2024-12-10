@@ -11,7 +11,7 @@ use crate::progress::frontier::Antichain;
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 
-use crate::{Container, Data};
+use crate::Container;
 use crate::communication::Push;
 use crate::dataflow::{OwnedStream, Scope, ScopeParent};
 use crate::dataflow::channels::pushers::{Counter, PushOwned};
@@ -60,7 +60,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<C: Container + Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, OwnedStream<Self, C>);
+    fn new_input<C: Container + Clone + 'static>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, OwnedStream<Self, C>);
 
     /// Create a new [StreamCore] and [Handle] through which to supply input.
     ///
@@ -141,7 +141,7 @@ pub trait Input : Scope {
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<C: Container + Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, OwnedStream<G, C>) {
+    fn new_input<C: Container + Clone + 'static>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, OwnedStream<G, C>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
@@ -240,7 +240,7 @@ where
     now_at: T,
 }
 
-impl<T: Timestamp, C: Container + Data> Handle<T, CapacityContainerBuilder<C>> {
+impl<T: Timestamp, C: Container + Clone + 'static> Handle<T, CapacityContainerBuilder<C>> {
     /// Allocates a new input handle, from which one can create timely streams.
     ///
     /// # Examples

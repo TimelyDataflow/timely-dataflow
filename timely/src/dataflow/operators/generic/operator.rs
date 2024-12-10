@@ -12,7 +12,7 @@ use crate::dataflow::{Scope, OwnedStream, StreamLike};
 use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
-use crate::{Container, Data};
+use crate::Container;
 use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 
 /// Methods to construct generic streaming and blocking operators.
@@ -181,7 +181,7 @@ pub trait Operator<G: Scope, C1: Container> {
     /// ```
     fn binary_frontier<C2, CB, O, B, L, P1, P2>(self, other: O, pact1: P1, pact2: P2, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
     where
-        C2: Container + Data,
+        C2: Container + 'static,
         CB: ContainerBuilder,
         O: StreamLike<G, C2>,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
@@ -232,7 +232,7 @@ pub trait Operator<G: Scope, C1: Container> {
     ///    }
     /// }).unwrap();
     /// ```
-    fn binary_notify<C2: Container + Data,
+    fn binary_notify<C2: Container + 'static,
               CB: ContainerBuilder,
               O: StreamLike<G, C2>,
               L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -275,7 +275,7 @@ pub trait Operator<G: Scope, C1: Container> {
     /// ```
     fn binary<C2, CB, O, B, L, P1, P2>(self, other: O, pact1: P1, pact2: P2, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
     where
-        C2: Container + Data,
+        C2: Container + 'static,
         CB: ContainerBuilder,
         O: StreamLike<G, C2>,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
@@ -314,7 +314,7 @@ pub trait Operator<G: Scope, C1: Container> {
         P: ParallelizationContract<G::Timestamp, C1>;
 }
 
-impl<G: Scope, C1: Container + Data, S: StreamLike<G, C1>> Operator<G, C1> for S {
+impl<G: Scope, C1: Container + 'static, S: StreamLike<G, C1>> Operator<G, C1> for S {
 
     fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
     where
@@ -396,7 +396,7 @@ impl<G: Scope, C1: Container + Data, S: StreamLike<G, C1>> Operator<G, C1> for S
 
     fn binary_frontier<C2, CB, O, B, L, P1, P2>(self, other: O, pact1: P1, pact2: P2, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
     where
-        C2: Container + Data,
+        C2: Container + 'static,
         CB: ContainerBuilder,
         O: StreamLike<G, C2>,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
@@ -428,7 +428,7 @@ impl<G: Scope, C1: Container + Data, S: StreamLike<G, C1>> Operator<G, C1> for S
         stream
     }
 
-    fn binary_notify<C2: Container + Data,
+    fn binary_notify<C2: Container + 'static,
               CB: ContainerBuilder,
               O: StreamLike<G, C2>,
               L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -458,7 +458,7 @@ impl<G: Scope, C1: Container + Data, S: StreamLike<G, C1>> Operator<G, C1> for S
 
     fn binary<C2, CB, O, B, L, P1, P2>(self, other: O, pact1: P1, pact2: P2, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
     where
-        C2: Container + Data,
+        C2: Container + 'static,
         CB: ContainerBuilder,
         O: StreamLike<G, C2>,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,

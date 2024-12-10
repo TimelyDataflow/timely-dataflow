@@ -5,7 +5,6 @@ use std::fmt;
 use std::rc::Rc;
 
 use timely_communication::Push;
-use crate::{Data, Container};
 use crate::dataflow::channels::Message;
 
 /// A pusher that can bind to a single downstream pusher.
@@ -37,7 +36,7 @@ impl<T, D> Clone for PushOwned<T, D> {
     }
 }
 
-impl<T: Data, D: Container> Push<Message<T, D>> for PushOwned<T, D> {
+impl<T, D> Push<Message<T, D>> for PushOwned<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, D>>) {
         let mut pusher = self.0.borrow_mut();

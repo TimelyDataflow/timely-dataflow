@@ -21,7 +21,7 @@ pub trait Broadcast<G: Scope, D: ExchangeData> {
     fn broadcast(self) -> OwnedStream<G, Vec<D>>;
 }
 
-impl<G: Scope, D: ExchangeData, S: StreamLike<G, Vec<D>>> Broadcast<G, D> for S {
+impl<G: Scope, D: ExchangeData + Clone, S: StreamLike<G, Vec<D>>> Broadcast<G, D> for S {
     fn broadcast(self) -> OwnedStream<G, Vec<D>> {
 
         // NOTE: Simplified implementation due to underlying motion

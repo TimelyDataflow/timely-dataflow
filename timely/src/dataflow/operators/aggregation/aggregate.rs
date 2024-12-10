@@ -2,7 +2,7 @@
 use std::hash::Hash;
 use std::collections::HashMap;
 
-use crate::{Data, ExchangeData};
+use crate::ExchangeData;
 use crate::dataflow::{Scope, StreamLike, OwnedStream};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
@@ -60,7 +60,7 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     ///         .inspect(|x| assert!(*x == (0, 5) || *x == (1, 5)));
     /// });
     /// ```
-    fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
+    fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         self,
         fold: F,
         emit: E,
@@ -75,7 +75,7 @@ where
     S: StreamLike<G, Vec<(K, V)>>,
 {
 
-    fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
+    fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         self,
         fold: F,
         emit: E,

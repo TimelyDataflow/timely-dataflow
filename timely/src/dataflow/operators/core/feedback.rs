@@ -1,6 +1,6 @@
 //! Create cycles in a timely dataflow graph.
 
-use crate::{Container, Data};
+use crate::Container;
 use crate::container::CapacityContainerBuilder;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pushers::PushOwned;
@@ -85,7 +85,7 @@ impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> 
 }
 
 /// Connect a `Stream` to the input of a loop variable.
-pub trait ConnectLoop<G: Scope, C: Container + Data> {
+pub trait ConnectLoop<G: Scope, C: Container> {
     /// Connect a `Stream` to be the input of a loop variable.
     ///
     /// # Examples
@@ -106,7 +106,7 @@ pub trait ConnectLoop<G: Scope, C: Container + Data> {
     fn connect_loop(self, handle: Handle<G, C>);
 }
 
-impl<G: Scope, C: Container + Data, S: StreamLike<G, C>> ConnectLoop<G, C> for S {
+impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> ConnectLoop<G, C> for S {
     fn connect_loop(self, handle: Handle<G, C>) {
 
         let mut builder = handle.builder;

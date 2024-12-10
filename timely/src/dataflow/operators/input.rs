@@ -1,6 +1,5 @@
 //! Create new `Streams` connected to external inputs.
 
-use crate::Data;
 use crate::container::CapacityContainerBuilder;
 use crate::dataflow::{ScopeParent, Scope, OwnedStream};
 use crate::dataflow::operators::core::{Input as InputCore};
@@ -47,7 +46,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, OwnedStream<Self, Vec<D>>);
+    fn new_input<D: Clone + 'static>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, OwnedStream<Self, Vec<D>>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -79,16 +78,16 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> OwnedStream<Self, Vec<D>>;
+    fn input_from<D: Clone + 'static>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> OwnedStream<Self, Vec<D>>;
 }
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<D: Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, OwnedStream<G, Vec<D>>) {
+    fn new_input<D: Clone + 'static>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, OwnedStream<G, Vec<D>>) {
         InputCore::new_input(self)
     }
 
-    fn input_from<D: Data>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> OwnedStream<G, Vec<D>> {
+    fn input_from<D: Clone + 'static>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> OwnedStream<G, Vec<D>> {
         InputCore::input_from(self, handle)
     }
 }

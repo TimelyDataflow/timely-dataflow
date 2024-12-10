@@ -1,7 +1,7 @@
 //! Conversion to the `StreamCore` type from iterators.
 
 use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, PushInto};
-use crate::{Container, Data};
+use crate::Container;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::{Scope, OwnedStream};
 
@@ -81,7 +81,7 @@ pub trait ToStream<C: Container> {
     fn to_stream<S: Scope>(self, scope: &mut S) -> OwnedStream<S, C>;
 }
 
-impl<C: SizableContainer + Data, I: IntoIterator+'static> ToStream<C> for I where C: PushInto<I::Item> {
+impl<C: SizableContainer + 'static, I: IntoIterator+'static> ToStream<C> for I where C: PushInto<I::Item> {
     fn to_stream<S: Scope>(self, scope: &mut S) -> OwnedStream<S, C> {
         ToStreamBuilder::<CapacityContainerBuilder<C>>::to_stream_with_builder(self, scope)
     }

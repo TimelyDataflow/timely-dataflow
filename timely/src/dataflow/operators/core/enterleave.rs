@@ -25,7 +25,7 @@ use crate::logging::{TimelyLogger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
-use crate::{Container, Data};
+use crate::Container;
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, PushOwned};
 use crate::dataflow::channels::Message;
@@ -53,7 +53,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     fn enter<'a>(self, _: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C>;
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container, S: StreamLike<G, C>> Enter<G, T, C> for S {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container + 'static, S: StreamLike<G, C>> Enter<G, T, C> for S {
     fn enter<'a>(self, scope: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
@@ -130,14 +130,14 @@ impl<'a, G: Scope, C: Container + 'static, T: Timestamp+Refines<G::Timestamp>, S
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container + Data> {
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> {
     targets: Counter<TInner, TContainer, PushOwned<TInner, TContainer>>,
     phantom: PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container + Data> Push<Message<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> Push<Message<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
     fn push(&mut self, element: &mut Option<Message<TOuter, TContainer>>) {
         if let Some(outer_message) = element {
             let data = ::std::mem::take(&mut outer_message.data);

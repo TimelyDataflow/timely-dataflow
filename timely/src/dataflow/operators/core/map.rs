@@ -1,7 +1,6 @@
 //! Extension methods for `StreamCore` based on record-by-record transformation.
 
 use crate::container::{Container, SizableContainer, PushInto};
-use crate::Data;
 use crate::dataflow::{OwnedStream, Scope, StreamLike};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
@@ -24,7 +23,7 @@ pub trait Map<G: Scope, C: Container> : Sized {
     /// ```
     fn map<C2, D2, L>(self, mut logic: L) -> OwnedStream<G, C2>
     where
-        C2: SizableContainer + PushInto<D2> + Data,
+        C2: SizableContainer + PushInto<D2> + 'static,
         L: FnMut(C::Item<'_>)->D2 + 'static,
     {
         self.flat_map(move |x| std::iter::once(logic(x)))
@@ -46,19 +45,19 @@ pub trait Map<G: Scope, C: Container> : Sized {
     fn flat_map<C2, I, L>(self, logic: L) -> OwnedStream<G, C2>
     where
         I: IntoIterator,
-        C2: SizableContainer + PushInto<I::Item> + Data,
+        C2: SizableContainer + PushInto<I::Item> + 'static,
         L: FnMut(C::Item<'_>)->I + 'static,
     ;
 }
 
-impl<G: Scope, C: Container + Data, S: StreamLike<G, C>> Map<G, C> for S {
+impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> Map<G, C> for S {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
     fn flat_map<C2, I, L>(self, mut logic: L) -> OwnedStream<G, C2>
     where
         I: IntoIterator,
-        C2: SizableContainer + PushInto<I::Item> + Data,
+        C2: SizableContainer + PushInto<I::Item> + 'static,
         L: FnMut(C::Item<'_>)->I + 'static,
     {
         self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {

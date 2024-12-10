@@ -3,10 +3,9 @@
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, OwnedStream, StreamLike};
-use crate::Data;
 
 /// Partition a stream of records into multiple streams.
-pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2)> {
+pub trait Partition<G: Scope, D: 'static, D2: 'static, F: Fn(D) -> (u64, D2)> {
     /// Produces `parts` output streams, containing records produced and assigned by `route`.
     ///
     /// # Examples
@@ -28,8 +27,8 @@ pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2)> {
 impl<G, D, D2, F, S> Partition<G, D, D2, F> for S
 where
     G: Scope,
-    D: Data,
-    D2: Data,
+    D: 'static,
+    D2: 'static,
     F: Fn(D) -> (u64, D2) + 'static,
     S: StreamLike<G, Vec<D>>,
 {

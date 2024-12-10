@@ -1,11 +1,10 @@
 //! Extension methods for `Stream` containing `Result`s.
 
-use crate::Data;
 use crate::dataflow::operators::Map;
 use crate::dataflow::{Scope, StreamLike, OwnedStream};
 
 /// Extension trait for `Stream`.
-pub trait ResultStream<G: Scope, T: Data, E: Data> {
+pub trait ResultStream<G: Scope, T: 'static, E: 'static> {
     /// Returns a new instance of `self` containing only `ok` records.
     ///
     /// # Examples
@@ -46,7 +45,7 @@ pub trait ResultStream<G: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(self, logic: L) -> OwnedStream<G, Vec<Result<T2, E>>>;
+    fn map_ok<T2: 'static, L: FnMut(T) -> T2 + 'static>(self, logic: L) -> OwnedStream<G, Vec<Result<T2, E>>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Err` records.
     ///
@@ -60,7 +59,7 @@ pub trait ResultStream<G: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(self, logic: L) -> OwnedStream<G, Vec<Result<T, E2>>>;
+    fn map_err<E2: 'static, L: FnMut(E) -> E2 + 'static>(self, logic: L) -> OwnedStream<G, Vec<Result<T, E2>>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records, passes through `Err`
     /// records.
@@ -75,7 +74,7 @@ pub trait ResultStream<G: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn and_then<T2: Data, L: FnMut(T) -> Result<T2, E> + 'static>(
+    fn and_then<T2: 'static, L: FnMut(T) -> Result<T2, E> + 'static>(
         self,
         logic: L,
     ) -> OwnedStream<G, Vec<Result<T2, E>>>;
@@ -95,7 +94,7 @@ pub trait ResultStream<G: Scope, T: Data, E: Data> {
     fn unwrap_or_else<L: FnMut(E) -> T + 'static>(self, logic: L) -> OwnedStream<G, Vec<T>>;
 }
 
-impl<G: Scope, T: Data, E: Data, S: StreamLike<G, Vec<Result<T, E>>>> ResultStream<G, T, E> for S {
+impl<G: Scope, T: 'static, E: 'static, S: StreamLike<G, Vec<Result<T, E>>>> ResultStream<G, T, E> for S {
     fn ok(self) -> OwnedStream<G, Vec<T>> {
         self.flat_map(Result::ok)
     }
@@ -104,15 +103,15 @@ impl<G: Scope, T: Data, E: Data, S: StreamLike<G, Vec<Result<T, E>>>> ResultStre
         self.flat_map(Result::err)
     }
 
-    fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(self, mut logic: L) -> OwnedStream<G, Vec<Result<T2, E>>> {
+    fn map_ok<T2: 'static, L: FnMut(T) -> T2 + 'static>(self, mut logic: L) -> OwnedStream<G, Vec<Result<T2, E>>> {
         self.map(move |r| r.map(&mut logic))
     }
 
-    fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(self, mut logic: L) -> OwnedStream<G, Vec<Result<T, E2>>> {
+    fn map_err<E2: 'static, L: FnMut(E) -> E2 + 'static>(self, mut logic: L) -> OwnedStream<G, Vec<Result<T, E2>>> {
         self.map(move |r| r.map_err(&mut logic))
     }
 
-    fn and_then<T2: Data, L: FnMut(T) -> Result<T2, E> + 'static>(self, mut logic: L) -> OwnedStream<G, Vec<Result<T2, E>>> {
+    fn and_then<T2: 'static, L: FnMut(T) -> Result<T2, E> + 'static>(self, mut logic: L) -> OwnedStream<G, Vec<Result<T2, E>>> {
         self.map(move |r| r.and_then(&mut logic))
     }
 

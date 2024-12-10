@@ -3,7 +3,7 @@
 use crate::communication::Push;
 use crate::container::{ContainerBuilder, SizableContainer, PushInto};
 use crate::dataflow::channels::Message;
-use crate::{Container, Data};
+use crate::Container;
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<T: Eq+Data, CB, P, H> Push<Message<T, CB::Container>> for Exchange<T, CB, P, H>
+impl<T: Eq+Clone, CB, P, H> Push<Message<T, CB::Container>> for Exchange<T, CB, P, H>
 where
     CB: ContainerBuilder,
     CB::Container: SizableContainer,

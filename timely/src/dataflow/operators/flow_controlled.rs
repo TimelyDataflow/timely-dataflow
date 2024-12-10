@@ -1,6 +1,5 @@
 //! Methods to construct flow-controlled sources.
 
-use crate::Data;
 use crate::order::{PartialOrder, TotalOrder};
 use crate::progress::timestamp::Timestamp;
 use crate::dataflow::operators::generic::operator::source;
@@ -8,7 +7,7 @@ use crate::dataflow::operators::probe::Handle;
 use crate::dataflow::{OwnedStream, Scope};
 
 /// Output of the input reading function for iterator_source.
-pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: IntoIterator<Item=(T, DI)>> {
+pub struct IteratorSourceInput<T: Clone, D: 'static, DI: IntoIterator<Item=D>, I: IntoIterator<Item=(T, DI)>> {
     /// Lower bound on timestamps that can be emitted by this input in the future.
     pub lower_bound: T,
     /// Any `T: IntoIterator` of new input data in the form (time, data): time must be
@@ -73,7 +72,7 @@ pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: I
 /// ```
 pub fn iterator_source<
     G: Scope,
-    D: Data,
+    D: 'static,
     DI: IntoIterator<Item=D>,
     I: IntoIterator<Item=(G::Timestamp, DI)>,
     F: FnMut(&G::Timestamp)->Option<IteratorSourceInput<G::Timestamp, D, DI, I>>+'static>(
