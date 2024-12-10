@@ -81,7 +81,7 @@ impl<S: Scope, C: Container + 'static> OwnedStream<S, C> {
     }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
-    pub fn container<D: Container>(self) -> <Self as AsStream<S, D>>::Stream where Self: AsStream<S, D> { self.as_stream() }
+    pub fn container<D: Container>(self) -> OwnedStream<S, C> where Self: AsStream<S, D> { self.as_stream() }
 }
 
 /// A stream batching data in vectors.
@@ -136,24 +136,20 @@ impl<S: Scope, C: Container> StreamCore<S, C> {
     pub fn scope(&self) -> S { self.scope.clone() }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
-    pub fn container<D: Container>(self) -> <Self as AsStream<S, D>>::Stream where Self: AsStream<S, D> { self.as_stream() }
+    pub fn container<D: Container>(self) -> StreamCore<S, C> where Self: AsStream<S, D> { self.as_stream() }
 }
 
 /// A type that can be translated to a [StreamCore].
 pub trait AsStream<S: Scope, C> {
-    /// The type of the stream.
-    type Stream;
     /// Translate `self` to a stream.
-    fn as_stream(self) -> Self::Stream;
+    fn as_stream(self) -> Self;
 }
 
 impl<S: Scope, C> AsStream<S, C> for StreamCore<S, C> {
-    type Stream = StreamCore<S, C>;
     fn as_stream(self) -> Self { self }
 }
 
 impl<G: Scope, C> AsStream<G, C> for OwnedStream<G, C> {
-    type Stream = OwnedStream<G, C>;
     fn as_stream(self) -> Self { self }
 }
 
