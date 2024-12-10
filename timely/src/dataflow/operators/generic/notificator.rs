@@ -195,7 +195,7 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///     let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
 ///         let (in1_handle, in1) = scope.new_input();
 ///         let (in2_handle, in2) = scope.new_input();
-///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
+///         in1.binary_frontier(in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
 ///             let mut notificator = FrontierNotificator::default();
 ///             let mut stash = HashMap::new();
 ///             move |input1, input2, output| {

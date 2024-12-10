@@ -2,8 +2,8 @@
 use std::hash::Hash;
 use std::collections::HashMap;
 
-use crate::{Data, ExchangeData};
-use crate::dataflow::{Stream, Scope};
+use crate::ExchangeData;
+use crate::dataflow::{Scope, StreamLike, OwnedStream};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
 
@@ -60,20 +60,26 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     ///         .inspect(|x| assert!(*x == (0, 5) || *x == (1, 5)));
     /// });
     /// ```
-    fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
-        &self,
+    fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
+        self,
         fold: F,
         emit: E,
-        hash: H) -> Stream<S, R> where S::Timestamp: Eq;
+        hash: H) -> OwnedStream<S, Vec<R>> where S::Timestamp: Eq;
 }
 
-impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
+impl<G, K, V, S> Aggregate<G, K, V> for S
+where
+    G: Scope,
+    K: ExchangeData + Hash + Eq + Clone,
+    V: ExchangeData,
+    S: StreamLike<G, Vec<(K, V)>>,
+{
 
-    fn aggregate<R: Data, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
-        &self,
+    fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
+        self,
         fold: F,
         emit: E,
-        hash: H) -> Stream<S, R> where S::Timestamp: Eq {
+        hash: H) -> OwnedStream<G, Vec<R>> where G::Timestamp: Eq {
 
         let mut aggregates = HashMap::new();
         self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {

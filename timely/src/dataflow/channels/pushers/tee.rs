@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::dataflow::channels::Message;
 
 use crate::communication::Push;
-use crate::{Container, Data};
+use crate::Container;
 
 type PushList<T, C> = Rc<RefCell<Vec<Box<dyn Push<Message<T, C>>>>>>;
 
@@ -17,7 +17,7 @@ pub struct Tee<T, C> {
     shared: PushList<T, C>,
 }
 
-impl<T: Data, C: Container + Data> Push<Message<T, C>> for Tee<T, C> {
+impl<T: Clone + 'static, C: Container + Clone + 'static> Push<Message<T, C>> for Tee<T, C> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         let mut pushers = self.shared.borrow_mut();

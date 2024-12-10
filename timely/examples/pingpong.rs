@@ -14,7 +14,7 @@ fn main() {
             (0 .. elements)
                   .filter(move |&x| (x as usize) % peers == index)
                   .to_stream(scope)
-                  .concat(&cycle)
+                  .concat(cycle)
                   .exchange(|&x| x)
                   .map_in_place(|x| *x += 1)
                   .branch_when(move |t| t < &iterations).1
