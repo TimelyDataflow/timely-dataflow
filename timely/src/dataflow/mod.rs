@@ -13,7 +13,7 @@
 //! });
 //! ```
 
-pub use self::stream::{StreamCore, Stream, StreamLike, OwnedStream};
+pub use self::stream::{StreamTee, Stream, StreamCore};
 pub use self::scopes::{Scope, ScopeParent};
 
 pub use self::operators::core::input::Handle as InputHandleCore;

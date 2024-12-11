@@ -31,7 +31,7 @@ use crate::dataflow::channels::pushers::{Counter, PushOwned};
 use crate::dataflow::channels::Message;
 
 use crate::worker::AsWorker;
-use crate::dataflow::{Scope, OwnedStream, StreamLike};
+use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::scopes::Child;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
@@ -50,11 +50,11 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(self, _: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C>;
+    fn enter<'a>(self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container + 'static, S: StreamLike<G, C>> Enter<G, T, C> for S {
-    fn enter<'a>(self, scope: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container+'static> Enter<G, T, C> for StreamCore<G, C> {
+    fn enter<'a>(self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -76,7 +76,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container + 'static, S: St
             self.connect_to(input, ingress, channel_id);
         }
 
-        OwnedStream::new(
+        StreamCore::new(
             Source::new(0, input.port),
             registrar,
             scope.clone(),
@@ -85,7 +85,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container + 'static, S: St
 }
 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
-pub trait Leave<G: Scope, T, C: Container> {
+pub trait Leave<G: Scope, C: Container> {
     /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// # Examples
@@ -100,11 +100,11 @@ pub trait Leave<G: Scope, T, C: Container> {
     ///     });
     /// });
     /// ```
-    fn leave(self) -> OwnedStream<G, C>;
+    fn leave(self) -> StreamCore<G, C>;
 }
 
-impl<'a, G: Scope, C: Container + 'static, T: Timestamp+Refines<G::Timestamp>, S: StreamLike<Child<'a, G, T>, C>> Leave<G, T, C> for S {
-    fn leave(self) -> OwnedStream<G, C> {
+impl<G: Scope, C: Container + 'static, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
+    fn leave(self) -> StreamCore<G, C> {
 
         let scope = self.scope();
 
@@ -121,7 +121,7 @@ impl<'a, G: Scope, C: Container + 'static, T: Timestamp+Refines<G::Timestamp>, S
             self.connect_to(target, egress, channel_id);
         }
 
-        OwnedStream::new(
+        StreamCore::new(
             output,
             registrar,
             scope.parent,

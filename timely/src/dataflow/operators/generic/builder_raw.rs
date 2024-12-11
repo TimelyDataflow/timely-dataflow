@@ -14,7 +14,7 @@ use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
 use crate::Container;
-use crate::dataflow::{OwnedStream, StreamLike, Scope};
+use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::channels::pushers::PushOwned;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
@@ -104,7 +104,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P, S: StreamLike<G, C>>(&mut self, stream: S, pact: P) -> P::Puller
+    pub fn new_input<C: Container+'static, P>(&mut self, stream: StreamCore<G, C>, pact: P) -> P::Puller
         where
             P: ParallelizationContract<G::Timestamp, C> {
         let connection = vec![Antichain::from_elem(Default::default()); self.shape.outputs];
@@ -112,7 +112,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<C: Container, P, S: StreamLike<G, C>>(&mut self, stream: S, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller
+    pub fn new_input_connection<C: Container+'static, P>(&mut self, stream: StreamCore<G, C>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller
     where
         P: ParallelizationContract<G::Timestamp, C> {
 
@@ -130,18 +130,18 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: Container + 'static>(&mut self) -> (PushOwned<G::Timestamp, C>, OwnedStream<G, C>) {
+    pub fn new_output<C: Container + 'static>(&mut self) -> (PushOwned<G::Timestamp, C>, StreamCore<G, C>) {
 
         let connection = vec![Antichain::from_elem(Default::default()); self.shape.inputs];
         self.new_output_connection(connection)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output_connection<C: Container + 'static>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (PushOwned<G::Timestamp, C>, OwnedStream<G, C>) {
+    pub fn new_output_connection<C: Container + 'static>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (PushOwned<G::Timestamp, C>, StreamCore<G, C>) {
 
         let (target, registrar) = PushOwned::new();
         let source = Source::new(self.index, self.shape.outputs);
-        let stream = OwnedStream::new(source, registrar, self.scope.clone());
+        let stream = StreamCore::new(source, registrar, self.scope.clone());
 
         self.shape.outputs += 1;
         assert_eq!(self.shape.inputs, connection.len());

@@ -169,7 +169,8 @@ fn main() {
         let streams = (0..10).to_stream(scope)
                              .partition(3, |x| (x % 3, x));
 
-        scope.concatenate(streams)
+        scope.clone()
+             .concatenate(streams)
              .inspect(|x| println!("seen: {:?}", x));
     });
 }

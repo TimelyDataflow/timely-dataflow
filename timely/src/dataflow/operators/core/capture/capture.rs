@@ -5,7 +5,7 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
-use crate::dataflow::{Scope, StreamLike};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
@@ -17,7 +17,7 @@ use crate::progress::Timestamp;
 use super::{Event, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<G: Scope, C: Container + 'static> : Sized {
+pub trait Capture<T: Timestamp, C: Container + 'static> : Sized {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -103,18 +103,18 @@ pub trait Capture<G: Scope, C: Container + 'static> : Sized {
     ///
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// ```
-    fn capture_into<P: EventPusher<G::Timestamp, C>+'static>(self, pusher: P);
+    fn capture_into<P: EventPusher<T, C>+'static>(self, pusher: P);
 
     /// Captures a stream using Rust's MPSC channels.
-    fn capture(self) -> ::std::sync::mpsc::Receiver<Event<G::Timestamp, C>> {
+    fn capture(self) -> ::std::sync::mpsc::Receiver<Event<T, C>> {
         let (send, recv) = ::std::sync::mpsc::channel();
         self.capture_into(send);
         recv
     }
 }
 
-impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> Capture<G, C> for S {
-    fn capture_into<P: EventPusher<G::Timestamp, C>+'static>(self, mut event_pusher: P) {
+impl<S: Scope, C: Container + 'static> Capture<S::Timestamp, C> for StreamCore<S, C> {
+    fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));

@@ -17,11 +17,11 @@ use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, Autoflush
 
 use crate::dataflow::operators::{ActivateCapability, Capability};
 
-use crate::dataflow::{OwnedStream, Scope};
+use crate::dataflow::{Scope, StreamCore};
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
-    /// Create a new capability-based stream and [UnorderedHandle] through which to supply input. This
+    /// Create a new capability-based [StreamCore] and [UnorderedHandle] through which to supply input. This
     /// input supports multiple open epochs (timestamps) at the same time.
     ///
     /// The `new_unordered_input_core` method returns `((HandleCore, Capability), StreamCore)` where the `StreamCore` can be used
@@ -76,11 +76,11 @@ pub trait UnorderedInput<G: Scope> {
     ///     assert_eq!(extract[i], (i, vec![i]));
     /// }
     /// ```
-    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), OwnedStream<G, CB::Container>);
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), StreamCore<G, CB::Container>);
 }
 
 impl<G: Scope> UnorderedInput<G> for G {
-    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), OwnedStream<G, CB::Container>) {
+    fn new_unordered_input<CB: ContainerBuilder>(&mut self) -> ((UnorderedHandle<G::Timestamp, CB>, ActivateCapability<G::Timestamp>), StreamCore<G, CB::Container>) {
 
         let (output, registrar) = PushOwned::<G::Timestamp, CB::Container>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
@@ -106,7 +106,7 @@ impl<G: Scope> UnorderedInput<G> for G {
             peers,
         }), index);
 
-        ((helper, cap), OwnedStream::new(Source::new(index, 0), registrar, self.clone()))
+        ((helper, cap), StreamCore::new(Source::new(index, 0), registrar, self.clone()))
     }
 }
 

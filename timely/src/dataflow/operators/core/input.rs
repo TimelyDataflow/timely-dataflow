@@ -13,7 +13,7 @@ use crate::progress::Source;
 
 use crate::Container;
 use crate::communication::Push;
-use crate::dataflow::{OwnedStream, Scope, ScopeParent};
+use crate::dataflow::{Scope, ScopeParent, StreamCore};
 use crate::dataflow::channels::pushers::{Counter, PushOwned};
 use crate::dataflow::channels::Message;
 
@@ -60,7 +60,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<C: Container + Clone + 'static>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, OwnedStream<Self, C>);
+    fn new_input<C: Container + Clone + 'static>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<Self, C>);
 
     /// Create a new [StreamCore] and [Handle] through which to supply input.
     ///
@@ -97,7 +97,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_with_builder<CB: ContainerBuilder>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CB>, OwnedStream<Self, CB::Container>)
+    fn new_input_with_builder<CB: ContainerBuilder>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CB>, StreamCore<Self, CB::Container>)
     where
         CB::Container: Clone,
     ;
@@ -133,7 +133,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<CB: ContainerBuilder>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, CB>) -> OwnedStream<Self, CB::Container>
+    fn input_from<CB: ContainerBuilder>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, CB>) -> StreamCore<Self, CB::Container>
     where
         CB::Container: Clone,
     ;
@@ -141,13 +141,13 @@ pub trait Input : Scope {
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<C: Container + Clone + 'static>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, OwnedStream<G, C>) {
+    fn new_input<C: Container + Clone + 'static>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<G, C>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn new_input_with_builder<CB: ContainerBuilder>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CB>, OwnedStream<G, CB::Container>)
+    fn new_input_with_builder<CB: ContainerBuilder>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CB>, StreamCore<G, CB::Container>)
     where
         CB::Container: Clone,
     {
@@ -156,7 +156,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         (handle, stream)
     }
 
-    fn input_from<CB: ContainerBuilder>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, CB>) -> OwnedStream<G, CB::Container>
+    fn input_from<CB: ContainerBuilder>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, CB>) -> StreamCore<G, CB::Container>
     where
         CB::Container: Clone,
     {
@@ -184,7 +184,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
             copies,
         }), index);
 
-        OwnedStream::new(Source::new(index, 0), registrar, self.clone())
+        StreamCore::new(Source::new(index, 0), registrar, self.clone())
     }
 }
 
@@ -350,7 +350,7 @@ where
     ///     }
     /// });
     /// ```
-    pub fn to_stream<G>(&mut self, scope: &mut G) -> OwnedStream<G, CB::Container>
+    pub fn to_stream<G>(&mut self, scope: &mut G) -> StreamCore<G, CB::Container>
     where
         T: TotalOrder,
         G: Scope<Timestamp=T>,

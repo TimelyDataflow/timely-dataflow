@@ -19,7 +19,9 @@ impl<T, D> PushOwned<T, D> {
     }
 
     /// Set the downstream pusher.
-    pub fn set<P: Push<Message<T, D>> + 'static>(self, pusher: P) {
+    ///
+    /// Consumes `Self` as only a single pusher can be set.
+    pub fn set_pusher<P: Push<Message<T, D>> + 'static>(self, pusher: P) {
         *self.0.borrow_mut() = Some(Box::new(pusher));
     }
 }

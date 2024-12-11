@@ -1,11 +1,11 @@
 //! Broadcast records to all workers.
 
 use crate::ExchangeData;
-use crate::dataflow::{OwnedStream, StreamLike, Scope};
+use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::{Map, Exchange};
 
 /// Broadcast records to all workers.
-pub trait Broadcast<G: Scope, D: ExchangeData> {
+pub trait Broadcast<D: ExchangeData> {
     /// Broadcast records to all workers.
     ///
     /// # Examples
@@ -18,11 +18,11 @@ pub trait Broadcast<G: Scope, D: ExchangeData> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn broadcast(self) -> OwnedStream<G, Vec<D>>;
+    fn broadcast(self) -> Self;
 }
 
-impl<G: Scope, D: ExchangeData + Clone, S: StreamLike<G, Vec<D>>> Broadcast<G, D> for S {
-    fn broadcast(self) -> OwnedStream<G, Vec<D>> {
+impl<G: Scope, D: ExchangeData + Clone> Broadcast<D> for Stream<G, D> {
+    fn broadcast(self) -> Stream<G, D> {
 
         // NOTE: Simplified implementation due to underlying motion
         // in timely dataflow internals. Optimize once they have

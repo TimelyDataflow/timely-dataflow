@@ -3,7 +3,7 @@
 use crate::container::{Container, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, OwnedStream, StreamLike};
+use crate::dataflow::{Scope, StreamCore};
 
 /// Extension trait for `Stream`.
 pub trait OkErr<S: Scope, C: Container> {
@@ -27,7 +27,10 @@ pub trait OkErr<S: Scope, C: Container> {
     ///     odd.container::<Vec<_>>().inspect(|x| println!("odd: {:?}", x));
     /// });
     /// ```
-    fn ok_err<C1, D1, C2, D2, L>(self, logic: L) -> (OwnedStream<S, C1>, OwnedStream<S, C2>)
+    fn ok_err<C1, D1, C2, D2, L>(
+        self,
+        logic: L,
+    ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
     where
         C1: SizableContainer + PushInto<D1> + 'static,
         C2: SizableContainer + PushInto<D2> + 'static,
@@ -35,8 +38,11 @@ pub trait OkErr<S: Scope, C: Container> {
     ;
 }
 
-impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> OkErr<G, C> for S {
-    fn ok_err<C1, D1, C2, D2, L>(self, mut logic: L) -> (OwnedStream<G, C1>, OwnedStream<G, C2>)
+impl<S: Scope, C: Container + 'static> OkErr<S, C> for StreamCore<S, C> {
+    fn ok_err<C1, D1, C2, D2, L>(
+        self,
+        mut logic: L,
+    ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
     where
         C1: SizableContainer + PushInto<D1> + 'static,
         C2: SizableContainer + PushInto<D2> + 'static,

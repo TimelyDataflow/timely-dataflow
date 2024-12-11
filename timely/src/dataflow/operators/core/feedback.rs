@@ -7,7 +7,7 @@ use crate::dataflow::channels::pushers::PushOwned;
 use crate::dataflow::operators::generic::OutputWrapper;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::scopes::child::Iterative;
-use crate::dataflow::{Scope, OwnedStream, StreamLike};
+use crate::dataflow::{StreamCore, Scope};
 use crate::order::Product;
 use crate::progress::frontier::Antichain;
 use crate::progress::{Timestamp, PathSummary};
@@ -36,7 +36,7 @@ pub trait Feedback<G: Scope> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn feedback<C: Container + 'static>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, OwnedStream<G, C>);
+    fn feedback<C: Container + 'static>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, StreamCore<G, C>);
 }
 
 /// Creates a `StreamCore` and a `Handle` to later bind the source of that `StreamCore`.
@@ -64,12 +64,12 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<C: Container + 'static>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, OwnedStream<Iterative<'a, G, T>, C>);
+    fn loop_variable<C: Container + 'static>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>);
 }
 
 impl<G: Scope> Feedback<G> for G {
 
-    fn feedback<C: Container + 'static>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, OwnedStream<G, C>) {
+    fn feedback<C: Container + 'static>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, StreamCore<G, C>) {
 
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
         let (output, stream) = builder.new_output();
@@ -79,7 +79,7 @@ impl<G: Scope> Feedback<G> for G {
 }
 
 impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
-    fn loop_variable<C: Container + 'static>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, OwnedStream<Iterative<'a, G, T>, C>) {
+    fn loop_variable<C: Container + 'static>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>) {
         self.feedback(Product::new(Default::default(), summary))
     }
 }
@@ -106,7 +106,7 @@ pub trait ConnectLoop<G: Scope, C: Container> {
     fn connect_loop(self, handle: Handle<G, C>);
 }
 
-impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> ConnectLoop<G, C> for S {
+impl<G: Scope, C: Container + 'static> ConnectLoop<G, C> for StreamCore<G, C> {
     fn connect_loop(self, handle: Handle<G, C>) {
 
         let mut builder = handle.builder;

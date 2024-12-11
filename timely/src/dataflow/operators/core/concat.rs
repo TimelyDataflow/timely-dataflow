@@ -3,10 +3,10 @@
 
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{OwnedStream, StreamLike, Scope};
+use crate::dataflow::{StreamCore, Scope};
 
 /// Merge the contents of two streams.
-pub trait Concat<G: Scope, C: Container, S: StreamLike<G, C>> {
+pub trait Concat<G: Scope, C: Container> {
     /// Merge the contents of two streams.
     ///
     /// # Examples
@@ -16,21 +16,21 @@ pub trait Concat<G: Scope, C: Container, S: StreamLike<G, C>> {
     /// timely::example(|scope| {
     ///
     ///     let stream = (0..10).to_stream(scope).tee();
-    ///     stream.concat(&stream)
+    ///     stream.owned().concat(stream.owned())
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concat(self, other: S) -> OwnedStream<G, C>;
+    fn concat(self, other: StreamCore<G, C>) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> Concat<G, C, S> for S {
-    fn concat(self, other: S) -> OwnedStream<G, C> {
+impl<G: Scope, C: Container + 'static> Concat<G, C> for StreamCore<G, C> {
+    fn concat(self, other: StreamCore<G, C>) -> StreamCore<G, C> {
         self.scope().concatenate([self, other])
     }
 }
 
 /// Merge the contents of multiple streams.
-pub trait Concatenate<G: Scope, C: Container, S: StreamLike<G, C>> {
+pub trait Concatenate<G: Scope, C: Container> {
     /// Merge the contents of multiple streams.
     ///
     /// # Examples
@@ -43,28 +43,29 @@ pub trait Concatenate<G: Scope, C: Container, S: StreamLike<G, C>> {
     ///                        (0..10).to_stream(scope),
     ///                        (0..10).to_stream(scope)];
     ///
-    ///     scope.concatenate(streams)
+    ///     scope.clone()
+    ///          .concatenate(streams)
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate<I>(self, sources: I) -> OwnedStream<G, C>
+    fn concatenate<I>(self, sources: I) -> StreamCore<G, C>
     where
-        I: IntoIterator<Item=S>;
+        I: IntoIterator<Item=StreamCore<G, C>>;
 }
 
-impl<G: Scope, C: Container + 'static> Concatenate<G, C, OwnedStream<G, C>> for OwnedStream<G, C> {
-    fn concatenate<I>(self, sources: I) -> OwnedStream<G, C>
+impl<G: Scope, C: Container + 'static> Concatenate<G, C> for StreamCore<G, C> {
+    fn concatenate<I>(self, sources: I) -> StreamCore<G, C>
     where
-        I: IntoIterator<Item=OwnedStream<G, C>>
+        I: IntoIterator<Item=StreamCore<G, C>>
     {
         self.scope().concatenate(Some(self).into_iter().chain(sources))
     }
 }
 
-impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> Concatenate<G, C, S> for &G {
-    fn concatenate<I>(self, sources: I) -> OwnedStream<G, C>
+impl<G: Scope, C: Container + 'static> Concatenate<G, C> for G {
+    fn concatenate<I>(self, sources: I) -> StreamCore<G, C>
     where
-        I: IntoIterator<Item=S>
+        I: IntoIterator<Item=StreamCore<G, C>>
     {
 
         // create an operator builder.

@@ -2,12 +2,12 @@
 
 use crate::Container;
 use crate::order::PartialOrder;
-use crate::dataflow::{Scope, OwnedStream, StreamLike};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for reclocking a stream.
-pub trait Reclock<G: Scope, C: Container> {
+pub trait Reclock<S: Scope> {
     /// Delays records until an input is observed on the `clock` input.
     ///
     /// The source stream is buffered until a record is seen on the clock input,
@@ -45,11 +45,11 @@ pub trait Reclock<G: Scope, C: Container> {
     /// assert_eq!(extracted[1], (5, vec![4,5]));
     /// assert_eq!(extracted[2], (8, vec![6,7,8]));
     /// ```
-    fn reclock<TC: Container + 'static, CS: StreamLike<G, TC>>(self, clock: CS) -> OwnedStream<G, C>;
+    fn reclock<TC: Container + 'static>(self, clock: StreamCore<S, TC>) -> Self;
 }
 
-impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> Reclock<G, C> for S {
-    fn reclock<TC: Container + 'static, CS: StreamLike<G, TC>>(self, clock: CS) -> OwnedStream<G, C> {
+impl<S: Scope, C: Container + 'static> Reclock<S> for StreamCore<S, C> {
+    fn reclock<TC: Container + 'static>(self, clock: StreamCore<S, TC>) -> StreamCore<S, C> {
 
         let mut stash = vec![];
 

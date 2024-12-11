@@ -2,7 +2,7 @@
 
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Scope, OwnedStream, StreamLike};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
@@ -18,7 +18,7 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn inspect<F>(self, mut func: F) -> OwnedStream<G, C>
+    fn inspect<F>(self, mut func: F) -> Self
     where
         F: for<'a> FnMut(C::ItemRef<'a>) + 'static,
     {
@@ -38,7 +38,7 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///            .inspect_time(|t, x| println!("seen at: {:?}\t{:?}", t, x));
     /// });
     /// ```
-    fn inspect_time<F>(self, mut func: F) -> OwnedStream<G, C>
+    fn inspect_time<F>(self, mut func: F) -> Self
     where
         F: for<'a> FnMut(&G::Timestamp, C::ItemRef<'a>) + 'static,
     {
@@ -60,7 +60,7 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch(self, mut func: impl FnMut(&G::Timestamp, &C)+'static) -> OwnedStream<G, C> {
+    fn inspect_batch(self, mut func: impl FnMut(&G::Timestamp, &C)+'static) -> Self {
         self.inspect_core(move |event| {
             if let Ok((time, data)) = event {
                 func(time, data);
@@ -87,11 +87,11 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     ///             });
     /// });
     /// ```
-    fn inspect_core<F>(self, func: F) -> OwnedStream<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
+    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> Inspect<G, C> for S {
-    fn inspect_core<F>(self, func: F) -> OwnedStream<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
+impl<G: Scope, C: Container + 'static> Inspect<G, C> for StreamCore<G, C> {
+    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
         self.inspect_container(func)
     }
 }
@@ -117,12 +117,12 @@ pub trait InspectCore<G: Scope, C: Container> {
     ///             });
     /// });
     /// ```
-    fn inspect_container<F>(self, func: F) -> OwnedStream<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
+    fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container + 'static, S: StreamLike<G, C>> InspectCore<G, C> for S {
+impl<G: Scope, C: Container + 'static> InspectCore<G, C> for StreamCore<G, C> {
 
-    fn inspect_container<F>(self, mut func: F) -> OwnedStream<G, C>
+    fn inspect_container<F>(self, mut func: F) -> Self
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static
     {
         use crate::progress::timestamp::Timestamp;

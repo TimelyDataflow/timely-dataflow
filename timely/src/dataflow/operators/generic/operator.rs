@@ -7,7 +7,7 @@ use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::operators::generic::handles::{InputHandleCore, FrontieredInputHandleCore, OutputHandleCore};
 use crate::dataflow::operators::capability::Capability;
 
-use crate::dataflow::{Scope, OwnedStream, StreamLike};
+use crate::dataflow::{Scope, StreamCore};
 
 use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
@@ -55,7 +55,7 @@ pub trait Operator<G: Scope, C1: Container> {
     ///     });
     /// }
     /// ```
-    fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+    fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
@@ -95,7 +95,7 @@ pub trait Operator<G: Scope, C1: Container> {
                      &mut OutputHandleCore<G::Timestamp, CB, PushOwned<G::Timestamp, CB::Container>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, C1>>
-             (self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, logic: L) -> OwnedStream<G, CB::Container>;
+             (self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, logic: L) -> StreamCore<G, CB::Container>;
 
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
@@ -123,7 +123,7 @@ pub trait Operator<G: Scope, C1: Container> {
     ///         });
     /// });
     /// ```
-    fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+    fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
@@ -179,11 +179,10 @@ pub trait Operator<G: Scope, C1: Container> {
     ///    }
     /// }).unwrap();
     /// ```
-    fn binary_frontier<C2, CB, O, B, L, P1, P2>(self, other: O, pact1: P1, pact2: P2, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+    fn binary_frontier<C2, CB, B, L, P1, P2>(self, other: StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
         C2: Container + 'static,
         CB: ContainerBuilder,
-        O: StreamLike<G, C2>,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller>,
                  &mut FrontieredInputHandleCore<G::Timestamp, C2, P2::Puller>,
@@ -234,14 +233,13 @@ pub trait Operator<G: Scope, C1: Container> {
     /// ```
     fn binary_notify<C2: Container + 'static,
               CB: ContainerBuilder,
-              O: StreamLike<G, C2>,
               L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
                        &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
                        &mut OutputHandleCore<G::Timestamp, CB, PushOwned<G::Timestamp, CB::Container>>,
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, C1>,
               P2: ParallelizationContract<G::Timestamp, C2>>
-            (self, other: O, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, logic: L) -> OwnedStream<G, CB::Container>;
+            (self, other: StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, logic: L) -> StreamCore<G, CB::Container>;
 
     /// Creates a new dataflow operator that partitions its input streams by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
@@ -273,11 +271,10 @@ pub trait Operator<G: Scope, C1: Container> {
     ///         }).inspect(|x| println!("{:?}", x));
     /// });
     /// ```
-    fn binary<C2, CB, O, B, L, P1, P2>(self, other: O, pact1: P1, pact2: P2, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+    fn binary<C2, CB, B, L, P1, P2>(self, other: StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
         C2: Container + 'static,
         CB: ContainerBuilder,
-        O: StreamLike<G, C2>,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
                  &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
@@ -314,9 +311,9 @@ pub trait Operator<G: Scope, C1: Container> {
         P: ParallelizationContract<G::Timestamp, C1>;
 }
 
-impl<G: Scope, C1: Container + 'static, S: StreamLike<G, C1>> Operator<G, C1> for S {
+impl<G: Scope, C1: Container + 'static> Operator<G, C1> for StreamCore<G, C1> {
 
-    fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+    fn unary_frontier<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
@@ -349,7 +346,7 @@ impl<G: Scope, C1: Container + 'static, S: StreamLike<G, C1>> Operator<G, C1> fo
                      &mut OutputHandleCore<G::Timestamp, CB, PushOwned<G::Timestamp, CB::Container>>,
                      &mut Notificator<G::Timestamp>)+'static,
              P: ParallelizationContract<G::Timestamp, C1>>
-             (self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> OwnedStream<G, CB::Container> {
+             (self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> StreamCore<G, CB::Container> {
 
         let logging = self.scope().logging();
         self.unary_frontier(pact, name, move |capability, _info| {
@@ -366,7 +363,7 @@ impl<G: Scope, C1: Container + 'static, S: StreamLike<G, C1>> Operator<G, C1> fo
         })
     }
 
-    fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+    fn unary<CB, B, L, P>(self, pact: P, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
@@ -394,11 +391,10 @@ impl<G: Scope, C1: Container + 'static, S: StreamLike<G, C1>> Operator<G, C1> fo
         stream
     }
 
-    fn binary_frontier<C2, CB, O, B, L, P1, P2>(self, other: O, pact1: P1, pact2: P2, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+    fn binary_frontier<C2, CB, B, L, P1, P2>(self, other: StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
         C2: Container + 'static,
         CB: ContainerBuilder,
-        O: StreamLike<G, C2>,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller>,
                  &mut FrontieredInputHandleCore<G::Timestamp, C2, P2::Puller>,
@@ -430,14 +426,13 @@ impl<G: Scope, C1: Container + 'static, S: StreamLike<G, C1>> Operator<G, C1> fo
 
     fn binary_notify<C2: Container + 'static,
               CB: ContainerBuilder,
-              O: StreamLike<G, C2>,
               L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
                        &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
                        &mut OutputHandleCore<G::Timestamp, CB, PushOwned<G::Timestamp, CB::Container>>,
                        &mut Notificator<G::Timestamp>)+'static,
               P1: ParallelizationContract<G::Timestamp, C1>,
               P2: ParallelizationContract<G::Timestamp, C2>>
-            (self, other: O, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> OwnedStream<G, CB::Container> {
+            (self, other: StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> StreamCore<G, CB::Container> {
 
         let logging = self.scope().logging();
         self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
@@ -456,11 +451,10 @@ impl<G: Scope, C1: Container + 'static, S: StreamLike<G, C1>> Operator<G, C1> fo
     }
 
 
-    fn binary<C2, CB, O, B, L, P1, P2>(self, other: O, pact1: P1, pact2: P2, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+    fn binary<C2, CB, B, L, P1, P2>(self, other: StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
         C2: Container + 'static,
         CB: ContainerBuilder,
-        O: StreamLike<G, C2>,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
                  &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
@@ -548,7 +542,7 @@ impl<G: Scope, C1: Container + 'static, S: StreamLike<G, C1>> Operator<G, C1> fo
 ///     .inspect(|x| println!("number: {:?}", x));
 /// });
 /// ```
-pub fn source<G: Scope, CB, B, L>(scope: &G, name: &str, constructor: B) -> OwnedStream<G, CB::Container>
+pub fn source<G: Scope, CB, B, L>(scope: &G, name: &str, constructor: B) -> StreamCore<G, CB::Container>
 where
     CB: ContainerBuilder,
     B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
@@ -592,7 +586,7 @@ where
 ///
 /// });
 /// ```
-pub fn empty<G: Scope, C: Container + 'static>(scope: &G) -> OwnedStream<G, C> {
+pub fn empty<G: Scope, C: Container + 'static>(scope: &G) -> StreamCore<G, C> {
     source::<_, CapacityContainerBuilder<C>, _, _>(scope, "Empty", |_capability, _info| |_output| {
         // drop capability, do nothing
     })
