@@ -61,6 +61,7 @@ pub use product::flatcontainer::ProductRegion as FlatProductRegion;
 /// A pair of timestamps, partially ordered by the product order.
 mod product {
     use std::fmt::{Formatter, Error, Debug};
+    use columnar::Columnar;
     use serde::{Deserialize, Serialize};
 
     use crate::container::columnation::{Columnation, Region};
@@ -73,7 +74,7 @@ mod product {
     ///
     /// We use `Product` rather than `(TOuter, TInner)` so that we can derive our own `PartialOrder`,
     /// because Rust just uses the lexicographic total order.
-    #[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd, Serialize, Deserialize, Columnar)]
     pub struct Product<TOuter, TInner> {
         /// Outer timestamp.
         pub outer: TOuter,
