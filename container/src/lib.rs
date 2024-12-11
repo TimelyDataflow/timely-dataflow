@@ -14,10 +14,6 @@ pub mod flatcontainer;
 ///
 /// A container must implement default. The default implementation is not required to allocate
 /// memory for variable-length components.
-///
-/// We require the container to be cloneable to enable efficient copies when providing references
-/// of containers to operators. Care must be taken that the type's `clone_from` implementation
-/// is efficient (which is not necessarily the case when deriving `Clone`.)
 pub trait Container: Default {
     /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
@@ -105,7 +101,7 @@ pub trait PushInto<T> {
 /// decide to represent a push order for `extract` and `finish`, or not.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
-    type Container: Container + Clone + 'static;
+    type Container: Container + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -170,7 +166,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
     }
 }
 
-impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: Container + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]

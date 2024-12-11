@@ -1,7 +1,7 @@
 //! Merges the contents of multiple streams.
 
 
-use crate::{Container, Data};
+use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{StreamCore, Scope};
 
@@ -15,17 +15,17 @@ pub trait Concat<G: Scope, C: Container> {
     ///
     /// timely::example(|scope| {
     ///
-    ///     let stream = (0..10).to_stream(scope);
-    ///     stream.concat(&stream)
+    ///     let stream = (0..10).to_stream(scope).tee();
+    ///     stream.owned().concat(stream.owned())
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concat(&self, _: &StreamCore<G, C>) -> StreamCore<G, C>;
+    fn concat(self, other: StreamCore<G, C>) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: Container + Data> Concat<G, C> for StreamCore<G, C> {
-    fn concat(&self, other: &StreamCore<G, C>) -> StreamCore<G, C> {
-        self.scope().concatenate([self.clone(), other.clone()])
+impl<G: Scope, C: Container + 'static> Concat<G, C> for StreamCore<G, C> {
+    fn concat(self, other: StreamCore<G, C>) -> StreamCore<G, C> {
+        self.scope().concatenate([self, other])
     }
 }
 
@@ -43,27 +43,27 @@ pub trait Concatenate<G: Scope, C: Container> {
     ///                        (0..10).to_stream(scope),
     ///                        (0..10).to_stream(scope)];
     ///
-    ///     scope.concatenate(streams)
+    ///     scope.clone()
+    ///          .concatenate(streams)
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
+    fn concatenate<I>(self, sources: I) -> StreamCore<G, C>
     where
         I: IntoIterator<Item=StreamCore<G, C>>;
 }
 
-impl<G: Scope, C: Container + Data> Concatenate<G, C> for StreamCore<G, C> {
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
+impl<G: Scope, C: Container + 'static> Concatenate<G, C> for StreamCore<G, C> {
+    fn concatenate<I>(self, sources: I) -> StreamCore<G, C>
     where
         I: IntoIterator<Item=StreamCore<G, C>>
     {
-        let clone = self.clone();
-        self.scope().concatenate(Some(clone).into_iter().chain(sources))
+        self.scope().concatenate(Some(self).into_iter().chain(sources))
     }
 }
 
-impl<G: Scope, C: Container + Data> Concatenate<G, C> for G {
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
+impl<G: Scope, C: Container + 'static> Concatenate<G, C> for G {
+    fn concatenate<I>(self, sources: I) -> StreamCore<G, C>
     where
         I: IntoIterator<Item=StreamCore<G, C>>
     {
@@ -73,7 +73,7 @@ impl<G: Scope, C: Container + Data> Concatenate<G, C> for G {
         let mut builder = OperatorBuilder::new("Concatenate".to_string(), self.clone());
 
         // create new input handles for each input stream.
-        let mut handles = sources.into_iter().map(|s| builder.new_input(&s, Pipeline)).collect::<Vec<_>>();
+        let mut handles = sources.into_iter().map(|s| builder.new_input(s, Pipeline)).collect::<Vec<_>>();
 
         // create one output handle for the concatenated results.
         let (mut output, result) = builder.new_output();

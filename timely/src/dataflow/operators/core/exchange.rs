@@ -23,7 +23,7 @@ pub trait Exchange<C: Container> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn exchange<F>(&self, route: F) -> Self
+    fn exchange<F>(self, route: F) -> Self
     where
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static;
 }
@@ -32,9 +32,8 @@ impl<G: Scope, C> Exchange<C> for StreamCore<G, C>
 where
     C: SizableContainer + ExchangeData + crate::dataflow::channels::ContainerBytes,
     C: for<'a> PushInto<C::Item<'a>>,
-
 {
-    fn exchange<F>(&self, route: F) -> StreamCore<G, C>
+    fn exchange<F>(self, route: F) -> StreamCore<G, C>
     where
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static,
     {

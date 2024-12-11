@@ -1,11 +1,10 @@
 //! Extension methods for `Stream` containing `Result`s.
 
-use crate::Data;
 use crate::dataflow::operators::Map;
 use crate::dataflow::{Scope, Stream};
 
 /// Extension trait for `Stream`.
-pub trait ResultStream<S: Scope, T: Data, E: Data> {
+pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
     /// Returns a new instance of `self` containing only `ok` records.
     ///
     /// # Examples
@@ -18,7 +17,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn ok(&self) -> Stream<S, T>;
+    fn ok(self) -> Stream<S, T>;
 
     /// Returns a new instance of `self` containing only `err` records.
     ///
@@ -32,7 +31,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn err(&self) -> Stream<S, E>;
+    fn err(self) -> Stream<S, E>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records.
     ///
@@ -46,7 +45,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(&self, logic: L) -> Stream<S, Result<T2, E>>;
+    fn map_ok<T2: 'static, L: FnMut(T) -> T2 + 'static>(self, logic: L) -> Stream<S, Result<T2, E>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Err` records.
     ///
@@ -60,7 +59,7 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(&self, logic: L) -> Stream<S, Result<T, E2>>;
+    fn map_err<E2: 'static, L: FnMut(E) -> E2 + 'static>(self, logic: L) -> Stream<S, Result<T, E2>>;
 
     /// Returns a new instance of `self` applying `logic` on all `Ok` records, passes through `Err`
     /// records.
@@ -75,8 +74,8 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn and_then<T2: Data, L: FnMut(T) -> Result<T2, E> + 'static>(
-        &self,
+    fn and_then<T2: 'static, L: FnMut(T) -> Result<T2, E> + 'static>(
+        self,
         logic: L,
     ) -> Stream<S, Result<T2, E>>;
 
@@ -92,31 +91,31 @@ pub trait ResultStream<S: Scope, T: Data, E: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(&self, logic: L) -> Stream<S, T>;
+    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(self, logic: L) -> Stream<S, T>;
 }
 
-impl<S: Scope, T: Data, E: Data> ResultStream<S, T, E> for Stream<S, Result<T, E>> {
-    fn ok(&self) -> Stream<S, T> {
+impl<S: Scope, T: 'static, E: 'static> ResultStream<S, T, E> for Stream<S, Result<T, E>> {
+    fn ok(self) -> Stream<S, T> {
         self.flat_map(Result::ok)
     }
 
-    fn err(&self) -> Stream<S, E> {
+    fn err(self) -> Stream<S, E> {
         self.flat_map(Result::err)
     }
 
-    fn map_ok<T2: Data, L: FnMut(T) -> T2 + 'static>(&self, mut logic: L) -> Stream<S, Result<T2, E>> {
+    fn map_ok<T2: 'static, L: FnMut(T) -> T2 + 'static>(self, mut logic: L) -> Stream<S, Result<T2, E>> {
         self.map(move |r| r.map(&mut logic))
     }
 
-    fn map_err<E2: Data, L: FnMut(E) -> E2 + 'static>(&self, mut logic: L) -> Stream<S, Result<T, E2>> {
+    fn map_err<E2: 'static, L: FnMut(E) -> E2 + 'static>(self, mut logic: L) -> Stream<S, Result<T, E2>> {
         self.map(move |r| r.map_err(&mut logic))
     }
 
-    fn and_then<T2: Data, L: FnMut(T) -> Result<T2, E> + 'static>(&self, mut logic: L) -> Stream<S, Result<T2, E>> {
+    fn and_then<T2: 'static, L: FnMut(T) -> Result<T2, E> + 'static>(self, mut logic: L) -> Stream<S, Result<T2, E>> {
         self.map(move |r| r.and_then(&mut logic))
     }
 
-    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(&self, mut logic: L) -> Stream<S, T> {
+    fn unwrap_or_else<L: FnMut(E) -> T + 'static>(self, mut logic: L) -> Stream<S, T> {
         self.map(move |r| r.unwrap_or_else(&mut logic))
     }
 }

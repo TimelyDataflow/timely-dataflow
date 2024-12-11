@@ -52,7 +52,7 @@ pub struct Sequencer<T> {
     recv: Rc<RefCell<VecDeque<T>>>, // sequenced items.
 }
 
-impl<T: ExchangeData> Sequencer<T> {
+impl<T: ExchangeData + Clone> Sequencer<T> {
 
     /// Creates a new Sequencer.
     ///

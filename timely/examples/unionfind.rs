@@ -48,11 +48,11 @@ fn main() {
 }
 
 trait UnionFind {
-    fn union_find(&self) -> Self;
+    fn union_find(self) -> Self;
 }
 
 impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
-    fn union_find(&self) -> Stream<G, (usize, usize)> {
+    fn union_find(self) -> Stream<G, (usize, usize)> {
 
         self.unary(Pipeline, "UnionFind", |_,_| {
 

@@ -3,10 +3,10 @@
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, Stream, StreamCore};
-use crate::{Container, Data};
+use crate::Container;
 
 /// Extension trait for `Stream`.
-pub trait Branch<S: Scope, D: Data> {
+pub trait Branch<S: Scope, D> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
     /// the data and its time. If it returns `true`, the record will be sent
@@ -29,14 +29,14 @@ pub trait Branch<S: Scope, D: Data> {
     /// });
     /// ```
     fn branch(
-        &self,
+        self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
     ) -> (Stream<S, D>, Stream<S, D>);
 }
 
-impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
+impl<S: Scope, D: 'static> Branch<S, D> for Stream<S, D> {
     fn branch(
-        &self,
+        self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
     ) -> (Stream<S, D>, Stream<S, D>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
@@ -89,11 +89,11 @@ pub trait BranchWhen<T>: Sized {
     ///     after_five.inspect(|x| println!("Times 5 and later: {:?}", x));
     /// });
     /// ```
-    fn branch_when(&self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
+    fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<S: Scope, C: Container + Data> BranchWhen<S::Timestamp> for StreamCore<S, C> {
-    fn branch_when(&self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
+impl<S: Scope, C: Container + 'static> BranchWhen<S::Timestamp> for StreamCore<S, C> {
+    fn branch_when(self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
         let mut input = builder.new_input(self, Pipeline);
