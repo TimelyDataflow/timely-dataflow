@@ -19,6 +19,7 @@ default = ["getopts"]
 getopts = ["getopts-dep", "timely_communication/getopts"]
 
 [dependencies]
+columnar = "0.1"
 getopts-dep = { package = "getopts", version = "0.2.21", optional = true }
 bincode = { version = "1.0" }
 byteorder = "1.5"
@@ -33,5 +34,3 @@ smallvec = { version = "1.13.2", features = ["serde", "const_generics"] }
 [dev-dependencies]
 bytemuck = "1.18.0"
 rand = { version = "0.8", features = ["small_rng"] }
-columnar = "0.1"
-# columnar = { git = "https://github.com/frankmcsherry/columnar" }

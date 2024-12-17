@@ -12,7 +12,7 @@ pub mod pullers;
 pub mod pact;
 
 /// A serializable representation of timestamped data.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct Message<T, C> {
     /// The timestamp associated with the message.
     pub time: T,
