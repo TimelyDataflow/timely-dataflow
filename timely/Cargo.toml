@@ -19,7 +19,7 @@ default = ["getopts"]
 getopts = ["getopts-dep", "timely_communication/getopts"]
 
 [dependencies]
-columnar = "0.1"
+columnar = "0.2"
 getopts-dep = { package = "getopts", version = "0.2.21", optional = true }
 bincode = { version = "1.0" }
 byteorder = "1.5"
