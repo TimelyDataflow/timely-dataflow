@@ -17,7 +17,7 @@ license = "MIT"
 default = ["getopts"]
 
 [dependencies]
-columnar = "0.1"
+columnar = "0.2"
 getopts = { version = "0.2.21", optional = true }
 byteorder = "1.5"
 serde = { version = "1.0", features = ["derive"] }
