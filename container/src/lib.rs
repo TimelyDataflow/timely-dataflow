@@ -120,7 +120,6 @@ pub trait ContainerBuilder: Default + 'static {
     fn partition<I>(container: &mut Self::Container, builders: &mut [Self], mut index: I)
     where
         Self: for<'a> PushInto<<Self::Container as Container>::Item<'a>>,
-        Self::Container: SizableContainer,
         I: for<'a> FnMut(&<Self::Container as Container>::Item<'a>) -> usize,
     {
         for datum in container.drain() {
