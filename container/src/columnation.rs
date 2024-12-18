@@ -25,6 +25,7 @@ impl<T: Columnation> TimelyStack<T> {
     ///
     /// Note that the associated region is not initialized to a specific capacity
     /// because we can't generally know how much space would be required.
+    #[inline(always)]
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             local: Vec::with_capacity(capacity),
@@ -65,6 +66,7 @@ impl<T: Columnation> TimelyStack<T> {
     /// Copies an element in to the region.
     ///
     /// The element can be read by indexing
+    #[inline]
     pub fn copy(&mut self, item: &T) {
         // TODO: Some types `T` should just be cloned.
         // E.g. types that are `Copy` or vecs of ZSTs.
@@ -73,6 +75,7 @@ impl<T: Columnation> TimelyStack<T> {
         }
     }
     /// Empties the collection.
+    #[inline]
     pub fn clear(&mut self) {
         unsafe {
             // Unsafety justified in that setting the length to zero exposes
@@ -84,6 +87,7 @@ impl<T: Columnation> TimelyStack<T> {
     /// Retain elements that pass a predicate, from a specified offset.
     ///
     /// This method may or may not reclaim memory in the inner region.
+    #[inline]
     pub fn retain_from<P: FnMut(&T) -> bool>(&mut self, index: usize, mut predicate: P) {
         let mut write_position = index;
         for position in index..self.local.len() {
@@ -105,6 +109,7 @@ impl<T: Columnation> TimelyStack<T> {
     ///
     /// # Safety
     /// Elements within `local` can be reordered, but not mutated, removed and/or dropped.
+    #[inline(always)]
     pub unsafe fn local(&mut self) -> &mut [T] {
         &mut self.local[..]
     }
