@@ -1,6 +1,6 @@
 //! Partition a stream of records into multiple streams.
 
-use timely_container::{Container, ContainerBuilder, PushInto, SizableContainer};
+use timely_container::{Container, ContainerBuilder, PushInto};
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
@@ -29,16 +29,16 @@ pub trait Partition<G: Scope, C: Container> {
     /// ```
     fn partition<CB, D2, F>(&self, parts: u64, route: F) -> Vec<StreamCore<G, CB::Container>>
     where
-        CB: ContainerBuilder,
-        CB::Container: SizableContainer + PushInto<D2> + Data,
+        CB: ContainerBuilder + PushInto<D2>,
+        CB::Container: Data,
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static;
 }
 
 impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
     fn partition<CB, D2, F>(&self, parts: u64, mut route: F) -> Vec<StreamCore<G, CB::Container>>
     where
-        CB: ContainerBuilder,
-        CB::Container: SizableContainer + PushInto<D2> + Data,
+        CB: ContainerBuilder + PushInto<D2>,
+        CB::Container: Data,
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static,
     {
         let mut builder = OperatorBuilder::new("Partition".to_owned(), self.scope());
@@ -48,7 +48,7 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
         let mut streams = Vec::with_capacity(parts as usize);
 
         for _ in 0..parts {
-            let (output, stream) = builder.new_output();
+            let (output, stream) = builder.new_output::<CB>();
             outputs.push(output);
             streams.push(stream);
         }
@@ -59,7 +59,7 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
                 input.for_each(|time, data| {
                     let mut sessions = handles
                         .iter_mut()
-                        .map(|h| h.session(&time))
+                        .map(|h| h.session_with_builder(&time))
                         .collect::<Vec<_>>();
 
                     for datum in data.drain() {

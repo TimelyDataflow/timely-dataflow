@@ -53,7 +53,6 @@ pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 impl<CB, F> ExchangeCore<CB, F>
 where
     CB: LengthPreservingContainerBuilder,
-    CB::Container: SizableContainer,
     for<'a> F: FnMut(&<CB::Container as Container>::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
@@ -84,7 +83,7 @@ impl<T: Timestamp, CB, H: 'static> ParallelizationContract<T, CB::Container> for
 where
     CB: ContainerBuilder,
     CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
-    CB::Container: Data + Send + SizableContainer + crate::dataflow::channels::ContainerBytes,
+    CB::Container: Data + Send + crate::dataflow::channels::ContainerBytes,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, CB, LogPusher<T, CB::Container, Box<dyn Push<Message<T, CB::Container>>>>, H>;

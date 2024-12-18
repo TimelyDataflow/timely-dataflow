@@ -1,7 +1,7 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
 use crate::communication::Push;
-use crate::container::{ContainerBuilder, SizableContainer, PushInto};
+use crate::container::{ContainerBuilder, PushInto};
 use crate::dataflow::channels::Message;
 use crate::{Container, Data};
 
@@ -10,7 +10,6 @@ use crate::{Container, Data};
 pub struct Exchange<T, CB, P, H>
 where
     CB: ContainerBuilder,
-    CB::Container: SizableContainer,
     P: Push<Message<T, CB::Container>>,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
@@ -23,7 +22,6 @@ where
 impl<T: Clone, CB, P, H>  Exchange<T, CB, P, H>
 where
     CB: ContainerBuilder,
-    CB::Container: SizableContainer,
     P: Push<Message<T, CB::Container>>,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
@@ -53,7 +51,6 @@ where
 impl<T: Eq+Data, CB, P, H> Push<Message<T, CB::Container>> for Exchange<T, CB, P, H>
 where
     CB: ContainerBuilder,
-    CB::Container: SizableContainer,
     CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
     P: Push<Message<T, CB::Container>>,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
