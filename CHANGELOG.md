@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.15.0...timely-v0.15.1) - 2024-12-18
+
+### Other
+
+- Remove worker identifier from logging ([#533](https://github.com/TimelyDataflow/timely-dataflow/pull/533))
+- add `.partition()` for `StreamCore` (#610)
+- Update columnar ([#611](https://github.com/TimelyDataflow/timely-dataflow/pull/611))
+- Introduce columnar and derive extensively ([#608](https://github.com/TimelyDataflow/timely-dataflow/pull/608))
+
 ## [0.15.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.14.1...timely-v0.15.0) - 2024-12-05
 
 ### Other

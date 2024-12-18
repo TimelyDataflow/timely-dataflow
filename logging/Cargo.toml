@@ -1,6 +1,6 @@
 [package]
 name = "timely_logging"
-version = "0.12.1"
+version = "0.13.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 description = "Common timely logging infrastructure"
 edition.workspace = true
