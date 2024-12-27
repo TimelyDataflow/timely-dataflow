@@ -57,7 +57,9 @@ impl<T, C: Container> Message<T, C> {
 }
 
 // Instructions for serialization of `Message`.
-// Intended to swap out the constraint on `C` for `C: Bytesable`.
+//
+// Serialization of each field is meant to be `u64` aligned, so that each has tha ability
+// to be decoded using safe transmutation, e.g. `bytemuck`.
 impl<T, C> crate::communication::Bytesable for Message<T, C>
 where
     T: Serialize + for<'a> Deserialize<'a>,
@@ -69,17 +71,19 @@ where
         let from: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
         let seq: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
         let time: T = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
-        let bytes_read = bytes.len() - slice.len();
+        let time_size = ::bincode::serialized_size(&time).expect("bincode::serialized_size() failed") as usize;
+        // We expect to find the `data` payload at `8 + 8 + round_up(time_size)`;
+        let bytes_read = 8 + 8 + ((time_size + 7) & !7);
+        // let bytes_read = bytes.len() - slice.len();
         bytes.extract_to(bytes_read);
         let data: C = ContainerBytes::from_bytes(bytes);
         Self { time, data, from, seq }
     }
 
     fn length_in_bytes(&self) -> usize {
+        let time_size = ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize;
         // 16 comes from the two `u64` fields: `from` and `seq`.
-        16 +
-        ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize +
-        self.data.length_in_bytes()
+        16 + ((time_size + 7) & !7) + self.data.length_in_bytes()
     }
 
     fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
@@ -87,6 +91,9 @@ where
         writer.write_u64::<byteorder::LittleEndian>(self.from.try_into().unwrap()).unwrap();
         writer.write_u64::<byteorder::LittleEndian>(self.seq.try_into().unwrap()).unwrap();
         ::bincode::serialize_into(&mut *writer, &self.time).expect("bincode::serialize_into() failed");
+        let time_size = ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize;
+        let time_slop = ((time_size + 7) & !7) - time_size;
+        writer.write(&[0u8; 8][..time_slop]).unwrap();
         self.data.into_bytes(&mut *writer);
     }
 }
