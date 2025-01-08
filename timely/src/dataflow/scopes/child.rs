@@ -70,6 +70,7 @@ where
     fn peek_identifier(&self) -> usize {
         self.parent.peek_identifier()
     }
+    #[inline(always)]
     fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry> {
         self.parent.log_register()
     }

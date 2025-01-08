@@ -1,7 +1,7 @@
 use crate::progress::frontier::{AntichainRef, MutableAntichain};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
-use crate::logging::TimelyLogger as Logger;
+use crate::logging::{TimelyEvent, TimelyLogger as Logger};
 
 /// Tracks requests for notification and delivers available notifications.
 ///
@@ -82,9 +82,13 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     #[inline]
     pub fn for_each<F: FnMut(Capability<T>, u64, &mut Notificator<T>)>(&mut self, mut logic: F) {
         while let Some((cap, count)) = self.next() {
-            self.logging.as_ref().map(|l| l.log(crate::logging::GuardedProgressEvent { is_start: true }));
+            if let Some(l) = self.logging.as_ref() {
+                l.log(TimelyEvent::from(crate::logging::GuardedMessageEvent { is_start: true }));
+            };
             logic(cap, count, self);
-            self.logging.as_ref().map(|l| l.log(crate::logging::GuardedProgressEvent { is_start: false }));
+            if let Some(l) = self.logging.as_ref() {
+                l.log(TimelyEvent::from(crate::logging::GuardedMessageEvent { is_start: false }));
+            };
         }
     }
 }

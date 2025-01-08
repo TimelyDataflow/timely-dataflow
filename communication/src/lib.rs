@@ -97,6 +97,8 @@
 
 #![forbid(missing_docs)]
 
+use std::time::Duration;
+
 pub mod allocator;
 pub mod networking;
 pub mod initialize;
@@ -191,3 +193,9 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
 
     (senders, recvers)
 }
+
+use timely_container::CapacityContainerBuilder;
+use timely_logging::Logger;
+use crate::logging::CommunicationEvent;
+
+pub(crate) type CommLogger = Logger<CapacityContainerBuilder<Vec<(Duration, CommunicationEvent)>>>;

@@ -74,7 +74,6 @@
 
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
-
 use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
@@ -577,7 +576,7 @@ impl<T:Timestamp> Tracker<T> {
                 .collect::<Vec<_>>();
 
             if !target_changes.is_empty() {
-                logger.log_target_updates(Box::new(target_changes));
+                logger.log_target_updates(target_changes.into_boxed_slice());
             }
 
             let source_changes =
@@ -587,7 +586,7 @@ impl<T:Timestamp> Tracker<T> {
                 .collect::<Vec<_>>();
 
             if !source_changes.is_empty() {
-                logger.log_source_updates(Box::new(source_changes));
+                logger.log_source_updates(source_changes.into_boxed_slice());
             }
         }
 
@@ -832,41 +831,40 @@ fn summarize_outputs<T: Timestamp>(
 /// Logging types for reachability tracking events.
 pub mod logging {
     use std::rc::Rc;
-    use crate::logging::{Logger, ProgressEventTimestampVec};
+    use std::time::Duration;
+    use timely_container::CapacityContainerBuilder;
+    use crate::logging_core::Logger;
+    use crate::logging::ProgressEventTimestampVec;
+
+    /// A container builder for tracker events.
+    pub type TrackerEventBuilder = CapacityContainerBuilder<Vec<(Duration, TrackerEvent)>>;
 
     /// A logger with additional identifying information about the tracker.
     pub struct TrackerLogger {
         path: Rc<[usize]>,
-        logger: Logger<TrackerEvent>,
+        logger: Logger<TrackerEventBuilder>,
     }
 
     impl TrackerLogger {
         /// Create a new tracker logger from its fields.
-        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEvent>) -> Self {
+        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEventBuilder>) -> Self {
             Self { path, logger }
         }
 
         /// Log source update events with additional identifying information.
-        pub fn log_source_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
-            self.logger.log({
-                SourceUpdate {
-                    tracker_id: self.path.to_vec(),
-                    updates,
-                }
-            })
+        pub fn log_source_updates<T: ProgressEventTimestampVec>(&mut self, updates: T) {
+            let updates = Rc::new(updates) as Rc<dyn ProgressEventTimestampVec>;
+            self.logger.log(TrackerEvent::from(SourceUpdate { tracker_id: self.path.to_vec(), updates}))
         }
         /// Log target update events with additional identifying information.
-        pub fn log_target_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
-            self.logger.log({
-                TargetUpdate {
-                    tracker_id: self.path.to_vec(),
-                    updates,
-                }
-            })
+        pub fn log_target_updates<T: ProgressEventTimestampVec>(&mut self, updates: T) {
+            let updates = Rc::new(updates) as Rc<dyn ProgressEventTimestampVec>;
+            self.logger.log(TrackerEvent::from(TargetUpdate { tracker_id: self.path.to_vec(), updates }) )
         }
     }
 
     /// Events that the tracker may record.
+    #[derive(Debug, Clone)]
     pub enum TrackerEvent {
         /// Updates made at a source of data.
         SourceUpdate(SourceUpdate),
@@ -875,19 +873,21 @@ pub mod logging {
     }
 
     /// An update made at a source of data.
+    #[derive(Debug, Clone)]
     pub struct SourceUpdate {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Box<dyn ProgressEventTimestampVec>,
+        pub updates: Rc<dyn ProgressEventTimestampVec>,
     }
 
     /// An update made at a target of data.
+    #[derive(Debug, Clone)]
     pub struct TargetUpdate {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Box<dyn ProgressEventTimestampVec>,
+        pub updates: Rc<dyn ProgressEventTimestampVec>,
     }
 
     impl From<SourceUpdate> for TrackerEvent {
@@ -924,7 +924,7 @@ impl<T: Timestamp> Drop for Tracker<T> {
                 })
                 .collect::<Vec<_>>();
             if !target_changes.is_empty() {
-                logger.log_target_updates(Box::new(target_changes));
+                logger.log_target_updates(target_changes.into_boxed_slice());
             }
 
             let source_changes = per_operator.sources
@@ -937,7 +937,7 @@ impl<T: Timestamp> Drop for Tracker<T> {
                 })
                 .collect::<Vec<_>>();
             if !source_changes.is_empty() {
-                logger.log_source_updates(Box::new(source_changes));
+                logger.log_source_updates(source_changes.into_boxed_slice());
             }
         }
     }

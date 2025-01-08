@@ -15,14 +15,14 @@ pub trait Partition<G: Scope, C: Container> {
     /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::core::{Partition, Inspect};
+    /// use timely_container::CapacityContainerBuilder;
     ///
     /// timely::example(|scope| {
     ///     let streams = (0..10).to_stream(scope)
-    ///                          .partition(3, |x| (x % 3, x));
+    ///                          .partition::<CapacityContainerBuilder<Vec<_>>, _, _>(3, |x| (x % 3, x));
     ///
     ///     for (idx, stream) in streams.into_iter().enumerate() {
     ///         stream
-    ///             .container::<Vec<_>>()
     ///             .inspect(move |x| println!("seen {idx}: {x:?}"));
     ///     }
     /// });

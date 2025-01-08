@@ -3,15 +3,13 @@
 use std::io::{self, Write};
 use crossbeam_channel::{Sender, Receiver};
 
+use crate::CommLogger;
+use crate::logging::{CommunicationEvent, MessageEvent, StateEvent};
 use crate::networking::MessageHeader;
 
 use super::bytes_slab::BytesSlab;
 use super::bytes_exchange::MergeQueue;
 use super::stream::Stream;
-
-use timely_logging::Logger;
-
-use crate::logging::{CommunicationEvent, MessageEvent, StateEvent};
 
 fn tcp_panic(context: &'static str, cause: io::Error) -> ! {
     // NOTE: some downstream crates sniff out "timely communication error:" from
@@ -35,12 +33,14 @@ pub fn recv_loop<S>(
     worker_offset: usize,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent>>)
+    logger: Option<CommLogger>)
 where
     S: Stream,
 {
     // Log the receive thread's start.
-    logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: true }));
+    if let Some(logger) = logger.as_ref() {
+        logger.log(CommunicationEvent::from(StateEvent { send: false, process, remote, start: true }));
+    }
 
     let mut targets: Vec<MergeQueue> = targets.into_iter().map(|x| x.recv().expect("Failed to receive MergeQueue")).collect();
 
@@ -88,9 +88,9 @@ where
             let bytes = buffer.extract(peeled_bytes);
 
             // Record message receipt.
-            logger.as_mut().map(|logger| {
-                logger.log(MessageEvent { is_send: false, header, });
-            });
+            if let Some(logger) = logger.as_ref() {
+                logger.log(CommunicationEvent::from(MessageEvent { is_send: false, header }));
+            }
 
             if header.length > 0 {
                 stageds[header.target - worker_offset].push(bytes);
@@ -117,7 +117,9 @@ where
     }
 
     // Log the receive thread's end.
-    logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: false, }));
+    if let Some(logger) = logger.as_ref() {
+        logger.log(CommunicationEvent::from(StateEvent { send: false, process, remote, start: false, }));
+    }
 }
 
 /// Repeatedly sends messages into a TcpStream.
@@ -134,11 +136,13 @@ pub fn send_loop<S: Stream>(
     sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent>>)
+    logger: Option<CommLogger>)
 {
 
     // Log the send thread's start.
-    logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
+    if let Some(logger) = logger.as_ref() {
+        logger.log(CommunicationEvent::from(StateEvent { send: true, process, remote, start: true, }));
+    }
 
     let mut sources: Vec<MergeQueue> = sources.into_iter().map(|x| {
         let buzzer = crate::buzzer::Buzzer::default();
@@ -176,13 +180,13 @@ pub fn send_loop<S: Stream>(
             for mut bytes in stash.drain(..) {
 
                 // Record message sends.
-                logger.as_mut().map(|logger| {
+                if let Some(logger) = logger.as_ref() {
                     let mut offset = 0;
                     while let Some(header) = MessageHeader::try_read(&mut bytes[offset..]) {
-                        logger.log(MessageEvent { is_send: true, header, });
+                        logger.log(CommunicationEvent::from(MessageEvent { is_send: true, header, }));
                         offset += header.required_bytes();
                     }
-                });
+                };
 
                 writer.write_all(&bytes[..]).unwrap_or_else(|e| tcp_panic("writing data", e));
             }
@@ -202,8 +206,12 @@ pub fn send_loop<S: Stream>(
     header.write_to(&mut writer).unwrap_or_else(|e| tcp_panic("writing data", e));
     writer.flush().unwrap_or_else(|e| tcp_panic("flushing writer", e));
     writer.get_mut().shutdown(::std::net::Shutdown::Write).unwrap_or_else(|e| tcp_panic("shutting down writer", e));
-    logger.as_mut().map(|logger| logger.log(MessageEvent { is_send: true, header }));
+    if let Some(logger) = logger.as_ref() {
+        logger.log(CommunicationEvent::from(MessageEvent { is_send: true, header }));
+    }
 
     // Log the send thread's end.
-    logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: false, }));
+    if let Some(logger) = logger.as_ref() {
+        logger.log(CommunicationEvent::from(StateEvent { send: true, process, remote, start: false, }));
+    }
 }

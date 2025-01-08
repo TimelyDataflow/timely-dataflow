@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
-use crate::logging::TimelyLogger as Logger;
+use crate::logging::{TimelyEvent, TimelyLogger as Logger};
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 
 use crate::scheduling::Schedule;
@@ -135,11 +135,11 @@ where
             child_path.extend_from_slice(&self.path[..]);
             child_path.push(index);
 
-            l.log(crate::logging::OperatesEvent {
+            l.log(TimelyEvent::from(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
-            });
+            }));
         }
         self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone()))
     }
@@ -179,7 +179,7 @@ where
         let path = self.path.clone();
         let reachability_logging =
         worker.log_register()
-            .get::<reachability::logging::TrackerEvent>("timely/reachability")
+            .get::<reachability::logging::TrackerEventBuilder>("timely/reachability")
             .map(|logger| reachability::logging::TrackerLogger::new(path, logger));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
@@ -685,23 +685,23 @@ impl<T: Timestamp> PerOperatorState<T> {
         if let Some(ref mut operator) = self.operator {
 
             // Perhaps log information about the start of the schedule call.
-            if let Some(l) = self.logging.as_mut() {
+            if let Some(l) = self.logging.as_ref() {
                 // FIXME: There is no contract that the operator must consume frontier changes.
                 //        This report could be spurious.
                 // TODO:  Perhaps fold this in to `ScheduleEvent::start()` as a "reason"?
                 let frontiers = &mut self.shared_progress.borrow_mut().frontiers[..];
                 if frontiers.iter_mut().any(|buffer| !buffer.is_empty()) {
-                    l.log(crate::logging::PushProgressEvent { op_id: self.id })
+                    l.log(TimelyEvent::from(crate::logging::PushProgressEvent { op_id: self.id }));
                 }
 
-                l.log(crate::logging::ScheduleEvent::start(self.id));
+                l.log(TimelyEvent::from(crate::logging::ScheduleEvent::start(self.id)));
             }
 
             let incomplete = operator.schedule();
 
             // Perhaps log information about the stop of the schedule call.
-            if let Some(l) = self.logging.as_mut() {
-                l.log(crate::logging::ScheduleEvent::stop(self.id));
+            if let Some(l) = self.logging.as_ref() {
+                l.log(TimelyEvent::from(crate::logging::ScheduleEvent::stop(self.id)));
             }
 
             incomplete
@@ -723,8 +723,8 @@ impl<T: Timestamp> PerOperatorState<T> {
 
     fn shut_down(&mut self) {
         if self.operator.is_some() {
-            if let Some(l) = self.logging.as_mut() {
-                l.log(crate::logging::ShutdownEvent{ id: self.id });
+            if let Some(l) = self.logging.as_ref() {
+                l.log(TimelyEvent::from(crate::logging::ShutdownEvent{ id: self.id }));
             }
             self.operator = None;
         }

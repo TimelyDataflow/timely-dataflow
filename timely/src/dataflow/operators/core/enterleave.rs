@@ -21,7 +21,7 @@
 
 use std::marker::PhantomData;
 
-use crate::logging::{TimelyLogger, MessagesEvent};
+use crate::logging::{TimelyLogger, MessagesEvent, TimelyEvent};
 use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
@@ -225,8 +225,8 @@ where
                 ..send_event
             };
 
-            self.logger.log(send_event);
-            self.logger.log(recv_event);
+            self.logger.log(TimelyEvent::from(send_event));
+            self.logger.log(TimelyEvent::from(recv_event));
             self.counter += 1;
         }
 

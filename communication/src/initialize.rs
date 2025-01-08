@@ -14,8 +14,8 @@ use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
 use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
 use crate::allocator::zero_copy::initialize::initialize_networking;
 
-use crate::logging::{CommunicationSetup, CommunicationEvent};
-use timely_logging::Logger;
+use crate::logging::CommunicationSetup;
+use crate::CommLogger;
 use std::fmt::{Debug, Formatter};
 
 
@@ -39,7 +39,7 @@ pub enum Config {
         /// Verbosely report connection process
         report: bool,
         /// Closure to create a new logger for a communication thread
-        log_fn: Arc<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent>> + Send + Sync>,
+        log_fn: Arc<dyn Fn(CommunicationSetup) -> Option<CommLogger> + Send + Sync>,
     }
 }
 

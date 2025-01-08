@@ -2,16 +2,24 @@
 
 /// Type alias for logging timely events.
 pub type WorkerIdentifier = usize;
-/// Logger type for worker-local logging.
-pub type Logger<Event> = crate::logging_core::Logger<Event>;
+
+/// Container builder for timely dataflow system events.
+pub type TimelyEventBuilder = CapacityContainerBuilder<Vec<(Duration, TimelyEvent)>>;
+
 /// Logger for timely dataflow system events.
-pub type TimelyLogger = Logger<TimelyEvent>;
+pub type TimelyLogger = Logger<TimelyEventBuilder>;
+
+/// Container builder for timely dataflow progress events.
+pub type TimelyProgressEventBuilder = CapacityContainerBuilder<Vec<(Duration, TimelyProgressEvent)>>;
+
 /// Logger for timely dataflow progress events (the "timely/progress" log stream).
-pub type TimelyProgressLogger = Logger<TimelyProgressEvent>;
+pub type TimelyProgressLogger = Logger<TimelyProgressEventBuilder>;
 
 use std::time::Duration;
 use columnar::Columnar;
 use serde::{Deserialize, Serialize};
+use timely_container::CapacityContainerBuilder;
+use crate::logging_core::Logger;
 use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
@@ -83,7 +91,7 @@ pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
     /// # Example
     /// ```rust
     /// let ts = vec![(0usize, 0usize, (23u64, 10u64), -4i64), (0usize, 0usize, (23u64, 11u64), 1i64)];
-    /// let ts: &dyn timely::logging::ProgressEventTimestampVec = &ts;
+    /// let ts: &dyn timely::logging::ProgressEventTimestampVec = &ts.into_boxed_slice();
     /// for (n, p, t, d) in ts.iter() {
     ///     print!("{:?}, ", (n, p, t.as_any().downcast_ref::<(u64, u64)>(), d));
     /// }
@@ -119,7 +127,7 @@ pub trait ProgressEventTimestampVec: std::fmt::Debug + std::any::Any {
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a>;
 }
 
-impl<T: ProgressEventTimestamp> ProgressEventTimestampVec for Vec<(usize, usize, T, i64)> {
+impl<T: ProgressEventTimestamp> ProgressEventTimestampVec for Box<[(usize, usize, T, i64)]> {
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a> {
         Box::new(<[(usize, usize, T, i64)]>::iter(&self[..]).map(|(n, p, t, d)| {
             let t: &dyn ProgressEventTimestamp = t;
@@ -128,7 +136,7 @@ impl<T: ProgressEventTimestamp> ProgressEventTimestampVec for Vec<(usize, usize,
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Send or receive of progress information.
 pub struct TimelyProgressEvent {
     /// `true` if the event is a send, and `false` if it is a receive.
@@ -142,9 +150,9 @@ pub struct TimelyProgressEvent {
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
     pub addr: Vec<usize>,
     /// List of message updates, containing Target descriptor, timestamp as string, and delta.
-    pub messages: Box<dyn ProgressEventTimestampVec>,
+    pub messages: std::rc::Rc<dyn ProgressEventTimestampVec>,
     /// List of capability updates, containing Source descriptor, timestamp as string, and delta.
-    pub internal: Box<dyn ProgressEventTimestampVec>,
+    pub internal: std::rc::Rc<dyn ProgressEventTimestampVec>,
 }
 
 #[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]

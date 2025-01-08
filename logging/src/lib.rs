@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::fmt::{self, Debug};
 
+use timely_container::{ContainerBuilder, PushInto};
+
 pub struct Registry {
     /// A map from names to typed loggers.
     map: HashMap<String, (Box<dyn Any>, Box<dyn Flush>)>,
@@ -25,21 +27,17 @@ impl Registry {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
-    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, T)>)+'static>(
+    pub fn insert<CB: ContainerBuilder, F: FnMut(&Duration, &mut CB::Container)+'static>(
         &mut self,
         name: &str,
         action: F) -> Option<Box<dyn Any>>
     {
-        let logger = Logger::<T>::new(self.time, Duration::default(), action);
+        let logger = Logger::<CB>::new(self.time, Duration::default(), action);
         self.insert_logger(name, logger)
     }
 
     /// Binds a log name to a logger.
-    pub fn insert_logger<T: 'static>(
-        &mut self,
-        name: &str,
-        logger: Logger<T>) -> Option<Box<dyn Any>>
-    {
+    pub fn insert_logger<CB: ContainerBuilder>(&mut self, name: &str, logger: Logger<CB>) -> Option<Box<dyn Any>> {
         self.map.insert(name.to_owned(), (Box::new(logger.clone()), Box::new(logger))).map(|x| x.0)
     }
 
@@ -54,10 +52,11 @@ impl Registry {
     }
 
     /// Retrieves a shared logger, if one has been inserted.
-    pub fn get<T: 'static>(&self, name: &str) -> Option<Logger<T>> {
+    #[inline]
+    pub fn get<CB: ContainerBuilder>(&self, name: &str) -> Option<Logger<CB>> {
         self.map
             .get(name)
-            .and_then(|entry| entry.0.downcast_ref::<Logger<T>>())
+            .and_then(|entry| entry.0.downcast_ref::<Logger<CB>>())
             .map(|x| (*x).clone())
     }
 
@@ -76,8 +75,8 @@ impl Registry {
 }
 
 impl Flush for Registry {
-    fn flush(&mut self) {
-        for value in self.map.values_mut() {
+    fn flush(&self) {
+        for value in self.map.values() {
             value.1.flush();
         }
     }
@@ -85,11 +84,11 @@ impl Flush for Registry {
 
 /// A buffering logger.
 #[derive(Debug)]
-pub struct Logger<T> {
-    inner: Rc<RefCell<LoggerInner<T, dyn FnMut(&Duration, &mut Vec<(Duration, T)>)>>>,
+pub struct Logger<CB: ContainerBuilder> {
+    inner: Rc<RefCell<LoggerInner<CB, dyn FnMut(&Duration, &mut CB::Container)>>>,
 }
 
-impl<T> Clone for Logger<T> {
+impl<CB: ContainerBuilder> Clone for Logger<CB> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone()
@@ -97,28 +96,28 @@ impl<T> Clone for Logger<T> {
     }
 }
 
-struct LoggerInner<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> {
+struct LoggerInner<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> {
     /// common instant used for all loggers.
     time:   Instant,
     /// offset to allow re-calibration.
     offset: Duration,
-    /// shared buffer of accumulated log events
-    buffer: Vec<(Duration, T)>,
+    /// container builder to produce buffers of accumulated log events
+    builder: CB,
     /// action to take on full log buffers.
     action: A,
 }
 
-impl<T> Logger<T> {
+impl<CB: ContainerBuilder> Logger<CB> {
     /// Allocates a new shareable logger bound to a write destination.
     pub fn new<F>(time: Instant, offset: Duration, action: F) -> Self
     where
-        F: FnMut(&Duration, &mut Vec<(Duration, T)>)+'static
+        F: FnMut(&Duration, &mut CB::Container)+'static
     {
         let inner = LoggerInner {
             time,
             offset,
             action,
-            buffer: Vec::with_capacity(LoggerInner::<T, F>::buffer_capacity()),
+            builder: CB::default(),
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
@@ -133,7 +132,7 @@ impl<T> Logger<T> {
     /// This implementation borrows a shared (but thread-local) buffer of log events, to ensure
     /// that the `action` only sees one stream of events with increasing timestamps. This may
     /// have a cost that we don't entirely understand.
-    pub fn log<S: Into<T>>(&self, event: S) {
+    pub fn log<S>(&self, event: S) where CB: PushInto<(Duration, S)> {
         self.log_many(Some(event));
     }
 
@@ -151,78 +150,57 @@ impl<T> Logger<T> {
     /// that the `action` only sees one stream of events with increasing timestamps. This may
     /// have a cost that we don't entirely understand.
     pub fn log_many<I>(&self, events: I)
-    where I: IntoIterator, I::Item: Into<T>
+    where I: IntoIterator, CB: PushInto<(Duration, I::Item)>
     {
         self.inner.borrow_mut().log_many(events)
     }
 
     /// Flushes logged messages and communicates the new minimal timestamp.
-    pub fn flush(&mut self) {
+    pub fn flush(&self) {
         <Self as Flush>::flush(self);
     }
 }
 
-impl<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> LoggerInner<T, A> {
-
-    /// The upper limit for buffers to allocate, size in bytes. [Self::buffer_capacity] converts
-    /// this to size in elements.
-    const BUFFER_SIZE_BYTES: usize = 1 << 13;
-
-    /// The maximum buffer capacity in elements. Returns a number between [Self::BUFFER_SIZE_BYTES]
-    /// and 1, inclusively.
-    // TODO: This fn is not const because it cannot depend on non-Sized generic parameters
-    fn buffer_capacity() -> usize {
-        let size =  ::std::mem::size_of::<(Duration, T)>();
-        if size == 0 {
-            Self::BUFFER_SIZE_BYTES
-        } else if size <= Self::BUFFER_SIZE_BYTES {
-            Self::BUFFER_SIZE_BYTES / size
-        } else {
-            1
-        }
-    }
-
+impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> LoggerInner<CB, A> {
     pub fn log_many<I>(&mut self, events: I)
-        where I: IntoIterator, I::Item: Into<T>
+        where I: IntoIterator, CB: PushInto<(Duration, I::Item)>,
     {
         let elapsed = self.time.elapsed() + self.offset;
         for event in events {
-            self.buffer.push((elapsed, event.into()));
-            if self.buffer.len() == self.buffer.capacity() {
-                // Would call `self.flush()`, but for `RefCell` panic.
-                (self.action)(&elapsed, &mut self.buffer);
-                // The buffer clear could plausibly be removed, changing the semantics but allowing users
-                // to do in-place updates without forcing them to take ownership.
-                self.buffer.clear();
-                let buffer_capacity = self.buffer.capacity();
-                if buffer_capacity < Self::buffer_capacity() {
-                    self.buffer.reserve((buffer_capacity+1).next_power_of_two());
-                }
+            self.builder.push_into((elapsed, event.into()));
+            while let Some(container) = self.builder.extract() {
+                (self.action)(&elapsed, container);
             }
+        }
+    }
+
+    pub fn flush(&mut self) {
+        // TODO: This previously called action with an empty buffer if there was no data.
+        let elapsed = self.time.elapsed() + self.offset;
+        while let Some(buffer) = self.builder.finish() {
+            (self.action)(&elapsed, buffer);
         }
     }
 }
 
 /// Flush on the *last* drop of a logger.
-impl<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> Drop for LoggerInner<T, A> {
+impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> Drop for LoggerInner<CB, A> {
     fn drop(&mut self) {
         // Avoid sending out empty buffers just because of drops.
-        if !self.buffer.is_empty() {
-            self.flush();
-        }
+        self.flush();
     }
 }
 
-impl<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> Debug for LoggerInner<T, A>
+impl<CB, A: ?Sized + FnMut(&Duration, &mut CB::Container)> Debug for LoggerInner<CB, A>
 where
-    T: Debug,
+    CB: ContainerBuilder + Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LoggerInner")
             .field("time", &self.time)
             .field("offset", &self.offset)
             .field("action", &"FnMut")
-            .field("buffer", &self.buffer)
+            .field("builder", &self.builder)
             .finish()
     }
 }
@@ -230,29 +208,11 @@ where
 /// Types that can be flushed.
 trait Flush {
     /// Flushes buffered data.
-    fn flush(&mut self);
+    fn flush(&self);
 }
 
-impl<T> Flush for Logger<T> {
-    fn flush(&mut self) {
+impl<CB: ContainerBuilder> Flush for Logger<CB> {
+    fn flush(&self) {
         self.inner.borrow_mut().flush()
-    }
-}
-
-impl<T, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, T)>)> Flush for LoggerInner<T, A> {
-    fn flush(&mut self) {
-        let elapsed = self.time.elapsed() + self.offset;
-        if !self.buffer.is_empty() {
-            (self.action)(&elapsed, &mut self.buffer);
-            self.buffer.clear();
-            // NB: This does not re-allocate any specific size if the buffer has been
-            // taken. The intent is that the geometric growth in `log_many` should be
-            // enough to ensure that we do not send too many small buffers, nor do we
-            // allocate too large buffers when they are not needed.
-        }
-        else {
-            // Avoid swapping resources for empty buffers.
-            (self.action)(&elapsed, &mut Vec::new());
-        }
     }
 }

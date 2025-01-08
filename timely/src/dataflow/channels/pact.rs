@@ -15,7 +15,7 @@ use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
 use crate::dataflow::channels::Message;
-use crate::logging::{TimelyLogger as Logger, MessagesEvent};
+use crate::logging::{TimelyLogger as Logger, MessagesEvent, TimelyEvent};
 use crate::progress::Timestamp;
 use crate::worker::AsWorker;
 use crate::Data;
@@ -141,14 +141,14 @@ impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<
             bundle.from = self.source;
 
             if let Some(logger) = self.logging.as_ref() {
-                logger.log(MessagesEvent {
+                logger.log(TimelyEvent::from(MessagesEvent {
                     is_send: true,
                     channel: self.channel,
                     source: self.source,
                     target: self.target,
                     seq_no: self.counter - 1,
                     length: bundle.data.len(),
-                })
+                }));
             }
         }
 
@@ -188,14 +188,14 @@ impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<
             let target = self.index;
 
             if let Some(logger) = self.logging.as_ref() {
-                logger.log(MessagesEvent {
+                logger.log(TimelyEvent::from(MessagesEvent {
                     is_send: false,
                     channel,
                     source: bundle.from,
                     target,
                     seq_no: bundle.seq,
                     length: bundle.data.len(),
-                });
+                }));
             }
         }
 

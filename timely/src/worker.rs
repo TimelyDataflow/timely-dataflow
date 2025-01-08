@@ -16,7 +16,7 @@ use crate::progress::timestamp::{Refines};
 use crate::progress::SubgraphBuilder;
 use crate::progress::operate::Operate;
 use crate::dataflow::scopes::Child;
-use crate::logging::TimelyLogger;
+use crate::logging::{TimelyEvent, TimelyLogger};
 
 /// Different ways in which timely's progress tracking can work.
 ///
@@ -200,6 +200,7 @@ pub trait AsWorker : Scheduler {
     /// Provides access to named logging streams.
     fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry>;
     /// Provides access to the timely logging stream.
+    #[inline(always)]
     fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().get("timely") }
 }
 
@@ -245,6 +246,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
     fn peek_identifier(&self) -> usize { self.peek_identifier() }
+    #[inline(always)]
     fn log_register(&self) -> RefMut<crate::logging_core::Registry> {
         self.log_register()
     }
@@ -365,10 +367,11 @@ impl<A: Allocate> Worker<A> {
         };
 
         if delay != Some(Duration::new(0,0)) {
+            let logger = self.logging();
 
             // Log parking and flush log.
-            if let Some(l) = self.logging().as_mut() {
-                l.log(crate::logging::ParkEvent::park(delay));
+            if let Some(l) = logger.as_ref() {
+                l.log(TimelyEvent::from(crate::logging::ParkEvent::park(delay)));
                 l.flush();
             }
 
@@ -377,7 +380,9 @@ impl<A: Allocate> Worker<A> {
                 .await_events(delay);
 
             // Log return from unpark.
-            self.logging().as_mut().map(|l| l.log(crate::logging::ParkEvent::unpark()));
+            if let Some(logger) = logger {
+                logger.log(TimelyEvent::from(crate::logging::ParkEvent::unpark()));
+            }
         }
         else {   // Schedule active dataflows.
 
@@ -536,11 +541,12 @@ impl<A: Allocate> Worker<A> {
     /// timely::execute_from_args(::std::env::args(), |worker| {
     ///
     ///     worker.log_register()
-    ///           .insert::<timely::logging::TimelyEvent,_>("timely", |time, data|
+    ///           .insert::<timely::logging::TimelyEventBuilder,_>("timely", |time, data|
     ///               println!("{:?}\t{:?}", time, data)
     ///           );
     /// });
     /// ```
+    #[inline(always)]
     pub fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry> {
         self.logging.borrow_mut()
     }
@@ -618,7 +624,7 @@ impl<A: Allocate> Worker<A> {
     ///     );
     /// });
     /// ```
-    pub fn dataflow_core<T, R, F, V>(&mut self, name: &str, mut logging: Option<TimelyLogger>, mut resources: V, func: F) -> R
+    pub fn dataflow_core<T, R, F, V>(&mut self, name: &str, logging: Option<TimelyLogger>, mut resources: V, func: F) -> R
     where
         T: Refines<()>,
         F: FnOnce(&mut V, &mut Child<Self, T>)->R,
@@ -644,12 +650,12 @@ impl<A: Allocate> Worker<A> {
 
         let mut operator = subscope.into_inner().build(self);
 
-        if let Some(l) = logging.as_mut() {
-            l.log(crate::logging::OperatesEvent {
+        if let Some(l) = logging.as_ref() {
+            l.log(TimelyEvent::from(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: operator.path().to_vec(),
                 name: operator.name().to_string(),
-            });
+            }));
             l.flush();
         }
 
@@ -748,8 +754,8 @@ impl Wrapper {
     fn step(&mut self) -> bool {
 
         // Perhaps log information about the start of the schedule call.
-        if let Some(l) = self.logging.as_mut() {
-            l.log(crate::logging::ScheduleEvent::start(self.identifier));
+        if let Some(l) = self.logging.as_ref() {
+            l.log(TimelyEvent::from(crate::logging::ScheduleEvent::start(self.identifier)));
         }
 
         let incomplete = self.operate.as_mut().map(|op| op.schedule()).unwrap_or(false);
@@ -759,8 +765,8 @@ impl Wrapper {
         }
 
         // Perhaps log information about the stop of the schedule call.
-        if let Some(l) = self.logging.as_mut() {
-            l.log(crate::logging::ScheduleEvent::stop(self.identifier));
+        if let Some(l) = self.logging.as_ref() {
+            l.log(TimelyEvent::from(crate::logging::ScheduleEvent::stop(self.identifier)));
         }
 
         incomplete
@@ -769,8 +775,8 @@ impl Wrapper {
 
 impl Drop for Wrapper {
     fn drop(&mut self) {
-        if let Some(l) = self.logging.as_mut() {
-            l.log(crate::logging::ShutdownEvent { id: self.identifier });
+        if let Some(l) = self.logging.as_ref() {
+            l.log(TimelyEvent::from(crate::logging::ShutdownEvent { id: self.identifier }));
         }
         // ensure drop order
         self.operate = None;

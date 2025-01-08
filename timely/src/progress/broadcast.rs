@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::{Location, Port};
 use crate::communication::{Push, Pull};
-use crate::logging::TimelyLogger as Logger;
+use crate::logging::{ProgressEventTimestampVec, TimelyEvent, TimelyLogger as Logger};
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::Bincode;
 
@@ -33,14 +33,16 @@ pub struct Progcaster<T:Timestamp> {
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
+    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         let (pushers, puller) = worker.allocate(channel_identifier, addr.clone());
-        logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
-            identifier: channel_identifier,
-            kind: crate::logging::CommChannelKind::Progress,
-        }));
+        if let Some(logger) = logging.as_ref() {
+            logger.log(TimelyEvent::from(crate::logging::CommChannelsEvent {
+                identifier: channel_identifier,
+                kind: crate::logging::CommChannelKind::Progress,
+            }));
+        }
         let worker_index = worker.index();
         Progcaster {
             to_push: None,
@@ -65,8 +67,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 // Pre-allocate enough space; we transfer ownership, so there is not
                 // an opportunity to re-use allocations (w/o changing the logging
                 // interface to accept references).
-                let mut messages = Box::new(Vec::with_capacity(changes.len()));
-                let mut internal = Box::new(Vec::with_capacity(changes.len()));
+                let mut messages = Vec::with_capacity(changes.len());
+                let mut internal = Vec::with_capacity(changes.len());
 
                 for ((location, time), diff) in changes.iter() {
                     match location.port {
@@ -85,8 +87,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     channel: self.channel_identifier,
                     seq_no: self.counter,
                     addr: self.addr.to_vec(),
-                    messages,
-                    internal,
+                    messages: Rc::new(messages.into_boxed_slice()) as Rc<dyn ProgressEventTimestampVec>,
+                    internal: Rc::new(internal.into_boxed_slice()) as Rc<dyn ProgressEventTimestampVec>,
                 });
             });
 
@@ -134,8 +136,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
             // options for improving it if performance limits users who want other logging.
             self.progress_logging.as_ref().map(|l| {
 
-                let mut messages = Box::new(Vec::with_capacity(changes.len()));
-                let mut internal = Box::new(Vec::with_capacity(changes.len()));
+                let mut messages = Vec::with_capacity(changes.len());
+                let mut internal = Vec::with_capacity(changes.len());
 
                 for ((location, time), diff) in recv_changes.iter() {
 
@@ -155,8 +157,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     seq_no: counter,
                     channel,
                     addr: addr.to_vec(),
-                    messages,
-                    internal,
+                    messages: Rc::new(messages.into_boxed_slice()) as Rc<dyn ProgressEventTimestampVec>,
+                    internal: Rc::new(internal.into_boxed_slice()) as Rc<dyn ProgressEventTimestampVec>,
                 });
             });
 
