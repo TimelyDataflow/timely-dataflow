@@ -1,7 +1,9 @@
 //! Network initialization.
 
 use std::sync::Arc;
+use timely_logging::Logger;
 use crate::allocator::process::ProcessBuilder;
+use crate::logging::CommunicationEventBuilder;
 use crate::networking::create_sockets;
 use super::tcp::{send_loop, recv_loop};
 use super::allocator::{TcpBuilder, new_vector};
@@ -30,7 +32,6 @@ impl Drop for CommsGuard {
 }
 
 use crate::logging::CommunicationSetup;
-use crate::CommLogger;
 
 /// Initializes network connections
 pub fn initialize_networking(
@@ -38,7 +39,7 @@ pub fn initialize_networking(
     my_index: usize,
     threads: usize,
     noisy: bool,
-    log_sender: Arc<dyn Fn(CommunicationSetup)->Option<CommLogger>+Send+Sync>,
+    log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEventBuilder>>+Send+Sync>,
 )
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {
@@ -57,7 +58,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
     mut sockets: Vec<Option<S>>,
     my_index: usize,
     threads: usize,
-    log_sender: Arc<dyn Fn(CommunicationSetup)->Option<CommLogger>+Send+Sync>,
+    log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEventBuilder>>+Send+Sync>,
 )
 -> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
 {

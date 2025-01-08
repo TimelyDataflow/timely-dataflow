@@ -1,7 +1,8 @@
 //! Configuration and events for communication logging.
 
 use columnar::Columnar;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use timely_container::CapacityContainerBuilder;
 
 /// Configuration information about a communication thread.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, Columnar)]
@@ -53,3 +54,6 @@ impl From<MessageEvent> for CommunicationEvent {
 impl From<StateEvent> for CommunicationEvent {
     fn from(v: StateEvent) -> CommunicationEvent { CommunicationEvent::State(v) }
 }
+
+/// Builder for communication log events.
+pub type CommunicationEventBuilder = CapacityContainerBuilder<Vec<(std::time::Duration, CommunicationEvent)>>;

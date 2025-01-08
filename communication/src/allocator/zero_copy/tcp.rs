@@ -2,8 +2,8 @@
 
 use std::io::{self, Write};
 use crossbeam_channel::{Sender, Receiver};
-
-use crate::CommLogger;
+use timely_logging::Logger;
+use crate::logging::CommunicationEventBuilder;
 use crate::logging::{CommunicationEvent, MessageEvent, StateEvent};
 use crate::networking::MessageHeader;
 
@@ -33,7 +33,7 @@ pub fn recv_loop<S>(
     worker_offset: usize,
     process: usize,
     remote: usize,
-    logger: Option<CommLogger>)
+    logger: Option<Logger<CommunicationEventBuilder>>)
 where
     S: Stream,
 {
@@ -136,7 +136,7 @@ pub fn send_loop<S: Stream>(
     sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
-    logger: Option<CommLogger>)
+    logger: Option<Logger<CommunicationEventBuilder>>)
 {
 
     // Log the send thread's start.
