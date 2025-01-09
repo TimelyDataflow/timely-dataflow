@@ -12,8 +12,8 @@ use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::Message;
 use std::fmt::{self, Debug};
 use crate::Container;
-use crate::logging::TimelyEvent;
 
+// use dataflow::scopes::root::loggers::CHANNELS_Q;
 
 /// Abstraction of a stream of `C: Container` records timestamped with `S::Timestamp`.
 ///
@@ -54,15 +54,13 @@ impl<S: Scope, C: Container> StreamCore<S, C> {
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
     pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
-        let logging = self.scope().logging();
-        if let Some(l) = logging.as_ref() {
-            l.log(TimelyEvent::from(crate::logging::ChannelsEvent {
-                id: identifier,
-                scope_addr: self.scope.addr().to_vec(),
-                source: (self.name.node, self.name.port),
-                target: (target.node, target.port),
-            }))
-        };
+        let mut logging = self.scope().logging();
+        logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
+            id: identifier,
+            scope_addr: self.scope.addr().to_vec(),
+            source: (self.name.node, self.name.port),
+            target: (target.node, target.port),
+        }));
 
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);

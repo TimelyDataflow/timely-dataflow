@@ -1,7 +1,7 @@
 //! Configuration and events for communication logging.
 
 use columnar::Columnar;
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Deserialize};
 use timely_container::CapacityContainerBuilder;
 
 /// Configuration information about a communication thread.

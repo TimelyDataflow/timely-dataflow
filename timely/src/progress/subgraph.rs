@@ -135,11 +135,11 @@ where
             child_path.extend_from_slice(&self.path[..]);
             child_path.push(index);
 
-            l.log(TimelyEvent::from(crate::logging::OperatesEvent {
+            l.log(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
-            }));
+            });
         }
         self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone()))
     }

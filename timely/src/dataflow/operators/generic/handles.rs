@@ -17,7 +17,7 @@ use crate::dataflow::channels::Message;
 use crate::communication::{Push, Pull};
 use crate::{Container, Data};
 use crate::container::{ContainerBuilder, CapacityContainerBuilder};
-use crate::logging::{TimelyEvent, TimelyLogger as Logger};
+use crate::logging::TimelyLogger as Logger;
 
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
@@ -82,15 +82,11 @@ impl<T: Timestamp, C: Container, P: Pull<Message<T, C>>> InputHandleCore<T, C, P
     /// ```
     #[inline]
     pub fn for_each<F: FnMut(InputCapability<T>, &mut C)>(&mut self, mut logic: F) {
-        let logging = self.logging.take();
+        let mut logging = self.logging.take();
         while let Some((cap, data)) = self.next() {
-            if let Some(l) = logging.as_ref() {
-                l.log(TimelyEvent::from(crate::logging::GuardedMessageEvent { is_start: true }));
-            };
+            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            if let Some(l) = logging.as_ref() {
-                l.log(TimelyEvent::from(crate::logging::GuardedMessageEvent { is_start: false }));
-            };
+            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
         }
         self.logging = logging;
     }

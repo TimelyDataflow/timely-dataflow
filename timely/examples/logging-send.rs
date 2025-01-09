@@ -1,9 +1,9 @@
 use std::time::Duration;
+
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Probe};
-
 use timely::logging::{TimelyEventBuilder, TimelyProgressEventBuilder};
-use timely_container::CapacityContainerBuilder;
+use timely::container::CapacityContainerBuilder;
 
 fn main() {
     // initializes and runs a timely dataflow.

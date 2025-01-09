@@ -7,7 +7,7 @@ pub type WorkerIdentifier = usize;
 pub type TimelyEventBuilder = CapacityContainerBuilder<Vec<(Duration, TimelyEvent)>>;
 
 /// Logger for timely dataflow system events.
-pub type TimelyLogger = Logger<TimelyEventBuilder>;
+pub type TimelyLogger = TypedLogger<TimelyEventBuilder, TimelyEvent>;
 
 /// Container builder for timely dataflow progress events.
 pub type TimelyProgressEventBuilder = CapacityContainerBuilder<Vec<(Duration, TimelyProgressEvent)>>;
@@ -19,6 +19,7 @@ use std::time::Duration;
 use columnar::Columnar;
 use serde::{Deserialize, Serialize};
 use timely_container::CapacityContainerBuilder;
+use timely_logging::TypedLogger;
 use crate::logging_core::Logger;
 use crate::dataflow::operators::capture::{Event, EventPusher};
 

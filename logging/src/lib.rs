@@ -5,6 +5,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::fmt::{self, Debug};
+use std::marker::PhantomData;
 
 use timely_container::{ContainerBuilder, PushInto};
 
@@ -52,7 +53,6 @@ impl Registry {
     }
 
     /// Retrieves a shared logger, if one has been inserted.
-    #[inline]
     pub fn get<CB: ContainerBuilder>(&self, name: &str) -> Option<Logger<CB>> {
         self.map
             .get(name)
@@ -83,7 +83,6 @@ impl Flush for Registry {
 }
 
 /// A buffering logger.
-#[derive(Debug)]
 pub struct Logger<CB: ContainerBuilder> {
     inner: Rc<RefCell<LoggerInner<CB, dyn FnMut(&Duration, &mut CB::Container)>>>,
 }
@@ -96,6 +95,14 @@ impl<CB: ContainerBuilder> Clone for Logger<CB> {
     }
 }
 
+impl<CB: ContainerBuilder + Debug> Debug for Logger<CB> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Logger")
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
 struct LoggerInner<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> {
     /// common instant used for all loggers.
     time:   Instant,
@@ -103,6 +110,9 @@ struct LoggerInner<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::C
     offset: Duration,
     /// container builder to produce buffers of accumulated log events
     builder: CB,
+    /// True if we logged an event since the last flush.
+    /// Used to avoid sending empty buffers on drop.
+    dirty: bool,
     /// action to take on full log buffers.
     action: A,
 }
@@ -118,6 +128,7 @@ impl<CB: ContainerBuilder> Logger<CB> {
             offset,
             action,
             builder: CB::default(),
+            dirty: false,
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
@@ -132,7 +143,7 @@ impl<CB: ContainerBuilder> Logger<CB> {
     /// This implementation borrows a shared (but thread-local) buffer of log events, to ensure
     /// that the `action` only sees one stream of events with increasing timestamps. This may
     /// have a cost that we don't entirely understand.
-    pub fn log<S>(&self, event: S) where CB: PushInto<(Duration, S)> {
+    pub fn log<T>(&self, event: T) where CB: PushInto<(Duration, T)> {
         self.log_many(Some(event));
     }
 
@@ -159,14 +170,77 @@ impl<CB: ContainerBuilder> Logger<CB> {
     pub fn flush(&self) {
         <Self as Flush>::flush(self);
     }
+
+    /// Obtain a typed logger.
+    pub fn into_typed<T>(self) -> TypedLogger<CB, T> {
+        self.into()
+    }
+}
+
+/// A logger that's typed to specific events. Its `log` functions accept events that can be
+/// converted into `T`. Dereferencing a `TypedLogger` gives you a [`Logger`] that can log any
+/// compatible type.
+///
+/// Construct a `TypedLogger` with [`Logger::into_typed`] or by calling `into` on a `Logger`.
+#[derive(Debug)]
+pub struct TypedLogger<CB: ContainerBuilder, T> {
+    inner: Logger<CB>,
+    _marker: PhantomData<T>,
+}
+
+impl<CB: ContainerBuilder, T> TypedLogger<CB, T> {
+    /// Logs an event. Equivalent to [`Logger::log`], with the exception that it converts the
+    /// event to `T` before logging.
+    pub fn log<S: Into<T>>(&self, event: S)
+    where
+        CB: PushInto<(Duration, T)>,
+    {
+        self.inner.log(event.into());
+    }
+
+    /// Logs multiple events. Equivalent to [`Logger::log_many`], with the exception that it
+    /// converts the events to `T` before logging.
+    pub fn log_many<I>(&self, events: I)
+    where
+        I: IntoIterator, I::Item: Into<T>,
+        CB: PushInto<(Duration, T)>,
+    {
+        self.inner.log_many(events.into_iter().map(Into::into));
+    }
+}
+
+impl<CB: ContainerBuilder, T> Clone for TypedLogger<CB, T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<CB: ContainerBuilder, T> From<Logger<CB>> for TypedLogger<CB, T> {
+    fn from(inner: Logger<CB>) -> Self {
+        TypedLogger {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<CB: ContainerBuilder, T> std::ops::Deref for TypedLogger<CB, T> {
+    type Target = Logger<CB>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> LoggerInner<CB, A> {
-    pub fn log_many<I>(&mut self, events: I)
+    fn log_many<I>(&mut self, events: I)
         where I: IntoIterator, CB: PushInto<(Duration, I::Item)>,
     {
         let elapsed = self.time.elapsed() + self.offset;
         for event in events {
+            self.dirty = true;
             self.builder.push_into((elapsed, event.into()));
             while let Some(container) = self.builder.extract() {
                 (self.action)(&elapsed, container);
@@ -174,12 +248,21 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> Log
         }
     }
 
-    pub fn flush(&mut self) {
-        // TODO: This previously called action with an empty buffer if there was no data.
+    fn flush(&mut self) {
         let elapsed = self.time.elapsed() + self.offset;
+
+        let mut action_ran = false;
         while let Some(buffer) = self.builder.finish() {
             (self.action)(&elapsed, buffer);
+            action_ran = true;
         }
+
+        if !action_ran {
+            // Send an empty container to indicate progress.
+            (self.action)(&elapsed, &mut CB::Container::default());
+        }
+
+        self.dirty = false;
     }
 }
 
@@ -187,7 +270,9 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> Log
 impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> Drop for LoggerInner<CB, A> {
     fn drop(&mut self) {
         // Avoid sending out empty buffers just because of drops.
-        self.flush();
+        if self.dirty {
+            self.flush();
+        }
     }
 }
 
@@ -199,6 +284,7 @@ where
         f.debug_struct("LoggerInner")
             .field("time", &self.time)
             .field("offset", &self.offset)
+            .field("dirty", &self.dirty)
             .field("action", &"FnMut")
             .field("builder", &self.builder)
             .finish()

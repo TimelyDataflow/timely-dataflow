@@ -74,6 +74,7 @@
 
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
+
 use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
@@ -832,7 +833,9 @@ fn summarize_outputs<T: Timestamp>(
 pub mod logging {
     use std::rc::Rc;
     use std::time::Duration;
+
     use timely_container::CapacityContainerBuilder;
+    use timely_logging::TypedLogger;
     use crate::logging_core::Logger;
     use crate::logging::ProgressEventTimestampVec;
 
@@ -842,24 +845,34 @@ pub mod logging {
     /// A logger with additional identifying information about the tracker.
     pub struct TrackerLogger {
         path: Rc<[usize]>,
-        logger: Logger<TrackerEventBuilder>,
+        logger: TypedLogger<TrackerEventBuilder, TrackerEvent>,
     }
 
     impl TrackerLogger {
         /// Create a new tracker logger from its fields.
         pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEventBuilder>) -> Self {
-            Self { path, logger }
+            Self { path, logger: logger.into() }
         }
 
         /// Log source update events with additional identifying information.
         pub fn log_source_updates<T: ProgressEventTimestampVec>(&mut self, updates: T) {
             let updates = Rc::new(updates) as Rc<dyn ProgressEventTimestampVec>;
-            self.logger.log(TrackerEvent::from(SourceUpdate { tracker_id: self.path.to_vec(), updates}))
+            self.logger.log({
+                SourceUpdate {
+                    tracker_id: self.path.to_vec(),
+                    updates,
+                }
+            })
         }
         /// Log target update events with additional identifying information.
         pub fn log_target_updates<T: ProgressEventTimestampVec>(&mut self, updates: T) {
             let updates = Rc::new(updates) as Rc<dyn ProgressEventTimestampVec>;
-            self.logger.log(TrackerEvent::from(TargetUpdate { tracker_id: self.path.to_vec(), updates }) )
+            self.logger.log({
+                TargetUpdate {
+                    tracker_id: self.path.to_vec(),
+                    updates,
+                }
+            })
         }
     }
 
