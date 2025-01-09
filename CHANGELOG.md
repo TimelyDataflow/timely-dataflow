@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.15.1...timely-v0.16.0) - 2025-01-09
+
+### Other
+
+- Define loggers in terms of container builders ([#615](https://github.com/TimelyDataflow/timely-dataflow/pull/615))
+- Remove SizableContainer requirement from partition ([#612](https://github.com/TimelyDataflow/timely-dataflow/pull/612))
+
 ## [0.15.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.15.0...timely-v0.15.1) - 2024-12-18
 
 ### Other
