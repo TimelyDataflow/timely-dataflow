@@ -2,25 +2,19 @@
 
 /// Type alias for logging timely events.
 pub type WorkerIdentifier = usize;
-
 /// Container builder for timely dataflow system events.
 pub type TimelyEventBuilder = CapacityContainerBuilder<Vec<(Duration, TimelyEvent)>>;
-
 /// Logger for timely dataflow system events.
-pub type TimelyLogger = TypedLogger<TimelyEventBuilder, TimelyEvent>;
-
+pub type TimelyLogger = crate::logging_core::TypedLogger<TimelyEventBuilder, TimelyEvent>;
 /// Container builder for timely dataflow progress events.
 pub type TimelyProgressEventBuilder = CapacityContainerBuilder<Vec<(Duration, TimelyProgressEvent)>>;
-
 /// Logger for timely dataflow progress events (the "timely/progress" log stream).
-pub type TimelyProgressLogger = Logger<TimelyProgressEventBuilder>;
+pub type TimelyProgressLogger = crate::logging_core::Logger<TimelyProgressEventBuilder>;
 
 use std::time::Duration;
 use columnar::Columnar;
 use serde::{Deserialize, Serialize};
-use timely_container::CapacityContainerBuilder;
-use timely_logging::TypedLogger;
-use crate::logging_core::Logger;
+use crate::container::CapacityContainerBuilder;
 use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
@@ -92,7 +86,7 @@ pub trait ProgressEventTimestamp: std::fmt::Debug + std::any::Any {
     /// # Example
     /// ```rust
     /// let ts = vec![(0usize, 0usize, (23u64, 10u64), -4i64), (0usize, 0usize, (23u64, 11u64), 1i64)];
-    /// let ts: &dyn timely::logging::ProgressEventTimestampVec = &ts.into_boxed_slice();
+    /// let ts: &dyn timely::logging::ProgressEventTimestampVec = &ts;
     /// for (n, p, t, d) in ts.iter() {
     ///     print!("{:?}, ", (n, p, t.as_any().downcast_ref::<(u64, u64)>(), d));
     /// }
@@ -126,18 +120,25 @@ impl<T: crate::Data + std::fmt::Debug + std::any::Any> ProgressEventTimestamp fo
 pub trait ProgressEventTimestampVec: std::fmt::Debug + std::any::Any {
     /// Iterate over the contents of the vector
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a>;
+
+    /// Clone self into a boxed trait object.
+    fn box_clone(&self) -> Box<dyn ProgressEventTimestampVec>;
 }
 
-impl<T: ProgressEventTimestamp> ProgressEventTimestampVec for Box<[(usize, usize, T, i64)]> {
+impl<T: ProgressEventTimestamp + Clone> ProgressEventTimestampVec for Vec<(usize, usize, T, i64)> {
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=(&'a usize, &'a usize, &'a dyn ProgressEventTimestamp, &'a i64)>+'a> {
         Box::new(<[(usize, usize, T, i64)]>::iter(&self[..]).map(|(n, p, t, d)| {
             let t: &dyn ProgressEventTimestamp = t;
             (n, p, t, d)
         }))
     }
+
+    fn box_clone(&self) -> Box<dyn ProgressEventTimestampVec> {
+        Box::new(self.clone())
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 /// Send or receive of progress information.
 pub struct TimelyProgressEvent {
     /// `true` if the event is a send, and `false` if it is a receive.
@@ -151,9 +152,23 @@ pub struct TimelyProgressEvent {
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
     pub addr: Vec<usize>,
     /// List of message updates, containing Target descriptor, timestamp as string, and delta.
-    pub messages: std::rc::Rc<dyn ProgressEventTimestampVec>,
+    pub messages: Box<dyn ProgressEventTimestampVec>,
     /// List of capability updates, containing Source descriptor, timestamp as string, and delta.
-    pub internal: std::rc::Rc<dyn ProgressEventTimestampVec>,
+    pub internal: Box<dyn ProgressEventTimestampVec>,
+}
+
+impl Clone for TimelyProgressEvent {
+    fn clone(&self) -> Self {
+        Self {
+            is_send: self.is_send,
+            source: self.source,
+            channel: self.channel,
+            seq_no: self.seq_no,
+            addr: self.addr.clone(),
+            messages: self.messages.box_clone(),
+            internal: self.internal.box_clone(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]

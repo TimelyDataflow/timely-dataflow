@@ -577,7 +577,7 @@ impl<T:Timestamp> Tracker<T> {
                 .collect::<Vec<_>>();
 
             if !target_changes.is_empty() {
-                logger.log_target_updates(target_changes.into_boxed_slice());
+                logger.log_target_updates(Box::new(target_changes));
             }
 
             let source_changes =
@@ -587,7 +587,7 @@ impl<T:Timestamp> Tracker<T> {
                 .collect::<Vec<_>>();
 
             if !source_changes.is_empty() {
-                logger.log_source_updates(source_changes.into_boxed_slice());
+                logger.log_source_updates(Box::new(source_changes));
             }
         }
 
@@ -855,8 +855,7 @@ pub mod logging {
         }
 
         /// Log source update events with additional identifying information.
-        pub fn log_source_updates<T: ProgressEventTimestampVec>(&mut self, updates: T) {
-            let updates = Rc::new(updates) as Rc<dyn ProgressEventTimestampVec>;
+        pub fn log_source_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
             self.logger.log({
                 SourceUpdate {
                     tracker_id: self.path.to_vec(),
@@ -865,8 +864,7 @@ pub mod logging {
             })
         }
         /// Log target update events with additional identifying information.
-        pub fn log_target_updates<T: ProgressEventTimestampVec>(&mut self, updates: T) {
-            let updates = Rc::new(updates) as Rc<dyn ProgressEventTimestampVec>;
+        pub fn log_target_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
             self.logger.log({
                 TargetUpdate {
                     tracker_id: self.path.to_vec(),
@@ -886,21 +884,39 @@ pub mod logging {
     }
 
     /// An update made at a source of data.
-    #[derive(Debug, Clone)]
+    #[derive(Debug)]
     pub struct SourceUpdate {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Rc<dyn ProgressEventTimestampVec>,
+        pub updates: Box<dyn ProgressEventTimestampVec>,
+    }
+
+    impl Clone for SourceUpdate {
+        fn clone(&self) -> Self {
+            Self {
+                tracker_id: self.tracker_id.clone(),
+                updates: self.updates.box_clone(),
+            }
+        }
     }
 
     /// An update made at a target of data.
-    #[derive(Debug, Clone)]
+    #[derive(Debug)]
     pub struct TargetUpdate {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Rc<dyn ProgressEventTimestampVec>,
+        pub updates: Box<dyn ProgressEventTimestampVec>,
+    }
+
+    impl Clone for TargetUpdate {
+        fn clone(&self) -> Self {
+            Self {
+                tracker_id: self.tracker_id.clone(),
+                updates: self.updates.box_clone(),
+            }
+        }
     }
 
     impl From<SourceUpdate> for TrackerEvent {
@@ -937,7 +953,7 @@ impl<T: Timestamp> Drop for Tracker<T> {
                 })
                 .collect::<Vec<_>>();
             if !target_changes.is_empty() {
-                logger.log_target_updates(target_changes.into_boxed_slice());
+                logger.log_target_updates(Box::new(target_changes));
             }
 
             let source_changes = per_operator.sources
@@ -950,7 +966,7 @@ impl<T: Timestamp> Drop for Tracker<T> {
                 })
                 .collect::<Vec<_>>();
             if !source_changes.is_empty() {
-                logger.log_source_updates(source_changes.into_boxed_slice());
+                logger.log_source_updates(Box::new(source_changes));
             }
         }
     }
