@@ -11,7 +11,7 @@ use super::stream::Stream;
 
 use timely_logging::Logger;
 
-use crate::logging::{CommunicationEvent, MessageEvent, StateEvent};
+use crate::logging::{CommunicationEvent, CommunicationEventBuilder, MessageEvent, StateEvent};
 
 fn tcp_panic(context: &'static str, cause: io::Error) -> ! {
     // NOTE: some downstream crates sniff out "timely communication error:" from
@@ -35,10 +35,11 @@ pub fn recv_loop<S>(
     worker_offset: usize,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent>>)
+    logger: Option<Logger<CommunicationEventBuilder>>)
 where
     S: Stream,
 {
+    let mut logger = logger.map(|logger| logger.into_typed::<CommunicationEvent>());
     // Log the receive thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: true }));
 
@@ -134,9 +135,9 @@ pub fn send_loop<S: Stream>(
     sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent>>)
+    logger: Option<Logger<CommunicationEventBuilder>>)
 {
-
+    let mut logger = logger.map(|logger| logger.into_typed::<CommunicationEvent>());
     // Log the send thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
 

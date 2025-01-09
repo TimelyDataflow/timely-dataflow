@@ -200,7 +200,7 @@ pub trait AsWorker : Scheduler {
     /// Provides access to named logging streams.
     fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry>;
     /// Provides access to the timely logging stream.
-    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().get("timely") }
+    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().get("timely").map(Into::into) }
 }
 
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
@@ -536,7 +536,7 @@ impl<A: Allocate> Worker<A> {
     /// timely::execute_from_args(::std::env::args(), |worker| {
     ///
     ///     worker.log_register()
-    ///           .insert::<timely::logging::TimelyEvent,_>("timely", |time, data|
+    ///           .insert::<timely::logging::TimelyEventBuilder,_>("timely", |time, data|
     ///               println!("{:?}\t{:?}", time, data)
     ///           );
     /// });
@@ -565,7 +565,7 @@ impl<A: Allocate> Worker<A> {
         T: Refines<()>,
         F: FnOnce(&mut Child<Self, T>)->R,
     {
-        let logging = self.logging.borrow_mut().get("timely");
+        let logging = self.logging.borrow_mut().get("timely").map(Into::into);
         self.dataflow_core("Dataflow", logging, Box::new(()), |_, child| func(child))
     }
 
@@ -589,7 +589,7 @@ impl<A: Allocate> Worker<A> {
         T: Refines<()>,
         F: FnOnce(&mut Child<Self, T>)->R,
     {
-        let logging = self.logging.borrow_mut().get("timely");
+        let logging = self.logging.borrow_mut().get("timely").map(Into::into);
         self.dataflow_core(name, logging, Box::new(()), |_, child| func(child))
     }
 

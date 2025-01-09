@@ -832,18 +832,26 @@ fn summarize_outputs<T: Timestamp>(
 /// Logging types for reachability tracking events.
 pub mod logging {
     use std::rc::Rc;
-    use crate::logging::{Logger, ProgressEventTimestampVec};
+    use std::time::Duration;
+
+    use timely_container::CapacityContainerBuilder;
+    use timely_logging::TypedLogger;
+    use crate::logging_core::Logger;
+    use crate::logging::ProgressEventTimestampVec;
+
+    /// A container builder for tracker events.
+    pub type TrackerEventBuilder = CapacityContainerBuilder<Vec<(Duration, TrackerEvent)>>;
 
     /// A logger with additional identifying information about the tracker.
     pub struct TrackerLogger {
         path: Rc<[usize]>,
-        logger: Logger<TrackerEvent>,
+        logger: TypedLogger<TrackerEventBuilder, TrackerEvent>,
     }
 
     impl TrackerLogger {
         /// Create a new tracker logger from its fields.
-        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEvent>) -> Self {
-            Self { path, logger }
+        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEventBuilder>) -> Self {
+            Self { path, logger: logger.into() }
         }
 
         /// Log source update events with additional identifying information.
@@ -867,6 +875,7 @@ pub mod logging {
     }
 
     /// Events that the tracker may record.
+    #[derive(Debug, Clone)]
     pub enum TrackerEvent {
         /// Updates made at a source of data.
         SourceUpdate(SourceUpdate),
@@ -875,6 +884,7 @@ pub mod logging {
     }
 
     /// An update made at a source of data.
+    #[derive(Debug)]
     pub struct SourceUpdate {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
@@ -882,12 +892,31 @@ pub mod logging {
         pub updates: Box<dyn ProgressEventTimestampVec>,
     }
 
+    impl Clone for SourceUpdate {
+        fn clone(&self) -> Self {
+            Self {
+                tracker_id: self.tracker_id.clone(),
+                updates: self.updates.box_clone(),
+            }
+        }
+    }
+
     /// An update made at a target of data.
+    #[derive(Debug)]
     pub struct TargetUpdate {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
         pub updates: Box<dyn ProgressEventTimestampVec>,
+    }
+
+    impl Clone for TargetUpdate {
+        fn clone(&self) -> Self {
+            Self {
+                tracker_id: self.tracker_id.clone(),
+                updates: self.updates.box_clone(),
+            }
+        }
     }
 
     impl From<SourceUpdate> for TrackerEvent {

@@ -179,7 +179,7 @@ where
         let path = self.path.clone();
         let reachability_logging =
         worker.log_register()
-            .get::<reachability::logging::TrackerEvent>("timely/reachability")
+            .get::<reachability::logging::TrackerEventBuilder>("timely/reachability")
             .map(|logger| reachability::logging::TrackerLogger::new(path, logger));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
