@@ -1,6 +1,6 @@
 [package]
 name = "timely_communication"
-version = "0.16.0"
+version = "0.16.1"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 description = "Communication layer for timely dataflow"
 edition.workspace = true
@@ -22,6 +22,6 @@ getopts = { version = "0.2.21", optional = true }
 byteorder = "1.5"
 serde = { version = "1.0", features = ["derive"] }
 timely_bytes = { path = "../bytes", version = "0.12" }
-timely_container = { path = "../container", version = "0.13.0" }
+timely_container = { path = "../container", version = "0.13.1" }
 timely_logging = { path = "../logging", version = "0.13" }
 crossbeam-channel = "0.5"
