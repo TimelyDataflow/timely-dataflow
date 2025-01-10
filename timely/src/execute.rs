@@ -244,7 +244,7 @@ where
 ///
 /// The arguments `execute_from_args` currently understands are:
 ///
-/// `-w, --workers`: number of per-process worker threads.
+/// `-w, --threads`: number of per-process worker threads.
 ///
 /// `-n, --processes`: number of processes involved in the computation.
 ///
