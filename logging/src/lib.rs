@@ -113,9 +113,6 @@ struct LoggerInner<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Optio
     offset: Duration,
     /// container builder to produce buffers of accumulated log events
     builder: CB,
-    /// True if we logged an event since the last flush.
-    /// Used to avoid flushing buffers on drop.
-    dirty: bool,
     /// action to take on full log buffers, or on flush.
     action: A,
 }
@@ -131,7 +128,6 @@ impl<CB: ContainerBuilder> Logger<CB> {
             offset,
             action,
             builder: CB::default(),
-            dirty: false,
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
@@ -243,7 +239,6 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Containe
     {
         let elapsed = self.time.elapsed() + self.offset;
         for event in events {
-            self.dirty = true;
             self.builder.push_into((elapsed, event.into()));
             while let Some(container) = self.builder.extract() {
                 let mut c = Some(std::mem::take(container));
@@ -270,18 +265,13 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Containe
 
         // Send no container to indicate flush.
         (self.action)(&elapsed, &mut None);
-
-        self.dirty = false;
     }
 }
 
 /// Flush on the *last* drop of a logger.
 impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> Drop for LoggerInner<CB, A> {
     fn drop(&mut self) {
-        // Avoid sending out empty buffers just because of drops.
-        if self.dirty {
-            self.flush();
-        }
+        self.flush();
     }
 }
 
@@ -293,7 +283,6 @@ where
         f.debug_struct("LoggerInner")
             .field("time", &self.time)
             .field("offset", &self.offset)
-            .field("dirty", &self.dirty)
             .field("action", &"FnMut")
             .field("builder", &self.builder)
             .finish()
