@@ -14,18 +14,19 @@ pub type TimelyProgressLogger = crate::logging_core::Logger<TimelyProgressEventB
 use std::time::Duration;
 use columnar::Columnar;
 use serde::{Deserialize, Serialize};
+
+use crate::Container;
 use crate::container::CapacityContainerBuilder;
 use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
-pub struct BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> {
-    // None when the logging stream is closed
+pub struct BatchLogger<P, C> where P: EventPusher<Duration, C> {
     time: Duration,
     event_pusher: P,
-    _phantom: ::std::marker::PhantomData<T>,
+    _phantom: ::std::marker::PhantomData<C>,
 }
 
-impl<T, P> BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> {
+impl<P, C> BatchLogger<P, C> where P: EventPusher<Duration, C>, C: Container {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
         BatchLogger {
@@ -35,8 +36,8 @@ impl<T, P> BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> 
         }
     }
     /// Publishes a batch of logged events and advances the capability.
-    pub fn publish_batch(&mut self, &time: &Duration, data: &mut Vec<(Duration, T)>) {
-        if !data.is_empty() {
+    pub fn publish_batch(&mut self, &time: &Duration, data: &mut Option<C>) {
+        if let Some(data) = data {
             self.event_pusher.push(Event::Messages(self.time, std::mem::take(data)));
         }
         if self.time < time {
@@ -47,7 +48,7 @@ impl<T, P> BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> 
         self.time = time;
     }
 }
-impl<T, P> Drop for BatchLogger<T, P> where P: EventPusher<Duration, Vec<(Duration, T)>> {
+impl<P, C> Drop for BatchLogger<P, C> where P: EventPusher<Duration, C> {
     fn drop(&mut self) {
         self.event_pusher.push(Event::Progress(vec![(self.time, -1)]));
     }
