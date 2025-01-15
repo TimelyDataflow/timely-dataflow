@@ -56,14 +56,6 @@ impl<T, C: Container + Data, P: Push<Message<T, C>>> Buffer<T, CapacityContainer
     pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, CapacityContainerBuilder<C>, P> where T: Timestamp {
         self.autoflush_session_with_builder(cap)
     }
-
-    /// Gives an entire container at the current time.
-    fn give_container(&mut self, container: &mut C) {
-        if !container.is_empty() {
-            self.builder.push_container(container);
-            self.extract_and_send();
-        }
-    }
 }
 
 impl<T, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Buffer<T, CB, P> where T: Eq+Clone {
@@ -109,6 +101,19 @@ impl<T, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Buffer<T, CB, 
             Message::push_at(container, time, &mut self.pusher);
         }
     }
+
+    /// Gives an entire container at the current time. Maintains FIFO order with previously pushed
+    /// data. Only intended to be used through [`Session::give_container`].
+    // TODO: This method could exist without a container builder, but we can't express this as a
+    // buffer always requires a container builder. We could expose the buffer's underlying pusher
+    // directly, but this would bypass the buffer's time tracking.
+    fn give_container(&mut self, container: &mut CB::Container) {
+        if !container.is_empty() {
+            self.flush();
+            let time = self.time.as_ref().unwrap().clone();
+            Message::push_at(container, time, &mut self.pusher);
+        }
+    }
 }
 
 impl<T, CB, P, D> PushInto<D> for Buffer<T, CB, P>
@@ -133,13 +138,14 @@ pub struct Session<'a, T, CB, P> {
     buffer: &'a mut Buffer<T, CB, P>,
 }
 
-impl<'a, T, C: Container + Data, P> Session<'a, T, CapacityContainerBuilder<C>, P>
+impl<'a, T, CB: ContainerBuilder, P> Session<'a, T, CB, P>
 where
     T: Eq + Clone + 'a,
-    P: Push<Message<T, C>> + 'a,
+    P: Push<Message<T, CB::Container>> + 'a,
 {
-    /// Provide a container at the time specified by the [Session].
-    pub fn give_container(&mut self, container: &mut C) {
+    /// Provide a container at the time specified by the [Session]. Maintains FIFO order with
+    /// previously pushed data.
+    pub fn give_container(&mut self, container: &mut CB::Container) {
         self.buffer.give_container(container)
     }
 }
