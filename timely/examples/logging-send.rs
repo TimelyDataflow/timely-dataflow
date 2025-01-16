@@ -15,28 +15,38 @@ fn main() {
         let mut probe = ProbeHandle::new();
 
         // Register timely worker logging.
-        worker.log_register().insert::<TimelyEventBuilder,_>("timely", |_time, data|
-            data.iter().for_each(|x| println!("LOG1: {:?}", x))
+        worker.log_register().insert::<TimelyEventBuilder,_>("timely", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|x| println!("LOG1: {:?}", x))
+            }
+            else {
+                println!("LOG1: Flush {time:?}");
+            }
         );
 
         // Register timely progress logging.
         // Less generally useful: intended for debugging advanced custom operators or timely
         // internals.
-        worker.log_register().insert::<TimelyProgressEventBuilder,_>("timely/progress", |_time, data|
-            data.iter().for_each(|x| {
-                println!("PROGRESS: {:?}", x);
-                let (_, ev) = x;
-                print!("PROGRESS: TYPED MESSAGES: ");
-                for (n, p, t, d) in ev.messages.iter() {
-                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
-                }
-                println!();
-                print!("PROGRESS: TYPED INTERNAL: ");
-                for (n, p, t, d) in ev.internal.iter() {
-                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
-                }
-                println!();
-            })
+        worker.log_register().insert::<TimelyProgressEventBuilder,_>("timely/progress", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|x| {
+                    println!("PROGRESS: {:?}", x);
+                    let (_, ev) = x;
+                    print!("PROGRESS: TYPED MESSAGES: ");
+                    for (n, p, t, d) in ev.messages.iter() {
+                        print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                    }
+                    println!();
+                    print!("PROGRESS: TYPED INTERNAL: ");
+                    for (n, p, t, d) in ev.internal.iter() {
+                        print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                    }
+                    println!();
+                })
+            }
+            else {
+                println!("PROGRESS: Flush {time:?}");
+            }
         );
 
         // create a new input, exchange data, and inspect its output
@@ -48,8 +58,13 @@ fn main() {
         });
 
         // Register timely worker logging.
-        worker.log_register().insert::<TimelyEventBuilder,_>("timely", |_time, data|
-            data.iter().for_each(|x| println!("LOG2: {:?}", x))
+        worker.log_register().insert::<TimelyEventBuilder,_>("timely", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|x| println!("LOG2: {:?}", x))
+            }
+            else {
+                println!("LOG2: Flush {time:?}");
+            }
         );
 
         // create a new input, exchange data, and inspect its output
@@ -62,9 +77,14 @@ fn main() {
 
         // Register user-level logging.
         type MyBuilder = CapacityContainerBuilder<Vec<(Duration, ())>>;
-        worker.log_register().insert::<MyBuilder,_>("input", |_time, data|
-            for element in data.iter() {
-                println!("Round tick at: {:?}", element.0);
+        worker.log_register().insert::<MyBuilder,_>("input", |time, data|
+            if let Some(data) = data {
+                for element in data.iter() {
+                    println!("Round tick at: {:?}", element.0);
+                }
+            }
+            else {
+                println!("Round flush at: {time:?}");
             }
         );
 

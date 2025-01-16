@@ -9,6 +9,7 @@ use std::marker::PhantomData;
 
 use timely_container::{ContainerBuilder, PushInto};
 
+/// A registry binding names to typed loggers.
 pub struct Registry {
     /// A map from names to typed loggers.
     map: HashMap<String, (Box<dyn Any>, Box<dyn Flush>)>,
@@ -28,7 +29,12 @@ impl Registry {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
-    pub fn insert<CB: ContainerBuilder, F: FnMut(&Duration, &mut CB::Container)+'static>(
+    ///
+    /// The action needs to follow the requirements of container builder `CB` regarding what they
+    /// need to do with containers they receive and what properties to uphold.
+    ///
+    /// Passing a `&mut None` container to an action indicates a flush.
+    pub fn insert<CB: ContainerBuilder, F: FnMut(&Duration, &mut Option<CB::Container>)+'static>(
         &mut self,
         name: &str,
         action: F) -> Option<Box<dyn Any>>
@@ -84,7 +90,7 @@ impl Flush for Registry {
 
 /// A buffering logger.
 pub struct Logger<CB: ContainerBuilder> {
-    inner: Rc<RefCell<LoggerInner<CB, dyn FnMut(&Duration, &mut CB::Container)>>>,
+    inner: Rc<RefCell<LoggerInner<CB, dyn FnMut(&Duration, &mut Option<CB::Container>)>>>,
 }
 
 impl<CB: ContainerBuilder> Clone for Logger<CB> {
@@ -103,17 +109,14 @@ impl<CB: ContainerBuilder + Debug> Debug for Logger<CB> {
     }
 }
 
-struct LoggerInner<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> {
+struct LoggerInner<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> {
     /// common instant used for all loggers.
     time:   Instant,
     /// offset to allow re-calibration.
     offset: Duration,
     /// container builder to produce buffers of accumulated log events
     builder: CB,
-    /// True if we logged an event since the last flush.
-    /// Used to avoid sending empty buffers on drop.
-    dirty: bool,
-    /// action to take on full log buffers.
+    /// action to take on full log buffers, or on flush.
     action: A,
 }
 
@@ -121,14 +124,13 @@ impl<CB: ContainerBuilder> Logger<CB> {
     /// Allocates a new shareable logger bound to a write destination.
     pub fn new<F>(time: Instant, offset: Duration, action: F) -> Self
     where
-        F: FnMut(&Duration, &mut CB::Container)+'static
+        F: FnMut(&Duration, &mut Option<CB::Container>)+'static
     {
         let inner = LoggerInner {
             time,
             offset,
             action,
             builder: CB::default(),
-            dirty: false,
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
@@ -234,16 +236,25 @@ impl<CB: ContainerBuilder, T> std::ops::Deref for TypedLogger<CB, T> {
     }
 }
 
-impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> LoggerInner<CB, A> {
+impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> LoggerInner<CB, A> {
+    /// Push a container with a time at an action.
+    #[inline]
+    fn push(action: &mut A, time: &Duration, container: &mut CB::Container) {
+        let mut c = Some(std::mem::take(container));
+        (action)(time, &mut c);
+        if let Some(c) = c {
+            *container = c;
+        }
+    }
+
     fn log_many<I>(&mut self, events: I)
         where I: IntoIterator, CB: PushInto<(Duration, I::Item)>,
     {
         let elapsed = self.time.elapsed() + self.offset;
         for event in events {
-            self.dirty = true;
             self.builder.push_into((elapsed, event.into()));
             while let Some(container) = self.builder.extract() {
-                (self.action)(&elapsed, container);
+                Self::push(&mut self.action, &elapsed, container);
             }
         }
     }
@@ -251,32 +262,23 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> Log
     fn flush(&mut self) {
         let elapsed = self.time.elapsed() + self.offset;
 
-        let mut action_ran = false;
-        while let Some(buffer) = self.builder.finish() {
-            (self.action)(&elapsed, buffer);
-            action_ran = true;
+        while let Some(container) = self.builder.finish() {
+            Self::push(&mut self.action, &elapsed, container);
         }
 
-        if !action_ran {
-            // Send an empty container to indicate progress.
-            (self.action)(&elapsed, &mut CB::Container::default());
-        }
-
-        self.dirty = false;
+        // Send no container to indicate flush.
+        (self.action)(&elapsed, &mut None);
     }
 }
 
 /// Flush on the *last* drop of a logger.
-impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut CB::Container)> Drop for LoggerInner<CB, A> {
+impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> Drop for LoggerInner<CB, A> {
     fn drop(&mut self) {
-        // Avoid sending out empty buffers just because of drops.
-        if self.dirty {
-            self.flush();
-        }
+        self.flush();
     }
 }
 
-impl<CB, A: ?Sized + FnMut(&Duration, &mut CB::Container)> Debug for LoggerInner<CB, A>
+impl<CB, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> Debug for LoggerInner<CB, A>
 where
     CB: ContainerBuilder + Debug,
 {
@@ -284,7 +286,6 @@ where
         f.debug_struct("LoggerInner")
             .field("time", &self.time)
             .field("offset", &self.offset)
-            .field("dirty", &self.dirty)
             .field("action", &"FnMut")
             .field("builder", &self.builder)
             .finish()
