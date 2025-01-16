@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.16.0...timely-v0.16.1) - 2025-01-16
+
+### Other
+
+- Avoid allocation in progcaster ([#622](https://github.com/TimelyDataflow/timely-dataflow/pull/622))
+- Log action can distinguish data from flush ([#619](https://github.com/TimelyDataflow/timely-dataflow/pull/619))
+- give_container for arbitrary container builders ([#621](https://github.com/TimelyDataflow/timely-dataflow/pull/621))
+- Add an is_empty check before retrieving elapsed time. ([#620](https://github.com/TimelyDataflow/timely-dataflow/pull/620))
+- Correct documentation for execute_from_args ([#617](https://github.com/TimelyDataflow/timely-dataflow/pull/617))
+
 ## [0.16.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.15.1...timely-v0.16.0) - 2025-01-09
 
 ### Other
