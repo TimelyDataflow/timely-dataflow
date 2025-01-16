@@ -7,7 +7,7 @@ use std::time::{Instant, Duration};
 use std::fmt::{self, Debug};
 use std::marker::PhantomData;
 
-use timely_container::{Container, ContainerBuilder, PushInto};
+use timely_container::{ContainerBuilder, PushInto};
 
 /// A registry binding names to typed loggers.
 pub struct Registry {
@@ -29,6 +29,9 @@ impl Registry {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
+    ///
+    /// The action needs to follow the requirements of container builder `CB` regarding what they
+    /// need to do with containers they receive and what properties to uphold.
     ///
     /// Passing a `&mut None` container to an action indicates a flush.
     pub fn insert<CB: ContainerBuilder, F: FnMut(&Duration, &mut Option<CB::Container>)+'static>(
@@ -234,6 +237,16 @@ impl<CB: ContainerBuilder, T> std::ops::Deref for TypedLogger<CB, T> {
 }
 
 impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> LoggerInner<CB, A> {
+    /// Push a container with a time at an action.
+    #[inline]
+    fn push(action: &mut A, time: &Duration, container: &mut CB::Container) {
+        let mut c = Some(std::mem::take(container));
+        (action)(time, &mut c);
+        if let Some(c) = c {
+            *container = c;
+        }
+    }
+
     fn log_many<I>(&mut self, events: I)
         where I: IntoIterator, CB: PushInto<(Duration, I::Item)>,
     {
@@ -241,12 +254,7 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Containe
         for event in events {
             self.builder.push_into((elapsed, event.into()));
             while let Some(container) = self.builder.extract() {
-                let mut c = Some(std::mem::take(container));
-                (self.action)(&elapsed, &mut c);
-                if let Some(mut c) = c {
-                    c.clear();
-                    *container = c;
-                }
+                Self::push(&mut self.action, &elapsed, container);
             }
         }
     }
@@ -255,12 +263,7 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Containe
         let elapsed = self.time.elapsed() + self.offset;
 
         while let Some(container) = self.builder.finish() {
-            let mut c = Some(std::mem::take(container));
-            (self.action)(&elapsed, &mut c);
-            if let Some(mut c) = c {
-                c.clear();
-                *container = c;
-            }
+            Self::push(&mut self.action, &elapsed, container);
         }
 
         // Send no container to indicate flush.
