@@ -104,7 +104,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     self.to_push = Some(Bincode::from((
                         self.source,
                         self.counter,
-                        changes.clone().into_inner().to_vec(),
+                        changes.clone().into_inner().into_vec(),
                     )));
                 }
 
