@@ -194,27 +194,6 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
 
 impl<C: Container + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
-impl<C: Container> CapacityContainerBuilder<C> {
-    /// Push a pre-formed container at this builder. This exists to maintain
-    /// API compatibility.
-    #[inline]
-    pub fn push_container(&mut self, container: &mut C) {
-        if !container.is_empty() {
-            // Flush to maintain FIFO ordering.
-            if self.current.len() > 0 {
-                self.pending.push_back(std::mem::take(&mut self.current));
-            }
-
-            let mut empty = self.empty.take().unwrap_or_default();
-            // Ideally, we'd discard non-uniformly sized containers, but we don't have
-            // access to `len`/`capacity` of the container.
-            empty.clear();
-
-            self.pending.push_back(std::mem::replace(container, empty));
-        }
-    }
-}
-
 impl<T> Container for Vec<T> {
     type ItemRef<'a> = &'a T where T: 'a;
     type Item<'a> = T where T: 'a;
