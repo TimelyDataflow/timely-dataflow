@@ -11,6 +11,7 @@ use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
 use crate::logging::{TimelyLogger as Logger, TimelyProgressEventBuilder};
+use crate::logging::TimelySummaryLogger as SummaryLogger;
 
 use crate::scheduling::Schedule;
 use crate::scheduling::activate::Activations;
@@ -63,6 +64,8 @@ where
 
     /// Logging handle
     logging: Option<Logger>,
+    /// Typed logging handle for operator summaries.
+    summary_logging: Option<SummaryLogger<TInner::Summary>>,
 }
 
 impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
@@ -95,6 +98,7 @@ where
     pub fn new_from(
         path: Rc<[usize]>,
         logging: Option<Logger>,
+        summary_logging: Option<SummaryLogger<TInner::Summary>>,
         name: &str,
     )
         -> SubgraphBuilder<TOuter, TInner>
@@ -113,6 +117,7 @@ where
             input_messages: Vec::new(),
             output_capabilities: Vec::new(),
             logging,
+            summary_logging,
         }
     }
 
@@ -135,7 +140,7 @@ where
                 name: child.name().to_owned(),
             });
         }
-        self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone()))
+        self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone(), &mut self.summary_logging));
     }
 
     /// Now that initialization is complete, actually build a subgraph.
@@ -636,7 +641,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         mut scope: Box<dyn Operate<T>>,
         index: usize,
         identifier: usize,
-        logging: Option<Logger>
+        logging: Option<Logger>,
+        summary_logging: &mut Option<SummaryLogger<T::Summary>>,
     ) -> PerOperatorState<T>
     {
         let local = scope.local();
@@ -645,6 +651,13 @@ impl<T: Timestamp> PerOperatorState<T> {
         let notify = scope.notify_me();
 
         let (internal_summary, shared_progress) = scope.get_internal_summary();
+
+        if let Some(l) = summary_logging {
+            l.log(crate::logging::OperatesSummaryEvent {
+                id: identifier,
+                summary: internal_summary.clone(),
+            })
+        }
 
         assert_eq!(
             internal_summary.len(),

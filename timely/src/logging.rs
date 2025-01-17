@@ -10,6 +10,10 @@ pub type TimelyLogger = crate::logging_core::TypedLogger<TimelyEventBuilder, Tim
 pub type TimelyProgressEventBuilder<T> = CapacityContainerBuilder<Vec<(Duration, TimelyProgressEvent<T>)>>;
 /// Logger for timely dataflow progress events (the "timely/progress" log stream).
 pub type TimelyProgressLogger<T> = crate::logging_core::Logger<TimelyProgressEventBuilder<T>>;
+/// Container builder for timely dataflow progress events.
+pub type TimelySummaryEventBuilder<TS> = CapacityContainerBuilder<Vec<(Duration, OperatesSummaryEvent<TS>)>>;
+/// Logger for timely dataflow progress events (the "timely/progress" log stream).
+pub type TimelySummaryLogger<TS> = crate::logging_core::Logger<TimelySummaryEventBuilder<TS>>;
 
 use std::time::Duration;
 use columnar::Columnar;
@@ -63,6 +67,16 @@ pub struct OperatesEvent {
     pub addr: Vec<usize>,
     /// A helpful name.
     pub name: String,
+}
+
+
+#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Eq, PartialEq)]
+/// The summary of internal connectivity of an `Operate` implementor.
+pub struct OperatesSummaryEvent<TS> {
+    /// Worker-unique identifier for the operator.
+    pub id: usize,
+    /// Timestamp action summaries for (input, output) pairs.
+    pub summary: Vec<Vec<crate::progress::Antichain<TS>>>,
 }
 
 #[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
