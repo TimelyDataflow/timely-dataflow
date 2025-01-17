@@ -34,7 +34,7 @@ where
     /// The log writer for this scope.
     pub logging:  Option<Logger>,
     /// The progress log writer for this scope.
-    pub progress_logging:  Option<ProgressLogger>,
+    pub progress_logging:  Option<ProgressLogger<T>>,
 }
 
 impl<G, T> Child<'_, G, T>
@@ -130,13 +130,16 @@ where
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let path = self.addr_for_child(index);
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(path, self.logging(), self.progress_logging.clone(), name));
+        let type_name = std::any::type_name::<T2>();
+        let progress_logging = self.log_register().get(&format!("timely/progress/{type_name}"));
+
+        let subscope = RefCell::new(SubgraphBuilder::new_from(path, self.logging(), name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
                 parent: self.clone(),
                 logging: self.logging.clone(),
-                progress_logging: self.progress_logging.clone(),
+                progress_logging,
             };
             func(&mut builder)
         };

@@ -10,8 +10,7 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
-use crate::logging::TimelyLogger as Logger;
-use crate::logging::TimelyProgressLogger as ProgressLogger;
+use crate::logging::{TimelyLogger as Logger, TimelyProgressEventBuilder};
 
 use crate::scheduling::Schedule;
 use crate::scheduling::activate::Activations;
@@ -64,9 +63,6 @@ where
 
     /// Logging handle
     logging: Option<Logger>,
-
-    /// Progress logging handle
-    progress_logging: Option<ProgressLogger>,
 }
 
 impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
@@ -99,7 +95,6 @@ where
     pub fn new_from(
         path: Rc<[usize]>,
         logging: Option<Logger>,
-        progress_logging: Option<ProgressLogger>,
         name: &str,
     )
         -> SubgraphBuilder<TOuter, TInner>
@@ -118,7 +113,6 @@ where
             input_messages: Vec::new(),
             output_capabilities: Vec::new(),
             logging,
-            progress_logging,
         }
     }
 
@@ -177,13 +171,15 @@ where
 
         // The `None` argument is optional logging infrastructure.
         let path = self.path.clone();
+        let type_name = std::any::type_name::<TInner>();
         let reachability_logging =
         worker.log_register()
-            .get::<reachability::logging::TrackerEventBuilder>("timely/reachability")
+            .get::<reachability::logging::TrackerEventBuilder<TInner>>(&format!("timely/reachability/{type_name}"))
             .map(|logger| reachability::logging::TrackerLogger::new(path, logger));
+        let progress_logging = worker.log_register().get::<TimelyProgressEventBuilder<TInner>>(&format!("timely/progress/{type_name}"));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
-        let progcaster = Progcaster::new(worker, self.path.clone(), self.logging.clone(), self.progress_logging.clone());
+        let progcaster = Progcaster::new(worker, self.path.clone(), self.logging.clone(), progress_logging);
 
         let mut incomplete = vec![true; self.children.len()];
         incomplete[0] = false;
