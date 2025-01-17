@@ -28,12 +28,12 @@ pub struct Progcaster<T:Timestamp> {
     /// Communication channel identifier
     channel_identifier: usize,
 
-    progress_logging: Option<ProgressLogger>,
+    progress_logging: Option<ProgressLogger<T>>,
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger>) -> Progcaster<T> {
+    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger<T>>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
         let (pushers, puller) = worker.allocate(channel_identifier, addr.clone());
@@ -65,8 +65,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 // Pre-allocate enough space; we transfer ownership, so there is not
                 // an opportunity to re-use allocations (w/o changing the logging
                 // interface to accept references).
-                let mut messages = Box::new(Vec::with_capacity(changes.len()));
-                let mut internal = Box::new(Vec::with_capacity(changes.len()));
+                let mut messages = Vec::with_capacity(changes.len());
+                let mut internal = Vec::with_capacity(changes.len());
 
                 for ((location, time), diff) in changes.iter() {
                     match location.port {
@@ -134,8 +134,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
             // options for improving it if performance limits users who want other logging.
             self.progress_logging.as_ref().map(|l| {
 
-                let mut messages = Box::new(Vec::with_capacity(changes.len()));
-                let mut internal = Box::new(Vec::with_capacity(changes.len()));
+                let mut messages = Vec::with_capacity(changes.len());
+                let mut internal = Vec::with_capacity(changes.len());
 
                 for ((location, time), diff) in recv_changes.iter() {
 

@@ -4,6 +4,7 @@ use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Probe};
 use timely::logging::{TimelyEventBuilder, TimelyProgressEventBuilder};
 use timely::container::CapacityContainerBuilder;
+use timely::progress::reachability::logging::TrackerEventBuilder;
 
 fn main() {
     // initializes and runs a timely dataflow.
@@ -27,25 +28,36 @@ fn main() {
         // Register timely progress logging.
         // Less generally useful: intended for debugging advanced custom operators or timely
         // internals.
-        worker.log_register().insert::<TimelyProgressEventBuilder,_>("timely/progress", |time, data|
+        worker.log_register().insert::<TimelyProgressEventBuilder<usize>,_>("timely/progress/usize", |time, data|
             if let Some(data) = data {
                 data.iter().for_each(|x| {
                     println!("PROGRESS: {:?}", x);
                     let (_, ev) = x;
                     print!("PROGRESS: TYPED MESSAGES: ");
                     for (n, p, t, d) in ev.messages.iter() {
-                        print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                        print!("{:?}, ", (n, p, t, d));
                     }
                     println!();
                     print!("PROGRESS: TYPED INTERNAL: ");
                     for (n, p, t, d) in ev.internal.iter() {
-                        print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
+                        print!("{:?}, ", (n, p, t, d));
                     }
                     println!();
                 })
             }
             else {
                 println!("PROGRESS: Flush {time:?}");
+            }
+        );
+
+        worker.log_register().insert::<TrackerEventBuilder<usize>,_>("timely/reachability/usize", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|x| {
+                    println!("REACHABILITY: {:?}", x);
+                })
+            }
+            else {
+                println!("REACHABILITY: Flush {time:?}");
             }
         );
 

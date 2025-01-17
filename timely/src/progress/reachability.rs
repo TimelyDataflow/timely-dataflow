@@ -195,7 +195,7 @@ impl<T: Timestamp> Builder<T> {
     /// default summaries (a serious liveness issue).
     ///
     /// The optional logger information is baked into the resulting tracker.
-    pub fn build(self, logger: Option<logging::TrackerLogger>) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn build(self, logger: Option<logging::TrackerLogger<T>>) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
 
         if !self.is_acyclic() {
             println!("Cycle detected without timestamp increment");
@@ -404,7 +404,7 @@ pub struct Tracker<T:Timestamp> {
     total_counts: i64,
 
     /// Optionally, a unique logging identifier and logging for tracking events.
-    logger: Option<logging::TrackerLogger>,
+    logger: Option<logging::TrackerLogger<T>>,
 }
 
 /// Target and source information for each operator.
@@ -503,7 +503,7 @@ impl<T:Timestamp> Tracker<T> {
     /// output port.
     ///
     /// If the optional logger is provided, it will be used to log various tracker events.
-    pub fn allocate_from(builder: Builder<T>, logger: Option<logging::TrackerLogger>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn allocate_from(builder: Builder<T>, logger: Option<logging::TrackerLogger<T>>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
 
         // Allocate buffer space for each input and input port.
         let mut per_operator =
@@ -577,7 +577,7 @@ impl<T:Timestamp> Tracker<T> {
                 .collect::<Vec<_>>();
 
             if !target_changes.is_empty() {
-                logger.log_target_updates(Box::new(target_changes));
+                logger.log_target_updates(target_changes);
             }
 
             let source_changes =
@@ -587,7 +587,7 @@ impl<T:Timestamp> Tracker<T> {
                 .collect::<Vec<_>>();
 
             if !source_changes.is_empty() {
-                logger.log_source_updates(Box::new(source_changes));
+                logger.log_source_updates(source_changes);
             }
         }
 
@@ -837,25 +837,24 @@ pub mod logging {
     use timely_container::CapacityContainerBuilder;
     use timely_logging::TypedLogger;
     use crate::logging_core::Logger;
-    use crate::logging::ProgressEventTimestampVec;
 
     /// A container builder for tracker events.
-    pub type TrackerEventBuilder = CapacityContainerBuilder<Vec<(Duration, TrackerEvent)>>;
+    pub type TrackerEventBuilder<T> = CapacityContainerBuilder<Vec<(Duration, TrackerEvent<T>)>>;
 
     /// A logger with additional identifying information about the tracker.
-    pub struct TrackerLogger {
+    pub struct TrackerLogger<T: Clone + 'static> {
         path: Rc<[usize]>,
-        logger: TypedLogger<TrackerEventBuilder, TrackerEvent>,
+        logger: TypedLogger<TrackerEventBuilder<T>, TrackerEvent<T>>,
     }
 
-    impl TrackerLogger {
+    impl<T: Clone + 'static> TrackerLogger<T> {
         /// Create a new tracker logger from its fields.
-        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEventBuilder>) -> Self {
+        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEventBuilder<T>>) -> Self {
             Self { path, logger: logger.into() }
         }
 
         /// Log source update events with additional identifying information.
-        pub fn log_source_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
+        pub fn log_source_updates(&mut self, updates: Vec<(usize, usize, T, i64)>) {
             self.logger.log({
                 SourceUpdate {
                     tracker_id: self.path.to_vec(),
@@ -864,7 +863,7 @@ pub mod logging {
             })
         }
         /// Log target update events with additional identifying information.
-        pub fn log_target_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
+        pub fn log_target_updates(&mut self, updates: Vec<(usize, usize, T, i64)>) {
             self.logger.log({
                 TargetUpdate {
                     tracker_id: self.path.to_vec(),
@@ -876,55 +875,37 @@ pub mod logging {
 
     /// Events that the tracker may record.
     #[derive(Debug, Clone)]
-    pub enum TrackerEvent {
+    pub enum TrackerEvent<T> {
         /// Updates made at a source of data.
-        SourceUpdate(SourceUpdate),
+        SourceUpdate(SourceUpdate<T>),
         /// Updates made at a target of data.
-        TargetUpdate(TargetUpdate),
+        TargetUpdate(TargetUpdate<T>),
     }
 
     /// An update made at a source of data.
-    #[derive(Debug)]
-    pub struct SourceUpdate {
+    #[derive(Debug, Clone)]
+    pub struct SourceUpdate<T> {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Box<dyn ProgressEventTimestampVec>,
-    }
-
-    impl Clone for SourceUpdate {
-        fn clone(&self) -> Self {
-            Self {
-                tracker_id: self.tracker_id.clone(),
-                updates: self.updates.box_clone(),
-            }
-        }
+        pub updates: Vec<(usize, usize, T, i64)>,
     }
 
     /// An update made at a target of data.
-    #[derive(Debug)]
-    pub struct TargetUpdate {
+    #[derive(Debug, Clone)]
+    pub struct TargetUpdate<T> {
         /// An identifier for the tracker.
         pub tracker_id: Vec<usize>,
         /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Box<dyn ProgressEventTimestampVec>,
+        pub updates: Vec<(usize, usize, T, i64)>,
     }
 
-    impl Clone for TargetUpdate {
-        fn clone(&self) -> Self {
-            Self {
-                tracker_id: self.tracker_id.clone(),
-                updates: self.updates.box_clone(),
-            }
-        }
+    impl<T> From<SourceUpdate<T>> for TrackerEvent<T> {
+        fn from(v: SourceUpdate<T>) -> TrackerEvent<T> { TrackerEvent::SourceUpdate(v) }
     }
 
-    impl From<SourceUpdate> for TrackerEvent {
-        fn from(v: SourceUpdate) -> TrackerEvent { TrackerEvent::SourceUpdate(v) }
-    }
-
-    impl From<TargetUpdate> for TrackerEvent {
-        fn from(v: TargetUpdate) -> TrackerEvent { TrackerEvent::TargetUpdate(v) }
+    impl<T> From<TargetUpdate<T>> for TrackerEvent<T> {
+        fn from(v: TargetUpdate<T>) -> TrackerEvent<T> { TrackerEvent::TargetUpdate(v) }
     }
 }
 
@@ -953,7 +934,7 @@ impl<T: Timestamp> Drop for Tracker<T> {
                 })
                 .collect::<Vec<_>>();
             if !target_changes.is_empty() {
-                logger.log_target_updates(Box::new(target_changes));
+                logger.log_target_updates(target_changes);
             }
 
             let source_changes = per_operator.sources
@@ -966,7 +947,7 @@ impl<T: Timestamp> Drop for Tracker<T> {
                 })
                 .collect::<Vec<_>>();
             if !source_changes.is_empty() {
-                logger.log_source_updates(Box::new(source_changes));
+                logger.log_source_updates(source_changes);
             }
         }
     }
