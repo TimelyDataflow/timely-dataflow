@@ -94,17 +94,18 @@ where
 
                 for event_stream in event_streams.iter_mut() {
                     while let Some(event) = event_stream.next() {
+                        use std::borrow::Cow::*;
                         match event {
-                            Ok(Event::Progress(vec)) => {
+                            Owned(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.into_iter());
                             },
-                            Ok(Event::Messages(time, mut data)) => {
+                            Owned(Event::Messages(time, mut data)) => {
                                 output.session(&time).give_container(&mut data);
                             }
-                            Err(Event::Progress(vec)) => {
+                            Borrowed(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.iter().cloned());
                             },
-                            Err(Event::Messages(time, data)) => {
+                            Borrowed(Event::Messages(time, data)) => {
                                 allocation.clone_from(data);
                                 output.session(time).give_container(&mut allocation);
                             }
