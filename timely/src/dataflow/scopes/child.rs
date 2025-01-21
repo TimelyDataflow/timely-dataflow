@@ -132,8 +132,9 @@ where
 
         let type_name = std::any::type_name::<T2>();
         let progress_logging = self.log_register().get(&format!("timely/progress/{type_name}"));
+        let summary_logging = self.log_register().get(&format!("timely/summary/{type_name}"));
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(path, self.logging(), name));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(path, self.logging(), summary_logging, name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,

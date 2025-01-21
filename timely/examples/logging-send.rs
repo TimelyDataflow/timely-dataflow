@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Probe};
-use timely::logging::{TimelyEventBuilder, TimelyProgressEventBuilder};
+use timely::logging::{TimelyEventBuilder, TimelyProgressEventBuilder, TimelySummaryEventBuilder};
 use timely::container::CapacityContainerBuilder;
 use timely::progress::reachability::logging::TrackerEventBuilder;
 
@@ -58,6 +58,17 @@ fn main() {
             }
             else {
                 println!("REACHABILITY: Flush {time:?}");
+            }
+        );
+
+        worker.log_register().insert::<TimelySummaryEventBuilder<usize>,_>("timely/summary/usize", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|(_, x)| {
+                    println!("SUMMARY: {:?}", x);
+                })
+            }
+            else {
+                println!("SUMMARY: Flush {time:?}");
             }
         );
 
