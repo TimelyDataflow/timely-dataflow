@@ -95,10 +95,16 @@ where
                 for event_stream in event_streams.iter_mut() {
                     while let Some(event) = event_stream.next() {
                         match event {
-                            Event::Progress(vec) => {
+                            Ok(Event::Progress(vec)) => {
+                                progress.internals[0].extend(vec.into_iter());
+                            },
+                            Ok(Event::Messages(time, mut data)) => {
+                                output.session(&time).give_container(&mut data);
+                            }
+                            Err(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.iter().cloned());
                             },
-                            Event::Messages(ref time, data) => {
+                            Err(Event::Messages(time, data)) => {
                                 allocation.clone_from(data);
                                 output.session(time).give_container(&mut allocation);
                             }

@@ -18,13 +18,13 @@ pub enum Event<T, C> {
 
 /// Iterates over contained `Event<T, C>`.
 ///
-/// The `EventIterator` trait describes types that can iterate over references to events,
+/// The `EventIterator` trait describes types that can iterate over events or references to events,
 /// and which can be used to replay a stream into a new timely dataflow computation.
 ///
 /// This method is not simply an iterator because of the lifetime in the result.
 pub trait EventIterator<T, C> {
-    /// Iterates over references to `Event<T, C>` elements.
-    fn next(&mut self) -> Option<&Event<T, C>>;
+    /// Iterates over owned data or references to `Event<T, C>` elements.
+    fn next(&mut self) -> Option<Result<Event<T, C>, &Event<T,C>>>;
 }
 
 /// Receives `Event<T, C>` events.
@@ -78,12 +78,16 @@ pub mod link {
     }
 
     impl<T, C> EventIterator<T, C> for Rc<EventLink<T, C>> {
-        fn next(&mut self) -> Option<&Event<T, C>> {
+        fn next(&mut self) -> Option<Result<Event<T, C>, &Event<T,C>>> {
             let is_some = self.next.borrow().is_some();
             if is_some {
                 let next = self.next.borrow().as_ref().unwrap().clone();
                 *self = next;
-                self.event.as_ref()
+                if let Some(this) = Rc::get_mut(self) {
+                    this.event.take().map(Ok)
+                } else {
+                    self.event.as_ref().map(Err)
+                }
             }
             else {
                 None
@@ -165,9 +169,9 @@ pub mod binary {
     }
 
     impl<T: DeserializeOwned, C: DeserializeOwned, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
-        fn next(&mut self) -> Option<&Event<T, C>> {
+        fn next(&mut self) -> Option<Result<Event<T, C>, &Event<T,C>>> {
             self.decoded = ::bincode::deserialize_from(&mut self.reader).ok();
-            self.decoded.as_ref()
+            self.decoded.take().map(Ok)
         }
     }
 }
