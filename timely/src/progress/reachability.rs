@@ -570,12 +570,24 @@ impl<T:Timestamp> Tracker<T> {
         // Step 0: If logging is enabled, construct and log inbound changes.
         if let Some(logger) = &mut self.logger {
 
-            for ((target, time), diff) in self.target_changes.iter() {
-                logger.log_target_update(target.node, target.port, time.clone(), *diff);
+            let target_changes =
+            self.target_changes
+                .iter()
+                .map(|((target, time), diff)| (target.node, target.port, time.clone(), *diff))
+                .collect::<Vec<_>>();
+
+            if !target_changes.is_empty() {
+                logger.log_target_updates(target_changes);
             }
 
-            for ((source, time), diff) in self.source_changes.iter() {
-                logger.log_source_update(source.node, source.port, time.clone(), *diff);
+            let source_changes =
+            self.source_changes
+                .iter()
+                .map(|((source, time), diff)| (source.node, source.port, time.clone(), *diff))
+                .collect::<Vec<_>>();
+
+            if !source_changes.is_empty() {
+                logger.log_source_updates(source_changes);
             }
         }
 
@@ -841,20 +853,20 @@ pub mod logging {
         }
 
         /// Log source update events with additional identifying information.
-        pub fn log_source_update(&mut self, node: usize, port: usize, time: T, diff: i64) {
+        pub fn log_source_updates(&mut self, updates: Vec<(usize, usize, T, i64)>) {
             self.logger.log({
                 SourceUpdate {
-                    id: self.identifier,
-                    node, port, time, diff,
+                    tracker_id: self.identifier,
+                    updates,
                 }
             })
         }
         /// Log target update events with additional identifying information.
-        pub fn log_target_update(&mut self, node: usize, port: usize, time: T, diff: i64) {
+        pub fn log_target_updates(&mut self, updates: Vec<(usize, usize, T, i64)>) {
             self.logger.log({
                 TargetUpdate {
-                    id: self.identifier,
-                    node, port, time, diff,
+                    tracker_id: self.identifier,
+                    updates,
                 }
             })
         }
@@ -873,30 +885,18 @@ pub mod logging {
     #[derive(Debug, Clone)]
     pub struct SourceUpdate<T> {
         /// An identifier for the tracker.
-        pub id: usize,
-        /// Index of the source operator.
-        pub node: usize,
-        /// Number of the output port from the operator.
-        pub port: usize,
-        /// Time of the update
-        pub time: T,
-        /// Change
-        pub diff: i64,
+        pub tracker_id: usize,
+        /// Updates themselves, as `(node, port, time, diff)`.
+        pub updates: Vec<(usize, usize, T, i64)>,
     }
 
     /// An update made at a target of data.
     #[derive(Debug, Clone)]
     pub struct TargetUpdate<T> {
         /// An identifier for the tracker.
-        pub id: usize,
-        /// Index of the target operator.
-        pub node: usize,
-        /// Number of the input port to the operator.
-        pub port: usize,
-        /// Time of the update
-        pub time: T,
-        /// Change
-        pub diff: i64,
+        pub tracker_id: usize,
+        /// Updates themselves, as `(node, port, time, diff)`.
+        pub updates: Vec<(usize, usize, T, i64)>,
     }
 
     impl<T> From<SourceUpdate<T>> for TrackerEvent<T> {
@@ -923,26 +923,30 @@ impl<T: Timestamp> Drop for Tracker<T> {
 
         // Retract pending data that `propagate_all` would normally log.
         for (index, per_operator) in self.per_operator.iter_mut().enumerate() {
-            for (node, port, time, diff) in per_operator.targets
+            let target_changes = per_operator.targets
                 .iter_mut()
                 .enumerate()
                 .flat_map(|(port, target)| {
                     target.pointstamps
                         .updates()
                         .map(move |(time, diff)| (index, port, time.clone(), -diff))
-                }) {
-                logger.log_target_update(node, port, time.clone(), diff);
+                })
+                .collect::<Vec<_>>();
+            if !target_changes.is_empty() {
+                logger.log_target_updates(target_changes);
             }
 
-            for (node, port, time, diff) in per_operator.sources
+            let source_changes = per_operator.sources
                 .iter_mut()
                 .enumerate()
                 .flat_map(|(port, source)| {
                     source.pointstamps
                         .updates()
                         .map(move |(time, diff)| (index, port, time.clone(), -diff))
-                }) {
-                logger.log_source_update(node, port, time, diff);
+                })
+                .collect::<Vec<_>>();
+            if !source_changes.is_empty() {
+                logger.log_source_updates(source_changes);
             }
         }
     }
