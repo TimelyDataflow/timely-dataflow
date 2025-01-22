@@ -831,7 +831,6 @@ fn summarize_outputs<T: Timestamp>(
 
 /// Logging types for reachability tracking events.
 pub mod logging {
-    use std::rc::Rc;
     use std::time::Duration;
 
     use timely_container::CapacityContainerBuilder;
@@ -843,21 +842,21 @@ pub mod logging {
 
     /// A logger with additional identifying information about the tracker.
     pub struct TrackerLogger<T: Clone + 'static> {
-        path: Rc<[usize]>,
+        identifier: usize,
         logger: TypedLogger<TrackerEventBuilder<T>, TrackerEvent<T>>,
     }
 
     impl<T: Clone + 'static> TrackerLogger<T> {
         /// Create a new tracker logger from its fields.
-        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEventBuilder<T>>) -> Self {
-            Self { path, logger: logger.into() }
+        pub fn new(identifier: usize, logger: Logger<TrackerEventBuilder<T>>) -> Self {
+            Self { identifier, logger: logger.into() }
         }
 
         /// Log source update events with additional identifying information.
         pub fn log_source_updates(&mut self, updates: Vec<(usize, usize, T, i64)>) {
             self.logger.log({
                 SourceUpdate {
-                    tracker_id: self.path.to_vec(),
+                    tracker_id: self.identifier,
                     updates,
                 }
             })
@@ -866,7 +865,7 @@ pub mod logging {
         pub fn log_target_updates(&mut self, updates: Vec<(usize, usize, T, i64)>) {
             self.logger.log({
                 TargetUpdate {
-                    tracker_id: self.path.to_vec(),
+                    tracker_id: self.identifier,
                     updates,
                 }
             })
@@ -886,7 +885,7 @@ pub mod logging {
     #[derive(Debug, Clone)]
     pub struct SourceUpdate<T> {
         /// An identifier for the tracker.
-        pub tracker_id: Vec<usize>,
+        pub tracker_id: usize,
         /// Updates themselves, as `(node, port, time, diff)`.
         pub updates: Vec<(usize, usize, T, i64)>,
     }
@@ -895,7 +894,7 @@ pub mod logging {
     #[derive(Debug, Clone)]
     pub struct TargetUpdate<T> {
         /// An identifier for the tracker.
-        pub tracker_id: Vec<usize>,
+        pub tracker_id: usize,
         /// Updates themselves, as `(node, port, time, diff)`.
         pub updates: Vec<(usize, usize, T, i64)>,
     }

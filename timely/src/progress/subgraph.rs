@@ -50,6 +50,9 @@ where
     /// The index assigned to the subgraph by its parent.
     index: usize,
 
+    /// A global identifier for this subgraph.
+    identifier: usize,
+
     // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
     children: Vec<PerOperatorState<TInner>>,
     child_count: usize,
@@ -97,6 +100,7 @@ where
     /// terminating with the local index of the new subgraph itself.
     pub fn new_from(
         path: Rc<[usize]>,
+        identifier: usize,
         logging: Option<Logger>,
         summary_logging: Option<SummaryLogger<TInner::Summary>>,
         name: &str,
@@ -111,6 +115,7 @@ where
             name: name.to_owned(),
             path,
             index,
+            identifier,
             children,
             child_count: 1,
             edge_stash: Vec::new(),
@@ -175,16 +180,15 @@ where
         }
 
         // The `None` argument is optional logging infrastructure.
-        let path = self.path.clone();
         let type_name = std::any::type_name::<TInner>();
         let reachability_logging =
         worker.log_register()
             .get::<reachability::logging::TrackerEventBuilder<TInner>>(&format!("timely/reachability/{type_name}"))
-            .map(|logger| reachability::logging::TrackerLogger::new(path, logger));
+            .map(|logger| reachability::logging::TrackerLogger::new(self.identifier, logger));
         let progress_logging = worker.log_register().get::<TimelyProgressEventBuilder<TInner>>(&format!("timely/progress/{type_name}"));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
-        let progcaster = Progcaster::new(worker, self.path.clone(), self.logging.clone(), progress_logging);
+        let progcaster = Progcaster::new(worker, self.path.clone(), self.identifier, self.logging.clone(), progress_logging);
 
         let mut incomplete = vec![true; self.children.len()];
         incomplete[0] = false;

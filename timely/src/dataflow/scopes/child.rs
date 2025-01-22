@@ -128,13 +128,14 @@ where
         F: FnOnce(&mut Child<Self, T2>) -> R,
     {
         let index = self.subgraph.borrow_mut().allocate_child_id();
+        let identifier = self.new_identifier();
         let path = self.addr_for_child(index);
 
         let type_name = std::any::type_name::<T2>();
         let progress_logging = self.log_register().get(&format!("timely/progress/{type_name}"));
         let summary_logging = self.log_register().get(&format!("timely/summary/{type_name}"));
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(path, self.logging(), summary_logging, name));
+        let subscope = RefCell::new(SubgraphBuilder::new_from(path, identifier, self.logging(), summary_logging, name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
@@ -146,7 +147,7 @@ where
         };
         let subscope = subscope.into_inner().build(self);
 
-        self.add_operator_with_index(Box::new(subscope), index);
+        self.add_operator_with_indices(Box::new(subscope), index, identifier);
 
         result
     }
