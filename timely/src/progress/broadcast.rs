@@ -23,8 +23,8 @@ pub struct Progcaster<T:Timestamp> {
     source: usize,
     /// Sequence number counter
     counter: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to this subgraph
-    addr: Rc<[usize]>,
+    /// Global identifier of the scope that owns this `Progcaster`.
+    identifier: usize,
     /// Communication channel identifier
     channel_identifier: usize,
 
@@ -33,10 +33,10 @@ pub struct Progcaster<T:Timestamp> {
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied worker.
-    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger<T>>) -> Progcaster<T> {
+    pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, identifier: usize, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger<T>>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
-        let (pushers, puller) = worker.allocate(channel_identifier, addr.clone());
+        let (pushers, puller) = worker.allocate(channel_identifier, addr);
         logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: crate::logging::CommChannelKind::Progress,
@@ -48,7 +48,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
             puller,
             source: worker_index,
             counter: 0,
-            addr,
+            identifier,
             channel_identifier,
             progress_logging,
         }
@@ -84,7 +84,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     source: self.source,
                     channel: self.channel_identifier,
                     seq_no: self.counter,
-                    addr: self.addr.to_vec(),
+                    identifier: self.identifier,
                     messages,
                     internal,
                 });
@@ -127,7 +127,6 @@ impl<T:Timestamp+Send> Progcaster<T> {
             let counter = message.1;
             let recv_changes = &message.2;
 
-            let addr = &mut self.addr;
             let channel = self.channel_identifier;
 
             // See comments above about the relatively high cost of this logging, and our
@@ -154,7 +153,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                     source,
                     seq_no: counter,
                     channel,
-                    addr: addr.to_vec(),
+                    identifier: self.identifier,
                     messages,
                     internal,
                 });

@@ -570,24 +570,12 @@ impl<T:Timestamp> Tracker<T> {
         // Step 0: If logging is enabled, construct and log inbound changes.
         if let Some(logger) = &mut self.logger {
 
-            let target_changes =
-            self.target_changes
-                .iter()
-                .map(|((target, time), diff)| (target.node, target.port, time.clone(), *diff))
-                .collect::<Vec<_>>();
-
-            if !target_changes.is_empty() {
-                logger.log_target_updates(target_changes);
+            for ((target, time), diff) in self.target_changes.iter() {
+                logger.log_target_update(target.node, target.port, time.clone(), *diff);
             }
 
-            let source_changes =
-            self.source_changes
-                .iter()
-                .map(|((source, time), diff)| (source.node, source.port, time.clone(), *diff))
-                .collect::<Vec<_>>();
-
-            if !source_changes.is_empty() {
-                logger.log_source_updates(source_changes);
+            for ((source, time), diff) in self.source_changes.iter() {
+                logger.log_source_update(source.node, source.port, time.clone(), *diff);
             }
         }
 
@@ -831,7 +819,6 @@ fn summarize_outputs<T: Timestamp>(
 
 /// Logging types for reachability tracking events.
 pub mod logging {
-    use std::rc::Rc;
     use std::time::Duration;
 
     use timely_container::CapacityContainerBuilder;
@@ -843,31 +830,31 @@ pub mod logging {
 
     /// A logger with additional identifying information about the tracker.
     pub struct TrackerLogger<T: Clone + 'static> {
-        path: Rc<[usize]>,
+        identifier: usize,
         logger: TypedLogger<TrackerEventBuilder<T>, TrackerEvent<T>>,
     }
 
     impl<T: Clone + 'static> TrackerLogger<T> {
         /// Create a new tracker logger from its fields.
-        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEventBuilder<T>>) -> Self {
-            Self { path, logger: logger.into() }
+        pub fn new(identifier: usize, logger: Logger<TrackerEventBuilder<T>>) -> Self {
+            Self { identifier, logger: logger.into() }
         }
 
         /// Log source update events with additional identifying information.
-        pub fn log_source_updates(&mut self, updates: Vec<(usize, usize, T, i64)>) {
+        pub fn log_source_update(&mut self, node: usize, port: usize, time: T, diff: i64) {
             self.logger.log({
                 SourceUpdate {
-                    tracker_id: self.path.to_vec(),
-                    updates,
+                    id: self.identifier,
+                    node, port, time, diff,
                 }
             })
         }
         /// Log target update events with additional identifying information.
-        pub fn log_target_updates(&mut self, updates: Vec<(usize, usize, T, i64)>) {
+        pub fn log_target_update(&mut self, node: usize, port: usize, time: T, diff: i64) {
             self.logger.log({
                 TargetUpdate {
-                    tracker_id: self.path.to_vec(),
-                    updates,
+                    id: self.identifier,
+                    node, port, time, diff,
                 }
             })
         }
@@ -886,18 +873,30 @@ pub mod logging {
     #[derive(Debug, Clone)]
     pub struct SourceUpdate<T> {
         /// An identifier for the tracker.
-        pub tracker_id: Vec<usize>,
-        /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Vec<(usize, usize, T, i64)>,
+        pub id: usize,
+        /// Index of the source operator.
+        pub node: usize,
+        /// Number of the output port from the operator.
+        pub port: usize,
+        /// Time of the update
+        pub time: T,
+        /// Change
+        pub diff: i64,
     }
 
     /// An update made at a target of data.
     #[derive(Debug, Clone)]
     pub struct TargetUpdate<T> {
         /// An identifier for the tracker.
-        pub tracker_id: Vec<usize>,
-        /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Vec<(usize, usize, T, i64)>,
+        pub id: usize,
+        /// Index of the target operator.
+        pub node: usize,
+        /// Number of the input port to the operator.
+        pub port: usize,
+        /// Time of the update
+        pub time: T,
+        /// Change
+        pub diff: i64,
     }
 
     impl<T> From<SourceUpdate<T>> for TrackerEvent<T> {
@@ -924,30 +923,26 @@ impl<T: Timestamp> Drop for Tracker<T> {
 
         // Retract pending data that `propagate_all` would normally log.
         for (index, per_operator) in self.per_operator.iter_mut().enumerate() {
-            let target_changes = per_operator.targets
+            for (node, port, time, diff) in per_operator.targets
                 .iter_mut()
                 .enumerate()
                 .flat_map(|(port, target)| {
                     target.pointstamps
                         .updates()
                         .map(move |(time, diff)| (index, port, time.clone(), -diff))
-                })
-                .collect::<Vec<_>>();
-            if !target_changes.is_empty() {
-                logger.log_target_updates(target_changes);
+                }) {
+                logger.log_target_update(node, port, time.clone(), diff);
             }
 
-            let source_changes = per_operator.sources
+            for (node, port, time, diff) in per_operator.sources
                 .iter_mut()
                 .enumerate()
                 .flat_map(|(port, source)| {
                     source.pointstamps
                         .updates()
                         .map(move |(time, diff)| (index, port, time.clone(), -diff))
-                })
-                .collect::<Vec<_>>();
-            if !source_changes.is_empty() {
-                logger.log_source_updates(source_changes);
+                }) {
+                logger.log_source_update(node, port, time, diff);
             }
         }
     }

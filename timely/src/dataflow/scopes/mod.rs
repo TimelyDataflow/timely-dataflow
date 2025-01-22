@@ -57,15 +57,6 @@ pub trait Scope: ScopeParent {
     /// an operator will be added, and it is an error not to eventually add such an operator.
     fn allocate_operator_index(&mut self) -> usize;
 
-    /// Adds a child `Operate` to the builder's scope using a supplied index.
-    ///
-    /// This is used internally when there is a gap between allocate a child identifier and adding the
-    /// child, as happens in subgraph creation.
-    fn add_operator_with_index(&mut self, operator: Box<dyn Operate<Self::Timestamp>>, index: usize) {
-        let global = self.new_identifier();
-        self.add_operator_with_indices(operator, index, global);
-    }
-
     /// Adds a child `Operate` to the builder's scope using supplied indices.
     ///
     /// The two indices are the scope-local operator index, and a worker-unique index used for e.g. logging.

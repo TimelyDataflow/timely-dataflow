@@ -631,7 +631,7 @@ impl<A: Allocate> Worker<A> {
         let type_name = std::any::type_name::<T>();
         let progress_logging = self.logging.borrow_mut().get(&format!("timely/progress/{type_name}"));
         let summary_logging = self.logging.borrow_mut().get(&format!("timely/summary/{type_name}"));
-        let subscope = SubgraphBuilder::new_from(addr, logging.clone(), summary_logging, name);
+        let subscope = SubgraphBuilder::new_from(addr, identifier, logging.clone(), summary_logging, name);
         let subscope = RefCell::new(subscope);
 
         let result = {

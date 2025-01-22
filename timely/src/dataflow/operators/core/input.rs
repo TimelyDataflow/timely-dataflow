@@ -154,6 +154,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 
         let index = self.allocate_operator_index();
         let address = self.addr_for_child(index);
+        let identifier = self.new_identifier();
 
         handle.activate.push(self.activator_for(address.clone()));
 
@@ -163,14 +164,14 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
 
         let copies = self.peers();
 
-        self.add_operator_with_index(Box::new(Operator {
+        self.add_operator_with_indices(Box::new(Operator {
             name: "Input".to_owned(),
             address,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             progress,
             messages: produced,
             copies,
-        }), index);
+        }), index, identifier);
 
         StreamCore::new(Source::new(index, 0), registrar, self.clone())
     }

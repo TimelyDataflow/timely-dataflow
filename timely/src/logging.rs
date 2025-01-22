@@ -103,8 +103,8 @@ pub struct TimelyProgressEvent<T> {
     pub channel: usize,
     /// Message sequence number.
     pub seq_no: usize,
-    /// Sequence of nested scope identifiers indicating the path from the root to this instance.
-    pub addr: Vec<usize>,
+    /// Global identifier of the operator reporting progress.
+    pub identifier: usize,
     /// List of message updates, containing Target descriptor, timestamp as string, and delta.
     pub messages: Vec<(usize, usize, T, i64)>,
     /// List of capability updates, containing Source descriptor, timestamp as string, and delta.

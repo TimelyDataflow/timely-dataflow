@@ -92,19 +92,20 @@ impl<G: Scope> UnorderedInput<G> for G {
 
         let index = self.allocate_operator_index();
         let address = self.addr_for_child(index);
+        let identifier = self.new_identifier();
 
         let cap = ActivateCapability::new(cap, address.clone(), self.activations());
 
         let helper = UnorderedHandle::new(counter);
 
-        self.add_operator_with_index(Box::new(UnorderedOperator {
+        self.add_operator_with_indices(Box::new(UnorderedOperator {
             name: "UnorderedInput".to_owned(),
             address,
             shared_progress: Rc::new(RefCell::new(SharedProgress::new(0, 1))),
             internal,
             produced,
             peers,
-        }), index);
+        }), index, identifier);
 
         ((helper, cap), StreamCore::new(Source::new(index, 0), registrar, self.clone()))
     }
