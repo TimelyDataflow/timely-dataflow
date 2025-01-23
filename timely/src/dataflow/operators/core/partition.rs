@@ -12,7 +12,7 @@ pub trait Partition<G: Scope, C: Container> {
     /// Produces `parts` output streams, containing records produced and assigned by `route`.
     ///
     /// # Examples
-    /// ```ignore
+    /// ```
     /// use timely::dataflow::operators::ToStream;
     /// use timely::dataflow::operators::core::{Partition, Inspect};
     /// use timely_container::CapacityContainerBuilder;
