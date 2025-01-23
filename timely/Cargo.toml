@@ -1,7 +1,7 @@
 [package]
 
 name = "timely"
-version = "0.16.1"
+version = "0.17.0"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 readme = "../README.md"
 edition.workspace = true

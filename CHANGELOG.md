@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.16.1...timely-v0.17.0) - 2025-01-23
+
+### Other
+
+- Move opinions about reachability logging into TrackerLogger ([#629](https://github.com/TimelyDataflow/timely-dataflow/pull/629))
+- Align `Bytesable` messages to `u64` ([#614](https://github.com/TimelyDataflow/timely-dataflow/pull/614))
+- Flatten reachability logging, log identifier ([#628](https://github.com/TimelyDataflow/timely-dataflow/pull/628))
+- Log operator summaries using clever approach ([#626](https://github.com/TimelyDataflow/timely-dataflow/pull/626))
+- Allow event iterators to surface owned data ([#627](https://github.com/TimelyDataflow/timely-dataflow/pull/627))
+- Typed logging ([#624](https://github.com/TimelyDataflow/timely-dataflow/pull/624))
+
 ## [0.16.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.16.0...timely-v0.16.1) - 2025-01-16
 
 ### Other
