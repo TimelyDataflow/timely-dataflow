@@ -141,18 +141,25 @@ mod encoding {
         }
     }
 
+    // We will pad out anything we write to make the result `u64` aligned.
     impl<T: Data> Bytesable for Bincode<T> {
         fn from_bytes(bytes: Bytes) -> Self {
             let typed = ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed");
+            let typed_size = ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize;
+            assert_eq!(bytes.len(), (typed_size + 7) & !7);
             Bincode { payload: typed }
         }
 
         fn length_in_bytes(&self) -> usize {
-            ::bincode::serialized_size(&self.payload).expect("bincode::serialized_size() failed") as usize
+            let typed_size = ::bincode::serialized_size(&self.payload).expect("bincode::serialized_size() failed") as usize;
+            (typed_size + 7) & !7
         }
 
-        fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
-            ::bincode::serialize_into(writer, &self.payload).expect("bincode::serialize_into() failed");
+        fn into_bytes<W: ::std::io::Write>(&self, mut writer: &mut W) {
+            let typed_size = ::bincode::serialized_size(&self.payload).expect("bincode::serialized_size() failed") as usize;
+            let typed_slop = ((typed_size + 7) & !7) - typed_size;
+            ::bincode::serialize_into(&mut writer, &self.payload).expect("bincode::serialize_into() failed");
+            writer.write(&[0u8; 8][..typed_slop]).unwrap();
         }
     }
 

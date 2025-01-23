@@ -57,7 +57,9 @@ impl<T, C: Container> Message<T, C> {
 }
 
 // Instructions for serialization of `Message`.
-// Intended to swap out the constraint on `C` for `C: Bytesable`.
+//
+// Serialization of each field is meant to be `u64` aligned, so that each has the ability
+// to be decoded using safe transmutation, e.g. `bytemuck`.
 impl<T, C> crate::communication::Bytesable for Message<T, C>
 where
     T: Serialize + for<'a> Deserialize<'a>,
@@ -69,17 +71,18 @@ where
         let from: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
         let seq: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
         let time: T = ::bincode::deserialize_from(&mut slice).expect("bincode::deserialize() failed");
-        let bytes_read = bytes.len() - slice.len();
+        let time_size = ::bincode::serialized_size(&time).expect("bincode::serialized_size() failed") as usize;
+        // We expect to find the `data` payload at `8 + 8 + round_up(time_size)`;
+        let bytes_read = 8 + 8 + ((time_size + 7) & !7);
         bytes.extract_to(bytes_read);
         let data: C = ContainerBytes::from_bytes(bytes);
         Self { time, data, from, seq }
     }
 
     fn length_in_bytes(&self) -> usize {
+        let time_size = ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize;
         // 16 comes from the two `u64` fields: `from` and `seq`.
-        16 +
-        ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize +
-        self.data.length_in_bytes()
+        16 + ((time_size + 7) & !7) + self.data.length_in_bytes()
     }
 
     fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
@@ -87,6 +90,9 @@ where
         writer.write_u64::<byteorder::LittleEndian>(self.from.try_into().unwrap()).unwrap();
         writer.write_u64::<byteorder::LittleEndian>(self.seq.try_into().unwrap()).unwrap();
         ::bincode::serialize_into(&mut *writer, &self.time).expect("bincode::serialize_into() failed");
+        let time_size = ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize;
+        let time_slop = ((time_size + 7) & !7) - time_size;
+        writer.write(&[0u8; 8][..time_slop]).unwrap();
         self.data.into_bytes(&mut *writer);
     }
 }
@@ -106,6 +112,8 @@ pub trait ContainerBytes {
 
 mod implementations {
 
+    use std::io::Write;
+
     use serde::{Serialize, Deserialize};
     use crate::dataflow::channels::ContainerBytes;
 
@@ -115,11 +123,16 @@ mod implementations {
         }
 
         fn length_in_bytes(&self) -> usize {
-            ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize
+            let length = ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize;
+            (length + 7) & !7
         }
 
-        fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
-            ::bincode::serialize_into(writer, &self).expect("bincode::serialize_into() failed");
+        fn into_bytes<W: Write>(&self, writer: &mut W) {
+            let mut counter = WriteCounter::new(writer);
+            ::bincode::serialize_into(&mut counter, &self).expect("bincode::serialize_into() failed");
+            let written = counter.count;
+            let written_slop = ((written + 7) & !7) - written;
+            counter.write(&[0u8; 8][..written_slop]).unwrap();
         }
     }
 
@@ -130,11 +143,60 @@ mod implementations {
         }
 
         fn length_in_bytes(&self) -> usize {
-            ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize
+            let length = ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize;
+            (length + 7) & !7
         }
 
-        fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
-            ::bincode::serialize_into(writer, &self).expect("bincode::serialize_into() failed");
+        fn into_bytes<W: Write>(&self, writer: &mut W) {
+            let mut counter = WriteCounter::new(writer);
+            ::bincode::serialize_into(&mut counter, &self).expect("bincode::serialize_into() failed");
+            let written = counter.count;
+            let written_slop = ((written + 7) & !7) - written;
+            counter.write(&[0u8; 8][..written_slop]).unwrap();
+        }
+    }
+
+    use write_counter::WriteCounter;
+    /// A `Write` wrapper that counts the bytes written.
+    mod write_counter {
+
+        use ::std::io::{Write, IoSlice, Result};
+        use std::fmt::Arguments;
+
+        /// A write wrapper that tracks the bytes written.
+        pub struct WriteCounter<W> {
+            inner: W,
+            pub count: usize,
+        }
+
+        impl<W> WriteCounter<W> {
+            /// Creates a new counter wrapper from a writer.
+            pub fn new(inner: W) -> Self {
+                Self { inner, count: 0 }
+            }
+        }
+
+        impl<W: Write> Write for WriteCounter<W> {
+            fn write(&mut self, buf: &[u8]) -> Result<usize> {
+                let written = self.inner.write(buf)?;
+                self.count += written;
+                Ok(written)
+            }
+            fn flush(&mut self) -> Result<()> {
+                self.inner.flush()
+            }
+            fn write_vectored(&mut self, bufs: &[IoSlice<'_>]) -> Result<usize> {
+                let written = self.inner.write_vectored(bufs)?;
+                self.count += written;
+                Ok(written)
+            }
+            fn write_all(&mut self, buf: &[u8]) -> Result<()> {
+                self.count += buf.len();
+                self.inner.write_all(buf)
+            }
+            fn write_fmt(&mut self, _fmt: Arguments<'_>) -> Result<()> {
+                unimplemented!()
+            }
         }
     }
 }
