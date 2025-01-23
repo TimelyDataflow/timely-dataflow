@@ -108,8 +108,8 @@ impl<T: Clone+'static> Data for T { }
 ///
 /// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`
 /// `Data` trait, which describes requirements for communication along channels.
-pub trait ExchangeData: Data + encoding::Data + columnar::Columnar { }
-impl<T: Data + encoding::Data + columnar::Columnar> ExchangeData for T { }
+pub trait ExchangeData: Data + encoding::Data { }
+impl<T: Data + encoding::Data> ExchangeData for T { }
 
 #[doc = include_str!("../../README.md")]
 #[cfg(doctest)]

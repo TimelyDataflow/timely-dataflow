@@ -58,7 +58,7 @@ impl<T, C: Container> Message<T, C> {
 
 // Instructions for serialization of `Message`.
 //
-// Serialization of each field is meant to be `u64` aligned, so that each has tha ability
+// Serialization of each field is meant to be `u64` aligned, so that each has the ability
 // to be decoded using safe transmutation, e.g. `bytemuck`.
 impl<T, C> crate::communication::Bytesable for Message<T, C>
 where
