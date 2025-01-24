@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.17.0...timely-v0.17.1) - 2025-01-24
+
+### Other
+
+- Derive ord/eq traits for Product's columnar variant ([#630](https://github.com/TimelyDataflow/timely-dataflow/pull/630))
+
 ## [0.17.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.16.1...timely-v0.17.0) - 2025-01-23
 
 ### Other
