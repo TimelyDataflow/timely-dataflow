@@ -151,8 +151,10 @@ impl<T: Timestamp> Capability<T> {
     ///
     /// Returns a [DowngradeError] if `self.time` is not less or equal to `new_time`.
     pub fn try_downgrade(&mut self, new_time: &T) -> Result<(), DowngradeError> {
-        if let Some(new_capability) = self.try_delayed(new_time) {
-            *self = new_capability;
+        if self.time.less_equal(new_time) {
+            if &self.time != new_time {
+                *self = Self::new(new_time.clone(), self.internal.clone());
+            }
             Ok(())
         } else {
             Err(DowngradeError(()))
