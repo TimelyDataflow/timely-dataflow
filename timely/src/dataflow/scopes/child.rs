@@ -64,6 +64,9 @@ where
     fn pipeline<D: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<D>, ThreadPuller<D>) {
         self.parent.pipeline(identifier, address)
     }
+    fn broadcast<D: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<D>>, Box<dyn Pull<D>>) {
+        self.parent.broadcast(identifier, address)
+    }
     fn new_identifier(&mut self) -> usize {
         self.parent.new_identifier()
     }

@@ -17,7 +17,7 @@ pub type ProgressMsg<T> = Bincode<(usize, usize, ProgressVec<T>)>;
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
     to_push: Option<ProgressMsg<T>>,
-    pushers: Vec<Box<dyn Push<ProgressMsg<T>>>>,
+    pusher: Box<dyn Push<ProgressMsg<T>>>,
     puller: Box<dyn Pull<ProgressMsg<T>>>,
     /// Source worker index
     source: usize,
@@ -36,7 +36,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
     pub fn new<A: crate::worker::AsWorker>(worker: &mut A, addr: Rc<[usize]>, identifier: usize, mut logging: Option<Logger>, progress_logging: Option<ProgressLogger<T>>) -> Progcaster<T> {
 
         let channel_identifier = worker.new_identifier();
-        let (pushers, puller) = worker.allocate(channel_identifier, addr);
+        let (pusher, puller) = worker.broadcast(channel_identifier, addr);
         logging.as_mut().map(|l| l.log(crate::logging::CommChannelsEvent {
             identifier: channel_identifier,
             kind: crate::logging::CommChannelKind::Progress,
@@ -44,7 +44,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
         let worker_index = worker.index();
         Progcaster {
             to_push: None,
-            pushers,
+            pusher,
             puller,
             source: worker_index,
             counter: 0,
@@ -90,28 +90,22 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 });
             });
 
-            for pusher in self.pushers.iter_mut() {
-
-                // Attempt to reuse allocations, if possible.
-                if let Some(tuple) = &mut self.to_push {
-                    tuple.payload.0 = self.source;
-                    tuple.payload.1 = self.counter;
-                    tuple.payload.2.clear(); 
-                    tuple.payload.2.extend(changes.iter().cloned());
-                }
-                // If we don't have an allocation ...
-                if self.to_push.is_none() {
-                    self.to_push = Some(Bincode::from((
-                        self.source,
-                        self.counter,
-                        changes.clone().into_inner().into_vec(),
-                    )));
-                }
-
-                // TODO: This should probably use a broadcast channel.
-                pusher.push(&mut self.to_push);
-                pusher.done();
+            if let Some(tuple) = &mut self.to_push {
+                tuple.payload.0 = self.source;
+                tuple.payload.1 = self.counter;
+                tuple.payload.2.clear();
+                tuple.payload.2.extend(changes.iter().cloned());
             }
+            if self.to_push.is_none() {
+                self.to_push = Some(Bincode::from((
+                    self.source,
+                    self.counter,
+                    changes.clone().into_inner().into_vec(),
+                )));
+            }
+
+            self.pusher.push(&mut self.to_push);
+            self.pusher.done();
 
             self.counter += 1;
             changes.clear();
