@@ -8,16 +8,15 @@ use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
 use crate::Bincode;
 
-/// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
-pub type ProgressVec<T> = Vec<((Location, T), i64)>;
 /// A progress update message consisting of source worker id, sequence number and lists of
 /// message and internal updates
-pub type ProgressMsg<T> = Bincode<(usize, usize, ProgressVec<T>)>;
+pub type ProgressMsg<T> = Bincode<(usize, usize, ChangeBatch<(Location, T)>)>;
 
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
-    to_push: Option<ProgressMsg<T>>,
+    /// Pusher into which we send progress updates.
     pusher: Box<dyn Push<ProgressMsg<T>>>,
+    /// Puller from which we recv progress updates.
     puller: Box<dyn Pull<ProgressMsg<T>>>,
     /// Source worker index
     source: usize,
@@ -27,7 +26,7 @@ pub struct Progcaster<T:Timestamp> {
     identifier: usize,
     /// Communication channel identifier
     channel_identifier: usize,
-
+    /// An optional logger to record progress messages.
     progress_logging: Option<ProgressLogger<T>>,
 }
 
@@ -43,7 +42,6 @@ impl<T:Timestamp+Send> Progcaster<T> {
         }));
         let worker_index = worker.index();
         Progcaster {
-            to_push: None,
             pusher,
             puller,
             source: worker_index,
@@ -90,25 +88,17 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 });
             });
 
-            if let Some(tuple) = &mut self.to_push {
-                tuple.payload.0 = self.source;
-                tuple.payload.1 = self.counter;
-                tuple.payload.2.clear();
-                tuple.payload.2.extend(changes.iter().cloned());
-            }
-            if self.to_push.is_none() {
-                self.to_push = Some(Bincode::from((
-                    self.source,
-                    self.counter,
-                    changes.clone().into_inner().into_vec(),
-                )));
-            }
-
-            self.pusher.push(&mut self.to_push);
+            let payload = (self.source, self.counter, std::mem::take(changes));
+            let mut to_push = Some(Bincode { payload });
+            self.pusher.push(&mut to_push);
             self.pusher.done();
 
+            if let Some(pushed) = to_push {
+                *changes = pushed.payload.2;
+                changes.clear();
+            }
+
             self.counter += 1;
-            changes.clear();
         }
     }
 
@@ -119,7 +109,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
 
             let source = message.0;
             let counter = message.1;
-            let recv_changes = &message.2;
+            let recv_changes = &mut message.2;
 
             let channel = self.channel_identifier;
 
