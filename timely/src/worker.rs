@@ -193,6 +193,9 @@ pub trait AsWorker : Scheduler {
     /// that this behavior will be overridden to be more efficient.
     fn pipeline<T: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<T>, ThreadPuller<T>);
 
+    /// Allocates a broadcast channel, where each pushed message is received by all.
+    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>);
+
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
     /// The next worker-unique identifier to be allocated.
@@ -241,6 +244,13 @@ impl<A: Allocate> AsWorker for Worker<A> {
         paths.insert(identifier, address);
         self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().pipeline(identifier)
+    }
+    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
+        let mut paths = self.paths.borrow_mut();
+        paths.insert(identifier, address);
+        self.temp_channel_ids.borrow_mut().push(identifier);
+        self.allocator.borrow_mut().broadcast(identifier)
     }
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }

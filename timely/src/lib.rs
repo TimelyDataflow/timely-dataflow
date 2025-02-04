@@ -130,6 +130,7 @@ mod encoding {
     impl<T: Send+Any+Serialize+for<'a>Deserialize<'a>> Data for T { }
 
     /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
+    #[derive(Clone)]
     pub struct Bincode<T> {
         /// Bincode contents.
         pub payload: T,

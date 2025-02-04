@@ -96,4 +96,32 @@ pub trait Allocate {
     {
         thread::Thread::new_from(identifier, self.events().clone())
     }
+
+    /// Allocates a broadcast channel, where each pushed message is received by all.
+    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        let (pushers, pull) = self.allocate(identifier);
+        (Box::new(Broadcaster { spare: None, pushers }), pull)
+    }
+}
+
+/// An adapter to broadcast any pushed element.
+struct Broadcaster<T> {
+    /// Spare element for defensive copies.
+    spare: Option<T>,
+    /// Destinations to which pushed elements should be broadcast.
+    pushers: Vec<Box<dyn Push<T>>>,
+}
+
+impl<T: Clone> Push<T> for Broadcaster<T> {
+    fn push(&mut self, element: &mut Option<T>) {
+        // Push defensive copies to pushers after the first.
+        for pusher in self.pushers.iter_mut().skip(1) {
+            self.spare.clone_from(element);
+            pusher.push(&mut self.spare);
+        }
+        // Push the element itself at the first pusher.
+        for pusher in self.pushers.iter_mut().take(1) {
+            pusher.push(element);
+        }
+    }
 }
