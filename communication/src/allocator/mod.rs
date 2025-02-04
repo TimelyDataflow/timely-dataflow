@@ -104,16 +104,24 @@ pub trait Allocate {
     }
 }
 
+/// An adapter to broadcast any pushed element.
 struct Broadcaster<T> {
+    /// Spare element for defensive copies.
     spare: Option<T>,
+    /// Destinations to which pushed elements should be broadcast.
     pushers: Vec<Box<dyn Push<T>>>,
 }
 
 impl<T: Clone> Push<T> for Broadcaster<T> {
     fn push(&mut self, element: &mut Option<T>) {
-        for pusher in self.pushers.iter_mut() {
+        // Push defensive copies to pushers after the first.
+        for pusher in self.pushers.iter_mut().skip(1) {
             self.spare.clone_from(element);
             pusher.push(&mut self.spare);
+        }
+        // Push the element itself at the first pusher.
+        for pusher in self.pushers.iter_mut().take(1) {
+            pusher.push(element);
         }
     }
 }
