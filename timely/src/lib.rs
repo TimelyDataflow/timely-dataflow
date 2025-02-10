@@ -160,7 +160,7 @@ mod encoding {
             let typed_size = ::bincode::serialized_size(&self.payload).expect("bincode::serialized_size() failed") as usize;
             let typed_slop = ((typed_size + 7) & !7) - typed_size;
             ::bincode::serialize_into(&mut writer, &self.payload).expect("bincode::serialize_into() failed");
-            writer.write(&[0u8; 8][..typed_slop]).unwrap();
+            writer.write_all(&[0u8; 8][..typed_slop]).unwrap();
         }
     }
 

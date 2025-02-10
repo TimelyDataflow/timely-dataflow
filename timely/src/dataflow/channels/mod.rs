@@ -92,7 +92,7 @@ where
         ::bincode::serialize_into(&mut *writer, &self.time).expect("bincode::serialize_into() failed");
         let time_size = ::bincode::serialized_size(&self.time).expect("bincode::serialized_size() failed") as usize;
         let time_slop = ((time_size + 7) & !7) - time_size;
-        writer.write(&[0u8; 8][..time_slop]).unwrap();
+        writer.write_all(&[0u8; 8][..time_slop]).unwrap();
         self.data.into_bytes(&mut *writer);
     }
 }
@@ -132,7 +132,7 @@ mod implementations {
             ::bincode::serialize_into(&mut counter, &self).expect("bincode::serialize_into() failed");
             let written = counter.count;
             let written_slop = ((written + 7) & !7) - written;
-            counter.write(&[0u8; 8][..written_slop]).unwrap();
+            counter.write_all(&[0u8; 8][..written_slop]).unwrap();
         }
     }
 
@@ -152,7 +152,7 @@ mod implementations {
             ::bincode::serialize_into(&mut counter, &self).expect("bincode::serialize_into() failed");
             let written = counter.count;
             let written_slop = ((written + 7) & !7) - written;
-            counter.write(&[0u8; 8][..written_slop]).unwrap();
+            counter.write_all(&[0u8; 8][..written_slop]).unwrap();
         }
     }
 
