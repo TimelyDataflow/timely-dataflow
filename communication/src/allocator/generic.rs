@@ -55,6 +55,15 @@ impl Generic {
             Generic::ZeroCopy(z) => z.allocate(identifier),
         }
     }
+    /// Constructs several send endpoints and one receive endpoint.
+    fn broadcast<T: Exchangeable+Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        match self {
+            Generic::Thread(t) => t.broadcast(identifier),
+            Generic::Process(p) => p.broadcast(identifier),
+            Generic::ProcessBinary(pb) => pb.broadcast(identifier),
+            Generic::ZeroCopy(z) => z.broadcast(identifier),
+        }
+    }
     /// Perform work before scheduling operators.
     fn receive(&mut self) {
         match self {
@@ -89,7 +98,9 @@ impl Allocate for Generic {
     fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
         self.allocate(identifier)
     }
-
+    fn broadcast<T: Exchangeable+Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        self.broadcast(identifier)
+    }
     fn receive(&mut self) { self.receive(); }
     fn release(&mut self) { self.release(); }
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> { self.events() }
