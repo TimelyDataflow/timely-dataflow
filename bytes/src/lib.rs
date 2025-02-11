@@ -1,5 +1,10 @@
 //! A simplified implementation of the `bytes` crate, with different features, less safety.
 //!
+//! The crate is currently minimalist rather than maximalist, and for example does not support
+//! methods on `BytesMut` that seem like they should be safe, because they are not yet needed.
+//! For example, `BytesMut` should be able to implement `Send`, and `BytesMut::extract_to` could
+//! return a `BytesMut` rather than a `Bytes`.
+//!
 //! # Examples
 //!
 //! ```
@@ -51,11 +56,6 @@ pub mod arc {
         /// enough to make a stronger statement about this.
         sequestered: Arc<dyn Any>,
     }
-
-    // Synchronization happens through `self.sequestered`, which means to ensure that even
-    // across multiple threads each region of the slice is uniquely "owned", if not in the
-    // traditional Rust sense.
-    unsafe impl Send for BytesMut { }
 
     impl BytesMut {
 
@@ -139,7 +139,8 @@ pub mod arc {
             }
         }
 
-        /// Converts a writeable byte slice to an shareable byte slice.
+        /// Converts a writeable byte slice to a shareable byte slice.
+        #[inline(always)]
         pub fn freeze(self) -> Bytes {
             Bytes {
                 ptr: self.ptr,
@@ -151,12 +152,14 @@ pub mod arc {
 
     impl Deref for BytesMut {
         type Target = [u8];
+        #[inline(always)]
         fn deref(&self) -> &[u8] {
             unsafe { ::std::slice::from_raw_parts(self.ptr, self.len) }
         }
     }
 
     impl DerefMut for BytesMut {
+        #[inline(always)]
         fn deref_mut(&mut self) -> &mut [u8] {
             unsafe { ::std::slice::from_raw_parts_mut(self.ptr, self.len) }
         }
@@ -245,6 +248,7 @@ pub mod arc {
 
     impl Deref for Bytes {
         type Target = [u8];
+        #[inline(always)]
         fn deref(&self) -> &[u8] {
             unsafe { ::std::slice::from_raw_parts(self.ptr, self.len) }
         }
