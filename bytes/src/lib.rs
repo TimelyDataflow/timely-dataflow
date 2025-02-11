@@ -96,7 +96,7 @@ pub mod arc {
                 sequestered: self.sequestered.clone(),
             };
 
-            unsafe { self.ptr = self.ptr.add(index); }
+            self.ptr = self.ptr.wrapping_add(index);
             self.len -= index;
 
             result
@@ -161,7 +161,7 @@ pub mod arc {
         /// shared4.try_merge(shared2).ok().expect("Failed to merge 4 and 231");
         /// ```
         pub fn try_merge(&mut self, other: Bytes) -> Result<(), Bytes> {
-            if Arc::ptr_eq(&self.sequestered, &other.sequestered) && ::std::ptr::eq(unsafe { self.ptr.add(self.len) }, other.ptr) {
+            if Arc::ptr_eq(&self.sequestered, &other.sequestered) && ::std::ptr::eq(self.ptr.wrapping_add(self.len), other.ptr) {
                 self.len += other.len;
                 Ok(())
             }
