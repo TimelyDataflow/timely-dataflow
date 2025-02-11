@@ -17,13 +17,10 @@
 //! assert_eq!(shared4.len(), 60);
 //!
 //! for byte in shared1.iter_mut() { *byte = 1u8; }
-//! for byte in shared2.iter_mut() { *byte = 2u8; }
-//! for byte in shared3.iter_mut() { *byte = 3u8; }
-//! for byte in shared4.iter_mut() { *byte = 4u8; }
 //!
 //! // memory in slabs [4, 2, 3, 1]: merge back in arbitrary order.
 //! shared2.try_merge(shared3).ok().expect("Failed to merge 2 and 3");
-//! shared2.try_merge(shared1).ok().expect("Failed to merge 23 and 1");
+//! shared2.try_merge(shared1.freeze()).ok().expect("Failed to merge 23 and 1");
 //! shared4.try_merge(shared2).ok().expect("Failed to merge 4 and 231");
 //!
 //! assert_eq!(shared4.len(), 1024);
@@ -84,12 +81,12 @@ pub mod arc {
             }
         }
 
-        /// Extracts [0, index) into a new `BytesMut` which is returned, updating `self`.
+        /// Extracts [0, index) into a new `Bytes` which is returned, updating `self`.
         ///
         /// # Safety
         ///
         /// This method first tests `index` against `self.len`, which should ensure that both
-        /// the returned `BytesMut` contains valid memory, and that `self` can no longer access it.
+        /// the returned `Bytes` contains valid memory, and that `self` can no longer access it.
         pub fn extract_to(&mut self, index: usize) -> Bytes {
 
             assert!(index <= self.len);
@@ -123,11 +120,11 @@ pub mod arc {
         /// let mut shared3 = shared1.extract_to(100);
         /// let mut shared4 = shared2.extract_to(60);
         ///
-        /// drop(shared1);
+        /// drop(shared3);
         /// drop(shared2);
         /// drop(shared4);
-        /// assert!(shared3.try_regenerate::<Vec<u8>>());
-        /// assert!(shared3.len() == 1024);
+        /// assert!(shared1.try_regenerate::<Vec<u8>>());
+        /// assert!(shared1.len() == 1024);
         /// ```
         pub fn try_regenerate<B>(&mut self) -> bool where B: DerefMut<Target=[u8]>+'static {
             // Only possible if this is the only reference to the sequestered allocation.
@@ -191,12 +188,12 @@ pub mod arc {
 
     impl Bytes {
 
-        /// Extracts [0, index) into a new `BytesMut` which is returned, updating `self`.
+        /// Extracts [0, index) into a new `Bytes` which is returned, updating `self`.
         ///
         /// # Safety
         ///
         /// This method first tests `index` against `self.len`, which should ensure that both
-        /// the returned `BytesMut` contains valid memory, and that `self` can no longer access it.
+        /// the returned `Bytes` contains valid memory, and that `self` can no longer access it.
         pub fn extract_to(&mut self, index: usize) -> Bytes {
 
             assert!(index <= self.len);
@@ -225,7 +222,7 @@ pub mod arc {
         /// use timely_bytes::arc::BytesMut;
         ///
         /// let bytes = vec![0u8; 1024];
-        /// let mut shared1 = BytesMut::from(bytes);
+        /// let mut shared1 = BytesMut::from(bytes).freeze();
         /// let mut shared2 = shared1.extract_to(100);
         /// let mut shared3 = shared1.extract_to(100);
         /// let mut shared4 = shared2.extract_to(60);

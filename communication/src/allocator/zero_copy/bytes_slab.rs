@@ -5,7 +5,7 @@ use timely_bytes::arc::{Bytes, BytesMut};
 /// A large binary allocation for writing and sharing.
 ///
 /// A bytes slab wraps a `BytesMut` and maintains a valid (written) length, and supports writing after
-/// this valid length, and extracting `BytesMut` up to this valid length. Extracted bytes are enqueued
+/// this valid length, and extracting `Bytes` up to this valid length. Extracted bytes are enqueued
 /// and checked for uniqueness in order to recycle them (once all shared references are dropped).
 pub struct BytesSlab {
     buffer:         BytesMut,                   // current working buffer.
