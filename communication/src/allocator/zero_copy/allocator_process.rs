@@ -135,7 +135,8 @@ impl Allocate for ProcessAllocator {
             let header = MessageHeader {
                 channel:    identifier,
                 source:     self.index,
-                target:     target_index,
+                target_lower:     target_index,
+                target_upper:     target_index+1,
                 length:     0,
                 seqno:      0,
             };
