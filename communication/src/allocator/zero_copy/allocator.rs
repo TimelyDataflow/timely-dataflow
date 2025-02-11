@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::{VecDeque, HashMap, hash_map::Entry};
 use crossbeam_channel::{Sender, Receiver};
 
-use timely_bytes::arc::Bytes;
+use timely_bytes::arc::BytesMut;
 
 use crate::networking::MessageHeader;
 
@@ -121,7 +121,7 @@ pub struct TcpAllocator<A: Allocate> {
     index:      usize,                              // number out of peers
     peers:      usize,                              // number of peer allocators (for typed channel allocation).
 
-    staged:     Vec<Bytes>,                         // staging area for incoming Bytes
+    staged:     Vec<BytesMut>,                      // staging area for incoming Bytes
     canaries:   Rc<RefCell<Vec<usize>>>,
 
     channel_id_bound: Option<usize>,
@@ -129,7 +129,7 @@ pub struct TcpAllocator<A: Allocate> {
     // sending, receiving, and responding to binary buffers.
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>,     // sends[x] -> goes to process x.
     recvs:      Vec<MergeQueue>,                                // recvs[x] <- from process x.
-    to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,   // to worker-local typed pullers.
+    to_local:   HashMap<usize, Rc<RefCell<VecDeque<BytesMut>>>>,// to worker-local typed pullers.
 }
 
 impl<A: Allocate> Allocate for TcpAllocator<A> {

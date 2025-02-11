@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 
-use timely_bytes::arc::Bytes;
+use timely_bytes::arc::BytesMut;
 use super::bytes_slab::BytesSlab;
 
 /// A target for `Bytes`.
@@ -11,14 +11,14 @@ pub trait BytesPush {
     // /// Pushes bytes at the instance.
     // fn push(&mut self, bytes: Bytes);
     /// Pushes many bytes at the instance.
-    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iter: I);
+    fn extend<I: IntoIterator<Item=BytesMut>>(&mut self, iter: I);
 }
 /// A source for `Bytes`.
 pub trait BytesPull {
     // /// Pulls bytes from the instance.
     // fn pull(&mut self) -> Option<Bytes>;
     /// Drains many bytes from the instance.
-    fn drain_into(&mut self, vec: &mut Vec<Bytes>);
+    fn drain_into(&mut self, vec: &mut Vec<BytesMut>);
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,7 +28,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// TODO: explain "extend"
 #[derive(Clone)]
 pub struct MergeQueue {
-    queue: Arc<Mutex<VecDeque<Bytes>>>, // queue of bytes.
+    queue: Arc<Mutex<VecDeque<BytesMut>>>, // queue of bytes.
     buzzer: crate::buzzer::Buzzer,  // awakens receiver thread.
     panic: Arc<AtomicBool>,
 }
@@ -50,7 +50,7 @@ impl MergeQueue {
 }
 
 impl BytesPush for MergeQueue {
-    fn extend<I: IntoIterator<Item=Bytes>>(&mut self, iterator: I) {
+    fn extend<I: IntoIterator<Item=BytesMut>>(&mut self, iterator: I) {
 
         if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
 
@@ -92,7 +92,7 @@ impl BytesPush for MergeQueue {
 }
 
 impl BytesPull for MergeQueue {
-    fn drain_into(&mut self, vec: &mut Vec<Bytes>) {
+    fn drain_into(&mut self, vec: &mut Vec<BytesMut>) {
         if self.panic.load(Ordering::SeqCst) { panic!("MergeQueue poisoned."); }
 
         // try to acquire lock without going to sleep (Rust's lock() might yield)

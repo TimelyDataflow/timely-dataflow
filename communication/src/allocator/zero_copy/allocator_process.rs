@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::{VecDeque, HashMap, hash_map::Entry};
 use crossbeam_channel::{Sender, Receiver};
 
-use timely_bytes::arc::Bytes;
+use timely_bytes::arc::BytesMut;
 
 use crate::networking::MessageHeader;
 
@@ -110,10 +110,10 @@ pub struct ProcessAllocator {
     channel_id_bound: Option<usize>,
 
     // sending, receiving, and responding to binary buffers.
-    staged:     Vec<Bytes>,
+    staged:     Vec<BytesMut>,
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>, // sends[x] -> goes to thread x.
     recvs:      Vec<MergeQueue>,                            // recvs[x] <- from thread x.
-    to_local:   HashMap<usize, Rc<RefCell<VecDeque<Bytes>>>>,          // to worker-local typed pullers.
+    to_local:   HashMap<usize, Rc<RefCell<VecDeque<BytesMut>>>>,          // to worker-local typed pullers.
 }
 
 impl Allocate for ProcessAllocator {

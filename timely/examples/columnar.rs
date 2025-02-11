@@ -117,18 +117,18 @@ mod container {
     use columnar::Columnar;
     use columnar::Container as FooBozzle;
 
-    use timely_bytes::arc::Bytes;
+    use timely_bytes::arc::BytesMut;
 
     /// A container based on a columnar store, encoded in aligned bytes.
     pub enum Column<C: Columnar> {
         /// The typed variant of the container.
         Typed(C::Container),
         /// The binary variant of the container.
-        Bytes(Bytes),
-        /// Relocated, aligned binary data, if `Bytes` doesn't work for some reason.
+        Bytes(BytesMut),
+        /// Relocated, aligned binary data, if `BytesMut` doesn't work for some reason.
         ///
         /// Reasons could include misalignment, cloning of data, or wanting
-        /// to release the `Bytes` as a scarce resource.
+        /// to release the `BytesMut` as a scarce resource.
         Align(Box<[u64]>),
     }
 
@@ -227,7 +227,7 @@ mod container {
 
     use timely::dataflow::channels::ContainerBytes;
     impl<C: Columnar> ContainerBytes for Column<C> {
-        fn from_bytes(bytes: timely::bytes::arc::Bytes) -> Self {
+        fn from_bytes(bytes: timely::bytes::arc::BytesMut) -> Self {
             // Our expectation / hope is that `bytes` is `u64` aligned and sized.
             // If the alignment is borked, we can relocate. IF the size is borked,
             // not sure what we do in that case.

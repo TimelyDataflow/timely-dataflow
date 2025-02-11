@@ -1,16 +1,16 @@
 //! A large binary allocation for writing and sharing.
 
-use timely_bytes::arc::Bytes;
+use timely_bytes::arc::BytesMut;
 
 /// A large binary allocation for writing and sharing.
 ///
-/// A bytes slab wraps a `Bytes` and maintains a valid (written) length, and supports writing after
-/// this valid length, and extracting `Bytes` up to this valid length. Extracted bytes are enqueued
+/// A bytes slab wraps a `BytesMut` and maintains a valid (written) length, and supports writing after
+/// this valid length, and extracting `BytesMut` up to this valid length. Extracted bytes are enqueued
 /// and checked for uniqueness in order to recycle them (once all shared references are dropped).
 pub struct BytesSlab {
-    buffer:         Bytes,                      // current working buffer.
-    in_progress:    Vec<Option<Bytes>>,         // buffers shared with workers.
-    stash:          Vec<Bytes>,                 // reclaimed and reusable buffers.
+    buffer:         BytesMut,                   // current working buffer.
+    in_progress:    Vec<Option<BytesMut>>,      // buffers shared with workers.
+    stash:          Vec<BytesMut>,              // reclaimed and reusable buffers.
     shift:          usize,                      // current buffer allocation size.
     valid:          usize,                      // buffer[..valid] are valid bytes.
 }
@@ -19,7 +19,7 @@ impl BytesSlab {
     /// Allocates a new `BytesSlab` with an initial size determined by a shift.
     pub fn new(shift: usize) -> Self {
         BytesSlab {
-            buffer: Bytes::from(vec![0u8; 1 << shift].into_boxed_slice()),
+            buffer: BytesMut::from(vec![0u8; 1 << shift].into_boxed_slice()),
             in_progress: Vec::new(),
             stash: Vec::new(),
             shift,
@@ -39,7 +39,7 @@ impl BytesSlab {
         self.valid += bytes;
     }
     /// Extracts the first `bytes` valid bytes.
-    pub fn extract(&mut self, bytes: usize) -> Bytes {
+    pub fn extract(&mut self, bytes: usize) -> BytesMut {
         debug_assert!(bytes <= self.valid);
         self.valid -= bytes;
         self.buffer.extract_to(bytes)
@@ -82,7 +82,7 @@ impl BytesSlab {
                 self.in_progress.retain(|x| x.is_some());
             }
 
-            let new_buffer = self.stash.pop().unwrap_or_else(|| Bytes::from(vec![0; 1 << self.shift].into_boxed_slice()));
+            let new_buffer = self.stash.pop().unwrap_or_else(|| BytesMut::from(vec![0; 1 << self.shift].into_boxed_slice()));
             let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
 
             self.buffer[.. self.valid].copy_from_slice(&old_buffer[.. self.valid]);

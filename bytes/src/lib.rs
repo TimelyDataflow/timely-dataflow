@@ -3,10 +3,10 @@
 //! # Examples
 //!
 //! ```
-//! use timely_bytes::arc::Bytes;
+//! use timely_bytes::arc::BytesMut;
 //!
 //! let bytes = vec![0u8; 1024];
-//! let mut shared1 = Bytes::from(bytes);
+//! let mut shared1 = BytesMut::from(bytes);
 //! let mut shared2 = shared1.extract_to(100);
 //! let mut shared3 = shared1.extract_to(100);
 //! let mut shared4 = shared2.extract_to(60);
@@ -38,7 +38,11 @@ pub mod arc {
     use std::any::Any;
 
     /// A thread-safe byte buffer backed by a shared allocation.
-    pub struct Bytes {
+    ///
+    /// An instance of this type contends that `ptr` is valid for `len` bytes,
+    /// and that no other reference to these bytes exists, other than through
+    /// the type currently held in `sequestered`.
+    pub struct BytesMut {
         /// Pointer to the start of this slice (not the allocation).
         ptr: *mut u8,
         /// Length of this slice.
@@ -54,12 +58,12 @@ pub mod arc {
     // Synchronization happens through `self.sequestered`, which mean to ensure that even
     // across multiple threads each region of the slice is uniquely "owned", if not in the
     // traditional Rust sense.
-    unsafe impl Send for Bytes { }
+    unsafe impl Send for BytesMut { }
 
-    impl Bytes {
+    impl BytesMut {
 
         /// Create a new instance from a byte allocation.
-        pub fn from<B>(bytes: B) -> Bytes where B : DerefMut<Target=[u8]>+'static {
+        pub fn from<B>(bytes: B) -> BytesMut where B : DerefMut<Target=[u8]>+'static {
 
             // Sequester allocation behind an `Arc`, which *should* keep the address
             // stable for the lifetime of `sequestered`. The `Arc` also serves as our
@@ -73,24 +77,24 @@ pub mod arc {
                 .map(|a| (a.as_mut_ptr(), a.len()))
                 .unwrap();
 
-            Bytes {
+            BytesMut {
                 ptr,
                 len,
                 sequestered,
             }
         }
 
-        /// Extracts [0, index) into a new `Bytes` which is returned, updating `self`.
+        /// Extracts [0, index) into a new `BytesMut` which is returned, updating `self`.
         ///
         /// # Safety
         ///
         /// This method first tests `index` against `self.len`, which should ensure that both
-        /// the returned `Bytes` contains valid memory, and that `self` can no longer access it.
-        pub fn extract_to(&mut self, index: usize) -> Bytes {
+        /// the returned `BytesMut` contains valid memory, and that `self` can no longer access it.
+        pub fn extract_to(&mut self, index: usize) -> BytesMut {
 
             assert!(index <= self.len);
 
-            let result = Bytes {
+            let result = BytesMut {
                 ptr: self.ptr,
                 len: index,
                 sequestered: self.sequestered.clone(),
@@ -102,19 +106,19 @@ pub mod arc {
             result
         }
 
-        /// Regenerates the Bytes if it is uniquely held.
+        /// Regenerates the BytesMut if it is uniquely held.
         ///
         /// If uniquely held, this method recovers the initial pointer and length
-        /// of the sequestered allocation and re-initializes the Bytes. The return
+        /// of the sequestered allocation and re-initializes the BytesMut. The return
         /// value indicates whether this occurred.
         ///
         /// # Examples
         ///
         /// ```
-        /// use timely_bytes::arc::Bytes;
+        /// use timely_bytes::arc::BytesMut;
         ///
         /// let bytes = vec![0u8; 1024];
-        /// let mut shared1 = Bytes::from(bytes);
+        /// let mut shared1 = BytesMut::from(bytes);
         /// let mut shared2 = shared1.extract_to(100);
         /// let mut shared3 = shared1.extract_to(100);
         /// let mut shared4 = shared2.extract_to(60);
@@ -147,10 +151,10 @@ pub mod arc {
         /// # Examples
         ///
         /// ```
-        /// use timely_bytes::arc::Bytes;
+        /// use timely_bytes::arc::BytesMut;
         ///
         /// let bytes = vec![0u8; 1024];
-        /// let mut shared1 = Bytes::from(bytes);
+        /// let mut shared1 = BytesMut::from(bytes);
         /// let mut shared2 = shared1.extract_to(100);
         /// let mut shared3 = shared1.extract_to(100);
         /// let mut shared4 = shared2.extract_to(60);
@@ -160,7 +164,7 @@ pub mod arc {
         /// shared2.try_merge(shared1).ok().expect("Failed to merge 23 and 1");
         /// shared4.try_merge(shared2).ok().expect("Failed to merge 4 and 231");
         /// ```
-        pub fn try_merge(&mut self, other: Bytes) -> Result<(), Bytes> {
+        pub fn try_merge(&mut self, other: BytesMut) -> Result<(), BytesMut> {
             if Arc::ptr_eq(&self.sequestered, &other.sequestered) && ::std::ptr::eq(self.ptr.wrapping_add(self.len), other.ptr) {
                 self.len += other.len;
                 Ok(())
@@ -171,14 +175,14 @@ pub mod arc {
         }
     }
 
-    impl Deref for Bytes {
+    impl Deref for BytesMut {
         type Target = [u8];
         fn deref(&self) -> &[u8] {
             unsafe { ::std::slice::from_raw_parts(self.ptr, self.len) }
         }
     }
 
-    impl DerefMut for Bytes {
+    impl DerefMut for BytesMut {
         fn deref_mut(&mut self) -> &mut [u8] {
             unsafe { ::std::slice::from_raw_parts_mut(self.ptr, self.len) }
         }

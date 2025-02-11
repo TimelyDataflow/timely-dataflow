@@ -65,7 +65,7 @@ where
     T: Serialize + for<'a> Deserialize<'a>,
     C: ContainerBytes,
 {
-    fn from_bytes(mut bytes: crate::bytes::arc::Bytes) -> Self {
+    fn from_bytes(mut bytes: crate::bytes::arc::BytesMut) -> Self {
         use byteorder::ReadBytesExt;
         let mut slice = &bytes[..];
         let from: usize = slice.read_u64::<byteorder::LittleEndian>().unwrap().try_into().unwrap();
@@ -101,7 +101,7 @@ where
 /// A container-oriented version of `Bytesable` that can be implemented here for `Vec<T>` and other containers.
 pub trait ContainerBytes {
     /// Wrap bytes as `Self`.
-    fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self;
+    fn from_bytes(bytes: crate::bytes::arc::BytesMut) -> Self;
 
     /// The number of bytes required to serialize the data.
     fn length_in_bytes(&self) -> usize;
@@ -118,7 +118,7 @@ mod implementations {
     use crate::dataflow::channels::ContainerBytes;
 
     impl<T: Serialize + for<'a> Deserialize<'a>> ContainerBytes for Vec<T> {
-        fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
+        fn from_bytes(bytes: crate::bytes::arc::BytesMut) -> Self {
             ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")
         }
 
@@ -138,7 +138,7 @@ mod implementations {
 
     use crate::container::flatcontainer::FlatStack;
     impl<T: Serialize + for<'a> Deserialize<'a> + crate::container::flatcontainer::Region> ContainerBytes for FlatStack<T> {
-        fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
+        fn from_bytes(bytes: crate::bytes::arc::BytesMut) -> Self {
             ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")
         }
 

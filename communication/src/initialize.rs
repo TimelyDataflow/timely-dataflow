@@ -189,7 +189,7 @@ impl Config {
 /// }
 ///
 /// impl Bytesable for Message {
-///     fn from_bytes(bytes: timely_bytes::arc::Bytes) -> Self {
+///     fn from_bytes(bytes: timely_bytes::arc::BytesMut) -> Self {
 ///         Message { payload: std::str::from_utf8(&bytes[..]).unwrap().to_string() }
 ///     }
 ///
@@ -285,7 +285,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 /// }
 ///
 /// impl Bytesable for Message {
-///     fn from_bytes(bytes: timely_bytes::arc::Bytes) -> Self {
+///     fn from_bytes(bytes: timely_bytes::arc::BytesMut) -> Self {
 ///         Message { payload: std::str::from_utf8(&bytes[..]).unwrap().to_string() }
 ///     }
 ///
