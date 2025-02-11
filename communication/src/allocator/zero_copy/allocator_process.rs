@@ -188,7 +188,7 @@ impl Allocate for ProcessAllocator {
             // No splitting occurs across allocations.
             while bytes.len() > 0 {
 
-                if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
+                if let Some(header) = MessageHeader::try_read(&bytes[..]) {
 
                     // Get the header and payload, ditch the header.
                     let mut peel = bytes.extract_to(header.required_bytes());
