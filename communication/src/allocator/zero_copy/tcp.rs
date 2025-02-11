@@ -174,12 +174,12 @@ pub fn send_loop<S: Stream>(
         }
         else {
             // TODO: Could do scatter/gather write here.
-            for mut bytes in stash.drain(..) {
+            for bytes in stash.drain(..) {
 
                 // Record message sends.
                 logger.as_mut().map(|logger| {
                     let mut offset = 0;
-                    while let Some(header) = MessageHeader::try_read(&mut bytes[offset..]) {
+                    while let Some(header) = MessageHeader::try_read(&bytes[offset..]) {
                         logger.log(MessageEvent { is_send: true, header, });
                         offset += header.required_bytes();
                     }

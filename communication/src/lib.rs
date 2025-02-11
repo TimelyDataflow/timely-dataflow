@@ -24,7 +24,7 @@
 //! }
 //! 
 //! impl Bytesable for Message {
-//!     fn from_bytes(bytes: timely_bytes::arc::BytesMut) -> Self {
+//!     fn from_bytes(bytes: timely_bytes::arc::Bytes) -> Self {
 //!         Message { payload: std::str::from_utf8(&bytes[..]).unwrap().to_string() }
 //!     }
 //! 
@@ -107,12 +107,12 @@ pub use allocator::Generic as Allocator;
 pub use allocator::{Allocate, Exchangeable};
 pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
 
-use timely_bytes::arc::BytesMut;
+use timely_bytes::arc::Bytes;
 
-/// A type that can be serialized and deserialized through `BytesMut`.
+/// A type that can be serialized and deserialized through `Bytes`.
 pub trait Bytesable {
     /// Wrap bytes as `Self`.
-    fn from_bytes(bytes: BytesMut) -> Self;
+    fn from_bytes(bytes: Bytes) -> Self;
 
     /// The number of bytes required to serialize the data.
     fn length_in_bytes(&self) -> usize;

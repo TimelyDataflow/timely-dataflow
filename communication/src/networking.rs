@@ -44,7 +44,7 @@ impl MessageHeader {
 
     /// Returns a header when there is enough supporting data
     #[inline]
-    pub fn try_read(bytes: &mut [u8]) -> Option<MessageHeader> {
+    pub fn try_read(bytes: &[u8]) -> Option<MessageHeader> {
         let mut cursor = io::Cursor::new(&bytes[..]);
         let mut buffer = [0; Self::FIELDS];
         cursor.read_u64_into::<ByteOrder>(&mut buffer).ok()?;

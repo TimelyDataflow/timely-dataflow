@@ -1,6 +1,6 @@
 //! A large binary allocation for writing and sharing.
 
-use timely_bytes::arc::BytesMut;
+use timely_bytes::arc::{Bytes, BytesMut};
 
 /// A large binary allocation for writing and sharing.
 ///
@@ -39,7 +39,7 @@ impl BytesSlab {
         self.valid += bytes;
     }
     /// Extracts the first `bytes` valid bytes.
-    pub fn extract(&mut self, bytes: usize) -> BytesMut {
+    pub fn extract(&mut self, bytes: usize) -> Bytes {
         debug_assert!(bytes <= self.valid);
         self.valid -= bytes;
         self.buffer.extract_to(bytes)

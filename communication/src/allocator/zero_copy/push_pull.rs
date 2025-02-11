@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
-use timely_bytes::arc::BytesMut;
+use timely_bytes::arc::Bytes;
 
 use crate::allocator::canary::Canary;
 use crate::networking::MessageHeader;
@@ -67,12 +67,12 @@ impl<T: Bytesable, P: BytesPush> Push<T> for Pusher<T, P> {
 pub struct Puller<T> {
     _canary: Canary,
     current: Option<T>,
-    receiver: Rc<RefCell<VecDeque<BytesMut>>>,    // source of serialized buffers
+    receiver: Rc<RefCell<VecDeque<Bytes>>>,    // source of serialized buffers
 }
 
 impl<T: Bytesable> Puller<T> {
     /// Creates a new `Puller` instance from a shared queue.
-    pub fn new(receiver: Rc<RefCell<VecDeque<BytesMut>>>, _canary: Canary) -> Puller<T> {
+    pub fn new(receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Puller<T> {
         Puller {
             _canary,
             current: None,
@@ -104,12 +104,12 @@ pub struct PullerInner<T> {
     inner: Box<dyn Pull<T>>,               // inner pullable (e.g. intra-process typed queue)
     _canary: Canary,
     current: Option<T>,
-    receiver: Rc<RefCell<VecDeque<BytesMut>>>,     // source of serialized buffers
+    receiver: Rc<RefCell<VecDeque<Bytes>>>,     // source of serialized buffers
 }
 
 impl<T: Bytesable> PullerInner<T> {
     /// Creates a new `PullerInner` instance from a shared queue.
-    pub fn new(inner: Box<dyn Pull<T>>, receiver: Rc<RefCell<VecDeque<BytesMut>>>, _canary: Canary) -> Self {
+    pub fn new(inner: Box<dyn Pull<T>>, receiver: Rc<RefCell<VecDeque<Bytes>>>, _canary: Canary) -> Self {
         PullerInner {
             inner,
             _canary,

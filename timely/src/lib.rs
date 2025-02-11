@@ -122,7 +122,7 @@ mod encoding {
 
     use std::any::Any;
     use serde::{Serialize, Deserialize};
-    use timely_bytes::arc::BytesMut;
+    use timely_bytes::arc::Bytes;
     use timely_communication::Bytesable;
 
     /// A composite trait for types that may be used with channels.
@@ -144,7 +144,7 @@ mod encoding {
 
     // We will pad out anything we write to make the result `u64` aligned.
     impl<T: Data> Bytesable for Bincode<T> {
-        fn from_bytes(bytes: BytesMut) -> Self {
+        fn from_bytes(bytes: Bytes) -> Self {
             let typed = ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed");
             let typed_size = ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize;
             assert_eq!(bytes.len(), (typed_size + 7) & !7);
