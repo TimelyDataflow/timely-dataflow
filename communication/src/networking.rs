@@ -89,7 +89,13 @@ impl MessageHeader {
     /// The number of bytes required for the header and data.
     #[inline]
     pub fn required_bytes(&self) -> usize {
-        std::mem::size_of::<u64>() * Self::FIELDS + self.length
+        self.header_bytes() + self.length
+    }
+
+    /// The number of bytes required for the header.
+    #[inline(always)]
+    pub fn header_bytes(&self) -> usize {
+        std::mem::size_of::<u64>() * Self::FIELDS
     }
 }
 
