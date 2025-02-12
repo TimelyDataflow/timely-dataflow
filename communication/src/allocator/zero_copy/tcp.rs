@@ -94,7 +94,9 @@ where
             });
 
             if header.length > 0 {
-                stageds[header.target - worker_offset].push(bytes);
+                for target in header.target_lower .. header.target_upper {
+                    stageds[target - worker_offset].push(bytes.clone());
+                }
             }
             else {
                 // Shutting down; confirm absence of subsequent data.
@@ -196,7 +198,8 @@ pub fn send_loop<S: Stream>(
     let header = MessageHeader {
         channel:    0,
         source:     0,
-        target:     0,
+        target_lower:     0,
+        target_upper:     0,
         length:     0,
         seqno:      0,
     };

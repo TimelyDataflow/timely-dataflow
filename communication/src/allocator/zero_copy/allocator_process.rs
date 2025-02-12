@@ -135,7 +135,8 @@ impl Allocate for ProcessAllocator {
             let header = MessageHeader {
                 channel:    identifier,
                 source:     self.index,
-                target:     target_index,
+                target_lower:     target_index,
+                target_upper:     target_index+1,
                 length:     0,
                 seqno:      0,
             };
@@ -192,7 +193,7 @@ impl Allocate for ProcessAllocator {
 
                     // Get the header and payload, ditch the header.
                     let mut peel = bytes.extract_to(header.required_bytes());
-                    let _ = peel.extract_to(40);
+                    let _ = peel.extract_to(header.header_bytes());
 
                     // Increment message count for channel.
                     // Safe to do this even if the channel has been dropped.
