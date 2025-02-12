@@ -206,6 +206,8 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
         pushes.push(inner_send);
         for (mut index, send) in self.sends.iter().enumerate() {
+            // The span of worker indexes jumps by `inner_peers` as we skip our own process.
+            // We bump `index` by one as we pass `self.index/inner_peers` to effect this.
             if index >= self.index/inner_peers { index += 1; }
             let header = MessageHeader {
                 channel: identifier,
