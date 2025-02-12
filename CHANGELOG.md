@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.0...timely-v0.18.1) - 2025-02-12
+
+### Other
+
+- Update columnar to 0.3, make workspace dependency ([#639](https://github.com/TimelyDataflow/timely-dataflow/pull/639))
+
 ## [0.18.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.17.1...timely-v0.18.0) - 2025-02-12
 
 ### Other
