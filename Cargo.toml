@@ -12,6 +12,9 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 
+[workspace.dependencies]
+columnar = "0.3"
+
 [profile.release]
 opt-level = 3
 debug = true
