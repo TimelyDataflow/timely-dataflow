@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.17.1...timely-v0.18.0) - 2025-02-12
+
+### Other
+
+- Update columnar to 0.3, and columnar example ([#635](https://github.com/TimelyDataflow/timely-dataflow/pull/635))
+- Convert Write::write to Write::write_all ([#636](https://github.com/TimelyDataflow/timely-dataflow/pull/636))
+- Introduce foundation for broadcast channel ([#633](https://github.com/TimelyDataflow/timely-dataflow/pull/633))
+
 ## [0.17.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.17.0...timely-v0.17.1) - 2025-01-24
 
 ### Other
