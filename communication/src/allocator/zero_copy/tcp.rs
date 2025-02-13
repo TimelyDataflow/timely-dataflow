@@ -5,7 +5,7 @@ use crossbeam_channel::{Sender, Receiver};
 
 use crate::networking::MessageHeader;
 
-use super::bytes_slab::BytesSlab;
+use super::bytes_slab::{BytesRefill, BytesSlab};
 use super::bytes_exchange::MergeQueue;
 use super::stream::Stream;
 
@@ -35,7 +35,9 @@ pub fn recv_loop<S>(
     worker_offset: usize,
     process: usize,
     remote: usize,
-    logger: Option<Logger<CommunicationEventBuilder>>)
+    refill: BytesRefill,
+    logger: Option<Logger<CommunicationEventBuilder>>
+)
 where
     S: Stream,
 {
@@ -45,7 +47,7 @@ where
 
     let mut targets: Vec<MergeQueue> = targets.into_iter().map(|x| x.recv().expect("Failed to receive MergeQueue")).collect();
 
-    let mut buffer = BytesSlab::new(20, Box::new(|size| Box::new(vec![0u8; size])));
+    let mut buffer = BytesSlab::new(20, refill);
 
     // Where we stash Bytes before handing them off.
     let mut stageds = Vec::with_capacity(targets.len());

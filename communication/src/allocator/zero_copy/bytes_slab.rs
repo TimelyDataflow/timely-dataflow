@@ -14,12 +14,15 @@ pub struct BytesSlab {
     stash:          Vec<BytesMut>,              // reclaimed and reusable buffers.
     shift:          usize,                      // current buffer allocation size.
     valid:          usize,                      // buffer[..valid] are valid bytes.
-    new_bytes:      Box<dyn Fn(usize) -> Box<dyn DerefMut<Target=[u8]>>+'static>,
+    new_bytes:      BytesRefill,     // function to allocate new buffers.
 }
+
+/// A function to allocate a new buffer of at least `usize` bytes.
+pub type BytesRefill = std::sync::Arc<dyn Fn(usize) -> Box<dyn DerefMut<Target=[u8]>>+Send+Sync>;
 
 impl BytesSlab {
     /// Allocates a new `BytesSlab` with an initial size determined by a shift.
-    pub fn new(shift: usize, new_bytes: Box<dyn Fn(usize) -> Box<dyn DerefMut<Target=[u8]>>+'static>) -> Self {
+    pub fn new(shift: usize, new_bytes: BytesRefill) -> Self {
         BytesSlab {
             buffer: BytesMut::from(BoxDerefMut { boxed: new_bytes(1 << shift) }),
             in_progress: Vec::new(),
