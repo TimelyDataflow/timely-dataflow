@@ -3,6 +3,7 @@
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use timely_communication::{Allocate, Bytesable};
+use timely_communication::allocator::zero_copy::bytes_slab::BytesRefill;
 
 /// A wrapper that indicates the serialization/deserialization strategy.
 pub struct Message {
@@ -62,7 +63,10 @@ fn main() {
     config.enable().with_path(std::env::temp_dir()); 
     lgalloc::lgalloc_set_config(&config);
 
-    let refill = std::sync::Arc::new(|size| lgalloc_refill(size) as Box<dyn DerefMut<Target=[u8]>>);
+    let refill = BytesRefill {
+        logic: std::sync::Arc::new(|size| lgalloc_refill(size) as Box<dyn DerefMut<Target=[u8]>>),
+        limit: None,
+    };
 
     // extract the configuration from user-supplied arguments, initialize the computation.
     let config = timely_communication::Config::ProcessBinary(4);
