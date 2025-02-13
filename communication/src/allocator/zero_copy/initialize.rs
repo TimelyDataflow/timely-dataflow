@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use timely_logging::Logger;
-use crate::allocator::process::ProcessBuilder;
+use crate::allocator::PeerBuilder;
 use crate::logging::CommunicationEventBuilder;
 use crate::networking::create_sockets;
 use super::tcp::{send_loop, recv_loop};
@@ -34,17 +34,17 @@ impl Drop for CommsGuard {
 use crate::logging::CommunicationSetup;
 
 /// Initializes network connections
-pub fn initialize_networking(
+pub fn initialize_networking<P: PeerBuilder>(
     addresses: Vec<String>,
     my_index: usize,
     threads: usize,
     noisy: bool,
     log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEventBuilder>>+Send+Sync>,
 )
--> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
+-> ::std::io::Result<(Vec<TcpBuilder<P::Peer>>, CommsGuard)>
 {
     let sockets = create_sockets(addresses, my_index, noisy)?;
-    initialize_networking_from_sockets(sockets, my_index, threads, log_sender)
+    initialize_networking_from_sockets::<_, P>(sockets, my_index, threads, log_sender)
 }
 
 /// Initialize send and recv threads from sockets.
@@ -54,13 +54,13 @@ pub fn initialize_networking(
 ///
 /// It is important that the `sockets` argument contain sockets for each remote process, in order, and
 /// with position `my_index` set to `None`.
-pub fn initialize_networking_from_sockets<S: Stream + 'static>(
+pub fn initialize_networking_from_sockets<S: Stream + 'static, P: PeerBuilder>(
     mut sockets: Vec<Option<S>>,
     my_index: usize,
     threads: usize,
     log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEventBuilder>>+Send+Sync>,
 )
--> ::std::io::Result<(Vec<TcpBuilder<ProcessBuilder>>, CommsGuard)>
+-> ::std::io::Result<(Vec<TcpBuilder<P::Peer>>, CommsGuard)>
 {
     // Sockets are expected to be blocking,
     for socket in sockets.iter_mut().flatten() {
@@ -69,7 +69,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static>(
 
     let processes = sockets.len();
 
-    let process_allocators = crate::allocator::process::Process::new_vector(threads);
+    let process_allocators = P::new_vector(threads);
     let (builders, promises, futures) = new_vector(process_allocators, my_index, processes);
 
     let mut promises_iter = promises.into_iter();

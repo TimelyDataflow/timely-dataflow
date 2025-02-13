@@ -9,7 +9,7 @@ use std::collections::{HashMap};
 use crossbeam_channel::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
-use crate::allocator::{Allocate, AllocateBuilder, Thread};
+use crate::allocator::{Allocate, AllocateBuilder, PeerBuilder, Thread};
 use crate::{Push, Pull};
 use crate::buzzer::Buzzer;
 
@@ -70,8 +70,12 @@ pub struct Process {
 impl Process {
     /// Access the wrapped inner allocator.
     pub fn inner(&mut self) -> &mut Thread { &mut self.inner }
+}
+
+impl PeerBuilder for Process {
+    type Peer = ProcessBuilder;
     /// Allocate a list of connected intra-process allocators.
-    pub fn new_vector(peers: usize) -> Vec<ProcessBuilder> {
+    fn new_vector(peers: usize) -> Vec<ProcessBuilder> {
 
         let mut counters_send = Vec::with_capacity(peers);
         let mut counters_recv = Vec::with_capacity(peers);
