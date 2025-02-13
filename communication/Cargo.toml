@@ -26,5 +26,6 @@ timely_container = { path = "../container", version = "0.14.0" }
 timely_logging = { path = "../logging", version = "0.13" }
 crossbeam-channel = "0.5"
 
-[dev-dependencies]
+# Lgalloc only supports linux and macos, don't depend on any other OS.
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
 lgalloc = "0.4"
