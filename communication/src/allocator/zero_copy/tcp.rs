@@ -45,7 +45,7 @@ where
 
     let mut targets: Vec<MergeQueue> = targets.into_iter().map(|x| x.recv().expect("Failed to receive MergeQueue")).collect();
 
-    let mut buffer = BytesSlab::new(20);
+    let mut buffer = BytesSlab::new(20, Box::new(|size| Box::new(vec![0u8; size])));
 
     // Where we stash Bytes before handing them off.
     let mut stageds = Vec::with_capacity(targets.len());

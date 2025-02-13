@@ -145,7 +145,7 @@ impl<P: BytesPush> SendEndpoint<P> {
     pub fn new(queue: P) -> Self {
         SendEndpoint {
             send: queue,
-            buffer: BytesSlab::new(20),
+            buffer: BytesSlab::new(20, Box::new(|size| Box::new(vec![0u8; size]))),
         }
     }
     /// Makes the next `bytes` bytes valid.

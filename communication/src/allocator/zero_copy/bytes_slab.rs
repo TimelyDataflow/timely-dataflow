@@ -1,5 +1,6 @@
 //! A large binary allocation for writing and sharing.
 
+use std::ops::{Deref, DerefMut};
 use timely_bytes::arc::{Bytes, BytesMut};
 
 /// A large binary allocation for writing and sharing.
@@ -13,17 +14,19 @@ pub struct BytesSlab {
     stash:          Vec<BytesMut>,              // reclaimed and reusable buffers.
     shift:          usize,                      // current buffer allocation size.
     valid:          usize,                      // buffer[..valid] are valid bytes.
+    new_bytes:      Box<dyn Fn(usize) -> Box<dyn DerefMut<Target=[u8]>>+'static>,
 }
 
 impl BytesSlab {
     /// Allocates a new `BytesSlab` with an initial size determined by a shift.
-    pub fn new(shift: usize) -> Self {
+    pub fn new(shift: usize, new_bytes: Box<dyn Fn(usize) -> Box<dyn DerefMut<Target=[u8]>>+'static>) -> Self {
         BytesSlab {
-            buffer: BytesMut::from(vec![0u8; 1 << shift].into_boxed_slice()),
+            buffer: BytesMut::from(BoxDerefMut { boxed: new_bytes(1 << shift) }),
             in_progress: Vec::new(),
             stash: Vec::new(),
             shift,
             valid: 0,
+            new_bytes,
         }
     }
     /// The empty region of the slab.
@@ -68,7 +71,7 @@ impl BytesSlab {
             if self.stash.is_empty() {
                 for shared in self.in_progress.iter_mut() {
                     if let Some(mut bytes) = shared.take() {
-                        if bytes.try_regenerate::<Box<[u8]>>() {
+                        if bytes.try_regenerate::<BoxDerefMut>() {
                             // NOTE: Test should be redundant, but better safe...
                             if bytes.len() == (1 << self.shift) {
                                 self.stash.push(bytes);
@@ -82,7 +85,7 @@ impl BytesSlab {
                 self.in_progress.retain(|x| x.is_some());
             }
 
-            let new_buffer = self.stash.pop().unwrap_or_else(|| BytesMut::from(vec![0; 1 << self.shift].into_boxed_slice()));
+            let new_buffer = self.stash.pop().unwrap_or_else(|| BytesMut::from(BoxDerefMut { boxed: (self.new_bytes)(1 << self.shift) }));
             let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
 
             self.buffer[.. self.valid].copy_from_slice(&old_buffer[.. self.valid]);
@@ -90,5 +93,23 @@ impl BytesSlab {
                 self.in_progress.push(Some(old_buffer));
             }
         }
+    }
+}
+
+/// A wrapper for `Box<dyn DerefMut<Target=T>>` that dereferences to `T` rather than `dyn DerefMut<Target=T>`.
+struct BoxDerefMut {
+    boxed: Box<dyn DerefMut<Target=[u8]>+'static>,
+}
+
+impl Deref for BoxDerefMut {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        &self.boxed[..]
+    }
+}
+
+impl DerefMut for BoxDerefMut {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.boxed[..]
     }
 }
