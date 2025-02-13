@@ -11,7 +11,7 @@ use crate::networking::MessageHeader;
 use crate::{Allocate, Push, Pull};
 use crate::allocator::{AllocateBuilder, Exchangeable};
 use crate::allocator::canary::Canary;
-
+use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 use super::push_pull::{Pusher, PullerInner};
 
@@ -27,6 +27,8 @@ pub struct TcpBuilder<A: AllocateBuilder> {
     peers:  usize,                      // number of peer allocators.
     futures:   Vec<Receiver<MergeQueue>>,  // to receive queues to each network thread.
     promises:   Vec<Sender<MergeQueue>>,    // to send queues from each network thread.
+    /// Byte slab refill function.
+    refill: BytesRefill,
 }
 
 /// Creates a vector of builders, sharing appropriate state.
@@ -44,8 +46,9 @@ pub struct TcpBuilder<A: AllocateBuilder> {
 pub fn new_vector<A: AllocateBuilder>(
     allocators: Vec<A>,
     my_process: usize,
-    processes: usize)
--> (Vec<TcpBuilder<A>>,
+    processes: usize,
+    refill: BytesRefill,
+) -> (Vec<TcpBuilder<A>>,
     Vec<Vec<Sender<MergeQueue>>>,
     Vec<Vec<Receiver<MergeQueue>>>)
 {
@@ -68,6 +71,7 @@ pub fn new_vector<A: AllocateBuilder>(
                 peers: threads * processes,
                 promises,
                 futures,
+                refill: refill.clone(),
             }})
         .collect();
 
@@ -92,7 +96,7 @@ impl<A: AllocateBuilder> TcpBuilder<A> {
         let mut sends = Vec::with_capacity(self.peers);
         for pusher in self.futures.into_iter() {
             let queue = pusher.recv().expect("Failed to receive push queue");
-            let sendpoint = SendEndpoint::new(queue);
+            let sendpoint = SendEndpoint::new(queue, self.refill.clone());
             sends.push(Rc::new(RefCell::new(sendpoint)));
         }
 

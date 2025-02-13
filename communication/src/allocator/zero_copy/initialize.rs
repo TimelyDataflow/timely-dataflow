@@ -3,6 +3,7 @@
 use std::sync::Arc;
 use timely_logging::Logger;
 use crate::allocator::PeerBuilder;
+use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::logging::CommunicationEventBuilder;
 use crate::networking::create_sockets;
 use super::tcp::{send_loop, recv_loop};
@@ -39,12 +40,13 @@ pub fn initialize_networking<P: PeerBuilder>(
     my_index: usize,
     threads: usize,
     noisy: bool,
+    refill: BytesRefill,
     log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEventBuilder>>+Send+Sync>,
 )
 -> ::std::io::Result<(Vec<TcpBuilder<P::Peer>>, CommsGuard)>
 {
     let sockets = create_sockets(addresses, my_index, noisy)?;
-    initialize_networking_from_sockets::<_, P>(sockets, my_index, threads, log_sender)
+    initialize_networking_from_sockets::<_, P>(sockets, my_index, threads, refill, log_sender)
 }
 
 /// Initialize send and recv threads from sockets.
@@ -58,6 +60,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static, P: PeerBuilder>(
     mut sockets: Vec<Option<S>>,
     my_index: usize,
     threads: usize,
+    refill: BytesRefill,
     log_sender: Arc<dyn Fn(CommunicationSetup)->Option<Logger<CommunicationEventBuilder>>+Send+Sync>,
 )
 -> ::std::io::Result<(Vec<TcpBuilder<P::Peer>>, CommsGuard)>
@@ -69,14 +72,15 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static, P: PeerBuilder>(
 
     let processes = sockets.len();
 
-    let process_allocators = P::new_vector(threads);
-    let (builders, promises, futures) = new_vector(process_allocators, my_index, processes);
+    let process_allocators = P::new_vector(threads, refill.clone());
+    let (builders, promises, futures) = new_vector(process_allocators, my_index, processes, refill.clone());
 
     let mut promises_iter = promises.into_iter();
     let mut futures_iter = futures.into_iter();
 
     let mut send_guards = Vec::with_capacity(sockets.len());
     let mut recv_guards = Vec::with_capacity(sockets.len());
+    let refill = refill.clone();
 
     // for each process, if a stream exists (i.e. not local) ...
     for (index, stream) in sockets.into_iter().enumerate().filter_map(|(i, s)| s.map(|s| (i, s))) {
@@ -108,6 +112,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static, P: PeerBuilder>(
             // let remote_sends = remote_sends.clone();
             let log_sender = log_sender.clone();
             let stream = stream.try_clone()?;
+            let refill = refill.clone();
             let join_guard =
             ::std::thread::Builder::new()
                 .name(format!("timely:recv-{}", index))
@@ -117,7 +122,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static, P: PeerBuilder>(
                         sender: false,
                         remote: Some(index),
                     });
-                    recv_loop(stream, remote_send, threads * my_index, my_index, index, logger);
+                    recv_loop(stream, remote_send, threads * my_index, my_index, index, refill, logger);
                 })?;
 
             recv_guards.push(join_guard);

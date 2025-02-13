@@ -126,10 +126,12 @@ impl<T: Clone> Push<T> for Broadcaster<T> {
     }
 }
 
+use crate::allocator::zero_copy::bytes_slab::BytesRefill;
+
 /// A builder for vectors of peers.
 pub trait PeerBuilder {
     /// The peer type.
     type Peer: AllocateBuilder + Sized;
     /// Allocate a list of `Self::Peer` of length `peers`.
-    fn new_vector(peers: usize) -> Vec<Self::Peer>;
+    fn new_vector(peers: usize, refill: BytesRefill) -> Vec<Self::Peer>;
 }

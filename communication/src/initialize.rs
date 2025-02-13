@@ -6,7 +6,7 @@ use std::io::BufRead;
 use std::sync::Arc;
 use std::fmt::{Debug, Formatter};
 use std::any::Any;
-
+use std::ops::DerefMut;
 #[cfg(feature = "getopts")]
 use getopts;
 use timely_logging::Logger;
@@ -14,6 +14,7 @@ use timely_logging::Logger;
 use crate::allocator::thread::ThreadBuilder;
 use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder, PeerBuilder};
 use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
+use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::allocator::zero_copy::initialize::initialize_networking;
 use crate::logging::{CommunicationEventBuilder, CommunicationSetup};
 
@@ -151,18 +152,24 @@ impl Config {
 
     /// Attempts to assemble the described communication infrastructure.
     pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
+        let refill = Arc::new(|size| Box::new(vec![0_u8; size]) as Box<dyn DerefMut<Target=[u8]>>);
+        self.try_build_with(refill)
+    }
+
+    /// Attempts to assemble the described communication infrastructure, using the supplied refill function.
+    pub fn try_build_with(self, refill: BytesRefill) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
         match self {
             Config::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
             },
             Config::Process(threads) => {
-                Ok((Process::new_vector(threads).into_iter().map(GenericBuilder::Process).collect(), Box::new(())))
+                Ok((Process::new_vector(threads, refill).into_iter().map(GenericBuilder::Process).collect(), Box::new(())))
             },
             Config::ProcessBinary(threads) => {
-                Ok((ProcessBuilder::new_vector(threads).into_iter().map(GenericBuilder::ProcessBinary).collect(), Box::new(())))
+                Ok((ProcessBuilder::new_vector(threads, refill).into_iter().map(GenericBuilder::ProcessBinary).collect(), Box::new(())))
             },
             Config::Cluster { threads, process, addresses, report, zerocopy: false, log_fn } => {
-                match initialize_networking::<Process>(addresses, process, threads, report, log_fn) {
+                match initialize_networking::<Process>(addresses, process, threads, report, refill, log_fn) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(GenericBuilder::ZeroCopy).collect(), Box::new(guard)))
                     },
@@ -170,7 +177,7 @@ impl Config {
                 }
             },
             Config::Cluster { threads, process, addresses, report, zerocopy: true, log_fn } => {
-                match initialize_networking::<ProcessBuilder>(addresses, process, threads, report, log_fn) {
+                match initialize_networking::<ProcessBuilder>(addresses, process, threads, report, refill, log_fn) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(GenericBuilder::ZeroCopyBinary).collect(), Box::new(guard)))
                     },

@@ -75,7 +75,7 @@ impl Process {
 impl PeerBuilder for Process {
     type Peer = ProcessBuilder;
     /// Allocate a list of connected intra-process allocators.
-    fn new_vector(peers: usize) -> Vec<ProcessBuilder> {
+    fn new_vector(peers: usize, _refill: crate::allocator::BytesRefill) -> Vec<ProcessBuilder> {
 
         let mut counters_send = Vec::with_capacity(peers);
         let mut counters_recv = Vec::with_capacity(peers);
