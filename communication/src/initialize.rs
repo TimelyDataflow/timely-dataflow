@@ -49,14 +49,14 @@ impl Debug for Config {
             Config::Thread => write!(f, "Config::Thread()"),
             Config::Process(n) => write!(f, "Config::Process({})", n),
             Config::ProcessBinary(n) => write!(f, "Config::ProcessBinary({})", n),
-            Config::Cluster { threads, process, addresses, report, .. } => f
+            Config::Cluster { threads, process, addresses, report, zerocopy, log_fn: _ } => f
                 .debug_struct("Config::Cluster")
                 .field("threads", threads)
                 .field("process", process)
                 .field("addresses", addresses)
                 .field("report", report)
-                // TODO: Use `.finish_non_exhaustive()` after rust/#67364 lands
-                .finish()
+                .field("zerocopy", zerocopy)
+                .finish_non_exhaustive()
         }
     }
 }
@@ -115,7 +115,7 @@ impl Config {
                 }
             }
 
-            assert!(processes == addresses.len());
+            assert_eq!(processes, addresses.len());
             Ok(Config::Cluster {
                 threads,
                 process,
