@@ -1,4 +1,5 @@
 use std::ops::{Deref, DerefMut};
+use std::ptr::NonNull;
 use timely_communication::{Allocate, Bytesable};
 
 /// A wrapper that indicates the serialization/deserialization strategy.
@@ -22,33 +23,34 @@ impl Bytesable for Message {
 }
 
 fn lgalloc_refill(size: usize) -> Box<LgallocHandle> {
-    let (ptr, cap, handle) = lgalloc::allocate::<u8>(size).unwrap();
-    let slice = unsafe { std::slice::from_raw_parts_mut(ptr.as_ptr(), cap) };
+    let (pointer, capacity, handle) = lgalloc::allocate::<u8>(size).unwrap();
     let handle = Some(handle);
-    Box::new(LgallocHandle { handle, slice: slice.into() })
+    Box::new(LgallocHandle { handle, pointer, capacity })
 }
 
 struct LgallocHandle {
     handle: Option<lgalloc::Handle>,
-    slice: Box<[u8]>
+    pointer: NonNull<u8>,
+    capacity: usize,
 }
 
 impl Deref for LgallocHandle {
     type Target = [u8];
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        &self.slice
+        unsafe { std::slice::from_raw_parts(self.pointer.as_ptr(), self.capacity) }
     }
 }
 
 impl DerefMut for LgallocHandle {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.slice
+        unsafe { std::slice::from_raw_parts_mut(self.pointer.as_ptr(), self.capacity) }
     }
 }
 
 impl Drop for LgallocHandle {
     fn drop(&mut self) {
-        Box::leak(std::mem::take(&mut self.slice));
         lgalloc::deallocate(self.handle.take().unwrap());
     }
 }
