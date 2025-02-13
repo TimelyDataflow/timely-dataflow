@@ -10,7 +10,7 @@ use timely_bytes::arc::Bytes;
 use crate::networking::MessageHeader;
 
 use crate::{Allocate, Push, Pull};
-use crate::allocator::{AllocateBuilder, Exchangeable};
+use crate::allocator::{AllocateBuilder, Exchangeable, PeerBuilder};
 use crate::allocator::canary::Canary;
 
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
@@ -30,11 +30,12 @@ pub struct ProcessBuilder {
     pullers: Vec<Sender<MergeQueue>>,   // for pulling bytes from other workers.
 }
 
-impl ProcessBuilder {
+impl PeerBuilder for ProcessBuilder {
+    type Peer = ProcessBuilder;
     /// Creates a vector of builders, sharing appropriate state.
     ///
     /// This method requires access to a byte exchanger, from which it mints channels.
-    pub fn new_vector(count: usize) -> Vec<ProcessBuilder> {
+    fn new_vector(count: usize) -> Vec<ProcessBuilder> {
 
         // Channels for the exchange of `MergeQueue` endpoints.
         let (pullers_vec, pushers_vec) = crate::promise_futures(count, count);
@@ -53,7 +54,9 @@ impl ProcessBuilder {
             )
             .collect()
     }
+}
 
+impl ProcessBuilder {
     /// Builds a `ProcessAllocator`, instantiating `Rc<RefCell<_>>` elements.
     pub fn build(self) -> ProcessAllocator {
 

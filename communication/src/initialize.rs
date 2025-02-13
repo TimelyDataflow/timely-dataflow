@@ -12,7 +12,7 @@ use getopts;
 use timely_logging::Logger;
 
 use crate::allocator::thread::ThreadBuilder;
-use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
+use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder, PeerBuilder};
 use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
 use crate::allocator::zero_copy::initialize::initialize_networking;
 use crate::logging::{CommunicationEventBuilder, CommunicationSetup};
@@ -36,6 +36,8 @@ pub enum Config {
         addresses: Vec<String>,
         /// Verbosely report connection process
         report: bool,
+        /// Enable intra-process zero-copy
+        zerocopy: bool,
         /// Closure to create a new logger for a communication thread
         log_fn: Arc<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEventBuilder>> + Send + Sync>,
     }
@@ -119,6 +121,7 @@ impl Config {
                 process,
                 addresses,
                 report,
+                zerocopy,
                 log_fn: Arc::new(|_| None),
             })
         } else if threads > 1 {
@@ -158,14 +161,22 @@ impl Config {
             Config::ProcessBinary(threads) => {
                 Ok((ProcessBuilder::new_vector(threads).into_iter().map(GenericBuilder::ProcessBinary).collect(), Box::new(())))
             },
-            Config::Cluster { threads, process, addresses, report, log_fn } => {
-                match initialize_networking(addresses, process, threads, report, log_fn) {
+            Config::Cluster { threads, process, addresses, report, zerocopy: false, log_fn } => {
+                match initialize_networking::<Process>(addresses, process, threads, report, log_fn) {
                     Ok((stuff, guard)) => {
                         Ok((stuff.into_iter().map(GenericBuilder::ZeroCopy).collect(), Box::new(guard)))
                     },
                     Err(err) => Err(format!("failed to initialize networking: {}", err))
                 }
             },
+            Config::Cluster { threads, process, addresses, report, zerocopy: true, log_fn } => {
+                match initialize_networking::<ProcessBuilder>(addresses, process, threads, report, log_fn) {
+                    Ok((stuff, guard)) => {
+                        Ok((stuff.into_iter().map(GenericBuilder::ZeroCopyBinary).collect(), Box::new(guard)))
+                    },
+                    Err(err) => Err(format!("failed to initialize networking: {}", err))
+                }
+            }
         }
     }
 }
