@@ -1,3 +1,5 @@
+#![cfg(any(target_os = "linux", target_os = "macos"))]
+
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use timely_communication::{Allocate, Bytesable};
