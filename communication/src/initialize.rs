@@ -152,7 +152,10 @@ impl Config {
 
     /// Attempts to assemble the described communication infrastructure.
     pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
-        let refill = Arc::new(|size| Box::new(vec![0_u8; size]) as Box<dyn DerefMut<Target=[u8]>>);
+        let refill = BytesRefill {
+            logic: Arc::new(|size| Box::new(vec![0_u8; size]) as Box<dyn DerefMut<Target=[u8]>>),
+            limit: None,
+        };
         self.try_build_with(refill)
     }
 

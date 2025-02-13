@@ -14,17 +14,23 @@ pub struct BytesSlab {
     stash:          Vec<BytesMut>,              // reclaimed and reusable buffers.
     shift:          usize,                      // current buffer allocation size.
     valid:          usize,                      // buffer[..valid] are valid bytes.
-    new_bytes:      BytesRefill,     // function to allocate new buffers.
+    new_bytes:      BytesRefill,                // function to allocate new buffers.
 }
 
-/// A function to allocate a new buffer of at least `usize` bytes.
-pub type BytesRefill = std::sync::Arc<dyn Fn(usize) -> Box<dyn DerefMut<Target=[u8]>>+Send+Sync>;
+/// Ability to acquire and policy to retain byte buffers.
+#[derive(Clone)]
+pub struct BytesRefill {
+    /// Logic to acquire a new buffer of a certain number of bytes.
+    pub logic: std::sync::Arc<dyn Fn(usize) -> Box<dyn DerefMut<Target=[u8]>>+Send+Sync>,
+    /// An optional limit on the number of empty buffers retained.
+    pub limit: Option<usize>,
+}
 
 impl BytesSlab {
     /// Allocates a new `BytesSlab` with an initial size determined by a shift.
     pub fn new(shift: usize, new_bytes: BytesRefill) -> Self {
         BytesSlab {
-            buffer: BytesMut::from(BoxDerefMut { boxed: new_bytes(1 << shift) }),
+            buffer: BytesMut::from(BoxDerefMut { boxed: (new_bytes.logic)(1 << shift) }),
             in_progress: Vec::new(),
             stash: Vec::new(),
             shift,
@@ -88,8 +94,12 @@ impl BytesSlab {
                 self.in_progress.retain(|x| x.is_some());
             }
 
-            let new_buffer = self.stash.pop().unwrap_or_else(|| BytesMut::from(BoxDerefMut { boxed: (self.new_bytes)(1 << self.shift) }));
+            let new_buffer = self.stash.pop().unwrap_or_else(|| BytesMut::from(BoxDerefMut { boxed: (self.new_bytes.logic)(1 << self.shift) }));
             let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
+
+            if let Some(limit) = self.new_bytes.limit {
+                self.stash.truncate(limit);
+            }
 
             self.buffer[.. self.valid].copy_from_slice(&old_buffer[.. self.valid]);
             if !increased_shift {
