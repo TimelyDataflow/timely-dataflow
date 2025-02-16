@@ -165,6 +165,10 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
         // Maybe flush
         if self.current.at_capacity() {
             self.pending.push_back(std::mem::take(&mut self.current));
+            if let Some(spare) = self.empty.take() {
+                self.current = spare;
+                self.current.clear();
+            }
         }
     }
 }
@@ -186,9 +190,12 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
     fn finish(&mut self) -> Option<&mut C> {
         if !self.current.is_empty() {
             self.pending.push_back(std::mem::take(&mut self.current));
+            if let Some(spare) = &mut self.empty {
+                std::mem::swap(&mut self.current, spare);
+                self.current.clear();
+            }
         }
-        self.empty = self.pending.pop_front();
-        self.empty.as_mut()
+        self.extract()
     }
 }
 
