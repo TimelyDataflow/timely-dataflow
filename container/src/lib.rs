@@ -4,9 +4,6 @@
 
 use std::collections::VecDeque;
 
-pub mod columnation;
-pub mod flatcontainer;
-
 /// A container transferring data through dataflow edges
 ///
 /// A container stores a number of elements and thus is able to describe it length (`len()`) and

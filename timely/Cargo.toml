@@ -20,6 +20,7 @@ getopts = ["getopts-dep", "timely_communication/getopts"]
 
 [dependencies]
 columnar = { workspace = true }
+columnation = "0.1"
 getopts-dep = { package = "getopts", version = "0.2.21", optional = true }
 bincode = { version = "1.0" }
 byteorder = "1.5"

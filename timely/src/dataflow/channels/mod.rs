@@ -136,26 +136,6 @@ mod implementations {
         }
     }
 
-    use crate::container::flatcontainer::FlatStack;
-    impl<T: Serialize + for<'a> Deserialize<'a> + crate::container::flatcontainer::Region> ContainerBytes for FlatStack<T> {
-        fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
-            ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed")
-        }
-
-        fn length_in_bytes(&self) -> usize {
-            let length = ::bincode::serialized_size(&self).expect("bincode::serialized_size() failed") as usize;
-            (length + 7) & !7
-        }
-
-        fn into_bytes<W: Write>(&self, writer: &mut W) {
-            let mut counter = WriteCounter::new(writer);
-            ::bincode::serialize_into(&mut counter, &self).expect("bincode::serialize_into() failed");
-            let written = counter.count;
-            let written_slop = ((written + 7) & !7) - written;
-            counter.write_all(&[0u8; 8][..written_slop]).unwrap();
-        }
-    }
-
     use write_counter::WriteCounter;
     /// A `Write` wrapper that counts the bytes written.
     mod write_counter {
