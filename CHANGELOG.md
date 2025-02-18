@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.1...timely-v0.19.0) - 2025-02-18
+
+### Other
+
+- Remove columnation and flatcontainer deps ([#647](https://github.com/TimelyDataflow/timely-dataflow/pull/647))
+
 ## [0.18.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.0...timely-v0.18.1) - 2025-02-12
 
 ### Other
