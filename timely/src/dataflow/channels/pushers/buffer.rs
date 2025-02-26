@@ -114,16 +114,10 @@ impl<T, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Buffer<T, CB, 
             Message::push_at(container, time, &mut self.pusher);
         }
     }
-}
-
-impl<T, CB, P, D> PushInto<D> for Buffer<T, CB, P>
-where
-    T: Eq+Clone,
-    CB: ContainerBuilder + PushInto<D>,
-    P: Push<Message<T, CB::Container>>
-{
+    
+    /// An internal implementation of push that should only be called by sessions.
     #[inline]
-    fn push_into(&mut self, item: D) {
+    fn push_internal<D>(&mut self, item: D) where CB: PushInto<D> {
         self.builder.push_into(item);
         self.extract_and_send();
     }
@@ -189,7 +183,7 @@ where
 {
     #[inline]
     fn push_into(&mut self, item: D) {
-        self.buffer.push_into(item);
+        self.buffer.push_internal(item);
     }
 }
 
@@ -241,7 +235,7 @@ where
 {
     #[inline]
     fn push_into(&mut self, item: D) {
-        self.buffer.push_into(item);
+        self.buffer.push_internal(item);
     }
 }
 
