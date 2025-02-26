@@ -145,6 +145,7 @@ mod encoding {
     // We will pad out anything we write to make the result `u64` aligned.
     impl<T: Data> Bytesable for Bincode<T> {
         fn from_bytes(bytes: Bytes) -> Self {
+            println!("Bincode::from_bytes: {:?}", std::any::type_name::<T>());
             let typed = ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed");
             let typed_size = ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize;
             assert_eq!(bytes.len(), (typed_size + 7) & !7);

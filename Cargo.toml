@@ -13,7 +13,8 @@ resolver = "2"
 edition = "2021"
 
 [workspace.dependencies]
-columnar = "0.3"
+# columnar = "0.3"
+columnar = { path = "../columnar" }
 
 [profile.release]
 opt-level = 3

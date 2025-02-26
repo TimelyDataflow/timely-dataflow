@@ -114,13 +114,13 @@ struct Broadcaster<T> {
 
 impl<T: Clone> Push<T> for Broadcaster<T> {
     fn push(&mut self, element: &mut Option<T>) {
-        // Push defensive copies to pushers after the first.
-        for pusher in self.pushers.iter_mut().skip(1) {
-            self.spare.clone_from(element);
-            pusher.push(&mut self.spare);
-        }
+        // // Push defensive copies to pushers after the first.
+        // for pusher in self.pushers.iter_mut().skip(1) {
+        //     self.spare.clone_from(element);
+        //     pusher.push(&mut self.spare);
+        // }
         // Push the element itself at the first pusher.
-        for pusher in self.pushers.iter_mut().take(1) {
+        for pusher in self.pushers.iter_mut() {//}.take(1) {
             pusher.push(element);
         }
     }

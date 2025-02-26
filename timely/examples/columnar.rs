@@ -1,7 +1,7 @@
 //! Wordcount based on flatcontainer.
 
 use {
-    std::collections::HashMap,
+    std::collections::BTreeMap,
     timely::{Container, container::CapacityContainerBuilder},
     timely::dataflow::channels::pact::{ExchangeCore, Pipeline},
     timely::dataflow::InputHandleCore,
@@ -21,8 +21,6 @@ fn main() {
 
     type Container = Column<WordCount>;
 
-    use columnar::Len;
-
     let config = timely::Config {
         communication: timely::CommunicationConfig::ProcessBinary(3),
         worker: timely::WorkerConfig::default(),
@@ -37,9 +35,7 @@ fn main() {
         worker.dataflow::<usize, _, _>(|scope| {
             input
                 .to_stream(scope)
-                .unary(
-                    Pipeline,
-                    "Split",
+                .unary(Pipeline, "Split",
                     |_cap, _info| {
                         move |input, output| {
                             while let Some((time, data)) = input.next() {
@@ -58,38 +54,33 @@ fn main() {
                     ExchangeCore::<ColumnBuilder<WordCount>,_>::new_core(|x: &WordCountReference<&str,&i64>| x.text.len() as u64),
                     "WordCount",
                     |_capability, _info| {
-                        let mut queues = HashMap::new();
-                        let mut counts = HashMap::new();
+                        let mut queues = Vec::new();
+                        let mut counts = BTreeMap::new();
 
                         move |input, output| {
                             while let Some((time, data)) = input.next() {
-                                queues
-                                    .entry(time.retain())
-                                    .or_insert(Vec::new())
-                                    .push(std::mem::take(data));
+                                queues.push((time.retain(), std::mem::take(data)));
                             }
 
                             for (key, val) in queues.iter_mut() {
                                 if !input.frontier().less_equal(key.time()) {
                                     let mut session = output.session(key);
-                                    for batch in val.drain(..) {
-                                        for wordcount in batch.iter() {
-                                            let total =
-                                            if let Some(count) = counts.get_mut(wordcount.text) {
-                                                *count += wordcount.diff;
-                                                *count
-                                            }
-                                            else {
-                                                counts.insert(wordcount.text.to_string(), *wordcount.diff);
-                                                *wordcount.diff
-                                            };
-                                            session.give(WordCountReference { text: wordcount.text, diff: total });
+                                    for wordcount in val.iter() {
+                                        let total =
+                                        if let Some(count) = counts.get_mut(wordcount.text) {
+                                            *count += wordcount.diff;
+                                            *count
                                         }
+                                        else {
+                                            counts.insert(wordcount.text.to_string(), *wordcount.diff);
+                                            *wordcount.diff
+                                        };
+                                        session.give(WordCountReference { text: wordcount.text, diff: total });
                                     }
                                 }
                             }
 
-                            queues.retain(|_key, val| !val.is_empty());
+                            queues.retain(|(key, _val)| input.frontier().less_equal(key.time()) );
                         }
                     },
                 )
@@ -99,13 +90,35 @@ fn main() {
         });
 
         // introduce data and watch!
-        for round in 0..10 {
-            input.send(WordCountReference { text: "flat container", diff: 1 });
-            input.advance_to(round + 1);
-            while probe.less_than(input.time()) {
-                worker.step();
+
+        if let Some(filename) = std::env::args().nth(1) {
+            let file = std::fs::File::open(filename).unwrap();
+            use std::io::BufRead;
+            let mut lines = std::io::BufReader::new(file);
+            let mut text = String::default();
+            let mut index = 0;
+            while lines.read_line(&mut text).unwrap() > 0 {
+                if index % worker.peers() == worker.index() {
+                    input.send(WordCountReference { text: &text, diff: 1 });
+                }
+                text.clear();
+                input.advance_to(index + 1);
+                while probe.less_than(input.time()) {
+                    worker.step();
+                }
+                index += 1;
             }
         }
+        else {
+            for round in 0.. {
+                input.send(WordCountReference { text: "flat container", diff: 1 });
+                input.advance_to(round + 1);
+                while probe.less_than(input.time()) {
+                    worker.step();
+                }
+            }
+        }
+
     })
     .unwrap();
 }
@@ -177,9 +190,9 @@ mod container {
         type Iter<'a> = IterOwn<<C::Container as columnar::Container<C>>::Borrowed<'a>>;
         fn iter<'a>(&'a self) -> Self::Iter<'a> {
             match self {
-                Column::Typed(t) => t.borrow().into_iter(),
-                Column::Bytes(b) => <<C::Container as columnar::Container<C>>::Borrowed<'a> as FromBytes>::from_bytes(&mut Indexed::decode(bytemuck::cast_slice(b))).into_iter(),
-                Column::Align(a) => <<C::Container as columnar::Container<C>>::Borrowed<'a> as FromBytes>::from_bytes(&mut Indexed::decode(a)).into_iter(),
+                Column::Typed(t) => t.borrow().into_index_iter(),
+                Column::Bytes(b) => <<C::Container as columnar::Container<C>>::Borrowed<'a> as FromBytes>::from_bytes(&mut Indexed::decode(bytemuck::cast_slice(b))).into_index_iter(),
+                Column::Align(a) => <<C::Container as columnar::Container<C>>::Borrowed<'a> as FromBytes>::from_bytes(&mut Indexed::decode(a)).into_index_iter(),
             }
         }
 
@@ -187,9 +200,9 @@ mod container {
         type DrainIter<'a> = IterOwn<<C::Container as columnar::Container<C>>::Borrowed<'a>>;
         fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> {
             match self {
-                Column::Typed(t) => t.borrow().into_iter(),
-                Column::Bytes(b) => <<C::Container as columnar::Container<C>>::Borrowed<'a> as FromBytes>::from_bytes(&mut Indexed::decode(bytemuck::cast_slice(b))).into_iter(),
-                Column::Align(a) => <<C::Container as columnar::Container<C>>::Borrowed<'a> as FromBytes>::from_bytes(&mut Indexed::decode(a)).into_iter(),
+                Column::Typed(t) => t.borrow().into_index_iter(),
+                Column::Bytes(b) => <<C::Container as columnar::Container<C>>::Borrowed<'a> as FromBytes>::from_bytes(&mut Indexed::decode(bytemuck::cast_slice(b))).into_index_iter(),
+                Column::Align(a) => <<C::Container as columnar::Container<C>>::Borrowed<'a> as FromBytes>::from_bytes(&mut Indexed::decode(a)).into_index_iter(),
             }
         }
     }
@@ -327,9 +340,12 @@ mod builder {
         fn finish(&mut self) -> Option<&mut Self::Container> {
             if !self.current.is_empty() {
                 self.pending.push_back(Column::Typed(std::mem::take(&mut self.current)));
+                if let Some(Column::Typed(spare)) = self.empty.take() {
+                    self.current = spare;
+                    self.current.clear();
+                }
             }
-            self.empty = self.pending.pop_front();
-            self.empty.as_mut()
+            self.extract()
         }
     }
 
