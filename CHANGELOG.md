@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.1...timely-v0.19.0) - 2025-02-28
+
+### Other
+
+- Use `dep` syntax with `getopts` ([#591](https://github.com/TimelyDataflow/timely-dataflow/pull/591))
+- Make Buffer::push_into private ([#649](https://github.com/TimelyDataflow/timely-dataflow/pull/649))
+- Remove columnation and flatcontainer deps ([#647](https://github.com/TimelyDataflow/timely-dataflow/pull/647))
+
 ## [0.18.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.0...timely-v0.18.1) - 2025-02-12
 
 ### Other
