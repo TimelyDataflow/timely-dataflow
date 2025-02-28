@@ -96,10 +96,12 @@ impl Activations {
         }
 
         // Drain timer-based activations.
-        let now = self.timer.elapsed();
-        while self.queue.peek().map(|Reverse((t,_))| t <= &now) == Some(true) {
-            let Reverse((_time, path)) = self.queue.pop().unwrap();
-            self.activate(&path[..]);
+        if !self.queue.is_empty() {
+            let now = self.timer.elapsed();
+            while self.queue.peek().map(|Reverse((t,_))| t <= &now) == Some(true) {
+                let Reverse((_time, path)) = self.queue.pop().unwrap();
+                self.activate(&path[..]);
+            }
         }
 
         self.bounds.drain(.. self.clean);

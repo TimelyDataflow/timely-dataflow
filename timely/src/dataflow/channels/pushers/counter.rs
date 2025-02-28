@@ -5,21 +5,21 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::progress::{ChangeBatch, Timestamp};
-use crate::dataflow::channels::Bundle;
+use crate::dataflow::channels::Message;
 use crate::communication::Push;
 use crate::Container;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
-pub struct Counter<T, C, P: Push<Bundle<T, C>>> {
+pub struct Counter<T, C, P: Push<Message<T, C>>> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
     phantom: PhantomData<C>,
 }
 
-impl<T: Timestamp, C: Container, P> Push<Bundle<T, C>> for Counter<T, C, P> where P: Push<Bundle<T, C>> {
+impl<T: Timestamp, C: Container, P> Push<Message<T, C>> for Counter<T, C, P> where P: Push<Message<T, C>> {
     #[inline]
-    fn push(&mut self, message: &mut Option<Bundle<T, C>>) {
+    fn push(&mut self, message: &mut Option<Message<T, C>>) {
         if let Some(message) = message {
             self.produced.borrow_mut().update(message.time.clone(), message.data.len() as i64);
         }
@@ -31,7 +31,7 @@ impl<T: Timestamp, C: Container, P> Push<Bundle<T, C>> for Counter<T, C, P> wher
     }
 }
 
-impl<T, C, P: Push<Bundle<T, C>>> Counter<T, C, P> where T : Ord+Clone+'static {
+impl<T, C, P: Push<Message<T, C>>> Counter<T, C, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
     pub fn new(pushee: P) -> Counter<T, C, P> {
         Counter {

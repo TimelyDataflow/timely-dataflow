@@ -1,5 +1,3 @@
-extern crate timely;
-
 use std::rc::Rc;
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Inspect, Probe};

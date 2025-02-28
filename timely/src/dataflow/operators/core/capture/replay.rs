@@ -54,15 +54,15 @@ pub trait Replay<T: Timestamp, C> : Sized {
     fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }
-    /// Replays `self` into the provided scope, as a `StreamCore<S, C>'.
+    /// Replays `self` into the provided scope, as a `StreamCore<S, C>`.
     ///
     /// The `period` argument allows the specification of a re-activation period, where the operator
     /// will re-activate itself every so often. The `None` argument instructs the operator not to
-    /// re-activate itself.us
+    /// re-activate itself.
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>;
 }
 
-impl<T: Timestamp, C: Container, I> Replay<T, C> for I
+impl<T: Timestamp, C: Container + Clone + 'static, I> Replay<T, C> for I
 where
     I : IntoIterator,
     <I as IntoIterator>::Item: EventIterator<T, C>+'static,
@@ -94,11 +94,18 @@ where
 
                 for event_stream in event_streams.iter_mut() {
                     while let Some(event) = event_stream.next() {
+                        use std::borrow::Cow::*;
                         match event {
-                            Event::Progress(vec) => {
+                            Owned(Event::Progress(vec)) => {
+                                progress.internals[0].extend(vec.into_iter());
+                            },
+                            Owned(Event::Messages(time, mut data)) => {
+                                output.session(&time).give_container(&mut data);
+                            }
+                            Borrowed(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.iter().cloned());
                             },
-                            Event::Messages(ref time, data) => {
+                            Borrowed(Event::Messages(time, data)) => {
                                 allocation.clone_from(data);
                                 output.session(time).give_container(&mut allocation);
                             }

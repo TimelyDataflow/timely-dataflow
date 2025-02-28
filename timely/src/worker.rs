@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-use crate::communication::{Allocate, Data, Push, Pull};
+use crate::communication::{Allocate, Exchangeable, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::{Schedule, Scheduler, Activations};
 use crate::progress::timestamp::{Refines};
@@ -34,7 +34,7 @@ use crate::logging::TimelyLogger;
 /// If you are not certain which option to use, prefer `Demand`, and
 /// perhaps monitor the progress messages through timely's logging
 /// infrastructure to see if their volume is surprisingly high.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub enum ProgressMode {
     /// Eagerly transmit all progress updates produced by a worker.
     ///
@@ -61,13 +61,8 @@ pub enum ProgressMode {
     /// the messages can affect. Once the capability is released, the
     /// progress messages are unblocked and transmitted, in accumulated
     /// form.
+    #[default]
     Demand,
-}
-
-impl Default for ProgressMode {
-    fn default() -> ProgressMode {
-        ProgressMode::Demand
-    }
 }
 
 impl FromStr for ProgressMode {
@@ -191,19 +186,24 @@ pub trait AsWorker : Scheduler {
     /// scheduled in response to the receipt of records on the channel.
     /// Most commonly, this would be the address of the *target* of the
     /// channel.
-    fn allocate<T: Data>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>);
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>);
     /// Constructs a pipeline channel from the worker to itself.
     ///
     /// By default this method uses the native channel allocation mechanism, but the expectation is
     /// that this behavior will be overridden to be more efficient.
-    fn pipeline<T: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>);
+    fn pipeline<T: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<T>, ThreadPuller<T>);
+
+    /// Allocates a broadcast channel, where each pushed message is received by all.
+    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>);
 
     /// Allocates a new worker-unique identifier.
     fn new_identifier(&mut self) -> usize;
+    /// The next worker-unique identifier to be allocated.
+    fn peek_identifier(&self) -> usize;
     /// Provides access to named logging streams.
-    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>;
+    fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry>;
     /// Provides access to the timely logging stream.
-    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().get("timely") }
+    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().get("timely").map(Into::into) }
 }
 
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
@@ -217,7 +217,7 @@ pub struct Worker<A: Allocate> {
     // dataflows: Rc<RefCell<Vec<Wrapper>>>,
     dataflows: Rc<RefCell<HashMap<usize, Wrapper>>>,
     dataflow_counter: Rc<RefCell<usize>>,
-    logging: Rc<RefCell<crate::logging_core::Registry<crate::logging::WorkerIdentifier>>>,
+    logging: Rc<RefCell<crate::logging_core::Registry>>,
 
     activations: Rc<RefCell<Activations>>,
     active_dataflows: Vec<usize>,
@@ -231,23 +231,31 @@ impl<A: Allocate> AsWorker for Worker<A> {
     fn config(&self) -> &Config { &self.config }
     fn index(&self) -> usize { self.allocator.borrow().index() }
     fn peers(&self) -> usize { self.allocator.borrow().peers() }
-    fn allocate<D: Data>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<Message<D>>>>, Box<dyn Pull<Message<D>>>) {
+    fn allocate<D: Exchangeable>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Vec<Box<dyn Push<D>>>, Box<dyn Pull<D>>) {
         if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address);
         self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().allocate(identifier)
     }
-    fn pipeline<T: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>) {
+    fn pipeline<T: 'static>(&mut self, identifier: usize, address: Rc<[usize]>) -> (ThreadPusher<T>, ThreadPuller<T>) {
         if address.is_empty() { panic!("Unacceptable address: Length zero"); }
         let mut paths = self.paths.borrow_mut();
         paths.insert(identifier, address);
         self.temp_channel_ids.borrow_mut().push(identifier);
         self.allocator.borrow_mut().pipeline(identifier)
     }
+    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize, address: Rc<[usize]>) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        if address.is_empty() { panic!("Unacceptable address: Length zero"); }
+        let mut paths = self.paths.borrow_mut();
+        paths.insert(identifier, address);
+        self.temp_channel_ids.borrow_mut().push(identifier);
+        self.allocator.borrow_mut().broadcast(identifier)
+    }
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
-    fn log_register(&self) -> RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
+    fn peek_identifier(&self) -> usize { self.peek_identifier() }
+    fn log_register(&self) -> RefMut<crate::logging_core::Registry> {
         self.log_register()
     }
 }
@@ -262,7 +270,6 @@ impl<A: Allocate> Worker<A> {
     /// Allocates a new `Worker` bound to a channel allocator.
     pub fn new(config: Config, c: A) -> Worker<A> {
         let now = Instant::now();
-        let index = c.index();
         Worker {
             config,
             timer: now,
@@ -271,7 +278,7 @@ impl<A: Allocate> Worker<A> {
             identifiers:  Default::default(),
             dataflows: Default::default(),
             dataflow_counter:  Default::default(),
-            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now, index))),
+            logging: Rc::new(RefCell::new(crate::logging_core::Registry::new(now))),
             activations: Rc::new(RefCell::new(Activations::new(now))),
             active_dataflows: Default::default(),
             temp_channel_ids:  Default::default(),
@@ -412,7 +419,7 @@ impl<A: Allocate> Worker<A> {
         !self.dataflows.borrow().is_empty()
     }
 
-    /// Calls `self.step()` as long as `func` evaluates to true.
+    /// Calls `self.step()` as long as `func` evaluates to `true`.
     ///
     /// This method will continually execute even if there is not work
     /// for the worker to perform. Consider using the similar method
@@ -441,7 +448,7 @@ impl<A: Allocate> Worker<A> {
         self.step_or_park_while(Some(Duration::from_secs(0)), func)
     }
 
-    /// Calls `self.step_or_park(duration)` as long as `func` evaluates to true.
+    /// Calls `self.step_or_park(duration)` as long as `func` evaluates to `true`.
     ///
     /// This method may yield whenever there is no work to perform, as performed
     /// by `Self::step_or_park()`. Please consult the documentation for further
@@ -526,6 +533,11 @@ impl<A: Allocate> Worker<A> {
         *self.identifiers.borrow() - 1
     }
 
+    /// The next worker-unique identifier to be allocated.
+    pub fn peek_identifier(&self) -> usize {
+        *self.identifiers.borrow()
+    }
+
     /// Access to named loggers.
     ///
     /// # Examples
@@ -534,12 +546,12 @@ impl<A: Allocate> Worker<A> {
     /// timely::execute_from_args(::std::env::args(), |worker| {
     ///
     ///     worker.log_register()
-    ///           .insert::<timely::logging::TimelyEvent,_>("timely", |time, data|
+    ///           .insert::<timely::logging::TimelyEventBuilder,_>("timely", |time, data|
     ///               println!("{:?}\t{:?}", time, data)
     ///           );
     /// });
     /// ```
-    pub fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry<crate::logging::WorkerIdentifier>> {
+    pub fn log_register(&self) -> ::std::cell::RefMut<crate::logging_core::Registry> {
         self.logging.borrow_mut()
     }
 
@@ -563,7 +575,7 @@ impl<A: Allocate> Worker<A> {
         T: Refines<()>,
         F: FnOnce(&mut Child<Self, T>)->R,
     {
-        let logging = self.logging.borrow_mut().get("timely");
+        let logging = self.logging.borrow_mut().get("timely").map(Into::into);
         self.dataflow_core("Dataflow", logging, Box::new(()), |_, child| func(child))
     }
 
@@ -587,7 +599,7 @@ impl<A: Allocate> Worker<A> {
         T: Refines<()>,
         F: FnOnce(&mut Child<Self, T>)->R,
     {
-        let logging = self.logging.borrow_mut().get("timely");
+        let logging = self.logging.borrow_mut().get("timely").map(Into::into);
         self.dataflow_core(name, logging, Box::new(()), |_, child| func(child))
     }
 
@@ -626,8 +638,10 @@ impl<A: Allocate> Worker<A> {
         let addr = vec![dataflow_index].into();
         let identifier = self.new_identifier();
 
-        let progress_logging = self.logging.borrow_mut().get("timely/progress");
-        let subscope = SubgraphBuilder::new_from(addr, logging.clone(), progress_logging.clone(), name);
+        let type_name = std::any::type_name::<T>();
+        let progress_logging = self.logging.borrow_mut().get(&format!("timely/progress/{type_name}"));
+        let summary_logging = self.logging.borrow_mut().get(&format!("timely/summary/{type_name}"));
+        let subscope = SubgraphBuilder::new_from(addr, identifier, logging.clone(), summary_logging, name);
         let subscope = RefCell::new(subscope);
 
         let result = {
@@ -699,7 +713,7 @@ impl<A: Allocate> Worker<A> {
         self.dataflows.borrow().keys().cloned().collect()
     }
 
-    /// True if there is at least one dataflow under management.
+    /// Returns `true` if there is at least one dataflow under management.
     pub fn has_dataflows(&self) -> bool {
         !self.dataflows.borrow().is_empty()
     }
@@ -710,8 +724,6 @@ impl<A: Allocate> Worker<A> {
         *self.dataflow_counter.borrow() - 1
     }
 }
-
-use crate::communication::Message;
 
 impl<A: Allocate> Clone for Worker<A> {
     fn clone(&self) -> Self {

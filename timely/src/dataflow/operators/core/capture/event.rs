@@ -4,10 +4,11 @@
 //! stream. There are two types of events, (i) the receipt of data and (ii) reports of progress
 //! of timestamps.
 
+use columnar::Columnar;
 use serde::{Deserialize, Serialize};
 
 /// Data and progress events of the captured stream.
-#[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize, Columnar)]
 pub enum Event<T, C> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
@@ -17,13 +18,13 @@ pub enum Event<T, C> {
 
 /// Iterates over contained `Event<T, C>`.
 ///
-/// The `EventIterator` trait describes types that can iterate over references to events,
+/// The `EventIterator` trait describes types that can iterate over `Cow`s of events,
 /// and which can be used to replay a stream into a new timely dataflow computation.
 ///
 /// This method is not simply an iterator because of the lifetime in the result.
-pub trait EventIterator<T, C> {
-    /// Iterates over references to `Event<T, C>` elements.
-    fn next(&mut self) -> Option<&Event<T, C>>;
+pub trait EventIterator<T: Clone, C: Clone> {
+    /// Iterates over `Cow<Event<T, C>>` elements.
+    fn next(&mut self) -> Option<std::borrow::Cow<Event<T, C>>>;
 }
 
 /// Receives `Event<T, C>` events.
@@ -44,6 +45,7 @@ impl<T, C> EventPusher<T, C> for ::std::sync::mpsc::Sender<Event<T, C>> {
 /// A linked-list event pusher and iterator.
 pub mod link {
 
+    use std::borrow::Cow;
     use std::rc::Rc;
     use std::cell::RefCell;
 
@@ -76,13 +78,18 @@ pub mod link {
         }
     }
 
-    impl<T, C> EventIterator<T, C> for Rc<EventLink<T, C>> {
-        fn next(&mut self) -> Option<&Event<T, C>> {
+    impl<T: Clone, C: Clone> EventIterator<T, C> for Rc<EventLink<T, C>> {
+        fn next(&mut self) -> Option<Cow<Event<T, C>>> {
             let is_some = self.next.borrow().is_some();
             if is_some {
                 let next = self.next.borrow().as_ref().unwrap().clone();
                 *self = next;
-                self.event.as_ref()
+                if let Some(this) = Rc::get_mut(self) {
+                    this.event.take().map(Cow::Owned)
+                }
+                else {
+                    self.event.as_ref().map(Cow::Borrowed)
+                }
             }
             else {
                 None
@@ -119,6 +126,8 @@ pub mod link {
 
 /// A binary event pusher and iterator.
 pub mod binary {
+
+    use std::borrow::Cow;
 
     use serde::{de::DeserializeOwned, Serialize};
 
@@ -163,10 +172,10 @@ pub mod binary {
         }
     }
 
-    impl<T: DeserializeOwned, C: DeserializeOwned, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
-        fn next(&mut self) -> Option<&Event<T, C>> {
+    impl<T: DeserializeOwned + Clone, C: DeserializeOwned + Clone, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
+        fn next(&mut self) -> Option<Cow<Event<T, C>>> {
             self.decoded = ::bincode::deserialize_from(&mut self.reader).ok();
-            self.decoded.as_ref()
+            self.decoded.take().map(Cow::Owned)
         }
     }
 }

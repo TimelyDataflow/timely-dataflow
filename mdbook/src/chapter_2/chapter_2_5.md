@@ -212,7 +212,7 @@ As before, I'm just going to show you the new code, which now lives just after `
                         while let Some((time, data)) = input.next() {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
-                                  .extend(data.replace(Vec::new()));
+                                  .extend(std::mem::take(data));
                         }
 
                         // enable each stashed time if ready.
@@ -297,7 +297,7 @@ Inside the closure, we do two things: (i) read inputs and (ii) update counts and
         while let Some((time, data)) = input.next() {
             queues.entry(time.retain())
                   .or_insert(Vec::new())
-                  .extend(data.replace(Vec::new()));
+                  .extend(std::mem::take(data));
         }
 ```
 

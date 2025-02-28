@@ -5,14 +5,14 @@ use std::cell::RefCell;
 use std::collections::{VecDeque, HashMap, hash_map::Entry};
 use crossbeam_channel::{Sender, Receiver};
 
-use bytes::arc::Bytes;
+use timely_bytes::arc::Bytes;
 
 use crate::networking::MessageHeader;
 
-use crate::{Allocate, Message, Data, Push, Pull};
-use crate::allocator::{AllocateBuilder};
+use crate::{Allocate, Push, Pull};
+use crate::allocator::{AllocateBuilder, Exchangeable, PeerBuilder};
 use crate::allocator::canary::Canary;
-
+use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 
 use super::push_pull::{Pusher, Puller};
@@ -28,13 +28,15 @@ pub struct ProcessBuilder {
     peers:  usize,                      // number of peer allocators.
     pushers: Vec<Receiver<MergeQueue>>, // for pushing bytes at other workers.
     pullers: Vec<Sender<MergeQueue>>,   // for pulling bytes from other workers.
+    refill: BytesRefill,
 }
 
-impl ProcessBuilder {
+impl PeerBuilder for ProcessBuilder {
+    type Peer = ProcessBuilder;
     /// Creates a vector of builders, sharing appropriate state.
     ///
     /// This method requires access to a byte exchanger, from which it mints channels.
-    pub fn new_vector(count: usize) -> Vec<ProcessBuilder> {
+    fn new_vector(count: usize, refill: BytesRefill) -> Vec<ProcessBuilder> {
 
         // Channels for the exchange of `MergeQueue` endpoints.
         let (pullers_vec, pushers_vec) = crate::promise_futures(count, count);
@@ -49,18 +51,21 @@ impl ProcessBuilder {
                     peers: count,
                     pushers,
                     pullers,
+                    refill: refill.clone(),
                 }
             )
             .collect()
     }
+}
 
+impl ProcessBuilder {
     /// Builds a `ProcessAllocator`, instantiating `Rc<RefCell<_>>` elements.
     pub fn build(self) -> ProcessAllocator {
 
         // Fulfill puller obligations.
         let mut recvs = Vec::with_capacity(self.peers);
         for puller in self.pullers.into_iter() {
-            let buzzer = crate::buzzer::Buzzer::new();
+            let buzzer = crate::buzzer::Buzzer::default();
             let queue = MergeQueue::new(buzzer);
             puller.send(queue.clone()).expect("Failed to send MergeQueue");
             recvs.push(queue.clone());
@@ -70,7 +75,7 @@ impl ProcessBuilder {
         let mut sends = Vec::with_capacity(self.peers);
         for pusher in self.pushers.into_iter() {
             let queue = pusher.recv().expect("Failed to receive MergeQueue");
-            let sendpoint = SendEndpoint::new(queue);
+            let sendpoint = SendEndpoint::new(queue, self.refill.clone());
             sends.push(Rc::new(RefCell::new(sendpoint)));
         }
 
@@ -119,7 +124,7 @@ pub struct ProcessAllocator {
 impl Allocate for ProcessAllocator {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
 
         // Assume and enforce in-order identifier allocation.
         if let Some(bound) = self.channel_id_bound {
@@ -127,7 +132,7 @@ impl Allocate for ProcessAllocator {
         }
         self.channel_id_bound = Some(identifier);
 
-        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::with_capacity(self.peers());
+        let mut pushes = Vec::<Box<dyn Push<T>>>::with_capacity(self.peers());
 
         for target_index in 0 .. self.peers() {
 
@@ -135,7 +140,8 @@ impl Allocate for ProcessAllocator {
             let header = MessageHeader {
                 channel:    identifier,
                 source:     self.index,
-                target:     target_index,
+                target_lower:     target_index,
+                target_upper:     target_index+1,
                 length:     0,
                 seqno:      0,
             };
@@ -188,11 +194,11 @@ impl Allocate for ProcessAllocator {
             // No splitting occurs across allocations.
             while bytes.len() > 0 {
 
-                if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
+                if let Some(header) = MessageHeader::try_read(&bytes[..]) {
 
                     // Get the header and payload, ditch the header.
                     let mut peel = bytes.extract_to(header.required_bytes());
-                    let _ = peel.extract_to(40);
+                    let _ = peel.extract_to(header.header_bytes());
 
                     // Increment message count for channel.
                     // Safe to do this even if the channel has been dropped.

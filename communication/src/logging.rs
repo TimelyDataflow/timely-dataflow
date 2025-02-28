@@ -1,11 +1,13 @@
 //! Configuration and events for communication logging.
 
+use columnar::Columnar;
 use serde::{Serialize, Deserialize};
+use timely_container::CapacityContainerBuilder;
 
 /// Configuration information about a communication thread.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, Columnar)]
 pub struct CommunicationSetup {
-    /// True when this is a send thread (or the receive thread).
+    /// `true` when this is a send thread (or the receive thread).
     pub sender: bool,
     /// The process id of the thread.
     pub process: usize,
@@ -14,25 +16,27 @@ pub struct CommunicationSetup {
 }
 
 /// Various communication events.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, Columnar)]
 pub enum CommunicationEvent {
     /// An observed message.
     Message(MessageEvent),
     /// A state transition.
     State(StateEvent),
+    /// Setup event
+    Setup(CommunicationSetup)
 }
 
 /// An observed message.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, Columnar)]
 pub struct MessageEvent {
-    /// true for send event, false for receive event
+    /// `true` for send event, `false` for receive event
     pub is_send: bool,
     /// associated message header.
     pub header: crate::networking::MessageHeader,
 }
 
 /// Starting or stopping communication threads.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize, Columnar)]
 pub struct StateEvent {
     /// Is the thread a send (vs a recv) thread.
     pub send: bool,
@@ -50,3 +54,6 @@ impl From<MessageEvent> for CommunicationEvent {
 impl From<StateEvent> for CommunicationEvent {
     fn from(v: StateEvent) -> CommunicationEvent { CommunicationEvent::State(v) }
 }
+
+/// Builder for communication log events.
+pub type CommunicationEventBuilder = CapacityContainerBuilder<Vec<(std::time::Duration, CommunicationEvent)>>;

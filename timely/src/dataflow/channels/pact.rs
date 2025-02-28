@@ -10,22 +10,22 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use std::rc::Rc;
 
-use crate::Container;
+use crate::{Container, container::{ContainerBuilder, LengthPreservingContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto}};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::communication::{Push, Pull, Data};
-use crate::container::PushPartitioned;
+use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
-use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::channels::Message;
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::worker::AsWorker;
+use crate::Data;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T, C> {
     /// Type implementing `Push` produced by this pact.
-    type Pusher: Push<Bundle<T, C>>+'static;
+    type Pusher: Push<Message<T, C>>+'static;
     /// Type implementing `Pull` produced by this pact.
-    type Puller: Pull<Bundle<T, C>>+'static;
+    type Puller: Pull<Message<T, C>>+'static;
     /// Allocates a matched pair of push and pull endpoints implementing the pact.
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller);
 }
@@ -34,9 +34,9 @@ pub trait ParallelizationContract<T, C> {
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, C: Container> ParallelizationContract<T, C> for Pipeline {
-    type Pusher = LogPusher<T, C, ThreadPusher<Bundle<T, C>>>;
-    type Puller = LogPuller<T, C, ThreadPuller<Bundle<T, C>>>;
+impl<T: 'static, C: Container + 'static> ParallelizationContract<T, C> for Pipeline {
+    type Pusher = LogPusher<T, C, ThreadPusher<Message<T, C>>>;
+    type Puller = LogPuller<T, C, ThreadPuller<Message<T, C>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (pusher, puller) = allocator.pipeline::<Message<T, C>>(identifier, address);
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
@@ -45,18 +45,32 @@ impl<T: 'static, C: Container> ParallelizationContract<T, C> for Pipeline {
 }
 
 /// An exchange between multiple observers by data
-pub struct ExchangeCore<C, F> { hash_func: F, phantom: PhantomData<C> }
+pub struct ExchangeCore<CB, F> { hash_func: F, phantom: PhantomData<CB> }
 
 /// [ExchangeCore] specialized to vector-based containers.
-pub type Exchange<D, F> = ExchangeCore<Vec<D>, F>;
+pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 
-impl<C, F> ExchangeCore<C, F>
+impl<CB, F> ExchangeCore<CB, F>
 where
-    C: PushPartitioned,
+    CB: LengthPreservingContainerBuilder,
+    for<'a> F: FnMut(&<CB::Container as Container>::Item<'a>)->u64
+{
+    /// Allocates a new `Exchange` pact from a distribution function.
+    pub fn new_core(func: F) -> ExchangeCore<CB, F> {
+        ExchangeCore {
+            hash_func:  func,
+            phantom:    PhantomData,
+        }
+    }
+}
+
+impl<C, F> ExchangeCore<CapacityContainerBuilder<C>, F>
+where
+    C: SizableContainer,
     for<'a> F: FnMut(&C::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
-    pub fn new(func: F) -> ExchangeCore<C, F> {
+    pub fn new(func: F) -> ExchangeCore<CapacityContainerBuilder<C>, F> {
         ExchangeCore {
             hash_func:  func,
             phantom:    PhantomData,
@@ -65,16 +79,18 @@ where
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Timestamp, C, H: 'static> ParallelizationContract<T, C> for ExchangeCore<C, H>
+impl<T: Timestamp, CB, H: 'static> ParallelizationContract<T, CB::Container> for ExchangeCore<CB, H>
 where
-    C: Data + PushPartitioned,
-    for<'a> H: FnMut(&C::Item<'a>) -> u64
+    CB: ContainerBuilder,
+    CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
+    CB::Container: Data + Send + crate::dataflow::channels::ContainerBytes,
+    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
-    type Pusher = ExchangePusher<T, C, LogPusher<T, C, Box<dyn Push<Bundle<T, C>>>>, H>;
-    type Puller = LogPuller<T, C, Box<dyn Pull<Bundle<T, C>>>>;
+    type Pusher = ExchangePusher<T, CB, LogPusher<T, CB::Container, Box<dyn Push<Message<T, CB::Container>>>>, H>;
+    type Puller = LogPuller<T, CB::Container, Box<dyn Pull<Message<T, CB::Container>>>>;
 
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
-        let (senders, receiver) = allocator.allocate::<Message<T, C>>(identifier, address);
+        let (senders, receiver) = allocator.allocate::<Message<T, CB::Container>>(identifier, address);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
         (ExchangePusher::new(senders, self.hash_func), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
     }
@@ -88,7 +104,7 @@ impl<C, F> Debug for ExchangeCore<C, F> {
 
 /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
 #[derive(Debug)]
-pub struct LogPusher<T, C, P: Push<Bundle<T, C>>> {
+pub struct LogPusher<T, C, P: Push<Message<T, C>>> {
     pusher: P,
     channel: usize,
     counter: usize,
@@ -98,7 +114,7 @@ pub struct LogPusher<T, C, P: Push<Bundle<T, C>>> {
     logging: Option<Logger>,
 }
 
-impl<T, C, P: Push<Bundle<T, C>>> LogPusher<T, C, P> {
+impl<T, C, P: Push<Message<T, C>>> LogPusher<T, C, P> {
     /// Allocates a new pusher.
     pub fn new(pusher: P, source: usize, target: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPusher {
@@ -113,18 +129,16 @@ impl<T, C, P: Push<Bundle<T, C>>> LogPusher<T, C, P> {
     }
 }
 
-impl<T, C: Container, P: Push<Bundle<T, C>>> Push<Bundle<T, C>> for LogPusher<T, C, P> {
+impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<T, C, P> {
     #[inline]
-    fn push(&mut self, pair: &mut Option<Bundle<T, C>>) {
+    fn push(&mut self, pair: &mut Option<Message<T, C>>) {
         if let Some(bundle) = pair {
             self.counter += 1;
 
             // Stamp the sequence number and source.
             // FIXME: Awkward moment/logic.
-            if let Some(message) = bundle.if_mut() {
-                message.seq = self.counter - 1;
-                message.from = self.source;
-            }
+            bundle.seq = self.counter - 1;
+            bundle.from = self.source;
 
             if let Some(logger) = self.logging.as_ref() {
                 logger.log(MessagesEvent {
@@ -144,7 +158,7 @@ impl<T, C: Container, P: Push<Bundle<T, C>>> Push<Bundle<T, C>> for LogPusher<T,
 
 /// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
 #[derive(Debug)]
-pub struct LogPuller<T, C, P: Pull<Bundle<T, C>>> {
+pub struct LogPuller<T, C, P: Pull<Message<T, C>>> {
     puller: P,
     channel: usize,
     index: usize,
@@ -152,7 +166,7 @@ pub struct LogPuller<T, C, P: Pull<Bundle<T, C>>> {
     logging: Option<Logger>,
 }
 
-impl<T, C, P: Pull<Bundle<T, C>>> LogPuller<T, C, P> {
+impl<T, C, P: Pull<Message<T, C>>> LogPuller<T, C, P> {
     /// Allocates a new `Puller`.
     pub fn new(puller: P, index: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPuller {
@@ -165,9 +179,9 @@ impl<T, C, P: Pull<Bundle<T, C>>> LogPuller<T, C, P> {
     }
 }
 
-impl<T, C: Container, P: Pull<Bundle<T, C>>> Pull<Bundle<T, C>> for LogPuller<T, C, P> {
+impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<T, C, P> {
     #[inline]
-    fn pull(&mut self) -> &mut Option<Bundle<T, C>> {
+    fn pull(&mut self) -> &mut Option<Message<T, C>> {
         let result = self.puller.pull();
         if let Some(bundle) = result {
             let channel = self.channel;

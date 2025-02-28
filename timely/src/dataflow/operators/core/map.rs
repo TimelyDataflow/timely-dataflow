@@ -1,6 +1,7 @@
 //! Extension methods for `StreamCore` based on record-by-record transformation.
 
 use crate::container::{Container, SizableContainer, PushInto};
+use crate::Data;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
@@ -23,7 +24,7 @@ pub trait Map<S: Scope, C: Container> {
     /// ```
     fn map<C2, D2, L>(&self, mut logic: L) -> StreamCore<S, C2>
     where
-        C2: SizableContainer + PushInto<D2>,
+        C2: SizableContainer + PushInto<D2> + Data,
         L: FnMut(C::Item<'_>)->D2 + 'static,
     {
         self.flat_map(move |x| std::iter::once(logic(x)))
@@ -45,26 +46,24 @@ pub trait Map<S: Scope, C: Container> {
     fn flat_map<C2, I, L>(&self, logic: L) -> StreamCore<S, C2>
     where
         I: IntoIterator,
-        C2: SizableContainer + PushInto<I::Item>,
+        C2: SizableContainer + PushInto<I::Item> + Data,
         L: FnMut(C::Item<'_>)->I + 'static,
     ;
 }
 
-impl<S: Scope, C: Container> Map<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + Data> Map<S, C> for StreamCore<S, C> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
     fn flat_map<C2, I, L>(&self, mut logic: L) -> StreamCore<S, C2>
     where
         I: IntoIterator,
-        C2: SizableContainer + PushInto<I::Item>,
+        C2: SizableContainer + PushInto<I::Item> + Data,
         L: FnMut(C::Item<'_>)->I + 'static,
     {
-        let mut container = Default::default();
         self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                data.swap(&mut container);
-                output.session(&time).give_iterator(container.drain().flat_map(&mut logic));
+                output.session(&time).give_iterator(data.drain().flat_map(&mut logic));
             });
         })
     }

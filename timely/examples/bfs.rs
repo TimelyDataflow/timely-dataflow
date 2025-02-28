@@ -1,6 +1,3 @@
-extern crate rand;
-extern crate timely;
-
 use std::collections::HashMap;
 
 use rand::{Rng, SeedableRng, rngs::SmallRng};
@@ -58,7 +55,7 @@ fn main() {
                     // receive edges, start to sort them
                     input1.for_each(|time, data| {
                         notify.notify_at(time.retain());
-                        edge_list.push(data.replace(Vec::new()));
+                        edge_list.push(std::mem::take(data));
                     });
 
                     // receive (node, worker) pairs, note any new ones.
@@ -68,7 +65,7 @@ fn main() {
                                       notify.notify_at(time.retain());
                                       Vec::new()
                                   })
-                                  .push(data.replace(Vec::new()));
+                                  .push(std::mem::take(data));
                     });
 
                     notify.for_each(|time, _num, _notify| {

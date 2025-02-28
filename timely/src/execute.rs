@@ -153,7 +153,7 @@ where
     T: Send+'static,
     F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
 {
-    let alloc = crate::communication::allocator::thread::Thread::new();
+    let alloc = crate::communication::allocator::thread::Thread::default();
     let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc);
     let result = func(&mut worker);
     while worker.has_dataflows() {
@@ -244,7 +244,7 @@ where
 ///
 /// The arguments `execute_from_args` currently understands are:
 ///
-/// `-w, --workers`: number of per-process worker threads.
+/// `-w, --threads`: number of per-process worker threads.
 ///
 /// `-n, --processes`: number of processes involved in the computation.
 ///

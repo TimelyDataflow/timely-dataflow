@@ -28,7 +28,7 @@ use crate::progress::{Source, Target};
 use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
-use crate::dataflow::channels::{Bundle, Message};
+use crate::dataflow::channels::Message;
 
 use crate::worker::AsWorker;
 use crate::dataflow::{StreamCore, Scope};
@@ -103,7 +103,7 @@ pub trait Leave<G: Scope, C: Container> {
     fn leave(&self) -> StreamCore<G, C>;
 }
 
-impl<'a, G: Scope, C: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'a, G, T>, C> {
+impl<G: Scope, C: Container + Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
     fn leave(&self) -> StreamCore<G, C> {
 
         let scope = self.scope();
@@ -130,24 +130,21 @@ impl<'a, G: Scope, C: Clone+Container, T: Timestamp+Refines<G::Timestamp>> Leave
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> {
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container + Data> {
     targets: Counter<TInner, TContainer, Tee<TInner, TContainer>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> Push<Bundle<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
-    fn push(&mut self, element: &mut Option<Bundle<TOuter, TContainer>>) {
-        if let Some(message) = element {
-            let outer_message = message.as_mut();
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container + Data> Push<Message<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
+    fn push(&mut self, element: &mut Option<Message<TOuter, TContainer>>) {
+        if let Some(outer_message) = element {
             let data = ::std::mem::take(&mut outer_message.data);
-            let mut inner_message = Some(Bundle::from_typed(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0)));
+            let mut inner_message = Some(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
-                if let Some(inner_message) = inner_message.if_typed() {
-                    outer_message.data = inner_message.data;
-                }
+                outer_message.data = inner_message.data;
             }
             self.active = true;
         }
@@ -167,18 +164,15 @@ struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContaine
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TContainer: Container> Push<Bundle<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
+impl<TOuter, TInner, TContainer: Container> Push<Message<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data {
-    fn push(&mut self, message: &mut Option<Bundle<TInner, TContainer>>) {
-        if let Some(message) = message {
-            let inner_message = message.as_mut();
+    fn push(&mut self, message: &mut Option<Message<TInner, TContainer>>) {
+        if let Some(inner_message) = message {
             let data = ::std::mem::take(&mut inner_message.data);
-            let mut outer_message = Some(Bundle::from_typed(Message::new(inner_message.time.clone().to_outer(), data, 0, 0)));
+            let mut outer_message = Some(Message::new(inner_message.time.clone().to_outer(), data, 0, 0));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
-                if let Some(outer_message) = outer_message.if_typed() {
-                    inner_message.data = outer_message.data;
-                }
+                inner_message.data = outer_message.data;
             }
         }
         else { self.targets.done(); }
@@ -211,12 +205,12 @@ impl<P> LogPusher<P> {
     }
 }
 
-impl<T, C, P> Push<Bundle<T, C>> for LogPusher<P>
+impl<T, C, P> Push<Message<T, C>> for LogPusher<P>
 where
     C: Container,
-    P: Push<Bundle<T, C>>,
+    P: Push<Message<T, C>>,
 {
-    fn push(&mut self, element: &mut Option<Bundle<T, C>>) {
+    fn push(&mut self, element: &mut Option<Message<T, C>>) {
         if let Some(bundle) = element {
             let send_event = MessagesEvent {
                 is_send: true,

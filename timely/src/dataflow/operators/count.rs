@@ -1,8 +1,6 @@
 //! Counts the number of records at each time.
 use std::collections::HashMap;
 
-use crate::communication::message::RefOrMut;
-
 use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Stream, Scope};
@@ -27,7 +25,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(0, vec![45])]);
     /// ```
-    fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, RefOrMut<Vec<D>>)+'static) -> Stream<G, A>;
+    fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A>;
     /// Counts the number of records observed at each time.
     ///
     /// # Examples
@@ -51,12 +49,12 @@ pub trait Accumulate<G: Scope, D: Data> {
 }
 
 impl<G: Scope, D: Data> Accumulate<G, D> for Stream<G, D> {
-    fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, RefOrMut<Vec<D>>)+'static) -> Stream<G, A> {
+    fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A> {
 
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
-                logic(&mut accums.entry(time.time().clone()).or_insert_with(|| default.clone()), data);
+                logic(accums.entry(time.time().clone()).or_insert_with(|| default.clone()), data);
                 notificator.notify_at(time.retain());
             });
 

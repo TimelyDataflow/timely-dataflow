@@ -5,11 +5,11 @@ use std::any::Any;
 use std::default::Default;
 use std::hash::Hash;
 
-use crate::communication::Data;
+use crate::ExchangeData;
 use crate::order::PartialOrder;
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
-pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
+pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+ExchangeData+Hash+Ord {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
     /// A minimum value suitable as a default.
@@ -45,7 +45,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     ///
     /// It is possible that the two composed paths result in an invalid summary, for example when
     /// integer additions overflow. If it is correct that all timestamps moved along these paths
-    /// would also result in overflow and be discarded, `followed_by` can return `None. It is very
+    /// would also result in overflow and be discarded, `followed_by` can return `None`. It is very
     /// important that this not be used casually, as this does not prevent the actual movement of
     /// data.
     ///
@@ -61,19 +61,19 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     fn followed_by(&self, other: &Self) -> Option<Self>;
 }
 
-impl Timestamp for () { type Summary = (); fn minimum() -> Self { () }}
+impl Timestamp for () { type Summary = (); fn minimum() -> Self { }}
 impl PathSummary<()> for () {
     #[inline] fn results_in(&self, _src: &()) -> Option<()> { Some(()) }
     #[inline] fn followed_by(&self, _other: &()) -> Option<()> { Some(()) }
 }
 
-/// Implements Timestamp and PathSummary for types with a `checked_add` method.
+/// Implements [`Timestamp`] and [`PathSummary`] for types with a `checked_add` method.
 macro_rules! implement_timestamp_add {
     ($($index_type:ty,)*) => (
         $(
             impl Timestamp for $index_type {
                 type Summary = $index_type;
-                fn minimum() -> Self { Self::min_value() }
+                fn minimum() -> Self { Self::MIN }
             }
             impl PathSummary<$index_type> for $index_type {
                 #[inline]
@@ -140,8 +140,8 @@ mod refines {
             $(
                 impl Refines<()> for $index_type {
                     fn to_inner(_: ()) -> $index_type { Default::default() }
-                    fn to_outer(self) -> () { () }
-                    fn summarize(_: <$index_type as Timestamp>::Summary) -> () { () }
+                    fn to_outer(self) -> () { }
+                    fn summarize(_: <$index_type as Timestamp>::Summary) -> () { }
                 }
             )*
         )

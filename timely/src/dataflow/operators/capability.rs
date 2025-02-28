@@ -40,13 +40,13 @@ pub trait CapabilityTrait<T: Timestamp> {
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool;
 }
 
-impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a C {
+impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &C {
     fn time(&self) -> &T { (**self).time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         (**self).valid_for_output(query_buffer)
     }
 }
-impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a mut C {
+impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &mut C {
     fn time(&self) -> &T { (**self).time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         (**self).valid_for_output(query_buffer)
@@ -227,9 +227,10 @@ impl Error for DowngradeError {}
 /// A shared list of shared output capability buffers.
 type CapabilityUpdates<T> = Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>;
 
-/// An capability of an input port. Holding onto this capability will implicitly holds onto a
-/// capability for all the outputs ports this input is connected to, after the connection summaries
-/// have been applied.
+/// An capability of an input port. 
+///
+/// Holding onto this capability will implicitly holds onto a capability for all the outputs 
+/// ports this input is connected to, after the connection summaries have been applied.
 ///
 /// This input capability supplies a `retain_for_output(self)` method which consumes the input
 /// capability and turns it into a [Capability] for a specific output port.
@@ -415,11 +416,9 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///     vec![()].into_iter().to_stream(scope)
     ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
-    ///             let mut vector = Vec::new();
     ///             move |input, output| {
     ///                 cap.downgrade(&input.frontier().frontier());
     ///                 while let Some((time, data)) = input.next() {
-    ///                     data.swap(&mut vector);
     ///                 }
     ///                 let a_cap = cap.first();
     ///                 if let Some(a_cap) = a_cap.as_ref() {

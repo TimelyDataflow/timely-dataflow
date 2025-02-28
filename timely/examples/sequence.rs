@@ -1,5 +1,3 @@
-extern crate timely;
-
 use std::time::{Instant, Duration};
 
 use timely::Config;

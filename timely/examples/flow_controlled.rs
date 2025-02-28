@@ -1,5 +1,3 @@
-extern crate timely;
-
 use timely::dataflow::operators::flow_controlled::{iterator_source, IteratorSourceInput};
 use timely::dataflow::operators::{probe, Probe, Inspect};
 

@@ -195,7 +195,7 @@ impl<T: Timestamp> Builder<T> {
     /// default summaries (a serious liveness issue).
     ///
     /// The optional logger information is baked into the resulting tracker.
-    pub fn build(self, logger: Option<logging::TrackerLogger>) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn build(self, logger: Option<logging::TrackerLogger<T>>) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
 
         if !self.is_acyclic() {
             println!("Cycle detected without timestamp increment");
@@ -404,7 +404,7 @@ pub struct Tracker<T:Timestamp> {
     total_counts: i64,
 
     /// Optionally, a unique logging identifier and logging for tracking events.
-    logger: Option<logging::TrackerLogger>,
+    logger: Option<logging::TrackerLogger<T>>,
 }
 
 /// Target and source information for each operator.
@@ -446,12 +446,12 @@ impl<T: Timestamp> PortInformation<T> {
         }
     }
 
-    /// True if updates at this pointstamp uniquely block progress.
+    /// Returns `true` if updates at this pointstamp uniquely block progress.
     ///
-    /// This method returns true if the currently maintained pointstamp
+    /// This method returns `true` if the currently maintained pointstamp
     /// counts are such that zeroing out outstanding updates at *this*
     /// pointstamp would change the frontiers at this operator. When the
-    /// method returns false it means that, temporarily at least, there
+    /// method returns `false` it means that, temporarily at least, there
     /// are outstanding pointstamp updates that are strictly less than
     /// this pointstamp.
     #[inline]
@@ -503,7 +503,7 @@ impl<T:Timestamp> Tracker<T> {
     /// output port.
     ///
     /// If the optional logger is provided, it will be used to log various tracker events.
-    pub fn allocate_from(builder: Builder<T>, logger: Option<logging::TrackerLogger>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn allocate_from(builder: Builder<T>, logger: Option<logging::TrackerLogger<T>>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
 
         // Allocate buffer space for each input and input port.
         let mut per_operator =
@@ -573,22 +573,16 @@ impl<T:Timestamp> Tracker<T> {
             let target_changes =
             self.target_changes
                 .iter()
-                .map(|((target, time), diff)| (target.node, target.port, time.clone(), *diff))
-                .collect::<Vec<_>>();
+                .map(|((target, time), diff)| (target.node, target.port, time, *diff));
 
-            if !target_changes.is_empty() {
-                logger.log_target_updates(Box::new(target_changes));
-            }
+            logger.log_target_updates(target_changes);
 
             let source_changes =
             self.source_changes
                 .iter()
-                .map(|((source, time), diff)| (source.node, source.port, time.clone(), *diff))
-                .collect::<Vec<_>>();
+                .map(|((source, time), diff)| (source.node, source.port, time, *diff));
 
-            if !source_changes.is_empty() {
-                logger.log_source_updates(Box::new(source_changes));
-            }
+            logger.log_source_updates(source_changes);
         }
 
         // Step 1: Drain `self.input_changes` and determine actual frontier changes.
@@ -738,8 +732,8 @@ impl<T:Timestamp> Tracker<T> {
 /// Graph locations may be missing from the output, in which case they have no
 /// paths to scope outputs.
 fn summarize_outputs<T: Timestamp>(
-    nodes: &Vec<Vec<Vec<Antichain<T::Summary>>>>,
-    edges: &Vec<Vec<Vec<Target>>>,
+    nodes: &[Vec<Vec<Antichain<T::Summary>>>],
+    edges: &[Vec<Vec<Target>>],
     ) -> HashMap<Location, Vec<Antichain<T::Summary>>>
 {
     // A reverse edge map, to allow us to walk back up the dataflow graph.
@@ -831,71 +825,92 @@ fn summarize_outputs<T: Timestamp>(
 
 /// Logging types for reachability tracking events.
 pub mod logging {
-    use std::rc::Rc;
-    use crate::logging::{Logger, ProgressEventTimestampVec};
+    use std::time::Duration;
+
+    use timely_container::CapacityContainerBuilder;
+    use timely_logging::TypedLogger;
+    use crate::logging_core::Logger;
+
+    /// A container builder for tracker events.
+    pub type TrackerEventBuilder<T> = CapacityContainerBuilder<Vec<(Duration, TrackerEvent<T>)>>;
 
     /// A logger with additional identifying information about the tracker.
-    pub struct TrackerLogger {
-        path: Rc<[usize]>,
-        logger: Logger<TrackerEvent>,
+    pub struct TrackerLogger<T: Clone + 'static> {
+        identifier: usize,
+        logger: TypedLogger<TrackerEventBuilder<T>, TrackerEvent<T>>,
     }
 
-    impl TrackerLogger {
+    impl<T: Clone + 'static> TrackerLogger<T> {
         /// Create a new tracker logger from its fields.
-        pub fn new(path: Rc<[usize]>, logger: Logger<TrackerEvent>) -> Self {
-            Self { path, logger }
+        pub fn new(identifier: usize, logger: Logger<TrackerEventBuilder<T>>) -> Self {
+            Self { identifier, logger: logger.into() }
         }
 
         /// Log source update events with additional identifying information.
-        pub fn log_source_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
-            self.logger.log({
-                SourceUpdate {
-                    tracker_id: self.path.to_vec(),
-                    updates,
-                }
-            })
+        pub fn log_source_updates<'a, I>(&mut self, updates: I)
+        where
+            I: IntoIterator<Item = (usize, usize, &'a T, i64)>
+        {
+            let updates: Vec<_> = updates.into_iter().map(|(a,b,c,d)| (a,b,c.clone(),d)).collect();
+            if !updates.is_empty() {
+                self.logger.log({
+                    SourceUpdate {
+                        tracker_id: self.identifier,
+                        updates
+                    }
+                });
+            }
         }
         /// Log target update events with additional identifying information.
-        pub fn log_target_updates(&mut self, updates: Box<dyn ProgressEventTimestampVec>) {
-            self.logger.log({
-                TargetUpdate {
-                    tracker_id: self.path.to_vec(),
-                    updates,
-                }
-            })
+        pub fn log_target_updates<'a, I>(&mut self, updates: I)
+        where
+            I: IntoIterator<Item = (usize, usize, &'a T, i64)>
+        {
+            let updates: Vec<_> = updates.into_iter().map(|(a,b,c,d)| (a,b,c.clone(),d)).collect();
+            if !updates.is_empty() {
+                self.logger.log({
+                    TargetUpdate {
+                        tracker_id: self.identifier,
+                        updates
+                    }
+                });
+            }
         }
     }
 
     /// Events that the tracker may record.
-    pub enum TrackerEvent {
+    #[derive(Debug, Clone)]
+    pub enum TrackerEvent<T> {
         /// Updates made at a source of data.
-        SourceUpdate(SourceUpdate),
+        SourceUpdate(SourceUpdate<T>),
         /// Updates made at a target of data.
-        TargetUpdate(TargetUpdate),
+        TargetUpdate(TargetUpdate<T>),
     }
 
     /// An update made at a source of data.
-    pub struct SourceUpdate {
+    #[derive(Debug, Clone)]
+    pub struct SourceUpdate<T> {
         /// An identifier for the tracker.
-        pub tracker_id: Vec<usize>,
+        pub tracker_id: usize,
         /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Box<dyn ProgressEventTimestampVec>,
+        pub updates: Vec<(usize, usize, T, i64)>,
     }
 
     /// An update made at a target of data.
-    pub struct TargetUpdate {
+    #[derive(Debug, Clone)]
+    pub struct TargetUpdate<T> {
         /// An identifier for the tracker.
-        pub tracker_id: Vec<usize>,
+        pub tracker_id: usize,
         /// Updates themselves, as `(node, port, time, diff)`.
-        pub updates: Box<dyn ProgressEventTimestampVec>,
+        pub updates: Vec<(usize, usize, T, i64)>,
     }
 
-    impl From<SourceUpdate> for TrackerEvent {
-        fn from(v: SourceUpdate) -> TrackerEvent { TrackerEvent::SourceUpdate(v) }
+    impl<T> From<SourceUpdate<T>> for TrackerEvent<T> {
+        fn from(v: SourceUpdate<T>) -> TrackerEvent<T> { TrackerEvent::SourceUpdate(v) }
     }
 
-    impl From<TargetUpdate> for TrackerEvent {
-        fn from(v: TargetUpdate) -> TrackerEvent { TrackerEvent::TargetUpdate(v) }
+    impl<T> From<TargetUpdate<T>> for TrackerEvent<T> {
+        fn from(v: TargetUpdate<T>) -> TrackerEvent<T> { TrackerEvent::TargetUpdate(v) }
     }
 }
 
@@ -920,12 +935,10 @@ impl<T: Timestamp> Drop for Tracker<T> {
                 .flat_map(|(port, target)| {
                     target.pointstamps
                         .updates()
-                        .map(move |(time, diff)| (index, port, time.clone(), -diff))
-                })
-                .collect::<Vec<_>>();
-            if !target_changes.is_empty() {
-                logger.log_target_updates(Box::new(target_changes));
-            }
+                        .map(move |(time, diff)| (index, port, time, -diff))
+                });
+
+            logger.log_target_updates(target_changes);
 
             let source_changes = per_operator.sources
                 .iter_mut()
@@ -933,12 +946,10 @@ impl<T: Timestamp> Drop for Tracker<T> {
                 .flat_map(|(port, source)| {
                     source.pointstamps
                         .updates()
-                        .map(move |(time, diff)| (index, port, time.clone(), -diff))
-                })
-                .collect::<Vec<_>>();
-            if !source_changes.is_empty() {
-                logger.log_source_updates(Box::new(source_changes));
-            }
+                        .map(move |(time, diff)| (index, port, time, -diff))
+                });
+
+            logger.log_source_updates(source_changes);
         }
     }
 }

@@ -10,33 +10,31 @@ extern crate timely;
 use timely::dataflow::InputHandle;
 use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
 
-fn main() {
-    // initializes and runs a timely dataflow.
-    timely::execute_from_args(std::env::args(), |worker| {
+// initializes and runs a timely dataflow.
+timely::execute_from_args(std::env::args(), |worker| {
 
-        let index = worker.index();
-        let mut input = InputHandle::new();
+    let index = worker.index();
+    let mut input = InputHandle::new();
 
-        // create a new input, exchange data, and inspect its output
-        let probe = worker.dataflow(|scope|
-            scope.input_from(&mut input)
-                 .exchange(|x| *x)
-                 .inspect(move |x| println!("worker {}:\thello {}", index, x))
-                 .probe()
-        );
+    // create a new input, exchange data, and inspect its output
+    let probe = worker.dataflow(|scope|
+        scope.input_from(&mut input)
+             .exchange(|x| *x)
+             .inspect(move |x| println!("worker {}:\thello {}", index, x))
+             .probe()
+    );
 
-        // introduce data and watch!
-        for round in 0..10 {
-            if index == 0 {
-                input.send(round);
-            }
-            input.advance_to(round + 1);
-            while probe.less_than(input.time()) {
-                worker.step();
-            }
+    // introduce data and watch!
+    for round in 0..10 {
+        if index == 0 {
+            input.send(round);
         }
-    }).unwrap();
-}
+        input.advance_to(round + 1);
+        while probe.less_than(input.time()) {
+            worker.step();
+        }
+    }
+}).unwrap();
 ```
 
 We can run this program in a variety of configurations: with just a single worker thread, with one process and multiple worker threads, and with multiple processes each with multiple worker threads.

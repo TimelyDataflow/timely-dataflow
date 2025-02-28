@@ -24,7 +24,7 @@ pub struct Antichain<T> {
 impl<T: PartialOrder> Antichain<T> {
     /// Updates the `Antichain` if the element is not greater than or equal to some present element.
     ///
-    /// Returns true if element is added to the set
+    /// Returns `true` if element is added to the set
     ///
     /// # Examples
     ///
@@ -48,7 +48,7 @@ impl<T: PartialOrder> Antichain<T> {
 
     /// Updates the `Antichain` if the element is not greater than or equal to some present element.
     ///
-    /// Returns true if element is added to the set
+    /// Returns `true` if element is added to the set
     ///
     /// Accepts a reference to an element, which is cloned when inserting.
     ///
@@ -76,7 +76,7 @@ impl<T: PartialOrder> Antichain<T> {
     /// If the antichain needs updating, it uses the `to_owned` closure to convert the element into
     /// a `T`.
     ///
-    /// Returns true if element is added to the set
+    /// Returns `true` if element is added to the set
     ///
     /// # Examples
     ///
@@ -103,7 +103,7 @@ impl<T: PartialOrder> Antichain<T> {
         self.elements.reserve(additional);
     }
 
-    /// Performs a sequence of insertion and return true iff any insertion does.
+    /// Performs a sequence of insertion and returns `true` iff any insertion does.
     ///
     /// # Examples
     ///
@@ -123,7 +123,7 @@ impl<T: PartialOrder> Antichain<T> {
         added
     }
 
-    /// Returns true if any item in the antichain is strictly less than the argument.
+    /// Returns `true` if any item in the antichain is strictly less than the argument.
     ///
     /// # Examples
     ///
@@ -143,7 +143,7 @@ impl<T: PartialOrder> Antichain<T> {
         self.elements.iter().any(|x| x.less_than(time))
     }
 
-    /// Returns true if any item in the antichain is less than or equal to the argument.
+    /// Returns `true` if any item in the antichain is less than or equal to the argument.
     ///
     /// # Examples
     ///
@@ -163,7 +163,7 @@ impl<T: PartialOrder> Antichain<T> {
         self.elements.iter().any(|x| x.less_equal(time))
     }
 
-    /// Returns true if every element of `other` is greater or equal to some element of `self`.
+    /// Returns `true` if every element of `other` is greater or equal to some element of `self`.
     #[deprecated(since="0.12.0", note="please use `PartialOrder::less_equal` instead")]
     #[inline]
     pub fn dominates(&self, other: &Antichain<T>) -> bool {
@@ -337,9 +337,9 @@ impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
     }
 }
 
-impl<T> Into<SmallVec<[T; 1]>> for Antichain<T> {
-    fn into(self) -> SmallVec<[T; 1]> {
-        self.elements
+impl<T> From<Antichain<T>> for SmallVec<[T; 1]> {
+    fn from(val: Antichain<T>) -> Self {
+        val.elements
     }
 }
 
@@ -455,7 +455,7 @@ impl<T> MutableAntichain<T> {
         }
     }
 
-    /// Returns true if there are no elements in the `MutableAntichain`.
+    /// Returns `true` if there are no elements in the `MutableAntichain`.
     ///
     /// # Examples
     ///
@@ -470,7 +470,7 @@ impl<T> MutableAntichain<T> {
         self.frontier.is_empty()
     }
 
-    /// Returns true if any item in the `MutableAntichain` is strictly less than the argument.
+    /// Returns `true` if any item in the `MutableAntichain` is strictly less than the argument.
     ///
     /// # Examples
     ///
@@ -490,7 +490,7 @@ impl<T> MutableAntichain<T> {
         self.frontier().less_than(time)
     }
 
-    /// Returns true if any item in the `MutableAntichain` is less than or equal to the argument.
+    /// Returns `true` if any item in the `MutableAntichain` is less than or equal to the argument.
     ///
     /// # Examples
     ///
@@ -634,7 +634,7 @@ pub trait MutableAntichainFilter<T: PartialOrder+Ord+Clone> {
 
 impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainFilter<T> for I {
     fn filter_through(self, antichain: &mut MutableAntichain<T>) -> smallvec::Drain<[(T,i64); 2]> {
-        antichain.update_iter(self.into_iter())
+        antichain.update_iter(self)
     }
 }
 
@@ -675,11 +675,7 @@ pub struct AntichainRef<'a, T: 'a> {
 }
 
 impl<'a, T: 'a> Clone for AntichainRef<'a, T> {
-    fn clone(&self) -> Self {
-        Self {
-            frontier: self.frontier,
-        }
-    }
+    fn clone(&self) -> Self { *self }
 }
 
 impl<'a, T: 'a> Copy for AntichainRef<'a, T> { }
@@ -714,7 +710,7 @@ impl<'a, T: 'a> AntichainRef<'a, T> {
 
 impl<T> AntichainRef<'_, T> {
 
-    /// Returns true if any item in the `AntichainRef` is strictly less than the argument.
+    /// Returns `true` if any item in the `AntichainRef` is strictly less than the argument.
     ///
     /// # Examples
     ///
@@ -731,7 +727,7 @@ impl<T> AntichainRef<'_, T> {
         self.iter().any(|x| x.less_than(time))
     }
 
-    /// Returns true if any item in the `AntichainRef` is less than or equal to the argument.
+    /// Returns `true` if any item in the `AntichainRef` is less than or equal to the argument.
     #[inline]
     ///
     /// # Examples
@@ -749,7 +745,7 @@ impl<T> AntichainRef<'_, T> {
     }
 }
 
-impl<'a, T: PartialEq> PartialEq for AntichainRef<'a, T> {
+impl<T: PartialEq> PartialEq for AntichainRef<'_, T> {
     fn eq(&self, other: &Self) -> bool {
         // Lengths should be the same, with the option for fast acceptance if identical.
         self.len() == other.len() &&
@@ -760,17 +756,17 @@ impl<'a, T: PartialEq> PartialEq for AntichainRef<'a, T> {
     }
 }
 
-impl<'a, T: Eq> Eq for AntichainRef<'a, T> { }
+impl<T: Eq> Eq for AntichainRef<'_, T> { }
 
-impl<'a, T: PartialOrder> PartialOrder for AntichainRef<'a, T> {
+impl<T: PartialOrder> PartialOrder for AntichainRef<'_, T> {
     fn less_equal(&self, other: &Self) -> bool {
         other.iter().all(|t2| self.iter().any(|t1| t1.less_equal(t2)))
     }
 }
 
-impl<'a, T: TotalOrder> TotalOrder for AntichainRef<'a, T> { }
+impl<T: TotalOrder> TotalOrder for AntichainRef<'_, T> { }
 
-impl<'a, T: TotalOrder> AntichainRef<'a, T> {
+impl<T: TotalOrder> AntichainRef<'_, T> {
     /// Return a reference to the at most one element the antichain contains.
     pub fn as_option(&self) -> Option<&T> {
         debug_assert!(self.len() <= 1);
@@ -778,7 +774,7 @@ impl<'a, T: TotalOrder> AntichainRef<'a, T> {
     }
 }
 
-impl<'a, T> ::std::ops::Deref for AntichainRef<'a, T> {
+impl<T> ::std::ops::Deref for AntichainRef<'_, T> {
     type Target = [T];
     fn deref(&self) -> &Self::Target {
         self.frontier

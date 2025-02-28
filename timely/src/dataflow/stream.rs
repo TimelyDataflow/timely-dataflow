@@ -9,7 +9,7 @@ use crate::progress::{Source, Target};
 use crate::communication::Push;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
-use crate::dataflow::channels::Bundle;
+use crate::dataflow::channels::Message;
 use std::fmt::{self, Debug};
 use crate::Container;
 
@@ -19,14 +19,29 @@ use crate::Container;
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-#[derive(Clone)]
 pub struct StreamCore<S: Scope, C> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
     scope: S,
-    /// Maintains a list of Push<Bundle<T, C>> interested in the stream's output.
+    /// Maintains a list of Push<Message<T, C>> interested in the stream's output.
     ports: TeeHelper<S::Timestamp, C>,
+}
+
+impl<S: Scope, C> Clone for StreamCore<S, C> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            scope: self.scope.clone(),
+            ports: self.ports.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.name.clone_from(&source.name);
+        self.scope.clone_from(&source.scope);
+        self.ports.clone_from(&source.ports);
+    }
 }
 
 /// A stream batching data in vectors.
@@ -37,7 +52,7 @@ impl<S: Scope, C: Container> StreamCore<S, C> {
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<Bundle<S::Timestamp, C>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
+    pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
 
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {

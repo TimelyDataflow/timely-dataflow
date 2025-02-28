@@ -13,7 +13,7 @@ use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
 use crate::dataflow::{StreamCore, Scope};
-use crate::Container;
+use crate::{Container, Data};
 
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, C: Container> {
@@ -79,12 +79,12 @@ pub trait Probe<G: Scope, C: Container> {
     fn probe_with(&self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container + Data> Probe<G, C> for StreamCore<G, C> {
     fn probe(&self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
-        let mut handle = Handle::<G::Timestamp>::new();
-        self.probe_with(&mut handle);
+        let handle = Handle::<G::Timestamp>::new();
+        self.probe_with(&handle);
         handle
     }
     fn probe_with(&self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C> {
@@ -96,8 +96,6 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
 
         let shared_frontier = Rc::downgrade(&handle.frontier);
         let mut started = false;
-
-        let mut vector = Default::default();
 
         builder.build(
             move |progress| {
@@ -114,15 +112,10 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
                     started = true;
                 }
 
-                use crate::communication::message::RefOrMut;
-
                 while let Some(message) = input.next() {
-                    let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
-                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
-                    };
-                    data.swap(&mut vector);
-                    output.session(time).give_container(&mut vector);
+                    let time = &message.time;
+                    let data = &mut message.data;
+                    output.session(time).give_container(data);
                 }
                 output.cease();
 
@@ -145,11 +138,11 @@ pub struct Handle<T:Timestamp> {
 }
 
 impl<T: Timestamp> Handle<T> {
-    /// returns true iff the frontier is strictly less than `time`.
+    /// Returns `true` iff the frontier is strictly less than `time`.
     #[inline] pub fn less_than(&self, time: &T) -> bool { self.frontier.borrow().less_than(time) }
-    /// returns true iff the frontier is less than or equal to `time`.
+    /// Returns `true` iff the frontier is less than or equal to `time`.
     #[inline] pub fn less_equal(&self, time: &T) -> bool { self.frontier.borrow().less_equal(time) }
-    /// returns true iff the frontier is empty.
+    /// Returns `true` iff the frontier is empty.
     #[inline] pub fn done(&self) -> bool { self.frontier.borrow().is_empty() }
     /// Allocates a new handle.
     #[inline] pub fn new() -> Self { Handle { frontier: Rc::new(RefCell::new(MutableAntichain::new())) } }

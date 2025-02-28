@@ -25,7 +25,7 @@ impl<A: Allocate> ScopeParent for crate::worker::Worker<A> {
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
 ///
 /// Importantly, this is often a *shared* object, backed by a `Rc<RefCell<>>` wrapper. Each method
-/// takes a shared reference, but can be thought of as first calling .clone() and then calling the
+/// takes a shared reference, but can be thought of as first calling `.clone()` and then calling the
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
 pub trait Scope: ScopeParent {
     /// A useful name describing the scope.

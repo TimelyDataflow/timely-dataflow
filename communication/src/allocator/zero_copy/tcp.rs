@@ -1,17 +1,17 @@
-//!
+//! Methods related to reading from and writing to TCP connections
 
 use std::io::{self, Write};
 use crossbeam_channel::{Sender, Receiver};
 
 use crate::networking::MessageHeader;
 
-use super::bytes_slab::BytesSlab;
+use super::bytes_slab::{BytesRefill, BytesSlab};
 use super::bytes_exchange::MergeQueue;
 use super::stream::Stream;
 
-use logging_core::Logger;
+use timely_logging::Logger;
 
-use crate::logging::{CommunicationEvent, CommunicationSetup, MessageEvent, StateEvent};
+use crate::logging::{CommunicationEvent, CommunicationEventBuilder, MessageEvent, StateEvent};
 
 fn tcp_panic(context: &'static str, cause: io::Error) -> ! {
     // NOTE: some downstream crates sniff out "timely communication error:" from
@@ -35,16 +35,19 @@ pub fn recv_loop<S>(
     worker_offset: usize,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
+    refill: BytesRefill,
+    logger: Option<Logger<CommunicationEventBuilder>>
+)
 where
     S: Stream,
 {
+    let mut logger = logger.map(|logger| logger.into_typed::<CommunicationEvent>());
     // Log the receive thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: false, process, remote, start: true }));
 
     let mut targets: Vec<MergeQueue> = targets.into_iter().map(|x| x.recv().expect("Failed to receive MergeQueue")).collect();
 
-    let mut buffer = BytesSlab::new(20);
+    let mut buffer = BytesSlab::new(20, refill);
 
     // Where we stash Bytes before handing them off.
     let mut stageds = Vec::with_capacity(targets.len());
@@ -67,9 +70,9 @@ where
         assert!(!buffer.empty().is_empty());
 
         // Attempt to read some more bytes into self.buffer.
-        let read = match reader.read(&mut buffer.empty()) {
+        let read = match reader.read(buffer.empty()) {
             Err(x) => tcp_panic("reading data", x),
-            Ok(n) if n == 0 => {
+            Ok(0) => {
                 tcp_panic(
                     "reading data",
                     std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "socket closed"),
@@ -93,7 +96,9 @@ where
             });
 
             if header.length > 0 {
-                stageds[header.target - worker_offset].push(bytes);
+                for target in header.target_lower .. header.target_upper {
+                    stageds[target - worker_offset].push(bytes.clone());
+                }
             }
             else {
                 // Shutting down; confirm absence of subsequent data.
@@ -102,7 +107,7 @@ where
                     panic!("Clean shutdown followed by data.");
                 }
                 buffer.ensure_capacity(1);
-                if reader.read(&mut buffer.empty()).unwrap_or_else(|e| tcp_panic("reading EOF", e)) > 0 {
+                if reader.read(buffer.empty()).unwrap_or_else(|e| tcp_panic("reading EOF", e)) > 0 {
                     panic!("Clean shutdown followed by data.");
                 }
             }
@@ -134,14 +139,14 @@ pub fn send_loop<S: Stream>(
     sources: Vec<Sender<MergeQueue>>,
     process: usize,
     remote: usize,
-    mut logger: Option<Logger<CommunicationEvent, CommunicationSetup>>)
+    logger: Option<Logger<CommunicationEventBuilder>>)
 {
-
+    let mut logger = logger.map(|logger| logger.into_typed::<CommunicationEvent>());
     // Log the send thread's start.
     logger.as_mut().map(|l| l.log(StateEvent { send: true, process, remote, start: true, }));
 
     let mut sources: Vec<MergeQueue> = sources.into_iter().map(|x| {
-        let buzzer = crate::buzzer::Buzzer::new();
+        let buzzer = crate::buzzer::Buzzer::default();
         let queue = MergeQueue::new(buzzer);
         x.send(queue.clone()).expect("failed to send MergeQueue");
         queue
@@ -173,12 +178,12 @@ pub fn send_loop<S: Stream>(
         }
         else {
             // TODO: Could do scatter/gather write here.
-            for mut bytes in stash.drain(..) {
+            for bytes in stash.drain(..) {
 
                 // Record message sends.
                 logger.as_mut().map(|logger| {
                     let mut offset = 0;
-                    while let Some(header) = MessageHeader::try_read(&mut bytes[offset..]) {
+                    while let Some(header) = MessageHeader::try_read(&bytes[offset..]) {
                         logger.log(MessageEvent { is_send: true, header, });
                         offset += header.required_bytes();
                     }
@@ -195,7 +200,8 @@ pub fn send_loop<S: Stream>(
     let header = MessageHeader {
         channel:    0,
         source:     0,
-        target:     0,
+        target_lower:     0,
+        target_upper:     0,
         length:     0,
         seqno:      0,
     };

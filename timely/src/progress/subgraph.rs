@@ -10,8 +10,8 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
-use crate::logging::TimelyLogger as Logger;
-use crate::logging::TimelyProgressLogger as ProgressLogger;
+use crate::logging::{TimelyLogger as Logger, TimelyProgressEventBuilder};
+use crate::logging::TimelySummaryLogger as SummaryLogger;
 
 use crate::scheduling::Schedule;
 use crate::scheduling::activate::Activations;
@@ -50,6 +50,9 @@ where
     /// The index assigned to the subgraph by its parent.
     index: usize,
 
+    /// A global identifier for this subgraph.
+    identifier: usize,
+
     // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
     children: Vec<PerOperatorState<TInner>>,
     child_count: usize,
@@ -64,9 +67,8 @@ where
 
     /// Logging handle
     logging: Option<Logger>,
-
-    /// Progress logging handle
-    progress_logging: Option<ProgressLogger>,
+    /// Typed logging handle for operator summaries.
+    summary_logging: Option<SummaryLogger<TInner::Summary>>,
 }
 
 impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
@@ -98,8 +100,9 @@ where
     /// terminating with the local index of the new subgraph itself.
     pub fn new_from(
         path: Rc<[usize]>,
+        identifier: usize,
         logging: Option<Logger>,
-        progress_logging: Option<ProgressLogger>,
+        summary_logging: Option<SummaryLogger<TInner::Summary>>,
         name: &str,
     )
         -> SubgraphBuilder<TOuter, TInner>
@@ -112,13 +115,14 @@ where
             name: name.to_owned(),
             path,
             index,
+            identifier,
             children,
             child_count: 1,
             edge_stash: Vec::new(),
             input_messages: Vec::new(),
             output_capabilities: Vec::new(),
             logging,
-            progress_logging,
+            summary_logging,
         }
     }
 
@@ -141,7 +145,7 @@ where
                 name: child.name().to_owned(),
             });
         }
-        self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone()))
+        self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone(), &mut self.summary_logging));
     }
 
     /// Now that initialization is complete, actually build a subgraph.
@@ -176,14 +180,15 @@ where
         }
 
         // The `None` argument is optional logging infrastructure.
-        let path = self.path.clone();
+        let type_name = std::any::type_name::<TInner>();
         let reachability_logging =
         worker.log_register()
-            .get::<reachability::logging::TrackerEvent>("timely/reachability")
-            .map(|logger| reachability::logging::TrackerLogger::new(path, logger));
+            .get::<reachability::logging::TrackerEventBuilder<TInner>>(&format!("timely/reachability/{type_name}"))
+            .map(|logger| reachability::logging::TrackerLogger::new(self.identifier, logger));
+        let progress_logging = worker.log_register().get::<TimelyProgressEventBuilder<TInner>>(&format!("timely/progress/{type_name}"));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
-        let progcaster = Progcaster::new(worker, self.path.clone(), self.logging.clone(), self.progress_logging.clone());
+        let progcaster = Progcaster::new(worker, self.path.clone(), self.identifier, self.logging.clone(), progress_logging);
 
         let mut incomplete = vec![true; self.children.len()];
         incomplete[0] = false;
@@ -621,7 +626,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             name:       "External".to_owned(),
             operator:   None,
             index:      0,
-            id:         usize::max_value(),
+            id:         usize::MAX,
             local:      false,
             notify:     true,
             inputs,
@@ -640,7 +645,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         mut scope: Box<dyn Operate<T>>,
         index: usize,
         identifier: usize,
-        logging: Option<Logger>
+        logging: Option<Logger>,
+        summary_logging: &mut Option<SummaryLogger<T::Summary>>,
     ) -> PerOperatorState<T>
     {
         let local = scope.local();
@@ -649,6 +655,13 @@ impl<T: Timestamp> PerOperatorState<T> {
         let notify = scope.notify_me();
 
         let (internal_summary, shared_progress) = scope.get_internal_summary();
+
+        if let Some(l) = summary_logging {
+            l.log(crate::logging::OperatesSummaryEvent {
+                id: identifier,
+                summary: internal_summary.clone(),
+            })
+        }
 
         assert_eq!(
             internal_summary.len(),

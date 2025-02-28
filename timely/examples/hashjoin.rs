@@ -1,6 +1,3 @@
-extern crate rand;
-extern crate timely;
-
 use std::collections::HashMap;
 
 use rand::{Rng, SeedableRng, rngs::SmallRng};
@@ -40,16 +37,12 @@ fn main() {
                     let mut map1 = HashMap::<u64, Vec<u64>>::new();
                     let mut map2 = HashMap::<u64, Vec<u64>>::new();
 
-                    let mut vector1 = Vec::new();
-                    let mut vector2 = Vec::new();
-
                     move |input1, input2, output| {
 
                         // Drain first input, check second map, update first map.
                         input1.for_each(|time, data| {
-                            data.swap(&mut vector1);
                             let mut session = output.session(&time);
-                            for (key, val1) in vector1.drain(..) {
+                            for (key, val1) in data.drain(..) {
                                 if let Some(values) = map2.get(&key) {
                                     for val2 in values.iter() {
                                         session.give((val1.clone(), val2.clone()));
@@ -62,9 +55,8 @@ fn main() {
 
                         // Drain second input, check first map, update second map.
                         input2.for_each(|time, data| {
-                            data.swap(&mut vector2);
                             let mut session = output.session(&time);
-                            for (key, val2) in vector2.drain(..) {
+                            for (key, val2) in data.drain(..) {
                                 if let Some(values) = map1.get(&key) {
                                     for val1 in values.iter() {
                                         session.give((val1.clone(), val2.clone()));

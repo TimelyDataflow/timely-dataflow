@@ -1,5 +1,6 @@
 //! Progress tracking mechanisms to support notification in timely dataflow
 
+use columnar::Columnar;
 use serde::{Deserialize, Serialize};
 pub use self::operate::Operate;
 pub use self::subgraph::{Subgraph, SubgraphBuilder};
@@ -16,11 +17,11 @@ pub mod reachability;
 pub mod subgraph;
 
 /// A timely dataflow location.
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize, Columnar)]
 pub struct Location {
     /// A scope-local operator identifier.
     pub node: usize,
-    /// An operator port identifier.`
+    /// An operator port identifier.
     pub port: Port,
 }
 
@@ -58,7 +59,7 @@ impl From<Source> for Location {
 }
 
 /// An operator port.
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Serialize, Deserialize, Columnar)]
 pub enum Port {
     /// An operator input.
     Target(usize),

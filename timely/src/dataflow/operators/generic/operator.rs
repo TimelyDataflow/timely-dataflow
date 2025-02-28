@@ -12,7 +12,7 @@ use crate::dataflow::{Scope, StreamCore};
 use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
-use crate::Container;
+use crate::{Container, Data};
 use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 
 /// Methods to construct generic streaming and blocking operators.
@@ -33,18 +33,16 @@ pub trait Operator<G: Scope, C1: Container> {
     ///         (0u64..10).to_stream(scope)
     ///             .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///                 let mut cap = Some(default_cap.delayed(&12));
-    ///                 let mut notificator = FrontierNotificator::new();
+    ///                 let mut notificator = FrontierNotificator::default();
     ///                 let mut stash = HashMap::new();
-    ///                 let mut vector = Vec::new();
     ///                 move |input, output| {
     ///                     if let Some(ref c) = cap.take() {
     ///                         output.session(&c).give(12);
     ///                     }
     ///                     while let Some((time, data)) = input.next() {
-    ///                         data.swap(&mut vector);
     ///                         stash.entry(time.time().clone())
     ///                              .or_insert(Vec::new())
-    ///                              .extend(vector.drain(..));
+    ///                              .extend(data.drain(..));
     ///                     }
     ///                     notificator.for_each(&[input.frontier()], |time, _not| {
     ///                         if let Some(mut vec) = stash.remove(time.time()) {
@@ -78,13 +76,11 @@ pub trait Operator<G: Scope, C1: Container> {
     ///
     /// fn main() {
     ///     timely::example(|scope| {
-    ///         let mut vector = Vec::new();
     ///         (0u64..10)
     ///             .to_stream(scope)
     ///             .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
     ///                 input.for_each(|time, data| {
-    ///                     data.swap(&mut vector);
-    ///                     output.session(&time).give_container(&mut vector);
+    ///                     output.session(&time).give_container(data);
     ///                     notificator.notify_at(time.retain());
     ///                 });
     ///                 notificator.for_each(|time, _cnt, _not| {
@@ -116,14 +112,12 @@ pub trait Operator<G: Scope, C1: Container> {
     ///     (0u64..10).to_stream(scope)
     ///         .unary(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&12));
-    ///             let mut vector = Vec::new();
     ///             move |input, output| {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
     ///                 while let Some((time, data)) = input.next() {
-    ///                     data.swap(&mut vector);
-    ///                     output.session(&time).give_container(&mut vector);
+    ///                     output.session(&time).give_container(data);
     ///                 }
     ///             }
     ///         });
@@ -153,19 +147,15 @@ pub trait Operator<G: Scope, C1: Container> {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///        in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
-    ///            let mut notificator = FrontierNotificator::new();
+    ///            let mut notificator = FrontierNotificator::default();
     ///            let mut stash = HashMap::new();
-    ///            let mut vector1 = Vec::new();
-    ///            let mut vector2 = Vec::new();
     ///            move |input1, input2, output| {
     ///                while let Some((time, data)) = input1.next() {
-    ///                    data.swap(&mut vector1);
-    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(vector1.drain(..));
+    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
     ///                    notificator.notify_at(time.retain());
     ///                }
     ///                while let Some((time, data)) = input2.next() {
-    ///                    data.swap(&mut vector2);
-    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(vector2.drain(..));
+    ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
     ///                    notificator.notify_at(time.retain());
     ///                }
     ///                notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _not| {
@@ -191,7 +181,7 @@ pub trait Operator<G: Scope, C1: Container> {
     /// ```
     fn binary_frontier<C2, CB, B, L, P1, P2>(&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
-        C2: Container,
+        C2: Container + Data,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -216,17 +206,13 @@ pub trait Operator<G: Scope, C1: Container> {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
     ///
-    ///        let mut vector1 = Vec::new();
-    ///        let mut vector2 = Vec::new();
     ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
     ///            input1.for_each(|time, data| {
-    ///                data.swap(&mut vector1);
-    ///                output.session(&time).give_container(&mut vector1);
+    ///                output.session(&time).give_container(data);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            input2.for_each(|time, data| {
-    ///                data.swap(&mut vector2);
-    ///                output.session(&time).give_container(&mut vector2);
+    ///                output.session(&time).give_container(data);
     ///                notificator.notify_at(time.retain());
     ///            });
     ///            notificator.for_each(|time, _cnt, _not| {
@@ -245,7 +231,7 @@ pub trait Operator<G: Scope, C1: Container> {
     ///    }
     /// }).unwrap();
     /// ```
-    fn binary_notify<C2: Container,
+    fn binary_notify<C2: Container + Data,
               CB: ContainerBuilder,
               L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
                        &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
@@ -271,19 +257,15 @@ pub trait Operator<G: Scope, C1: Container> {
     ///     (0u64..10).to_stream(scope)
     ///         .binary(&stream2, Pipeline, Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&12));
-    ///             let mut vector1 = Vec::new();
-    ///             let mut vector2 = Vec::new();
     ///             move |input1, input2, output| {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
     ///                 while let Some((time, data)) = input1.next() {
-    ///                     data.swap(&mut vector1);
-    ///                     output.session(&time).give_container(&mut vector1);
+    ///                     output.session(&time).give_container(data);
     ///                 }
     ///                 while let Some((time, data)) = input2.next() {
-    ///                     data.swap(&mut vector2);
-    ///                     output.session(&time).give_container(&mut vector2);
+    ///                     output.session(&time).give_container(data);
     ///                 }
     ///             }
     ///         }).inspect(|x| println!("{:?}", x));
@@ -291,7 +273,7 @@ pub trait Operator<G: Scope, C1: Container> {
     /// ```
     fn binary<C2, CB, B, L, P1, P2>(&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
-        C2: Container,
+        C2: Container + Data,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -329,7 +311,7 @@ pub trait Operator<G: Scope, C1: Container> {
         P: ParallelizationContract<G::Timestamp, C1>;
 }
 
-impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
+impl<G: Scope, C1: Container + Data> Operator<G, C1> for StreamCore<G, C1> {
 
     fn unary_frontier<CB, B, L, P>(&self, pact: P, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
@@ -367,7 +349,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
              (&self, pact: P, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> StreamCore<G, CB::Container> {
 
         self.unary_frontier(pact, name, move |capability, _info| {
-            let mut notificator = FrontierNotificator::new();
+            let mut notificator = FrontierNotificator::default();
             for time in init {
                 notificator.notify_at(capability.delayed(&time));
             }
@@ -376,7 +358,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
             move |input, output| {
                 let frontier = &[input.frontier()];
                 let notificator = &mut Notificator::new(frontier, &mut notificator, &logging);
-                logic(&mut input.handle, output, notificator);
+                logic(input.handle, output, notificator);
             }
         })
     }
@@ -411,7 +393,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
 
     fn binary_frontier<C2, CB, B, L, P1, P2>(&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
-        C2: Container,
+        C2: Container + Data,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -442,7 +424,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
         stream
     }
 
-    fn binary_notify<C2: Container,
+    fn binary_notify<C2: Container + Data,
               CB: ContainerBuilder,
               L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
                        &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
@@ -453,7 +435,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
             (&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, init: impl IntoIterator<Item=G::Timestamp>, mut logic: L) -> StreamCore<G, CB::Container> {
 
         self.binary_frontier(other, pact1, pact2, name, |capability, _info| {
-            let mut notificator = FrontierNotificator::new();
+            let mut notificator = FrontierNotificator::default();
             for time in init {
                 notificator.notify_at(capability.delayed(&time));
             }
@@ -462,7 +444,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
             move |input1, input2, output| {
                 let frontiers = &[input1.frontier(), input2.frontier()];
                 let notificator = &mut Notificator::new(frontiers, &mut notificator, &logging);
-                logic(&mut input1.handle, &mut input2.handle, output, notificator);
+                logic(input1.handle, input2.handle, output, notificator);
             }
         })
 
@@ -471,7 +453,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
 
     fn binary<C2, CB, B, L, P1, P2>(&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
-        C2: Container,
+        C2: Container + Data,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -604,7 +586,7 @@ where
 ///
 /// });
 /// ```
-pub fn empty<G: Scope, C: Container>(scope: &G) -> StreamCore<G, C> {
+pub fn empty<G: Scope, C: Container + Data>(scope: &G) -> StreamCore<G, C> {
     source::<_, CapacityContainerBuilder<C>, _, _>(scope, "Empty", |_capability, _info| |_output| {
         // drop capability, do nothing
     })

@@ -10,14 +10,14 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
-use crate::Container;
+use crate::{Container, Data};
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
 use super::{Event, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<T: Timestamp, C: Container> {
+pub trait Capture<T: Timestamp, C: Container + Data> {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -113,7 +113,7 @@ pub trait Capture<T: Timestamp, C: Container> {
     }
 }
 
-impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + Data> Capture<S::Timestamp, C> for StreamCore<S, C> {
     fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
@@ -134,15 +134,11 @@ impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
                     event_pusher.push(Event::Progress(to_send.into_inner().to_vec()));
                 }
 
-                use crate::communication::message::RefOrMut;
-
                 // turn each received message into an event.
                 while let Some(message) = input.next() {
-                    let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
-                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
-                    };
-                    let vector = data.replace(Default::default());
+                    let time = &message.time;
+                    let data = &mut message.data;
+                    let vector = std::mem::take(data);
                     event_pusher.push(Event::Messages(time.clone(), vector));
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);

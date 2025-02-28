@@ -56,7 +56,7 @@ impl<T, const X: usize> ChangeBatch<T, X> {
         }
     }
 
-    /// Returns true if the change batch is not guaranteed compact.
+    /// Returns `true` if the change batch is not guaranteed compact.
     pub fn is_dirty(&self) -> bool {
         self.updates.len() > self.clean
     }
@@ -206,7 +206,7 @@ where
         self.updates.drain(..)
     }
 
-    /// True iff all keys have value zero.
+    /// Returns `true` iff all keys have value zero.
     ///
     /// This method requires mutable access to `self` because it may need to compact the representation
     /// to determine if the batch of updates is indeed empty. We could also implement a weaker form of

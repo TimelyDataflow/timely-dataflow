@@ -1,4 +1,9 @@
+#![cfg(any(target_os = "linux", target_os = "macos"))]
+
+use std::ops::{Deref, DerefMut};
+use std::ptr::NonNull;
 use timely_communication::{Allocate, Bytesable};
+use timely_communication::allocator::zero_copy::bytes_slab::BytesRefill;
 
 /// A wrapper that indicates the serialization/deserialization strategy.
 pub struct Message {
@@ -20,11 +25,53 @@ impl Bytesable for Message {
     }
 }
 
+fn lgalloc_refill(size: usize) -> Box<LgallocHandle> {
+    let (pointer, capacity, handle) = lgalloc::allocate::<u8>(size).unwrap();
+    let handle = Some(handle);
+    Box::new(LgallocHandle { handle, pointer, capacity })
+}
+
+struct LgallocHandle {
+    handle: Option<lgalloc::Handle>,
+    pointer: NonNull<u8>,
+    capacity: usize,
+}
+
+impl Deref for LgallocHandle {
+    type Target = [u8];
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        unsafe { std::slice::from_raw_parts(self.pointer.as_ptr(), self.capacity) }
+    }
+}
+
+impl DerefMut for LgallocHandle {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { std::slice::from_raw_parts_mut(self.pointer.as_ptr(), self.capacity) }
+    }
+}
+
+impl Drop for LgallocHandle {
+    fn drop(&mut self) {
+        lgalloc::deallocate(self.handle.take().unwrap());
+    }
+}
+
 fn main() {
+    let mut config = lgalloc::LgAlloc::new();
+    config.enable().with_path(std::env::temp_dir()); 
+    lgalloc::lgalloc_set_config(&config);
+
+    let refill = BytesRefill {
+        logic: std::sync::Arc::new(|size| lgalloc_refill(size) as Box<dyn DerefMut<Target=[u8]>>),
+        limit: None,
+    };
 
     // extract the configuration from user-supplied arguments, initialize the computation.
-    let config = timely_communication::Config::from_args(std::env::args()).unwrap();
-    let guards = timely_communication::initialize(config, |mut allocator| {
+    let config = timely_communication::Config::ProcessBinary(4);
+    let (allocators, others) = config.try_build_with(refill).unwrap();
+    let guards = timely_communication::initialize_from(allocators, others, |mut allocator| {
 
         println!("worker {} of {} started", allocator.index(), allocator.peers());
 
