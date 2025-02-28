@@ -34,9 +34,10 @@ use crate::scheduling::Activations;
 use crate::dataflow::channels::pullers::counter::ConsumedGuard;
 
 /// An internal trait expressing the capability to send messages with a given timestamp.
-pub trait CapabilityTrait<T: Timestamp> {
+pub trait CapabilityTrait<T: Timestamp>: private::Sealed {
     /// The timestamp associated with the capability.
     fn time(&self) -> &T;
+    /// Checks if this capability is valid for the output port associated with `query_buffer`
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool;
 }
 
@@ -51,6 +52,18 @@ impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &mut C {
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         (**self).valid_for_output(query_buffer)
     }
+}
+
+mod private {
+    use crate::progress::Timestamp;
+
+    pub trait Sealed {}
+
+    impl<'a, C: Sealed> Sealed for &'a C { }
+    impl<'a, C: Sealed> Sealed for &'a mut C { }
+    impl<T: Timestamp> Sealed for super::Capability<T> { }
+    impl<T: Timestamp> Sealed for super::InputCapability<T> { }
+    impl<T: Timestamp> Sealed for super::ActivateCapability<T> { }
 }
 
 /// The capability to send data with a certain timestamp on a dataflow edge.
