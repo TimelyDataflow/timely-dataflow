@@ -7,28 +7,29 @@ use crate::communication::{Exchangeable, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::Scheduler;
 use crate::scheduling::activate::Activations;
-use crate::progress::{Timestamp, Operate, SubgraphBuilder};
+use crate::progress::{Timestamp, Operate};
 use crate::progress::{Source, Target};
 use crate::progress::timestamp::Refines;
 use crate::order::Product;
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
+use crate::progress::subgraph::SubgraphBuilderT;
 use crate::worker::{AsWorker, Config};
 
 use super::{ScopeParent, Scope};
 
 /// Type alias for iterative child scope.
-pub type Iterative<'a, G, T> = Child<'a, G, Product<<G as ScopeParent>::Timestamp, T>>;
+pub type Iterative<'a, G, T, SG> = Child<'a, G, Product<<G as ScopeParent>::Timestamp, T>, SG>;
 
 /// A `Child` wraps a `Subgraph` and a parent `G: Scope`. It manages the addition
 /// of `Operate`s to a subgraph, and the connection of edges between them.
-pub struct Child<'a, G, T>
+pub struct Child<'a, G, T, SG>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp+Refines<G::Timestamp>,
 {
     /// The subgraph under assembly.
-    pub subgraph: &'a RefCell<SubgraphBuilder<G::Timestamp, T>>,
+    pub subgraph: &'a RefCell<SG>,
     /// A copy of the child's parent scope.
     pub parent:   G,
     /// The log writer for this scope.
@@ -37,10 +38,11 @@ where
     pub progress_logging:  Option<ProgressLogger<T>>,
 }
 
-impl<G, T> Child<'_, G, T>
+impl<G, T, SG> Child<'_, G, T, SG>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp+Refines<G::Timestamp>,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
 {
     /// This worker's unique identifier.
     ///
@@ -50,10 +52,11 @@ where
     pub fn peers(&self) -> usize { self.parent.peers() }
 }
 
-impl<G, T> AsWorker for Child<'_, G, T>
+impl<G, T, SG> AsWorker for Child<'_, G, T, SG>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp+Refines<G::Timestamp>,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
 {
     fn config(&self) -> &Config { self.parent.config() }
     fn index(&self) -> usize { self.parent.index() }
@@ -78,34 +81,37 @@ where
     }
 }
 
-impl<G, T> Scheduler for Child<'_, G, T>
+impl<G, T, SG> Scheduler for Child<'_, G, T, SG>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp+Refines<G::Timestamp>,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
 {
     fn activations(&self) -> Rc<RefCell<Activations>> {
         self.parent.activations()
     }
 }
 
-impl<G, T> ScopeParent for Child<'_, G, T>
+impl<G, T, SG> ScopeParent for Child<'_, G, T, SG>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp+Refines<G::Timestamp>,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
 {
     type Timestamp = T;
 }
 
-impl<G, T> Scope for Child<'_, G, T>
+impl<G, T, SG> Scope for Child<'_, G, T, SG>
 where
     G: ScopeParent,
     T: Timestamp+Refines<G::Timestamp>,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
 {
-    fn name(&self) -> String { self.subgraph.borrow().name.clone() }
-    fn addr(&self) -> Rc<[usize]> { Rc::clone(&self.subgraph.borrow().path) }
+    fn name(&self) -> String { self.subgraph.borrow().name().to_owned() }
+    fn addr(&self) -> Rc<[usize]> { Rc::clone(&self.subgraph.borrow().path()) }
 
     fn addr_for_child(&self, index: usize) -> Rc<[usize]> {
-        let path = &self.subgraph.borrow().path[..];
+        let path = &self.subgraph.borrow().path()[..];
         let mut addr = Vec::with_capacity(path.len() + 1);
         addr.extend_from_slice(path);
         addr.push(index);
@@ -125,10 +131,11 @@ where
     }
 
     #[inline]
-    fn scoped<T2, R, F>(&mut self, name: &str, func: F) -> R
+    fn scoped<T2, R, F, SSG>(&mut self, name: &str, func: F) -> R
     where
         T2: Timestamp+Refines<T>,
-        F: FnOnce(&mut Child<Self, T2>) -> R,
+        F: FnOnce(&mut Child<Self, T2, SSG>) -> R,
+        SSG: SubgraphBuilderT<T, T2>,
     {
         let index = self.subgraph.borrow_mut().allocate_child_id();
         let identifier = self.new_identifier();
@@ -138,7 +145,7 @@ where
         let progress_logging = self.logger_for(&format!("timely/progress/{type_name}"));
         let summary_logging  = self.logger_for(&format!("timely/summary/{type_name}"));
 
-        let subscope = RefCell::new(SubgraphBuilder::new_from(path, identifier, self.logging(), summary_logging, name));
+        let subscope = RefCell::new(SSG::new_from(path, identifier, self.logging(), summary_logging, name));
         let result = {
             let mut builder = Child {
                 subgraph: &subscope,
@@ -156,10 +163,11 @@ where
     }
 }
 
-impl<G, T> Clone for Child<'_, G, T>
+impl<G, T, SG> Clone for Child<'_, G, T, SG>
 where
     G: ScopeParent,
-    T: Timestamp+Refines<G::Timestamp>
+    T: Timestamp+Refines<G::Timestamp>,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
 {
     fn clone(&self) -> Self {
         Child {

@@ -33,9 +33,16 @@ use crate::dataflow::channels::Message;
 use crate::worker::AsWorker;
 use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::scopes::Child;
+use crate::progress::subgraph::SubgraphBuilderT;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
-pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
+pub trait Enter<G, T, C, SG>
+where
+    G: Scope,
+    T: Timestamp + Refines<G::Timestamp>,
+    C: Container,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
+{
     /// Moves the `Stream` argument into a child of its current `Scope`.
     ///
     /// # Examples
@@ -50,11 +57,17 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(&self, _: &Child<'a, G, T, SG>) -> StreamCore<Child<'a, G, T, SG>, C>;
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for StreamCore<G, C> {
-    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+impl<G, T, C, SG> Enter<G, T, C, SG> for StreamCore<G, C>
+where
+    G: Scope,
+    T: Timestamp + Refines<G::Timestamp>,
+    C: Data + Container,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
+{
+    fn enter<'a>(&self, scope: &Child<'a, G, T, SG>) -> StreamCore<Child<'a, G, T, SG>, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -103,7 +116,13 @@ pub trait Leave<G: Scope, C: Container> {
     fn leave(&self) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: Container + Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
+impl<G, C, T, SG> Leave<G, C> for StreamCore<Child<'_, G, T, SG>, C>
+where
+    G: Scope,
+    C: Container + Data,
+    T: Timestamp + Refines<G::Timestamp>,
+    SG: SubgraphBuilderT<G::Timestamp, T>,
+{
     fn leave(&self) -> StreamCore<G, C> {
 
         let scope = self.scope();
