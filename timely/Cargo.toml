@@ -19,6 +19,7 @@ default = ["getopts"]
 getopts = ["dep:getopts", "timely_communication/getopts"]
 
 [dependencies]
+bytemuck = "1.18.0"
 columnar = { workspace = true }
 columnation = "0.1"
 getopts = { version = "0.2.21", optional = true }
@@ -33,5 +34,4 @@ crossbeam-channel = "0.5"
 smallvec = { version = "1.13.2", features = ["serde", "const_generics"] }
 
 [dev-dependencies]
-bytemuck = "1.18.0"
 rand = { version = "0.8", features = ["small_rng"] }
