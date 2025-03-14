@@ -18,12 +18,13 @@ You can create a new scope in any other scope by invoking the `scoped` method:
 extern crate timely;
 
 use timely::dataflow::Scope;
+use timely::progress::SubgraphBuilder;
 
 fn main() {
     timely::example(|scope| {
 
         // Create a new scope with the same (u64) timestamp.
-        scope.scoped::<u64,_,_>("SubScope", |subscope| {
+        scope.scoped::<u64,_,_,SubgraphBuilder<_,_>>("SubScope", |subscope| {
             // probably want something here
         })
 
@@ -46,6 +47,7 @@ extern crate timely;
 
 use timely::dataflow::Scope;
 use timely::dataflow::operators::*;
+use timely::progress::SubgraphBuilder;
 
 fn main() {
     timely::example(|scope| {
@@ -53,7 +55,7 @@ fn main() {
         let stream = (0 .. 10).to_stream(scope);
 
         // Create a new scope with the same (u64) timestamp.
-        let result = scope.scoped::<u64,_,_>("SubScope", |subscope| {
+        let result = scope.scoped::<u64,_,_,SubgraphBuilder<_,_>>("SubScope", |subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
                   .leave()
@@ -108,6 +110,7 @@ extern crate timely;
 
 use timely::dataflow::Scope;
 use timely::dataflow::operators::*;
+use timely::progress::SubgraphBuilder;
 
 fn main() {
     timely::example(|scope| {
@@ -115,7 +118,7 @@ fn main() {
         let stream = (0 .. 10).to_stream(scope);
 
         // Create a new scope with a (u64, u32) timestamp.
-        let result = scope.iterative::<u32,_,_>(|subscope| {
+        let result = scope.iterative::<u32,_,_,SubgraphBuilder<_,_>>(|subscope| {
             stream.enter(subscope)
                   .inspect_batch(|t, xs| println!("{:?}, {:?}", t, xs))
                   .leave()
