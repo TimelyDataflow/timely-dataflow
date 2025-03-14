@@ -3,8 +3,8 @@ use std::rc::Rc;
 use std::time::Duration;
 use timely::dataflow::operators::{Input, Map, Probe};
 use timely::logging::{TimelyLogger, TimelySummaryLogger};
-use timely::progress::{Antichain, ChangeBatch, Operate, Source, SubgraphBuilder, Target, Timestamp};
-use timely::progress::operate::SharedProgress;
+use timely::progress::{ChangeBatch, Operate, Source, SubgraphBuilder, Target, Timestamp};
+use timely::progress::operate::{Connectivity, SharedProgress};
 use timely::progress::subgraph::SubgraphBuilderT;
 use timely::progress::timestamp::Refines;
 use timely::scheduling::Schedule;
@@ -53,7 +53,7 @@ impl<TOuter: Timestamp, OP: Operate<TOuter>> Operate<TOuter> for ThreadStatSubgr
         self.inner.outputs()
     }
 
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
+    fn get_internal_summary(&mut self) -> (Connectivity<TOuter::Summary>, Rc<RefCell<SharedProgress<TOuter>>>) {
         self.inner.get_internal_summary()
     }
 
@@ -294,12 +294,12 @@ fn main() {
 
         // create a new input, exchange data, and inspect its output
         for _dataflow in 0 .. dataflows {
-            let logging = worker.log_register().get("timely").map(Into::into);
+            let logging = worker.logging();
             worker.dataflow_subgraph::<_, _, _, _, ThreadStatSubgraphBuilder<SubgraphBuilder<_, _>>>("Dataflow", logging, (), |(), scope| {
                 let (input, mut stream) = scope.new_input();
                 for _step in 0 .. length {
                     stream = stream.map(|x: ()| {
-                        // Simluate CPU intensive task
+                        // Simulate CPU intensive task
                         for i in 0..1_000_000 {
                             std::hint::black_box(i);
                         }
