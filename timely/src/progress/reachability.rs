@@ -754,6 +754,19 @@ fn summarize_outputs<T: Timestamp>(
         }
     }
 
+    // A reverse map from operator outputs to inputs, along their internal summaries.
+    let mut reverse_internal = HashMap::new();
+    for (node, connectivity) in nodes.iter().enumerate() {
+        for (input, outputs) in connectivity.iter().enumerate() {
+            for (output, summary) in outputs.iter() {
+                reverse_internal
+                    .entry(Location::new_source(node, *output))
+                    .or_insert_with(|| Vec::default())
+                    .push((input, summary));
+            }
+        }
+    }
+
     let mut results: HashMap<Location, PortConnectivity<T::Summary>> = HashMap::new();
     let mut worklist = VecDeque::<(Location, usize, T::Summary)>::new();
 
@@ -776,20 +789,18 @@ fn summarize_outputs<T: Timestamp>(
 
             // This is an output port of an operator, or a scope input.
             // We want to crawl up the operator, to its inputs.
-            Port::Source(output_port) => {
-
-                // Consider each input port of the associated operator.
-                for (input_port, summaries) in nodes[location.node].iter().enumerate() {
-
-                    // Determine the current path summaries from the input port.
-                    let location = Location { node: location.node, port: Port::Target(input_port) };
-                    let antichains = results.entry(location).or_insert_with(|| PortConnectivity::default());
-
-                    // Combine each operator-internal summary to the output with `summary`.
-                    if let Some(port_connectivity) = summaries.get(&output_port) {
-                        for operator_summary in port_connectivity.elements().iter() {
-                            if let Some(combined) = operator_summary.followed_by(&summary) {
-                                let update = antichains.entry(output).or_insert_with(|| Antichain::default()).insert_ref(&combined);
+            Port::Source(_output_port) => {
+                if let Some(inputs) = reverse_internal.get(&location) {
+                    for (input_port, operator_summary) in inputs.iter() {
+                        let location = Location::new_target(location.node, *input_port);
+                        for summary in operator_summary.elements().iter() {
+                            if let Some(combined) = summary.followed_by(&summary) {
+                                let update =
+                                results.entry(location)
+                                    .or_insert_with(|| PortConnectivity::default())
+                                    .entry(output)
+                                    .or_insert_with(|| Antichain::default())
+                                    .insert_ref(&combined);
                                 if update {
                                     worklist.push_back((location, output, combined));
                                 }

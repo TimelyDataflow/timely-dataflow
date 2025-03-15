@@ -572,8 +572,8 @@ where
             "the internal summary should have as many elements as there are inputs",
         );
         debug_assert!(
-            internal_summary.iter().all(|summary| summary.len() == self.outputs()),
-            "each element of the internal summary should have as many elements as there are outputs",
+            internal_summary.iter().all(|summary| summary.keys().all(|output| output < &self.outputs())),
+            "each element of the internal summary should only reference recognized outputs",
         );
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
@@ -673,7 +673,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             inputs,
         );
         assert!(
-            !internal_summary.iter().any(|x| x.len() != outputs),
+            !internal_summary.iter().any(|x| x.keys().any(|k| k >= &outputs)),
             "operator summary had too few outputs",
         );
 

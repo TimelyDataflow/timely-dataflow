@@ -124,7 +124,6 @@ impl<G: Scope> OperatorBuilder<G> {
         stream.connect_to(target, sender, channel_id);
 
         self.shape.inputs += 1;
-        assert_eq!(self.shape.outputs, connection.len());
         self.summary.push(connection);
 
         receiver
