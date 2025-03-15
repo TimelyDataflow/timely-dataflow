@@ -75,7 +75,6 @@
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
 
-use crate::progress::Antichain;
 use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
@@ -161,11 +160,7 @@ impl<T: Timestamp> Builder<T> {
 
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
-        for x in summary.iter() { 
-            for o in x.keys() {
-                debug_assert!(o < &outputs);
-            }
-        }
+        debug_assert!(summary.iter().all(|x| x.iter().all(|(o,_)| o < &outputs)));
 
         while self.nodes.len() <= index {
             self.nodes.push(Vec::new());
@@ -755,13 +750,13 @@ fn summarize_outputs<T: Timestamp>(
     }
 
     // A reverse map from operator outputs to inputs, along their internal summaries.
-    let mut reverse_internal = HashMap::new();
+    let mut reverse_internal: HashMap<_, Vec<_>> = HashMap::new();
     for (node, connectivity) in nodes.iter().enumerate() {
         for (input, outputs) in connectivity.iter().enumerate() {
             for (output, summary) in outputs.iter() {
                 reverse_internal
                     .entry(Location::new_source(node, *output))
-                    .or_insert_with(|| Vec::default())
+                    .or_default()
                     .push((input, summary));
             }
         }
@@ -797,9 +792,9 @@ fn summarize_outputs<T: Timestamp>(
                             if let Some(combined) = summary.followed_by(&summary) {
                                 let update =
                                 results.entry(location)
-                                    .or_insert_with(|| PortConnectivity::default())
+                                    .or_default()
                                     .entry(output)
-                                    .or_insert_with(|| Antichain::default())
+                                    .or_default()
                                     .insert_ref(&combined);
                                 if update {
                                     worklist.push_back((location, output, combined));
@@ -817,8 +812,8 @@ fn summarize_outputs<T: Timestamp>(
 
                 // Each target should have (at most) one source.
                 if let Some(&source) = reverse.get(&location) {
-                    let antichains = results.entry(source).or_insert_with(|| PortConnectivity::default());
-                    let update = antichains.entry(output).or_insert_with(|| Antichain::default()).insert_ref(&summary);
+                    let antichains = results.entry(source).or_default();
+                    let update = antichains.entry(output).or_default().insert_ref(&summary);
                     if update {
                         worklist.push_back((source, output, summary.clone()));
                     }
