@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.19.0...timely-v0.19.1) - 2025-03-15
+
+### Other
+
+- Linear connectivity ([#651](https://github.com/TimelyDataflow/timely-dataflow/pull/651))
+
 ## [0.19.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.1...timely-v0.19.0) - 2025-02-28
 
 ### Other
