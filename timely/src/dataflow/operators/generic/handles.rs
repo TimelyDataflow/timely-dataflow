@@ -6,10 +6,10 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::progress::Antichain;
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
 use crate::progress::frontier::MutableAntichain;
+use crate::progress::operate::PortConnectivity;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
@@ -30,7 +30,7 @@ pub struct InputHandleCore<T: Timestamp, C: Container, P: Pull<Message<T, C>>> {
     ///
     /// Each timestamp received through this input may only produce output timestamps
     /// greater or equal to the input timestamp subjected to at least one of these summaries.
-    summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, 
+    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
     logging: Option<Logger>,
 }
 
@@ -148,8 +148,8 @@ pub fn _access_pull_counter<T: Timestamp, C: Container, P: Pull<Message<T, C>>>(
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
 pub fn new_input_handle<T: Timestamp, C: Container, P: Pull<Message<T, C>>>(
     pull_counter: PullCounter<T, C, P>, 
-    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, 
-    summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, 
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
+    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
     logging: Option<Logger>
 ) -> InputHandleCore<T, C, P> {
     InputHandleCore {
