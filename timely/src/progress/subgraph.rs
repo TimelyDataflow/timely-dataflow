@@ -168,7 +168,7 @@ where
         let mut builder = reachability::Builder::new();
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
-        let summary = (0..outputs).map(|_| (0..inputs).map(|_| Antichain::new()).collect()).collect();
+        let summary = (0..outputs).map(|_| Default::default()).collect();
         builder.add_node(0, outputs, inputs, summary);
         for (index, child) in self.children.iter().enumerate().skip(1) {
             builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
@@ -555,13 +555,15 @@ where
         // Note that we need to have `self.inputs()` elements in the summary
         // with each element containing `self.outputs()` antichains regardless
         // of how long `self.scope_summary` is
-        let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
-        for (input_idx, input) in self.scope_summary.iter().enumerate() {
-            for (output_idx, output) in input.iter().enumerate() {
-                let antichain = &mut internal_summary[input_idx][output_idx];
-                antichain.reserve(output.elements().len());
-                antichain.extend(output.elements().iter().cloned().map(TInner::summarize));
-            }
+        // let mut internal_summary: Connectivity<TOuter::Summary> = vec![PortConnectivity::default(); self.inputs()];
+        let mut internal_summary: Connectivity<TOuter::Summary> = Vec::with_capacity(self.inputs());
+        for input in self.scope_summary.iter() {
+            let input_connectivity = input.iter().map(|(o, summary)| {
+                let mut antichain = Antichain::with_capacity(summary.elements().len());
+                antichain.extend(summary.elements().iter().cloned().map(TInner::summarize));
+                (*o, antichain)
+            }).collect();
+            internal_summary.push(input_connectivity);
         }
 
         debug_assert_eq!(

@@ -12,7 +12,7 @@ use crate::scheduling::{Schedule, Activations};
 
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
-use crate::progress::operate::Connectivity;
+use crate::progress::operate::{Connectivity, PortConnectivity};
 
 use crate::Container;
 use crate::dataflow::{StreamCore, Scope};
@@ -108,12 +108,12 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn new_input<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P) -> P::Puller
         where
             P: ParallelizationContract<G::Timestamp, C> {
-        let connection = vec![Antichain::from_elem(Default::default()); self.shape.outputs];
+        let connection = (0 .. self.shape.outputs).map(|o| (o, Antichain::from_elem(Default::default()))).collect();
         self.new_input_connection(stream, pact, connection)
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller
+    pub fn new_input_connection<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: PortConnectivity<<G::Timestamp as Timestamp>::Summary>) -> P::Puller
     where
         P: ParallelizationContract<G::Timestamp, C> {
 
@@ -133,21 +133,20 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output<C: Container>(&mut self) -> (Tee<G::Timestamp, C>, StreamCore<G, C>) {
 
-        let connection = vec![Antichain::from_elem(Default::default()); self.shape.inputs];
+        let connection = (0 .. self.shape.inputs).map(|i| (i, Antichain::from_elem(Default::default()))).collect();
         self.new_output_connection(connection)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output_connection<C: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (Tee<G::Timestamp, C>, StreamCore<G, C>) {
+    pub fn new_output_connection<C: Container>(&mut self, connection: PortConnectivity<<G::Timestamp as Timestamp>::Summary>) -> (Tee<G::Timestamp, C>, StreamCore<G, C>) {
 
         let (targets, registrar) = Tee::<G::Timestamp,C>::new();
         let source = Source::new(self.index, self.shape.outputs);
         let stream = StreamCore::new(source, registrar, self.scope.clone());
 
         self.shape.outputs += 1;
-        assert_eq!(self.shape.inputs, connection.len());
-        for (summary, entry) in self.summary.iter_mut().zip(connection.into_iter()) {
-            summary.push(entry);
+        for (input, entry) in connection.into_iter() {
+            self.summary[input].insert(self.shape.outputs - 1, entry);
         }
 
         (targets, stream)

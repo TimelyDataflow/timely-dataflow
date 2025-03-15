@@ -17,9 +17,9 @@
 //! let mut builder = Builder::<usize>::new();
 //!
 //! // Each node with one input connected to one output.
-//! builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-//! builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-//! builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)]]);
+//! builder.add_node(0, 1, 1, vec![[(0, Antichain::from_elem(0))].into()]);
+//! builder.add_node(1, 1, 1, vec![[(0, Antichain::from_elem(0))].into()]);
+//! builder.add_node(2, 1, 1, vec![[(0, Antichain::from_elem(1))].into()]);
 //!
 //! // Connect nodes in sequence, looping around to the first from the last.
 //! builder.add_edge(Source::new(0, 0), Target::new(1, 0));
@@ -75,12 +75,13 @@
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
 
+use crate::progress::Antichain;
 use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
 use crate::progress::{Location, Port};
-use crate::progress::operate::Connectivity;
-use crate::progress::frontier::{Antichain, MutableAntichain};
+use crate::progress::operate::{Connectivity, PortConnectivity};
+use crate::progress::frontier::MutableAntichain;
 use crate::progress::timestamp::PathSummary;
 
 
@@ -113,9 +114,9 @@ use crate::progress::timestamp::PathSummary;
 /// let mut builder = Builder::<usize>::new();
 ///
 /// // Each node with one input connected to one output.
-/// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-/// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-/// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)]]);
+/// builder.add_node(0, 1, 1, vec![[(0, Antichain::from_elem(0))].into()]);
+/// builder.add_node(1, 1, 1, vec![[(0, Antichain::from_elem(0))].into()]);
+/// builder.add_node(2, 1, 1, vec![[(0, Antichain::from_elem(1))].into()]);
 ///
 /// // Connect nodes in sequence, looping around to the first from the last.
 /// builder.add_edge(Source::new(0, 0), Target::new(1, 0));
@@ -160,7 +161,11 @@ impl<T: Timestamp> Builder<T> {
 
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
-        for x in summary.iter() { debug_assert_eq!(outputs, x.len()); }
+        for x in summary.iter() { 
+            for o in x.keys() {
+                debug_assert!(o < &outputs);
+            }
+        }
 
         while self.nodes.len() <= index {
             self.nodes.push(Vec::new());
@@ -224,9 +229,9 @@ impl<T: Timestamp> Builder<T> {
     /// let mut builder = Builder::<usize>::new();
     ///
     /// // Each node with one input connected to one output.
-    /// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-    /// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)]]);
-    /// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(0)]]);
+    /// builder.add_node(0, 1, 1, vec![[(0, Antichain::from_elem(0))].into()]);
+    /// builder.add_node(1, 1, 1, vec![[(0, Antichain::from_elem(0))].into()]);
+    /// builder.add_node(2, 1, 1, vec![[(0, Antichain::from_elem(0))].into()]);
     ///
     /// // Connect nodes in sequence, looping around to the first from the last.
     /// builder.add_edge(Source::new(0, 0), Target::new(1, 0));
@@ -253,8 +258,8 @@ impl<T: Timestamp> Builder<T> {
     ///
     /// // Two inputs and outputs, only one of which advances.
     /// builder.add_node(0, 2, 2, vec![
-    ///     vec![Antichain::from_elem(0),Antichain::new(),],
-    ///     vec![Antichain::new(),Antichain::from_elem(1),],
+    ///     [(0,Antichain::from_elem(0)),(1,Antichain::new()),].into(),
+    ///     [(0,Antichain::new()),(1,Antichain::from_elem(1)),].into(),
     /// ]);
     ///
     /// // Connect each output to the opposite input.
@@ -285,8 +290,8 @@ impl<T: Timestamp> Builder<T> {
             for (input, outputs) in summary.iter().enumerate() {
                 let target = Location::new_target(index, input);
                 in_degree.entry(target).or_insert(0);
-                for (output, summaries) in outputs.iter().enumerate() {
-                    let source = Location::new_source(index, output);
+                for (output, summaries) in outputs.iter() {
+                    let source = Location::new_source(index, *output);
                     for summary in summaries.elements().iter() {
                         if summary == &Default::default() {
                             *in_degree.entry(source).or_insert(0) += 1;
@@ -322,8 +327,8 @@ impl<T: Timestamp> Builder<T> {
                     }
                 },
                 Port::Target(port) => {
-                    for (output, summaries) in self.nodes[node][port].iter().enumerate() {
-                        let source = Location::new_source(node, output);
+                    for (output, summaries) in self.nodes[node][port].iter() {
+                        let source = Location::new_source(node, *output);
                         for summary in summaries.elements().iter() {
                             if summary == &Default::default() {
                                 *in_degree.get_mut(&source).unwrap() -= 1;
@@ -433,7 +438,7 @@ pub struct PortInformation<T: Timestamp> {
     /// Current implications of active pointstamps across the dataflow.
     pub implications: MutableAntichain<T>,
     /// Path summaries to each of the scope outputs.
-    pub output_summaries: Vec<Antichain<T::Summary>>,
+    pub output_summaries: PortConnectivity<T::Summary>,
 }
 
 impl<T: Timestamp> PortInformation<T> {
@@ -442,7 +447,7 @@ impl<T: Timestamp> PortInformation<T> {
         PortInformation {
             pointstamps: MutableAntichain::new(),
             implications: MutableAntichain::new(),
-            output_summaries: Vec::new(),
+            output_summaries: PortConnectivity::default(),
         }
     }
 
@@ -514,7 +519,7 @@ impl<T:Timestamp> Tracker<T> {
             .collect::<Vec<_>>();
 
         // Summary of scope inputs to scope outputs.
-        let mut builder_summary = vec![vec![]; builder.shape[0].1];
+        let mut builder_summary: Connectivity<T::Summary> = vec![PortConnectivity::default(); builder.shape[0].1];
 
         // Compile summaries from each location to each scope output.
         let output_summaries = summarize_outputs::<T>(&builder.nodes, &builder.edges);
@@ -598,8 +603,8 @@ impl<T:Timestamp> Tracker<T> {
 
             for (time, diff) in changes {
                 self.total_counts += diff;
-                for (output, summaries) in operator.output_summaries.iter().enumerate() {
-                    let output_changes = &mut self.output_changes[output];
+                for (output, summaries) in operator.output_summaries.iter() {
+                    let output_changes = &mut self.output_changes[*output];
                     summaries
                         .elements()
                         .iter()
@@ -617,8 +622,8 @@ impl<T:Timestamp> Tracker<T> {
 
             for (time, diff) in changes {
                 self.total_counts += diff;
-                for (output, summaries) in operator.output_summaries.iter().enumerate() {
-                    let output_changes = &mut self.output_changes[output];
+                for (output, summaries) in operator.output_summaries.iter() {
+                    let output_changes = &mut self.output_changes[*output];
                     summaries
                         .elements()
                         .iter()
@@ -658,8 +663,8 @@ impl<T:Timestamp> Tracker<T> {
 
                         for (time, diff) in changes {
                             let nodes = &self.nodes[location.node][port_index];
-                            for (output_port, summaries) in nodes.iter().enumerate() {
-                                let source = Location { node: location.node, port: Port::Source(output_port) };
+                            for (output_port, summaries) in nodes.iter() {
+                                let source = Location { node: location.node, port: Port::Source(*output_port) };
                                 for summary in summaries.elements().iter() {
                                     if let Some(new_time) = summary.results_in(&time) {
                                         self.worklist.push(Reverse((new_time, source, diff)));
@@ -734,7 +739,7 @@ impl<T:Timestamp> Tracker<T> {
 fn summarize_outputs<T: Timestamp>(
     nodes: &[Connectivity<T::Summary>],
     edges: &[Vec<Vec<Target>>],
-    ) -> HashMap<Location, Vec<Antichain<T::Summary>>>
+    ) -> HashMap<Location, PortConnectivity<T::Summary>>
 {
     // A reverse edge map, to allow us to walk back up the dataflow graph.
     let mut reverse = HashMap::new();
@@ -749,7 +754,7 @@ fn summarize_outputs<T: Timestamp>(
         }
     }
 
-    let mut results: HashMap<Location, Vec<Antichain<T::Summary>>> = HashMap::new();
+    let mut results: HashMap<Location, PortConnectivity<T::Summary>> = HashMap::new();
     let mut worklist = VecDeque::<(Location, usize, T::Summary)>::new();
 
     let outputs =
@@ -778,18 +783,16 @@ fn summarize_outputs<T: Timestamp>(
 
                     // Determine the current path summaries from the input port.
                     let location = Location { node: location.node, port: Port::Target(input_port) };
-                    let antichains = results
-                        .entry(location)
-                        .and_modify(|antichains| antichains.reserve(output))
-                        .or_insert_with(|| Vec::with_capacity(output));
-
-                    while antichains.len() <= output { antichains.push(Antichain::new()); }
+                    let antichains = results.entry(location).or_insert_with(|| PortConnectivity::default());
 
                     // Combine each operator-internal summary to the output with `summary`.
-                    for operator_summary in summaries[output_port].elements().iter() {
-                        if let Some(combined) = operator_summary.followed_by(&summary) {
-                            if antichains[output].insert(combined.clone()) {
-                                worklist.push_back((location, output, combined));
+                    if let Some(port_connectivity) = summaries.get(&output_port) {
+                        for operator_summary in port_connectivity.elements().iter() {
+                            if let Some(combined) = operator_summary.followed_by(&summary) {
+                                let update = antichains.entry(output).or_insert_with(|| Antichain::default()).insert_ref(&combined);
+                                if update {
+                                    worklist.push_back((location, output, combined));
+                                }
                             }
                         }
                     }
@@ -803,14 +806,9 @@ fn summarize_outputs<T: Timestamp>(
 
                 // Each target should have (at most) one source.
                 if let Some(&source) = reverse.get(&location) {
-                    let antichains = results
-                        .entry(source)
-                        .and_modify(|antichains| antichains.reserve(output))
-                        .or_insert_with(|| Vec::with_capacity(output));
-
-                    while antichains.len() <= output { antichains.push(Antichain::new()); }
-
-                    if antichains[output].insert(summary.clone()) {
+                    let antichains = results.entry(source).or_insert_with(|| PortConnectivity::default());
+                    let update = antichains.entry(output).or_insert_with(|| Antichain::default()).insert_ref(&summary);
+                    if update {
                         worklist.push_back((source, output, summary.clone()));
                     }
                 }

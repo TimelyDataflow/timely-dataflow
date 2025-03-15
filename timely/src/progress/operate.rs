@@ -59,7 +59,9 @@ pub trait Operate<T: Timestamp> : Schedule {
 }
 
 /// Operator internal connectivity, from inputs to outputs.
-pub type Connectivity<TS> = Vec<Vec<Antichain<TS>>>;
+pub type Connectivity<TS> = Vec<PortConnectivity<TS>>;
+/// Internal connectivity from one port to any number of opposing ports.
+pub type PortConnectivity<TS> = std::collections::BTreeMap<usize, Antichain<TS>>;
 
 /// Progress information shared between parent and child.
 #[derive(Debug)]

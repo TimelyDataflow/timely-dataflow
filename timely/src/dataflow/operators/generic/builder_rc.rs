@@ -20,7 +20,7 @@ use crate::dataflow::operators::capability::Capability;
 use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_handle, OutputWrapper};
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 use crate::dataflow::operators::generic::builder_raw::OperatorShape;
-
+use crate::progress::operate::PortConnectivity;
 use crate::logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
@@ -33,7 +33,7 @@ pub struct OperatorBuilder<G: Scope> {
     consumed: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>>>,
     /// For each input, a shared list of summaries to each output.
-    summaries: Vec<Rc<RefCell<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>>>,
+    summaries: Vec<Rc<RefCell<PortConnectivity<<G::Timestamp as Timestamp>::Summary>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     logging: Option<Logger>,
 }
@@ -64,7 +64,7 @@ impl<G: Scope> OperatorBuilder<G> {
     where
         P: ParallelizationContract<G::Timestamp, C> {
 
-        let connection = (0..self.builder.shape().outputs()).map(|_| Antichain::from_elem(Default::default())).collect();
+        let connection = (0..self.builder.shape().outputs()).map(|o| (o, Antichain::from_elem(Default::default()))).collect();
         self.new_input_connection(stream, pact, connection)
     }
 
@@ -76,7 +76,7 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_input_connection<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandleCore<G::Timestamp, C, P::Puller>
+    pub fn new_input_connection<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: PortConnectivity<<G::Timestamp as Timestamp>::Summary>) -> InputHandleCore<G::Timestamp, C, P::Puller>
         where
             P: ParallelizationContract<G::Timestamp, C> {
 
@@ -94,7 +94,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output<CB: ContainerBuilder>(&mut self) -> (OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>, StreamCore<G, CB::Container>) {
-        let connection = (0..self.builder.shape().inputs()).map(|_| Antichain::from_elem(Default::default())).collect();
+        let connection = (0..self.builder.shape().inputs()).map(|i| (i, Antichain::from_elem(Default::default()))).collect();
         self.new_output_connection(connection)
     }
 
@@ -108,7 +108,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// antichain indicating that there is no connection from the input to the output.
     pub fn new_output_connection<CB: ContainerBuilder>(
         &mut self,
-        connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>
+        connection: PortConnectivity<<G::Timestamp as Timestamp>::Summary>
     ) -> (
         OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
         StreamCore<G, CB::Container>
@@ -122,8 +122,9 @@ impl<G: Scope> OperatorBuilder<G> {
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(buffer.inner().produced().clone());
 
-        for (summary, connection) in self.summaries.iter().zip(connection.into_iter()) {
-            summary.borrow_mut().push(connection.clone());
+        for (input, summary) in connection.into_iter() {
+            let mut borrow = self.summaries[input].borrow_mut();
+            borrow.insert(self.shape().outputs() - 1, summary);
         }
 
         (OutputWrapper::new(buffer, internal), stream)
