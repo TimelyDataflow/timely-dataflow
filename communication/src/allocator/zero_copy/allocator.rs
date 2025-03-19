@@ -2,7 +2,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::{VecDeque, HashMap, hash_map::Entry};
-use crossbeam_channel::{Sender, Receiver};
+use std::sync::mpsc::{Sender, Receiver};
 
 use timely_bytes::arc::Bytes;
 
