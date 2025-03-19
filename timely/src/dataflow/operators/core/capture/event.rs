@@ -116,9 +116,13 @@ pub mod link {
 
     #[test]
     fn avoid_stack_overflow_in_drop() {
+        #[cfg(miri)]
+        let limit = 1_000;
+        #[cfg(not(miri))]
+        let limit = 1_000_000;
         let mut event1 = Rc::new(EventLink::<(),()>::new());
         let _event2 = event1.clone();
-        for _ in 0 .. 1_000_000 {
+        for _ in 0 .. limit {
             event1.push(Event::Progress(vec![]));
         }
     }

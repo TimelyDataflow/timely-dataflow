@@ -24,6 +24,7 @@
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventLink, Replay};
 //!
+//! # #[cfg_attr(miri, ignore)]
 //! timely::execute(timely::Config::thread(), |worker| {
 //!     let handle1 = Rc::new(EventLink::new());
 //!     let handle2 = Some(handle1.clone());

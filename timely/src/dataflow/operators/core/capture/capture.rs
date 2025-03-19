@@ -76,6 +76,7 @@ pub trait Capture<T: Timestamp, C: Container + Data> {
     /// let (send0, recv0) = ::std::sync::mpsc::channel();
     /// let send0 = Arc::new(Mutex::new(send0));
     ///
+    /// # #[cfg_attr(miri, ignore)]
     /// timely::execute(timely::Config::thread(), move |worker| {
     ///
     ///     // this is only to validate the output.
