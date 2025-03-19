@@ -1,7 +1,7 @@
 //! Methods related to reading from and writing to TCP connections
 
 use std::io::{self, Write};
-use crossbeam_channel::{Sender, Receiver};
+use std::sync::mpsc::{Sender, Receiver};
 
 use crate::networking::MessageHeader;
 

@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::time::Duration;
 use std::collections::{HashMap};
-use crossbeam_channel::{Sender, Receiver};
+use std::sync::mpsc::{Sender, Receiver};
 
 use crate::allocator::thread::{ThreadBuilder};
 use crate::allocator::{Allocate, AllocateBuilder, PeerBuilder, Thread};
@@ -80,7 +80,7 @@ impl PeerBuilder for Process {
         let mut counters_send = Vec::with_capacity(peers);
         let mut counters_recv = Vec::with_capacity(peers);
         for _ in 0 .. peers {
-            let (send, recv) = crossbeam_channel::unbounded();
+            let (send, recv) = std::sync::mpsc::channel();
             counters_send.push(send);
             counters_recv.push(recv);
         }
@@ -130,7 +130,7 @@ impl Allocate for Process {
                 let mut pushers = Vec::with_capacity(self.peers);
                 let mut pullers = Vec::with_capacity(self.peers);
                 for buzzer in self.buzzers.iter() {
-                    let (s, r): (Sender<T>, Receiver<T>) = crossbeam_channel::unbounded();
+                    let (s, r): (Sender<T>, Receiver<T>) = std::sync::mpsc::channel();
                     // TODO: the buzzer in the pusher may be redundant, because we need to buzz post-counter.
                     pushers.push((Pusher { target: s }, buzzer.clone()));
                     pullers.push(Puller { source: r, current: None });

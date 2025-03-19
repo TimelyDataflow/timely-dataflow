@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::mpsc::Sender;
 
 use crate::{Push, Pull};
 
@@ -50,8 +51,6 @@ impl<T, P: Push<T>> Push<T> for Pusher<T, P> {
         self.pusher.push(element)
     }
 }
-
-use crossbeam_channel::Sender;
 
 /// The push half of an intra-thread channel.
 pub struct ArcPusher<T, P: Push<T>> {
