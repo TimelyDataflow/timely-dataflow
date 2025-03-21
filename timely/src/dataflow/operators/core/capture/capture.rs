@@ -72,11 +72,13 @@ pub trait Capture<T: Timestamp, C: Container + Data> {
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
     /// use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay, Extract};
     ///
+    /// # #[cfg(miri)] fn main() {}
+    /// # #[cfg(not(miri))]
+    /// # fn main() {
     /// // get send and recv endpoints, wrap send to share
     /// let (send0, recv0) = ::std::sync::mpsc::channel();
     /// let send0 = Arc::new(Mutex::new(send0));
     ///
-    /// # #[cfg_attr(miri, ignore)]
     /// timely::execute(timely::Config::thread(), move |worker| {
     ///
     ///     // this is only to validate the output.
@@ -103,6 +105,7 @@ pub trait Capture<T: Timestamp, C: Container + Data> {
     /// }).unwrap();
     ///
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
+    /// # }
     /// ```
     fn capture_into<P: EventPusher<T, C>+'static>(&self, pusher: P);
 

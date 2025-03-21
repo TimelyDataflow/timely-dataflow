@@ -53,7 +53,7 @@ fn operator_scaling(scale: u64) {
 
 #[test] fn subgraph_scaling_1() { subgraph_scaling(1); }
 #[test] fn subgraph_scaling_10() { subgraph_scaling(10); }
-#[test] #[cfg_attr(miri, ignore)] fn subgraph_scaling_100() { subgraph_scaling(100); }
+#[test] fn subgraph_scaling_100() { subgraph_scaling(100); }
 #[test] #[cfg_attr(miri, ignore)] fn subgraph_scaling_1000() { subgraph_scaling(1000); }
 #[test] #[cfg_attr(miri, ignore)] fn subgraph_scaling_10000() { subgraph_scaling(10000); }
 #[test] #[cfg_attr(miri, ignore)] fn subgraph_scaling_100000() { subgraph_scaling(100000); }

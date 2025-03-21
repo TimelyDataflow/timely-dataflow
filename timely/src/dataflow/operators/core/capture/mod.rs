@@ -24,7 +24,9 @@
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventLink, Replay};
 //!
-//! # #[cfg_attr(miri, ignore)]
+//! # #[cfg(miri)] fn main() {}
+//! # #[cfg(not(miri))]
+//! # fn main() {
 //! timely::execute(timely::Config::thread(), |worker| {
 //!     let handle1 = Rc::new(EventLink::new());
 //!     let handle2 = Some(handle1.clone());
@@ -39,6 +41,7 @@
 //!                .inspect(|x| println!("replayed: {:?}", x));
 //!     })
 //! }).unwrap();
+//! # }
 //! ```
 //!
 //! The types `EventWriter<T, D, W>` and `EventReader<T, D, R>` can be
