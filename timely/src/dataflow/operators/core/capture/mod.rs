@@ -24,6 +24,9 @@
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventLink, Replay};
 //!
+//! # #[cfg(miri)] fn main() {}
+//! # #[cfg(not(miri))]
+//! # fn main() {
 //! timely::execute(timely::Config::thread(), |worker| {
 //!     let handle1 = Rc::new(EventLink::new());
 //!     let handle2 = Some(handle1.clone());
@@ -38,6 +41,7 @@
 //!                .inspect(|x| println!("replayed: {:?}", x));
 //!     })
 //! }).unwrap();
+//! # }
 //! ```
 //!
 //! The types `EventWriter<T, D, W>` and `EventReader<T, D, R>` can be
@@ -52,6 +56,9 @@
 //! use timely::dataflow::operators::{Capture, ToStream, Inspect};
 //! use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay};
 //!
+//! # #[cfg(miri)] fn main() {}
+//! # #[cfg(not(miri))]
+//! # fn main() {
 //! timely::execute(timely::Config::thread(), |worker| {
 //!     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
 //!     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
@@ -71,6 +78,7 @@
 //!             .inspect(|x| println!("replayed: {:?}", x));
 //!     })
 //! }).unwrap();
+//! # }
 //! ```
 
 pub use self::capture::Capture;
