@@ -24,7 +24,6 @@ serde = { version = "1.0", features = ["derive"] }
 timely_bytes = { path = "../bytes", version = "0.13" }
 timely_container = { path = "../container", version = "0.15.0" }
 timely_logging = { path = "../logging", version = "0.13" }
-crossbeam-channel = "0.5"
 
 # Lgalloc only supports linux and macos, don't depend on any other OS.
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
