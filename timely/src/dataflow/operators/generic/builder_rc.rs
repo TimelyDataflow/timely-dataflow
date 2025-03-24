@@ -86,7 +86,7 @@ impl<G: Scope> OperatorBuilder<G> {
         self.frontier.push(MutableAntichain::new());
         self.consumed.push(Rc::clone(input.consumed()));
 
-        let shared_summary = Rc::new(RefCell::new(connection));
+        let shared_summary = Rc::new(RefCell::new(connection.into()));
         self.summaries.push(Rc::clone(&shared_summary));
 
         new_input_handle(input, Rc::clone(&self.internal), shared_summary, self.logging.clone())
@@ -123,7 +123,7 @@ impl<G: Scope> OperatorBuilder<G> {
         self.produced.push(Rc::clone(buffer.inner().produced()));
 
         for (summary, connection) in self.summaries.iter().zip(connection.into_iter()) {
-            summary.borrow_mut().push(connection.clone());
+            summary.borrow_mut().add_port(connection.clone());
         }
 
         (OutputWrapper::new(buffer, internal), stream)

@@ -61,8 +61,63 @@ pub trait Operate<T: Timestamp> : Schedule {
 /// Operator internal connectivity, from inputs to outputs.
 pub type Connectivity<TS> = Vec<PortConnectivity<TS>>;
 /// Internal connectivity from one port to any number of opposing ports.
-pub type PortConnectivity<TS> = Vec<Antichain<TS>>;
+#[derive(serde::Serialize, serde::Deserialize, columnar::Columnar, Debug, Clone, Eq, PartialEq)]
+pub struct PortConnectivity<TS> {
+    list: Vec<Antichain<TS>>,
+}
 
+impl<TS> Default for PortConnectivity<TS> {
+    fn default() -> Self {
+        Self { list: Vec::new() }
+    }
+}
+
+impl<TS> PortConnectivity<TS> {
+    /// Introduces default summaries for `0 .. count` ports.
+    pub fn default_for(count: usize) -> Self {
+        let mut list = Vec::with_capacity(count);
+        for _ in 0 .. count { list.push(Default::default()) }
+        Self { list }
+    }
+    /// Ensures an entry exists at `index` and returns a mutable reference to it.
+    pub fn ensure(&mut self, index: usize) -> &mut Antichain<TS> {
+        while self.next_port() <= index { self.add_port(Antichain::new()); }
+        &mut self.list[index]
+    }
+    /// Inserts an element by reference, ensuring that the index exists.
+    pub fn insert_ref(&mut self, index: usize, element: &TS) -> bool where TS : crate::PartialOrder + Clone {
+        self.ensure(index).insert_ref(element)
+    }
+    /// Introduces a summary for the port `self.next_port()`.
+    pub fn add_port(&mut self, summary: Antichain<TS>) {
+        self.list.push(summary);
+    }
+    /// Borrowing iterator of port identifiers and antichains.
+    pub fn iter_ports(&self) -> impl Iterator<Item = (usize, &Antichain<TS>)> {
+        self.list.iter().enumerate()
+    }
+    /// Owning iterator of port identifiers and antichains.
+    pub fn into_iter_ports(self) -> impl Iterator<Item = (usize, Antichain<TS>)> {
+        self.list.into_iter().enumerate()
+    }
+    /// Announces the next output port identifier.
+    pub fn next_port(&self) -> usize {
+        self.list.len()
+    }
+}
+
+impl<TS> From<Vec<Antichain<TS>>> for PortConnectivity<TS> {
+    fn from(list: Vec<Antichain<TS>>) -> Self {
+        Self { list }
+    }
+}
+
+impl<TS> std::ops::Index<usize> for PortConnectivity<TS> {
+    type Output = Antichain<TS>;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.list[index]
+    }
+}
 
 /// Progress information shared between parent and child.
 #[derive(Debug)]

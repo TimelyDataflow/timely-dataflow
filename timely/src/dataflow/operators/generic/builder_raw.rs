@@ -124,7 +124,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         self.shape.inputs += 1;
         assert_eq!(self.shape.outputs, connection.len());
-        self.summary.push(connection);
+        self.summary.push(connection.into());
 
         receiver
     }
@@ -146,7 +146,7 @@ impl<G: Scope> OperatorBuilder<G> {
         self.shape.outputs += 1;
         assert_eq!(self.shape.inputs, connection.len());
         for (summary, entry) in self.summary.iter_mut().zip(connection.into_iter()) {
-            summary.push(entry);
+            summary.add_port(entry);
         }
 
         (targets, stream)
