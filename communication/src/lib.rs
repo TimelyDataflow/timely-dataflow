@@ -107,6 +107,8 @@ pub use allocator::Generic as Allocator;
 pub use allocator::{Allocate, Exchangeable};
 pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
 
+use std::sync::mpsc::{Sender, Receiver};
+
 use timely_bytes::arc::Bytes;
 
 /// A type that can be serialized and deserialized through `Bytes`.
@@ -169,8 +171,6 @@ impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
 }
 
 
-use crossbeam_channel::{Sender, Receiver};
-
 /// Allocate a matrix of send and receive changes to exchange items.
 ///
 /// This method constructs channels for `sends` threads to create and send
@@ -183,7 +183,7 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
 
     for sender in senders.iter_mut() {
         for recver in recvers.iter_mut() {
-            let (send, recv) = crossbeam_channel::unbounded();
+            let (send, recv) = std::sync::mpsc::channel();
             sender.push(send);
             recver.push(recv);
         }

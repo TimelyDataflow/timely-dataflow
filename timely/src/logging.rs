@@ -22,7 +22,6 @@ use serde::{Deserialize, Serialize};
 use crate::Container;
 use crate::container::CapacityContainerBuilder;
 use crate::dataflow::operators::capture::{Event, EventPusher};
-use crate::progress::operate::Connectivity;
 
 /// Logs events as a timely stream, with progress statements.
 pub struct BatchLogger<P, C> where P: EventPusher<Duration, C> {
@@ -77,7 +76,7 @@ pub struct OperatesSummaryEvent<TS> {
     /// Worker-unique identifier for the operator.
     pub id: usize,
     /// Timestamp action summaries for (input, output) pairs.
-    pub summary: Connectivity<TS>,
+    pub summary: Vec<Vec<crate::progress::Antichain<TS>>>,
 }
 
 #[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
