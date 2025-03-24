@@ -12,7 +12,7 @@ use crate::scheduling::{Schedule, Activations};
 
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
-
+use crate::progress::operate::Connectivity;
 use crate::Container;
 use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::channels::pushers::Tee;
@@ -60,7 +60,7 @@ pub struct OperatorBuilder<G: Scope> {
     global: usize,
     address: Rc<[usize]>,    // path to the operator (ending with index).
     shape: OperatorShape,
-    summary: Vec<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>,
+    summary: Connectivity<<G::Timestamp as Timestamp>::Summary>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {
@@ -188,7 +188,7 @@ where
     logic: L,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     activations: Rc<RefCell<Activations>>,
-    summary: Vec<Vec<Antichain<T::Summary>>>,
+    summary: Connectivity<T::Summary>,
 }
 
 impl<T, L> Schedule for OperatorCore<T, L>
@@ -213,7 +213,7 @@ where
     fn outputs(&self) -> usize { self.shape.outputs }
 
     // announce internal topology as fully connected, and hold all default capabilities.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+    fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>) {
 
         // Request the operator to be scheduled at least once.
         self.activations.borrow_mut().activate(&self.address[..]);

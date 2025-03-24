@@ -27,9 +27,9 @@ use std::cell::RefCell;
 use std::fmt::{self, Debug};
 
 use crate::order::PartialOrder;
-use crate::progress::Antichain;
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
+use crate::progress::operate::PortConnectivity;
 use crate::scheduling::Activations;
 use crate::dataflow::channels::pullers::counter::ConsumedGuard;
 
@@ -238,7 +238,7 @@ pub struct InputCapability<T: Timestamp> {
     /// Output capability buffers, for use in minting capabilities.
     internal: CapabilityUpdates<T>,
     /// Timestamp summaries for each output.
-    summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>,
+    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
     /// A drop guard that updates the consumed capability this InputCapability refers to on drop
     consumed_guard: ConsumedGuard<T>,
 }
@@ -257,7 +257,7 @@ impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
 impl<T: Timestamp> InputCapability<T> {
     /// Creates a new capability reference at `time` while incrementing (and keeping a reference to)
     /// the provided [`ChangeBatch`].
-    pub(crate) fn new(internal: CapabilityUpdates<T>, summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, guard: ConsumedGuard<T>) -> Self {
+    pub(crate) fn new(internal: CapabilityUpdates<T>, summaries: Rc<RefCell<PortConnectivity<T::Summary>>>, guard: ConsumedGuard<T>) -> Self {
         InputCapability {
             internal,
             summaries,

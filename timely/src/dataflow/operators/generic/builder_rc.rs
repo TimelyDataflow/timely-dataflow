@@ -20,7 +20,7 @@ use crate::dataflow::operators::capability::Capability;
 use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_handle, OutputWrapper};
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 use crate::dataflow::operators::generic::builder_raw::OperatorShape;
-
+use crate::progress::operate::PortConnectivity;
 use crate::logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
@@ -33,7 +33,7 @@ pub struct OperatorBuilder<G: Scope> {
     consumed: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>>>,
     /// For each input, a shared list of summaries to each output.
-    summaries: Vec<Rc<RefCell<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>>>,
+    summaries: Vec<Rc<RefCell<PortConnectivity<<G::Timestamp as Timestamp>::Summary>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
     logging: Option<Logger>,
 }

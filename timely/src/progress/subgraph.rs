@@ -19,7 +19,7 @@ use crate::scheduling::activate::Activations;
 use crate::progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress};
 use crate::progress::{Location, Port, Source, Target};
-
+use crate::progress::operate::Connectivity;
 use crate::progress::ChangeBatch;
 use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
@@ -270,7 +270,7 @@ where
     progcaster: Progcaster<TInner>,
 
     shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
-    scope_summary: Vec<Vec<Antichain<TInner::Summary>>>,
+    scope_summary: Connectivity<TInner::Summary>,
 
     progress_mode: ProgressMode,
 }
@@ -546,7 +546,7 @@ where
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
+    fn get_internal_summary(&mut self) -> (Connectivity<TOuter::Summary>, Rc<RefCell<SharedProgress<TOuter>>>) {
 
         // double-check that child 0 (the outside world) is correctly shaped.
         assert_eq!(self.children[0].outputs, self.inputs());
@@ -614,7 +614,7 @@ struct PerOperatorState<T: Timestamp> {
 
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    internal_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
+    internal_summary: Connectivity<T::Summary>,   // cached result from get_internal_summary.
 
     logging: Option<Logger>,
 }

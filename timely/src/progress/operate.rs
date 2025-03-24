@@ -44,7 +44,7 @@ pub trait Operate<T: Timestamp> : Schedule {
     ///
     /// The default behavior is to indicate that timestamps on any input can emerge unchanged on
     /// any output, and no initial capabilities are held.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>);
+    fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>);
 
     /// Signals that external frontiers have been set.
     ///
@@ -57,6 +57,12 @@ pub trait Operate<T: Timestamp> : Schedule {
     /// Indicates of whether the operator requires `push_external_progress` information or not.
     fn notify_me(&self) -> bool { true }
 }
+
+/// Operator internal connectivity, from inputs to outputs.
+pub type Connectivity<TS> = Vec<PortConnectivity<TS>>;
+/// Internal connectivity from one port to any number of opposing ports.
+pub type PortConnectivity<TS> = Vec<Antichain<TS>>;
+
 
 /// Progress information shared between parent and child.
 #[derive(Debug)]

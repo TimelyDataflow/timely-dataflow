@@ -79,7 +79,7 @@ use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
 use crate::progress::ChangeBatch;
 use crate::progress::{Location, Port};
-
+use crate::progress::operate::{Connectivity, PortConnectivity};
 use crate::progress::frontier::{Antichain, MutableAntichain};
 use crate::progress::timestamp::PathSummary;
 
@@ -132,7 +132,7 @@ pub struct Builder<T: Timestamp> {
     /// Indexed by operator index, then input port, then output port. This is the
     /// same format returned by `get_internal_summary`, as if we simply appended
     /// all of the summaries for the hosted nodes.
-    pub nodes: Vec<Vec<Vec<Antichain<T::Summary>>>>,
+    pub nodes: Vec<Connectivity<T::Summary>>,
     /// Direct connections from sources to targets.
     ///
     /// Edges do not affect timestamps, so we only need to know the connectivity.
@@ -156,7 +156,7 @@ impl<T: Timestamp> Builder<T> {
     /// Add links internal to operators.
     ///
     /// This method overwrites any existing summary, instead of anything more sophisticated.
-    pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, summary: Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn add_node(&mut self, index: usize, inputs: usize, outputs: usize, summary: Connectivity<T::Summary>) {
 
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
@@ -195,7 +195,7 @@ impl<T: Timestamp> Builder<T> {
     /// default summaries (a serious liveness issue).
     ///
     /// The optional logger information is baked into the resulting tracker.
-    pub fn build(self, logger: Option<logging::TrackerLogger<T>>) -> (Tracker<T>, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn build(self, logger: Option<logging::TrackerLogger<T>>) -> (Tracker<T>, Connectivity<T::Summary>) {
 
         if !self.is_acyclic() {
             println!("Cycle detected without timestamp increment");
@@ -361,7 +361,7 @@ pub struct Tracker<T:Timestamp> {
     /// Indexed by operator index, then input port, then output port. This is the
     /// same format returned by `get_internal_summary`, as if we simply appended
     /// all of the summaries for the hosted nodes.
-    nodes: Vec<Vec<Vec<Antichain<T::Summary>>>>,
+    nodes: Vec<Connectivity<T::Summary>>,
     /// Direct connections from sources to targets.
     ///
     /// Edges do not affect timestamps, so we only need to know the connectivity.
@@ -433,7 +433,7 @@ pub struct PortInformation<T: Timestamp> {
     /// Current implications of active pointstamps across the dataflow.
     pub implications: MutableAntichain<T>,
     /// Path summaries to each of the scope outputs.
-    pub output_summaries: Vec<Antichain<T::Summary>>,
+    pub output_summaries: PortConnectivity<T::Summary>,
 }
 
 impl<T: Timestamp> PortInformation<T> {
@@ -503,7 +503,7 @@ impl<T:Timestamp> Tracker<T> {
     /// output port.
     ///
     /// If the optional logger is provided, it will be used to log various tracker events.
-    pub fn allocate_from(builder: Builder<T>, logger: Option<logging::TrackerLogger<T>>) -> (Self, Vec<Vec<Antichain<T::Summary>>>) {
+    pub fn allocate_from(builder: Builder<T>, logger: Option<logging::TrackerLogger<T>>) -> (Self, Connectivity<T::Summary>) {
 
         // Allocate buffer space for each input and input port.
         let mut per_operator =
@@ -732,9 +732,9 @@ impl<T:Timestamp> Tracker<T> {
 /// Graph locations may be missing from the output, in which case they have no
 /// paths to scope outputs.
 fn summarize_outputs<T: Timestamp>(
-    nodes: &[Vec<Vec<Antichain<T::Summary>>>],
+    nodes: &[Connectivity<T::Summary>],
     edges: &[Vec<Vec<Target>>],
-    ) -> HashMap<Location, Vec<Antichain<T::Summary>>>
+    ) -> HashMap<Location, PortConnectivity<T::Summary>>
 {
     // A reverse edge map, to allow us to walk back up the dataflow graph.
     let mut reverse = HashMap::new();
@@ -749,7 +749,7 @@ fn summarize_outputs<T: Timestamp>(
         }
     }
 
-    let mut results: HashMap<Location, Vec<Antichain<T::Summary>>> = HashMap::new();
+    let mut results: HashMap<Location, PortConnectivity<T::Summary>> = HashMap::new();
     let mut worklist = VecDeque::<(Location, usize, T::Summary)>::new();
 
     let outputs =
