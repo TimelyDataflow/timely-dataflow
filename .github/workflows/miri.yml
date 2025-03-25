@@ -13,7 +13,6 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: nightly
-      - name: Install miri
-        run: rustup component add miri
+          components: miri
       - name: Cargo test
         run: cargo miri test
