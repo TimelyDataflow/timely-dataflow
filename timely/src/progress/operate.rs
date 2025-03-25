@@ -63,51 +63,47 @@ pub type Connectivity<TS> = Vec<PortConnectivity<TS>>;
 /// Internal connectivity from one port to any number of opposing ports.
 #[derive(serde::Serialize, serde::Deserialize, columnar::Columnar, Debug, Clone, Eq, PartialEq)]
 pub struct PortConnectivity<TS> {
-    list: Vec<Antichain<TS>>,
+    tree: std::collections::BTreeMap<usize, Antichain<TS>>,
 }
 
 impl<TS> Default for PortConnectivity<TS> {
     fn default() -> Self {
-        Self { list: Vec::new() }
+        Self { tree: std::collections::BTreeMap::new() }
     }
 }
 
 impl<TS> PortConnectivity<TS> {
-    /// Ensures an entry exists at `index` and returns a mutable reference to it.
-    fn ensure(&mut self, index: usize) -> &mut Antichain<TS> {
-        while self.list.len() <= index { self.add_port(self.list.len(), Antichain::new()); }
-        &mut self.list[index]
-    }
     /// Inserts an element by reference, ensuring that the index exists.
     pub fn insert(&mut self, index: usize, element: TS) -> bool where TS : crate::PartialOrder + Clone {
-        self.ensure(index).insert(element)
+        self.tree.entry(index).or_default().insert(element)
     }
     /// Inserts an element by reference, ensuring that the index exists.
     pub fn insert_ref(&mut self, index: usize, element: &TS) -> bool where TS : crate::PartialOrder + Clone {
-        self.ensure(index).insert_ref(element)
+        self.tree.entry(index).or_default().insert_ref(element)
     }
     /// Introduces a summary for `port`. Panics if a summary already exists.
     pub fn add_port(&mut self, port: usize, summary: Antichain<TS>) {
-        assert_eq!(self.list.len(), port);
-        self.list.push(summary);
+        if !summary.is_empty() {
+            let prior = self.tree.insert(port, summary);
+            assert!(prior.is_none());
+        }
+        else {
+            assert!(self.tree.remove(&port).is_none());
+        }
     }
     /// Borrowing iterator of port identifiers and antichains.
     pub fn iter_ports(&self) -> impl Iterator<Item = (usize, &Antichain<TS>)> {
-        self.list.iter().enumerate()
-    }
-    /// Announces the largest port identifier, largely for debug asserts.
-    pub fn max_port(&self) -> usize {
-        self.list.len() - 1
+        self.tree.iter().map(|(o,p)| (*o, p))
     }
     /// Returns the associated path summary, if it exists.
     pub fn get(&self, index: usize) -> Option<&Antichain<TS>> {
-        self.list.get(index)
+        self.tree.get(&index)
     }
 }
 
 impl<TS> From<Vec<Antichain<TS>>> for PortConnectivity<TS> {
     fn from(list: Vec<Antichain<TS>>) -> Self {
-        Self { list }
+        Self { tree: list.into_iter().enumerate().filter(|(_,p)| !p.is_empty()).collect() }
     }
 }
 
