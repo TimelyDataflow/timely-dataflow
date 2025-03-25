@@ -138,15 +138,15 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output_connection<C: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (Tee<G::Timestamp, C>, StreamCore<G, C>) {
-
+        let new_output = self.shape.outputs;
+        self.shape.outputs += 1;
         let (targets, registrar) = Tee::<G::Timestamp,C>::new();
-        let source = Source::new(self.index, self.shape.outputs);
+        let source = Source::new(self.index, new_output);
         let stream = StreamCore::new(source, registrar, self.scope.clone());
 
-        self.shape.outputs += 1;
         assert_eq!(self.shape.inputs, connection.len());
         for (summary, entry) in self.summary.iter_mut().zip(connection.into_iter()) {
-            summary.add_port(entry);
+            summary.add_port(new_output, entry);
         }
 
         (targets, stream)

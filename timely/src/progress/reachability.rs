@@ -160,7 +160,7 @@ impl<T: Timestamp> Builder<T> {
 
         // Assert that all summaries exist.
         debug_assert_eq!(inputs, summary.len());
-        for x in summary.iter() { debug_assert_eq!(outputs, x.next_port()); }
+        debug_assert!(summary.iter().all(|os| os.iter_ports().all(|(o,_)| o < outputs)));
 
         while self.nodes.len() <= index {
             self.nodes.push(Vec::new());
@@ -779,8 +779,6 @@ fn summarize_outputs<T: Timestamp>(
                     // Determine the current path summaries from the input port.
                     let location = Location { node: location.node, port: Port::Target(input_port) };
                     let antichains = results.entry(location).or_default();
-                    // TODO: This is redundant with `insert_ref` below.
-                    antichains.ensure(output);
 
                     // Combine each operator-internal summary to the output with `summary`.
                     for operator_summary in summaries[output_port].elements().iter() {
@@ -801,8 +799,6 @@ fn summarize_outputs<T: Timestamp>(
                 // Each target should have (at most) one source.
                 if let Some(&source) = reverse.get(&location) {
                     let antichains = results.entry(source).or_default();
-                    // TODO: This is redundant with `insert_ref` below.
-                    antichains.ensure(output);
 
                     if antichains.insert_ref(output, &summary) {
                         worklist.push_back((source, output, summary.clone()));

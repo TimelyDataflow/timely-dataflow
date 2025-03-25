@@ -113,7 +113,7 @@ impl<G: Scope> OperatorBuilder<G> {
         OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
         StreamCore<G, CB::Container>
     ) {
-
+        let new_output = self.shape().outputs();
         let (tee, stream) = self.builder.new_output_connection(connection.clone());
 
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
@@ -123,7 +123,7 @@ impl<G: Scope> OperatorBuilder<G> {
         self.produced.push(Rc::clone(buffer.inner().produced()));
 
         for (summary, connection) in self.summaries.iter().zip(connection.into_iter()) {
-            summary.borrow_mut().add_port(connection.clone());
+            summary.borrow_mut().add_port(new_output, connection.clone());
         }
 
         (OutputWrapper::new(buffer, internal), stream)

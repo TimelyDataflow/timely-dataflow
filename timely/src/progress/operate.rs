@@ -80,29 +80,30 @@ impl<TS> PortConnectivity<TS> {
         Self { list }
     }
     /// Ensures an entry exists at `index` and returns a mutable reference to it.
-    pub fn ensure(&mut self, index: usize) -> &mut Antichain<TS> {
-        while self.next_port() <= index { self.add_port(Antichain::new()); }
+    fn ensure(&mut self, index: usize) -> &mut Antichain<TS> {
+        while self.list.len() <= index { self.add_port(self.list.len(), Antichain::new()); }
         &mut self.list[index]
+    }
+    /// Inserts an element by reference, ensuring that the index exists.
+    pub fn insert(&mut self, index: usize, element: TS) -> bool where TS : crate::PartialOrder + Clone {
+        self.ensure(index).insert(element)
     }
     /// Inserts an element by reference, ensuring that the index exists.
     pub fn insert_ref(&mut self, index: usize, element: &TS) -> bool where TS : crate::PartialOrder + Clone {
         self.ensure(index).insert_ref(element)
     }
-    /// Introduces a summary for the port `self.next_port()`.
-    pub fn add_port(&mut self, summary: Antichain<TS>) {
+    /// Introduces a summary for `port`. Panics if a summary already exists.
+    pub fn add_port(&mut self, port: usize, summary: Antichain<TS>) {
+        assert_eq!(self.list.len(), port);
         self.list.push(summary);
     }
     /// Borrowing iterator of port identifiers and antichains.
     pub fn iter_ports(&self) -> impl Iterator<Item = (usize, &Antichain<TS>)> {
         self.list.iter().enumerate()
     }
-    /// Owning iterator of port identifiers and antichains.
-    pub fn into_iter_ports(self) -> impl Iterator<Item = (usize, Antichain<TS>)> {
-        self.list.into_iter().enumerate()
-    }
-    /// Announces the next output port identifier.
-    pub fn next_port(&self) -> usize {
-        self.list.len()
+    /// Announces the largest port identifier, largely for debug asserts.
+    pub fn max_port(&self) -> usize {
+        self.list.len() - 1
     }
 }
 

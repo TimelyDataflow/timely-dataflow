@@ -558,9 +558,9 @@ where
         let mut internal_summary = vec![PortConnectivity::default_for(self.outputs); self.inputs()];
         for (input_idx, input) in self.scope_summary.iter().enumerate() {
             for (output_idx, output) in input.iter_ports() {
-                let antichain = internal_summary[input_idx].ensure(output_idx);
-                antichain.reserve(output.elements().len());
-                antichain.extend(output.elements().iter().cloned().map(TInner::summarize));
+                for outer in output.elements().iter().cloned().map(TInner::summarize) {
+                    internal_summary[input_idx].insert(output_idx, outer);
+                }
             }
         }
 
@@ -570,8 +570,8 @@ where
             "the internal summary should have as many elements as there are inputs",
         );
         debug_assert!(
-            internal_summary.iter().all(|summary| summary.next_port() == self.outputs()),
-            "each element of the internal summary should have as many elements as there are outputs",
+            internal_summary.iter().all(|os| os.iter_ports().all(|(o,_)| o < self.outputs())),
+            "each element of the internal summary should only reference valid outputs",
         );
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
@@ -671,8 +671,8 @@ impl<T: Timestamp> PerOperatorState<T> {
             inputs,
         );
         assert!(
-            !internal_summary.iter().any(|x| x.next_port() != outputs),
-            "operator summary had too few outputs",
+            internal_summary.iter().all(|os| os.iter_ports().all(|(o,_)| o < outputs)),
+            "operator summary references invalid output port",
         );
 
         PerOperatorState {
