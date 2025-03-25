@@ -26,10 +26,20 @@ jobs:
           components: clippy
       - name: Cargo test
         run: cargo test --workspace --all-targets
+
+  # Check for clippy warnings
+  clippy:
+    name: Cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: clippy
       - name: Cargo clippy
         run: cargo clippy --workspace --all-targets
         env:
-          RUSTFLAGS: ""
+          RUSTFLAGS: "" # Don't make test fail on clippy
 
   # Check mdbook files for errors
   mdbook:
