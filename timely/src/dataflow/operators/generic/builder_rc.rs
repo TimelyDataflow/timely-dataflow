@@ -64,7 +64,7 @@ impl<G: Scope> OperatorBuilder<G> {
     where
         P: ParallelizationContract<G::Timestamp, C> {
 
-        let connection = (0..self.builder.shape().outputs()).map(|_| Antichain::from_elem(Default::default())).collect();
+        let connection = (0..self.builder.shape().outputs()).map(|o| (o, Antichain::from_elem(Default::default())));
         self.new_input_connection(stream, pact, connection)
     }
 
@@ -76,17 +76,18 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_input_connection<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> InputHandleCore<G::Timestamp, C, P::Puller>
-        where
-            P: ParallelizationContract<G::Timestamp, C> {
-
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: I) -> InputHandleCore<G::Timestamp, C, P::Puller>
+    where
+        P: ParallelizationContract<G::Timestamp, C>,
+        I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)> + Clone,
+    {
         let puller = self.builder.new_input_connection(stream, pact, connection.clone());
 
         let input = PullCounter::new(puller);
         self.frontier.push(MutableAntichain::new());
         self.consumed.push(Rc::clone(input.consumed()));
 
-        let shared_summary = Rc::new(RefCell::new(connection.into()));
+        let shared_summary = Rc::new(RefCell::new(connection.into_iter().collect()));
         self.summaries.push(Rc::clone(&shared_summary));
 
         new_input_handle(input, Rc::clone(&self.internal), shared_summary, self.logging.clone())
@@ -94,7 +95,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output<CB: ContainerBuilder>(&mut self) -> (OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>, StreamCore<G, CB::Container>) {
-        let connection = (0..self.builder.shape().inputs()).map(|_| Antichain::from_elem(Default::default())).collect();
+        let connection = (0..self.builder.shape().inputs()).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
 
@@ -106,13 +107,13 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_output_connection<CB: ContainerBuilder>(
-        &mut self,
-        connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>
-    ) -> (
+    pub fn new_output_connection<CB: ContainerBuilder, I>(&mut self, connection: I) -> (
         OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
         StreamCore<G, CB::Container>
-    ) {
+    )
+    where
+        I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)> + Clone,
+    {
         let new_output = self.shape().outputs();
         let (tee, stream) = self.builder.new_output_connection(connection.clone());
 
@@ -122,8 +123,8 @@ impl<G: Scope> OperatorBuilder<G> {
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
         self.produced.push(Rc::clone(buffer.inner().produced()));
 
-        for (summary, connection) in self.summaries.iter().zip(connection.into_iter()) {
-            summary.borrow_mut().add_port(new_output, connection.clone());
+        for (input, entry) in connection {
+            self.summaries[input].borrow_mut().add_port(new_output, entry);
         }
 
         (OutputWrapper::new(buffer, internal), stream)

@@ -17,9 +17,9 @@
 //! let mut builder = Builder::<usize>::new();
 //!
 //! // Each node with one input connected to one output.
-//! builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)].into()]);
-//! builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)].into()]);
-//! builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)].into()]);
+//! builder.add_node(0, 1, 1, vec![[(0, Antichain::from_elem(0))].into_iter().collect()]);
+//! builder.add_node(1, 1, 1, vec![[(0, Antichain::from_elem(0))].into_iter().collect()]);
+//! builder.add_node(2, 1, 1, vec![[(0, Antichain::from_elem(1))].into_iter().collect()]);
 //!
 //! // Connect nodes in sequence, looping around to the first from the last.
 //! builder.add_edge(Source::new(0, 0), Target::new(1, 0));
@@ -113,9 +113,9 @@ use crate::progress::timestamp::PathSummary;
 /// let mut builder = Builder::<usize>::new();
 ///
 /// // Each node with one input connected to one output.
-/// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)].into()]);
-/// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)].into()]);
-/// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(1)].into()]);
+/// builder.add_node(0, 1, 1, vec![[(0, Antichain::from_elem(0))].into_iter().collect()]);
+/// builder.add_node(1, 1, 1, vec![[(0, Antichain::from_elem(0))].into_iter().collect()]);
+/// builder.add_node(2, 1, 1, vec![[(0, Antichain::from_elem(1))].into_iter().collect()]);
 ///
 /// // Connect nodes in sequence, looping around to the first from the last.
 /// builder.add_edge(Source::new(0, 0), Target::new(1, 0));
@@ -224,9 +224,9 @@ impl<T: Timestamp> Builder<T> {
     /// let mut builder = Builder::<usize>::new();
     ///
     /// // Each node with one input connected to one output.
-    /// builder.add_node(0, 1, 1, vec![vec![Antichain::from_elem(0)].into()]);
-    /// builder.add_node(1, 1, 1, vec![vec![Antichain::from_elem(0)].into()]);
-    /// builder.add_node(2, 1, 1, vec![vec![Antichain::from_elem(0)].into()]);
+    /// builder.add_node(0, 1, 1, vec![[(0, Antichain::from_elem(0))].into_iter().collect()]);
+    /// builder.add_node(1, 1, 1, vec![[(0, Antichain::from_elem(0))].into_iter().collect()]);
+    /// builder.add_node(2, 1, 1, vec![[(0, Antichain::from_elem(0))].into_iter().collect()]);
     ///
     /// // Connect nodes in sequence, looping around to the first from the last.
     /// builder.add_edge(Source::new(0, 0), Target::new(1, 0));
@@ -253,8 +253,8 @@ impl<T: Timestamp> Builder<T> {
     ///
     /// // Two inputs and outputs, only one of which advances.
     /// builder.add_node(0, 2, 2, vec![
-    ///     vec![Antichain::from_elem(0),Antichain::new(),].into(),
-    ///     vec![Antichain::new(),Antichain::from_elem(1),].into(),
+    ///     [(0,Antichain::from_elem(0)),(1,Antichain::new())].into_iter().collect(),
+    ///     [(0,Antichain::new()),(1,Antichain::from_elem(1))].into_iter().collect(),
     /// ]);
     ///
     /// // Connect each output to the opposite input.

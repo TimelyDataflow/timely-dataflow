@@ -113,7 +113,7 @@ impl<G: Scope, C: Container + Data> ConnectLoop<G, C> for StreamCore<G, C> {
         let summary = handle.summary;
         let mut output = handle.output;
 
-        let mut input = builder.new_input_connection(self, Pipeline, vec![Antichain::from_elem(summary.clone())]);
+        let mut input = builder.new_input_connection(self, Pipeline, [(0, Antichain::from_elem(summary.clone()))]);
 
         builder.build(move |_capability| move |_frontier| {
             let mut output = output.activate();

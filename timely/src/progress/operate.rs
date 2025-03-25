@@ -101,9 +101,9 @@ impl<TS> PortConnectivity<TS> {
     }
 }
 
-impl<TS> From<Vec<Antichain<TS>>> for PortConnectivity<TS> {
-    fn from(list: Vec<Antichain<TS>>) -> Self {
-        Self { tree: list.into_iter().enumerate().filter(|(_,p)| !p.is_empty()).collect() }
+impl<TS> FromIterator<(usize, Antichain<TS>)> for PortConnectivity<TS> {
+    fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = (usize, Antichain<TS>)> {
+        Self { tree: iter.into_iter().filter(|(_,p)| !p.is_empty()).collect() }
     }
 }
 
