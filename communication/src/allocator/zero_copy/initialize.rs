@@ -87,7 +87,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static, P: PeerBuilder>(
         let remote_recv = promises_iter.next().unwrap();
 
         {
-            let log_sender = log_sender.clone();
+            let log_sender = Arc::clone(&log_sender);
             let stream = stream.try_clone()?;
             let join_guard =
             ::std::thread::Builder::new()
@@ -110,7 +110,7 @@ pub fn initialize_networking_from_sockets<S: Stream + 'static, P: PeerBuilder>(
 
         {
             // let remote_sends = remote_sends.clone();
-            let log_sender = log_sender.clone();
+            let log_sender = Arc::clone(&log_sender);
             let stream = stream.try_clone()?;
             let refill = refill.clone();
             let join_guard =

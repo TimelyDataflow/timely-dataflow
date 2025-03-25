@@ -45,7 +45,7 @@ impl<T, C: Container> Tee<T, C> {
         let shared = Rc::new(RefCell::new(Vec::new()));
         let port = Tee {
             buffer: Default::default(),
-            shared: shared.clone(),
+            shared: Rc::clone(&shared),
         };
 
         (port, TeeHelper { shared })
@@ -56,7 +56,7 @@ impl<T, C: Container> Clone for Tee<T, C> {
     fn clone(&self) -> Self {
         Self {
             buffer: Default::default(),
-            shared: self.shared.clone(),
+            shared: Rc::clone(&self.shared),
         }
     }
 }
@@ -94,7 +94,7 @@ impl<T, C> TeeHelper<T, C> {
 impl<T, C> Clone for TeeHelper<T, C> {
     fn clone(&self) -> Self {
         TeeHelper {
-            shared: self.shared.clone(),
+            shared: Rc::clone(&self.shared),
         }
     }
 }

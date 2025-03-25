@@ -96,7 +96,7 @@ pub struct Logger<CB: ContainerBuilder> {
 impl<CB: ContainerBuilder> Clone for Logger<CB> {
     fn clone(&self) -> Self {
         Self {
-            inner: self.inner.clone()
+            inner: Rc::clone(&self.inner)
         }
     }
 }
@@ -241,7 +241,7 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Containe
     #[inline]
     fn push(action: &mut A, time: &Duration, container: &mut CB::Container) {
         let mut c = Some(std::mem::take(container));
-        (action)(time, &mut c);
+        action(time, &mut c);
         if let Some(c) = c {
             *container = c;
         }
@@ -252,7 +252,7 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Containe
     {
         let elapsed = self.time.elapsed() + self.offset;
         for event in events {
-            self.builder.push_into((elapsed, event.into()));
+            self.builder.push_into((elapsed, event));
             while let Some(container) = self.builder.extract() {
                 Self::push(&mut self.action, &elapsed, container);
             }

@@ -169,7 +169,7 @@ impl<T: Timestamp> Handle<T> {
 impl<T: Timestamp> Clone for Handle<T> {
     fn clone(&self) -> Self {
         Handle {
-            frontier: self.frontier.clone()
+            frontier: Rc::clone(&self.frontier)
         }
     }
 }

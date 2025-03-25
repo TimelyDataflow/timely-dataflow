@@ -5,6 +5,10 @@ on:
       - master
   pull_request:
 
+# Make sure CI fails on all warnings, including Clippy lints
+env:
+  RUSTFLAGS: "-Dwarnings"
+
 jobs:
   test:
     strategy:
@@ -25,6 +29,8 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
       - name: Cargo test
         run: cargo test --workspace --all-targets
+      - name: Cargo clippy
+        run: cargo clippy --workspace --all-targets
 
   # Check mdbook files for errors
   mdbook:

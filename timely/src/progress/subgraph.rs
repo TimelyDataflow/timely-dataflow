@@ -188,7 +188,7 @@ where
         let progress_logging = worker.log_register().get::<TimelyProgressEventBuilder<TInner>>(&format!("timely/progress/{type_name}"));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
-        let progcaster = Progcaster::new(worker, self.path.clone(), self.identifier, self.logging.clone(), progress_logging);
+        let progcaster = Progcaster::new(worker, Rc::clone(&self.path), self.identifier, self.logging.clone(), progress_logging);
 
         let mut incomplete = vec![true; self.children.len()];
         incomplete[0] = false;
@@ -584,7 +584,7 @@ where
         self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
 
         // Return summaries and shared progress information.
-        (internal_summary, self.shared_progress.clone())
+        (internal_summary, Rc::clone(&self.shared_progress))
     }
 
     fn set_external_summary(&mut self) {
@@ -744,7 +744,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
     /// Extracts shared progress information and converts to pointstamp changes.
-    fn extract_progress(&mut self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>) {
+    fn extract_progress(&self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 
@@ -776,7 +776,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     /// The validity of shared progress information depends on both the external frontiers and the
     /// internal capabilities, as events can occur that cannot be explained locally otherwise.
     #[allow(dead_code)]
-    fn validate_progress(&mut self, child_state: &reachability::PerOperator<T>) {
+    fn validate_progress(&self, child_state: &reachability::PerOperator<T>) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 

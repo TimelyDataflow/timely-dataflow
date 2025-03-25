@@ -31,7 +31,7 @@ fn main() {
     // initializes and runs a timely dataflow.
     timely::execute(config, |worker| {
         let mut input = <InputHandleCore<_, CapacityContainerBuilder<Container>>>::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
         worker.dataflow::<usize, _, _>(|scope| {
@@ -95,7 +95,7 @@ fn main() {
                 )
                 .container::<Container>()
                 .inspect(|x| println!("seen: {:?}", x))
-                .probe_with(&mut probe);
+                .probe_with(&probe);
         });
 
         // introduce data and watch!
@@ -232,7 +232,7 @@ mod container {
             // If the alignment is borked, we can relocate. IF the size is borked,
             // not sure what we do in that case.
             assert!(bytes.len() % 8 == 0);
-            if let Ok(_) = bytemuck::try_cast_slice::<_, u64>(&bytes) {
+            if bytemuck::try_cast_slice::<_, u64>(&bytes).is_ok() {
                 Self::Bytes(bytes)
             }
             else {

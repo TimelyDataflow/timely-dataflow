@@ -118,7 +118,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, self.address.clone(), logging);
+        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, Rc::clone(&self.address), logging);
         let target = Target::new(self.index, self.shape.inputs);
         stream.connect_to(target, sender, channel_id);
 
@@ -174,7 +174,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Information describing the operator.
     pub fn operator_info(&self) -> OperatorInfo {
-        OperatorInfo::new(self.index, self.global, self.address.clone())
+        OperatorInfo::new(self.index, self.global, Rc::clone(&self.address))
     }
 }
 
@@ -225,7 +225,7 @@ where
             .iter_mut()
             .for_each(|output| output.update(T::minimum(), self.shape.peers as i64));
 
-        (self.summary.clone(), self.shared_progress.clone())
+        (self.summary.clone(), Rc::clone(&self.shared_progress))
     }
 
     // initialize self.frontier antichains as indicated by hosting scope.

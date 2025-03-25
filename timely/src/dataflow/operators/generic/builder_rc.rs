@@ -84,12 +84,12 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let input = PullCounter::new(puller);
         self.frontier.push(MutableAntichain::new());
-        self.consumed.push(input.consumed().clone());
+        self.consumed.push(Rc::clone(input.consumed()));
 
         let shared_summary = Rc::new(RefCell::new(connection));
-        self.summaries.push(shared_summary.clone());
+        self.summaries.push(Rc::clone(&shared_summary));
 
-        new_input_handle(input, self.internal.clone(), shared_summary, self.logging.clone())
+        new_input_handle(input, Rc::clone(&self.internal), shared_summary, self.logging.clone())
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
@@ -117,10 +117,10 @@ impl<G: Scope> OperatorBuilder<G> {
         let (tee, stream) = self.builder.new_output_connection(connection.clone());
 
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
-        self.internal.borrow_mut().push(internal.clone());
+        self.internal.borrow_mut().push(Rc::clone(&internal));
 
         let mut buffer = PushBuffer::new(PushCounter::new(tee));
-        self.produced.push(buffer.inner().produced().clone());
+        self.produced.push(Rc::clone(buffer.inner().produced()));
 
         for (summary, connection) in self.summaries.iter().zip(connection.into_iter()) {
             summary.borrow_mut().push(connection.clone());
@@ -155,7 +155,7 @@ impl<G: Scope> OperatorBuilder<G> {
         // create capabilities, discard references to their creation.
         let mut capabilities = Vec::with_capacity(self.internal.borrow().len());
         for batch in self.internal.borrow().iter() {
-            capabilities.push(Capability::new(G::Timestamp::minimum(), batch.clone()));
+            capabilities.push(Capability::new(G::Timestamp::minimum(), Rc::clone(batch)));
             // Discard evidence of creation, as we are assumed to start with one.
             batch.borrow_mut().clear();
         }

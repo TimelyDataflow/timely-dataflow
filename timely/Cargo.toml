@@ -14,6 +14,9 @@ repository = "https://github.com/TimelyDataflow/timely-dataflow.git"
 keywords = ["timely", "dataflow"]
 license = "MIT"
 
+[lints]
+workspace = true
+
 [features]
 default = ["getopts"]
 getopts = ["dep:getopts", "timely_communication/getopts"]

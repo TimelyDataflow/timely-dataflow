@@ -67,7 +67,7 @@ where
             let data = &mut message.data;
 
             // if the time isn't right, flush everything.
-            if self.current.as_ref().map_or(false, |x| x != time) {
+            if self.current.as_ref().is_some_and(|x| x != time) {
                 for index in 0..self.pushers.len() {
                     self.flush(index);
                 }

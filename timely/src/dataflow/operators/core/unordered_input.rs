@@ -85,15 +85,15 @@ impl<G: Scope> UnorderedInput<G> for G {
         let (output, registrar) = Tee::<G::Timestamp, CB::Container>::new();
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         // let produced = Rc::new(RefCell::new(ChangeBatch::new()));
-        let cap = Capability::new(G::Timestamp::minimum(), internal.clone());
+        let cap = Capability::new(G::Timestamp::minimum(), Rc::clone(&internal));
         let counter = Counter::new(output);
-        let produced = counter.produced().clone();
+        let produced = Rc::clone(counter.produced());
         let peers = self.peers();
 
         let index = self.allocate_operator_index();
         let address = self.addr_for_child(index);
 
-        let cap = ActivateCapability::new(cap, address.clone(), self.activations());
+        let cap = ActivateCapability::new(cap, Rc::clone(&address), self.activations());
 
         let helper = UnorderedHandle::new(counter);
 
@@ -139,7 +139,7 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
         for (time, count) in borrow.drain() {
             self.shared_progress.borrow_mut().internals[0].update(time, count * (self.peers as i64));
         }
-        (Vec::new(), self.shared_progress.clone())
+        (Vec::new(), Rc::clone(&self.shared_progress))
     }
 
     fn notify_me(&self) -> bool { false }
@@ -161,7 +161,7 @@ impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
     /// Allocates a new automatically flushing session based on the supplied capability.
     #[inline]
     pub fn session_with_builder(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>> {
-        ActivateOnDrop::new(self.buffer.autoflush_session_with_builder(cap.capability.clone()), cap.address.clone(), cap.activations.clone())
+        ActivateOnDrop::new(self.buffer.autoflush_session_with_builder(cap.capability.clone()), Rc::clone(&cap.address), Rc::clone(&cap.activations))
     }
 }
 

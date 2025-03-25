@@ -58,7 +58,7 @@ impl<T: Timestamp, C: Container, P: Pull<Message<T, C>>> InputHandleCore<T, C, P
         let internal = &self.internal;
         let summaries = &self.summaries;
         self.pull_counter.next_guarded().map(|(guard, bundle)| {
-            (InputCapability::new(internal.clone(), summaries.clone(), guard), &mut bundle.data)
+            (InputCapability::new(Rc::clone(internal), Rc::clone(summaries), guard), &mut bundle.data)
         })
     }
 

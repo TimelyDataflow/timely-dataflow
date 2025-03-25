@@ -120,7 +120,7 @@ fn notificator_delivers_notifications_in_topo_order() {
     let logging = None;//::logging::new_inactive_logger();
 
     // notificator.update_frontier_from_cm(&mut vec![ChangeBatch::new_from(ts_from_tuple((0, 0)), 1)]);
-    let times = vec![
+    let times = [
         Product::new(3, 5),
         Product::new(5, 4),
         Product::new(1, 2),

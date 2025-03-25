@@ -59,9 +59,9 @@ impl Drop for LgallocHandle {
 }
 
 fn main() {
-    let mut config = lgalloc::LgAlloc::new();
-    config.enable().with_path(std::env::temp_dir()); 
-    lgalloc::lgalloc_set_config(&config);
+    let mut lgconfig = lgalloc::LgAlloc::new();
+    lgconfig.enable().with_path(std::env::temp_dir());
+    lgalloc::lgalloc_set_config(&lgconfig);
 
     let refill = BytesRefill {
         logic: std::sync::Arc::new(|size| lgalloc_refill(size) as Box<dyn DerefMut<Target=[u8]>>),
@@ -79,9 +79,9 @@ fn main() {
         let (mut senders, mut receiver) = allocator.allocate(0);
 
         // send typed data along each channel
-        for i in 0 .. allocator.peers() {
-            senders[i].send(Message { payload: format!("hello, {}", i)});
-            senders[i].done();
+        for (i, sender) in senders.iter_mut().enumerate() {
+            sender.send(Message { payload: format!("hello, {}", i)});
+            sender.done();
         }
 
         // no support for termination notification,

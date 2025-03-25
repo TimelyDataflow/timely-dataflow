@@ -30,7 +30,7 @@ impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
     fn allocate<T: 'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
-        let (pusher, puller) = Thread::new_from(identifier, self.events.clone());
+        let (pusher, puller) = Thread::new_from(identifier, Rc::clone(&self.events));
         (vec![Box::new(pusher)], Box::new(puller))
     }
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
@@ -59,8 +59,8 @@ impl Thread {
         -> (ThreadPusher<T>, ThreadPuller<T>)
     {
         let shared = Rc::new(RefCell::new((VecDeque::<T>::new(), VecDeque::<T>::new())));
-        let pusher = Pusher { target: shared.clone() };
-        let pusher = CountPusher::new(pusher, identifier, events.clone());
+        let pusher = Pusher { target: Rc::clone(&shared) };
+        let pusher = CountPusher::new(pusher, identifier, Rc::clone(&events));
         let puller = Puller { source: shared, current: None };
         let puller = CountPuller::new(puller, identifier, events);
         (pusher, puller)

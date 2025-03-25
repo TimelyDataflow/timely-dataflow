@@ -10,7 +10,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         let index = worker.index();
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
         worker.dataflow::<usize,_,_>(|scope| {
@@ -21,7 +21,7 @@ fn main() {
                         input.for_each(|time, data| {
                             let counts =
                             counts_by_time
-                                .entry(time.time().clone())
+                                .entry(*time.time())
                                 .or_insert(HashMap::new());
                             let mut session = output.session(&time);
                             for &datum in data.iter() {
@@ -35,15 +35,15 @@ fn main() {
                     })
                 .container::<Vec<_>>()
                 .inspect(move |x| println!("worker {}:\tvalue {}", index, x))
-                .probe_with(&mut probe);
+                .probe_with(&probe);
         });
 
         // introduce data and watch!
         for round in 0..1 {
             if index == 0 {
-                vec![0, 1, 2, 2, 2, 3, 3, 4].iter().for_each(|x| input.send(*x));
+                [0, 1, 2, 2, 2, 3, 3, 4].iter().for_each(|x| input.send(*x));
             } else if index == 1 {
-                vec![0, 0, 3, 4, 4, 5, 7, 7].iter().for_each(|x| input.send(*x));
+                [0, 0, 3, 4, 4, 5, 7, 7].iter().for_each(|x| input.send(*x));
             }
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {

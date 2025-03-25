@@ -150,16 +150,16 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
     fn input_from<CB: ContainerBuilder>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, CB>) -> StreamCore<G, CB::Container> {
         let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, CB::Container>::new();
         let counter = Counter::new(output);
-        let produced = counter.produced().clone();
+        let produced = Rc::clone(counter.produced());
 
         let index = self.allocate_operator_index();
         let address = self.addr_for_child(index);
 
-        handle.activate.push(self.activator_for(address.clone()));
+        handle.activate.push(self.activator_for(Rc::clone(&address)));
 
         let progress = Rc::new(RefCell::new(ChangeBatch::new()));
 
-        handle.register(counter, progress.clone());
+        handle.register(counter, Rc::clone(&progress));
 
         let copies = self.peers();
 
@@ -207,7 +207,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
     fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<<T as Timestamp>::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
         self.shared_progress.borrow_mut().internals[0].update(T::minimum(), self.copies as i64);
-        (Vec::new(), self.shared_progress.clone())
+        (Vec::new(), Rc::clone(&self.shared_progress))
     }
 
     fn notify_me(&self) -> bool { false }

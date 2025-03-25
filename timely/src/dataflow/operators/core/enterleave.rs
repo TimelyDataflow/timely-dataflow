@@ -20,6 +20,7 @@
 //! ```
 
 use std::marker::PhantomData;
+use std::rc::Rc;
 
 use crate::logging::{TimelyLogger, MessagesEvent};
 use crate::progress::Timestamp;
@@ -29,7 +30,6 @@ use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::Message;
-
 use crate::worker::AsWorker;
 use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::scopes::Child;
@@ -65,7 +65,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T
             activator: scope.activator_for(scope.addr()),
             active: false,
         };
-        let produced = ingress.targets.produced().clone();
+        let produced = Rc::clone(ingress.targets.produced());
         let input = scope.subgraph.borrow_mut().new_input(produced);
         let channel_id = scope.clone().new_identifier();
 
@@ -253,7 +253,7 @@ mod test {
 
             let index = worker.index();
             let mut input = InputHandle::new();
-            let mut probe = ProbeHandle::new();
+            let probe = ProbeHandle::new();
 
             // create a new input, exchange data, and inspect its output
             worker.dataflow(|scope| {
@@ -265,7 +265,7 @@ mod test {
                     inner.region(|inner2| data.enter(inner2).leave()).leave()
                 })
                     .inspect(move |x| println!("worker {}:\thello {}", index, x))
-                    .probe_with(&mut probe);
+                    .probe_with(&probe);
             });
 
             // introduce data and watch!

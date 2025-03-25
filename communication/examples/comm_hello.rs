@@ -32,9 +32,9 @@ fn main() {
         let (mut senders, mut receiver) = allocator.allocate(0);
 
         // send typed data along each channel
-        for i in 0 .. allocator.peers() {
-            senders[i].send(Message { payload: format!("hello, {}", i)});
-            senders[i].done();
+        for (i, sender) in senders.iter_mut().enumerate() {
+            sender.send(Message { payload: format!("hello, {}", i)});
+            sender.done();
         }
 
         // no support for termination notification,

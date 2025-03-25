@@ -20,7 +20,7 @@ fn main() {
         let peers = worker.peers();
 
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         worker.dataflow(|scope| {
             scope.input_from(&mut input)
@@ -28,7 +28,7 @@ fn main() {
                  .union_find()
                  .exchange(|_| 0)
                  .union_find()
-                 .probe_with(&mut probe);
+                 .probe_with(&probe);
         });
 
         let mut rng: SmallRng = SeedableRng::seed_from_u64(index as u64);

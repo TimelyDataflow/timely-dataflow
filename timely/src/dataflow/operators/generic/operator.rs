@@ -28,32 +28,30 @@ pub trait Operator<G: Scope, C1: Container> {
     /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
-    /// fn main() {
-    ///     timely::example(|scope| {
-    ///         (0u64..10).to_stream(scope)
-    ///             .unary_frontier(Pipeline, "example", |default_cap, _info| {
-    ///                 let mut cap = Some(default_cap.delayed(&12));
-    ///                 let mut notificator = FrontierNotificator::default();
-    ///                 let mut stash = HashMap::new();
-    ///                 move |input, output| {
-    ///                     if let Some(ref c) = cap.take() {
-    ///                         output.session(&c).give(12);
-    ///                     }
-    ///                     while let Some((time, data)) = input.next() {
-    ///                         stash.entry(time.time().clone())
-    ///                              .or_insert(Vec::new())
-    ///                              .extend(data.drain(..));
-    ///                     }
-    ///                     notificator.for_each(&[input.frontier()], |time, _not| {
-    ///                         if let Some(mut vec) = stash.remove(time.time()) {
-    ///                             output.session(&time).give_iterator(vec.drain(..));
-    ///                         }
-    ///                     });
+    /// timely::example(|scope| {
+    ///     (0u64..10).to_stream(scope)
+    ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
+    ///             let mut cap = Some(default_cap.delayed(&12));
+    ///             let mut notificator = FrontierNotificator::default();
+    ///             let mut stash = HashMap::new();
+    ///             move |input, output| {
+    ///                 if let Some(ref c) = cap.take() {
+    ///                     output.session(&c).give(12);
     ///                 }
-    ///             })
-    ///             .container::<Vec<_>>();
-    ///     });
-    /// }
+    ///                 while let Some((time, data)) = input.next() {
+    ///                     stash.entry(time.time().clone())
+    ///                          .or_insert(Vec::new())
+    ///                          .extend(data.drain(..));
+    ///                 }
+    ///                 notificator.for_each(&[input.frontier()], |time, _not| {
+    ///                     if let Some(mut vec) = stash.remove(time.time()) {
+    ///                         output.session(&time).give_iterator(vec.drain(..));
+    ///                     }
+    ///                 });
+    ///             }
+    ///         })
+    ///         .container::<Vec<_>>();
+    /// });
     /// ```
     fn unary_frontier<CB, B, L, P>(&self, pact: P, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
@@ -74,21 +72,19 @@ pub trait Operator<G: Scope, C1: Container> {
     /// use timely::dataflow::operators::generic::Operator;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
-    /// fn main() {
-    ///     timely::example(|scope| {
-    ///         (0u64..10)
-    ///             .to_stream(scope)
-    ///             .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
-    ///                 input.for_each(|time, data| {
-    ///                     output.session(&time).give_container(data);
-    ///                     notificator.notify_at(time.retain());
-    ///                 });
-    ///                 notificator.for_each(|time, _cnt, _not| {
-    ///                     println!("notified at {:?}", time);
-    ///                 });
+    /// timely::example(|scope| {
+    ///     (0u64..10)
+    ///         .to_stream(scope)
+    ///         .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
+    ///             input.for_each(|time, data| {
+    ///                 output.session(&time).give_container(data);
+    ///                 notificator.notify_at(time.retain());
     ///             });
-    ///     });
-    /// }
+    ///             notificator.for_each(|time, _cnt, _not| {
+    ///                 println!("notified at {:?}", time);
+    ///             });
+    ///         });
+    /// });
     /// ```
     fn unary_notify<CB: ContainerBuilder,
             L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P::Puller>,

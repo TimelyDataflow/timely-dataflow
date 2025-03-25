@@ -31,7 +31,7 @@ pub struct StreamCore<S: Scope, C> {
 impl<S: Scope, C> Clone for StreamCore<S, C> {
     fn clone(&self) -> Self {
         Self {
-            name: self.name.clone(),
+            name: self.name,
             scope: self.scope.clone(),
             ports: self.ports.clone(),
         }

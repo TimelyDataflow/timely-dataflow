@@ -5,7 +5,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         let mut input = (0u64..100000).peekable();
         worker.dataflow(|scope| {
-            let mut probe_handle = probe::Handle::new();
+            let probe_handle = probe::Handle::new();
             let probe_handle_2 = probe_handle.clone();
 
             iterator_source(
@@ -27,7 +27,7 @@ fn main() {
                 },
                 probe_handle_2)
             .inspect_time(|t, d| eprintln!("@ {:?}: {:?}", t, d))
-            .probe_with(&mut probe_handle);
+            .probe_with(&probe_handle);
         });
     }).unwrap();
 }

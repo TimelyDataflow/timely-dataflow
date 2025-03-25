@@ -11,5 +11,8 @@ repository = "https://github.com/TimelyDataflow/timely-dataflow.git"
 keywords = ["timely", "dataflow", "logging"]
 license = "MIT"
 
+[lints]
+workspace = true
+
 [dependencies]
 timely_container = { version = "0.15.0", path = "../container" }
