@@ -94,7 +94,7 @@ pub trait Allocate {
         (thread::ThreadPusher<T>,
          thread::ThreadPuller<T>)
     {
-        thread::Thread::new_from(identifier, self.events().clone())
+        thread::Thread::new_from(identifier, Rc::clone(self.events()))
     }
 
     /// Allocates a broadcast channel, where each pushed message is received by all.

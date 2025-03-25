@@ -11,7 +11,7 @@ fn main() {
     timely::execute_from_args(std::env::args().skip(3), move |worker| {
 
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         worker.dataflow::<usize,_,_>(|scope| {
 
@@ -30,8 +30,8 @@ fn main() {
                 |_capability, _info| {
 
                     // where we stash out-of-order data.
-                    let mut edge_stash = HashMap::new();
-                    let mut rank_stash = HashMap::new();
+                    let mut edge_stash: HashMap<_, Vec<_>> = HashMap::new();
+                    let mut rank_stash: HashMap<_, Vec<_>> = HashMap::new();
 
                     // lists of edges, ranks, and changes.
                     let mut edges = Vec::new();
@@ -45,12 +45,12 @@ fn main() {
 
                         // hold on to edge changes until it is time.
                         input1.for_each(|time, data| {
-                            edge_stash.entry(time.retain()).or_insert(Vec::new()).extend(data.drain(..));
+                            edge_stash.entry(time.retain()).or_default().append(data);
                         });
 
                         // hold on to rank changes until it is time.
                         input2.for_each(|time, data| {
-                            rank_stash.entry(time.retain()).or_insert(Vec::new()).extend(data.drain(..));
+                            rank_stash.entry(time.retain()).or_default().append(data);
                         });
 
                         let frontiers = &[input1.frontier(), input2.frontier()];
@@ -145,7 +145,7 @@ fn main() {
             );
 
             changes
-                .probe_with(&mut probe)
+                .probe_with(&probe)
                 .connect_loop(handle);
 
         });

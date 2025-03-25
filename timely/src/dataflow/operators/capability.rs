@@ -118,7 +118,7 @@ impl<T: Timestamp> Capability<T> {
     /// Returns [`None`] `self.time` is not less or equal to `new_time`.
     pub fn try_delayed(&self, new_time: &T) -> Option<Capability<T>> {
         if self.time.less_equal(new_time) {
-            Some(Self::new(new_time.clone(), self.internal.clone()))
+            Some(Self::new(new_time.clone(), Rc::clone(&self.internal)))
         } else {
             None
         }
@@ -171,7 +171,7 @@ impl<T: Timestamp> Drop for Capability<T> {
 
 impl<T: Timestamp> Clone for Capability<T> {
     fn clone(&self) -> Capability<T> {
-        Self::new(self.time.clone(), self.internal.clone())
+        Self::new(self.time.clone(), Rc::clone(&self.internal))
     }
 }
 
@@ -282,7 +282,7 @@ impl<T: Timestamp> InputCapability<T> {
     pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
         use crate::progress::timestamp::PathSummary;
         if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
-            Capability::new(new_time.clone(), self.internal.borrow()[output_port].clone())
+            Capability::new(new_time.clone(), Rc::clone(&self.internal.borrow()[output_port]))
         } else {
             panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, self.summaries.borrow()[output_port], self.time());
         }
@@ -306,7 +306,7 @@ impl<T: Timestamp> InputCapability<T> {
         use crate::progress::timestamp::PathSummary;
         let self_time = self.time().clone();
         if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(&self_time)).any(|time| time.less_equal(&self_time)) {
-            Capability::new(self_time, self.internal.borrow()[output_port].clone())
+            Capability::new(self_time, Rc::clone(&self.internal.borrow()[output_port]))
         }
         else {
             panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", self_time, self.summaries.borrow()[output_port], self_time);
@@ -365,8 +365,8 @@ impl<T: Timestamp> ActivateCapability<T> {
     pub fn delayed(&self, time: &T) -> Self {
         ActivateCapability {
             capability: self.capability.delayed(time),
-            address: self.address.clone(),
-            activations: self.activations.clone(),
+            address: Rc::clone(&self.address),
+            activations: Rc::clone(&self.activations),
         }
     }
 

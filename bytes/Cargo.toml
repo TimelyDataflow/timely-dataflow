@@ -11,3 +11,6 @@ homepage = "https://github.com/TimelyDataflow/timely-dataflow"
 repository = "https://github.com/TimelyDataflow/timely-dataflow.git"
 keywords = ["timely", "dataflow", "bytes"]
 license = "MIT"
+
+[lints]
+workspace = true

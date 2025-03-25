@@ -73,7 +73,7 @@ pub mod link {
     impl<T, C> EventPusher<T, C> for Rc<EventLink<T, C>> {
         fn push(&mut self, event: Event<T, C>) {
             *self.next.borrow_mut() = Some(Rc::new(EventLink { event: Some(event), next: RefCell::new(None) }));
-            let next = self.next.borrow().as_ref().unwrap().clone();
+            let next = Rc::clone(self.next.borrow().as_ref().unwrap());
             *self = next;
         }
     }
@@ -82,7 +82,7 @@ pub mod link {
         fn next(&mut self) -> Option<Cow<Event<T, C>>> {
             let is_some = self.next.borrow().is_some();
             if is_some {
-                let next = self.next.borrow().as_ref().unwrap().clone();
+                let next = Rc::clone(self.next.borrow().as_ref().unwrap());
                 *self = next;
                 if let Some(this) = Rc::get_mut(self) {
                     this.event.take().map(Cow::Owned)
@@ -121,7 +121,7 @@ pub mod link {
         #[cfg(not(miri))]
         let limit = 1_000_000;
         let mut event1 = Rc::new(EventLink::<(),()>::new());
-        let _event2 = event1.clone();
+        let _event2 = Rc::clone(&event1);
         for _ in 0 .. limit {
             event1.push(Event::Progress(vec![]));
         }

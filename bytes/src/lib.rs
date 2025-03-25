@@ -94,7 +94,7 @@ pub mod arc {
             let result = BytesMut {
                 ptr: self.ptr,
                 len: index,
-                sequestered: self.sequestered.clone(),
+                sequestered: Arc::clone(&self.sequestered),
             };
 
             self.ptr = self.ptr.wrapping_add(index);
@@ -204,7 +204,7 @@ pub mod arc {
             let result = Bytes {
                 ptr: self.ptr,
                 len: index,
-                sequestered: self.sequestered.clone(),
+                sequestered: Arc::clone(&self.sequestered),
             };
 
             self.ptr = self.ptr.wrapping_add(index);

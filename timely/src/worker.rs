@@ -262,7 +262,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
 
 impl<A: Allocate> Scheduler for Worker<A> {
     fn activations(&self) -> Rc<RefCell<Activations>> {
-        self.activations.clone()
+        Rc::clone(&self.activations)
     }
 }
 
@@ -342,7 +342,7 @@ impl<A: Allocate> Worker<A> {
         {   // Process channel events. Activate responders.
             let mut allocator = self.allocator.borrow_mut();
             allocator.receive();
-            let events = allocator.events().clone();
+            let events = allocator.events();
             let mut borrow = events.borrow_mut();
             let paths = self.paths.borrow();
             borrow.sort_unstable();
@@ -719,7 +719,7 @@ impl<A: Allocate> Worker<A> {
     }
 
     // Acquire a new distinct dataflow identifier.
-    fn allocate_dataflow_index(&mut self) -> usize {
+    fn allocate_dataflow_index(&self) -> usize {
         *self.dataflow_counter.borrow_mut() += 1;
         *self.dataflow_counter.borrow() - 1
     }
@@ -730,15 +730,15 @@ impl<A: Allocate> Clone for Worker<A> {
         Worker {
             config: self.config.clone(),
             timer: self.timer,
-            paths: self.paths.clone(),
-            allocator: self.allocator.clone(),
-            identifiers: self.identifiers.clone(),
-            dataflows: self.dataflows.clone(),
-            dataflow_counter: self.dataflow_counter.clone(),
-            logging: self.logging.clone(),
-            activations: self.activations.clone(),
+            paths: Rc::clone(&self.paths),
+            allocator: Rc::clone(&self.allocator),
+            identifiers: Rc::clone(&self.identifiers),
+            dataflows: Rc::clone(&self.dataflows),
+            dataflow_counter: Rc::clone(&self.dataflow_counter),
+            logging: Rc::clone(&self.logging),
+            activations: Rc::clone(&self.activations),
             active_dataflows: Vec::new(),
-            temp_channel_ids: self.temp_channel_ids.clone(),
+            temp_channel_ids: Rc::clone(&self.temp_channel_ids),
         }
     }
 }

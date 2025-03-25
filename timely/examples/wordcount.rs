@@ -9,7 +9,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         // define a distribution function for strings.
         let exchange = Exchange::new(|x: &(String, i64)| (x.0).len() as u64);
@@ -53,7 +53,7 @@ fn main() {
                     }})
                  .container::<Vec<_>>()
                  .inspect(|x| println!("seen: {:?}", x))
-                 .probe_with(&mut probe);
+                 .probe_with(&probe);
         });
 
         // introduce data and watch!

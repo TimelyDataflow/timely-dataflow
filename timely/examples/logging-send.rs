@@ -13,7 +13,7 @@ fn main() {
         let batch = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
         let rounds = std::env::args().nth(2).unwrap().parse::<usize>().unwrap();
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         // Register timely worker logging.
         worker.log_register().insert::<TimelyEventBuilder,_>("timely", |time, data|
@@ -77,7 +77,7 @@ fn main() {
             scope
                 .input_from(&mut input)
                 .exchange(|&x| x as u64)
-                .probe_with(&mut probe);
+                .probe_with(&probe);
         });
 
         // Register timely worker logging.
@@ -95,7 +95,7 @@ fn main() {
             scope
                 .input_from(&mut input)
                 .exchange(|&x| x as u64)
-                .probe_with(&mut probe);
+                .probe_with(&probe);
         });
 
         // Register user-level logging.

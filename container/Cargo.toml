@@ -4,3 +4,6 @@ version = "0.15.0"
 description = "Container abstractions for Timely"
 license = "MIT"
 edition.workspace = true
+
+[lints]
+workspace = true

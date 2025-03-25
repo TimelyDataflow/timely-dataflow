@@ -102,7 +102,7 @@ impl PeerBuilder for Process {
                     peers,
                     buzzers_send: bsend,
                     buzzers_recv: brecv,
-                    channels: channels.clone(),
+                    channels: Arc::clone(&channels),
                     counters_send: counters_send.clone(),
                     counters_recv: recv,
                 }
@@ -173,7 +173,7 @@ impl Allocate for Process {
              .map(|s| Box::new(s) as Box<dyn Push<T>>)
              .collect::<Vec<_>>();
 
-        let recv = Box::new(CountPuller::new(recv, identifier, self.inner.events().clone())) as Box<dyn Pull<T>>;
+        let recv = Box::new(CountPuller::new(recv, identifier, Rc::clone(self.inner.events()))) as Box<dyn Pull<T>>;
 
         (sends, recv)
     }

@@ -175,19 +175,15 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
                 // create, box, and stash new process_binary pusher.
                 if process_id > self.index / inner_peers { process_id -= 1; }
-                pushes.push(Box::new(Pusher::new(header, self.sends[process_id].clone())));
+                pushes.push(Box::new(Pusher::new(header, Rc::clone(&self.sends[process_id]))));
             }
         }
 
-        let channel =
-        self.to_local
-            .entry(identifier)
-            .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
-            .clone();
+        let channel = Rc::clone(self.to_local.entry(identifier).or_default());
 
         use crate::allocator::counters::Puller as CountPuller;
-        let canary = Canary::new(identifier, self.canaries.clone());
-        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.events().clone()));
+        let canary = Canary::new(identifier, Rc::clone(&self.canaries));
+        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, Rc::clone(self.events())));
 
         (pushes, puller, )
     }
@@ -221,18 +217,14 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
                 length: 0,
                 seqno: 0,
             };
-            pushes.push(Box::new(Pusher::new(header, send.clone())))
+            pushes.push(Box::new(Pusher::new(header, Rc::clone(send))))
         }
 
-        let channel =
-        self.to_local
-            .entry(identifier)
-            .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
-            .clone();
+        let channel = Rc::clone(self.to_local.entry(identifier).or_default());
 
         use crate::allocator::counters::Puller as CountPuller;
-        let canary = Canary::new(identifier, self.canaries.clone());
-        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.events().clone()));
+        let canary = Canary::new(identifier, Rc::clone(&self.canaries));
+        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, Rc::clone(self.events())));
 
         let pushes = Box::new(crate::allocator::Broadcaster { spare: None, pushers: pushes });
         (pushes, puller, )

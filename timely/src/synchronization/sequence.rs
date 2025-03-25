@@ -106,8 +106,8 @@ impl<T: ExchangeData> Sequencer<T> {
         // only initialize the activator once we obtain the operator
         // address.
         let activator = Rc::new(RefCell::new(None));
-        let activator_source = activator.clone();
-        let activator_sink = activator.clone();
+        let activator_source = Rc::clone(&activator);
+        let activator_sink = Rc::clone(&activator);
 
         // build a dataflow used to serialize and circulate commands
         worker.dataflow::<Duration,_,_>(move |dataflow| {

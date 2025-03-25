@@ -10,14 +10,14 @@ fn main() {
 
     // create input and probe handles.
     let mut input = InputHandle::new();
-    let mut probe = ProbeHandle::new();
+    let probe = ProbeHandle::new();
 
     // directly build a dataflow.
     worker.dataflow(|scope| {
         input
             .to_stream(scope)
             .inspect(|x| println!("{:?}", x))
-            .probe_with(&mut probe);
+            .probe_with(&probe);
     });
 
     // manage inputs.

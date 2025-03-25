@@ -50,7 +50,7 @@ impl MessageHeader {
     /// Returns a header when there is enough supporting data
     #[inline]
     pub fn try_read(bytes: &[u8]) -> Option<MessageHeader> {
-        let mut cursor = io::Cursor::new(&bytes[..]);
+        let mut cursor = io::Cursor::new(bytes);
         let mut buffer = [0; Self::FIELDS];
         cursor.read_u64_into::<ByteOrder>(&mut buffer).ok()?;
         let header = MessageHeader {
@@ -106,7 +106,7 @@ impl MessageHeader {
 pub fn create_sockets(addresses: Vec<String>, my_index: usize, noisy: bool) -> Result<Vec<Option<TcpStream>>> {
 
     let hosts1 = Arc::new(addresses);
-    let hosts2 = hosts1.clone();
+    let hosts2 = Arc::clone(&hosts1);
 
     let start_task = thread::spawn(move || start_connections(hosts1, my_index, noisy));
     let await_task = thread::spawn(move || await_connections(hosts2, my_index, noisy));

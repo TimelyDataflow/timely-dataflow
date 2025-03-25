@@ -1,0 +1,1 @@
+ignore-interior-mutability = ["timely::dataflow::operators::capability::Capability"]

@@ -16,7 +16,7 @@ fn main() {
         let timer = std::time::Instant::now();
 
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         // Create a dataflow that discards input data (just synchronizes).
         worker.dataflow(|scope| {
@@ -32,7 +32,7 @@ fn main() {
                 .filter(|x| x > &1);
 
             step.connect_loop(loop_handle);
-            step.probe_with(&mut probe);
+            step.probe_with(&probe);
         });
 
         let ns_per_request = 1_000_000_000 / rate;

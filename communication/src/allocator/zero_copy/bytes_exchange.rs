@@ -75,9 +75,9 @@ impl BytesPush for MergeQueue {
                 bytes
             };
 
-            for bytes in iterator {
-                if let Err(bytes) = tail.try_merge(bytes) {
-                    queue.push_back(::std::mem::replace(&mut tail, bytes));
+            for more_bytes in iterator {
+                if let Err(more_bytes) = tail.try_merge(more_bytes) {
+                    queue.push_back(::std::mem::replace(&mut tail, more_bytes));
                 }
             }
             queue.push_back(tail);

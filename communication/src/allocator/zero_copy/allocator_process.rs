@@ -147,18 +147,14 @@ impl Allocate for ProcessAllocator {
             };
 
             // create, box, and stash new process_binary pusher.
-            pushes.push(Box::new(Pusher::new(header, self.sends[target_index].clone())));
+            pushes.push(Box::new(Pusher::new(header, Rc::clone(&self.sends[target_index]))));
         }
 
-        let channel =
-        self.to_local
-            .entry(identifier)
-            .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
-            .clone();
+        let channel = Rc::clone(self.to_local.entry(identifier).or_default());
 
         use crate::allocator::counters::Puller as CountPuller;
-        let canary = Canary::new(identifier, self.canaries.clone());
-        let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, self.events().clone()));
+        let canary = Canary::new(identifier, Rc::clone(&self.canaries));
+        let puller = Box::new(CountPuller::new(Puller::new(channel, canary), identifier, Rc::clone(self.events())));
 
         (pushes, puller)
     }

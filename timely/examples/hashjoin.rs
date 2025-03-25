@@ -21,7 +21,7 @@ fn main() {
 
         let mut input1 = InputHandle::new();
         let mut input2 = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         worker.dataflow(|scope| {
 
@@ -45,11 +45,11 @@ fn main() {
                             for (key, val1) in data.drain(..) {
                                 if let Some(values) = map2.get(&key) {
                                     for val2 in values.iter() {
-                                        session.give((val1.clone(), val2.clone()));
+                                        session.give((val1, *val2));
                                     }
                                 }
 
-                                map1.entry(key).or_insert(Vec::new()).push(val1);
+                                map1.entry(key).or_default().push(val1);
                             }
                         });
 
@@ -59,17 +59,17 @@ fn main() {
                             for (key, val2) in data.drain(..) {
                                 if let Some(values) = map1.get(&key) {
                                     for val1 in values.iter() {
-                                        session.give((val1.clone(), val2.clone()));
+                                        session.give((*val1, val2));
                                     }
                                 }
 
-                                map2.entry(key).or_insert(Vec::new()).push(val2);
+                                map2.entry(key).or_default().push(val2);
                             }
                         });
                     }
                 })
                 .container::<Vec<_>>()
-                .probe_with(&mut probe);
+                .probe_with(&probe);
         });
 
         let mut rng: SmallRng = SeedableRng::seed_from_u64(index as u64);
