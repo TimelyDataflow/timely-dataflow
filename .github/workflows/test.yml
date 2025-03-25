@@ -27,7 +27,7 @@ jobs:
       - name: Cargo test
         run: cargo test --workspace --all-targets
       - name: Cargo clippy
-        run: cargo clippy --workspace --all-targets
+        run: RUSTFLAGS="" cargo clippy --workspace --all-targets
 
   # Check mdbook files for errors
   mdbook:
