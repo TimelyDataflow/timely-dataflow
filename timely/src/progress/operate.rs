@@ -73,12 +73,6 @@ impl<TS> Default for PortConnectivity<TS> {
 }
 
 impl<TS> PortConnectivity<TS> {
-    /// Introduces default summaries for `0 .. count` ports.
-    pub fn default_for(count: usize) -> Self {
-        let mut list = Vec::with_capacity(count);
-        for _ in 0 .. count { list.push(Default::default()) }
-        Self { list }
-    }
     /// Ensures an entry exists at `index` and returns a mutable reference to it.
     fn ensure(&mut self, index: usize) -> &mut Antichain<TS> {
         while self.list.len() <= index { self.add_port(self.list.len(), Antichain::new()); }
@@ -105,18 +99,15 @@ impl<TS> PortConnectivity<TS> {
     pub fn max_port(&self) -> usize {
         self.list.len() - 1
     }
+    /// Returns the associated path summary, if it exists.
+    pub fn get(&self, index: usize) -> Option<&Antichain<TS>> {
+        self.list.get(index)
+    }
 }
 
 impl<TS> From<Vec<Antichain<TS>>> for PortConnectivity<TS> {
     fn from(list: Vec<Antichain<TS>>) -> Self {
         Self { list }
-    }
-}
-
-impl<TS> std::ops::Index<usize> for PortConnectivity<TS> {
-    type Output = Antichain<TS>;
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.list[index]
     }
 }
 

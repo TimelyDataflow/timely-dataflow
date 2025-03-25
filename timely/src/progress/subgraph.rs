@@ -168,7 +168,7 @@ where
         let mut builder = reachability::Builder::new();
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
-        let summary = (0..outputs).map(|_| PortConnectivity::default_for(inputs)).collect();
+        let summary = (0..outputs).map(|_| PortConnectivity::default()).collect();
         builder.add_node(0, outputs, inputs, summary);
         for (index, child) in self.children.iter().enumerate().skip(1) {
             builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
@@ -555,7 +555,7 @@ where
         // Note that we need to have `self.inputs()` elements in the summary
         // with each element containing `self.outputs()` antichains regardless
         // of how long `self.scope_summary` is
-        let mut internal_summary = vec![PortConnectivity::default_for(self.outputs); self.inputs()];
+        let mut internal_summary = vec![PortConnectivity::default(); self.inputs()];
         for (input_idx, input) in self.scope_summary.iter().enumerate() {
             for (output_idx, output) in input.iter_ports() {
                 for outer in output.elements().iter().cloned().map(TInner::summarize) {

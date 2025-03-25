@@ -781,10 +781,12 @@ fn summarize_outputs<T: Timestamp>(
                     let antichains = results.entry(location).or_default();
 
                     // Combine each operator-internal summary to the output with `summary`.
-                    for operator_summary in summaries[output_port].elements().iter() {
-                        if let Some(combined) = operator_summary.followed_by(&summary) {
-                            if antichains.insert_ref(output, &combined) {
-                                worklist.push_back((location, output, combined));
+                    if let Some(connection) = summaries.get(output_port) {
+                        for operator_summary in connection.elements().iter() {
+                            if let Some(combined) = operator_summary.followed_by(&summary) {
+                                if antichains.insert_ref(output, &combined) {
+                                    worklist.push_back((location, output, combined));
+                                }
                             }
                         }
                     }
