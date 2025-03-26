@@ -74,7 +74,7 @@ impl<TS> Default for PortConnectivity<TS> {
 
 impl<TS> PortConnectivity<TS> {
     /// Inserts an element by reference, ensuring that the index exists.
-    pub fn insert(&mut self, index: usize, element: TS) -> bool where TS : crate::PartialOrder + Clone {
+    pub fn insert(&mut self, index: usize, element: TS) -> bool where TS : crate::PartialOrder {
         self.tree.entry(index).or_default().insert(element)
     }
     /// Inserts an element by reference, ensuring that the index exists.
