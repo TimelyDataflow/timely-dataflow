@@ -27,9 +27,9 @@ use std::cell::RefCell;
 use std::fmt::{self, Debug};
 
 use crate::order::PartialOrder;
-use crate::progress::Antichain;
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
+use crate::progress::operate::PortConnectivity;
 use crate::scheduling::Activations;
 use crate::dataflow::channels::pullers::counter::ConsumedGuard;
 
@@ -238,7 +238,7 @@ pub struct InputCapability<T: Timestamp> {
     /// Output capability buffers, for use in minting capabilities.
     internal: CapabilityUpdates<T>,
     /// Timestamp summaries for each output.
-    summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>,
+    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
     /// A drop guard that updates the consumed capability this InputCapability refers to on drop
     consumed_guard: ConsumedGuard<T>,
 }
@@ -246,18 +246,20 @@ pub struct InputCapability<T: Timestamp> {
 impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
     fn time(&self) -> &T { self.time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
-        let borrow = self.summaries.borrow();
-        self.internal.borrow().iter().enumerate().any(|(index, rc)| {
-            // To be valid, the output buffer must match and the timestamp summary needs to be the default.
-            Rc::ptr_eq(rc, query_buffer) && borrow[index].len() == 1 && borrow[index][0] == Default::default()
-        })
+        let summaries_borrow = self.summaries.borrow();
+        let internal_borrow = self.internal.borrow();
+        // To be valid, the output buffer must match and the timestamp summary needs to be the default.
+        let result = summaries_borrow.iter_ports().any(|(port, path)| {
+            Rc::ptr_eq(&internal_borrow[port], query_buffer) && path.len() == 1 && path[0] == Default::default()
+        });
+        result
     }
 }
 
 impl<T: Timestamp> InputCapability<T> {
     /// Creates a new capability reference at `time` while incrementing (and keeping a reference to)
     /// the provided [`ChangeBatch`].
-    pub(crate) fn new(internal: CapabilityUpdates<T>, summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, guard: ConsumedGuard<T>) -> Self {
+    pub(crate) fn new(internal: CapabilityUpdates<T>, summaries: Rc<RefCell<PortConnectivity<T::Summary>>>, guard: ConsumedGuard<T>) -> Self {
         InputCapability {
             internal,
             summaries,
@@ -281,10 +283,15 @@ impl<T: Timestamp> InputCapability<T> {
     /// Delays capability for a specific output port.
     pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
         use crate::progress::timestamp::PathSummary;
-        if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
-            Capability::new(new_time.clone(), Rc::clone(&self.internal.borrow()[output_port]))
-        } else {
-            panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, self.summaries.borrow()[output_port], self.time());
+        if let Some(path) = self.summaries.borrow().get(output_port) {
+            if path.iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
+                Capability::new(new_time.clone(), Rc::clone(&self.internal.borrow()[output_port]))
+            } else {
+                panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, path, self.time());
+            }
+        }
+        else {
+            panic!("Attempted to delay a capability for a disconnected output");
         }
     }
 
@@ -305,11 +312,16 @@ impl<T: Timestamp> InputCapability<T> {
     pub fn retain_for_output(self, output_port: usize) -> Capability<T> {
         use crate::progress::timestamp::PathSummary;
         let self_time = self.time().clone();
-        if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(&self_time)).any(|time| time.less_equal(&self_time)) {
-            Capability::new(self_time, Rc::clone(&self.internal.borrow()[output_port]))
+        if let Some(path) = self.summaries.borrow().get(output_port) {
+            if path.iter().flat_map(|summary| summary.results_in(&self_time)).any(|time| time.less_equal(&self_time)) {
+                Capability::new(self_time, Rc::clone(&self.internal.borrow()[output_port]))
+            }
+            else {
+                panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", self_time, path, self_time);
+            }
         }
         else {
-            panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", self_time, self.summaries.borrow()[output_port], self_time);
+            panic!("Attempted to retain a capability for a disconnected output");
         }
     }
 }

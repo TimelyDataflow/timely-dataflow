@@ -16,10 +16,10 @@ use crate::logging::TimelySummaryLogger as SummaryLogger;
 use crate::scheduling::Schedule;
 use crate::scheduling::activate::Activations;
 
-use crate::progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
+use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress};
 use crate::progress::{Location, Port, Source, Target};
-
+use crate::progress::operate::{Connectivity, PortConnectivity};
 use crate::progress::ChangeBatch;
 use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
@@ -168,7 +168,7 @@ where
         let mut builder = reachability::Builder::new();
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
-        let summary = (0..outputs).map(|_| (0..inputs).map(|_| Antichain::new()).collect()).collect();
+        let summary = (0..outputs).map(|_| PortConnectivity::default()).collect();
         builder.add_node(0, outputs, inputs, summary);
         for (index, child) in self.children.iter().enumerate().skip(1) {
             builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
@@ -270,7 +270,7 @@ where
     progcaster: Progcaster<TInner>,
 
     shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
-    scope_summary: Vec<Vec<Antichain<TInner::Summary>>>,
+    scope_summary: Connectivity<TInner::Summary>,
 
     progress_mode: ProgressMode,
 }
@@ -546,7 +546,7 @@ where
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
+    fn get_internal_summary(&mut self) -> (Connectivity<TOuter::Summary>, Rc<RefCell<SharedProgress<TOuter>>>) {
 
         // double-check that child 0 (the outside world) is correctly shaped.
         assert_eq!(self.children[0].outputs, self.inputs());
@@ -555,12 +555,12 @@ where
         // Note that we need to have `self.inputs()` elements in the summary
         // with each element containing `self.outputs()` antichains regardless
         // of how long `self.scope_summary` is
-        let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
+        let mut internal_summary = vec![PortConnectivity::default(); self.inputs()];
         for (input_idx, input) in self.scope_summary.iter().enumerate() {
-            for (output_idx, output) in input.iter().enumerate() {
-                let antichain = &mut internal_summary[input_idx][output_idx];
-                antichain.reserve(output.elements().len());
-                antichain.extend(output.elements().iter().cloned().map(TInner::summarize));
+            for (output_idx, output) in input.iter_ports() {
+                for outer in output.elements().iter().cloned().map(TInner::summarize) {
+                    internal_summary[input_idx].insert(output_idx, outer);
+                }
             }
         }
 
@@ -570,8 +570,8 @@ where
             "the internal summary should have as many elements as there are inputs",
         );
         debug_assert!(
-            internal_summary.iter().all(|summary| summary.len() == self.outputs()),
-            "each element of the internal summary should have as many elements as there are outputs",
+            internal_summary.iter().all(|os| os.iter_ports().all(|(o,_)| o < self.outputs())),
+            "each element of the internal summary should only reference valid outputs",
         );
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
@@ -614,7 +614,7 @@ struct PerOperatorState<T: Timestamp> {
 
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    internal_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
+    internal_summary: Connectivity<T::Summary>,   // cached result from get_internal_summary.
 
     logging: Option<Logger>,
 }
@@ -671,8 +671,8 @@ impl<T: Timestamp> PerOperatorState<T> {
             inputs,
         );
         assert!(
-            !internal_summary.iter().any(|x| x.len() != outputs),
-            "operator summary had too few outputs",
+            internal_summary.iter().all(|os| os.iter_ports().all(|(o,_)| o < outputs)),
+            "operator summary references invalid output port",
         );
 
         PerOperatorState {
