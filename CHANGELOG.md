@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.19.0...timely-v0.20.0) - 2025-03-28
+
+### Other
+
+- Update timely/src/progress/operate.rs
+- Add scaling test
+- Switch builder API to port-identified iterators
+- Adjust reachability logic to be more linear
+- Swap PortConnectivity implementation from Vec to BTreeMap
+- Support optional path summaries for disconnected ports
+- Make PortConnectivity API more explicit
+- Make PortConnectivity a struct, with sufficient methods
+- Introduce Connectivity and PortConnectivity type aliases
+- Add clippy lints ([#659](https://github.com/TimelyDataflow/timely-dataflow/pull/659))
+- Add miri test ([#655](https://github.com/TimelyDataflow/timely-dataflow/pull/655))
+
 ## [0.19.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.1...timely-v0.19.0) - 2025-02-28
 
 ### Other
