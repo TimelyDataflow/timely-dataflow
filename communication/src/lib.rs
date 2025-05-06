@@ -8,46 +8,65 @@
 //! receive endpoint. Messages sent into a send endpoint will eventually be received by the corresponding worker,
 //! if it receives often enough. The point-to-point channels are each FIFO, but with no fairness guarantees.
 //!
-//! To be communicated, a type must implement the [`Serialize`](serde::Serialize) trait when using the
-//! `bincode` feature or the [`Abomonation`](abomonation::Abomonation) trait when not.
+//! To be communicated, a type must implement the [`Bytesable`] trait.
 //!
-//! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`](Push) and [`Pull`](Pull)
+//! Channel endpoints also implement a lower-level `push` and `pull` interface (through the [`Push`] and [`Pull`]
 //! traits), which is used for more precise control of resources.
 //!
 //! # Examples
 //! ```
-//! use timely_communication::Allocate;
+//! use timely_communication::{Allocate, Bytesable};
 //!
-//! // configure for two threads, just one process.
-//! let config = timely_communication::Config::Process(2);
+//! /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
+//! pub struct Message {
+//!     /// Text contents.
+//!     pub payload: String,
+//! }
 //!
-//! // initializes communication, spawns workers
+//! impl Bytesable for Message {
+//!     fn from_bytes(bytes: timely_bytes::arc::Bytes) -> Self {
+//!         Message { payload: std::str::from_utf8(&bytes[..]).unwrap().to_string() }
+//!     }
+//!
+//!     fn length_in_bytes(&self) -> usize {
+//!         self.payload.len()
+//!     }
+//!
+//!     fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+//!         writer.write_all(self.payload.as_bytes()).unwrap();
+//!     }
+//! }
+//!
+//! // extract the configuration from user-supplied arguments, initialize the computation.
+//! let config = timely_communication::Config::from_args(std::env::args()).unwrap();
 //! let guards = timely_communication::initialize(config, |mut allocator| {
-//!     println!("worker {} started", allocator.index());
+//!
+//!     println!("worker {} of {} started", allocator.index(), allocator.peers());
 //!
 //!     // allocates a pair of senders list and one receiver.
 //!     let (mut senders, mut receiver) = allocator.allocate(0);
 //!
 //!     // send typed data along each channel
-//!     use timely_communication::Message;
-//!     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
-//!     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
+//!     for i in 0 .. allocator.peers() {
+//!         senders[i].send(Message { payload: format!("hello, {}", i)});
+//!         senders[i].done();
+//!     }
 //!
 //!     // no support for termination notification,
 //!     // we have to count down ourselves.
-//!     let mut expecting = 2;
-//!     while expecting > 0 {
+//!     let mut received = 0;
+//!     while received < allocator.peers() {
 //!
 //!         allocator.receive();
+//!
 //!         if let Some(message) = receiver.recv() {
-//!             use std::ops::Deref;
-//!             println!("worker {}: received: <{}>", allocator.index(), message.deref());
-//!             expecting -= 1;
+//!             println!("worker {}: received: <{}>", allocator.index(), message.payload);
+//!             received += 1;
 //!         }
+//!
 //!         allocator.release();
 //!     }
 //!
-//!     // optionally, return something
 //!     allocator.index()
 //! });
 //!
@@ -60,7 +79,7 @@
 //! else { println!("error in computation"); }
 //! ```
 //!
-//! The should produce output like:
+//! This should produce output like:
 //!
 //! ```ignore
 //! worker 0 started
@@ -75,49 +94,31 @@
 
 #![forbid(missing_docs)]
 
-#[cfg(feature = "getopts")]
-extern crate getopts;
-#[cfg(feature = "bincode")]
-extern crate bincode;
-#[cfg(feature = "bincode")]
-extern crate serde;
-
-extern crate abomonation;
-#[macro_use] extern crate abomonation_derive;
-
-extern crate timely_bytes as bytes;
-extern crate timely_logging as logging_core;
-
 pub mod allocator;
 pub mod networking;
 pub mod initialize;
 pub mod logging;
-pub mod message;
 pub mod buzzer;
 
-use std::any::Any;
-
-#[cfg(feature = "bincode")]
-use serde::{Serialize, Deserialize};
-#[cfg(not(feature = "bincode"))]
-use abomonation::Abomonation;
-
 pub use allocator::Generic as Allocator;
-pub use allocator::Allocate;
+pub use allocator::{Allocate, Exchangeable};
 pub use initialize::{initialize, initialize_from, Config, WorkerGuards};
-pub use message::Message;
 
-/// A composite trait for types that may be used with channels.
-#[cfg(not(feature = "bincode"))]
-pub trait Data : Send+Sync+Any+Abomonation+'static { }
-#[cfg(not(feature = "bincode"))]
-impl<T: Send+Sync+Any+Abomonation+'static> Data for T { }
+use std::sync::mpsc::{Sender, Receiver};
 
-/// A composite trait for types that may be used with channels.
-#[cfg(feature = "bincode")]
-pub trait Data : Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static { }
-#[cfg(feature = "bincode")]
-impl<T: Send+Sync+Any+Serialize+for<'a>Deserialize<'a>+'static> Data for T { }
+use timely_bytes::arc::Bytes;
+
+/// A type that can be serialized and deserialized through `Bytes`.
+pub trait Bytesable {
+    /// Wrap bytes as `Self`.
+    fn from_bytes(bytes: Bytes) -> Self;
+
+    /// The number of bytes required to serialize the data.
+    fn length_in_bytes(&self) -> usize;
+
+    /// Writes the binary representation into `writer`.
+    fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W);
+}
 
 /// Pushing elements of type `T`.
 ///
@@ -167,8 +168,6 @@ impl<T, P: ?Sized + Pull<T>> Pull<T> for Box<P> {
 }
 
 
-use crossbeam_channel::{Sender, Receiver};
-
 /// Allocate a matrix of send and receive changes to exchange items.
 ///
 /// This method constructs channels for `sends` threads to create and send
@@ -179,11 +178,11 @@ fn promise_futures<T>(sends: usize, recvs: usize) -> (Vec<Vec<Sender<T>>>, Vec<V
     let mut senders: Vec<_> = (0 .. sends).map(|_| Vec::with_capacity(recvs)).collect();
     let mut recvers: Vec<_> = (0 .. recvs).map(|_| Vec::with_capacity(sends)).collect();
 
-    for sender in 0 .. sends {
-        for recver in 0 .. recvs {
-            let (send, recv) = crossbeam_channel::unbounded();
-            senders[sender].push(send);
-            recvers[recver].push(recv);
+    for sender in senders.iter_mut() {
+        for recver in recvers.iter_mut() {
+            let (send, recv) = std::sync::mpsc::channel();
+            sender.push(send);
+            recver.push(recv);
         }
     }
 

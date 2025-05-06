@@ -1,13 +1,13 @@
 //! Exchange records between workers.
 
 use crate::ExchangeData;
-use crate::container::PushPartitioned;
+use crate::container::{Container, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::ExchangeCore;
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::{Scope, StreamCore};
 
 /// Exchange records between workers.
-pub trait Exchange<D> {
+pub trait Exchange<C: Container> {
     /// Exchange records between workers.
     ///
     /// The closure supplied should map a reference to a record to a `u64`,
@@ -23,21 +23,25 @@ pub trait Exchange<D> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn exchange(&self, route: impl FnMut(&D) -> u64 + 'static) -> Self;
+    fn exchange<F>(&self, route: F) -> Self
+    where
+        for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static;
 }
 
-impl<G: Scope, C> Exchange<C::Item> for StreamCore<G, C>
+impl<G: Scope, C> Exchange<C> for StreamCore<G, C>
 where
-    C: PushPartitioned + ExchangeData,
-    C::Item: ExchangeData,
+    C: SizableContainer + ExchangeData + crate::dataflow::channels::ContainerBytes,
+    C: for<'a> PushInto<C::Item<'a>>,
+
 {
-    fn exchange(&self, route: impl FnMut(&C::Item) -> u64 + 'static) -> StreamCore<G, C> {
-        let mut container = Default::default();
+    fn exchange<F>(&self, route: F) -> StreamCore<G, C>
+    where
+        for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static,
+    {
         self.unary(ExchangeCore::new(route), "Exchange", |_, _| {
             move |input, output| {
                 input.for_each(|time, data| {
-                    data.swap(&mut container);
-                    output.session(&time).give_container(&mut container);
+                    output.session(&time).give_container(data);
                 });
             }
         })

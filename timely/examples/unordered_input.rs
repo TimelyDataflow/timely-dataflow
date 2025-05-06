@@ -1,6 +1,3 @@
-extern crate timely;
-extern crate timely_communication;
-
 use timely::dataflow::operators::*;
 use timely::Config;
 // use timely::progress::timestamp::RootTimestamp;

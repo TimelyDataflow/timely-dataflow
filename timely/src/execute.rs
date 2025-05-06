@@ -6,6 +6,7 @@ use crate::worker::Worker;
 use crate::{CommunicationConfig, WorkerConfig};
 
 /// Configures the execution of a timely dataflow computation.
+#[derive(Clone, Debug)]
 pub struct Config {
     /// Configuration for the communication infrastructure.
     pub communication: CommunicationConfig,
@@ -14,7 +15,7 @@ pub struct Config {
 }
 
 impl Config {
-    /// Installs options into a [getopts_dep::Options] struct that correspond
+    /// Installs options into a [getopts::Options] struct that correspond
     /// to the parameters in the configuration.
     ///
     /// It is the caller's responsibility to ensure that the installed options
@@ -24,7 +25,7 @@ impl Config {
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn install_options(opts: &mut getopts_dep::Options) {
+    pub fn install_options(opts: &mut getopts::Options) {
         CommunicationConfig::install_options(opts);
         WorkerConfig::install_options(opts);
     }
@@ -32,13 +33,13 @@ impl Config {
     /// Instantiates a configuration based upon the parsed options in `matches`.
     ///
     /// The `matches` object must have been constructed from a
-    /// [getopts_dep::Options] which contained at least the options installed by
+    /// [getopts::Options] which contained at least the options installed by
     /// [Self::install_options].
     ///
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
     #[cfg(feature = "getopts")]
-    pub fn from_matches(matches: &getopts_dep::Matches) -> Result<Config, String> {
+    pub fn from_matches(matches: &getopts::Matches) -> Result<Config, String> {
         Ok(Config {
             communication: CommunicationConfig::from_matches(matches)?,
             worker: WorkerConfig::from_matches(matches)?,
@@ -50,7 +51,7 @@ impl Config {
     /// Most commonly, callers supply `std::env::args()` as the iterator.
     #[cfg(feature = "getopts")]
     pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config, String> {
-        let mut opts = getopts_dep::Options::new();
+        let mut opts = getopts::Options::new();
         Config::install_options(&mut opts);
         let matches = opts.parse(args).map_err(|e| e.to_string())?;
         Config::from_matches(&matches)
@@ -152,7 +153,7 @@ where
     T: Send+'static,
     F: FnOnce(&mut Worker<crate::communication::allocator::thread::Thread>)->T+Send+Sync+'static
 {
-    let alloc = crate::communication::allocator::thread::Thread::new();
+    let alloc = crate::communication::allocator::thread::Thread::default();
     let mut worker = crate::worker::Worker::new(WorkerConfig::default(), alloc);
     let result = func(&mut worker);
     while worker.has_dataflows() {
@@ -218,78 +219,13 @@ where
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
 /// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
-pub fn execute<T, F>(
-    mut config: Config,
-    func: F
-) -> Result<WorkerGuards<T>,String>
+pub fn execute<T, F>(config: Config, func: F) -> Result<WorkerGuards<T>,String>
 where
     T:Send+'static,
-    F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static {
-
-    if let CommunicationConfig::Cluster { ref mut log_fn, .. } = config.communication {
-
-        *log_fn = Box::new(|events_setup| {
-
-            let mut result = None;
-            if let Ok(addr) = ::std::env::var("TIMELY_COMM_LOG_ADDR") {
-
-                use ::std::net::TcpStream;
-                use crate::logging::BatchLogger;
-                use crate::dataflow::operators::capture::EventWriterCore;
-
-                eprintln!("enabled COMM logging to {}", addr);
-
-                if let Ok(stream) = TcpStream::connect(&addr) {
-                    let writer = EventWriterCore::new(stream);
-                    let mut logger = BatchLogger::new(writer);
-                    result = Some(crate::logging_core::Logger::new(
-                        ::std::time::Instant::now(),
-                        ::std::time::Duration::default(),
-                        events_setup,
-                        move |time, data| logger.publish_batch(time, data)
-                    ));
-                }
-                else {
-                    panic!("Could not connect to communication log address: {:?}", addr);
-                }
-            }
-            result
-        });
-    }
-
+    F: Fn(&mut Worker<Allocator>)->T+Send+Sync+'static,
+{
     let (allocators, other) = config.communication.try_build()?;
-
-    let worker_config = config.worker;
-    initialize_from(allocators, other, move |allocator| {
-
-        let mut worker = Worker::new(worker_config.clone(), allocator);
-
-        // If an environment variable is set, use it as the default timely logging.
-        if let Ok(addr) = ::std::env::var("TIMELY_WORKER_LOG_ADDR") {
-
-            use ::std::net::TcpStream;
-            use crate::logging::{BatchLogger, TimelyEvent};
-            use crate::dataflow::operators::capture::EventWriterCore;
-
-            if let Ok(stream) = TcpStream::connect(&addr) {
-                let writer = EventWriterCore::new(stream);
-                let mut logger = BatchLogger::new(writer);
-                worker.log_register()
-                    .insert::<TimelyEvent,_>("timely", move |time, data|
-                        logger.publish_batch(time, data)
-                    );
-            }
-            else {
-                panic!("Could not connect logging stream to: {:?}", addr);
-            }
-        }
-
-        let result = func(&mut worker);
-        while worker.has_dataflows() {
-            worker.step_or_park(None);
-        }
-        result
-    })
+    execute_from(allocators, other, config.worker, func)
 }
 
 /// Executes a timely dataflow from supplied arguments and per-communicator logic.
@@ -308,7 +244,7 @@ where
 ///
 /// The arguments `execute_from_args` currently understands are:
 ///
-/// `-w, --workers`: number of per-process worker threads.
+/// `-w, --threads`: number of per-process worker threads.
 ///
 /// `-n, --processes`: number of processes involved in the computation.
 ///

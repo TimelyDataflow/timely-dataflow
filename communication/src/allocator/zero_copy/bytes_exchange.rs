@@ -3,8 +3,8 @@
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
 
-use bytes::arc::Bytes;
-use super::bytes_slab::BytesSlab;
+use timely_bytes::arc::Bytes;
+use super::bytes_slab::{BytesRefill, BytesSlab};
 
 /// A target for `Bytes`.
 pub trait BytesPush {
@@ -75,9 +75,9 @@ impl BytesPush for MergeQueue {
                 bytes
             };
 
-            for bytes in iterator {
-                if let Err(bytes) = tail.try_merge(bytes) {
-                    queue.push_back(::std::mem::replace(&mut tail, bytes));
+            for more_bytes in iterator {
+                if let Err(more_bytes) = tail.try_merge(more_bytes) {
+                    queue.push_back(::std::mem::replace(&mut tail, more_bytes));
                 }
             }
             queue.push_back(tail);
@@ -142,10 +142,10 @@ impl<P: BytesPush> SendEndpoint<P> {
     }
 
     /// Allocates a new `BytesSendEndpoint` from a shared queue.
-    pub fn new(queue: P) -> Self {
+    pub fn new(queue: P, refill: BytesRefill) -> Self {
         SendEndpoint {
             send: queue,
-            buffer: BytesSlab::new(20),
+            buffer: BytesSlab::new(20, refill),
         }
     }
     /// Makes the next `bytes` bytes valid.
@@ -177,4 +177,3 @@ impl<P: BytesPush> Drop for SendEndpoint<P> {
         self.send_buffer();
     }
 }
-

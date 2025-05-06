@@ -3,16 +3,16 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::dataflow::channels::BundleCore;
+use crate::dataflow::channels::Message;
 use crate::progress::ChangeBatch;
 use crate::communication::Pull;
 use crate::Container;
 
 /// A wrapper which accounts records pulled past in a shared count map.
-pub struct Counter<T: Ord+Clone+'static, D, P: Pull<BundleCore<T, D>>> {
+pub struct Counter<T: Ord+Clone+'static, C, P: Pull<Message<T, C>>> {
     pullable: P,
     consumed: Rc<RefCell<ChangeBatch<T>>>,
-    phantom: ::std::marker::PhantomData<D>,
+    phantom: ::std::marker::PhantomData<C>,
 }
 
 /// A guard type that updates the change batch counts on drop
@@ -24,7 +24,7 @@ pub struct ConsumedGuard<T: Ord + Clone + 'static> {
 
 impl<T:Ord+Clone+'static> ConsumedGuard<T> {
     pub(crate) fn time(&self) -> &T {
-        &self.time.as_ref().unwrap()
+        self.time.as_ref().unwrap()
     }
 }
 
@@ -36,15 +36,15 @@ impl<T:Ord+Clone+'static> Drop for ConsumedGuard<T> {
     }
 }
 
-impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
+impl<T:Ord+Clone+'static, C: Container, P: Pull<Message<T, C>>> Counter<T, C, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
-    pub fn next(&mut self) -> Option<&mut BundleCore<T, D>> {
+    pub fn next(&mut self) -> Option<&mut Message<T, C>> {
         self.next_guarded().map(|(_guard, bundle)| bundle)
     }
 
     #[inline]
-    pub(crate) fn next_guarded(&mut self) -> Option<(ConsumedGuard<T>, &mut BundleCore<T, D>)> {
+    pub(crate) fn next_guarded(&mut self) -> Option<(ConsumedGuard<T>, &mut Message<T, C>)> {
         if let Some(message) = self.pullable.pull() {
             let guard = ConsumedGuard {
                 consumed: Rc::clone(&self.consumed),
@@ -57,7 +57,7 @@ impl<T:Ord+Clone+'static, D: Container, P: Pull<BundleCore<T, D>>> Counter<T, D,
     }
 }
 
-impl<T:Ord+Clone+'static, D, P: Pull<BundleCore<T, D>>> Counter<T, D, P> {
+impl<T:Ord+Clone+'static, C, P: Pull<Message<T, C>>> Counter<T, C, P> {
     /// Allocates a new `Counter` from a boxed puller.
     pub fn new(pullable: P) -> Self {
         Counter {

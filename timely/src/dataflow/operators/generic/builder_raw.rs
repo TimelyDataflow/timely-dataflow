@@ -12,11 +12,11 @@ use crate::scheduling::{Schedule, Activations};
 
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
-
+use crate::progress::operate::{Connectivity, PortConnectivity};
 use crate::Container;
 use crate::dataflow::{StreamCore, Scope};
-use crate::dataflow::channels::pushers::TeeCore;
-use crate::dataflow::channels::pact::ParallelizationContractCore;
+use crate::dataflow::channels::pushers::Tee;
+use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 
 /// Contains type-free information about the operator properties.
@@ -58,9 +58,9 @@ pub struct OperatorBuilder<G: Scope> {
     scope: G,
     index: usize,
     global: usize,
-    address: Vec<usize>,    // path to the operator (ending with index).
+    address: Rc<[usize]>,    // path to the operator (ending with index).
     shape: OperatorShape,
-    summary: Vec<Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>>,
+    summary: Connectivity<<G::Timestamp as Timestamp>::Summary>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {
@@ -70,8 +70,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
         let global = scope.new_identifier();
         let index = scope.allocate_operator_index();
-        let mut address = scope.addr();
-        address.push(index);
+        let address = scope.addr_for_child(index);
         let peers = scope.peers();
 
         OperatorBuilder {
@@ -105,49 +104,54 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P) -> P::Puller
-        where
-            P: ParallelizationContractCore<G::Timestamp, D> {
-        let connection = vec![Antichain::from_elem(Default::default()); self.shape.outputs];
+    pub fn new_input<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P) -> P::Puller
+    where
+        P: ParallelizationContract<G::Timestamp, C>
+    {
+        let connection = (0 .. self.shape.outputs).map(|o| (o, Antichain::from_elem(Default::default())));
         self.new_input_connection(stream, pact, connection)
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<D: Container, P>(&mut self, stream: &StreamCore<G, D>, pact: P, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> P::Puller
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: I) -> P::Puller
     where
-        P: ParallelizationContractCore<G::Timestamp, D> {
-
+        P: ParallelizationContract<G::Timestamp, C>,
+        I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)>,
+    {
         let channel_id = self.scope.new_identifier();
         let logging = self.scope.logging();
-        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, &self.address[..], logging);
+        let (sender, receiver) = pact.connect(&mut self.scope, channel_id, Rc::clone(&self.address), logging);
         let target = Target::new(self.index, self.shape.inputs);
         stream.connect_to(target, sender, channel_id);
 
         self.shape.inputs += 1;
-        assert_eq!(self.shape.outputs, connection.len());
-        self.summary.push(connection);
+        let connectivity: PortConnectivity<_> = connection.into_iter().collect();
+        assert!(connectivity.iter_ports().all(|(o,_)| o < self.shape.outputs));
+        self.summary.push(connectivity);
 
         receiver
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<D: Container>(&mut self) -> (TeeCore<G::Timestamp, D>, StreamCore<G, D>) {
+    pub fn new_output<C: Container>(&mut self) -> (Tee<G::Timestamp, C>, StreamCore<G, C>) {
 
-        let connection = vec![Antichain::from_elem(Default::default()); self.shape.inputs];
+        let connection = (0 .. self.shape.inputs).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output_connection<D: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (TeeCore<G::Timestamp, D>, StreamCore<G, D>) {
-
-        let (targets, registrar) = TeeCore::<G::Timestamp,D>::new();
-        let source = Source::new(self.index, self.shape.outputs);
+    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (Tee<G::Timestamp, C>, StreamCore<G, C>)
+    where
+        I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)>,
+    {
+        let new_output = self.shape.outputs;
+        self.shape.outputs += 1;
+        let (targets, registrar) = Tee::<G::Timestamp,C>::new();
+        let source = Source::new(self.index, new_output);
         let stream = StreamCore::new(source, registrar, self.scope.clone());
 
-        self.shape.outputs += 1;
-        assert_eq!(self.shape.inputs, connection.len());
-        for (summary, entry) in self.summary.iter_mut().zip(connection.into_iter()) {
-            summary.push(entry);
+        for (input, entry) in connection {
+            self.summary[input].add_port(new_output, entry);
         }
 
         (targets, stream)
@@ -175,7 +179,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Information describing the operator.
     pub fn operator_info(&self) -> OperatorInfo {
-        OperatorInfo::new(self.index, self.global, &self.address[..])
+        OperatorInfo::new(self.index, self.global, Rc::clone(&self.address))
     }
 }
 
@@ -185,11 +189,11 @@ where
     L: FnMut(&mut SharedProgress<T>)->bool+'static,
 {
     shape: OperatorShape,
-    address: Vec<usize>,
+    address: Rc<[usize]>,
     logic: L,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
     activations: Rc<RefCell<Activations>>,
-    summary: Vec<Vec<Antichain<T::Summary>>>,
+    summary: Connectivity<T::Summary>,
 }
 
 impl<T, L> Schedule for OperatorCore<T, L>
@@ -214,7 +218,7 @@ where
     fn outputs(&self) -> usize { self.shape.outputs }
 
     // announce internal topology as fully connected, and hold all default capabilities.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>) {
+    fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>) {
 
         // Request the operator to be scheduled at least once.
         self.activations.borrow_mut().activate(&self.address[..]);
@@ -226,7 +230,7 @@ where
             .iter_mut()
             .for_each(|output| output.update(T::minimum(), self.shape.peers as i64));
 
-        (self.summary.clone(), self.shared_progress.clone())
+        (self.summary.clone(), Rc::clone(&self.shared_progress))
     }
 
     // initialize self.frontier antichains as indicated by hosting scope.

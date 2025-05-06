@@ -1,9 +1,8 @@
-extern crate timely;
-
 use timely::{Config, CommunicationConfig, WorkerConfig};
 use timely::dataflow::channels::pact::Pipeline;
 use timely::dataflow::operators::{Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
+use timely::container::CapacityContainerBuilder;
 
 #[test] fn barrier_sync_1w() { barrier_sync_helper(CommunicationConfig::Thread); }
 #[test] fn barrier_sync_2w() { barrier_sync_helper(CommunicationConfig::Process(2)); }
@@ -17,8 +16,8 @@ fn barrier_sync_helper(comm_config: ::timely::CommunicationConfig) {
     };
     timely::execute(config, move |worker| {
         worker.dataflow(move |scope| {
-            let (handle, stream) = scope.feedback::<u64>(1);
-            stream.unary_notify(
+            let (handle, stream) = scope.feedback::<Vec<usize>>(1);
+            stream.unary_notify::<CapacityContainerBuilder<_>, _, _>(
                 Pipeline,
                 "Barrier",
                 vec![0, 1],

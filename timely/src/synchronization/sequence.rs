@@ -106,8 +106,8 @@ impl<T: ExchangeData> Sequencer<T> {
         // only initialize the activator once we obtain the operator
         // address.
         let activator = Rc::new(RefCell::new(None));
-        let activator_source = activator.clone();
-        let activator_sink = activator.clone();
+        let activator_source = Rc::clone(&activator);
+        let activator_sink = Rc::clone(&activator);
 
         // build a dataflow used to serialize and circulate commands
         worker.dataflow::<Duration,_,_>(move |dataflow| {
@@ -116,7 +116,6 @@ impl<T: ExchangeData> Sequencer<T> {
             let peers = dataflow.peers();
 
             let mut recvd = Vec::new();
-            let mut vector = Vec::new();
 
             // monotonic counter to maintain per-worker total order.
             let mut counter = 0;
@@ -124,11 +123,11 @@ impl<T: ExchangeData> Sequencer<T> {
             // a source that attempts to pull from `recv` and produce commands for everyone
             source(dataflow, "SequenceInput", move |capability, info| {
 
-                // intialize activator, now that we have the address
+                // initialize activator, now that we have the address
                 activator_source
                     .borrow_mut()
                     .replace(CatchupActivator {
-                        activator: scope.activator_for(&info.address[..]),
+                        activator: scope.activator_for(info.address),
                         catchup_until: None,
                     });
 
@@ -178,11 +177,9 @@ impl<T: ExchangeData> Sequencer<T> {
 
                     // grab each command and queue it up
                     input.for_each(|time, data| {
-                        data.swap(&mut vector);
-
-                        recvd.reserve(vector.len());
-                        for (worker, counter, element) in vector.drain(..) {
-                            recvd.push(((time.time().clone(), worker, counter), element));
+                        recvd.reserve(data.len());
+                        for (worker, counter, element) in data.drain(..) {
+                            recvd.push(((*time.time(), worker, counter), element));
                         }
                     });
 

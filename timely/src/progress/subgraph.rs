@@ -10,16 +10,16 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
-use crate::logging::TimelyLogger as Logger;
-use crate::logging::TimelyProgressLogger as ProgressLogger;
+use crate::logging::{TimelyLogger as Logger, TimelyProgressEventBuilder};
+use crate::logging::TimelySummaryLogger as SummaryLogger;
 
 use crate::scheduling::Schedule;
 use crate::scheduling::activate::Activations;
 
-use crate::progress::frontier::{Antichain, MutableAntichain, MutableAntichainFilter};
+use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress};
 use crate::progress::{Location, Port, Source, Target};
-
+use crate::progress::operate::{Connectivity, PortConnectivity};
 use crate::progress::ChangeBatch;
 use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
@@ -45,10 +45,13 @@ where
     pub name: String,
 
     /// A sequence of integers uniquely identifying the subgraph.
-    pub path: Vec<usize>,
+    pub path: Rc<[usize]>,
 
     /// The index assigned to the subgraph by its parent.
     index: usize,
+
+    /// A global identifier for this subgraph.
+    identifier: usize,
 
     // handles to the children of the scope. index i corresponds to entry i-1, unless things change.
     children: Vec<PerOperatorState<TInner>>,
@@ -64,9 +67,8 @@ where
 
     /// Logging handle
     logging: Option<Logger>,
-
-    /// Progress logging handle
-    progress_logging: Option<ProgressLogger>,
+    /// Typed logging handle for operator summaries.
+    summary_logging: Option<SummaryLogger<TInner::Summary>>,
 }
 
 impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
@@ -94,32 +96,33 @@ where
         self.edge_stash.push((source, target));
     }
 
-    /// Creates a new Subgraph from a channel allocator and "descriptive" indices.
+    /// Creates a `SubgraphBuilder` from a path of indexes from the dataflow root to the subgraph,
+    /// terminating with the local index of the new subgraph itself.
     pub fn new_from(
-        index: usize,
-        mut path: Vec<usize>,
+        path: Rc<[usize]>,
+        identifier: usize,
         logging: Option<Logger>,
-        progress_logging: Option<ProgressLogger>,
+        summary_logging: Option<SummaryLogger<TInner::Summary>>,
         name: &str,
     )
         -> SubgraphBuilder<TOuter, TInner>
     {
-        path.push(index);
-
         // Put an empty placeholder for "outer scope" representative.
         let children = vec![PerOperatorState::empty(0, 0)];
+        let index = path[path.len() - 1];
 
         SubgraphBuilder {
             name: name.to_owned(),
             path,
             index,
+            identifier,
             children,
             child_count: 1,
             edge_stash: Vec::new(),
             input_messages: Vec::new(),
             output_capabilities: Vec::new(),
             logging,
-            progress_logging,
+            summary_logging,
         }
     }
 
@@ -131,16 +134,18 @@ where
 
     /// Adds a new child to the subgraph.
     pub fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize) {
-        {
-            let mut child_path = self.path.clone();
+        if let Some(l) = &mut self.logging {
+            let mut child_path = Vec::with_capacity(self.path.len() + 1);
+            child_path.extend_from_slice(&self.path[..]);
             child_path.push(index);
-            self.logging.as_mut().map(|l| l.log(crate::logging::OperatesEvent {
+
+            l.log(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
                 name: child.name().to_owned(),
-            }));
+            });
         }
-        self.children.push(PerOperatorState::new(child, index, self.path.clone(), identifier, self.logging.clone()))
+        self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone(), &mut self.summary_logging));
     }
 
     /// Now that initialization is complete, actually build a subgraph.
@@ -157,13 +162,14 @@ where
         let inputs = self.input_messages.len();
         let outputs = self.output_capabilities.len();
 
-        // Create empty child zero represenative.
+        // Create empty child zero representative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
         let mut builder = reachability::Builder::new();
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
-        builder.add_node(0, outputs, inputs, vec![vec![Antichain::new(); inputs]; outputs]);
+        let summary = (0..outputs).map(|_| PortConnectivity::default()).collect();
+        builder.add_node(0, outputs, inputs, summary);
         for (index, child) in self.children.iter().enumerate().skip(1) {
             builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
         }
@@ -174,14 +180,15 @@ where
         }
 
         // The `None` argument is optional logging infrastructure.
-        let path = self.path.clone();
+        let type_name = std::any::type_name::<TInner>();
         let reachability_logging =
         worker.log_register()
-            .get::<reachability::logging::TrackerEvent>("timely/reachability")
-            .map(|logger| reachability::logging::TrackerLogger::new(path, logger));
+            .get::<reachability::logging::TrackerEventBuilder<TInner>>(&format!("timely/reachability/{type_name}"))
+            .map(|logger| reachability::logging::TrackerLogger::new(self.identifier, logger));
+        let progress_logging = worker.log_register().get::<TimelyProgressEventBuilder<TInner>>(&format!("timely/progress/{type_name}"));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
-        let progcaster = Progcaster::new(worker, &self.path, self.logging.clone(), self.progress_logging.clone());
+        let progcaster = Progcaster::new(worker, Rc::clone(&self.path), self.identifier, self.logging.clone(), progress_logging);
 
         let mut incomplete = vec![true; self.children.len()];
         incomplete[0] = false;
@@ -230,7 +237,7 @@ where
 {
     name: String,           // an informative name.
     /// Path of identifiers from the root.
-    pub path: Vec<usize>,
+    pub path: Rc<[usize]>,
     inputs: usize,          // number of inputs.
     outputs: usize,         // number of outputs.
 
@@ -263,7 +270,7 @@ where
     progcaster: Progcaster<TInner>,
 
     shared_progress: Rc<RefCell<SharedProgress<TOuter>>>,
-    scope_summary: Vec<Vec<Antichain<TInner::Summary>>>,
+    scope_summary: Connectivity<TInner::Summary>,
 
     progress_mode: ProgressMode,
 }
@@ -539,7 +546,7 @@ where
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<TOuter::Summary>>>, Rc<RefCell<SharedProgress<TOuter>>>) {
+    fn get_internal_summary(&mut self) -> (Connectivity<TOuter::Summary>, Rc<RefCell<SharedProgress<TOuter>>>) {
 
         // double-check that child 0 (the outside world) is correctly shaped.
         assert_eq!(self.children[0].outputs, self.inputs());
@@ -548,12 +555,12 @@ where
         // Note that we need to have `self.inputs()` elements in the summary
         // with each element containing `self.outputs()` antichains regardless
         // of how long `self.scope_summary` is
-        let mut internal_summary = vec![vec![Antichain::new(); self.outputs()]; self.inputs()];
+        let mut internal_summary = vec![PortConnectivity::default(); self.inputs()];
         for (input_idx, input) in self.scope_summary.iter().enumerate() {
-            for (output_idx, output) in input.iter().enumerate() {
-                let antichain = &mut internal_summary[input_idx][output_idx];
-                antichain.reserve(output.elements().len());
-                antichain.extend(output.elements().iter().cloned().map(TInner::summarize));
+            for (output_idx, output) in input.iter_ports() {
+                for outer in output.elements().iter().cloned().map(TInner::summarize) {
+                    internal_summary[input_idx].insert(output_idx, outer);
+                }
             }
         }
 
@@ -563,8 +570,8 @@ where
             "the internal summary should have as many elements as there are inputs",
         );
         debug_assert!(
-            internal_summary.iter().all(|summary| summary.len() == self.outputs()),
-            "each element of the internal summary should have as many elements as there are outputs",
+            internal_summary.iter().all(|os| os.iter_ports().all(|(o,_)| o < self.outputs())),
+            "each element of the internal summary should only reference valid outputs",
         );
 
         // Each child has expressed initial capabilities (their `shared_progress.internals`).
@@ -577,7 +584,7 @@ where
         self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
 
         // Return summaries and shared progress information.
-        (internal_summary, self.shared_progress.clone())
+        (internal_summary, Rc::clone(&self.shared_progress))
     }
 
     fn set_external_summary(&mut self) {
@@ -607,7 +614,7 @@ struct PerOperatorState<T: Timestamp> {
 
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    internal_summary: Vec<Vec<Antichain<T::Summary>>>,   // cached result from get_internal_summary.
+    internal_summary: Connectivity<T::Summary>,   // cached result from get_internal_summary.
 
     logging: Option<Logger>,
 }
@@ -619,7 +626,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             name:       "External".to_owned(),
             operator:   None,
             index:      0,
-            id:         usize::max_value(),
+            id:         usize::MAX,
             local:      false,
             notify:     true,
             inputs,
@@ -637,9 +644,9 @@ impl<T: Timestamp> PerOperatorState<T> {
     pub fn new(
         mut scope: Box<dyn Operate<T>>,
         index: usize,
-        mut _path: Vec<usize>,
         identifier: usize,
-        logging: Option<Logger>
+        logging: Option<Logger>,
+        summary_logging: &mut Option<SummaryLogger<T::Summary>>,
     ) -> PerOperatorState<T>
     {
         let local = scope.local();
@@ -649,6 +656,13 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         let (internal_summary, shared_progress) = scope.get_internal_summary();
 
+        if let Some(l) = summary_logging {
+            l.log(crate::logging::OperatesSummaryEvent {
+                id: identifier,
+                summary: internal_summary.clone(),
+            })
+        }
+
         assert_eq!(
             internal_summary.len(),
             inputs,
@@ -657,8 +671,8 @@ impl<T: Timestamp> PerOperatorState<T> {
             inputs,
         );
         assert!(
-            !internal_summary.iter().any(|x| x.len() != outputs),
-            "operator summary had too few outputs",
+            internal_summary.iter().all(|os| os.iter_ports().all(|(o,_)| o < outputs)),
+            "operator summary references invalid output port",
         );
 
         PerOperatorState {
@@ -730,7 +744,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
     /// Extracts shared progress information and converts to pointstamp changes.
-    fn extract_progress(&mut self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>) {
+    fn extract_progress(&self, pointstamps: &mut ChangeBatch<(Location, T)>, temp_active: &mut BinaryHeap<Reverse<usize>>) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 
@@ -762,7 +776,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     /// The validity of shared progress information depends on both the external frontiers and the
     /// internal capabilities, as events can occur that cannot be explained locally otherwise.
     #[allow(dead_code)]
-    fn validate_progress(&mut self, child_state: &reachability::PerOperator<T>) {
+    fn validate_progress(&self, child_state: &reachability::PerOperator<T>) {
 
         let shared_progress = &mut *self.shared_progress.borrow_mut();
 

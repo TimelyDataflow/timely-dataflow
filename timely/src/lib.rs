@@ -2,8 +2,7 @@
 //!
 //! The code is organized in crates and modules that are meant to depend as little as possible on each other.
 //!
-//! **Serialization**: The [`abomonation`] crate contains simple and highly unsafe
-//! serialization routines.
+//! **Serialization**: Timely uses the `bincode` crate for serialization. Performance could be improved.
 //!
 //! **Communication**: The [`timely_communication`] crate defines several primitives for
 //! communicating between dataflow workers, and across machine boundaries.
@@ -57,16 +56,6 @@
 
 #![forbid(missing_docs)]
 
-#[macro_use]
-extern crate abomonation_derive;
-extern crate abomonation;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate timely_communication;
-extern crate timely_bytes;
-extern crate timely_logging;
-
 pub use execute::{execute, execute_directly, example};
 #[cfg(feature = "getopts")]
 pub use execute::execute_from_args;
@@ -119,5 +108,71 @@ impl<T: Clone+'static> Data for T { }
 ///
 /// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`
 /// `Data` trait, which describes requirements for communication along channels.
-pub trait ExchangeData: Data + communication::Data { }
-impl<T: Data + communication::Data> ExchangeData for T { }
+pub trait ExchangeData: Data + encoding::Data { }
+impl<T: Data + encoding::Data> ExchangeData for T { }
+
+#[doc = include_str!("../../README.md")]
+#[cfg(doctest)]
+pub struct ReadmeDoctests;
+
+/// A wrapper that indicates a serialization/deserialization strategy.
+pub use encoding::Bincode;
+
+mod encoding {
+
+    use std::any::Any;
+    use serde::{Serialize, Deserialize};
+    use timely_bytes::arc::Bytes;
+    use timely_communication::Bytesable;
+
+    /// A composite trait for types that may be used with channels.
+    pub trait Data : Send+Any+Serialize+for<'a>Deserialize<'a> { }
+    impl<T: Send+Any+Serialize+for<'a>Deserialize<'a>> Data for T { }
+
+    /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
+    #[derive(Clone)]
+    pub struct Bincode<T> {
+        /// Bincode contents.
+        pub payload: T,
+    }
+
+    impl<T> From<T> for Bincode<T> {
+        fn from(payload: T) -> Self {
+            Self { payload }
+        }
+    }
+
+    // We will pad out anything we write to make the result `u64` aligned.
+    impl<T: Data> Bytesable for Bincode<T> {
+        fn from_bytes(bytes: Bytes) -> Self {
+            let typed = ::bincode::deserialize(&bytes[..]).expect("bincode::deserialize() failed");
+            let typed_size = ::bincode::serialized_size(&typed).expect("bincode::serialized_size() failed") as usize;
+            assert_eq!(bytes.len(), (typed_size + 7) & !7);
+            Bincode { payload: typed }
+        }
+
+        fn length_in_bytes(&self) -> usize {
+            let typed_size = ::bincode::serialized_size(&self.payload).expect("bincode::serialized_size() failed") as usize;
+            (typed_size + 7) & !7
+        }
+
+        fn into_bytes<W: ::std::io::Write>(&self, mut writer: &mut W) {
+            let typed_size = ::bincode::serialized_size(&self.payload).expect("bincode::serialized_size() failed") as usize;
+            let typed_slop = ((typed_size + 7) & !7) - typed_size;
+            ::bincode::serialize_into(&mut writer, &self.payload).expect("bincode::serialize_into() failed");
+            writer.write_all(&[0u8; 8][..typed_slop]).unwrap();
+        }
+    }
+
+    impl<T> ::std::ops::Deref for Bincode<T> {
+        type Target = T;
+        fn deref(&self) -> &Self::Target {
+            &self.payload
+        }
+    }
+    impl<T> ::std::ops::DerefMut for Bincode<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.payload
+        }
+    }
+}

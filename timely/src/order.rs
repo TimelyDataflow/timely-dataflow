@@ -8,16 +8,16 @@
 ///
 /// The partial order should be consistent with [Eq], in the sense that if `a == b` then
 /// `a.less_equal(b)` and `b.less_equal(a)`.
-pub trait PartialOrder : Eq {
+pub trait PartialOrder<Rhs: ?Sized = Self>: PartialEq<Rhs> {
     /// Returns true iff one element is strictly less than the other.
     #[must_use]
-    fn less_than(&self, other: &Self) -> bool {
+    fn less_than(&self, other: &Rhs) -> bool {
         self.less_equal(other) && self != other
     }
 
     /// Returns true iff one element is less than or equal to the other.
     #[must_use]
-    fn less_equal(&self, other: &Self) -> bool;
+    fn less_equal(&self, other: &Rhs) -> bool;
 }
 
 /// A type that is totally ordered.
@@ -66,8 +66,10 @@ pub use product::Product;
 /// A pair of timestamps, partially ordered by the product order.
 mod product {
     use std::fmt::{Formatter, Error, Debug};
+    use columnar::Columnar;
+    use serde::{Deserialize, Serialize};
 
-    use crate::container::columnation::{Columnation, Region};
+    use columnation::{Columnation, Region};
     use crate::order::{Empty, TotalOrder};
     use crate::progress::Timestamp;
     use crate::progress::timestamp::PathSummary;
@@ -77,7 +79,8 @@ mod product {
     ///
     /// We use `Product` rather than `(TOuter, TInner)` so that we can derive our own `PartialOrder`,
     /// because Rust just uses the lexicographic total order.
-    #[derive(Abomonation, Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Hash, Eq, PartialEq, Default, Ord, PartialOrd, Serialize, Deserialize, Columnar)]
+    #[columnar(derive(Eq, PartialEq, Ord, PartialOrd))]
     pub struct Product<TOuter, TInner> {
         /// Outer timestamp.
         pub outer: TOuter,
@@ -103,9 +106,14 @@ mod product {
     }
 
     use super::PartialOrder;
-    impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for Product<TOuter, TInner> {
+    impl<TOuter, TOuter2, TInner, TInner2> PartialOrder<Product<TOuter2, TInner2>> for Product<TOuter, TInner>
+    where
+        TOuter: PartialOrder<TOuter2>,
+        TInner: PartialOrder<TInner2>,
+        Self: PartialEq<Product<TOuter2, TInner2>>,
+    {
         #[inline]
-        fn less_equal(&self, other: &Self) -> bool {
+        fn less_equal(&self, other: &Product<TOuter2, TInner2>) -> bool {
             self.outer.less_equal(&other.outer) && self.inner.less_equal(&other.inner)
         }
     }
@@ -195,9 +203,14 @@ mod product {
 mod tuple {
 
     use super::PartialOrder;
-    impl<TOuter: PartialOrder, TInner: PartialOrder> PartialOrder for (TOuter, TInner) {
+    impl<TOuter, TOuter2, TInner, TInner2> PartialOrder<(TOuter2, TInner2)> for (TOuter, TInner)
+    where
+        TOuter: PartialOrder<TOuter2>,
+        TInner: PartialOrder<TInner2>,
+        (TOuter, TInner): PartialEq<(TOuter2, TInner2)>,
+    {
         #[inline]
-        fn less_equal(&self, other: &Self) -> bool {
+        fn less_equal(&self, other: &(TOuter2, TInner2)) -> bool {
             // We avoid Rust's `PartialOrd` implementation, for reasons of correctness.
             self.0.less_than(&other.0) || (self.0.eq(&other.0) && self.1.less_equal(&other.1))
         }

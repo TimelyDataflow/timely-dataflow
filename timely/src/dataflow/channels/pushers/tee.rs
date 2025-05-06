@@ -4,25 +4,22 @@ use std::cell::RefCell;
 use std::fmt::{self, Debug};
 use std::rc::Rc;
 
-use crate::dataflow::channels::{BundleCore, Message};
+use crate::dataflow::channels::Message;
 
 use crate::communication::Push;
 use crate::{Container, Data};
 
-type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
+type PushList<T, C> = Rc<RefCell<Vec<Box<dyn Push<Message<T, C>>>>>>;
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
-pub struct TeeCore<T, D> {
-    buffer: D,
-    shared: PushList<T, D>,
+pub struct Tee<T, C> {
+    buffer: C,
+    shared: PushList<T, C>,
 }
 
-/// [TeeCore] specialized to `Vec`-based container.
-pub type Tee<T, D> = TeeCore<T, Vec<D>>;
-
-impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
+impl<T: Data, C: Container + Data> Push<Message<T, C>> for Tee<T, C> {
     #[inline]
-    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) {
+    fn push(&mut self, message: &mut Option<Message<T, C>>) {
         let mut pushers = self.shared.borrow_mut();
         if let Some(message) = message {
             for index in 1..pushers.len() {
@@ -42,31 +39,31 @@ impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
     }
 }
 
-impl<T, D: Container> TeeCore<T, D> {
+impl<T, C: Container> Tee<T, C> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
-    pub fn new() -> (TeeCore<T, D>, TeeHelper<T, D>) {
+    pub fn new() -> (Tee<T, C>, TeeHelper<T, C>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
-        let port = TeeCore {
+        let port = Tee {
             buffer: Default::default(),
-            shared: shared.clone(),
+            shared: Rc::clone(&shared),
         };
 
         (port, TeeHelper { shared })
     }
 }
 
-impl<T, D: Container> Clone for TeeCore<T, D> {
+impl<T, C: Container> Clone for Tee<T, C> {
     fn clone(&self) -> Self {
         Self {
             buffer: Default::default(),
-            shared: self.shared.clone(),
+            shared: Rc::clone(&self.shared),
         }
     }
 }
 
-impl<T, D> Debug for TeeCore<T, D>
+impl<T, C> Debug for Tee<T, C>
 where
-    D: Debug,
+    C: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("Tee");
@@ -83,26 +80,26 @@ where
 }
 
 /// A shared list of `Box<Push>` used to add `Push` implementors.
-pub struct TeeHelper<T, D> {
-    shared: PushList<T, D>,
+pub struct TeeHelper<T, C> {
+    shared: PushList<T, C>,
 }
 
-impl<T, D> TeeHelper<T, D> {
+impl<T, C> TeeHelper<T, C> {
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
-    pub fn add_pusher<P: Push<BundleCore<T, D>>+'static>(&self, pusher: P) {
+    pub fn add_pusher<P: Push<Message<T, C>>+'static>(&self, pusher: P) {
         self.shared.borrow_mut().push(Box::new(pusher));
     }
 }
 
-impl<T, D> Clone for TeeHelper<T, D> {
+impl<T, C> Clone for TeeHelper<T, C> {
     fn clone(&self) -> Self {
         TeeHelper {
-            shared: self.shared.clone(),
+            shared: Rc::clone(&self.shared),
         }
     }
 }
 
-impl<T, D> Debug for TeeHelper<T, D> {
+impl<T, C> Debug for TeeHelper<T, C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut debug = f.debug_struct("TeeHelper");
 

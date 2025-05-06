@@ -8,11 +8,11 @@ use std::cell::RefCell;
 
 use crate::allocator::thread::ThreadBuilder;
 use crate::allocator::process::ProcessBuilder as TypedProcessBuilder;
-use crate::allocator::{Allocate, AllocateBuilder, Thread, Process};
+use crate::allocator::{Allocate, AllocateBuilder, Exchangeable, Thread, Process};
 use crate::allocator::zero_copy::allocator_process::{ProcessBuilder, ProcessAllocator};
 use crate::allocator::zero_copy::allocator::{TcpBuilder, TcpAllocator};
 
-use crate::{Push, Pull, Data, Message};
+use crate::{Push, Pull};
 
 /// Enumerates known implementors of `Allocate`.
 /// Passes trait method calls on to members.
@@ -25,6 +25,8 @@ pub enum Generic {
     ProcessBinary(ProcessAllocator),
     /// Inter-process allocator.
     ZeroCopy(TcpAllocator<Process>),
+    /// Inter-process allocator, intra-process serializing allocator.
+    ZeroCopyBinary(TcpAllocator<ProcessAllocator>),
 }
 
 impl Generic {
@@ -35,6 +37,7 @@ impl Generic {
             Generic::Process(p) => p.index(),
             Generic::ProcessBinary(pb) => pb.index(),
             Generic::ZeroCopy(z) => z.index(),
+            Generic::ZeroCopyBinary(z) => z.index(),
         }
     }
     /// The number of workers.
@@ -44,15 +47,27 @@ impl Generic {
             Generic::Process(p) => p.peers(),
             Generic::ProcessBinary(pb) => pb.peers(),
             Generic::ZeroCopy(z) => z.peers(),
+            Generic::ZeroCopyBinary(z) => z.peers(),
         }
     }
     /// Constructs several send endpoints and one receive endpoint.
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
         match self {
             Generic::Thread(t) => t.allocate(identifier),
             Generic::Process(p) => p.allocate(identifier),
             Generic::ProcessBinary(pb) => pb.allocate(identifier),
             Generic::ZeroCopy(z) => z.allocate(identifier),
+            Generic::ZeroCopyBinary(z) => z.allocate(identifier),
+        }
+    }
+    /// Constructs several send endpoints and one receive endpoint.
+    fn broadcast<T: Exchangeable+Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        match self {
+            Generic::Thread(t) => t.broadcast(identifier),
+            Generic::Process(p) => p.broadcast(identifier),
+            Generic::ProcessBinary(pb) => pb.broadcast(identifier),
+            Generic::ZeroCopy(z) => z.broadcast(identifier),
+            Generic::ZeroCopyBinary(z) => z.broadcast(identifier),
         }
     }
     /// Perform work before scheduling operators.
@@ -62,6 +77,7 @@ impl Generic {
             Generic::Process(p) => p.receive(),
             Generic::ProcessBinary(pb) => pb.receive(),
             Generic::ZeroCopy(z) => z.receive(),
+            Generic::ZeroCopyBinary(z) => z.receive(),
         }
     }
     /// Perform work after scheduling operators.
@@ -71,6 +87,7 @@ impl Generic {
             Generic::Process(p) => p.release(),
             Generic::ProcessBinary(pb) => pb.release(),
             Generic::ZeroCopy(z) => z.release(),
+            Generic::ZeroCopyBinary(z) => z.release(),
         }
     }
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
@@ -79,6 +96,7 @@ impl Generic {
             Generic::Process(ref p) => p.events(),
             Generic::ProcessBinary(ref pb) => pb.events(),
             Generic::ZeroCopy(ref z) => z.events(),
+            Generic::ZeroCopyBinary(ref z) => z.events(),
         }
     }
 }
@@ -86,10 +104,12 @@ impl Generic {
 impl Allocate for Generic {
     fn index(&self) -> usize { self.index() }
     fn peers(&self) -> usize { self.peers() }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
         self.allocate(identifier)
     }
-
+    fn broadcast<T: Exchangeable+Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+        self.broadcast(identifier)
+    }
     fn receive(&mut self) { self.receive(); }
     fn release(&mut self) { self.release(); }
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> { self.events() }
@@ -99,6 +119,7 @@ impl Allocate for Generic {
             Generic::Process(p) => p.await_events(_duration),
             Generic::ProcessBinary(pb) => pb.await_events(_duration),
             Generic::ZeroCopy(z) => z.await_events(_duration),
+            Generic::ZeroCopyBinary(z) => z.await_events(_duration),
         }
     }
 }
@@ -118,6 +139,8 @@ pub enum GenericBuilder {
     ProcessBinary(ProcessBuilder),
     /// Builder for `ZeroCopy` allocator.
     ZeroCopy(TcpBuilder<TypedProcessBuilder>),
+    /// Builder for `ZeroCopyBinary` allocator.
+    ZeroCopyBinary(TcpBuilder<ProcessBuilder>),
 }
 
 impl AllocateBuilder for GenericBuilder {
@@ -128,6 +151,7 @@ impl AllocateBuilder for GenericBuilder {
             GenericBuilder::Process(p) => Generic::Process(p.build()),
             GenericBuilder::ProcessBinary(pb) => Generic::ProcessBinary(pb.build()),
             GenericBuilder::ZeroCopy(z) => Generic::ZeroCopy(z.build()),
+            GenericBuilder::ZeroCopyBinary(z) => Generic::ZeroCopyBinary(z.build()),
         }
     }
 }

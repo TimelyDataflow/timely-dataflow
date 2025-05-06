@@ -9,7 +9,7 @@ use crate::{Container, Data};
 pub trait Branch<S: Scope, D: Data> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
-    /// the data and its time. If it returns true, the record will be sent
+    /// the data and its time. If it returns `true`, the record will be sent
     /// to the second returned stream, otherwise it will be sent to the first.
     ///
     /// If the result of the closure only depends on the time, not the data,
@@ -46,17 +46,15 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
         let (mut output2, stream2) = builder.new_output();
 
         builder.build(move |_| {
-            let mut vector = Vec::new();
             move |_frontiers| {
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
                 input.for_each(|time, data| {
-                    data.swap(&mut vector);
                     let mut out1 = output1_handle.session(&time);
                     let mut out2 = output2_handle.session(&time);
-                    for datum in vector.drain(..) {
-                        if condition(&time.time(), &datum) {
+                    for datum in data.drain(..) {
+                        if condition(time.time(), &datum) {
                             out2.give(datum);
                         } else {
                             out1.give(datum);
@@ -73,7 +71,7 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
 /// Extension trait for `Stream`.
 pub trait BranchWhen<T>: Sized {
     /// Takes one input stream and splits it into two output streams.
-    /// For each time, the supplied closure is called. If it returns true,
+    /// For each time, the supplied closure is called. If it returns `true`,
     /// the records for that will be sent to the second returned stream, otherwise
     /// they will be sent to the first.
     ///
@@ -94,7 +92,7 @@ pub trait BranchWhen<T>: Sized {
     fn branch_when(&self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
+impl<S: Scope, C: Container + Data> BranchWhen<S::Timestamp> for StreamCore<S, C> {
     fn branch_when(&self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 
@@ -104,19 +102,17 @@ impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
 
         builder.build(move |_| {
 
-            let mut container = Default::default();
             move |_frontiers| {
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
                 input.for_each(|time, data| {
-                    data.swap(&mut container);
-                    let mut out = if condition(&time.time()) {
+                    let mut out = if condition(time.time()) {
                         output2_handle.session(&time)
                     } else {
                         output1_handle.session(&time)
                     };
-                    out.give_container(&mut container);
+                    out.give_container(data);
                 });
             }
         });

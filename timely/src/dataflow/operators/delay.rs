@@ -97,11 +97,9 @@ pub trait Delay<G: Scope, D: Data> {
 impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
     fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
         let mut elements = HashMap::new();
-        let mut vector = Vec::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
-                data.swap(&mut vector);
-                for datum in vector.drain(..) {
+                for datum in data.drain(..) {
                     let new_time = func(&datum, &time);
                     assert!(time.time().less_equal(&new_time));
                     elements.entry(new_time.clone())
@@ -133,14 +131,14 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
                 assert!(time.time().less_equal(&new_time));
                 elements.entry(new_time.clone())
                         .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
-                        .push(data.replace(Vec::new()));
+                        .push(std::mem::take(data));
             });
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain(..) {
-                        output.session(&time).give_vec(&mut data);
+                        output.session(&time).give_container(&mut data);
                     }
                 }
             });

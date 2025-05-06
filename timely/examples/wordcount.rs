@@ -1,5 +1,3 @@
-extern crate timely;
-
 use std::collections::HashMap;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
@@ -11,7 +9,7 @@ fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
 
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         // define a distribution function for strings.
         let exchange = Exchange::new(|x: &(String, i64)| (x.0).len() as u64);
@@ -19,11 +17,13 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         worker.dataflow::<usize,_,_>(|scope| {
             input.to_stream(scope)
-                 .flat_map(|(text, diff): (String, i64)|
+                .container::<Vec<_>>()
+                .flat_map(|(text, diff): (String, i64)|
                     text.split_whitespace()
                         .map(move |word| (word.to_owned(), diff))
                         .collect::<Vec<_>>()
                  )
+                 .container::<Vec<_>>()
                  .unary_frontier(exchange, "WordCount", |_capability, _info| {
 
                     let mut queues = HashMap::new();
@@ -33,7 +33,7 @@ fn main() {
                         while let Some((time, data)) = input.next() {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
-                                  .push(data.replace(Vec::new()));
+                                  .push(std::mem::take(data));
                         }
 
                         for (key, val) in queues.iter_mut() {
@@ -51,8 +51,9 @@ fn main() {
 
                         queues.retain(|_key, val| !val.is_empty());
                     }})
+                 .container::<Vec<_>>()
                  .inspect(|x| println!("seen: {:?}", x))
-                 .probe_with(&mut probe);
+                 .probe_with(&probe);
         });
 
         // introduce data and watch!

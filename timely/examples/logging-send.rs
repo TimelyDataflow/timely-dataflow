@@ -1,11 +1,10 @@
-extern crate timely;
+use std::time::Duration;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Exchange, Probe};
-
-// use timely::dataflow::operators::capture::EventWriter;
-// use timely::dataflow::ScopeParent;
-use timely::logging::{TimelyEvent, TimelyProgressEvent};
+use timely::logging::{TimelyEventBuilder, TimelyProgressEventBuilder, TimelySummaryEventBuilder};
+use timely::container::CapacityContainerBuilder;
+use timely::progress::reachability::logging::TrackerEventBuilder;
 
 fn main() {
     // initializes and runs a timely dataflow.
@@ -14,62 +13,105 @@ fn main() {
         let batch = std::env::args().nth(1).unwrap().parse::<usize>().unwrap();
         let rounds = std::env::args().nth(2).unwrap().parse::<usize>().unwrap();
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
         // Register timely worker logging.
-        worker.log_register().insert::<TimelyEvent,_>("timely", |_time, data|
-            data.iter().for_each(|x| println!("LOG1: {:?}", x))
+        worker.log_register().insert::<TimelyEventBuilder,_>("timely", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|x| println!("LOG1: {:?}", x))
+            }
+            else {
+                println!("LOG1: Flush {time:?}");
+            }
         );
 
         // Register timely progress logging.
         // Less generally useful: intended for debugging advanced custom operators or timely
         // internals.
-        worker.log_register().insert::<TimelyProgressEvent,_>("timely/progress", |_time, data|
-            data.iter().for_each(|x| {
-                println!("PROGRESS: {:?}", x);
-                let (_, _, ev) = x;
-                print!("PROGRESS: TYPED MESSAGES: ");
-                for (n, p, t, d) in ev.messages.iter() {
-                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
-                }
-                println!();
-                print!("PROGRESS: TYPED INTERNAL: ");
-                for (n, p, t, d) in ev.internal.iter() {
-                    print!("{:?}, ", (n, p, t.as_any().downcast_ref::<usize>(), d));
-                }
-                println!();
-            })
-        );
-
-        // create a new input, exchange data, and inspect its output
-        worker.dataflow(|scope| {
-            scope
-                .input_from(&mut input)
-                .exchange(|&x| x as u64)
-                .probe_with(&mut probe);
-        });
-
-        // Register timely worker logging.
-        worker.log_register().insert::<TimelyEvent,_>("timely", |_time, data|
-            data.iter().for_each(|x| println!("LOG2: {:?}", x))
-        );
-
-        // create a new input, exchange data, and inspect its output
-        worker.dataflow(|scope| {
-            scope
-                .input_from(&mut input)
-                .exchange(|&x| x as u64)
-                .probe_with(&mut probe);
-        });
-
-        // Register user-level logging.
-        worker.log_register().insert::<(),_>("input", |_time, data|
-            for element in data.iter() {
-                println!("Round tick at: {:?}", element.0);
+        worker.log_register().insert::<TimelyProgressEventBuilder<usize>,_>("timely/progress/usize", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|x| {
+                    println!("PROGRESS: {:?}", x);
+                    let (_, ev) = x;
+                    print!("PROGRESS: TYPED MESSAGES: ");
+                    for (n, p, t, d) in ev.messages.iter() {
+                        print!("{:?}, ", (n, p, t, d));
+                    }
+                    println!();
+                    print!("PROGRESS: TYPED INTERNAL: ");
+                    for (n, p, t, d) in ev.internal.iter() {
+                        print!("{:?}, ", (n, p, t, d));
+                    }
+                    println!();
+                })
+            }
+            else {
+                println!("PROGRESS: Flush {time:?}");
             }
         );
 
-        let input_logger = worker.log_register().get::<()>("input").expect("Input logger absent");
+        worker.log_register().insert::<TrackerEventBuilder<usize>,_>("timely/reachability/usize", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|x| {
+                    println!("REACHABILITY: {:?}", x);
+                })
+            }
+            else {
+                println!("REACHABILITY: Flush {time:?}");
+            }
+        );
+
+        worker.log_register().insert::<TimelySummaryEventBuilder<usize>,_>("timely/summary/usize", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|(_, x)| {
+                    println!("SUMMARY: {:?}", x);
+                })
+            }
+            else {
+                println!("SUMMARY: Flush {time:?}");
+            }
+        );
+
+        // create a new input, exchange data, and inspect its output
+        worker.dataflow(|scope| {
+            scope
+                .input_from(&mut input)
+                .exchange(|&x| x as u64)
+                .probe_with(&probe);
+        });
+
+        // Register timely worker logging.
+        worker.log_register().insert::<TimelyEventBuilder,_>("timely", |time, data|
+            if let Some(data) = data {
+                data.iter().for_each(|x| println!("LOG2: {:?}", x))
+            }
+            else {
+                println!("LOG2: Flush {time:?}");
+            }
+        );
+
+        // create a new input, exchange data, and inspect its output
+        worker.dataflow(|scope| {
+            scope
+                .input_from(&mut input)
+                .exchange(|&x| x as u64)
+                .probe_with(&probe);
+        });
+
+        // Register user-level logging.
+        type MyBuilder = CapacityContainerBuilder<Vec<(Duration, ())>>;
+        worker.log_register().insert::<MyBuilder,_>("input", |time, data|
+            if let Some(data) = data {
+                for element in data.iter() {
+                    println!("Round tick at: {:?}", element.0);
+                }
+            }
+            else {
+                println!("Round flush at: {time:?}");
+            }
+        );
+
+        let input_logger = worker.log_register().get::<MyBuilder>("input").expect("Input logger absent");
 
         let timer = std::time::Instant::now();
 

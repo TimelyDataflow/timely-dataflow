@@ -27,9 +27,9 @@ use std::cell::RefCell;
 use std::fmt::{self, Debug};
 
 use crate::order::PartialOrder;
-use crate::progress::Antichain;
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
+use crate::progress::operate::PortConnectivity;
 use crate::scheduling::Activations;
 use crate::dataflow::channels::pullers::counter::ConsumedGuard;
 
@@ -40,13 +40,13 @@ pub trait CapabilityTrait<T: Timestamp> {
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool;
 }
 
-impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a C {
+impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &C {
     fn time(&self) -> &T { (**self).time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         (**self).valid_for_output(query_buffer)
     }
 }
-impl<'a, T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &'a mut C {
+impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &mut C {
     fn time(&self) -> &T { (**self).time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
         (**self).valid_for_output(query_buffer)
@@ -118,7 +118,7 @@ impl<T: Timestamp> Capability<T> {
     /// Returns [`None`] `self.time` is not less or equal to `new_time`.
     pub fn try_delayed(&self, new_time: &T) -> Option<Capability<T>> {
         if self.time.less_equal(new_time) {
-            Some(Self::new(new_time.clone(), self.internal.clone()))
+            Some(Self::new(new_time.clone(), Rc::clone(&self.internal)))
         } else {
             None
         }
@@ -171,7 +171,7 @@ impl<T: Timestamp> Drop for Capability<T> {
 
 impl<T: Timestamp> Clone for Capability<T> {
     fn clone(&self) -> Capability<T> {
-        Self::new(self.time.clone(), self.internal.clone())
+        Self::new(self.time.clone(), Rc::clone(&self.internal))
     }
 }
 
@@ -227,9 +227,10 @@ impl Error for DowngradeError {}
 /// A shared list of shared output capability buffers.
 type CapabilityUpdates<T> = Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>;
 
-/// An capability of an input port. Holding onto this capability will implicitly holds onto a
-/// capability for all the outputs ports this input is connected to, after the connection summaries
-/// have been applied.
+/// An capability of an input port. 
+///
+/// Holding onto this capability will implicitly holds onto a capability for all the outputs 
+/// ports this input is connected to, after the connection summaries have been applied.
 ///
 /// This input capability supplies a `retain_for_output(self)` method which consumes the input
 /// capability and turns it into a [Capability] for a specific output port.
@@ -237,7 +238,7 @@ pub struct InputCapability<T: Timestamp> {
     /// Output capability buffers, for use in minting capabilities.
     internal: CapabilityUpdates<T>,
     /// Timestamp summaries for each output.
-    summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>,
+    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
     /// A drop guard that updates the consumed capability this InputCapability refers to on drop
     consumed_guard: ConsumedGuard<T>,
 }
@@ -245,18 +246,20 @@ pub struct InputCapability<T: Timestamp> {
 impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
     fn time(&self) -> &T { self.time() }
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
-        let borrow = self.summaries.borrow();
-        self.internal.borrow().iter().enumerate().any(|(index, rc)| {
-            // To be valid, the output buffer must match and the timestamp summary needs to be the default.
-            Rc::ptr_eq(rc, query_buffer) && borrow[index].len() == 1 && borrow[index][0] == Default::default()
-        })
+        let summaries_borrow = self.summaries.borrow();
+        let internal_borrow = self.internal.borrow();
+        // To be valid, the output buffer must match and the timestamp summary needs to be the default.
+        let result = summaries_borrow.iter_ports().any(|(port, path)| {
+            Rc::ptr_eq(&internal_borrow[port], query_buffer) && path.len() == 1 && path[0] == Default::default()
+        });
+        result
     }
 }
 
 impl<T: Timestamp> InputCapability<T> {
     /// Creates a new capability reference at `time` while incrementing (and keeping a reference to)
     /// the provided [`ChangeBatch`].
-    pub(crate) fn new(internal: CapabilityUpdates<T>, summaries: Rc<RefCell<Vec<Antichain<T::Summary>>>>, guard: ConsumedGuard<T>) -> Self {
+    pub(crate) fn new(internal: CapabilityUpdates<T>, summaries: Rc<RefCell<PortConnectivity<T::Summary>>>, guard: ConsumedGuard<T>) -> Self {
         InputCapability {
             internal,
             summaries,
@@ -280,10 +283,15 @@ impl<T: Timestamp> InputCapability<T> {
     /// Delays capability for a specific output port.
     pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
         use crate::progress::timestamp::PathSummary;
-        if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
-            Capability::new(new_time.clone(), self.internal.borrow()[output_port].clone())
-        } else {
-            panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, self.summaries.borrow()[output_port], self.time());
+        if let Some(path) = self.summaries.borrow().get(output_port) {
+            if path.iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
+                Capability::new(new_time.clone(), Rc::clone(&self.internal.borrow()[output_port]))
+            } else {
+                panic!("Attempted to delay to a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", new_time, path, self.time());
+            }
+        }
+        else {
+            panic!("Attempted to delay a capability for a disconnected output");
         }
     }
 
@@ -304,11 +312,16 @@ impl<T: Timestamp> InputCapability<T> {
     pub fn retain_for_output(self, output_port: usize) -> Capability<T> {
         use crate::progress::timestamp::PathSummary;
         let self_time = self.time().clone();
-        if self.summaries.borrow()[output_port].iter().flat_map(|summary| summary.results_in(&self_time)).any(|time| time.less_equal(&self_time)) {
-            Capability::new(self_time, self.internal.borrow()[output_port].clone())
+        if let Some(path) = self.summaries.borrow().get(output_port) {
+            if path.iter().flat_map(|summary| summary.results_in(&self_time)).any(|time| time.less_equal(&self_time)) {
+                Capability::new(self_time, Rc::clone(&self.internal.borrow()[output_port]))
+            }
+            else {
+                panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", self_time, path, self_time);
+            }
         }
         else {
-            panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", self_time, self.summaries.borrow()[output_port], self_time);
+            panic!("Attempted to retain a capability for a disconnected output");
         }
     }
 }
@@ -334,7 +347,7 @@ impl<T: Timestamp> Debug for InputCapability<T> {
 #[derive(Clone, Debug)]
 pub struct ActivateCapability<T: Timestamp> {
     pub(crate) capability: Capability<T>,
-    pub(crate) address: Rc<Vec<usize>>,
+    pub(crate) address: Rc<[usize]>,
     pub(crate) activations: Rc<RefCell<Activations>>,
 }
 
@@ -347,10 +360,10 @@ impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
 
 impl<T: Timestamp> ActivateCapability<T> {
     /// Creates a new activating capability.
-    pub fn new(capability: Capability<T>, address: &[usize], activations: Rc<RefCell<Activations>>) -> Self {
+    pub fn new(capability: Capability<T>, address: Rc<[usize]>, activations: Rc<RefCell<Activations>>) -> Self {
         Self {
             capability,
-            address: Rc::new(address.to_vec()),
+            address,
             activations,
         }
     }
@@ -364,8 +377,8 @@ impl<T: Timestamp> ActivateCapability<T> {
     pub fn delayed(&self, time: &T) -> Self {
         ActivateCapability {
             capability: self.capability.delayed(time),
-            address: self.address.clone(),
-            activations: self.activations.clone(),
+            address: Rc::clone(&self.address),
+            activations: Rc::clone(&self.activations),
         }
     }
 
@@ -415,18 +428,17 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///     vec![()].into_iter().to_stream(scope)
     ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
-    ///             let mut vector = Vec::new();
     ///             move |input, output| {
     ///                 cap.downgrade(&input.frontier().frontier());
     ///                 while let Some((time, data)) = input.next() {
-    ///                     data.swap(&mut vector);
     ///                 }
     ///                 let a_cap = cap.first();
     ///                 if let Some(a_cap) = a_cap.as_ref() {
     ///                     output.session(a_cap).give(());
     ///                 }
     ///             }
-    ///         });
+    ///         })
+    ///         .container::<Vec<_>>();
     /// });
     /// ```
     pub fn from_elem(cap: Capability<T>) -> Self {

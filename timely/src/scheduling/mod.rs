@@ -26,12 +26,12 @@ pub trait Scheduler {
     fn activations(&self) -> Rc<RefCell<Activations>>;
 
     /// Constructs an `Activator` tied to the specified operator address.
-    fn activator_for(&self, path: &[usize]) -> Activator {
+    fn activator_for(&self, path: Rc<[usize]>) -> Activator {
         Activator::new(path, self.activations())
     }
 
     /// Constructs a `SyncActivator` tied to the specified operator address.
-    fn sync_activator_for(&self, path: &[usize]) -> SyncActivator {
+    fn sync_activator_for(&self, path: Vec<usize>) -> SyncActivator {
         let sync_activations = self.activations().borrow().sync();
         SyncActivator::new(path, sync_activations)
     }

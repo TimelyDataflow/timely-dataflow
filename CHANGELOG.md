@@ -2,6 +2,135 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.19.0...timely-v0.20.0) - 2025-03-28
+
+### Other
+
+- Update timely/src/progress/operate.rs
+- Add scaling test
+- Switch builder API to port-identified iterators
+- Adjust reachability logic to be more linear
+- Swap PortConnectivity implementation from Vec to BTreeMap
+- Support optional path summaries for disconnected ports
+- Make PortConnectivity API more explicit
+- Make PortConnectivity a struct, with sufficient methods
+- Introduce Connectivity and PortConnectivity type aliases
+- Add clippy lints ([#659](https://github.com/TimelyDataflow/timely-dataflow/pull/659))
+- Add miri test ([#655](https://github.com/TimelyDataflow/timely-dataflow/pull/655))
+
+## [0.19.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.1...timely-v0.19.0) - 2025-02-28
+
+### Other
+
+- Use `dep` syntax with `getopts` ([#591](https://github.com/TimelyDataflow/timely-dataflow/pull/591))
+- Make Buffer::push_into private ([#649](https://github.com/TimelyDataflow/timely-dataflow/pull/649))
+- Remove columnation and flatcontainer deps ([#647](https://github.com/TimelyDataflow/timely-dataflow/pull/647))
+
+## [0.18.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.18.0...timely-v0.18.1) - 2025-02-12
+
+### Other
+
+- Update columnar to 0.3, make workspace dependency ([#639](https://github.com/TimelyDataflow/timely-dataflow/pull/639))
+
+## [0.18.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.17.1...timely-v0.18.0) - 2025-02-12
+
+### Other
+
+- Update columnar to 0.3, and columnar example ([#635](https://github.com/TimelyDataflow/timely-dataflow/pull/635))
+- Convert Write::write to Write::write_all ([#636](https://github.com/TimelyDataflow/timely-dataflow/pull/636))
+- Introduce foundation for broadcast channel ([#633](https://github.com/TimelyDataflow/timely-dataflow/pull/633))
+
+## [0.17.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.17.0...timely-v0.17.1) - 2025-01-24
+
+### Other
+
+- Derive ord/eq traits for Product's columnar variant ([#630](https://github.com/TimelyDataflow/timely-dataflow/pull/630))
+
+## [0.17.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.16.1...timely-v0.17.0) - 2025-01-23
+
+### Other
+
+- Move opinions about reachability logging into TrackerLogger ([#629](https://github.com/TimelyDataflow/timely-dataflow/pull/629))
+- Align `Bytesable` messages to `u64` ([#614](https://github.com/TimelyDataflow/timely-dataflow/pull/614))
+- Flatten reachability logging, log identifier ([#628](https://github.com/TimelyDataflow/timely-dataflow/pull/628))
+- Log operator summaries using clever approach ([#626](https://github.com/TimelyDataflow/timely-dataflow/pull/626))
+- Allow event iterators to surface owned data ([#627](https://github.com/TimelyDataflow/timely-dataflow/pull/627))
+- Typed logging ([#624](https://github.com/TimelyDataflow/timely-dataflow/pull/624))
+
+## [0.16.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.16.0...timely-v0.16.1) - 2025-01-16
+
+### Other
+
+- Avoid allocation in progcaster ([#622](https://github.com/TimelyDataflow/timely-dataflow/pull/622))
+- Log action can distinguish data from flush ([#619](https://github.com/TimelyDataflow/timely-dataflow/pull/619))
+- give_container for arbitrary container builders ([#621](https://github.com/TimelyDataflow/timely-dataflow/pull/621))
+- Add an is_empty check before retrieving elapsed time. ([#620](https://github.com/TimelyDataflow/timely-dataflow/pull/620))
+- Correct documentation for execute_from_args ([#617](https://github.com/TimelyDataflow/timely-dataflow/pull/617))
+
+## [0.16.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.15.1...timely-v0.16.0) - 2025-01-09
+
+### Other
+
+- Define loggers in terms of container builders ([#615](https://github.com/TimelyDataflow/timely-dataflow/pull/615))
+- Remove SizableContainer requirement from partition ([#612](https://github.com/TimelyDataflow/timely-dataflow/pull/612))
+
+## [0.15.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.15.0...timely-v0.15.1) - 2024-12-18
+
+### Other
+
+- Remove worker identifier from logging ([#533](https://github.com/TimelyDataflow/timely-dataflow/pull/533))
+- add `.partition()` for `StreamCore` (#610)
+- Update columnar ([#611](https://github.com/TimelyDataflow/timely-dataflow/pull/611))
+- Introduce columnar and derive extensively ([#608](https://github.com/TimelyDataflow/timely-dataflow/pull/608))
+
+## [0.15.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.14.1...timely-v0.15.0) - 2024-12-05
+
+### Other
+
+- Prefer byteorder in place of bincode ([#607](https://github.com/TimelyDataflow/timely-dataflow/pull/607))
+- Use help from columnar 0.1.1 ([#606](https://github.com/TimelyDataflow/timely-dataflow/pull/606))
+- Reorganize `Container` traits ([#605](https://github.com/TimelyDataflow/timely-dataflow/pull/605))
+- Robustify potential Bytes alignment
+- Correct bincode call to use and update reader
+- Demonstrate `columnar` stuff ([#586](https://github.com/TimelyDataflow/timely-dataflow/pull/586))
+- Allow containers to specify their own serialization ([#604](https://github.com/TimelyDataflow/timely-dataflow/pull/604))
+- Remove Container: Clone + 'static ([#540](https://github.com/TimelyDataflow/timely-dataflow/pull/540))
+- Apply various Clippy recommendations ([#603](https://github.com/TimelyDataflow/timely-dataflow/pull/603))
+- Several improvements around `Bytesable` and `Message`. ([#601](https://github.com/TimelyDataflow/timely-dataflow/pull/601))
+
+## [0.14.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.14.0...timely-v0.14.1) - 2024-11-12
+
+### Added
+
+The type `timely::Message` is now publicly re-exported.
+
+### Other
+
+- Public Message type ([#599](https://github.com/TimelyDataflow/timely-dataflow/pull/599))
+
+## [0.14.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.13.0...timely-v0.14.0) - 2024-11-11
+
+### Added
+
+The trait `communication::Bytesable`, for types that must be serialized into or from a `Bytes`, and stands in for "timely appropriate serialization".
+The trait `communication::Exchangeable`, a composite trait bringing together the requirements on a type for it to be sent along a general purpose communication channel.
+
+### Removed
+
+The communication `Message` and `RefOrMut` types have been removed.
+The `RefOrMut` type wrapped either a `&T` or a `&mut T`, but with the removal of `abomonation` it is always a `&mut T`.
+The `Message` type was used to indicate the serialization / deserialization behavior, and these opinions (e.g. "use `bincode`") have been migrated to the core `timely` crate.
+
+### Other
+
+- Move opinions about encoding from `communication` to `timely`. ([#597](https://github.com/TimelyDataflow/timely-dataflow/pull/597))
+- Rust updates, better doc testing ([#598](https://github.com/TimelyDataflow/timely-dataflow/pull/598))
+- Simplify communication `Message` type ([#596](https://github.com/TimelyDataflow/timely-dataflow/pull/596))
+
+## 0.13.0 - 2024-10-29
+
+Changelog bankruptcy declared.
+
 ## 0.12.0
 
 The `Timestamp` trait has a new method `minimim()` that replaces Timely's use of `Default::default()` for default capabilities. The most pressing reason for this is the use of signed integers for timestamps, where Timely would effectively prevent the use of negative numbers by providing the default value of zero for capabilities. This should not have reduced any functionality, but might provide surprising output for programs that use integer timestamps and do not first advance timestamps (the tidy `0` will be replaced with `_::min_value()`).
@@ -50,7 +179,7 @@ The address associated with each operator, a `[usize]` used to start with the id
 
 The `Worker` and the `Subgraph` operator no longer schedules all of their child dataflows and scopes by default. Instead, they track "active" children and schedule only those. Operators become active by receiving a message, a progress update, or by explicit activation. Some operators, source as `source`, have no inputs and will require explicit activation to run more than once. Operators that yield before completing all of their work (good for you!) should explicitly re-activate themselves to ensure they are re-scheduled even if they receive no further messages or progress updates. Documentation examples for the `source` method demonstrate this.
 
-The `dataflow_using` method has been generalized to support arbitrary dataflow names, loggers, and additional resources the dataflow should keep alive. Its name has been chaged to `dataflow_core`.
+The `dataflow_using` method has been generalized to support arbitrary dataflow names, loggers, and additional resources the dataflow should keep alive. Its name has been changed to `dataflow_core`.
 
 You can now construct `feedback` operators with a `Default::default()` path summary, which has the ability to not increment timestamps. Instead of panicking, Timely's reachability module will inform you if a non-incrementing cycle is detected, at which point you should probably double check your code. It is not 100% known what the system will do in this case (e.g., the progress tracker may enter a non-terminating loop; this is on you, not us ;)).
 

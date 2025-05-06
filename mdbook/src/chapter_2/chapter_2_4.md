@@ -19,17 +19,16 @@ fn main() {
             .to_stream(scope)
             .unary(Pipeline, "increment", |capability, info| {
 
-                let mut vector = Vec::new();
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
-                        data.swap(&mut vector);
                         let mut session = output.session(&time);
-                        for datum in vector.drain(..) {
+                        for datum in data.drain(..) {
                             session.give(datum + 1);
                         }
                     }
                 }
-            });
+            })
+            .container::<Vec<_>>();
     });
 }
 ```
@@ -79,7 +78,7 @@ fn main() {
 
             // Acquire a re-activator for this operator.
             use timely::scheduling::Scheduler;
-            let activator = scope.activator_for(&info.address[..]);
+            let activator = scope.activator_for(info.address);
 
             let mut cap = Some(capability);
             move |output| {
@@ -101,6 +100,7 @@ fn main() {
                 else    { activator.activate(); }
             }
         })
+        .container::<Vec<_>>()
         .inspect(|x| println!("number: {:?}", x));
     });
 }
@@ -134,13 +134,11 @@ fn main() {
             .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
-                let mut vector = Vec::new();
 
                 move |input, output| {
                     while let Some((time, data)) = input.next() {
-                        data.swap(&mut vector);
                         let mut session = output.session(&time);
-                        for datum in vector.drain(..) {
+                        for datum in data.drain(..) {
                             if datum > maximum {
                                 session.give(datum + 1);
                                 maximum = datum;
@@ -148,7 +146,8 @@ fn main() {
                         }
                     }
                 }
-            });
+            })
+            .container::<Vec<_>>();
     });
 }
 ```
@@ -185,20 +184,20 @@ fn main() {
 
         in1.binary_frontier(&in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
-            let mut notificator = FrontierNotificator::new();
+            let mut notificator = FrontierNotificator::default();
             let mut stash = HashMap::new();
 
             move |input1, input2, output| {
                 while let Some((time, data)) = input1.next() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                     notificator.notify_at(time.retain());
                 }
                 while let Some((time, data)) = input2.next() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                     notificator.notify_at(time.retain());
                 }
 
@@ -206,7 +205,7 @@ fn main() {
                     let mut session = output.session(&time);
                     if let Some(list) = stash.remove(time.time()) {
                         for mut vector in list.into_iter() {
-                            session.give_vec(&mut vector);
+                            session.give_container(&mut vector);
                         }
                     }
                 });
@@ -243,12 +242,12 @@ fn main() {
                 while let Some((time, data)) = input1.next() {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                 }
                 while let Some((time, data)) = input2.next() {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(data.replace(Vec::new()));
+                         .push(std::mem::take(data));
                 }
 
                 // consider sending everything in `stash`.
@@ -258,7 +257,7 @@ fn main() {
                     if frontiers.iter().all(|f| !f.less_equal(time.time())) {
                         let mut session = output.session(&time);
                         for mut vector in list.drain(..) {
-                            session.give_vec(&mut vector);
+                            session.give_container(&mut vector);
                         }
                     }
                 }

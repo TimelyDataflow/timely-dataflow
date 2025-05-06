@@ -1,5 +1,3 @@
-extern crate timely;
-
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Input, Filter, Probe};
 
@@ -21,14 +19,14 @@ fn main() {
         let timer = std::time::Instant::now();
 
         let mut input = InputHandle::new();
-        let mut probe = ProbeHandle::new();
+        let probe = ProbeHandle::new();
 
-        // Create a dataflow that discards input data (just syncronizes).
+        // Create a dataflow that discards input data (just synchronizes).
         worker.dataflow(|scope| {
             scope
                 .input_from(&mut input)     // read input.
                 .filter(|_| false)          // do nothing.
-                .probe_with(&mut probe);    // observe output.
+                .probe_with(&probe);    // observe output.
         });
 
         let ns_per_request = 1_000_000_000 / rate;

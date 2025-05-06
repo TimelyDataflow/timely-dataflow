@@ -96,10 +96,12 @@ impl Activations {
         }
 
         // Drain timer-based activations.
-        let now = self.timer.elapsed();
-        while self.queue.peek().map(|Reverse((t,_))| t <= &now) == Some(true) {
-            let Reverse((_time, path)) = self.queue.pop().unwrap();
-            self.activate(&path[..]);
+        if !self.queue.is_empty() {
+            let now = self.timer.elapsed();
+            while self.queue.peek().map(|Reverse((t,_))| t <= &now) == Some(true) {
+                let Reverse((_time, path)) = self.queue.pop().unwrap();
+                self.activate(&path[..]);
+            }
         }
 
         self.bounds.drain(.. self.clean);
@@ -218,15 +220,15 @@ impl SyncActivations {
 /// A capability to activate a specific path.
 #[derive(Clone, Debug)]
 pub struct Activator {
-    path: Vec<usize>,
+    path: Rc<[usize]>,
     queue: Rc<RefCell<Activations>>,
 }
 
 impl Activator {
     /// Creates a new activation handle
-    pub fn new(path: &[usize], queue: Rc<RefCell<Activations>>) -> Self {
+    pub fn new(path: Rc<[usize]>, queue: Rc<RefCell<Activations>>) -> Self {
         Self {
-            path: path.to_vec(),
+            path,
             queue,
         }
     }
@@ -259,9 +261,9 @@ pub struct SyncActivator {
 
 impl SyncActivator {
     /// Creates a new thread-safe activation handle.
-    pub fn new(path: &[usize], queue: SyncActivations) -> Self {
+    pub fn new(path: Vec<usize>, queue: SyncActivations) -> Self {
         Self {
-            path: path.to_vec(),
+            path,
             queue,
         }
     }
@@ -289,7 +291,7 @@ impl std::error::Error for SyncActivationError {}
 #[derive(Clone, Debug)]
 pub struct ActivateOnDrop<T>  {
     wrapped: T,
-    address: Rc<Vec<usize>>,
+    address: Rc<[usize]>,
     activator: Rc<RefCell<Activations>>,
 }
 
@@ -297,7 +299,7 @@ use std::ops::{Deref, DerefMut};
 
 impl<T> ActivateOnDrop<T> {
     /// Wraps an element so that it is unparked on drop.
-    pub fn new(wrapped: T, address: Rc<Vec<usize>>, activator: Rc<RefCell<Activations>>) -> Self {
+    pub fn new(wrapped: T, address: Rc<[usize]>, activator: Rc<RefCell<Activations>>) -> Self {
         Self { wrapped, address, activator }
     }
 }

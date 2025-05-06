@@ -2,16 +2,16 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::{VecDeque, HashMap, hash_map::Entry};
-use crossbeam_channel::{Sender, Receiver};
+use std::sync::mpsc::{Sender, Receiver};
 
-use bytes::arc::Bytes;
+use timely_bytes::arc::Bytes;
 
 use crate::networking::MessageHeader;
 
-use crate::{Allocate, Message, Data, Push, Pull};
-use crate::allocator::AllocateBuilder;
+use crate::{Allocate, Push, Pull};
+use crate::allocator::{AllocateBuilder, Exchangeable};
 use crate::allocator::canary::Canary;
-
+use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use super::bytes_exchange::{BytesPull, SendEndpoint, MergeQueue};
 use super::push_pull::{Pusher, PullerInner};
 
@@ -27,6 +27,8 @@ pub struct TcpBuilder<A: AllocateBuilder> {
     peers:  usize,                      // number of peer allocators.
     futures:   Vec<Receiver<MergeQueue>>,  // to receive queues to each network thread.
     promises:   Vec<Sender<MergeQueue>>,    // to send queues from each network thread.
+    /// Byte slab refill function.
+    refill: BytesRefill,
 }
 
 /// Creates a vector of builders, sharing appropriate state.
@@ -44,8 +46,9 @@ pub struct TcpBuilder<A: AllocateBuilder> {
 pub fn new_vector<A: AllocateBuilder>(
     allocators: Vec<A>,
     my_process: usize,
-    processes: usize)
--> (Vec<TcpBuilder<A>>,
+    processes: usize,
+    refill: BytesRefill,
+) -> (Vec<TcpBuilder<A>>,
     Vec<Vec<Sender<MergeQueue>>>,
     Vec<Vec<Receiver<MergeQueue>>>)
 {
@@ -68,6 +71,7 @@ pub fn new_vector<A: AllocateBuilder>(
                 peers: threads * processes,
                 promises,
                 futures,
+                refill: refill.clone(),
             }})
         .collect();
 
@@ -82,7 +86,7 @@ impl<A: AllocateBuilder> TcpBuilder<A> {
         // Fulfill puller obligations.
         let mut recvs = Vec::with_capacity(self.peers);
         for promise in self.promises.into_iter() {
-            let buzzer = crate::buzzer::Buzzer::new();
+            let buzzer = crate::buzzer::Buzzer::default();
             let queue = MergeQueue::new(buzzer);
             promise.send(queue.clone()).expect("Failed to send MergeQueue");
             recvs.push(queue.clone());
@@ -92,7 +96,7 @@ impl<A: AllocateBuilder> TcpBuilder<A> {
         let mut sends = Vec::with_capacity(self.peers);
         for pusher in self.futures.into_iter() {
             let queue = pusher.recv().expect("Failed to receive push queue");
-            let sendpoint = SendEndpoint::new(queue);
+            let sendpoint = SendEndpoint::new(queue, self.refill.clone());
             sends.push(Rc::new(RefCell::new(sendpoint)));
         }
 
@@ -135,7 +139,7 @@ pub struct TcpAllocator<A: Allocate> {
 impl<A: Allocate> Allocate for TcpAllocator<A> {
     fn index(&self) -> usize { self.index }
     fn peers(&self) -> usize { self.peers }
-    fn allocate<T: Data>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
 
         // Assume and enforce in-order identifier allocation.
         if let Some(bound) = self.channel_id_bound {
@@ -144,7 +148,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
         self.channel_id_bound = Some(identifier);
 
         // Result list of boxed pushers.
-        let mut pushes = Vec::<Box<dyn Push<Message<T>>>>::new();
+        let mut pushes = Vec::<Box<dyn Push<T>>>::new();
 
         // Inner exchange allocations.
         let inner_peers = self.inner.peers();
@@ -163,27 +167,66 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
                 let header = MessageHeader {
                     channel:    identifier,
                     source:     self.index,
-                    target:     target_index,
+                    target_lower:     target_index,
+                    target_upper:     target_index + 1,
                     length:     0,
                     seqno:      0,
                 };
 
                 // create, box, and stash new process_binary pusher.
                 if process_id > self.index / inner_peers { process_id -= 1; }
-                pushes.push(Box::new(Pusher::new(header, self.sends[process_id].clone())));
+                pushes.push(Box::new(Pusher::new(header, Rc::clone(&self.sends[process_id]))));
             }
         }
 
-        let channel =
-        self.to_local
-            .entry(identifier)
-            .or_insert_with(|| Rc::new(RefCell::new(VecDeque::new())))
-            .clone();
+        let channel = Rc::clone(self.to_local.entry(identifier).or_default());
 
         use crate::allocator::counters::Puller as CountPuller;
-        let canary = Canary::new(identifier, self.canaries.clone());
-        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, self.events().clone()));
+        let canary = Canary::new(identifier, Rc::clone(&self.canaries));
+        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, Rc::clone(self.events())));
 
+        (pushes, puller, )
+    }
+
+    fn broadcast<T: Exchangeable + Clone>(&mut self, identifier: usize) -> (Box<dyn Push<T>>, Box<dyn Pull<T>>) {
+
+        // Assume and enforce in-order identifier allocation.
+        if let Some(bound) = self.channel_id_bound {
+            assert!(bound < identifier);
+        }
+        self.channel_id_bound = Some(identifier);
+
+        // Result list of boxed pushers.
+        // One entry for each process.
+        let mut pushes = Vec::<Box<dyn Push<T>>>::with_capacity(self.sends.len() + 1);
+
+        // Inner exchange allocations.
+        let inner_peers = self.inner.peers();
+        let (inner_send, inner_recv) = self.inner.broadcast(identifier);
+
+        pushes.push(inner_send);
+        for (mut index, send) in self.sends.iter().enumerate() {
+            // The span of worker indexes jumps by `inner_peers` as we skip our own process.
+            // We bump `index` by one as we pass `self.index/inner_peers` to effect this.
+            if index >= self.index/inner_peers { index += 1; }
+            let header = MessageHeader {
+                channel: identifier,
+                source: self.index,
+                target_lower: index * inner_peers,
+                target_upper: index * inner_peers + inner_peers,
+                length: 0,
+                seqno: 0,
+            };
+            pushes.push(Box::new(Pusher::new(header, Rc::clone(send))))
+        }
+
+        let channel = Rc::clone(self.to_local.entry(identifier).or_default());
+
+        use crate::allocator::counters::Puller as CountPuller;
+        let canary = Canary::new(identifier, Rc::clone(&self.canaries));
+        let puller = Box::new(CountPuller::new(PullerInner::new(inner_recv, channel, canary), identifier, Rc::clone(self.events())));
+
+        let pushes = Box::new(crate::allocator::Broadcaster { spare: None, pushers: pushes });
         (pushes, puller, )
     }
 
@@ -220,7 +263,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
             // No splitting occurs across allocations.
             while bytes.len() > 0 {
 
-                if let Some(header) = MessageHeader::try_read(&mut bytes[..]) {
+                if let Some(header) = MessageHeader::try_read(&bytes[..]) {
 
                     // Get the header and payload, ditch the header.
                     let mut peel = bytes.extract_to(header.required_bytes());

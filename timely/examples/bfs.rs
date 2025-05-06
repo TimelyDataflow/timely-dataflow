@@ -1,6 +1,3 @@
-extern crate rand;
-extern crate timely;
-
 use std::collections::HashMap;
 
 use rand::{Rng, SeedableRng, rngs::SmallRng};
@@ -31,8 +28,8 @@ fn main() {
         let mut offsets = Vec::new();
         let mut targets = Vec::new();
 
-        // holds the bfs parent of each node, or u32::max_value() if unset.
-        let mut done = vec![u32::max_value(); 1 + (nodes / peers)];
+        // holds the bfs parent of each node, or u32::MAX if unset.
+        let mut done = vec![u32::MAX; 1 + (nodes / peers)];
 
         let start = std::time::Instant::now();
 
@@ -58,17 +55,17 @@ fn main() {
                     // receive edges, start to sort them
                     input1.for_each(|time, data| {
                         notify.notify_at(time.retain());
-                        edge_list.push(data.replace(Vec::new()));
+                        edge_list.push(std::mem::take(data));
                     });
 
                     // receive (node, worker) pairs, note any new ones.
                     input2.for_each(|time, data| {
-                        node_lists.entry(time.time().clone())
+                        node_lists.entry(*time.time())
                                   .or_insert_with(|| {
                                       notify.notify_at(time.retain());
                                       Vec::new()
                                   })
-                                  .push(data.replace(Vec::new()));
+                                  .push(std::mem::take(data));
                     });
 
                     notify.for_each(|time, _num, _notify| {
@@ -119,7 +116,7 @@ fn main() {
                             for buffer in todo.drain(..) {
                                 for (node, prev) in buffer {
                                     let temp = (node as usize) / peers;
-                                    if done[temp] == u32::max_value() {
+                                    if done[temp] == u32::MAX {
                                         done[temp] = prev;
                                         let lower = offsets[temp] as usize;
                                         let upper = offsets[temp + 1] as usize;

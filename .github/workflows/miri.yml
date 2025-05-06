@@ -1,0 +1,18 @@
+name: "Test Suite (miri)"
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    name: cargo miri test on ubuntu, rust nightly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: miri
+      - name: Cargo test
+        run: cargo miri test

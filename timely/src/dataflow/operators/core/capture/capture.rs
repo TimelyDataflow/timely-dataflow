@@ -10,14 +10,14 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
-use crate::Container;
+use crate::{Container, Data};
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
-use super::{EventCore, EventPusherCore};
+use super::{Event, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<T: Timestamp, D: Container> {
+pub trait Capture<T: Timestamp, C: Container + Data> {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -30,7 +30,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
-    /// use timely::dataflow::operators::capture::{EventLinkCore, Replay, Extract};
+    /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();
@@ -42,7 +42,7 @@ pub trait Capture<T: Timestamp, D: Container> {
     ///     let send = send.lock().unwrap().clone();
     ///
     ///     // these are to capture/replay the stream.
-    ///     let handle1 = Rc::new(EventLinkCore::new());
+    ///     let handle1 = Rc::new(EventLink::new());
     ///     let handle2 = Some(handle1.clone());
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
@@ -72,6 +72,9 @@ pub trait Capture<T: Timestamp, D: Container> {
     /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
     /// use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay, Extract};
     ///
+    /// # #[cfg(miri)] fn main() {}
+    /// # #[cfg(not(miri))]
+    /// # fn main() {
     /// // get send and recv endpoints, wrap send to share
     /// let (send0, recv0) = ::std::sync::mpsc::channel();
     /// let send0 = Arc::new(Mutex::new(send0));
@@ -95,26 +98,27 @@ pub trait Capture<T: Timestamp, D: Container> {
     ///     );
     ///
     ///     worker.dataflow::<u64,_,_>(|scope2| {
-    ///         Some(EventReader::<_,u64,_>::new(recv))
+    ///         Some(EventReader::<_,Vec<u64>,_>::new(recv))
     ///             .replay_into(scope2)
     ///             .capture_into(send0)
     ///     });
     /// }).unwrap();
     ///
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
+    /// # }
     /// ```
-    fn capture_into<P: EventPusherCore<T, D>+'static>(&self, pusher: P);
+    fn capture_into<P: EventPusher<T, C>+'static>(&self, pusher: P);
 
     /// Captures a stream using Rust's MPSC channels.
-    fn capture(&self) -> ::std::sync::mpsc::Receiver<EventCore<T, D>> {
+    fn capture(&self) -> ::std::sync::mpsc::Receiver<Event<T, C>> {
         let (send, recv) = ::std::sync::mpsc::channel();
         self.capture_into(send);
         recv
     }
 }
 
-impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
-    fn capture_into<P: EventPusherCore<S::Timestamp, D>+'static>(&self, mut event_pusher: P) {
+impl<S: Scope, C: Container + Data> Capture<S::Timestamp, C> for StreamCore<S, C> {
+    fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
@@ -131,19 +135,15 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
                 if !progress.frontiers[0].is_empty() {
                     // transmit any frontier progress.
                     let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
-                    event_pusher.push(EventCore::Progress(to_send.into_inner()));
+                    event_pusher.push(Event::Progress(to_send.into_inner().to_vec()));
                 }
-
-                use crate::communication::message::RefOrMut;
 
                 // turn each received message into an event.
                 while let Some(message) = input.next() {
-                    let (time, data) = match message.as_ref_or_mut() {
-                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
-                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
-                    };
-                    let vector = data.replace(Default::default());
-                    event_pusher.push(EventCore::Messages(time.clone(), vector));
+                    let time = &message.time;
+                    let data = &mut message.data;
+                    let vector = std::mem::take(data);
+                    event_pusher.push(Event::Messages(time.clone(), vector));
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false

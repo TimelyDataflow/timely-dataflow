@@ -3,23 +3,23 @@
 use std::thread;
 #[cfg(feature = "getopts")]
 use std::io::BufRead;
+use std::sync::Arc;
+use std::fmt::{Debug, Formatter};
+use std::any::Any;
+use std::ops::DerefMut;
 #[cfg(feature = "getopts")]
 use getopts;
-use std::sync::Arc;
-
-use std::any::Any;
+use timely_logging::Logger;
 
 use crate::allocator::thread::ThreadBuilder;
-use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder};
+use crate::allocator::{AllocateBuilder, Process, Generic, GenericBuilder, PeerBuilder};
 use crate::allocator::zero_copy::allocator_process::ProcessBuilder;
+use crate::allocator::zero_copy::bytes_slab::BytesRefill;
 use crate::allocator::zero_copy::initialize::initialize_networking;
-
-use crate::logging::{CommunicationSetup, CommunicationEvent};
-use logging_core::Logger;
-use std::fmt::{Debug, Formatter};
-
+use crate::logging::{CommunicationEventBuilder, CommunicationSetup};
 
 /// Possible configurations for the communication infrastructure.
+#[derive(Clone)]
 pub enum Config {
     /// Use one thread.
     Thread,
@@ -37,8 +37,10 @@ pub enum Config {
         addresses: Vec<String>,
         /// Verbosely report connection process
         report: bool,
+        /// Enable intra-process zero-copy
+        zerocopy: bool,
         /// Closure to create a new logger for a communication thread
-        log_fn: Box<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEvent, CommunicationSetup>> + Send + Sync>,
+        log_fn: Arc<dyn Fn(CommunicationSetup) -> Option<Logger<CommunicationEventBuilder>> + Send + Sync>,
     }
 }
 
@@ -48,14 +50,14 @@ impl Debug for Config {
             Config::Thread => write!(f, "Config::Thread()"),
             Config::Process(n) => write!(f, "Config::Process({})", n),
             Config::ProcessBinary(n) => write!(f, "Config::ProcessBinary({})", n),
-            Config::Cluster { threads, process, addresses, report, .. } => f
+            Config::Cluster { threads, process, addresses, report, zerocopy, log_fn: _ } => f
                 .debug_struct("Config::Cluster")
                 .field("threads", threads)
                 .field("process", process)
                 .field("addresses", addresses)
                 .field("report", report)
-                // TODO: Use `.finish_non_exhaustive()` after rust/#67364 lands
-                .finish()
+                .field("zerocopy", zerocopy)
+                .finish_non_exhaustive()
         }
     }
 }
@@ -114,13 +116,14 @@ impl Config {
                 }
             }
 
-            assert!(processes == addresses.len());
+            assert_eq!(processes, addresses.len());
             Ok(Config::Cluster {
                 threads,
                 process,
                 addresses,
                 report,
-                log_fn: Box::new( | _ | None),
+                zerocopy,
+                log_fn: Arc::new(|_| None),
             })
         } else if threads > 1 {
             if zerocopy {
@@ -149,24 +152,41 @@ impl Config {
 
     /// Attempts to assemble the described communication infrastructure.
     pub fn try_build(self) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
+        let refill = BytesRefill {
+            logic: Arc::new(|size| Box::new(vec![0_u8; size]) as Box<dyn DerefMut<Target=[u8]>>),
+            limit: None,
+        };
+        self.try_build_with(refill)
+    }
+
+    /// Attempts to assemble the described communication infrastructure, using the supplied refill function.
+    pub fn try_build_with(self, refill: BytesRefill) -> Result<(Vec<GenericBuilder>, Box<dyn Any+Send>), String> {
         match self {
             Config::Thread => {
                 Ok((vec![GenericBuilder::Thread(ThreadBuilder)], Box::new(())))
             },
             Config::Process(threads) => {
-                Ok((Process::new_vector(threads).into_iter().map(|x| GenericBuilder::Process(x)).collect(), Box::new(())))
+                Ok((Process::new_vector(threads, refill).into_iter().map(GenericBuilder::Process).collect(), Box::new(())))
             },
             Config::ProcessBinary(threads) => {
-                Ok((ProcessBuilder::new_vector(threads).into_iter().map(|x| GenericBuilder::ProcessBinary(x)).collect(), Box::new(())))
+                Ok((ProcessBuilder::new_vector(threads, refill).into_iter().map(GenericBuilder::ProcessBinary).collect(), Box::new(())))
             },
-            Config::Cluster { threads, process, addresses, report, log_fn } => {
-                match initialize_networking(addresses, process, threads, report, log_fn) {
+            Config::Cluster { threads, process, addresses, report, zerocopy: false, log_fn } => {
+                match initialize_networking::<Process>(addresses, process, threads, report, refill, log_fn) {
                     Ok((stuff, guard)) => {
-                        Ok((stuff.into_iter().map(|x| GenericBuilder::ZeroCopy(x)).collect(), Box::new(guard)))
+                        Ok((stuff.into_iter().map(GenericBuilder::ZeroCopy).collect(), Box::new(guard)))
                     },
                     Err(err) => Err(format!("failed to initialize networking: {}", err))
                 }
             },
+            Config::Cluster { threads, process, addresses, report, zerocopy: true, log_fn } => {
+                match initialize_networking::<ProcessBuilder>(addresses, process, threads, report, refill, log_fn) {
+                    Ok((stuff, guard)) => {
+                        Ok((stuff.into_iter().map(GenericBuilder::ZeroCopyBinary).collect(), Box::new(guard)))
+                    },
+                    Err(err) => Err(format!("failed to initialize networking: {}", err))
+                }
+            }
         }
     }
 }
@@ -181,37 +201,58 @@ impl Config {
 ///
 /// # Examples
 /// ```
-/// use timely_communication::Allocate;
+/// use timely_communication::{Allocate, Bytesable};
 ///
-/// // configure for two threads, just one process.
-/// let config = timely_communication::Config::Process(2);
+/// /// A wrapper that indicates the serialization/deserialization strategy.
+/// pub struct Message {
+///     /// Text contents.
+///     pub payload: String,
+/// }
 ///
-/// // initializes communication, spawns workers
+/// impl Bytesable for Message {
+///     fn from_bytes(bytes: timely_bytes::arc::Bytes) -> Self {
+///         Message { payload: std::str::from_utf8(&bytes[..]).unwrap().to_string() }
+///     }
+///
+///     fn length_in_bytes(&self) -> usize {
+///         self.payload.len()
+///     }
+///
+///     fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+///         writer.write_all(self.payload.as_bytes()).unwrap();
+///     }
+/// }
+///
+/// // extract the configuration from user-supplied arguments, initialize the computation.
+/// let config = timely_communication::Config::from_args(std::env::args()).unwrap();
 /// let guards = timely_communication::initialize(config, |mut allocator| {
-///     println!("worker {} started", allocator.index());
+///
+///     println!("worker {} of {} started", allocator.index(), allocator.peers());
 ///
 ///     // allocates a pair of senders list and one receiver.
 ///     let (mut senders, mut receiver) = allocator.allocate(0);
 ///
 ///     // send typed data along each channel
-///     use timely_communication::Message;
-///     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
-///     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
+///     for i in 0 .. allocator.peers() {
+///         senders[i].send(Message { payload: format!("hello, {}", i)});
+///         senders[i].done();
+///     }
 ///
 ///     // no support for termination notification,
 ///     // we have to count down ourselves.
-///     let mut expecting = 2;
-///     while expecting > 0 {
+///     let mut received = 0;
+///     while received < allocator.peers() {
+///
 ///         allocator.receive();
+///
 ///         if let Some(message) = receiver.recv() {
-///             use std::ops::Deref;
-///             println!("worker {}: received: <{}>", allocator.index(), message.deref());
-///             expecting -= 1;
+///             println!("worker {}: received: <{}>", allocator.index(), message.payload);
+///             received += 1;
 ///         }
+///
 ///         allocator.release();
 ///     }
 ///
-///     // optionally, return something
 ///     allocator.index()
 /// });
 ///
@@ -224,7 +265,7 @@ impl Config {
 /// else { println!("error in computation"); }
 /// ```
 ///
-/// The should produce output like:
+/// This should produce output like:
 ///
 /// ```ignore
 /// worker 0 started
@@ -253,37 +294,58 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 ///
 /// # Examples
 /// ```
-/// use timely_communication::Allocate;
+/// use timely_communication::{Allocate, Bytesable};
 ///
-/// // configure for two threads, just one process.
-/// let builders = timely_communication::allocator::process::Process::new_vector(2);
+/// /// A wrapper that indicates `bincode` as the serialization/deserialization strategy.
+/// pub struct Message {
+///     /// Text contents.
+///     pub payload: String,
+/// }
 ///
-/// // initializes communication, spawns workers
-/// let guards = timely_communication::initialize_from(builders, Box::new(()), |mut allocator| {
-///     println!("worker {} started", allocator.index());
+/// impl Bytesable for Message {
+///     fn from_bytes(bytes: timely_bytes::arc::Bytes) -> Self {
+///         Message { payload: std::str::from_utf8(&bytes[..]).unwrap().to_string() }
+///     }
+///
+///     fn length_in_bytes(&self) -> usize {
+///         self.payload.len()
+///     }
+///
+///     fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+///         writer.write_all(self.payload.as_bytes()).unwrap();
+///     }
+/// }
+///
+/// // extract the configuration from user-supplied arguments, initialize the computation.
+/// let config = timely_communication::Config::from_args(std::env::args()).unwrap();
+/// let guards = timely_communication::initialize(config, |mut allocator| {
+///
+///     println!("worker {} of {} started", allocator.index(), allocator.peers());
 ///
 ///     // allocates a pair of senders list and one receiver.
 ///     let (mut senders, mut receiver) = allocator.allocate(0);
 ///
 ///     // send typed data along each channel
-///     use timely_communication::Message;
-///     senders[0].send(Message::from_typed(format!("hello, {}", 0)));
-///     senders[1].send(Message::from_typed(format!("hello, {}", 1)));
+///     for i in 0 .. allocator.peers() {
+///         senders[i].send(Message { payload: format!("hello, {}", i)});
+///         senders[i].done();
+///     }
 ///
 ///     // no support for termination notification,
 ///     // we have to count down ourselves.
-///     let mut expecting = 2;
-///     while expecting > 0 {
+///     let mut received = 0;
+///     while received < allocator.peers() {
+///
 ///         allocator.receive();
+///
 ///         if let Some(message) = receiver.recv() {
-///             use std::ops::Deref;
-///             println!("worker {}: received: <{}>", allocator.index(), message.deref());
-///             expecting -= 1;
+///             println!("worker {}: received: <{}>", allocator.index(), message.payload);
+///             received += 1;
 ///         }
+///
 ///         allocator.release();
 ///     }
 ///
-///     // optionally, return something
 ///     allocator.index()
 /// });
 ///
@@ -308,7 +370,7 @@ where
     let logic = Arc::new(func);
     let mut guards = Vec::new();
     for (index, builder) in builders.into_iter().enumerate() {
-        let clone = logic.clone();
+        let clone = Arc::clone(&logic);
         guards.push(thread::Builder::new()
                             .name(format!("timely:work-{}", index))
                             .spawn(move || {

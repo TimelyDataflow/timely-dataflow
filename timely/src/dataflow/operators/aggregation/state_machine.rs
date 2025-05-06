@@ -7,6 +7,8 @@ use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
 
+/// Provides the `state_machine` method.
+///
 /// Generic state-transition machinery: each key has a state, and receives a sequence of events.
 /// Events are applied in time-order, but no other promises are made. Each state transition can
 /// produce output, which is sent.
@@ -15,8 +17,6 @@ use crate::dataflow::channels::pact::Exchange;
 /// updates for the current time reflected in the notificator, though. In the case of partially
 /// ordered times, the only guarantee is that updates are not applied out of order, not that there
 /// is some total order on times respecting the total order (updates may be interleaved).
-
-/// Provides the `state_machine` method.
 pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     /// Tracks a state for each presented key, using user-supplied state transition logic.
     ///
@@ -66,9 +66,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
         let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state
 
-        let mut vector = Vec::new();
-
-        self.unary_notify(Exchange::new(move |&(ref k, _)| hash(k)), "StateMachine", vec![], move |input, output, notificator| {
+        self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "StateMachine", vec![], move |input, output, notificator| {
 
             // go through each time with data, process each (key, val) pair.
             notificator.for_each(|time,_,_| {
@@ -88,17 +86,15 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             // stash each input and request a notification when ready
             input.for_each(|time, data| {
 
-                data.swap(&mut vector);
-
                 // stash if not time yet
                 if notificator.frontier(0).less_than(time.time()) {
-                    pending.entry(time.time().clone()).or_insert_with(Vec::new).extend(vector.drain(..));
+                    pending.entry(time.time().clone()).or_insert_with(Vec::new).append(data);
                     notificator.notify_at(time.retain());
                 }
                 else {
                     // else we can process immediately
                     let mut session = output.session(&time);
-                    for (key, val) in vector.drain(..) {
+                    for (key, val) in data.drain(..) {
                         let (remove, output) = {
                             let state = states.entry(key.clone()).or_insert_with(Default::default);
                             fold(&key, val, state)

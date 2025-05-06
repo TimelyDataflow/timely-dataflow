@@ -1,5 +1,3 @@
-extern crate timely;
-
 use std::time::{Instant, Duration};
 
 use timely::Config;
@@ -16,7 +14,7 @@ fn main() {
                 std::thread::sleep(Duration::from_secs(1 + worker.index() as u64));
                 sequencer.push(format!("worker {:?}, round {:?}", worker.index(), round));
             // }
-            while let Some(element) = sequencer.next() {
+            for element in &mut sequencer {
                 println!("{:?}:\tWorker {:?}:\t recv'd: {:?}", timer.elapsed(), worker.index(), element);
             }
             worker.step();

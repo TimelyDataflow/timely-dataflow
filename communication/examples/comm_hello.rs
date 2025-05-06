@@ -1,7 +1,24 @@
-extern crate timely_communication;
+use timely_communication::{Allocate, Bytesable};
 
-use std::ops::Deref;
-use timely_communication::{Message, Allocate};
+/// A wrapper that indicates the serialization/deserialization strategy.
+pub struct Message {
+    /// Text contents.
+    pub payload: String,
+}
+
+impl Bytesable for Message {
+    fn from_bytes(bytes: timely_bytes::arc::Bytes) -> Self {
+        Message { payload: std::str::from_utf8(&bytes[..]).unwrap().to_string() }
+    }
+
+    fn length_in_bytes(&self) -> usize {
+        self.payload.len()
+    }
+
+    fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W) {
+        writer.write_all(self.payload.as_bytes()).unwrap();
+    }
+}
 
 fn main() {
 
@@ -15,9 +32,9 @@ fn main() {
         let (mut senders, mut receiver) = allocator.allocate(0);
 
         // send typed data along each channel
-        for i in 0 .. allocator.peers() {
-            senders[i].send(Message::from_typed(format!("hello, {}", i)));
-            senders[i].done();
+        for (i, sender) in senders.iter_mut().enumerate() {
+            sender.send(Message { payload: format!("hello, {}", i)});
+            sender.done();
         }
 
         // no support for termination notification,
@@ -28,7 +45,7 @@ fn main() {
             allocator.receive();
 
             if let Some(message) = receiver.recv() {
-                println!("worker {}: received: <{}>", allocator.index(), message.deref());
+                println!("worker {}: received: <{}>", allocator.index(), message.payload);
                 received += 1;
             }
 

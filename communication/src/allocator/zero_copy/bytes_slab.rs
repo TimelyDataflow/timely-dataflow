@@ -1,29 +1,41 @@
 //! A large binary allocation for writing and sharing.
 
-use bytes::arc::Bytes;
+use std::ops::{Deref, DerefMut};
+use timely_bytes::arc::{Bytes, BytesMut};
 
 /// A large binary allocation for writing and sharing.
 ///
-/// A bytes slab wraps a `Bytes` and maintains a valid (written) length, and supports writing after
+/// A bytes slab wraps a `BytesMut` and maintains a valid (written) length, and supports writing after
 /// this valid length, and extracting `Bytes` up to this valid length. Extracted bytes are enqueued
 /// and checked for uniqueness in order to recycle them (once all shared references are dropped).
 pub struct BytesSlab {
-    buffer:         Bytes,                      // current working buffer.
-    in_progress:    Vec<Option<Bytes>>,         // buffers shared with workers.
-    stash:          Vec<Bytes>,                 // reclaimed and resuable buffers.
+    buffer:         BytesMut,                   // current working buffer.
+    in_progress:    Vec<Option<BytesMut>>,      // buffers shared with workers.
+    stash:          Vec<BytesMut>,              // reclaimed and reusable buffers.
     shift:          usize,                      // current buffer allocation size.
     valid:          usize,                      // buffer[..valid] are valid bytes.
+    new_bytes:      BytesRefill,                // function to allocate new buffers.
+}
+
+/// Ability to acquire and policy to retain byte buffers.
+#[derive(Clone)]
+pub struct BytesRefill {
+    /// Logic to acquire a new buffer of a certain number of bytes.
+    pub logic: std::sync::Arc<dyn Fn(usize) -> Box<dyn DerefMut<Target=[u8]>>+Send+Sync>,
+    /// An optional limit on the number of empty buffers retained.
+    pub limit: Option<usize>,
 }
 
 impl BytesSlab {
     /// Allocates a new `BytesSlab` with an initial size determined by a shift.
-    pub fn new(shift: usize) -> Self {
+    pub fn new(shift: usize, new_bytes: BytesRefill) -> Self {
         BytesSlab {
-            buffer: Bytes::from(vec![0u8; 1 << shift].into_boxed_slice()),
+            buffer: BytesMut::from(BoxDerefMut { boxed: (new_bytes.logic)(1 << shift) }),
             in_progress: Vec::new(),
             stash: Vec::new(),
             shift,
             valid: 0,
+            new_bytes,
         }
     }
     /// The empty region of the slab.
@@ -68,7 +80,7 @@ impl BytesSlab {
             if self.stash.is_empty() {
                 for shared in self.in_progress.iter_mut() {
                     if let Some(mut bytes) = shared.take() {
-                        if bytes.try_regenerate::<Box<[u8]>>() {
+                        if bytes.try_regenerate::<BoxDerefMut>() {
                             // NOTE: Test should be redundant, but better safe...
                             if bytes.len() == (1 << self.shift) {
                                 self.stash.push(bytes);
@@ -82,13 +94,35 @@ impl BytesSlab {
                 self.in_progress.retain(|x| x.is_some());
             }
 
-            let new_buffer = self.stash.pop().unwrap_or_else(|| Bytes::from(vec![0; 1 << self.shift].into_boxed_slice()));
+            let new_buffer = self.stash.pop().unwrap_or_else(|| BytesMut::from(BoxDerefMut { boxed: (self.new_bytes.logic)(1 << self.shift) }));
             let old_buffer = ::std::mem::replace(&mut self.buffer, new_buffer);
+
+            if let Some(limit) = self.new_bytes.limit {
+                self.stash.truncate(limit);
+            }
 
             self.buffer[.. self.valid].copy_from_slice(&old_buffer[.. self.valid]);
             if !increased_shift {
                 self.in_progress.push(Some(old_buffer));
             }
         }
+    }
+}
+
+/// A wrapper for `Box<dyn DerefMut<Target=T>>` that dereferences to `T` rather than `dyn DerefMut<Target=T>`.
+struct BoxDerefMut {
+    boxed: Box<dyn DerefMut<Target=[u8]>+'static>,
+}
+
+impl Deref for BoxDerefMut {
+    type Target = [u8];
+    fn deref(&self) -> &Self::Target {
+        &self.boxed[..]
+    }
+}
+
+impl DerefMut for BoxDerefMut {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.boxed[..]
     }
 }

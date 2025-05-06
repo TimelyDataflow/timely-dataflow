@@ -1,5 +1,3 @@
-extern crate timely;
-
 use std::net::TcpStream;
 use timely::dataflow::operators::ToStream;
 use timely::dataflow::operators::capture::{Capture, EventWriter};

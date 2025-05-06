@@ -8,18 +8,19 @@ use std::collections::VecDeque;
 use crate::allocator::{Allocate, AllocateBuilder};
 use crate::allocator::counters::Pusher as CountPusher;
 use crate::allocator::counters::Puller as CountPuller;
-use crate::{Push, Pull, Message};
+use crate::{Push, Pull};
 
 /// Builder for single-threaded allocator.
 pub struct ThreadBuilder;
 
 impl AllocateBuilder for ThreadBuilder {
     type Allocator = Thread;
-    fn build(self) -> Self::Allocator { Thread::new() }
+    fn build(self) -> Self::Allocator { Thread::default() }
 }
 
 
 /// An allocator for intra-thread communication.
+#[derive(Default)]
 pub struct Thread {
     /// Shared counts of messages in channels.
     events: Rc<RefCell<Vec<usize>>>,
@@ -28,8 +29,8 @@ pub struct Thread {
 impl Allocate for Thread {
     fn index(&self) -> usize { 0 }
     fn peers(&self) -> usize { 1 }
-    fn allocate<T: 'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<Message<T>>>>, Box<dyn Pull<Message<T>>>) {
-        let (pusher, puller) = Thread::new_from(identifier, self.events.clone());
+    fn allocate<T: 'static>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
+        let (pusher, puller) = Thread::new_from(identifier, Rc::clone(&self.events));
         (vec![Box::new(pusher)], Box::new(puller))
     }
     fn events(&self) -> &Rc<RefCell<Vec<usize>>> {
@@ -53,20 +54,13 @@ pub type ThreadPusher<T> = CountPusher<T, Pusher<T>>;
 pub type ThreadPuller<T> = CountPuller<T, Puller<T>>;
 
 impl Thread {
-    /// Allocates a new thread-local channel allocator.
-    pub fn new() -> Self {
-        Thread {
-            events: Rc::new(RefCell::new(Default::default())),
-        }
-    }
-
     /// Creates a new thread-local channel from an identifier and shared counts.
     pub fn new_from<T: 'static>(identifier: usize, events: Rc<RefCell<Vec<usize>>>)
-        -> (ThreadPusher<Message<T>>, ThreadPuller<Message<T>>)
+        -> (ThreadPusher<T>, ThreadPuller<T>)
     {
-        let shared = Rc::new(RefCell::new((VecDeque::<Message<T>>::new(), VecDeque::<Message<T>>::new())));
-        let pusher = Pusher { target: shared.clone() };
-        let pusher = CountPusher::new(pusher, identifier, events.clone());
+        let shared = Rc::new(RefCell::new((VecDeque::<T>::new(), VecDeque::<T>::new())));
+        let pusher = Pusher { target: Rc::clone(&shared) };
+        let pusher = CountPusher::new(pusher, identifier, Rc::clone(&events));
         let puller = Puller { source: shared, current: None };
         let puller = CountPuller::new(puller, identifier, events);
         (pusher, puller)

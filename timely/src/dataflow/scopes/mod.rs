@@ -1,5 +1,6 @@
 //! Hierarchical organization of timely dataflow graphs.
 
+use std::rc::Rc;
 use crate::progress::{Timestamp, Operate, Source, Target};
 use crate::order::Product;
 use crate::progress::timestamp::Refines;
@@ -24,14 +25,18 @@ impl<A: Allocate> ScopeParent for crate::worker::Worker<A> {
 /// The fundamental operations required to add and connect operators in a timely dataflow graph.
 ///
 /// Importantly, this is often a *shared* object, backed by a `Rc<RefCell<>>` wrapper. Each method
-/// takes a shared reference, but can be thought of as first calling .clone() and then calling the
+/// takes a shared reference, but can be thought of as first calling `.clone()` and then calling the
 /// method. Each method does not hold the `RefCell`'s borrow, and should prevent accidental panics.
 pub trait Scope: ScopeParent {
     /// A useful name describing the scope.
     fn name(&self) -> String;
 
     /// A sequence of scope identifiers describing the path from the worker root to this scope.
-    fn addr(&self) -> Vec<usize>;
+    fn addr(&self) -> Rc<[usize]>;
+
+    /// A sequence of scope identifiers describing the path from the worker root to the child
+    /// indicated by `index`.
+    fn addr_for_child(&self, index: usize) -> Rc<[usize]>;
 
     /// Connects a source of data with a target of the data. This only links the two for
     /// the purposes of tracking progress, rather than effect any data movement itself.

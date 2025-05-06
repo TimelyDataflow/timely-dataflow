@@ -44,7 +44,7 @@ pub trait Operate<T: Timestamp> : Schedule {
     ///
     /// The default behavior is to indicate that timestamps on any input can emerge unchanged on
     /// any output, and no initial capabilities are held.
-    fn get_internal_summary(&mut self) -> (Vec<Vec<Antichain<T::Summary>>>, Rc<RefCell<SharedProgress<T>>>);
+    fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>);
 
     /// Signals that external frontiers have been set.
     ///
@@ -56,6 +56,55 @@ pub trait Operate<T: Timestamp> : Schedule {
 
     /// Indicates of whether the operator requires `push_external_progress` information or not.
     fn notify_me(&self) -> bool { true }
+}
+
+/// Operator internal connectivity, from inputs to outputs.
+pub type Connectivity<TS> = Vec<PortConnectivity<TS>>;
+/// Internal connectivity from one port to any number of opposing ports.
+#[derive(serde::Serialize, serde::Deserialize, columnar::Columnar, Debug, Clone, Eq, PartialEq)]
+pub struct PortConnectivity<TS> {
+    tree: std::collections::BTreeMap<usize, Antichain<TS>>,
+}
+
+impl<TS> Default for PortConnectivity<TS> {
+    fn default() -> Self {
+        Self { tree: std::collections::BTreeMap::new() }
+    }
+}
+
+impl<TS> PortConnectivity<TS> {
+    /// Inserts an element by reference, ensuring that the index exists.
+    pub fn insert(&mut self, index: usize, element: TS) -> bool where TS : crate::PartialOrder {
+        self.tree.entry(index).or_default().insert(element)
+    }
+    /// Inserts an element by reference, ensuring that the index exists.
+    pub fn insert_ref(&mut self, index: usize, element: &TS) -> bool where TS : crate::PartialOrder + Clone {
+        self.tree.entry(index).or_default().insert_ref(element)
+    }
+    /// Introduces a summary for `port`. Panics if a summary already exists.
+    pub fn add_port(&mut self, port: usize, summary: Antichain<TS>) {
+        if !summary.is_empty() {
+            let prior = self.tree.insert(port, summary);
+            assert!(prior.is_none());
+        }
+        else {
+            assert!(self.tree.remove(&port).is_none());
+        }
+    }
+    /// Borrowing iterator of port identifiers and antichains.
+    pub fn iter_ports(&self) -> impl Iterator<Item = (usize, &Antichain<TS>)> {
+        self.tree.iter().map(|(o,p)| (*o, p))
+    }
+    /// Returns the associated path summary, if it exists.
+    pub fn get(&self, index: usize) -> Option<&Antichain<TS>> {
+        self.tree.get(&index)
+    }
+}
+
+impl<TS> FromIterator<(usize, Antichain<TS>)> for PortConnectivity<TS> {
+    fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = (usize, Antichain<TS>)> {
+        Self { tree: iter.into_iter().filter(|(_,p)| !p.is_empty()).collect() }
+    }
 }
 
 /// Progress information shared between parent and child.
