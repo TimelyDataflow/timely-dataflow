@@ -261,7 +261,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
 
             // We expect that `bytes` contains an integral number of messages.
             // No splitting occurs across allocations.
-            while bytes.len() > 0 {
+            while !bytes.is_empty() {
 
                 if let Some(header) = MessageHeader::try_read(&bytes[..]) {
 
