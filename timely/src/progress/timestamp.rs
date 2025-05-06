@@ -15,7 +15,9 @@ use crate::order::PartialOrder;
 pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+ExchangeData+Hash+Ord {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
-    /// A unique minimum value in our partial order, suitable as a default.
+    /// A unique minimum value in our partial order.
+    ///
+    /// This value will often be used as an initial value, and should be cheap to construct.
     fn minimum() -> Self;
 }
 
@@ -31,12 +33,14 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// in computation, uses this method and will drop messages with timestamps that when advanced
     /// result in `None`. Ideally, all other timestamp manipulation should behave similarly.
     ///
-    /// This summary's partial order is expected to be compatible with the partial order of [T],
-    /// in the sense that if `s1.less_equal(s2)`, then `s1.results_in(&t)` is less than or equal to
-    /// `s2.results_in(&t)`.
+    /// This function must be monotonic increasing in both inputs.
+    /// If `s1.less_equal(&s2)` then for all `t` we have `s1.results_in(&t).less_equal(&s2.results_in(&t))`.
+    /// If `t1.less_equal(&t2)` then for all `s` we have `s.results_in(&t1).less_equal(&s.results_in(&t2))`.
     ///
     /// Note that `Self::default()` is expected to behave as an "empty" or "noop" summary, such that
-    /// `Self::default().results_in(&t) == Some(t)`.
+    /// `Self::default().results_in(&t) == Some(t)`. The default summary does not need to be a minimal
+    /// summary, in that summaries are technically permitted to walk timestamps backwards. Care should
+    /// be used when doing this to avoid potentially cyclic dataflows without strict timestamp advancement.
     ///
     /// # Examples
     /// ```
