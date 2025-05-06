@@ -9,10 +9,13 @@ use crate::ExchangeData;
 use crate::order::PartialOrder;
 
 /// A composite trait for types that serve as timestamps in timely dataflow.
+///
+/// By implementing this trait, you promise that the type's [PartialOrder] implementation
+/// is compatible with [Ord], such that if `a.less_equal(b)` then `a <= b`.
 pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+ExchangeData+Hash+Ord {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
-    /// A minimum value suitable as a default.
+    /// A unique minimum value in our partial order, suitable as a default.
     fn minimum() -> Self;
 }
 
@@ -28,6 +31,13 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// in computation, uses this method and will drop messages with timestamps that when advanced
     /// result in `None`. Ideally, all other timestamp manipulation should behave similarly.
     ///
+    /// This summary's partial order is expected to be compatible with the partial order of [T],
+    /// in the sense that if `s1.less_equal(s2)`, then `s1.results_in(&t)` is less than or equal to
+    /// `s2.results_in(&t)`.
+    ///
+    /// Note that `Self::default()` is expected to behave as an "empty" or "noop" summary, such that
+    /// `Self::default().results_in(&t) == Some(t)`.
+    ///
     /// # Examples
     /// ```
     /// use timely::progress::timestamp::PathSummary;
@@ -35,7 +45,7 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// let timestamp = 3;
     ///
     /// let summary1 = 5;
-    /// let summary2 = usize::max_value() - 2;
+    /// let summary2 = usize::MAX - 2;
     ///
     /// assert_eq!(summary1.results_in(&timestamp), Some(8));
     /// assert_eq!(summary2.results_in(&timestamp), None);
@@ -49,14 +59,27 @@ pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     /// important that this not be used casually, as this does not prevent the actual movement of
     /// data.
     ///
+    /// Calling `results_in` on the composed summary should behave the same as though the two
+    /// summaries were applied to the argument in order.
+    ///
     /// # Examples
     /// ```
     /// use timely::progress::timestamp::PathSummary;
     ///
     /// let summary1 = 5;
-    /// let summary2 = usize::max_value() - 3;
+    /// let summary2 = usize::MAX - 3;
     ///
     /// assert_eq!(summary1.followed_by(&summary2), None);
+    ///
+    /// let time = 10;
+    /// let summary2 = 15;
+    /// assert_eq!(
+    ///     // Applying the composed summary...
+    ///     summary1.followed_by(&summary2).and_then(|s| s.results_in(&time)),
+    ///     // ...has the same result as applying the two summaries in sequence.
+    ///     summary1.results_in(&time).and_then(|t| summary2.results_in(&t)),
+    /// );
+    ///
     /// ```
     fn followed_by(&self, other: &Self) -> Option<Self>;
 }
