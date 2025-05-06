@@ -18,7 +18,7 @@ use timely::dataflow::operators::{ToStream, Inspect, Map};
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         worker.dataflow::<(),_,_>(|scope| {
-            (0 .. 9)
+            (0 .. 10)
                 .to_stream(scope)
                 .map(|x| x + 1)
                 .inspect(|x| println!("hello: {}", x));
@@ -37,7 +37,7 @@ use timely::dataflow::operators::{ToStream, Inspect, Map};
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         worker.dataflow::<(),_,_>(|scope| {
-            (0 .. 9)
+            (0 .. 10)
                 .to_stream(scope)
                 .map(|x| x.to_string())
                 .map(|mut x| { x.truncate(5); x } )
@@ -61,7 +61,7 @@ use timely::dataflow::operators::{ToStream, Inspect, Map};
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         worker.dataflow::<(),_,_>(|scope| {
-            (0 .. 9)
+            (0 .. 10)
                 .to_stream(scope)
                 .map(|x| x.to_string())
                 .map_in_place(|x| x.truncate(5))
@@ -81,7 +81,7 @@ use timely::dataflow::operators::{ToStream, Inspect, Map};
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         worker.dataflow::<(),_,_>(|scope| {
-            (0 .. 9)
+            (0 .. 10)
                 .to_stream(scope)
                 .flat_map(|x| 0 .. x)
                 .inspect(|x| println!("hello: {}", x));
@@ -102,7 +102,7 @@ use timely::dataflow::operators::{ToStream, Inspect, Filter};
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
         worker.dataflow::<(),_,_>(|scope| {
-            (0 .. 9)
+            (0 .. 10)
                 .to_stream(scope)
                 .filter(|x| *x % 2 == 0)
                 .inspect(|x| println!("hello: {}", x));
