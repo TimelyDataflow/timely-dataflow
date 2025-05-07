@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::collections::BinaryHeap;
 use std::cmp::Reverse;
 
-use crate::logging::{TimelyLogger as Logger, TimelyProgressEventBuilder};
+use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelySummaryLogger as SummaryLogger;
 
 use crate::scheduling::Schedule;
@@ -182,10 +182,9 @@ where
         // The `None` argument is optional logging infrastructure.
         let type_name = std::any::type_name::<TInner>();
         let reachability_logging =
-        worker.log_register()
-            .get::<reachability::logging::TrackerEventBuilder<TInner>>(&format!("timely/reachability/{type_name}"))
-            .map(|logger| reachability::logging::TrackerLogger::new(self.identifier, logger));
-        let progress_logging = worker.log_register().get::<TimelyProgressEventBuilder<TInner>>(&format!("timely/progress/{type_name}"));
+        worker.logger_for(&format!("timely/reachability/{type_name}"))
+              .map(|logger| reachability::logging::TrackerLogger::new(self.identifier, logger));
+        let progress_logging = worker.logger_for(&format!("timely/progress/{type_name}"));
         let (tracker, scope_summary) = builder.build(reachability_logging);
 
         let progcaster = Progcaster::new(worker, Rc::clone(&self.path), self.identifier, self.logging.clone(), progress_logging);

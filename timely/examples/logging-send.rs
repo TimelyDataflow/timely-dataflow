@@ -16,7 +16,7 @@ fn main() {
         let probe = ProbeHandle::new();
 
         // Register timely worker logging.
-        worker.log_register().insert::<TimelyEventBuilder,_>("timely", |time, data|
+        worker.log_register().unwrap().insert::<TimelyEventBuilder,_>("timely", |time, data|
             if let Some(data) = data {
                 data.iter().for_each(|x| println!("LOG1: {:?}", x))
             }
@@ -28,7 +28,7 @@ fn main() {
         // Register timely progress logging.
         // Less generally useful: intended for debugging advanced custom operators or timely
         // internals.
-        worker.log_register().insert::<TimelyProgressEventBuilder<usize>,_>("timely/progress/usize", |time, data|
+        worker.log_register().unwrap().insert::<TimelyProgressEventBuilder<usize>,_>("timely/progress/usize", |time, data|
             if let Some(data) = data {
                 data.iter().for_each(|x| {
                     println!("PROGRESS: {:?}", x);
@@ -50,7 +50,7 @@ fn main() {
             }
         );
 
-        worker.log_register().insert::<TrackerEventBuilder<usize>,_>("timely/reachability/usize", |time, data|
+        worker.log_register().unwrap().insert::<TrackerEventBuilder<usize>,_>("timely/reachability/usize", |time, data|
             if let Some(data) = data {
                 data.iter().for_each(|x| {
                     println!("REACHABILITY: {:?}", x);
@@ -61,7 +61,7 @@ fn main() {
             }
         );
 
-        worker.log_register().insert::<TimelySummaryEventBuilder<usize>,_>("timely/summary/usize", |time, data|
+        worker.log_register().unwrap().insert::<TimelySummaryEventBuilder<usize>,_>("timely/summary/usize", |time, data|
             if let Some(data) = data {
                 data.iter().for_each(|(_, x)| {
                     println!("SUMMARY: {:?}", x);
@@ -81,7 +81,7 @@ fn main() {
         });
 
         // Register timely worker logging.
-        worker.log_register().insert::<TimelyEventBuilder,_>("timely", |time, data|
+        worker.log_register().unwrap().insert::<TimelyEventBuilder,_>("timely", |time, data|
             if let Some(data) = data {
                 data.iter().for_each(|x| println!("LOG2: {:?}", x))
             }
@@ -100,7 +100,7 @@ fn main() {
 
         // Register user-level logging.
         type MyBuilder = CapacityContainerBuilder<Vec<(Duration, ())>>;
-        worker.log_register().insert::<MyBuilder,_>("input", |time, data|
+        worker.log_register().unwrap().insert::<MyBuilder,_>("input", |time, data|
             if let Some(data) = data {
                 for element in data.iter() {
                     println!("Round tick at: {:?}", element.0);
@@ -111,7 +111,7 @@ fn main() {
             }
         );
 
-        let input_logger = worker.log_register().get::<MyBuilder>("input").expect("Input logger absent");
+        let input_logger = worker.log_register().unwrap().get::<MyBuilder>("input").expect("Input logger absent");
 
         let timer = std::time::Instant::now();
 
