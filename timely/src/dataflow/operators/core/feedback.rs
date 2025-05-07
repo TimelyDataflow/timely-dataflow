@@ -11,6 +11,7 @@ use crate::dataflow::{StreamCore, Scope};
 use crate::order::Product;
 use crate::progress::frontier::Antichain;
 use crate::progress::{Timestamp, PathSummary};
+use crate::progress::subgraph::SubgraphBuilderT;
 
 /// Creates a `StreamCore` and a `Handle` to later bind the source of that `StreamCore`.
 pub trait Feedback<G: Scope> {
@@ -40,7 +41,12 @@ pub trait Feedback<G: Scope> {
 }
 
 /// Creates a `StreamCore` and a `Handle` to later bind the source of that `StreamCore`.
-pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
+pub trait LoopVariable<'a, G, T, SG>
+where
+    G: Scope,
+    T: Timestamp,
+    SG: SubgraphBuilderT<G::Timestamp, Product<G::Timestamp, T>>,
+{
     /// Creates a `StreamCore` and a `Handle` to later bind the source of that `StreamCore`.
     ///
     /// The resulting `StreamCore` will have its data defined by a future call to `connect_loop` with
@@ -51,10 +57,11 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     /// ```
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect, BranchWhen};
+    /// use timely::progress::SubgraphBuilder;
     ///
     /// timely::example(|scope| {
     ///     // circulate 0..10 for 100 iterations.
-    ///     scope.iterative::<usize,_,_>(|inner| {
+    ///     scope.iterative::<usize,_,_,SubgraphBuilder<_,_>>(|inner| {
     ///         let (handle, cycle) = inner.loop_variable(1);
     ///         (0..10).to_stream(inner)
     ///                .concat(&cycle)
@@ -64,7 +71,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     });
     /// });
     /// ```
-    fn loop_variable<C: Container + Data>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>);
+    fn loop_variable<C: Container + Data>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T, SG>, C>, StreamCore<Iterative<'a, G, T, SG>, C>);
 }
 
 impl<G: Scope> Feedback<G> for G {
@@ -78,8 +85,13 @@ impl<G: Scope> Feedback<G> for G {
     }
 }
 
-impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> {
-    fn loop_variable<C: Container + Data>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T>, C>, StreamCore<Iterative<'a, G, T>, C>) {
+impl<'a, G, T, SG> LoopVariable<'a, G, T, SG> for Iterative<'a, G, T, SG>
+where
+    G: Scope,
+    T: Timestamp,
+    SG: SubgraphBuilderT<G::Timestamp, Product<G::Timestamp, T>>,
+{
+    fn loop_variable<C: Container + Data>(&mut self, summary: T::Summary) -> (Handle<Iterative<'a, G, T, SG>, C>, StreamCore<Iterative<'a, G, T, SG>, C>) {
         self.feedback(Product::new(Default::default(), summary))
     }
 }

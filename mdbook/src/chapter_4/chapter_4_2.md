@@ -89,6 +89,7 @@ extern crate timely;
 
 use timely::dataflow::operators::*;
 use timely::dataflow::Scope;
+use timely::progress::SubgraphBuilder;
 
 fn main() {
     timely::example(|scope| {
@@ -97,7 +98,7 @@ fn main() {
 
         // Create a nested iterative scope.
         // Rust needs help understanding the iteration counter type.
-        scope.iterative::<u64,_,_>(|subscope| {
+        scope.iterative::<u64,_,_,SubgraphBuilder<_,_>>(|subscope| {
 
             let (handle, stream) = subscope.loop_variable(1);
 
