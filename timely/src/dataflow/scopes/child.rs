@@ -135,8 +135,8 @@ where
         let path = self.addr_for_child(index);
 
         let type_name = std::any::type_name::<T2>();
-        let progress_logging = self.log_register().as_ref().and_then(|l| l.get(&format!("timely/progress/{type_name}")));
-        let summary_logging  = self.log_register().as_ref().and_then(|l| l.get(&format!("timely/summary/{type_name}")));
+        let progress_logging = self.logger_for(&format!("timely/progress/{type_name}"));
+        let summary_logging  = self.logger_for(&format!("timely/summary/{type_name}"));
 
         let subscope = RefCell::new(SubgraphBuilder::new_from(path, identifier, self.logging(), summary_logging, name));
         let result = {

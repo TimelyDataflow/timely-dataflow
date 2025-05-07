@@ -202,8 +202,14 @@ pub trait AsWorker : Scheduler {
     fn peek_identifier(&self) -> usize;
     /// Provides access to named logging streams.
     fn log_register(&self) -> Option<::std::cell::RefMut<crate::logging_core::Registry>>;
+    /// Acquires a logger by name, if the log register exists and the name is registered.
+    ///
+    /// For a more precise understanding of why a result is `None` one can use the direct functions.
+    fn logger_for<CB: timely_container::ContainerBuilder>(&self, name: &str) -> Option<timely_logging::Logger<CB>> {
+        self.log_register().and_then(|l| l.get(name))
+    }
     /// Provides access to the timely logging stream.
-    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.log_register().and_then(|l| l.get("timely").map(Into::into)) }
+    fn logging(&self) -> Option<crate::logging::TimelyLogger> { self.logger_for("timely").map(Into::into) }
 }
 
 /// A `Worker` is the entry point to a timely dataflow computation. It wraps a `Allocate`,
@@ -579,8 +585,7 @@ impl<A: Allocate> Worker<A> {
         T: Refines<()>,
         F: FnOnce(&mut Child<Self, T>)->R,
     {
-        let logging = self.logging.as_ref().map(|l| l.borrow_mut()).and_then(|l| l.get("timely").map(Into::into));
-        self.dataflow_core("Dataflow", logging, Box::new(()), |_, child| func(child))
+        self.dataflow_core("Dataflow", self.logging(), Box::new(()), |_, child| func(child))
     }
 
     /// Construct a new dataflow with a (purely cosmetic) name.
@@ -603,8 +608,7 @@ impl<A: Allocate> Worker<A> {
         T: Refines<()>,
         F: FnOnce(&mut Child<Self, T>)->R,
     {
-        let logging = self.logging.as_ref().map(|l| l.borrow_mut()).and_then(|l| l.get("timely").map(Into::into));
-        self.dataflow_core(name, logging, Box::new(()), |_, child| func(child))
+        self.dataflow_core(name, self.logging(), Box::new(()), |_, child| func(child))
     }
 
     /// Construct a new dataflow with specific configurations.
@@ -643,8 +647,8 @@ impl<A: Allocate> Worker<A> {
         let identifier = self.new_identifier();
 
         let type_name = std::any::type_name::<T>();
-        let progress_logging = self.logging.as_ref().map(|l| l.borrow_mut()).and_then(|l| l.get(&format!("timely/progress/{}", type_name)).map(Into::into));
-        let summary_logging  = self.logging.as_ref().map(|l| l.borrow_mut()).and_then(|l| l.get(&format!("timely/summary/{}", type_name)).map(Into::into));
+        let progress_logging = self.logger_for(&format!("timely/progress/{}", type_name));
+        let summary_logging  = self.logger_for(&format!("timely/summary/{}", type_name));
         let subscope = SubgraphBuilder::new_from(addr, identifier, logging.clone(), summary_logging, name);
         let subscope = RefCell::new(subscope);
 
