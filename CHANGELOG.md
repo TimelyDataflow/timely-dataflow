@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.20.0...timely-v0.21.0) - 2025-05-09
+
+### Other
+
+- Remove crossbeam uses
+- Tidy various logging uses
+- Make std::time::Instant optional
+- Merge pull request #662 from frankmcsherry/further_cleanup
+- Switch to finish_non_exhaustive()
+- Merge branch 'master' into docs
+
 ## [0.20.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.19.0...timely-v0.20.0) - 2025-03-28
 
 ### Other
