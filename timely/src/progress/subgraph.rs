@@ -300,10 +300,11 @@ where
         self.propagate_pointstamps();
 
         {   // Enqueue active children; scoped to let borrow drop.
+            use crate::scheduling::activate::Scheduler;
             let temp_active = &mut self.temp_active;
             self.activations
                 .borrow_mut()
-                .for_extensions(&self.path[..], |index| temp_active.push(Reverse(index)));
+                .extensions(&self.path[..], temp_active);
         }
 
         // Schedule child operators.
