@@ -6,7 +6,7 @@ use std::thread::Thread;
 use std::collections::BinaryHeap;
 use std::time::{Duration, Instant};
 use std::cmp::Reverse;
-use crossbeam_channel::{Sender, Receiver};
+use std::sync::mpsc::{Sender, Receiver};
 
 /// Methods required to act as a timely scheduler.
 ///
@@ -56,7 +56,7 @@ impl Activations {
 
     /// Creates a new activation tracker.
     pub fn new(timer: Option<Instant>) -> Self {
-        let (tx, rx) = crossbeam_channel::unbounded();
+        let (tx, rx) = std::sync::mpsc::channel();
         Self {
             clean: 0,
             bounds: Vec::new(),
