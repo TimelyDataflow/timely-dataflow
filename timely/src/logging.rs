@@ -137,7 +137,7 @@ pub struct MessagesEvent {
 }
 
 /// Records the starting and stopping of an operator.
-#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Columnar, Debug, Copy, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum StartStop {
     /// Operator starts.
     Start,
@@ -145,7 +145,7 @@ pub enum StartStop {
     Stop,
 }
 
-#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Columnar, Debug, Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Operator start or stop.
 pub struct ScheduleEvent {
     /// Worker-unique identifier for the operator, linkable to the identifiers in [`OperatesEvent`].
@@ -200,7 +200,7 @@ pub struct TimelySetup {
     pub index: usize,
 }
 
-#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Columnar, Debug, Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Kind of communication channel
 pub enum CommChannelKind {
     /// Communication channel carrying progress information
@@ -209,7 +209,7 @@ pub enum CommChannelKind {
     Data,
 }
 
-#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Columnar, Debug, Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Event on a communication channel
 pub struct CommChannelsEvent {
     /// Communication channel identifier
@@ -218,7 +218,7 @@ pub struct CommChannelsEvent {
     pub kind: CommChannelKind,
 }
 
-#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Columnar, Debug, Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Input logic start/stop
 pub struct InputEvent {
     /// True when activity begins, false when it stops
