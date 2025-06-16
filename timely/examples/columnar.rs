@@ -300,6 +300,7 @@ mod builder {
     }
 
     impl<C: Columnar> Default for ColumnBuilder<C> {
+        #[inline]
         fn default() -> Self {
             ColumnBuilder {
                 current: Default::default(),
@@ -330,6 +331,11 @@ mod builder {
             }
             self.empty = self.pending.pop_front();
             self.empty.as_mut()
+        }
+
+        #[inline]
+        fn flush(&mut self) {
+            *self = Self::default();
         }
     }
 
