@@ -125,6 +125,12 @@ pub trait ContainerBuilder: Default + 'static {
         }
         container.clear();
     }
+
+    /// Indicates a good moment to release resources. By default, does nothing. Callers should
+    /// not rely on this method releasing any internal state though, i.e., the caller first
+    /// needs to drain the contents using [`Self::finish`].
+    #[inline]
+    fn flush(&mut self) { }
 }
 
 /// A wrapper trait indicating that the container building will preserve the number of records.
