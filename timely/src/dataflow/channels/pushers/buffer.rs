@@ -81,6 +81,7 @@ impl<T, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Buffer<T, CB, 
     /// Flushes all data and pushes a `None` to `self.pusher`, indicating a flush.
     pub fn cease(&mut self) {
         self.flush();
+        self.builder.flush();
         self.pusher.push(&mut None);
     }
 
