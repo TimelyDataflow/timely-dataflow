@@ -201,7 +201,7 @@ pub trait AsWorker : Scheduler {
     /// The next worker-unique identifier to be allocated.
     fn peek_identifier(&self) -> usize;
     /// Provides access to named logging streams.
-    fn log_register(&self) -> Option<::std::cell::RefMut<crate::logging_core::Registry>>;
+    fn log_register(&self) -> Option<RefMut<'_, crate::logging_core::Registry>>;
     /// Acquires a logger by name, if the log register exists and the name is registered.
     ///
     /// For a more precise understanding of why a result is `None` one can use the direct functions.

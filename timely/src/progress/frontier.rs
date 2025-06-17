@@ -629,7 +629,7 @@ pub trait MutableAntichainFilter<T: PartialOrder+Ord+Clone> {
     ///
     /// assert!(changes == vec![(1, -1), (2, 1)]);
     /// ```
-    fn filter_through(self, antichain: &mut MutableAntichain<T>) -> smallvec::Drain<[(T,i64); 2]>;
+    fn filter_through(self, antichain: &mut MutableAntichain<T>) -> smallvec::Drain<'_, [(T,i64); 2]>;
 }
 
 impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainFilter<T> for I {
