@@ -334,7 +334,7 @@ mod builder {
         }
 
         #[inline]
-        fn flush(&mut self) {
+        fn relax(&mut self) {
             *self = Self::default();
         }
     }

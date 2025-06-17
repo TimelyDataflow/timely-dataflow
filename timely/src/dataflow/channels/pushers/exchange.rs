@@ -96,7 +96,7 @@ where
             // flush
             for index in 0..self.pushers.len() {
                 self.flush(index);
-                self.builders[index].flush();
+                self.builders[index].relax();
                 self.pushers[index].push(&mut None);
             }
         }
