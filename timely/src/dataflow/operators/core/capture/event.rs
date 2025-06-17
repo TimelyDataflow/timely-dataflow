@@ -24,7 +24,7 @@ pub enum Event<T, C> {
 /// This method is not simply an iterator because of the lifetime in the result.
 pub trait EventIterator<T: Clone, C: Clone> {
     /// Iterates over `Cow<Event<T, C>>` elements.
-    fn next(&mut self) -> Option<std::borrow::Cow<Event<T, C>>>;
+    fn next(&mut self) -> Option<std::borrow::Cow<'_, Event<T, C>>>;
 }
 
 /// Receives `Event<T, C>` events.
