@@ -183,7 +183,7 @@ impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Out
     ///
     /// This method ensures that the only access to the push buffer is through the `OutputHandle`
     /// type which ensures the use of capabilities, and which calls `cease` when it is dropped.
-    pub fn activate(&mut self) -> OutputHandleCore<T, CB, P> {
+    pub fn activate(&mut self) -> OutputHandleCore<'_, T, CB, P> {
         OutputHandleCore {
             push_buffer: &mut self.push_buffer,
             internal_buffer: &self.internal_buffer,

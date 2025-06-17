@@ -265,7 +265,7 @@ impl<A: Allocate> AsWorker for Worker<A> {
 
     fn new_identifier(&mut self) -> usize { self.new_identifier() }
     fn peek_identifier(&self) -> usize { self.peek_identifier() }
-    fn log_register(&self) -> Option<RefMut<crate::logging_core::Registry>> {
+    fn log_register(&self) -> Option<RefMut<'_, crate::logging_core::Registry>> {
         self.log_register()
     }
 }
@@ -561,7 +561,7 @@ impl<A: Allocate> Worker<A> {
     ///           );
     /// });
     /// ```
-    pub fn log_register(&self) -> Option<::std::cell::RefMut<crate::logging_core::Registry>> {
+    pub fn log_register(&self) -> Option<RefMut<'_, crate::logging_core::Registry>> {
         self.logging.as_ref().map(|l| l.borrow_mut())
     }
 

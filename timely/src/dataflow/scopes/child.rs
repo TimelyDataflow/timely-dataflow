@@ -73,7 +73,7 @@ where
     fn peek_identifier(&self) -> usize {
         self.parent.peek_identifier()
     }
-    fn log_register(&self) -> Option<::std::cell::RefMut<crate::logging_core::Registry>> {
+    fn log_register(&self) -> Option<::std::cell::RefMut<'_, crate::logging_core::Registry>> {
         self.parent.log_register()
     }
 }
