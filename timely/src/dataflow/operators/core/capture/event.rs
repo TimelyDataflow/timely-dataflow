@@ -79,7 +79,7 @@ pub mod link {
     }
 
     impl<T: Clone, C: Clone> EventIterator<T, C> for Rc<EventLink<T, C>> {
-        fn next(&mut self) -> Option<Cow<Event<T, C>>> {
+        fn next(&mut self) -> Option<Cow<'_, Event<T, C>>> {
             let is_some = self.next.borrow().is_some();
             if is_some {
                 let next = Rc::clone(self.next.borrow().as_ref().unwrap());
@@ -177,7 +177,7 @@ pub mod binary {
     }
 
     impl<T: DeserializeOwned + Clone, C: DeserializeOwned + Clone, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
-        fn next(&mut self) -> Option<Cow<Event<T, C>>> {
+        fn next(&mut self) -> Option<Cow<'_, Event<T, C>>> {
             self.decoded = ::bincode::deserialize_from(&mut self.reader).ok();
             self.decoded.take().map(Cow::Owned)
         }

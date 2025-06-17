@@ -176,7 +176,7 @@ where
     /// assert!(!batch.is_empty());
     ///```
     #[inline]
-    pub fn iter(&mut self) -> ::std::slice::Iter<(T, i64)> {
+    pub fn iter(&mut self) -> std::slice::Iter<'_, (T, i64)> {
         self.compact();
         self.updates.iter()
     }
@@ -200,7 +200,7 @@ where
     /// assert!(batch.is_empty());
     ///```
     #[inline]
-    pub fn drain(&mut self) -> smallvec::Drain<[(T, i64); X]> {
+    pub fn drain(&mut self) -> smallvec::Drain<'_, [(T, i64); X]> {
         self.compact();
         self.clean = 0;
         self.updates.drain(..)

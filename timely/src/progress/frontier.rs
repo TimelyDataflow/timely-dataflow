@@ -267,7 +267,7 @@ impl<T> Antichain<T> {
     /// let mut frontier = Antichain::from_elem(2);
     /// assert_eq!(&*frontier.borrow(), &[2]);
     ///```
-    #[inline] pub fn borrow(&self) -> AntichainRef<T> { AntichainRef::new(&self.elements) }}
+    #[inline] pub fn borrow(&self) -> AntichainRef<'_, T> { AntichainRef::new(&self.elements) }}
 
 impl<T: PartialEq> PartialEq for Antichain<T> {
     fn eq(&self, other: &Self) -> bool {
@@ -633,7 +633,7 @@ pub trait MutableAntichainFilter<T: PartialOrder+Ord+Clone> {
 }
 
 impl<T: PartialOrder+Ord+Clone, I: IntoIterator<Item=(T,i64)>> MutableAntichainFilter<T> for I {
-    fn filter_through(self, antichain: &mut MutableAntichain<T>) -> smallvec::Drain<[(T,i64); 2]> {
+    fn filter_through(self, antichain: &mut MutableAntichain<T>) -> smallvec::Drain<'_, [(T,i64); 2]> {
         antichain.update_iter(self)
     }
 }

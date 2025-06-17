@@ -40,7 +40,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     }
 
     /// Reveals the elements in the frontier of the indicated input.
-    pub fn frontier(&self, input: usize) -> AntichainRef<T> {
+    pub fn frontier(&self, input: usize) -> AntichainRef<'_, T> {
         self.frontiers[input].frontier()
     }
 

@@ -47,27 +47,27 @@ impl<T, CB: Default, P> Buffer<T, CB, P> {
 impl<T, C: Container + Data, P: Push<Message<T, C>>> Buffer<T, CapacityContainerBuilder<C>, P> where T: Eq+Clone {
     /// Returns a `Session`, which accepts data to send at the associated time
     #[inline]
-    pub fn session(&mut self, time: &T) -> Session<T, CapacityContainerBuilder<C>, P> {
+    pub fn session(&mut self, time: &T) -> Session<'_, T, CapacityContainerBuilder<C>, P> {
         self.session_with_builder(time)
     }
 
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
     #[inline]
-    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<T, CapacityContainerBuilder<C>, P> where T: Timestamp {
+    pub fn autoflush_session(&mut self, cap: Capability<T>) -> AutoflushSession<'_, T, CapacityContainerBuilder<C>, P> where T: Timestamp {
         self.autoflush_session_with_builder(cap)
     }
 }
 
 impl<T, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Buffer<T, CB, P> where T: Eq+Clone {
     /// Returns a `Session`, which accepts data to send at the associated time
-    pub fn session_with_builder(&mut self, time: &T) -> Session<T, CB, P> {
+    pub fn session_with_builder(&mut self, time: &T) -> Session<'_, T, CB, P> {
         if let Some(true) = self.time.as_ref().map(|x| x != time) { self.flush(); }
         self.time = Some(time.clone());
         Session { buffer: self }
     }
 
     /// Allocates a new `AutoflushSession` which flushes itself on drop.
-    pub fn autoflush_session_with_builder(&mut self, cap: Capability<T>) -> AutoflushSession<T, CB, P> where T: Timestamp {
+    pub fn autoflush_session_with_builder(&mut self, cap: Capability<T>) -> AutoflushSession<'_, T, CB, P> where T: Timestamp {
         if let Some(true) = self.time.as_ref().map(|x| x != cap.time()) { self.flush(); }
         self.time = Some(cap.time().clone());
         AutoflushSession {
