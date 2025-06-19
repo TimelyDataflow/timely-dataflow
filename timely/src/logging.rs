@@ -91,6 +91,8 @@ pub struct ChannelsEvent {
     pub source: (usize, usize),
     /// Target descriptor, indicating operator index and input port.
     pub target: (usize, usize),
+    /// The type of data on the channel, as a string.
+    pub typ: String,
 }
 
 #[derive(Debug, Clone)]
