@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.0...timely-v0.21.1) - 2025-06-17
+
+### Other
+
+- Fix nightly compile warnings ([#670](https://github.com/TimelyDataflow/timely-dataflow/pull/670))
+- Avoid compile warnings on nightly ([#669](https://github.com/TimelyDataflow/timely-dataflow/pull/669))
+- Derive Copy
+
 ## [0.21.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.20.0...timely-v0.21.0) - 2025-05-09
 
 ### Other
