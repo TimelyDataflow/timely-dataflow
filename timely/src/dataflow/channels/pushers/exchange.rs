@@ -14,7 +14,7 @@ where
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
     pushers: Vec<P>,
-    buffers: Vec<CB>,
+    builders: Vec<CB>,
     current: Option<T>,
     hash_func: H,
 }
@@ -27,20 +27,20 @@ where
 {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, CB, P, H> {
-        let mut buffers = vec![];
+        let mut builders = vec![];
         for _ in 0..pushers.len() {
-            buffers.push(Default::default());
+            builders.push(Default::default());
         }
         Exchange {
             pushers,
             hash_func: key,
-            buffers,
+            builders,
             current: None,
         }
     }
     #[inline]
     fn flush(&mut self, index: usize) {
-        while let Some(container) = self.buffers[index].finish() {
+        while let Some(container) = self.builders[index].finish() {
             if let Some(ref time) = self.current {
                 Message::push_at(container, time.clone(), &mut self.pushers[index]);
             }
@@ -79,14 +79,14 @@ where
             // if the number of pushers is a power of two, use a mask
             if self.pushers.len().is_power_of_two() {
                 let mask = (self.pushers.len() - 1) as u64;
-                CB::partition(data, &mut self.buffers, |datum| ((hash_func)(datum) & mask) as usize);
+                CB::partition(data, &mut self.builders, |datum| ((hash_func)(datum) & mask) as usize);
             }
             // as a last resort, use mod (%)
             else {
                 let num_pushers = self.pushers.len() as u64;
-                CB::partition(data, &mut self.buffers, |datum| ((hash_func)(datum) % num_pushers) as usize);
+                CB::partition(data, &mut self.builders, |datum| ((hash_func)(datum) % num_pushers) as usize);
             }
-            for (buffer, pusher) in self.buffers.iter_mut().zip(self.pushers.iter_mut()) {
+            for (buffer, pusher) in self.builders.iter_mut().zip(self.pushers.iter_mut()) {
                 while let Some(container) = buffer.extract() {
                     Message::push_at(container, time.clone(), pusher);
                 }
@@ -96,6 +96,7 @@ where
             // flush
             for index in 0..self.pushers.len() {
                 self.flush(index);
+                self.builders[index].relax();
                 self.pushers[index].push(&mut None);
             }
         }
