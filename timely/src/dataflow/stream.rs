@@ -60,6 +60,7 @@ impl<S: Scope, C: Container> StreamCore<S, C> {
             scope_addr: self.scope.addr().to_vec(),
             source: (self.name.node, self.name.port),
             target: (target.node, target.port),
+            typ: std::any::type_name::<C>().to_string(),
         }));
 
         self.scope.add_edge(self.name, target);
