@@ -125,6 +125,14 @@ pub trait ContainerBuilder: Default + 'static {
         }
         container.clear();
     }
+
+    /// Indicates a good moment to release resources.
+    ///
+    /// By default, does nothing. Callers first needs to drain the contents using [`Self::finish`]
+    /// before calling this function. The implementation should not change the contents of the
+    /// builder.
+    #[inline]
+    fn relax(&mut self) { }
 }
 
 /// A wrapper trait indicating that the container building will preserve the number of records.

@@ -300,6 +300,7 @@ mod builder {
     }
 
     impl<C: Columnar> Default for ColumnBuilder<C> {
+        #[inline]
         fn default() -> Self {
             ColumnBuilder {
                 current: Default::default(),
@@ -330,6 +331,15 @@ mod builder {
             }
             self.empty = self.pending.pop_front();
             self.empty.as_mut()
+        }
+
+        #[inline]
+        fn relax(&mut self) {
+            // The caller is responsible for draining all contents; assert that we are empty.
+            // The assertion is not strictly necessary, but it helps catch bugs.
+            assert!(self.current.is_empty());
+            assert!(self.pending.is_empty());
+            *self = Self::default();
         }
     }
 
