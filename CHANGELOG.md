@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.2](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.1...timely-v0.21.2) - 2025-06-24
+
+### Other
+
+- Merge pull request #671 from antiguru/log_channel_typ
+- Log channel container type
+
 ## [0.21.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.0...timely-v0.21.1) - 2025-06-17
 
 ### Other
