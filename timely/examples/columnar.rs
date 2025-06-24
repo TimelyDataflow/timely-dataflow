@@ -335,6 +335,10 @@ mod builder {
 
         #[inline]
         fn relax(&mut self) {
+            /// The caller is responsible for draining all contents; assert that we are empty.
+            /// The assertion is not strictly necessary, but it helps catch bugs.
+            debug_assert!(self.current.is_empty());
+            debug_assert!(self.pending.is_empty());
             *self = Self::default();
         }
     }
