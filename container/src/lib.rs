@@ -126,9 +126,11 @@ pub trait ContainerBuilder: Default + 'static {
         container.clear();
     }
 
-    /// Indicates a good moment to release resources. By default, does nothing. Callers should
-    /// not rely on this method releasing any internal state though, i.e., the caller first
-    /// needs to drain the contents using [`Self::finish`].
+    /// Indicates a good moment to release resources.
+    ///
+    /// By default, does nothing. Callers first needs to drain the contents using [`Self::finish`]
+    /// before calling this function. The implementation should not change the contents of the
+    /// builder.
     #[inline]
     fn relax(&mut self) { }
 }
