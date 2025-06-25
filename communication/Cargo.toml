@@ -23,7 +23,7 @@ default = ["getopts"]
 columnar = { workspace = true }
 getopts = { version = "0.2.21", optional = true }
 byteorder = "1.5"
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true }
 timely_bytes = { path = "../bytes", version = "0.13" }
 timely_container = { path = "../container", version = "0.15.1" }
 timely_logging = { path = "../logging", version = "0.13" }
