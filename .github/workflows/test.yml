@@ -26,6 +26,8 @@ jobs:
           components: clippy
       - name: Cargo test
         run: cargo test --workspace --all-targets
+      - name: Cargo doc test
+        run: cargo test --doc
 
   # Check for clippy warnings
   clippy:
@@ -40,19 +42,3 @@ jobs:
         run: cargo clippy --workspace --all-targets
         env:
           RUSTFLAGS: "" # Don't make test fail on clippy
-
-  # Check mdbook files for errors
-  mdbook:
-    name: test mdBook
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        # rustdoc doesn't build dependencies, so it needs to run after `cargo build`,
-        # but its dependency search gets confused if there are multiple copies of any
-        # dependency in target/debug/deps, so it needs to run before `cargo test` et al.
-        # clutter target/debug/deps with multiple copies of things.
-      - run: cargo clean
-      - run: cargo build
-      - name: test mdBook
-        run: for file in $(find mdbook -name '*.md' | sort); do rustdoc --test $file  -L ./target/debug/deps; done
