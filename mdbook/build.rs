@@ -23,20 +23,20 @@ fn find_mds(dir: impl AsRef<Path>, mds: &mut Vec<PathBuf>) -> io::Result<()> {
 
 fn main() -> io::Result<()> {
     let mut mds = Vec::new();
-    find_mds("src/", &mut mds)?;
+    find_mds("src", &mut mds)?;
 
     let mut lib = String::new();
 
     for md in mds {
         let md_path = md.to_str().unwrap();
         println!("cargo::rerun-if-changed={md_path}");
-        let mod_name = md_path
-            .strip_prefix("src/")
-            .and_then(|s| s.strip_suffix(".md"))
-            .map(|s| s.replace(['/', '-'], "_"))
-            .unwrap();
+        let mod_name = md_path.replace(['/', '\\', '-', '.'], "_");
         use std::fmt::Write;
-        writeln!(&mut lib, "#[allow(non_snake_case)] #[doc = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{md_path}\"))] mod {mod_name} {{}}").unwrap();
+        writeln!(
+            &mut lib,
+            "#[allow(non_snake_case)] #[doc = include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), r\"{}{md_path}\"))] mod {mod_name} {{}}",
+            std::path::MAIN_SEPARATOR,
+        ).unwrap();
     }
 
     let dest_path = Path::new(&env::var("OUT_DIR").unwrap()).join("mdbook.rs");
