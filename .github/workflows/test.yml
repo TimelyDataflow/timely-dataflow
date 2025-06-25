@@ -26,6 +26,8 @@ jobs:
           components: clippy
       - name: Cargo test
         run: cargo test --workspace --all-targets
+      - name: Cargo doc test
+        run: cargo test --doc
 
   # Check for clippy warnings
   clippy:
