@@ -4,6 +4,7 @@ members = [
     "communication",
     "container",
     "logging",
+    "mdbook",
     "timely",
 ]
 
