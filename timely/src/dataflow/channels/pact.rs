@@ -44,6 +44,24 @@ impl<T: 'static, C: Container + 'static> ParallelizationContract<T, C> for Pipel
     }
 }
 
+/// A broadcast connection
+#[derive(Debug)]
+pub struct Broadcast;
+
+impl<T, C> ParallelizationContract<T, C> for Broadcast
+where
+    T: Timestamp,
+    C: Container + Data + Send + crate::dataflow::channels::ContainerBytes,
+{
+    type Pusher = LogPusher<T, C, Box<dyn Push<Message<T, C>>>>;
+    type Puller = LogPuller<T, C, Box<dyn Pull<Message<T, C>>>>;
+    fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
+        let (pusher, puller) = allocator.broadcast::<Message<T, C>>(identifier, address);
+        (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
+         LogPuller::new(puller, allocator.index(), identifier, logging))
+    }
+}
+
 /// An exchange between multiple observers by data
 pub struct ExchangeCore<CB, F> { hash_func: F, phantom: PhantomData<CB> }
 

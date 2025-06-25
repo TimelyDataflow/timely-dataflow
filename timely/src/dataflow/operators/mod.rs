@@ -42,7 +42,8 @@ pub use self::core::inspect;
 pub mod filter;
 pub mod delay;
 pub use self::core::exchange;
-pub mod broadcast;
+// Backwards compatibility with old names.
+pub use core::broadcast;
 pub use self::core::probe::{self, Probe};
 pub mod to_stream;
 pub use self::core::capture::{self, Capture};

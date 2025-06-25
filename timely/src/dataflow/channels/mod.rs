@@ -136,6 +136,20 @@ mod implementations {
         }
     }
 
+    impl<T: ContainerBytes> ContainerBytes for std::sync::Arc<T> {
+        fn from_bytes(bytes: crate::bytes::arc::Bytes) -> Self {
+            std::sync::Arc::new(T::from_bytes(bytes))
+        }
+
+        fn length_in_bytes(&self) -> usize {
+            self.as_ref().length_in_bytes()
+        }
+
+        fn into_bytes<W: Write>(&self, writer: &mut W) {
+            self.as_ref().into_bytes(writer);
+        }
+    }
+
     use write_counter::WriteCounter;
     /// A `Write` wrapper that counts the bytes written.
     mod write_counter {

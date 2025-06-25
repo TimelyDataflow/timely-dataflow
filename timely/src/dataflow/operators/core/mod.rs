@@ -1,6 +1,7 @@
 //! Extension traits for `StreamCore` implementing various operators that
 //! are independent of specific container types.
 
+pub mod broadcast;
 pub mod capture;
 pub mod concat;
 pub mod enterleave;

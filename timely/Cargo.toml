@@ -27,7 +27,7 @@ columnation = "0.1"
 getopts = { version = "0.2.21", optional = true }
 bincode = { version = "1.0" }
 byteorder = "1.5"
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 timely_bytes = { path = "../bytes", version = "0.13" }
 timely_logging = { path = "../logging", version = "0.13" }
 timely_communication = { path = "../communication", version = "0.19", default-features = false }
