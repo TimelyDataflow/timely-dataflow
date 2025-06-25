@@ -1,6 +1,6 @@
 [package]
 name = "timely_logging"
-version = "0.13.4"
+version = "0.13.5"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 description = "Common timely logging infrastructure"
 edition.workspace = true
@@ -15,4 +15,4 @@ license = "MIT"
 workspace = true
 
 [dependencies]
-timely_container = { version = "0.15.1", path = "../container" }
+timely_container = { version = "0.15.2", path = "../container" }

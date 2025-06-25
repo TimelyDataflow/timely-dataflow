@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.3](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.2...timely-v0.21.3) - 2025-06-24
+
+### Other
+
+- Improve doc
+- Always assert
+- Guard against data loss
+- Rename to relax
+- Also flush session buffer
+- Flush container builders in exchange
+
 ## [0.21.2](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.1...timely-v0.21.2) - 2025-06-24
 
 ### Other
