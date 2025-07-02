@@ -42,6 +42,7 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static,
     {
         let mut builder = OperatorBuilder::new("Partition".to_owned(), self.scope());
+        builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
         let mut outputs = Vec::with_capacity(parts as usize);

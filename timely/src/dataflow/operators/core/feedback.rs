@@ -72,6 +72,7 @@ impl<G: Scope> Feedback<G> for G {
     fn feedback<C: Container + Data>(&mut self, summary: <G::Timestamp as Timestamp>::Summary) -> (Handle<G, C>, StreamCore<G, C>) {
 
         let mut builder = OperatorBuilder::new("Feedback".to_owned(), self.clone());
+        builder.set_notify(false);
         let (output, stream) = builder.new_output();
 
         (Handle { builder, summary, output }, stream)

@@ -40,6 +40,7 @@ impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
     ) -> (Stream<S, D>, Stream<S, D>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
+        builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
         let (mut output1, stream1) = builder.new_output();
@@ -95,6 +96,7 @@ pub trait BranchWhen<T>: Sized {
 impl<S: Scope, C: Container + Data> BranchWhen<S::Timestamp> for StreamCore<S, C> {
     fn branch_when(&self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
+        builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
         let (mut output1, stream1) = builder.new_output();
