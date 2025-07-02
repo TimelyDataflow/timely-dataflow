@@ -50,6 +50,7 @@ impl<S: Scope, C: Container + Data> OkErr<S, C> for StreamCore<S, C> {
         L: FnMut(C::Item<'_>) -> Result<D1,D2>+'static
     {
         let mut builder = OperatorBuilder::new("OkErr".to_owned(), self.scope());
+        builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
         let (mut output1, stream1) = builder.new_output();
