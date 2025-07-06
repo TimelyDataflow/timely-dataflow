@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.4](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.3...timely-v0.21.4) - 2025-07-06
+
+### Other
+
+- Update for Columnar 0.7
+- Disable notifications for some operators
+
 ## [0.21.3](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.2...timely-v0.21.3) - 2025-06-24
 
 ### Other
