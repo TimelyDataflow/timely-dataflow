@@ -57,6 +57,5 @@ pub mod generic;
 pub use self::core::reclock;
 pub mod count;
 
-// keep "mint" module-private
-mod capability;
+pub mod capability;
 pub use self::capability::{ActivateCapability, Capability, InputCapability, CapabilitySet, DowngradeError};
