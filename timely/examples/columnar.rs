@@ -154,7 +154,7 @@ mod container {
     use columnar::bytes::{EncodeDecode, Indexed};
     use columnar::common::IterOwn;
 
-    impl<C: columnar::Container> Column<C> {
+    impl<C: columnar::ContainerBytes> Column<C> {
         /// Borrows the contents no matter their representation.
         #[inline(always)] fn borrow(&self) -> C::Borrowed<'_> {
             match self {
@@ -165,7 +165,7 @@ mod container {
         }
     }
 
-    impl<C: columnar::Container> timely::Container for Column<C> {
+    impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
         fn len(&self) -> usize { self.borrow().len() }
         // This sets `self` to be an empty `Typed` variant, appropriate for pushing into.
         fn clear(&mut self) {
@@ -185,7 +185,7 @@ mod container {
         fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> { self.borrow().into_index_iter() }
     }
 
-    impl<C: columnar::Container> timely::container::SizableContainer for Column<C> {
+    impl<C: columnar::ContainerBytes> timely::container::SizableContainer for Column<C> {
         fn at_capacity(&self) -> bool {
             match self {
                 Self::Typed(t) => {
@@ -213,7 +213,7 @@ mod container {
         }
     }
 
-    impl<C: columnar::Container> timely::dataflow::channels::ContainerBytes for Column<C> {
+    impl<C: columnar::ContainerBytes> timely::dataflow::channels::ContainerBytes for Column<C> {
         fn from_bytes(bytes: timely::bytes::arc::Bytes) -> Self {
             // Our expectation / hope is that `bytes` is `u64` aligned and sized.
             // If the alignment is borked, we can relocate. IF the size is borked,
@@ -268,7 +268,7 @@ mod builder {
         pending: VecDeque<Column<C>>,
     }
 
-    impl<C: columnar::Container, T> timely::container::PushInto<T> for ColumnBuilder<C> where C: columnar::Push<T> {
+    impl<C: columnar::ContainerBytes, T> timely::container::PushInto<T> for ColumnBuilder<C> where C: columnar::Push<T> {
         #[inline]
         fn push_into(&mut self, item: T) {
             self.current.push(item);
@@ -285,7 +285,7 @@ mod builder {
     }
 
     use timely::container::{ContainerBuilder, LengthPreservingContainerBuilder};
-    impl<C: columnar::Container> ContainerBuilder for ColumnBuilder<C> {
+    impl<C: columnar::ContainerBytes> ContainerBuilder for ColumnBuilder<C> {
         type Container = Column<C>;
 
         #[inline]
@@ -317,5 +317,5 @@ mod builder {
         }
     }
 
-    impl<C: columnar::Container> LengthPreservingContainerBuilder for ColumnBuilder<C> { }
+    impl<C: columnar::ContainerBytes> LengthPreservingContainerBuilder for ColumnBuilder<C> { }
 }
