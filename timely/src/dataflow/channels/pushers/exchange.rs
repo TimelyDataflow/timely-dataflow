@@ -27,10 +27,7 @@ where
 {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, CB, P, H> {
-        let mut builders = vec![];
-        for _ in 0..pushers.len() {
-            builders.push(Default::default());
-        }
+        let builders = std::iter::repeat_with(Default::default).take(pushers.len()).collect();
         Exchange {
             pushers,
             hash_func: key,
