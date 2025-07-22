@@ -7,15 +7,30 @@ use std::collections::VecDeque;
 /// A container transferring data through dataflow edges
 ///
 /// A container stores a number of elements and thus is able to describe it length (`len()`) and
-/// whether it is empty (`is_empty()`). It supports removing all elements (`clear`).
+/// whether it is empty (`is_empty()`).
 ///
 /// A container must implement default. The default implementation is not required to allocate
 /// memory for variable-length components.
+pub trait ProgressContainer: Default {
+    /// The number of elements in this container
+    ///
+    /// This number is used in progress tracking to confirm the receipt of some number
+    /// of outstanding records, and it is highly load bearing. The main restriction is
+    /// imposed on the `LengthPreservingContainerBuilder` trait, whose implementors
+    /// must preserve the number of items.
+    fn len(&self) -> usize;
+
+    /// Determine if the container contains any elements, corresponding to `len() == 0`.
+    #[inline(always)]
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// A container that can reveal its contents through iterating by reference and draining.
 ///
-/// We require the container to be cloneable to enable efficient copies when providing references
-/// of containers to operators. Care must be taken that the type's `clone_from` implementation
-/// is efficient (which is not necessarily the case when deriving `Clone`.)
-pub trait Container: Default {
+/// It supports removing all elements (`clear`).
+pub trait Container: ProgressContainer {
     /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
 
@@ -26,19 +41,6 @@ pub trait Container: Default {
     #[inline]
     fn push<T>(&mut self, item: T) where Self: PushInto<T> {
         self.push_into(item)
-    }
-
-    /// The number of elements in this container
-    ///
-    /// This number is used in progress tracking to confirm the receipt of some number
-    /// of outstanding records, and it is highly load bearing. The main restriction is
-    /// imposed on the `LengthPreservingContainerBuilder` trait, whose implementors
-    /// must preserve the number of items.
-    fn len(&self) -> usize;
-
-    /// Determine if the container contains any elements, corresponding to `len() == 0`.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
     }
 
     /// Remove all contents from `self` while retaining allocated memory.
@@ -102,7 +104,7 @@ pub trait PushInto<T> {
 /// decide to represent a push order for `extract` and `finish`, or not.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
-    type Container: Container + Clone + 'static;
+    type Container: ProgressContainer + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -118,6 +120,7 @@ pub trait ContainerBuilder: Default + 'static {
     where
         Self: for<'a> PushInto<<Self::Container as Container>::Item<'a>>,
         I: for<'a> FnMut(&<Self::Container as Container>::Item<'a>) -> usize,
+        Self::Container: Container,
     {
         for datum in container.drain() {
             let index = index(&datum);
@@ -142,6 +145,35 @@ pub trait ContainerBuilder: Default + 'static {
 /// If you have any questions about this trait you are best off not implementing it.
 pub trait LengthPreservingContainerBuilder : ContainerBuilder { }
 
+/// A container builder that never produces any outputs, and can be used to pass through data in
+/// operators.
+#[derive(Debug, Clone)]
+pub struct PassthroughContainerBuilder<C>(std::marker::PhantomData<C>);
+
+impl<C> Default for PassthroughContainerBuilder<C> {
+    #[inline(always)]
+    fn default() -> Self {
+        PassthroughContainerBuilder(std::marker::PhantomData)
+    }
+}
+
+impl<C> ContainerBuilder for PassthroughContainerBuilder<C>
+where
+    C: ProgressContainer + Clone + 'static,
+{
+    type Container = C;
+
+    #[inline(always)]
+    fn extract(&mut self) -> Option<&mut Self::Container> {
+        None
+    }
+
+    #[inline(always)]
+    fn finish(&mut self) -> Option<&mut Self::Container> {
+        None
+    }
+}
+
 /// A default container builder that uses length and preferred capacity to chunk data.
 ///
 /// Maintains a single empty allocation between [`Self::push_into`] and [`Self::extract`], but not
@@ -165,7 +197,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
         self.current.ensure_capacity(&mut self.empty);
 
         // Push item
-        self.current.push(item);
+        self.current.push_into(item);
 
         // Maybe flush
         if self.current.at_capacity() {
@@ -199,17 +231,17 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
 
 impl<C: Container + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
+impl<T> ProgressContainer for Vec<T> {
+    #[inline(always)]
+    fn len(&self) -> usize { Vec::len(self) }
+
+    #[inline(always)]
+    fn is_empty(&self) -> bool { Vec::is_empty(self) }
+}
+
 impl<T> Container for Vec<T> {
     type ItemRef<'a> = &'a T where T: 'a;
     type Item<'a> = T where T: 'a;
-
-    fn len(&self) -> usize {
-        Vec::len(self)
-    }
-
-    fn is_empty(&self) -> bool {
-        Vec::is_empty(self)
-    }
 
     fn clear(&mut self) { Vec::clear(self) }
 
@@ -268,19 +300,19 @@ mod rc {
     use std::ops::Deref;
     use std::rc::Rc;
 
-    use crate::Container;
+    use crate::{Container, ProgressContainer};
+
+    impl<T: ProgressContainer> ProgressContainer for Rc<T> {
+        #[inline(always)]
+        fn len(&self) -> usize { std::ops::Deref::deref(self).len() }
+
+        #[inline(always)]
+        fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
+    }
 
     impl<T: Container> Container for Rc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Item<'a> = T::ItemRef<'a> where Self: 'a;
-
-        fn len(&self) -> usize {
-            std::ops::Deref::deref(self).len()
-        }
-
-        fn is_empty(&self) -> bool {
-            std::ops::Deref::deref(self).is_empty()
-        }
 
         fn clear(&mut self) {
             // Try to reuse the allocation if possible
@@ -309,19 +341,19 @@ mod arc {
     use std::ops::Deref;
     use std::sync::Arc;
 
-    use crate::Container;
+    use crate::{Container, ProgressContainer};
+
+    impl<T: ProgressContainer> ProgressContainer for Arc<T> {
+        #[inline(always)]
+        fn len(&self) -> usize { std::ops::Deref::deref(self).len() }
+
+        #[inline(always)]
+        fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
+    }
 
     impl<T: Container> Container for Arc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Item<'a> = T::ItemRef<'a> where Self: 'a;
-
-        fn len(&self) -> usize {
-            std::ops::Deref::deref(self).len()
-        }
-
-        fn is_empty(&self) -> bool {
-            std::ops::Deref::deref(self).is_empty()
-        }
 
         fn clear(&mut self) {
             // Try to reuse the allocation if possible

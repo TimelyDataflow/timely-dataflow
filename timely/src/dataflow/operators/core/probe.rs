@@ -10,13 +10,12 @@ use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
-
-
 use crate::dataflow::{StreamCore, Scope};
-use crate::{Container, Data};
+use crate::Data;
+use crate::container::{PassthroughContainerBuilder, ProgressContainer};
 
 /// Monitors progress at a `Stream`.
-pub trait Probe<G: Scope, C: Container> {
+pub trait Probe<G: Scope, C> {
     /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
     ///
     /// # Examples
@@ -79,7 +78,7 @@ pub trait Probe<G: Scope, C: Container> {
     fn probe_with(&self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: Container + Data> Probe<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: ProgressContainer + Data> Probe<G, C> for StreamCore<G, C> {
     fn probe(&self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
@@ -92,7 +91,7 @@ impl<G: Scope, C: Container + Data> Probe<G, C> for StreamCore<G, C> {
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let (tee, stream) = builder.new_output();
-        let mut output = PushBuffer::new(PushCounter::new(tee));
+        let mut output = PushBuffer::<_, PassthroughContainerBuilder<_>, _>::new(PushCounter::new(tee));
 
         let shared_frontier = Rc::downgrade(&handle.frontier);
         let mut started = false;
@@ -115,7 +114,7 @@ impl<G: Scope, C: Container + Data> Probe<G, C> for StreamCore<G, C> {
                 while let Some(message) = input.next() {
                     let time = &message.time;
                     let data = &mut message.data;
-                    output.session(time).give_container(data);
+                    output.session_with_builder(time).give_container(data);
                 }
                 output.cease();
 

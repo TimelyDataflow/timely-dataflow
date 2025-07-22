@@ -1,7 +1,7 @@
 //! Conversion to the `StreamCore` type from iterators.
 
 use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, PushInto};
-use crate::{Container, Data};
+use crate::Data;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::{StreamCore, Scope};
 
@@ -61,7 +61,7 @@ impl<CB: ContainerBuilder, I: IntoIterator+'static> ToStreamBuilder<CB> for I wh
 
 /// Converts to a timely [StreamCore]. Equivalent to [`ToStreamBuilder`] but
 /// uses a [`CapacityContainerBuilder`].
-pub trait ToStream<C: Container> {
+pub trait ToStream<C> {
     /// Converts to a timely [StreamCore].
     ///
     /// # Examples

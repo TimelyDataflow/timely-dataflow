@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use crate::progress::{ChangeBatch, Timestamp};
 use crate::dataflow::channels::Message;
 use crate::communication::Push;
-use crate::Container;
+use crate::container::ProgressContainer;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
@@ -17,7 +17,7 @@ pub struct Counter<T, C, P: Push<Message<T, C>>> {
     phantom: PhantomData<C>,
 }
 
-impl<T: Timestamp, C: Container, P> Push<Message<T, C>> for Counter<T, C, P> where P: Push<Message<T, C>> {
+impl<T: Timestamp, C: ProgressContainer, P> Push<Message<T, C>> for Counter<T, C, P> where P: Push<Message<T, C>> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         if let Some(message) = message {

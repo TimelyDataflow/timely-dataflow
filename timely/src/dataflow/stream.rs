@@ -4,18 +4,17 @@
 //! operator output. Extension methods on the `Stream` type provide the appearance of higher-level
 //! declarative programming, while constructing a dataflow graph underneath.
 
+use std::fmt::{self, Debug};
+
 use crate::progress::{Source, Target};
 
 use crate::communication::Push;
+use crate::container::ProgressContainer;
 use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::Message;
-use std::fmt::{self, Debug};
-use crate::Container;
 
-// use dataflow::scopes::root::loggers::CHANNELS_Q;
-
-/// Abstraction of a stream of `C: Container` records timestamped with `S::Timestamp`.
+/// Abstraction of a stream of `C: ProgressContainer` records timestamped with `S::Timestamp`.
 ///
 /// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
@@ -47,7 +46,7 @@ impl<S: Scope, C> Clone for StreamCore<S, C> {
 /// A stream batching data in vectors.
 pub type Stream<S, D> = StreamCore<S, Vec<D>>;
 
-impl<S: Scope, C: Container> StreamCore<S, C> {
+impl<S: Scope, C: ProgressContainer> StreamCore<S, C> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
@@ -76,7 +75,7 @@ impl<S: Scope, C: Container> StreamCore<S, C> {
     pub fn scope(&self) -> S { self.scope.clone() }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
-    pub fn container<D: Container>(self) -> StreamCore<S, D> where Self: AsStream<S, D> { self.as_stream() }
+    pub fn container<D: ProgressContainer>(self) -> StreamCore<S, D> where Self: AsStream<S, D> { self.as_stream() }
 }
 
 /// A type that can be translated to a [StreamCore].

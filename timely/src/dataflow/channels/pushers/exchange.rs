@@ -9,7 +9,7 @@ use crate::{Container, Data};
 /// Distributes records among target pushees according to a distribution function.
 pub struct Exchange<T, CB, P, H>
 where
-    CB: ContainerBuilder,
+    CB: ContainerBuilder<Container: Container>,
     P: Push<Message<T, CB::Container>>,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
@@ -21,7 +21,7 @@ where
 
 impl<T: Clone, CB, P, H>  Exchange<T, CB, P, H>
 where
-    CB: ContainerBuilder,
+    CB: ContainerBuilder<Container: Container>,
     P: Push<Message<T, CB::Container>>,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
@@ -50,7 +50,7 @@ where
 
 impl<T: Eq+Data, CB, P, H> Push<Message<T, CB::Container>> for Exchange<T, CB, P, H>
 where
-    CB: ContainerBuilder,
+    CB: ContainerBuilder<Container: Container>,
     CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
     P: Push<Message<T, CB::Container>>,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64

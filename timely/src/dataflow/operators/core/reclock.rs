@@ -1,6 +1,7 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
-use crate::{Container, Data};
+use crate::container::{PassthroughContainerBuilder, ProgressContainer};
+use crate::Data;
 use crate::order::PartialOrder;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
@@ -45,15 +46,15 @@ pub trait Reclock<S: Scope> {
     /// assert_eq!(extracted[1], (5, vec![4,5]));
     /// assert_eq!(extracted[2], (8, vec![6,7,8]));
     /// ```
-    fn reclock<TC: Container + Data>(&self, clock: &StreamCore<S, TC>) -> Self;
+    fn reclock<TC: ProgressContainer + Data>(&self, clock: &StreamCore<S, TC>) -> Self;
 }
 
-impl<S: Scope, C: Container + Data> Reclock<S> for StreamCore<S, C> {
-    fn reclock<TC: Container + Data>(&self, clock: &StreamCore<S, TC>) -> StreamCore<S, C> {
+impl<S: Scope, C: ProgressContainer + Data> Reclock<S> for StreamCore<S, C> {
+    fn reclock<TC: ProgressContainer + Data>(&self, clock: &StreamCore<S, TC>) -> StreamCore<S, C> {
 
         let mut stash = vec![];
 
-        self.binary_notify(clock, Pipeline, Pipeline, "Reclock", vec![], move |input1, input2, output, notificator| {
+        self.binary_notify::<_,PassthroughContainerBuilder<_>,_,_,_>(clock, Pipeline, Pipeline, "Reclock", vec![], move |input1, input2, output, notificator| {
 
             // stash each data input with its timestamp.
             input1.for_each(|cap, data| {
@@ -67,7 +68,7 @@ impl<S: Scope, C: Container + Data> Reclock<S> for StreamCore<S, C> {
 
             // each time with complete stash can be flushed.
             notificator.for_each(|cap,_,_| {
-                let mut session = output.session(&cap);
+                let mut session = output.session_with_builder(&cap);
                 for &mut (ref t, ref mut data) in &mut stash {
                     if t.less_equal(cap.time()) {
                         session.give_container(data);

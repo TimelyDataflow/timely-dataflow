@@ -1,12 +1,12 @@
 //! Merges the contents of multiple streams.
 
-
-use crate::{Container, Data};
+use crate::container::{PassthroughContainerBuilder, ProgressContainer};
+use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{StreamCore, Scope};
 
 /// Merge the contents of two streams.
-pub trait Concat<G: Scope, C: Container> {
+pub trait Concat<G: Scope, C> {
     /// Merge the contents of two streams.
     ///
     /// # Examples
@@ -23,14 +23,14 @@ pub trait Concat<G: Scope, C: Container> {
     fn concat(&self, _: &StreamCore<G, C>) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: Container + Data> Concat<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: ProgressContainer + Data> Concat<G, C> for StreamCore<G, C> {
     fn concat(&self, other: &StreamCore<G, C>) -> StreamCore<G, C> {
         self.scope().concatenate([self.clone(), other.clone()])
     }
 }
 
 /// Merge the contents of multiple streams.
-pub trait Concatenate<G: Scope, C: Container> {
+pub trait Concatenate<G: Scope, C: ProgressContainer> {
     /// Merge the contents of multiple streams.
     ///
     /// # Examples
@@ -52,7 +52,7 @@ pub trait Concatenate<G: Scope, C: Container> {
         I: IntoIterator<Item=StreamCore<G, C>>;
 }
 
-impl<G: Scope, C: Container + Data> Concatenate<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: ProgressContainer + Data> Concatenate<G, C> for StreamCore<G, C> {
     fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
     where
         I: IntoIterator<Item=StreamCore<G, C>>
@@ -62,7 +62,7 @@ impl<G: Scope, C: Container + Data> Concatenate<G, C> for StreamCore<G, C> {
     }
 }
 
-impl<G: Scope, C: Container + Data> Concatenate<G, C> for G {
+impl<G: Scope, C: ProgressContainer + Data> Concatenate<G, C> for G {
     fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
     where
         I: IntoIterator<Item=StreamCore<G, C>>
@@ -77,7 +77,7 @@ impl<G: Scope, C: Container + Data> Concatenate<G, C> for G {
         let mut handles = sources.into_iter().map(|s| builder.new_input(&s, Pipeline)).collect::<Vec<_>>();
 
         // create one output handle for the concatenated results.
-        let (mut output, result) = builder.new_output();
+        let (mut output, result) = builder.new_output::<PassthroughContainerBuilder<_>>();
 
         // build an operator that plays out all input data.
         builder.build(move |_capability| {
@@ -86,7 +86,7 @@ impl<G: Scope, C: Container + Data> Concatenate<G, C> for G {
                 let mut output = output.activate();
                 for handle in handles.iter_mut() {
                     handle.for_each(|time, data| {
-                        output.session(&time).give_container(data);
+                        output.session_with_builder(&time).give_container(data);
                     })
                 }
             }

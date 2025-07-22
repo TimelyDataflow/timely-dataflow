@@ -165,8 +165,11 @@ mod container {
         }
     }
 
-    impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
+    impl<C: columnar::ContainerBytes> timely::container::ProgressContainer for Column<C> {
+        #[inline(always)]
         fn len(&self) -> usize { self.borrow().len() }
+    }
+    impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
         // This sets `self` to be an empty `Typed` variant, appropriate for pushing into.
         fn clear(&mut self) {
             match self {
