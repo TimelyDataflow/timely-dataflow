@@ -197,7 +197,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
         self.current.ensure_capacity(&mut self.empty);
 
         // Push item
-        self.current.push_into(item);
+        self.current.push(item);
 
         // Maybe flush
         if self.current.at_capacity() {
