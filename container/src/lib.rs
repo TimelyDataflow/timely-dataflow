@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 
 /// A type representing progress, with an update count.
 ///
-/// It describes its update count (`count()`) and whether it is empty (`is_empty()`).
+/// It describes its update count (`count()`).
 ///
 /// We require [`Default`] for convenience purposes.
 pub trait WithProgress: Default {
@@ -17,12 +17,6 @@ pub trait WithProgress: Default {
     /// imposed on the [`CountPreservingContainerBuilder`] trait, whose implementors
     /// must preserve the number of items.
     fn count(&self) -> usize;
-
-    /// Determine if the container contains any elements, corresponding to `count() == 0`.
-    #[inline(always)]
-    fn is_empty(&self) -> bool {
-        self.count() == 0
-    }
 }
 
 /// A container that can reveal its contents through iterating by reference and draining.
@@ -90,7 +84,7 @@ pub trait PushInto<T> {
 /// decide to represent a push order for `extract` and `finish`, or not.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
-    type Container: WithProgress + Default + Clone + 'static;
+    type Container: WithProgress + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -204,7 +198,7 @@ impl<C: WithProgress + Clone + 'static> ContainerBuilder for CapacityContainerBu
 
     #[inline]
     fn finish(&mut self) -> Option<&mut C> {
-        if !self.current.is_empty() {
+        if self.current.count() > 0 {
             self.pending.push_back(std::mem::take(&mut self.current));
         }
         self.empty = self.pending.pop_front();
@@ -337,15 +331,12 @@ pub mod buffer {
 
 impl<T> WithProgress for Vec<T> {
     #[inline(always)] fn count(&self) -> usize { self.len() }
-    #[inline(always)] fn is_empty(&self) -> bool { Vec::is_empty(self) }
 }
 
 impl<T: WithProgress> WithProgress for std::rc::Rc<T> {
     #[inline(always)] fn count(&self) -> usize { self.as_ref().count() }
-    #[inline(always)] fn is_empty(&self) -> bool { self.as_ref().is_empty() }
 }
 
 impl<T: WithProgress> WithProgress for std::sync::Arc<T> {
     #[inline(always)] fn count(&self) -> usize { self.as_ref().count() }
-    #[inline(always)] fn is_empty(&self) -> bool { self.as_ref().is_empty() }
 }

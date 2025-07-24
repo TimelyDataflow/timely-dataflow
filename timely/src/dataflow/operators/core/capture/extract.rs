@@ -74,9 +74,7 @@ where
             for datum in to_sort.into_iter() {
                 sorted.push_into(datum);
             }
-            if !sorted.is_empty() {
-                result.push((time, sorted));
-            }
+            result.push((time, sorted));
         }
         result
     }
