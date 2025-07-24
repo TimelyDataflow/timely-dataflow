@@ -49,7 +49,7 @@ impl<T:Ord+Clone+'static, C: Container, P: Pull<Message<T, C>>> Counter<T, C, P>
             let guard = ConsumedGuard {
                 consumed: Rc::clone(&self.consumed),
                 time: Some(message.time.clone()),
-                len: message.data.len(),
+                len: message.data.count(),
             };
             Some((guard, message))
         }

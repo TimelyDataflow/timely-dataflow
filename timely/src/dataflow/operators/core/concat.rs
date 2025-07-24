@@ -2,6 +2,7 @@
 
 
 use crate::{Container, Data};
+use crate::container::PassthroughContainerBuilder;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{StreamCore, Scope};
 
@@ -77,7 +78,7 @@ impl<G: Scope, C: Container + Data> Concatenate<G, C> for G {
         let mut handles = sources.into_iter().map(|s| builder.new_input(&s, Pipeline)).collect::<Vec<_>>();
 
         // create one output handle for the concatenated results.
-        let (mut output, result) = builder.new_output();
+        let (mut output, result) = builder.new_output::<PassthroughContainerBuilder<_>>();
 
         // build an operator that plays out all input data.
         builder.build(move |_capability| {
@@ -86,7 +87,7 @@ impl<G: Scope, C: Container + Data> Concatenate<G, C> for G {
                 let mut output = output.activate();
                 for handle in handles.iter_mut() {
                     handle.for_each(|time, data| {
-                        output.session(&time).give_container(data);
+                        output.session_with_builder(&time).give_container(data);
                     })
                 }
             }

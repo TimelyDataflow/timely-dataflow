@@ -4,6 +4,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, Stream, StreamCore};
 use crate::{Container, Data};
+use crate::container::PassthroughContainerBuilder;
 
 /// Extension trait for `Stream`.
 pub trait Branch<S: Scope, D: Data> {
@@ -99,8 +100,8 @@ impl<S: Scope, C: Container + Data> BranchWhen<S::Timestamp> for StreamCore<S, C
         builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
-        let (mut output1, stream1) = builder.new_output();
-        let (mut output2, stream2) = builder.new_output();
+        let (mut output1, stream1) = builder.new_output::<PassthroughContainerBuilder<_>>();
+        let (mut output2, stream2) = builder.new_output::<PassthroughContainerBuilder<_>>();
 
         builder.build(move |_| {
 
@@ -110,9 +111,9 @@ impl<S: Scope, C: Container + Data> BranchWhen<S::Timestamp> for StreamCore<S, C
 
                 input.for_each(|time, data| {
                     let mut out = if condition(time.time()) {
-                        output2_handle.session(&time)
+                        output2_handle.session_with_builder(&time)
                     } else {
-                        output1_handle.session(&time)
+                        output1_handle.session_with_builder(&time)
                     };
                     out.give_container(data);
                 });

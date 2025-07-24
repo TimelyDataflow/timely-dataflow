@@ -10,7 +10,7 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use std::rc::Rc;
 
-use crate::{Container, container::{ContainerBuilder, LengthPreservingContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto}};
+use crate::container::{ContainerBuilder, LengthPreservingContainerBuilder, IterContainer, Container, SizableContainer, CapacityContainerBuilder, PushInto};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -52,8 +52,8 @@ pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 
 impl<CB, F> ExchangeCore<CB, F>
 where
-    CB: LengthPreservingContainerBuilder,
-    for<'a> F: FnMut(&<CB::Container as Container>::Item<'a>)->u64
+    CB: LengthPreservingContainerBuilder<Container: IterContainer>,
+    for<'a> F: FnMut(&<CB::Container as IterContainer>::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new_core(func: F) -> ExchangeCore<CB, F> {
@@ -66,7 +66,7 @@ where
 
 impl<C, F> ExchangeCore<CapacityContainerBuilder<C>, F>
 where
-    C: SizableContainer,
+    C: SizableContainer + IterContainer,
     for<'a> F: FnMut(&C::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
@@ -81,10 +81,10 @@ where
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Timestamp, CB, H: 'static> ParallelizationContract<T, CB::Container> for ExchangeCore<CB, H>
 where
-    CB: ContainerBuilder,
-    CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
+    CB: ContainerBuilder<Container: IterContainer>,
+    CB: for<'a> PushInto<<CB::Container as IterContainer>::Item<'a>>,
     CB::Container: Data + Send + crate::dataflow::channels::ContainerBytes,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as IterContainer>::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, CB, LogPusher<T, CB::Container, Box<dyn Push<Message<T, CB::Container>>>>, H>;
     type Puller = LogPuller<T, CB::Container, Box<dyn Pull<Message<T, CB::Container>>>>;
@@ -147,7 +147,7 @@ impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<
                     source: self.source,
                     target: self.target,
                     seq_no: self.counter - 1,
-                    length: bundle.data.len(),
+                    length: bundle.data.count(),
                 })
             }
         }
@@ -194,7 +194,7 @@ impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<
                     source: bundle.from,
                     target,
                     seq_no: bundle.seq,
-                    length: bundle.data.len(),
+                    length: bundle.data.count(),
                 });
             }
         }

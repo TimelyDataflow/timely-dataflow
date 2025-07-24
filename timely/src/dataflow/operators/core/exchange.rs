@@ -1,13 +1,13 @@
 //! Exchange records between workers.
 
 use crate::ExchangeData;
-use crate::container::{Container, SizableContainer, PushInto};
+use crate::container::{IterContainer, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::ExchangeCore;
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::{Scope, StreamCore};
 
 /// Exchange records between workers.
-pub trait Exchange<C: Container> {
+pub trait Exchange<C: IterContainer> {
     /// Exchange records between workers.
     ///
     /// The closure supplied should map a reference to a record to a `u64`,
@@ -30,7 +30,7 @@ pub trait Exchange<C: Container> {
 
 impl<G: Scope, C> Exchange<C> for StreamCore<G, C>
 where
-    C: SizableContainer + ExchangeData + crate::dataflow::channels::ContainerBytes,
+    C: SizableContainer + IterContainer + ExchangeData + crate::dataflow::channels::ContainerBytes,
     C: for<'a> PushInto<C::Item<'a>>,
 
 {

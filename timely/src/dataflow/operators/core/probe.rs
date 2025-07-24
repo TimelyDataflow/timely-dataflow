@@ -14,6 +14,7 @@ use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 use crate::dataflow::{StreamCore, Scope};
 use crate::{Container, Data};
+use crate::container::PassthroughContainerBuilder;
 
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, C: Container> {
@@ -92,7 +93,7 @@ impl<G: Scope, C: Container + Data> Probe<G, C> for StreamCore<G, C> {
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let (tee, stream) = builder.new_output();
-        let mut output = PushBuffer::new(PushCounter::new(tee));
+        let mut output = PushBuffer::<_, PassthroughContainerBuilder<_>, _>::new(PushCounter::new(tee));
 
         let shared_frontier = Rc::downgrade(&handle.frontier);
         let mut started = false;
@@ -115,7 +116,7 @@ impl<G: Scope, C: Container + Data> Probe<G, C> for StreamCore<G, C> {
                 while let Some(message) = input.next() {
                     let time = &message.time;
                     let data = &mut message.data;
-                    output.session(time).give_container(data);
+                    output.session_with_builder(time).give_container(data);
                 }
                 output.cease();
 

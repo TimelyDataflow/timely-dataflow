@@ -1,7 +1,7 @@
 //! Create cycles in a timely dataflow graph.
 
 use crate::{Container, Data};
-use crate::container::CapacityContainerBuilder;
+use crate::container::PassthroughContainerBuilder;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::operators::generic::OutputWrapper;
@@ -122,7 +122,7 @@ impl<G: Scope, C: Container + Data> ConnectLoop<G, C> for StreamCore<G, C> {
                 if let Some(new_time) = summary.results_in(cap.time()) {
                     let new_cap = cap.delayed(&new_time);
                     output
-                        .session(&new_cap)
+                        .session_with_builder(&new_cap)
                         .give_container(data);
                 }
             });
@@ -135,5 +135,5 @@ impl<G: Scope, C: Container + Data> ConnectLoop<G, C> for StreamCore<G, C> {
 pub struct Handle<G: Scope, C: Container + Data> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
-    output: OutputWrapper<G::Timestamp, CapacityContainerBuilder<C>, Tee<G::Timestamp, C>>,
+    output: OutputWrapper<G::Timestamp, PassthroughContainerBuilder<C>, Tee<G::Timestamp, C>>,
 }

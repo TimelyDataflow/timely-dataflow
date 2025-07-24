@@ -4,46 +4,32 @@
 
 use std::collections::VecDeque;
 
-/// A container transferring data through dataflow edges
+/// A type representing progress, with an update count.
 ///
-/// A container stores a number of elements and thus is able to describe it length (`len()`) and
-/// whether it is empty (`is_empty()`). It supports removing all elements (`clear`).
+/// It describes its update count (`count()`).
 ///
-/// A container must implement default. The default implementation is not required to allocate
-/// memory for variable-length components.
-///
-/// We require the container to be cloneable to enable efficient copies when providing references
-/// of containers to operators. Care must be taken that the type's `clone_from` implementation
-/// is efficient (which is not necessarily the case when deriving `Clone`.)
+/// We require [`Default`] for convenience purposes.
 pub trait Container: Default {
+    /// The number of elements in this container
+    ///
+    /// This number is used in progress tracking to confirm the receipt of some number
+    /// of outstanding records, and it is highly load bearing. The main restriction is
+    /// imposed on the [`LengthPreservingContainerBuilder`] trait, whose implementors
+    /// must preserve the number of items.
+    fn count(&self) -> usize;
+
+    /// Remove all contents from `self` while retaining allocated memory.
+    /// After calling `clear`, `is_empty` must return `true` and `len` 0.
+    fn clear(&mut self);
+}
+
+/// A container that can reveal its contents through iterating by reference and draining.
+pub trait IterContainer: Container {
     /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
 
     /// The type of elements when draining the container.
     type Item<'a> where Self: 'a;
-
-    /// Push `item` into self
-    #[inline]
-    fn push<T>(&mut self, item: T) where Self: PushInto<T> {
-        self.push_into(item)
-    }
-
-    /// The number of elements in this container
-    ///
-    /// This number is used in progress tracking to confirm the receipt of some number
-    /// of outstanding records, and it is highly load bearing. The main restriction is
-    /// imposed on the `LengthPreservingContainerBuilder` trait, whose implementors
-    /// must preserve the number of items.
-    fn len(&self) -> usize;
-
-    /// Determine if the container contains any elements, corresponding to `len() == 0`.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    /// Remove all contents from `self` while retaining allocated memory.
-    /// After calling `clear`, `is_empty` must return `true` and `len` 0.
-    fn clear(&mut self);
 
     /// Iterator type when reading from the container.
     type Iter<'a>: Iterator<Item=Self::ItemRef<'a>> where Self: 'a;
@@ -116,8 +102,9 @@ pub trait ContainerBuilder: Default + 'static {
     /// Partitions `container` among `builders`, using the function `index` to direct items.
     fn partition<I>(container: &mut Self::Container, builders: &mut [Self], mut index: I)
     where
-        Self: for<'a> PushInto<<Self::Container as Container>::Item<'a>>,
-        I: for<'a> FnMut(&<Self::Container as Container>::Item<'a>) -> usize,
+        Self: for<'a> PushInto<<Self::Container as IterContainer>::Item<'a>>,
+        I: for<'a> FnMut(&<Self::Container as IterContainer>::Item<'a>) -> usize,
+        Self::Container: IterContainer,
     {
         for datum in container.drain() {
             let index = index(&datum);
@@ -142,6 +129,33 @@ pub trait ContainerBuilder: Default + 'static {
 /// If you have any questions about this trait you are best off not implementing it.
 pub trait LengthPreservingContainerBuilder : ContainerBuilder { }
 
+/// A container builder that never produces any outputs, and can be used to pass through data in
+/// operators.
+#[derive(Debug, Clone)]
+pub struct PassthroughContainerBuilder<C>(std::marker::PhantomData<C>);
+
+impl<C> Default for PassthroughContainerBuilder<C> {
+    #[inline(always)]
+    fn default() -> Self {
+        PassthroughContainerBuilder(std::marker::PhantomData)
+    }
+}
+
+impl<C: Container + Clone + 'static> ContainerBuilder for PassthroughContainerBuilder<C>
+{
+    type Container = C;
+
+    #[inline(always)]
+    fn extract(&mut self) -> Option<&mut Self::Container> {
+        None
+    }
+
+    #[inline(always)]
+    fn finish(&mut self) -> Option<&mut Self::Container> {
+        None
+    }
+}
+
 /// A default container builder that uses length and preferred capacity to chunk data.
 ///
 /// Maintains a single empty allocation between [`Self::push_into`] and [`Self::extract`], but not
@@ -165,7 +179,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
         self.current.ensure_capacity(&mut self.empty);
 
         // Push item
-        self.current.push(item);
+        self.current.push_into(item);
 
         // Maybe flush
         if self.current.at_capacity() {
@@ -189,7 +203,7 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
 
     #[inline]
     fn finish(&mut self) -> Option<&mut C> {
-        if !self.current.is_empty() {
+        if self.current.count() > 0 {
             self.pending.push_back(std::mem::take(&mut self.current));
         }
         self.empty = self.pending.pop_front();
@@ -197,22 +211,16 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
     }
 }
 
-impl<C: Container + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
+impl<C: Container + SizableContainer + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
 impl<T> Container for Vec<T> {
+    #[inline(always)] fn count(&self) -> usize { Vec::len(self) }
+    #[inline(always)] fn clear(&mut self) { Vec::clear(self) }
+}
+
+impl<T> IterContainer for Vec<T> {
     type ItemRef<'a> = &'a T where T: 'a;
     type Item<'a> = T where T: 'a;
-
-    fn len(&self) -> usize {
-        Vec::len(self)
-    }
-
-    fn is_empty(&self) -> bool {
-        Vec::is_empty(self)
-    }
-
-    fn clear(&mut self) { Vec::clear(self) }
-
     type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
 
     fn iter(&self) -> Self::Iter<'_> {
@@ -268,21 +276,11 @@ mod rc {
     use std::ops::Deref;
     use std::rc::Rc;
 
-    use crate::Container;
+    use crate::{Container, IterContainer};
 
     impl<T: Container> Container for Rc<T> {
-        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
-        type Item<'a> = T::ItemRef<'a> where Self: 'a;
-
-        fn len(&self) -> usize {
-            std::ops::Deref::deref(self).len()
-        }
-
-        fn is_empty(&self) -> bool {
-            std::ops::Deref::deref(self).is_empty()
-        }
-
-        fn clear(&mut self) {
+        #[inline(always)] fn count(&self) -> usize { self.as_ref().count() }
+        #[inline(always)] fn clear(&mut self) {
             // Try to reuse the allocation if possible
             if let Some(inner) = Rc::get_mut(self) {
                 inner.clear();
@@ -290,7 +288,12 @@ mod rc {
                 *self = Self::default();
             }
         }
+    }
 
+
+    impl<T: IterContainer> IterContainer for Rc<T> {
+        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
+        type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;
 
         fn iter(&self) -> Self::Iter<'_> {
@@ -309,21 +312,11 @@ mod arc {
     use std::ops::Deref;
     use std::sync::Arc;
 
-    use crate::Container;
+    use crate::{Container, IterContainer};
 
-    impl<T: Container> Container for Arc<T> {
-        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
-        type Item<'a> = T::ItemRef<'a> where Self: 'a;
-
-        fn len(&self) -> usize {
-            std::ops::Deref::deref(self).len()
-        }
-
-        fn is_empty(&self) -> bool {
-            std::ops::Deref::deref(self).is_empty()
-        }
-
-        fn clear(&mut self) {
+    impl<T: Container> Container for std::sync::Arc<T> {
+        #[inline(always)] fn count(&self) -> usize { self.as_ref().count() }
+        #[inline(always)] fn clear(&mut self) {
             // Try to reuse the allocation if possible
             if let Some(inner) = Arc::get_mut(self) {
                 inner.clear();
@@ -331,7 +324,11 @@ mod arc {
                 *self = Self::default();
             }
         }
+    }
 
+    impl<T: IterContainer> IterContainer for Arc<T> {
+        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
+        type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;
 
         fn iter(&self) -> Self::Iter<'_> {

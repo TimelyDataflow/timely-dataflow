@@ -13,7 +13,7 @@ use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 use crate::{Container, Data};
-use crate::container::{ContainerBuilder, CapacityContainerBuilder};
+use crate::container::{ContainerBuilder, PassthroughContainerBuilder};
 
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, C1: Container> {
@@ -583,7 +583,13 @@ where
 /// });
 /// ```
 pub fn empty<G: Scope, C: Container + Data>(scope: &G) -> StreamCore<G, C> {
-    source::<_, CapacityContainerBuilder<C>, _, _>(scope, "Empty", |_capability, _info| |_output| {
+    let mut builder = OperatorBuilder::new("Empty".to_owned(), scope.clone());
+
+    let (_output, stream) = builder.new_output::<PassthroughContainerBuilder<C>>();
+    builder.set_notify(false);
+    builder.build(|_caps| |_frontier| {
         // drop capability, do nothing
-    })
+    });
+
+    stream
 }

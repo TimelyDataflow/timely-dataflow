@@ -4,6 +4,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::Operator;
 use crate::dataflow::{Scope, StreamCore};
 use crate::{Container, Data};
+use crate::container::PassthroughContainerBuilder;
 use std::rc::Rc;
 
 /// Convert a stream into a stream of shared containers
@@ -26,11 +27,11 @@ pub trait SharedStream<S: Scope, C: Container> {
 
 impl<S: Scope, C: Container + Data> SharedStream<S, C> for StreamCore<S, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>> {
-        self.unary(Pipeline, "Shared", move |_, _| {
+        self.unary::<PassthroughContainerBuilder<_>,_,_,_>(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each(|time, data| {
                     output
-                        .session(&time)
+                        .session_with_builder(&time)
                         .give_container(&mut Rc::new(std::mem::take(data)));
                 });
             }

@@ -109,7 +109,7 @@ impl<T, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Buffer<T, CB, 
     // buffer always requires a container builder. We could expose the buffer's underlying pusher
     // directly, but this would bypass the buffer's time tracking.
     fn give_container(&mut self, container: &mut CB::Container) {
-        if !container.is_empty() {
+        if container.count() > 0 {
             self.flush();
             let time = self.time.as_ref().unwrap().clone();
             Message::push_at(container, time, &mut self.pusher);

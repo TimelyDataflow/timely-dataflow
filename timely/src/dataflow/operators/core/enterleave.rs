@@ -218,7 +218,7 @@ where
                 source: self.index,
                 target: self.index,
                 seq_no: self.counter,
-                length: bundle.data.len(),
+                length: bundle.data.count(),
             };
             let recv_event = MessagesEvent {
                 is_send: false,

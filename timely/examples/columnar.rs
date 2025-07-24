@@ -2,7 +2,7 @@
 
 use {
     std::collections::HashMap,
-    timely::{Container, container::CapacityContainerBuilder},
+    timely::container::{CapacityContainerBuilder, IterContainer},
     timely::dataflow::channels::pact::{ExchangeCore, Pipeline},
     timely::dataflow::InputHandleCore,
     timely::dataflow::operators::{Inspect, Operator, Probe},
@@ -165,9 +165,10 @@ mod container {
         }
     }
 
-    impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
-        fn len(&self) -> usize { self.borrow().len() }
+    impl<C: columnar::ContainerBytes> timely::container::Container for Column<C> {
+        #[inline(always)] fn count(&self) -> usize { self.borrow().len() }
         // This sets `self` to be an empty `Typed` variant, appropriate for pushing into.
+        #[inline(always)]
         fn clear(&mut self) {
             match self {
                 Column::Typed(t) => t.clear(),
@@ -175,7 +176,8 @@ mod container {
                 Column::Align(_) => *self = Column::Typed(Default::default()),
             }
         }
-
+    }
+    impl<C: columnar::ContainerBytes> timely::container::IterContainer for Column<C> {
         type ItemRef<'a> = C::Ref<'a>;
         type Iter<'a> = IterOwn<C::Borrowed<'a>>;
         fn iter<'a>(&'a self) -> Self::Iter<'a> { self.borrow().into_index_iter() }
