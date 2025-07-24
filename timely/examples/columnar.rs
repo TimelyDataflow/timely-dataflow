@@ -2,7 +2,7 @@
 
 use {
     std::collections::HashMap,
-    timely::container::{CapacityContainerBuilder, IterableContainer},
+    timely::container::{CapacityContainerBuilder, IterContainer},
     timely::dataflow::channels::pact::{ExchangeCore, Pipeline},
     timely::dataflow::InputHandleCore,
     timely::dataflow::operators::{Inspect, Operator, Probe},
@@ -165,11 +165,19 @@ mod container {
         }
     }
 
-    impl<C: columnar::ContainerBytes> timely::container::WithProgress for Column<C> {
+    impl<C: columnar::ContainerBytes> timely::container::Container for Column<C> {
+        #[inline(always)] fn count(&self) -> usize { self.borrow().len() }
+        // This sets `self` to be an empty `Typed` variant, appropriate for pushing into.
         #[inline(always)]
-        fn count(&self) -> usize { self.borrow().len() }
+        fn clear(&mut self) {
+            match self {
+                Column::Typed(t) => t.clear(),
+                Column::Bytes(_) => *self = Column::Typed(Default::default()),
+                Column::Align(_) => *self = Column::Typed(Default::default()),
+            }
+        }
     }
-    impl<C: columnar::ContainerBytes> timely::container::IterableContainer for Column<C> {
+    impl<C: columnar::ContainerBytes> timely::container::IterContainer for Column<C> {
         type ItemRef<'a> = C::Ref<'a>;
         type Iter<'a> = IterOwn<C::Borrowed<'a>>;
         fn iter<'a>(&'a self) -> Self::Iter<'a> { self.borrow().into_index_iter() }
@@ -278,7 +286,7 @@ mod builder {
         }
     }
 
-    use timely::container::{ContainerBuilder, CountPreservingContainerBuilder};
+    use timely::container::{ContainerBuilder, LengthPreservingContainerBuilder};
     impl<C: columnar::ContainerBytes> ContainerBuilder for ColumnBuilder<C> {
         type Container = Column<C>;
 
@@ -311,5 +319,5 @@ mod builder {
         }
     }
 
-    impl<C: columnar::ContainerBytes> CountPreservingContainerBuilder for ColumnBuilder<C> { }
+    impl<C: columnar::ContainerBytes> LengthPreservingContainerBuilder for ColumnBuilder<C> { }
 }

@@ -5,9 +5,9 @@ use std::fmt::{self, Debug};
 use std::rc::Rc;
 
 use crate::dataflow::channels::Message;
+
 use crate::communication::Push;
-use crate::Data;
-use crate::container::WithProgress;
+use crate::{Container, Data};
 
 type PushList<T, C> = Rc<RefCell<Vec<Box<dyn Push<Message<T, C>>>>>>;
 
@@ -17,7 +17,7 @@ pub struct Tee<T, C> {
     shared: PushList<T, C>,
 }
 
-impl<T: Data, C: WithProgress + Data> Push<Message<T, C>> for Tee<T, C> {
+impl<T: Data, C: Container + Data> Push<Message<T, C>> for Tee<T, C> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         let mut pushers = self.shared.borrow_mut();
@@ -39,7 +39,7 @@ impl<T: Data, C: WithProgress + Data> Push<Message<T, C>> for Tee<T, C> {
     }
 }
 
-impl<T, C: WithProgress> Tee<T, C> {
+impl<T, C: Container> Tee<T, C> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
     pub fn new() -> (Tee<T, C>, TeeHelper<T, C>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
@@ -52,7 +52,7 @@ impl<T, C: WithProgress> Tee<T, C> {
     }
 }
 
-impl<T, C: WithProgress> Clone for Tee<T, C> {
+impl<T, C: Container> Clone for Tee<T, C> {
     fn clone(&self) -> Self {
         Self {
             buffer: Default::default(),

@@ -1,15 +1,14 @@
 //! Shared containers
 
-use std::rc::Rc;
-
-use crate::container::{PassthroughContainerBuilder, WithProgress};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::Operator;
 use crate::dataflow::{Scope, StreamCore};
-use crate::Data;
+use crate::{Container, Data};
+use crate::container::PassthroughContainerBuilder;
+use std::rc::Rc;
 
 /// Convert a stream into a stream of shared containers
-pub trait SharedStream<S: Scope, C> {
+pub trait SharedStream<S: Scope, C: Container> {
     /// Convert a stream into a stream of shared data
     ///
     /// # Examples
@@ -26,7 +25,7 @@ pub trait SharedStream<S: Scope, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>>;
 }
 
-impl<S: Scope, C: WithProgress + Data> SharedStream<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + Data> SharedStream<S, C> for StreamCore<S, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>> {
         self.unary::<PassthroughContainerBuilder<_>,_,_,_>(Pipeline, "Shared", move |_, _| {
             move |input, output| {

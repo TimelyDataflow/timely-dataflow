@@ -10,7 +10,7 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use std::rc::Rc;
 
-use crate::container::{ContainerBuilder, CountPreservingContainerBuilder, IterableContainer, WithProgress, SizableContainer, CapacityContainerBuilder, PushInto};
+use crate::container::{ContainerBuilder, LengthPreservingContainerBuilder, IterContainer, Container, SizableContainer, CapacityContainerBuilder, PushInto};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -34,7 +34,7 @@ pub trait ParallelizationContract<T, C> {
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, C: WithProgress + 'static> ParallelizationContract<T, C> for Pipeline {
+impl<T: 'static, C: Container + 'static> ParallelizationContract<T, C> for Pipeline {
     type Pusher = LogPusher<T, C, ThreadPusher<Message<T, C>>>;
     type Puller = LogPuller<T, C, ThreadPuller<Message<T, C>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -52,8 +52,8 @@ pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 
 impl<CB, F> ExchangeCore<CB, F>
 where
-    CB: CountPreservingContainerBuilder<Container: IterableContainer>,
-    for<'a> F: FnMut(&<CB::Container as IterableContainer>::Item<'a>)->u64
+    CB: LengthPreservingContainerBuilder<Container: IterContainer>,
+    for<'a> F: FnMut(&<CB::Container as IterContainer>::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new_core(func: F) -> ExchangeCore<CB, F> {
@@ -66,7 +66,7 @@ where
 
 impl<C, F> ExchangeCore<CapacityContainerBuilder<C>, F>
 where
-    C: SizableContainer + IterableContainer,
+    C: SizableContainer + IterContainer,
     for<'a> F: FnMut(&C::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
@@ -81,10 +81,10 @@ where
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Timestamp, CB, H: 'static> ParallelizationContract<T, CB::Container> for ExchangeCore<CB, H>
 where
-    CB: ContainerBuilder<Container: IterableContainer>,
-    CB: for<'a> PushInto<<CB::Container as IterableContainer>::Item<'a>>,
+    CB: ContainerBuilder<Container: IterContainer>,
+    CB: for<'a> PushInto<<CB::Container as IterContainer>::Item<'a>>,
     CB::Container: Data + Send + crate::dataflow::channels::ContainerBytes,
-    for<'a> H: FnMut(&<CB::Container as IterableContainer>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as IterContainer>::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, CB, LogPusher<T, CB::Container, Box<dyn Push<Message<T, CB::Container>>>>, H>;
     type Puller = LogPuller<T, CB::Container, Box<dyn Pull<Message<T, CB::Container>>>>;
@@ -129,7 +129,7 @@ impl<T, C, P: Push<Message<T, C>>> LogPusher<T, C, P> {
     }
 }
 
-impl<T, C: WithProgress, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<T, C, P> {
+impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<T, C, P> {
     #[inline]
     fn push(&mut self, pair: &mut Option<Message<T, C>>) {
         if let Some(bundle) = pair {
@@ -179,7 +179,7 @@ impl<T, C, P: Pull<Message<T, C>>> LogPuller<T, C, P> {
     }
 }
 
-impl<T, C: WithProgress, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<T, C, P> {
+impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<T, C, P> {
     #[inline]
     fn pull(&mut self) -> &mut Option<Message<T, C>> {
         let result = self.puller.pull();

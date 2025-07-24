@@ -1,13 +1,13 @@
 //! Operators that separate one stream into two streams based on some condition
 
-use crate::container::{IterableContainer, SizableContainer, PushInto};
+use crate::container::{IterContainer, SizableContainer, PushInto};
 use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, StreamCore};
 
 /// Extension trait for `Stream`.
-pub trait OkErr<S: Scope, C: IterableContainer> {
+pub trait OkErr<S: Scope, C: IterContainer> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with the data.
     /// If it returns `Ok(x)`, then `x` will be sent
@@ -39,7 +39,7 @@ pub trait OkErr<S: Scope, C: IterableContainer> {
     ;
 }
 
-impl<S: Scope, C: IterableContainer + Data> OkErr<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: IterContainer + Data> OkErr<S, C> for StreamCore<S, C> {
     fn ok_err<C1, D1, C2, D2, L>(
         &self,
         mut logic: L,

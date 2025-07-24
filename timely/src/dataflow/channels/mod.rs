@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use crate::communication::Push;
-use crate::container::WithProgress;
+use crate::Container;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -32,15 +32,14 @@ impl<T, C> Message<T, C> {
     }
 }
 
-impl<T, C: WithProgress> Message<T, C> {
+impl<T, C: Container> Message<T, C> {
     /// Creates a new message instance from arguments.
     pub fn new(time: T, data: C, from: usize, seq: usize) -> Self {
         Message { time, data, from, seq }
     }
 
     /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
-    /// leaves in place, or the container's default element. The buffer's contents are left in an
-    /// undefined state, specifically the caller cannot rely on this function clearing the buffer.
+    /// leaves in place, or the container's default element. The buffer is cleared.
     #[inline]
     pub fn push_at<P: Push<Message<T, C>>>(buffer: &mut C, time: T, pusher: &mut P) {
 
@@ -52,6 +51,7 @@ impl<T, C: WithProgress> Message<T, C> {
 
         if let Some(message) = bundle {
             *buffer = message.data;
+            buffer.clear();
         }
     }
 }

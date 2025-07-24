@@ -6,21 +6,25 @@ use std::collections::VecDeque;
 
 /// A type representing progress, with an update count.
 ///
-/// It describes its update count (`count()`) and whether it is empty (`is_empty()`).
+/// It describes its update count (`count()`).
 ///
 /// We require [`Default`] for convenience purposes.
-pub trait WithProgress: Default {
+pub trait Container: Default {
     /// The number of elements in this container
     ///
     /// This number is used in progress tracking to confirm the receipt of some number
     /// of outstanding records, and it is highly load bearing. The main restriction is
-    /// imposed on the [`CountPreservingContainerBuilder`] trait, whose implementors
+    /// imposed on the [`LengthPreservingContainerBuilder`] trait, whose implementors
     /// must preserve the number of items.
     fn count(&self) -> usize;
+
+    /// Remove all contents from `self` while retaining allocated memory.
+    /// After calling `clear`, `is_empty` must return `true` and `len` 0.
+    fn clear(&mut self);
 }
 
 /// A container that can reveal its contents through iterating by reference and draining.
-pub trait IterableContainer: WithProgress {
+pub trait IterContainer: Container {
     /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
 
@@ -42,7 +46,7 @@ pub trait IterableContainer: WithProgress {
 }
 
 /// A container that can be sized and reveals its capacity.
-pub trait SizableContainer: WithProgress {
+pub trait SizableContainer: Container {
     /// Indicates that the container is "full" and should be shipped.
     fn at_capacity(&self) -> bool;
     /// Restores `self` to its desired capacity, if it has one.
@@ -84,7 +88,7 @@ pub trait PushInto<T> {
 /// decide to represent a push order for `extract` and `finish`, or not.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
-    type Container: WithProgress + Default + Clone + 'static;
+    type Container: Container + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -98,14 +102,15 @@ pub trait ContainerBuilder: Default + 'static {
     /// Partitions `container` among `builders`, using the function `index` to direct items.
     fn partition<I>(container: &mut Self::Container, builders: &mut [Self], mut index: I)
     where
-        Self: for<'a> PushInto<<Self::Container as IterableContainer>::Item<'a>>,
-        I: for<'a> FnMut(&<Self::Container as IterableContainer>::Item<'a>) -> usize,
-        Self::Container: IterableContainer,
+        Self: for<'a> PushInto<<Self::Container as IterContainer>::Item<'a>>,
+        I: for<'a> FnMut(&<Self::Container as IterContainer>::Item<'a>) -> usize,
+        Self::Container: IterContainer,
     {
         for datum in container.drain() {
             let index = index(&datum);
             builders[index].push_into(datum);
         }
+        container.clear();
     }
 
     /// Indicates a good moment to release resources.
@@ -122,7 +127,7 @@ pub trait ContainerBuilder: Default + 'static {
 /// Specifically, the sum of lengths of all extracted and finished containers must equal the
 /// number of times that `push_into` is called on the container builder.
 /// If you have any questions about this trait you are best off not implementing it.
-pub trait CountPreservingContainerBuilder: ContainerBuilder { }
+pub trait LengthPreservingContainerBuilder : ContainerBuilder { }
 
 /// A container builder that never produces any outputs, and can be used to pass through data in
 /// operators.
@@ -136,7 +141,7 @@ impl<C> Default for PassthroughContainerBuilder<C> {
     }
 }
 
-impl<C: WithProgress + Clone + 'static> ContainerBuilder for PassthroughContainerBuilder<C>
+impl<C: Container + Clone + 'static> ContainerBuilder for PassthroughContainerBuilder<C>
 {
     type Container = C;
 
@@ -183,7 +188,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
     }
 }
 
-impl<C: WithProgress + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
@@ -206,9 +211,14 @@ impl<C: WithProgress + Clone + 'static> ContainerBuilder for CapacityContainerBu
     }
 }
 
-impl<C: WithProgress + SizableContainer + Clone + 'static> CountPreservingContainerBuilder for CapacityContainerBuilder<C> { }
+impl<C: Container + SizableContainer + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
-impl<T> IterableContainer for Vec<T> {
+impl<T> Container for Vec<T> {
+    #[inline(always)] fn count(&self) -> usize { Vec::len(self) }
+    #[inline(always)] fn clear(&mut self) { Vec::clear(self) }
+}
+
+impl<T> IterContainer for Vec<T> {
     type ItemRef<'a> = &'a T where T: 'a;
     type Item<'a> = T where T: 'a;
     type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
@@ -266,9 +276,22 @@ mod rc {
     use std::ops::Deref;
     use std::rc::Rc;
 
-    use crate::IterableContainer;
+    use crate::{Container, IterContainer};
 
-    impl<T: IterableContainer> IterableContainer for Rc<T> {
+    impl<T: Container> Container for Rc<T> {
+        #[inline(always)] fn count(&self) -> usize { self.as_ref().count() }
+        #[inline(always)] fn clear(&mut self) {
+            // Try to reuse the allocation if possible
+            if let Some(inner) = Rc::get_mut(self) {
+                inner.clear();
+            } else {
+                *self = Self::default();
+            }
+        }
+    }
+
+
+    impl<T: IterContainer> IterContainer for Rc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;
@@ -289,9 +312,21 @@ mod arc {
     use std::ops::Deref;
     use std::sync::Arc;
 
-    use crate::IterableContainer;
+    use crate::{Container, IterContainer};
 
-    impl<T: IterableContainer> IterableContainer for Arc<T> {
+    impl<T: Container> Container for std::sync::Arc<T> {
+        #[inline(always)] fn count(&self) -> usize { self.as_ref().count() }
+        #[inline(always)] fn clear(&mut self) {
+            // Try to reuse the allocation if possible
+            if let Some(inner) = Arc::get_mut(self) {
+                inner.clear();
+            } else {
+                *self = Self::default();
+            }
+        }
+    }
+
+    impl<T: IterContainer> IterContainer for Arc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;
@@ -327,16 +362,4 @@ pub mod buffer {
             1
         }
     }
-}
-
-impl<T> WithProgress for Vec<T> {
-    #[inline(always)] fn count(&self) -> usize { self.len() }
-}
-
-impl<T: WithProgress> WithProgress for std::rc::Rc<T> {
-    #[inline(always)] fn count(&self) -> usize { self.as_ref().count() }
-}
-
-impl<T: WithProgress> WithProgress for std::sync::Arc<T> {
-    #[inline(always)] fn count(&self) -> usize { self.as_ref().count() }
 }

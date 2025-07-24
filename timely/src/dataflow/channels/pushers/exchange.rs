@@ -1,7 +1,7 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
 use crate::communication::Push;
-use crate::container::{ContainerBuilder, IterableContainer, PushInto};
+use crate::container::{ContainerBuilder, IterContainer, PushInto};
 use crate::dataflow::channels::Message;
 use crate::Data;
 
@@ -9,9 +9,9 @@ use crate::Data;
 /// Distributes records among target pushees according to a distribution function.
 pub struct Exchange<T, CB, P, H>
 where
-    CB: ContainerBuilder<Container: IterableContainer>,
+    CB: ContainerBuilder<Container: IterContainer>,
     P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as IterableContainer>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as IterContainer>::Item<'a>) -> u64
 {
     pushers: Vec<P>,
     builders: Vec<CB>,
@@ -21,9 +21,9 @@ where
 
 impl<T: Clone, CB, P, H>  Exchange<T, CB, P, H>
 where
-    CB: ContainerBuilder<Container: IterableContainer>,
+    CB: ContainerBuilder<Container: IterContainer>,
     P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as IterableContainer>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as IterContainer>::Item<'a>) -> u64
 {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, CB, P, H> {
@@ -50,10 +50,10 @@ where
 
 impl<T: Eq+Data, CB, P, H> Push<Message<T, CB::Container>> for Exchange<T, CB, P, H>
 where
-    CB: ContainerBuilder<Container: IterableContainer>,
-    CB: for<'a> PushInto<<CB::Container as IterableContainer>::Item<'a>>,
+    CB: ContainerBuilder<Container: IterContainer>,
+    CB: for<'a> PushInto<<CB::Container as IterContainer>::Item<'a>>,
     P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as IterableContainer>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as IterContainer>::Item<'a>) -> u64
 {
     #[inline(never)]
     fn push(&mut self, message: &mut Option<Message<T, CB::Container>>) {

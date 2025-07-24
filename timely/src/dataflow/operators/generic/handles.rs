@@ -15,15 +15,15 @@ use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Message;
 use crate::communication::{Push, Pull};
-use crate::Data;
-use crate::container::{ContainerBuilder, CapacityContainerBuilder, SizableContainer, WithProgress};
+use crate::{Container, Data};
+use crate::container::{ContainerBuilder, CapacityContainerBuilder, SizableContainer};
 use crate::logging::TimelyLogger as Logger;
 
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
 /// Handle to an operator's input stream.
-pub struct InputHandleCore<T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>> {
+pub struct InputHandleCore<T: Timestamp, C: Container, P: Pull<Message<T, C>>> {
     pull_counter: PullCounter<T, C, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     /// Timestamp summaries from this input to each output.
@@ -38,7 +38,7 @@ pub struct InputHandleCore<T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>
 pub type InputHandle<T, D, P> = InputHandleCore<T, Vec<D>, P>;
 
 /// Handle to an operator's input stream and frontier.
-pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: WithProgress +'a, P: Pull<Message<T, C>>+'a> {
+pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: Container+'a, P: Pull<Message<T, C>>+'a> {
     /// The underlying input handle.
     pub handle: &'a mut InputHandleCore<T, C, P>,
     /// The frontier as reported by timely progress tracking.
@@ -48,7 +48,7 @@ pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: WithProgress +'a, P: P
 /// Handle to an operator's input stream and frontier, specialized to vectors.
 pub type FrontieredInputHandle<'a, T, D, P> = FrontieredInputHandleCore<'a, T, Vec<D>, P>;
 
-impl<T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
+impl<T: Timestamp, C: Container, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
 
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
@@ -93,7 +93,7 @@ impl<T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>> InputHandleCore<T, C
 
 }
 
-impl<'a, T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>+'a> FrontieredInputHandleCore<'a, T, C, P> {
+impl<'a, T: Timestamp, C: Container, P: Pull<Message<T, C>>+'a> FrontieredInputHandleCore<'a, T, C, P> {
     /// Allocate a new frontiered input handle.
     pub fn new(handle: &'a mut InputHandleCore<T, C, P>, frontier: &'a MutableAntichain<T>) -> Self {
         FrontieredInputHandleCore {
@@ -140,13 +140,13 @@ impl<'a, T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>+'a> FrontieredInp
     }
 }
 
-pub fn _access_pull_counter<T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>>(input: &mut InputHandleCore<T, C, P>) -> &mut PullCounter<T, C, P> {
+pub fn _access_pull_counter<T: Timestamp, C: Container, P: Pull<Message<T, C>>>(input: &mut InputHandleCore<T, C, P>) -> &mut PullCounter<T, C, P> {
     &mut input.pull_counter
 }
 
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
-pub fn new_input_handle<T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>>(
+pub fn new_input_handle<T: Timestamp, C: Container, P: Pull<Message<T, C>>>(
     pull_counter: PullCounter<T, C, P>, 
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, 
     summaries: Rc<RefCell<PortConnectivity<T::Summary>>>, 

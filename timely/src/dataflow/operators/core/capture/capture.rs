@@ -10,15 +10,14 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
-use crate::Data;
-use crate::container::WithProgress;
+use crate::{Container, Data};
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
 use super::{Event, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<T: Timestamp, C: WithProgress + Data> {
+pub trait Capture<T: Timestamp, C: Container + Data> {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -118,7 +117,7 @@ pub trait Capture<T: Timestamp, C: WithProgress + Data> {
     }
 }
 
-impl<S: Scope, C: WithProgress + Data> Capture<S::Timestamp, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + Data> Capture<S::Timestamp, C> for StreamCore<S, C> {
     fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());

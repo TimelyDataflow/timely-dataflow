@@ -3,14 +3,14 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, WithProgress, PushInto};
+use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, PushInto};
 
 use crate::scheduling::{Schedule, Activator};
 
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 use crate::progress::operate::Connectivity;
-use crate::Data;
+use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::{Scope, ScopeParent, StreamCore};
 use crate::dataflow::channels::pushers::{Tee, Counter};
@@ -392,6 +392,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
                 Message::push_at(container, now_at.clone(), &mut pushers[index]);
             }
         }
+        container.clear();
     }
 
     /// Closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.

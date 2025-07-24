@@ -19,7 +19,8 @@ use std::time::Duration;
 use columnar::Columnar;
 use serde::{Deserialize, Serialize};
 
-use crate::container::{CapacityContainerBuilder, WithProgress};
+use crate::Container;
+use crate::container::CapacityContainerBuilder;
 use crate::dataflow::operators::capture::{Event, EventPusher};
 use crate::progress::operate::Connectivity;
 
@@ -30,7 +31,7 @@ pub struct BatchLogger<P, C> where P: EventPusher<Duration, C> {
     _phantom: ::std::marker::PhantomData<C>,
 }
 
-impl<P, C> BatchLogger<P, C> where P: EventPusher<Duration, C>, C: WithProgress {
+impl<P, C> BatchLogger<P, C> where P: EventPusher<Duration, C>, C: Container {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
         BatchLogger {
