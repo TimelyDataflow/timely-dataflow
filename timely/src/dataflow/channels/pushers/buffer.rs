@@ -2,7 +2,7 @@
 //! with the performance of batched sends.
 
 use crate::communication::Push;
-use crate::container::{ContainerBuilder, CapacityContainerBuilder, PushInto, SizableContainer};
+use crate::container::{ContainerBuilder, CapacityContainerBuilder, WithProgress, PushInto, SizableContainer};
 use crate::dataflow::channels::Message;
 use crate::dataflow::operators::Capability;
 use crate::progress::Timestamp;
@@ -109,9 +109,11 @@ impl<T, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Buffer<T, CB, 
     // buffer always requires a container builder. We could expose the buffer's underlying pusher
     // directly, but this would bypass the buffer's time tracking.
     fn give_container(&mut self, container: &mut CB::Container) {
-        self.flush();
-        let time = self.time.as_ref().unwrap().clone();
-        Message::push_at(container, time, &mut self.pusher);
+        if container.count() > 0 {
+            self.flush();
+            let time = self.time.as_ref().unwrap().clone();
+            Message::push_at(container, time, &mut self.pusher);
+        }
     }
     
     /// An internal implementation of push that should only be called by sessions.

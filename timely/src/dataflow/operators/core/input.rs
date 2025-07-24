@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, PushInto};
+use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, WithProgress, PushInto};
 
 use crate::scheduling::{Schedule, Activator};
 
@@ -439,9 +439,11 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
     /// });
     /// ```
     pub fn send_batch(&mut self, buffer: &mut CB::Container) {
-        // flush buffered elements to ensure local fifo.
-        self.flush();
-        Self::send_container(buffer, &mut self.buffer, &mut self.pushers, &self.now_at);
+        if !buffer.count() > 0 {
+            // flush buffered elements to ensure local fifo.
+            self.flush();
+            Self::send_container(buffer, &mut self.buffer, &mut self.pushers, &self.now_at);
+        }
     }
 
     /// Advances the current epoch to `next`.

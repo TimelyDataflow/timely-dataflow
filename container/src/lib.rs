@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 
 /// A type representing progress, with an update count.
 ///
-/// It describes its update count (`count()`).
+/// It describes its update count (`count()`) and whether it is empty (`is_empty()`).
 ///
 /// We require [`Default`] for convenience purposes.
 pub trait WithProgress: Default {
@@ -84,7 +84,7 @@ pub trait PushInto<T> {
 /// decide to represent a push order for `extract` and `finish`, or not.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
-    type Container: WithProgress + Clone + 'static;
+    type Container: WithProgress + Default + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
