@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use crate::dataflow::channels::Message;
 use crate::progress::ChangeBatch;
 use crate::communication::Pull;
-use crate::container::ProgressContainer;
+use crate::container::WithProgress;
 
 /// A wrapper which accounts records pulled past in a shared count map.
 pub struct Counter<T: Ord+Clone+'static, C, P: Pull<Message<T, C>>> {
@@ -36,7 +36,7 @@ impl<T:Ord+Clone+'static> Drop for ConsumedGuard<T> {
     }
 }
 
-impl<T:Ord+Clone+'static, C: ProgressContainer, P: Pull<Message<T, C>>> Counter<T, C, P> {
+impl<T:Ord+Clone+'static, C: WithProgress, P: Pull<Message<T, C>>> Counter<T, C, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
     pub fn next(&mut self) -> Option<&mut Message<T, C>> {
@@ -49,7 +49,7 @@ impl<T:Ord+Clone+'static, C: ProgressContainer, P: Pull<Message<T, C>>> Counter<
             let guard = ConsumedGuard {
                 consumed: Rc::clone(&self.consumed),
                 time: Some(message.time.clone()),
-                len: message.data.len(),
+                len: message.data.count(),
             };
             Some((guard, message))
         }

@@ -2,7 +2,7 @@
 //! with the performance of batched sends.
 
 use crate::communication::Push;
-use crate::container::{ContainerBuilder, CapacityContainerBuilder, ProgressContainer, PushInto};
+use crate::container::{ContainerBuilder, CapacityContainerBuilder, WithProgress, PushInto};
 use crate::dataflow::channels::Message;
 use crate::dataflow::operators::Capability;
 use crate::progress::Timestamp;

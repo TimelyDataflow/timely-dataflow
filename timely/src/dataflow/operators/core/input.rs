@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::container::{CapacityContainerBuilder, ContainerBuilder, ProgressContainer, PushInto};
+use crate::container::{CapacityContainerBuilder, ContainerBuilder, WithProgress, PushInto};
 
 use crate::scheduling::{Schedule, Activator};
 

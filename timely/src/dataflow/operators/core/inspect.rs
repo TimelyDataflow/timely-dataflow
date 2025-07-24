@@ -1,6 +1,6 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
-use crate::container::{PassthroughContainerBuilder, ProgressContainer};
+use crate::container::{PassthroughContainerBuilder, WithProgress};
 use crate::{Container, Data};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
@@ -121,7 +121,7 @@ pub trait InspectCore<G: Scope, C> {
     fn inspect_container<F>(&self, func: F) -> StreamCore<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: ProgressContainer + Data> InspectCore<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: WithProgress + Data> InspectCore<G, C> for StreamCore<G, C> {
 
     fn inspect_container<F>(&self, mut func: F) -> StreamCore<G, C>
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static

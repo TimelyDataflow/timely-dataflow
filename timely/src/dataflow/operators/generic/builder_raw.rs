@@ -10,7 +10,7 @@ use std::cell::RefCell;
 
 use crate::scheduling::{Schedule, Activations};
 
-use crate::container::ProgressContainer;
+use crate::container::WithProgress;
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 use crate::progress::operate::{Connectivity, PortConnectivity};
@@ -104,7 +104,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: ProgressContainer, P>(&mut self, stream: &StreamCore<G, C>, pact: P) -> P::Puller
+    pub fn new_input<C: WithProgress, P>(&mut self, stream: &StreamCore<G, C>, pact: P) -> P::Puller
     where
         P: ParallelizationContract<G::Timestamp, C>
     {
@@ -113,7 +113,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<C: ProgressContainer, P, I>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: I) -> P::Puller
+    pub fn new_input_connection<C: WithProgress, P, I>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: I) -> P::Puller
     where
         P: ParallelizationContract<G::Timestamp, C>,
         I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)>,
@@ -133,14 +133,14 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: ProgressContainer>(&mut self) -> (Tee<G::Timestamp, C>, StreamCore<G, C>) {
+    pub fn new_output<C: WithProgress>(&mut self) -> (Tee<G::Timestamp, C>, StreamCore<G, C>) {
 
         let connection = (0 .. self.shape.inputs).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output_connection<C: ProgressContainer, I>(&mut self, connection: I) -> (Tee<G::Timestamp, C>, StreamCore<G, C>)
+    pub fn new_output_connection<C: WithProgress, I>(&mut self, connection: I) -> (Tee<G::Timestamp, C>, StreamCore<G, C>)
     where
         I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)>,
     {

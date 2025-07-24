@@ -165,20 +165,11 @@ mod container {
         }
     }
 
-    impl<C: columnar::ContainerBytes> timely::container::ProgressContainer for Column<C> {
+    impl<C: columnar::ContainerBytes> timely::container::WithProgress for Column<C> {
         #[inline(always)]
-        fn len(&self) -> usize { self.borrow().len() }
+        fn count(&self) -> usize { self.borrow().len() }
     }
     impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
-        // This sets `self` to be an empty `Typed` variant, appropriate for pushing into.
-        fn clear(&mut self) {
-            match self {
-                Column::Typed(t) => t.clear(),
-                Column::Bytes(_) => *self = Column::Typed(Default::default()),
-                Column::Align(_) => *self = Column::Typed(Default::default()),
-            }
-        }
-
         type ItemRef<'a> = C::Ref<'a>;
         type Iter<'a> = IterOwn<C::Borrowed<'a>>;
         fn iter<'a>(&'a self) -> Self::Iter<'a> { self.borrow().into_index_iter() }
@@ -287,7 +278,7 @@ mod builder {
         }
     }
 
-    use timely::container::{ContainerBuilder, LengthPreservingContainerBuilder};
+    use timely::container::{ContainerBuilder, CountPreservingContainerBuilder};
     impl<C: columnar::ContainerBytes> ContainerBuilder for ColumnBuilder<C> {
         type Container = Column<C>;
 
@@ -320,5 +311,5 @@ mod builder {
         }
     }
 
-    impl<C: columnar::ContainerBytes> LengthPreservingContainerBuilder for ColumnBuilder<C> { }
+    impl<C: columnar::ContainerBytes> CountPreservingContainerBuilder for ColumnBuilder<C> { }
 }

@@ -13,10 +13,10 @@ use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 use crate::Data;
-use crate::container::{ContainerBuilder, PassthroughContainerBuilder, ProgressContainer};
+use crate::container::{ContainerBuilder, PassthroughContainerBuilder, WithProgress};
 
 /// Methods to construct generic streaming and blocking operators.
-pub trait Operator<G: Scope, C1: ProgressContainer> {
+pub trait Operator<G: Scope, C1: WithProgress> {
     /// Creates a new dataflow operator that partitions its input stream by a parallelization
     /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
     /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
@@ -177,7 +177,7 @@ pub trait Operator<G: Scope, C1: ProgressContainer> {
     /// ```
     fn binary_frontier<C2, CB, B, L, P1, P2>(&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
-        C2: ProgressContainer + Data,
+        C2: WithProgress + Data,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -227,7 +227,7 @@ pub trait Operator<G: Scope, C1: ProgressContainer> {
     ///    }
     /// }).unwrap();
     /// ```
-    fn binary_notify<C2: ProgressContainer + Data,
+    fn binary_notify<C2: WithProgress + Data,
               CB: ContainerBuilder,
               L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
                        &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
@@ -269,7 +269,7 @@ pub trait Operator<G: Scope, C1: ProgressContainer> {
     /// ```
     fn binary<C2, CB, B, L, P1, P2>(&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
-        C2: ProgressContainer + Data,
+        C2: WithProgress + Data,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -307,7 +307,7 @@ pub trait Operator<G: Scope, C1: ProgressContainer> {
         P: ParallelizationContract<G::Timestamp, C1>;
 }
 
-impl<G: Scope, C1: ProgressContainer + Data> Operator<G, C1> for StreamCore<G, C1> {
+impl<G: Scope, C1: WithProgress + Data> Operator<G, C1> for StreamCore<G, C1> {
 
     fn unary_frontier<CB, B, L, P>(&self, pact: P, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
@@ -389,7 +389,7 @@ impl<G: Scope, C1: ProgressContainer + Data> Operator<G, C1> for StreamCore<G, C
 
     fn binary_frontier<C2, CB, B, L, P1, P2>(&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
-        C2: ProgressContainer + Data,
+        C2: WithProgress + Data,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut FrontieredInputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -420,7 +420,7 @@ impl<G: Scope, C1: ProgressContainer + Data> Operator<G, C1> for StreamCore<G, C
         stream
     }
 
-    fn binary_notify<C2: ProgressContainer + Data,
+    fn binary_notify<C2: WithProgress + Data,
               CB: ContainerBuilder,
               L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
                        &mut InputHandleCore<G::Timestamp, C2, P2::Puller>,
@@ -449,7 +449,7 @@ impl<G: Scope, C1: ProgressContainer + Data> Operator<G, C1> for StreamCore<G, C
 
     fn binary<C2, CB, B, L, P1, P2>(&self, other: &StreamCore<G, C2>, pact1: P1, pact2: P2, name: &str, constructor: B) -> StreamCore<G, CB::Container>
     where
-        C2: ProgressContainer + Data,
+        C2: WithProgress + Data,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
         L: FnMut(&mut InputHandleCore<G::Timestamp, C1, P1::Puller>,
@@ -582,7 +582,7 @@ where
 ///
 /// });
 /// ```
-pub fn empty<G: Scope, C: ProgressContainer + Data>(scope: &G) -> StreamCore<G, C> {
+pub fn empty<G: Scope, C: WithProgress + Data>(scope: &G) -> StreamCore<G, C> {
     let mut builder = OperatorBuilder::new("Empty".to_owned(), scope.clone());
 
     let (_output, stream) = builder.new_output::<PassthroughContainerBuilder<C>>();

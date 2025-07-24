@@ -22,7 +22,7 @@
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::container::ProgressContainer;
+use crate::container::WithProgress;
 use crate::logging::{TimelyLogger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
@@ -54,7 +54,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+ProgressContainer> Enter<G, T, C> for StreamCore<G, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+WithProgress> Enter<G, T, C> for StreamCore<G, C> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
@@ -86,7 +86,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+ProgressContainer> En
 }
 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
-pub trait Leave<G: Scope, C: ProgressContainer> {
+pub trait Leave<G: Scope, C: WithProgress> {
     /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// # Examples
@@ -104,7 +104,7 @@ pub trait Leave<G: Scope, C: ProgressContainer> {
     fn leave(&self) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: ProgressContainer + Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
+impl<G: Scope, C: WithProgress + Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
     fn leave(&self) -> StreamCore<G, C> {
 
         let scope = self.scope();
@@ -131,14 +131,14 @@ impl<G: Scope, C: ProgressContainer + Data, T: Timestamp+Refines<G::Timestamp>> 
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: ProgressContainer + Data> {
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: WithProgress + Data> {
     targets: Counter<TInner, TContainer, Tee<TInner, TContainer>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: ProgressContainer + Data> Push<Message<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: WithProgress + Data> Push<Message<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
     fn push(&mut self, element: &mut Option<Message<TOuter, TContainer>>) {
         if let Some(outer_message) = element {
             let data = ::std::mem::take(&mut outer_message.data);
@@ -165,7 +165,7 @@ struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContaine
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TContainer: ProgressContainer> Push<Message<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
+impl<TOuter, TInner, TContainer: WithProgress> Push<Message<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
 where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data {
     fn push(&mut self, message: &mut Option<Message<TInner, TContainer>>) {
         if let Some(inner_message) = message {
@@ -208,7 +208,7 @@ impl<P> LogPusher<P> {
 
 impl<T, C, P> Push<Message<T, C>> for LogPusher<P>
 where
-    C: ProgressContainer,
+    C: WithProgress,
     P: Push<Message<T, C>>,
 {
     fn push(&mut self, element: &mut Option<Message<T, C>>) {
@@ -219,7 +219,7 @@ where
                 source: self.index,
                 target: self.index,
                 seq_no: self.counter,
-                length: bundle.data.len(),
+                length: bundle.data.count(),
             };
             let recv_event = MessagesEvent {
                 is_send: false,

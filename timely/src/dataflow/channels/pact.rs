@@ -10,7 +10,7 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use std::rc::Rc;
 
-use crate::{Container, container::{ContainerBuilder, LengthPreservingContainerBuilder, ProgressContainer, SizableContainer, CapacityContainerBuilder, PushInto}};
+use crate::{Container, container::{ContainerBuilder, CountPreservingContainerBuilder, WithProgress, SizableContainer, CapacityContainerBuilder, PushInto}};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -34,7 +34,7 @@ pub trait ParallelizationContract<T, C> {
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, C: ProgressContainer + 'static> ParallelizationContract<T, C> for Pipeline {
+impl<T: 'static, C: WithProgress + 'static> ParallelizationContract<T, C> for Pipeline {
     type Pusher = LogPusher<T, C, ThreadPusher<Message<T, C>>>;
     type Puller = LogPuller<T, C, ThreadPuller<Message<T, C>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -52,7 +52,7 @@ pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 
 impl<CB, F> ExchangeCore<CB, F>
 where
-    CB: LengthPreservingContainerBuilder<Container: Container>,
+    CB: CountPreservingContainerBuilder<Container: Container>,
     for<'a> F: FnMut(&<CB::Container as Container>::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
@@ -129,7 +129,7 @@ impl<T, C, P: Push<Message<T, C>>> LogPusher<T, C, P> {
     }
 }
 
-impl<T, C: ProgressContainer, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<T, C, P> {
+impl<T, C: WithProgress, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<T, C, P> {
     #[inline]
     fn push(&mut self, pair: &mut Option<Message<T, C>>) {
         if let Some(bundle) = pair {
@@ -147,7 +147,7 @@ impl<T, C: ProgressContainer, P: Push<Message<T, C>>> Push<Message<T, C>> for Lo
                     source: self.source,
                     target: self.target,
                     seq_no: self.counter - 1,
-                    length: bundle.data.len(),
+                    length: bundle.data.count(),
                 })
             }
         }
@@ -179,7 +179,7 @@ impl<T, C, P: Pull<Message<T, C>>> LogPuller<T, C, P> {
     }
 }
 
-impl<T, C: ProgressContainer, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<T, C, P> {
+impl<T, C: WithProgress, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<T, C, P> {
     #[inline]
     fn pull(&mut self) -> &mut Option<Message<T, C>> {
         let result = self.puller.pull();
@@ -194,7 +194,7 @@ impl<T, C: ProgressContainer, P: Pull<Message<T, C>>> Pull<Message<T, C>> for Lo
                     source: bundle.from,
                     target,
                     seq_no: bundle.seq,
-                    length: bundle.data.len(),
+                    length: bundle.data.count(),
                 });
             }
         }

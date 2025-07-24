@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::container::{PassthroughContainerBuilder, ProgressContainer};
+use crate::container::{PassthroughContainerBuilder, WithProgress};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::Operator;
 use crate::dataflow::{Scope, StreamCore};
@@ -26,7 +26,7 @@ pub trait SharedStream<S: Scope, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>>;
 }
 
-impl<S: Scope, C: ProgressContainer + Data> SharedStream<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: WithProgress + Data> SharedStream<S, C> for StreamCore<S, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>> {
         self.unary::<PassthroughContainerBuilder<_>,_,_,_>(Pipeline, "Shared", move |_, _| {
             move |input, output| {

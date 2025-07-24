@@ -1,6 +1,6 @@
 //! Operators that separate one stream into two streams based on some condition
 
-use crate::container::{PassthroughContainerBuilder, ProgressContainer};
+use crate::container::{PassthroughContainerBuilder, WithProgress};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, Stream, StreamCore};
@@ -94,7 +94,7 @@ pub trait BranchWhen<T>: Sized {
     fn branch_when(&self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<S: Scope, C: ProgressContainer + Data> BranchWhen<S::Timestamp> for StreamCore<S, C> {
+impl<S: Scope, C: WithProgress + Data> BranchWhen<S::Timestamp> for StreamCore<S, C> {
     fn branch_when(&self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
         builder.set_notify(false);
