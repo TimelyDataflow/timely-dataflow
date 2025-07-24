@@ -1,13 +1,13 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
-use crate::container::{PassthroughContainerBuilder, WithProgress};
-use crate::{Container, Data};
+use crate::container::{IterableContainer, PassthroughContainerBuilder, WithProgress};
+use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
-pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
+pub trait Inspect<G: Scope, C: IterableContainer>: InspectCore<G, C> + Sized {
     /// Runs a supplied closure on each observed data element.
     ///
     /// # Examples
@@ -91,7 +91,7 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container + Data> Inspect<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: IterableContainer + Data> Inspect<G, C> for StreamCore<G, C> {
     fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
         self.inspect_container(func)
     }

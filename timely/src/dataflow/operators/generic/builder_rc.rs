@@ -8,7 +8,6 @@ use crate::progress::{ChangeBatch, Timestamp};
 use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
-use crate::Container;
 use crate::container::{ContainerBuilder, WithProgress};
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::Tee;

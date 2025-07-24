@@ -38,6 +38,7 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
+use crate::container::{PassthroughContainerBuilder, WithProgress};
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
@@ -46,7 +47,6 @@ use crate::progress::Timestamp;
 
 use super::Event;
 use super::event::EventIterator;
-use crate::Container;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
@@ -62,7 +62,7 @@ pub trait Replay<T: Timestamp, C> : Sized {
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>;
 }
 
-impl<T: Timestamp, C: Container + Clone + 'static, I> Replay<T, C> for I
+impl<T: Timestamp, C: WithProgress + Clone + 'static, I> Replay<T, C> for I
 where
     I : IntoIterator,
     <I as IntoIterator>::Item: EventIterator<T, C>+'static,
@@ -76,7 +76,7 @@ where
 
         let (targets, stream) = builder.new_output();
 
-        let mut output = PushBuffer::new(PushCounter::new(targets));
+        let mut output = PushBuffer::<_,PassthroughContainerBuilder<_>,_>::new(PushCounter::new(targets));
         let mut event_streams = self.into_iter().collect::<Vec<_>>();
         let mut started = false;
         let mut allocation: C = Default::default();
@@ -100,14 +100,14 @@ where
                                 progress.internals[0].extend(vec.into_iter());
                             },
                             Owned(Event::Messages(time, mut data)) => {
-                                output.session(&time).give_container(&mut data);
+                                output.session_with_builder(&time).give_container(&mut data);
                             }
                             Borrowed(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.iter().cloned());
                             },
                             Borrowed(Event::Messages(time, data)) => {
                                 allocation.clone_from(data);
-                                output.session(time).give_container(&mut allocation);
+                                output.session_with_builder(time).give_container(&mut allocation);
                             }
                         }
                     }

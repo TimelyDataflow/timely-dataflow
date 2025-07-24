@@ -26,18 +26,12 @@ pub trait WithProgress: Default {
 }
 
 /// A container that can reveal its contents through iterating by reference and draining.
-pub trait Container: WithProgress {
+pub trait IterableContainer: WithProgress {
     /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
 
     /// The type of elements when draining the container.
     type Item<'a> where Self: 'a;
-
-    /// Push `item` into self
-    #[inline]
-    fn push<T>(&mut self, item: T) where Self: PushInto<T> {
-        self.push_into(item)
-    }
 
     /// Iterator type when reading from the container.
     type Iter<'a>: Iterator<Item=Self::ItemRef<'a>> where Self: 'a;
@@ -54,7 +48,7 @@ pub trait Container: WithProgress {
 }
 
 /// A container that can be sized and reveals its capacity.
-pub trait SizableContainer: Container {
+pub trait SizableContainer: WithProgress {
     /// Indicates that the container is "full" and should be shipped.
     fn at_capacity(&self) -> bool;
     /// Restores `self` to its desired capacity, if it has one.
@@ -110,9 +104,9 @@ pub trait ContainerBuilder: Default + 'static {
     /// Partitions `container` among `builders`, using the function `index` to direct items.
     fn partition<I>(container: &mut Self::Container, builders: &mut [Self], mut index: I)
     where
-        Self: for<'a> PushInto<<Self::Container as Container>::Item<'a>>,
-        I: for<'a> FnMut(&<Self::Container as Container>::Item<'a>) -> usize,
-        Self::Container: Container,
+        Self: for<'a> PushInto<<Self::Container as IterableContainer>::Item<'a>>,
+        I: for<'a> FnMut(&<Self::Container as IterableContainer>::Item<'a>) -> usize,
+        Self::Container: IterableContainer,
     {
         for datum in container.drain() {
             let index = index(&datum);
@@ -186,7 +180,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
         self.current.ensure_capacity(&mut self.empty);
 
         // Push item
-        self.current.push(item);
+        self.current.push_into(item);
 
         // Maybe flush
         if self.current.at_capacity() {
@@ -195,7 +189,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
     }
 }
 
-impl<C: WithProgress + Container + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: WithProgress + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
@@ -218,9 +212,9 @@ impl<C: WithProgress + Container + Clone + 'static> ContainerBuilder for Capacit
     }
 }
 
-impl<C: WithProgress + Container + Clone + 'static> CountPreservingContainerBuilder for CapacityContainerBuilder<C> { }
+impl<C: WithProgress + SizableContainer + Clone + 'static> CountPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
-impl<T> Container for Vec<T> {
+impl<T> IterableContainer for Vec<T> {
     type ItemRef<'a> = &'a T where T: 'a;
     type Item<'a> = T where T: 'a;
     type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
@@ -278,9 +272,9 @@ mod rc {
     use std::ops::Deref;
     use std::rc::Rc;
 
-    use crate::Container;
+    use crate::IterableContainer;
 
-    impl<T: Container> Container for Rc<T> {
+    impl<T: IterableContainer> IterableContainer for Rc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;
@@ -301,9 +295,9 @@ mod arc {
     use std::ops::Deref;
     use std::sync::Arc;
 
-    use crate::Container;
+    use crate::IterableContainer;
 
-    impl<T: Container> Container for Arc<T> {
+    impl<T: IterableContainer> IterableContainer for Arc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;

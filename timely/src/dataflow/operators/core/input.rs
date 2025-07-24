@@ -3,14 +3,14 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::container::{CapacityContainerBuilder, ContainerBuilder, WithProgress, PushInto};
+use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, WithProgress, PushInto};
 
 use crate::scheduling::{Schedule, Activator};
 
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 use crate::progress::operate::Connectivity;
-use crate::{Container, Data};
+use crate::Data;
 use crate::communication::Push;
 use crate::dataflow::{Scope, ScopeParent, StreamCore};
 use crate::dataflow::channels::pushers::{Tee, Counter};
@@ -59,7 +59,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<C: Container + Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<Self, C>);
+    fn new_input<C: SizableContainer + Data>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<Self, C>);
 
     /// Create a new [StreamCore] and [Handle] through which to supply input.
     ///
@@ -134,7 +134,7 @@ pub trait Input : Scope {
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<C: Container + Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<G, C>) {
+    fn new_input<C: SizableContainer + Data>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<G, C>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
@@ -224,7 +224,7 @@ pub struct Handle<T: Timestamp, CB: ContainerBuilder> {
     now_at: T,
 }
 
-impl<T: Timestamp, C: Container + Data> Handle<T, CapacityContainerBuilder<C>> {
+impl<T: Timestamp, C: SizableContainer + Data> Handle<T, CapacityContainerBuilder<C>> {
     /// Allocates a new input handle, from which one can create timely streams.
     ///
     /// # Examples
