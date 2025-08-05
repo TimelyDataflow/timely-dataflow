@@ -14,7 +14,7 @@ resolver = "2"
 edition = "2021"
 
 [workspace.dependencies]
-columnar = "0.9"
+columnar = "0.10"
 
 [workspace.lints.clippy]
 type_complexity = "allow"

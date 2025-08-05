@@ -366,7 +366,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
 
     /// Flush all contents and distribute to downstream operators.
     #[inline]
-    fn flush(&mut self) {
+    pub fn flush(&mut self) {
         while let Some(container) = self.builder.finish() {
             Self::send_container(container, &mut self.buffer, &mut self.pushers, &self.now_at);
         }
