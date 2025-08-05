@@ -8,3 +8,21 @@ name = "timely"
 changelog_update = true
 # set the path of the changelog to the root of the repository
 changelog_path = "./CHANGELOG.md"
+version_group = "timely"
+
+# We want all packages to track the same version.
+[[package]]
+name = "timely_bytes"
+version_group = "timely"
+
+[[package]]
+name = "timely_communication"
+version_group = "timely"
+
+[[package]]
+name = "timely_container"
+version_group = "timely"
+
+[[package]]
+name = "timely_logging"
+version_group = "timely"
