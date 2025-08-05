@@ -1,7 +1,7 @@
 [package]
 
 name = "timely"
-version = "0.21.4"
+version = "0.21.5"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 readme = "../README.md"
 edition.workspace = true
@@ -28,10 +28,10 @@ getopts = { version = "0.2.21", optional = true }
 bincode = { version = "1.0" }
 byteorder = "1.5"
 serde = { version = "1.0", features = ["derive"] }
-timely_bytes = { path = "../bytes", version = "0.13" }
-timely_logging = { path = "../logging", version = "0.13" }
-timely_communication = { path = "../communication", version = "0.19", default-features = false }
-timely_container = { path = "../container", version = "0.15" }
+timely_bytes = { path = "../bytes", version = "0.21" }
+timely_logging = { path = "../logging", version = "0.21" }
+timely_communication = { path = "../communication", version = "0.21", default-features = false }
+timely_container = { path = "../container", version = "0.21" }
 smallvec = { version = "1.13.2", features = ["serde", "const_generics"] }
 
 [dev-dependencies]

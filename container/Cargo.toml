@@ -1,6 +1,6 @@
 [package]
 name = "timely_container"
-version = "0.15.2"
+version = "0.21.5"
 description = "Container abstractions for Timely"
 license = "MIT"
 edition.workspace = true
