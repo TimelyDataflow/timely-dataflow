@@ -250,7 +250,7 @@ impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
         let internal_borrow = self.internal.borrow();
         // To be valid, the output buffer must match and the timestamp summary needs to be the default.
         Rc::ptr_eq(&internal_borrow[port], query_buffer) &&
-        summaries_borrow.get(port).map(|path| path.len() == 1 && path[0] == Default::default()).unwrap_or(false)
+        summaries_borrow.get(port).map_or(false, |path| path.elements() == [Default::default()])
     }
 }
 
