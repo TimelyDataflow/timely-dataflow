@@ -30,7 +30,7 @@ pub struct InputHandleCore<T: Timestamp, C: Container, P: Pull<Message<T, C>>> {
     ///
     /// Each timestamp received through this input may only produce output timestamps
     /// greater or equal to the input timestamp subjected to at least one of these summaries.
-    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>, 
+    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
     logging: Option<Logger>,
 }
 
@@ -147,9 +147,9 @@ pub fn _access_pull_counter<T: Timestamp, C: Container, P: Pull<Message<T, C>>>(
 /// Constructs an input handle.
 /// Declared separately so that it can be kept private when `InputHandle` is re-exported.
 pub fn new_input_handle<T: Timestamp, C: Container, P: Pull<Message<T, C>>>(
-    pull_counter: PullCounter<T, C, P>, 
-    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>, 
-    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>, 
+    pull_counter: PullCounter<T, C, P>,
+    internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
+    summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
     logging: Option<Logger>
 ) -> InputHandleCore<T, C, P> {
     InputHandleCore {
@@ -225,7 +225,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     /// });
     /// ```
     pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CB, PushCounter<T, CB::Container, P>> where 'a: 'b {
-        assert!(cap.valid_for_output(self.internal_buffer), "Attempted to open output session with invalid capability");
+        debug_assert!(cap.valid_for_output(self.internal_buffer), "Attempted to open output session with invalid capability");
         self.push_buffer.session_with_builder(cap.time())
     }
 
