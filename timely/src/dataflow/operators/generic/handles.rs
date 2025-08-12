@@ -169,14 +169,16 @@ pub fn new_input_handle<T: Timestamp, C: Container, P: Pull<Message<T, C>>>(
 pub struct OutputWrapper<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> {
     push_buffer: Buffer<T, CB, PushCounter<T, CB::Container, P>>,
     internal_buffer: Rc<RefCell<ChangeBatch<T>>>,
+    port: usize,
 }
 
 impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> OutputWrapper<T, CB, P> {
     /// Creates a new output wrapper from a push buffer.
-    pub fn new(push_buffer: Buffer<T, CB, PushCounter<T, CB::Container, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>) -> Self {
+    pub fn new(push_buffer: Buffer<T, CB, PushCounter<T, CB::Container, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>, port: usize) -> Self {
         OutputWrapper {
             push_buffer,
             internal_buffer,
+            port,
         }
     }
     /// Borrows the push buffer into a handle, which can be used to send records.
@@ -187,6 +189,7 @@ impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Out
         OutputHandleCore {
             push_buffer: &mut self.push_buffer,
             internal_buffer: &self.internal_buffer,
+            port: self.port,
         }
     }
 }
@@ -195,6 +198,7 @@ impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Out
 pub struct OutputHandleCore<'a, T: Timestamp, CB: ContainerBuilder+'a, P: Push<Message<T, CB::Container>>+'a> {
     push_buffer: &'a mut Buffer<T, CB, PushCounter<T, CB::Container, P>>,
     internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
+    port: usize,
 }
 
 /// Handle specialized to `Vec`-based container.
@@ -225,7 +229,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     /// });
     /// ```
     pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CB, PushCounter<T, CB::Container, P>> where 'a: 'b {
-        debug_assert!(cap.valid_for_output(self.internal_buffer), "Attempted to open output session with invalid capability");
+        debug_assert!(cap.valid_for_output(self.internal_buffer, self.port), "Attempted to open output session with invalid capability");
         self.push_buffer.session_with_builder(cap.time())
     }
 
