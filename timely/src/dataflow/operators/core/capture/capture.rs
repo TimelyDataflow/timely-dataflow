@@ -85,8 +85,8 @@ pub trait Capture<T: Timestamp, C: Container + Data> {
     ///     let send0 = send0.lock().unwrap().clone();
     ///
     ///     // these allow us to capture / replay a timely stream.
-    ///     let list = TcpListener::bind("127.0.0.1:8000").unwrap();
-    ///     let send = TcpStream::connect("127.0.0.1:8000").unwrap();
+    ///     let list = TcpListener::bind("127.0.0.1:8001").unwrap();
+    ///     let send = TcpStream::connect("127.0.0.1:8001").unwrap();
     ///     let recv = list.incoming().next().unwrap().unwrap();
     ///
     ///     recv.set_nonblocking(true).unwrap();
