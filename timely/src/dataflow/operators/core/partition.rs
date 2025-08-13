@@ -58,11 +58,6 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
         builder.build(move |_| {
             let mut todo = vec![];
             move |_frontiers| {
-                enum SessionState<H, S> {
-                    Handle(H),
-                    Session(S),
-                }
-
                 let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
 
                 // The capability associated with each session in `sessions`.
@@ -76,23 +71,18 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
 
                 for (cap, mut data) in todo.drain(..) {
                     if sessions_cap.as_ref().map_or(true, |s_cap| s_cap.time() != cap.time()) {
-                        sessions = handles
-                            .iter_mut()
-                            .map(|h| Some(SessionState::Handle(h)))
-                            .collect();
+                        sessions = handles.iter_mut().map(|h| Some(Err(h))).collect();
                         sessions_cap = Some(cap);
                     }
                     for datum in data.drain() {
                         let (part, datum2) = route(datum);
 
                         let mut session = match sessions[part as usize].take().unwrap() {
-                            SessionState::Session(s) => s,
-                            SessionState::Handle(handle) => {
-                                handle.session_with_builder(sessions_cap.as_ref().unwrap())
-                            }
+                            Ok(s) => s,
+                            Err(handle) => handle.session_with_builder(sessions_cap.as_ref().unwrap()),
                         };
                         session.give(datum2);
-                        sessions[part as usize] = Some(SessionState::Session(session));
+                        sessions[part as usize] = Some(Ok(session));
                     }
                 }
             }
