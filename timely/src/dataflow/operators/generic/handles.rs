@@ -17,7 +17,6 @@ use crate::dataflow::channels::Message;
 use crate::communication::{Push, Pull};
 use crate::{Container, Data};
 use crate::container::{ContainerBuilder, CapacityContainerBuilder};
-use crate::logging::TimelyLogger as Logger;
 
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
@@ -31,7 +30,6 @@ pub struct InputHandleCore<T: Timestamp, C: Container, P: Pull<Message<T, C>>> {
     /// Each timestamp received through this input may only produce output timestamps
     /// greater or equal to the input timestamp subjected to at least one of these summaries.
     summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
-    logging: Option<Logger>,
 }
 
 /// Handle to an operator's input stream, specialized to vectors.
@@ -82,13 +80,9 @@ impl<T: Timestamp, C: Container, P: Pull<Message<T, C>>> InputHandleCore<T, C, P
     /// ```
     #[inline]
     pub fn for_each<F: FnMut(InputCapability<T>, &mut C)>(&mut self, mut logic: F) {
-        let mut logging = self.logging.take();
         while let Some((cap, data)) = self.next() {
-            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: true }));
             logic(cap, data);
-            logging.as_mut().map(|l| l.log(crate::logging::GuardedMessageEvent { is_start: false }));
         }
-        self.logging = logging;
     }
 
 }
@@ -150,13 +144,11 @@ pub fn new_input_handle<T: Timestamp, C: Container, P: Pull<Message<T, C>>>(
     pull_counter: PullCounter<T, C, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
-    logging: Option<Logger>
 ) -> InputHandleCore<T, C, P> {
     InputHandleCore {
         pull_counter,
         internal,
         summaries,
-        logging,
     }
 }
 
