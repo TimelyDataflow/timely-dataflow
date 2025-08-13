@@ -56,6 +56,7 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
         }
 
         builder.build(move |_| {
+            let mut todo = vec![];
             move |_frontiers| {
                 #[derive(Default)]
                 enum SessionState<H, S> {
@@ -72,6 +73,11 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
                 let mut sessions = vec![];
 
                 while let Some((cap, data)) = input.next() {
+                    todo.push((cap, std::mem::take(data)));
+                }
+                todo.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+                for (cap, mut data) in todo.drain(..) {
                     let reset_sessions = match sessions_cap {
                         Some(ref s_cap) => !PartialOrder::less_equal(s_cap.time(), cap.time()),
                         None => true,
