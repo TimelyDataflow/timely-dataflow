@@ -58,12 +58,9 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
         builder.build(move |_| {
             let mut todo = vec![];
             move |_frontiers| {
-                #[derive(Default)]
                 enum SessionState<H, S> {
                     Handle(H),
                     Session(S),
-                    #[default]
-                    Invalid,
                 }
 
                 let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
@@ -79,28 +76,23 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
 
                 for (cap, mut data) in todo.drain(..) {
                     if sessions_cap.as_ref().map_or(true, |s_cap| s_cap.time() != cap.time()) {
-                        sessions = handles.iter_mut().map(SessionState::Handle).collect();
+                        sessions = handles
+                            .iter_mut()
+                            .map(|h| Some(SessionState::Handle(h)))
+                            .collect();
                         sessions_cap = Some(cap);
                     }
                     for datum in data.drain() {
                         let (part, datum2) = route(datum);
 
-                        let session = match &mut sessions[part as usize] {
+                        let mut session = match sessions[part as usize].take().unwrap() {
                             SessionState::Session(s) => s,
-                            st @ SessionState::Handle(_) => {
-                                let SessionState::Handle(handle) = std::mem::take(st) else {
-                                    unreachable!();
-                                };
-                                let session = handle.session_with_builder(sessions_cap.as_ref().unwrap());
-                                *st = SessionState::Session(session);
-                                let SessionState::Session(session) = st else {
-                                    unreachable!();
-                                };
-                                session
+                            SessionState::Handle(handle) => {
+                                handle.session_with_builder(sessions_cap.as_ref().unwrap())
                             }
-                            SessionState::Invalid => unreachable!(),
                         };
                         session.give(datum2);
+                        sessions[part as usize] = Some(SessionState::Session(session));
                     }
                 }
             }
