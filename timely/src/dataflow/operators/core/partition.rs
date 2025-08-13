@@ -71,18 +71,21 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
 
                 for (cap, mut data) in todo.drain(..) {
                     if sessions_cap.as_ref().map_or(true, |s_cap| s_cap.time() != cap.time()) {
-                        sessions = handles.iter_mut().map(|h| Some(Err(h))).collect();
+                        sessions = handles.iter_mut().map(|h| (None, Some(h))).collect();
                         sessions_cap = Some(cap);
                     }
                     for datum in data.drain() {
                         let (part, datum2) = route(datum);
 
-                        let mut session = match sessions[part as usize].take().unwrap() {
-                            Ok(s) => s,
-                            Err(handle) => handle.session_with_builder(sessions_cap.as_ref().unwrap()),
+                        let session = match sessions[part as usize] {
+                            (Some(ref mut s), _) => s,
+                            (ref mut session_slot, ref mut handle) => {
+                                let handle = handle.take().unwrap();
+                                let session = handle.session_with_builder(sessions_cap.as_ref().unwrap());
+                                session_slot.insert(session)
+                            }
                         };
                         session.give(datum2);
-                        sessions[part as usize] = Some(Ok(session));
                     }
                 }
             }
