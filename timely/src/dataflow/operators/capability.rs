@@ -37,19 +37,19 @@ use crate::dataflow::channels::pullers::counter::ConsumedGuard;
 pub trait CapabilityTrait<T: Timestamp> {
     /// The timestamp associated with the capability.
     fn time(&self) -> &T;
-    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool;
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool;
 }
 
 impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &C {
     fn time(&self) -> &T { (**self).time() }
-    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
-        (**self).valid_for_output(query_buffer)
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
+        (**self).valid_for_output(query_buffer, port)
     }
 }
 impl<T: Timestamp, C: CapabilityTrait<T>> CapabilityTrait<T> for &mut C {
     fn time(&self) -> &T { (**self).time() }
-    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
-        (**self).valid_for_output(query_buffer)
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
+        (**self).valid_for_output(query_buffer, port)
     }
 }
 
@@ -66,7 +66,7 @@ pub struct Capability<T: Timestamp> {
 
 impl<T: Timestamp> CapabilityTrait<T> for Capability<T> {
     fn time(&self) -> &T { &self.time }
-    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, _port: usize) -> bool {
         Rc::ptr_eq(&self.internal, query_buffer)
     }
 }
@@ -227,9 +227,9 @@ impl Error for DowngradeError {}
 /// A shared list of shared output capability buffers.
 type CapabilityUpdates<T> = Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>;
 
-/// An capability of an input port. 
+/// An capability of an input port.
 ///
-/// Holding onto this capability will implicitly holds onto a capability for all the outputs 
+/// Holding onto this capability will implicitly holds onto a capability for all the outputs
 /// ports this input is connected to, after the connection summaries have been applied.
 ///
 /// This input capability supplies a `retain_for_output(self)` method which consumes the input
@@ -245,14 +245,12 @@ pub struct InputCapability<T: Timestamp> {
 
 impl<T: Timestamp> CapabilityTrait<T> for InputCapability<T> {
     fn time(&self) -> &T { self.time() }
-    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
         let summaries_borrow = self.summaries.borrow();
         let internal_borrow = self.internal.borrow();
         // To be valid, the output buffer must match and the timestamp summary needs to be the default.
-        let result = summaries_borrow.iter_ports().any(|(port, path)| {
-            Rc::ptr_eq(&internal_borrow[port], query_buffer) && path.len() == 1 && path[0] == Default::default()
-        });
-        result
+        Rc::ptr_eq(&internal_borrow[port], query_buffer) &&
+        summaries_borrow.get(port).map_or(false, |path| path.elements() == [Default::default()])
     }
 }
 
@@ -353,8 +351,8 @@ pub struct ActivateCapability<T: Timestamp> {
 
 impl<T: Timestamp> CapabilityTrait<T> for ActivateCapability<T> {
     fn time(&self) -> &T { self.capability.time() }
-    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>) -> bool {
-        self.capability.valid_for_output(query_buffer)
+    fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool {
+        self.capability.valid_for_output(query_buffer, port)
     }
 }
 

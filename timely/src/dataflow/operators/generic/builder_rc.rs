@@ -127,7 +127,7 @@ impl<G: Scope> OperatorBuilder<G> {
             self.summaries[input].borrow_mut().add_port(new_output, entry);
         }
 
-        (OutputWrapper::new(buffer, internal), stream)
+        (OutputWrapper::new(buffer, internal, new_output), stream)
     }
 
     /// Creates an operator implementation from supplied logic constructor.
