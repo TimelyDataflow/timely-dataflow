@@ -4,8 +4,9 @@ use timely_container::{Container, ContainerBuilder, PushInto};
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::operators::InputCapability;
 use crate::dataflow::{Scope, StreamCore};
-use crate::Data;
+use crate::{Data, PartialOrder};
 
 /// Partition a stream of records into multiple streams.
 pub trait Partition<G: Scope, C: Container> {
@@ -56,18 +57,50 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
 
         builder.build(move |_| {
             move |_frontiers| {
-                let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
-                input.for_each(|time, data| {
-                    let mut sessions = handles
-                        .iter_mut()
-                        .map(|h| h.session_with_builder(&time))
-                        .collect::<Vec<_>>();
+                #[derive(Default)]
+                enum SessionState<H, S> {
+                    Handle(H),
+                    Session(S),
+                    #[default]
+                    Invalid,
+                }
 
+                let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
+
+                // The capability associated with each session in `sessions`.
+                let mut sessions_cap: Option<InputCapability<G::Timestamp>> = None;
+                let mut sessions = vec![];
+
+                while let Some((cap, data)) = input.next() {
+                    let reset_sessions = match sessions_cap {
+                        Some(ref s_cap) => !PartialOrder::less_equal(s_cap.time(), cap.time()),
+                        None => true,
+                    };
+                    if reset_sessions {
+                        sessions = handles.iter_mut().map(SessionState::Handle).collect();
+                        sessions_cap = Some(cap);
+                    }
                     for datum in data.drain() {
                         let (part, datum2) = route(datum);
-                        sessions[part as usize].give(datum2);
+
+                        let session = match &mut sessions[part as usize] {
+                            SessionState::Session(s) => s,
+                            st @ SessionState::Handle(_) => {
+                                let SessionState::Handle(handle) = std::mem::take(st) else {
+                                    unreachable!();
+                                };
+                                let session = handle.session_with_builder(sessions_cap.as_ref().unwrap());
+                                *st = SessionState::Session(session);
+                                let SessionState::Session(session) = st else {
+                                    unreachable!();
+                                };
+                                session
+                            }
+                            SessionState::Invalid => unreachable!(),
+                        };
+                        session.give(datum2);
                     }
-                });
+                }
             }
         });
 
