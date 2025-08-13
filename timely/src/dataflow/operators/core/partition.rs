@@ -4,6 +4,7 @@ use timely_container::{Container, ContainerBuilder, PushInto};
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::operators::InputCapability;
 use crate::dataflow::{Scope, StreamCore};
 use crate::Data;
 
@@ -55,19 +56,38 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
         }
 
         builder.build(move |_| {
+            let mut todo = vec![];
             move |_frontiers| {
                 let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
-                input.for_each(|time, data| {
-                    let mut sessions = handles
-                        .iter_mut()
-                        .map(|h| h.session_with_builder(&time))
-                        .collect::<Vec<_>>();
 
+                // The capability associated with each session in `sessions`.
+                let mut sessions_cap: Option<InputCapability<G::Timestamp>> = None;
+                let mut sessions = vec![];
+
+                while let Some((cap, data)) = input.next() {
+                    todo.push((cap, std::mem::take(data)));
+                }
+                todo.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+                for (cap, mut data) in todo.drain(..) {
+                    if sessions_cap.as_ref().map_or(true, |s_cap| s_cap.time() != cap.time()) {
+                        sessions = handles.iter_mut().map(|h| (None, Some(h))).collect();
+                        sessions_cap = Some(cap);
+                    }
                     for datum in data.drain() {
                         let (part, datum2) = route(datum);
-                        sessions[part as usize].give(datum2);
+
+                        let session = match sessions[part as usize] {
+                            (Some(ref mut s), _) => s,
+                            (ref mut session_slot, ref mut handle) => {
+                                let handle = handle.take().unwrap();
+                                let session = handle.session_with_builder(sessions_cap.as_ref().unwrap());
+                                session_slot.insert(session)
+                            }
+                        };
+                        session.give(datum2);
                     }
-                });
+                }
             }
         });
 
