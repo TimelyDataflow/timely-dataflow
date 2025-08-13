@@ -181,20 +181,6 @@ pub struct ApplicationEvent {
     pub is_start: bool,
 }
 
-#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-/// Application-defined code start or stop
-pub struct GuardedMessageEvent {
-    /// `true` when activity begins, `false` when it stops
-    pub is_start: bool,
-}
-
-#[derive(Serialize, Deserialize, Columnar, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
-/// Application-defined code start or stop
-pub struct GuardedProgressEvent {
-    /// `true` when activity begins, `false` when it stops
-    pub is_start: bool,
-}
-
 #[derive(Serialize, Deserialize, Columnar, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// Identifier of the worker that generated a log line
 pub struct TimelySetup {
@@ -260,10 +246,6 @@ pub enum TimelyEvent {
     Shutdown(ShutdownEvent),
     /// No clue.
     Application(ApplicationEvent),
-    /// Per-message computation.
-    GuardedMessage(GuardedMessageEvent),
-    /// Per-notification computation.
-    GuardedProgress(GuardedProgressEvent),
     /// Communication channel event.
     CommChannels(CommChannelsEvent),
     /// Input event.
@@ -300,14 +282,6 @@ impl From<ShutdownEvent> for TimelyEvent {
 
 impl From<ApplicationEvent> for TimelyEvent {
     fn from(v: ApplicationEvent) -> TimelyEvent { TimelyEvent::Application(v) }
-}
-
-impl From<GuardedMessageEvent> for TimelyEvent {
-    fn from(v: GuardedMessageEvent) -> TimelyEvent { TimelyEvent::GuardedMessage(v) }
-}
-
-impl From<GuardedProgressEvent> for TimelyEvent {
-    fn from(v: GuardedProgressEvent) -> TimelyEvent { TimelyEvent::GuardedProgress(v) }
 }
 
 impl From<CommChannelsEvent> for TimelyEvent {

@@ -350,10 +350,9 @@ impl<G: Scope, C1: Container + Data> Operator<G, C1> for StreamCore<G, C1> {
                 notificator.notify_at(capability.delayed(&time));
             }
 
-            let logging = self.scope().logging();
             move |input, output| {
                 let frontier = &[input.frontier()];
-                let notificator = &mut Notificator::new(frontier, &mut notificator, &logging);
+                let notificator = &mut Notificator::new(frontier, &mut notificator);
                 logic(input.handle, output, notificator);
             }
         })
@@ -436,10 +435,9 @@ impl<G: Scope, C1: Container + Data> Operator<G, C1> for StreamCore<G, C1> {
                 notificator.notify_at(capability.delayed(&time));
             }
 
-            let logging = self.scope().logging();
             move |input1, input2, output| {
                 let frontiers = &[input1.frontier(), input2.frontier()];
-                let notificator = &mut Notificator::new(frontiers, &mut notificator, &logging);
+                let notificator = &mut Notificator::new(frontiers, &mut notificator);
                 logic(input1.handle, input2.handle, output, notificator);
             }
         })

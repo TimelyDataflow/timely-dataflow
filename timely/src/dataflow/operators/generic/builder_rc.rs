@@ -21,7 +21,6 @@ use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_ha
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 use crate::dataflow::operators::generic::builder_raw::OperatorShape;
 use crate::progress::operate::PortConnectivity;
-use crate::logging::TimelyLogger as Logger;
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
@@ -35,14 +34,12 @@ pub struct OperatorBuilder<G: Scope> {
     /// For each input, a shared list of summaries to each output.
     summaries: Vec<Rc<RefCell<PortConnectivity<<G::Timestamp as Timestamp>::Summary>>>>,
     produced: Vec<Rc<RefCell<ChangeBatch<G::Timestamp>>>>,
-    logging: Option<Logger>,
 }
 
 impl<G: Scope> OperatorBuilder<G> {
 
     /// Allocates a new generic operator builder from its containing scope.
     pub fn new(name: String, scope: G) -> Self {
-        let logging = scope.logging();
         OperatorBuilder {
             builder: OperatorBuilderRaw::new(name, scope),
             frontier: Vec::new(),
@@ -50,7 +47,6 @@ impl<G: Scope> OperatorBuilder<G> {
             internal: Rc::new(RefCell::new(Vec::new())),
             summaries: Vec::new(),
             produced: Vec::new(),
-            logging,
         }
     }
 
@@ -90,7 +86,7 @@ impl<G: Scope> OperatorBuilder<G> {
         let shared_summary = Rc::new(RefCell::new(connection.into_iter().collect()));
         self.summaries.push(Rc::clone(&shared_summary));
 
-        new_input_handle(input, Rc::clone(&self.internal), shared_summary, self.logging.clone())
+        new_input_handle(input, Rc::clone(&self.internal), shared_summary)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
