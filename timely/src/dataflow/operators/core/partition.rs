@@ -6,7 +6,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::{Scope, StreamCore};
-use crate::{Data, PartialOrder};
+use crate::Data;
 
 /// Partition a stream of records into multiple streams.
 pub trait Partition<G: Scope, C: Container> {
@@ -78,11 +78,7 @@ impl<G: Scope, C: Container + Data> Partition<G, C> for StreamCore<G, C> {
                 todo.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
                 for (cap, mut data) in todo.drain(..) {
-                    let reset_sessions = match sessions_cap {
-                        Some(ref s_cap) => !PartialOrder::less_equal(s_cap.time(), cap.time()),
-                        None => true,
-                    };
-                    if reset_sessions {
+                    if sessions_cap.as_ref().map_or(true, |s_cap| s_cap.time() != cap.time()) {
                         sessions = handles.iter_mut().map(SessionState::Handle).collect();
                         sessions_cap = Some(cap);
                     }
