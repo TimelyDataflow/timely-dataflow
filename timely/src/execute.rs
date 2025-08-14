@@ -4,6 +4,7 @@ use crate::communication::{initialize_from, Allocator, allocator::AllocateBuilde
 use crate::dataflow::scopes::Child;
 use crate::worker::Worker;
 use crate::{CommunicationConfig, WorkerConfig};
+use crate::progress::SubgraphBuilder;
 
 /// Configures the execution of a timely dataflow computation.
 #[derive(Clone, Debug)]
@@ -122,7 +123,7 @@ impl Config {
 pub fn example<T, F>(func: F) -> T
 where
     T: Send+'static,
-    F: FnOnce(&mut Child<Worker<crate::communication::allocator::thread::Thread>,u64>)->T+Send+Sync+'static
+    F: FnOnce(&mut Child<Worker<crate::communication::allocator::thread::Thread>,u64,SubgraphBuilder<(),u64>>)->T+Send+Sync+'static
 {
     crate::execute::execute_directly(|worker| worker.dataflow(|scope| func(scope)))
 }
