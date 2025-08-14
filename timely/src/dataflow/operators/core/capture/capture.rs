@@ -29,7 +29,7 @@ pub trait Capture<T: Timestamp, C: Container + Data> {
     /// use std::rc::Rc;
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
+    /// use timely::dataflow::operators::{Capture, ToStream};
     /// use timely::dataflow::operators::capture::{EventLink, Replay, Extract};
     ///
     /// // get send and recv endpoints, wrap send to share
@@ -69,7 +69,7 @@ pub trait Capture<T: Timestamp, C: Container + Data> {
     /// use std::net::{TcpListener, TcpStream};
     /// use std::sync::{Arc, Mutex};
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{Capture, ToStream, Inspect};
+    /// use timely::dataflow::operators::{Capture, ToStream};
     /// use timely::dataflow::operators::capture::{EventReader, EventWriter, Replay, Extract};
     ///
     /// # #[cfg(miri)] fn main() {}
@@ -79,30 +79,26 @@ pub trait Capture<T: Timestamp, C: Container + Data> {
     /// let (send0, recv0) = ::std::sync::mpsc::channel();
     /// let send0 = Arc::new(Mutex::new(send0));
     ///
-    /// timely::execute(timely::Config::thread(), move |worker| {
+    /// // these allow us to capture / replay a timely stream.
+    /// let list = TcpListener::bind("127.0.0.1:8001").unwrap();
+    /// let send = TcpStream::connect("127.0.0.1:8001").unwrap();
+    /// let recv = list.incoming().next().unwrap().unwrap();
+    /// recv.set_nonblocking(true).unwrap();
     ///
-    ///     // this is only to validate the output.
-    ///     let send0 = send0.lock().unwrap().clone();
-    ///
-    ///     // these allow us to capture / replay a timely stream.
-    ///     let list = TcpListener::bind("127.0.0.1:8001").unwrap();
-    ///     let send = TcpStream::connect("127.0.0.1:8001").unwrap();
-    ///     let recv = list.incoming().next().unwrap().unwrap();
-    ///
-    ///     recv.set_nonblocking(true).unwrap();
-    ///
-    ///     worker.dataflow::<u64,_,_>(|scope1|
+    /// std::thread::scope(move |s| {
+    ///     s.spawn(move || timely::example(move |scope1| {
     ///         (0..10u64)
     ///             .to_stream(scope1)
     ///             .capture_into(EventWriter::new(send))
-    ///     );
-    ///
-    ///     worker.dataflow::<u64,_,_>(|scope2| {
+    ///     }));
+    ///     s.spawn(move || timely::example(move |scope2| {
+    ///         // this is only to validate the output.
+    ///         let send0 = send0.lock().unwrap().clone();
     ///         Some(EventReader::<_,Vec<u64>,_>::new(recv))
     ///             .replay_into(scope2)
     ///             .capture_into(send0)
-    ///     });
-    /// }).unwrap();
+    ///     }));
+    /// });
     ///
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// # }
