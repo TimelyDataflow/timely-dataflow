@@ -132,8 +132,12 @@ pub mod link {
 pub mod binary {
 
     use std::borrow::Cow;
+    use std::io::ErrorKind;
+    use std::ops::DerefMut;
+    use std::sync::Arc;
 
     use serde::{de::DeserializeOwned, Serialize};
+    use timely_communication::allocator::zero_copy::bytes_slab::{BytesRefill, BytesSlab};
 
     use super::{Event, EventPusher, EventIterator};
 
@@ -156,30 +160,62 @@ pub mod binary {
     impl<T: Serialize, C: Serialize, W: ::std::io::Write> EventPusher<T, C> for EventWriter<T, C, W> {
         fn push(&mut self, event: Event<T, C>) {
             // TODO: `push` has no mechanism to report errors, so we `unwrap`.
-            ::bincode::serialize_into(&mut self.stream, &event).expect("Event bincode/write failed");
+            let len = ::bincode::serialized_size(&event).expect("Event bincode failed");
+            self.stream.write_all(&len.to_le_bytes()).expect("Event write failed");
+            ::bincode::serialize_into(&mut self.stream, &event).expect("Event bincode failed");
         }
     }
 
     /// A Wrapper for `R: Read` implementing `EventIterator<T, D>`.
     pub struct EventReader<T, C, R: ::std::io::Read> {
         reader: R,
-        decoded: Option<Event<T, C>>,
+        buf: BytesSlab,
+        phant: ::std::marker::PhantomData<(T, C)>,
     }
 
     impl<T, C, R: ::std::io::Read> EventReader<T, C, R> {
         /// Allocates a new `EventReader` wrapping a supplied reader.
         pub fn new(r: R) -> Self {
+            let refill = BytesRefill {
+                logic: Arc::new(|size| {
+                    Box::new(vec![0_u8; size]) as Box<dyn DerefMut<Target = [u8]>>
+                }),
+                limit: None,
+            };
             Self {
                 reader: r,
-                decoded: None,
+                buf: BytesSlab::new(20, refill),
+                phant: ::std::marker::PhantomData,
             }
         }
     }
 
     impl<T: DeserializeOwned + Clone, C: DeserializeOwned + Clone, R: ::std::io::Read> EventIterator<T, C> for EventReader<T, C, R> {
         fn next(&mut self) -> Option<Cow<'_, Event<T, C>>> {
-            self.decoded = ::bincode::deserialize_from(&mut self.reader).ok();
-            self.decoded.take().map(Cow::Owned)
+            self.buf.ensure_capacity(1);
+            // Attempt to read some more bytes into self.buffer.
+            match self.reader.read(self.buf.empty()) {
+                Ok(n) => self.buf.make_valid(n),
+                Err(e) if e.kind() == ErrorKind::WouldBlock => {}
+                Err(e) => panic!("read failed: {e}"),
+            };
+
+            let valid = self.buf.valid();
+            if valid.len() >= 8 {
+                let event_len = u64::from_le_bytes([
+                    valid[0], valid[1], valid[2], valid[3], valid[4], valid[5], valid[6], valid[7],
+                ]);
+                let required_bytes = (event_len + 8) as usize;
+                if valid.len() >= required_bytes {
+                    let bytes = self.buf.extract(required_bytes);
+                    let event = ::bincode::deserialize(&bytes[8..]).expect("Event decode failed");
+                    Some(Cow::Owned(event))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         }
     }
 }
