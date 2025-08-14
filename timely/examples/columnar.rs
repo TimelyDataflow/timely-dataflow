@@ -135,7 +135,7 @@ mod container {
     // The clone implementation moves out of the `Bytes` variant into `Align`.
     // This is optional and non-optimal, as the bytes clone is relatively free.
     // But, we don't want to leak the uses of `Bytes`, is why we do this I think.
-    impl<C: Clone> Clone for Column<C> where C: Clone {
+    impl<C: columnar::Container> Clone for Column<C> where C: Clone {
         fn clone(&self) -> Self {
             match self {
                 Column::Typed(t) => Column::Typed(t.clone()),
@@ -146,6 +146,18 @@ mod container {
                     Self::Align(alloc.into())
                 },
                 Column::Align(a) => Column::Align(a.clone()),
+            }
+        }
+        fn clone_from(&mut self, other: &Self) {
+            match (self, other) {
+                (Column::Typed(t0), Column::Typed(t1)) => {
+                    // Derived `Clone` implementations for e.g. tuples cannot be relied on to call `clone_from`.
+                    let t1 = t1.borrow();
+                    t0.clear();
+                    t0.extend_from_self(t1, 0..t1.len());
+                }
+                (Column::Align(a0), Column::Align(a1)) => { a0.clone_from(a1); }
+                (x, y) => { *x = y.clone(); }
             }
         }
     }
