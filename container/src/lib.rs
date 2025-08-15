@@ -22,12 +22,6 @@ pub trait Container: Default {
     /// The type of elements when draining the container.
     type Item<'a> where Self: 'a;
 
-    /// Push `item` into self
-    #[inline]
-    fn push<T>(&mut self, item: T) where Self: PushInto<T> {
-        self.push_into(item)
-    }
-
     /// The number of elements in this container
     ///
     /// This number is used in progress tracking to confirm the receipt of some number
@@ -165,7 +159,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
         self.current.ensure_capacity(&mut self.empty);
 
         // Push item
-        self.current.push(item);
+        self.current.push_into(item);
 
         // Maybe flush
         if self.current.at_capacity() {
