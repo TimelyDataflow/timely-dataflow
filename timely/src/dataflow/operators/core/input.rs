@@ -392,7 +392,6 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
                 Message::push_at(container, now_at.clone(), &mut pushers[index]);
             }
         }
-        container.clear();
     }
 
     /// Closes the current epoch, flushing if needed, shutting if needed, and updating the frontier.

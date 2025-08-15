@@ -51,7 +51,6 @@ impl<T, C: Container> Message<T, C> {
 
         if let Some(message) = bundle {
             *buffer = message.data;
-            buffer.clear();
         }
     }
 }

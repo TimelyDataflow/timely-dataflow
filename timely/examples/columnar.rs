@@ -179,15 +179,6 @@ mod container {
 
     impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
         fn len(&self) -> usize { self.borrow().len() }
-        // This sets `self` to be an empty `Typed` variant, appropriate for pushing into.
-        fn clear(&mut self) {
-            match self {
-                Column::Typed(t) => t.clear(),
-                Column::Bytes(_) => *self = Column::Typed(Default::default()),
-                Column::Align(_) => *self = Column::Typed(Default::default()),
-            }
-        }
-
         type ItemRef<'a> = C::Ref<'a>;
         type Iter<'a> = IterOwn<C::Borrowed<'a>>;
         fn iter<'a>(&'a self) -> Self::Iter<'a> { self.borrow().into_index_iter() }

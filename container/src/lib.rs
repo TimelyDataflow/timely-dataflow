@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 /// A container transferring data through dataflow edges
 ///
 /// A container stores a number of elements and thus is able to describe it length (`len()`) and
-/// whether it is empty (`is_empty()`). It supports removing all elements (`clear`).
+/// whether it is empty (`is_empty()`).
 ///
 /// A container must implement default. The default implementation is not required to allocate
 /// memory for variable-length components.
@@ -15,6 +15,10 @@ use std::collections::VecDeque;
 /// We require the container to be cloneable to enable efficient copies when providing references
 /// of containers to operators. Care must be taken that the type's `clone_from` implementation
 /// is efficient (which is not necessarily the case when deriving `Clone`.)
+// The container is `Default` because `CapacityContainerBuilder` only implements `ContainerBuilder`
+// for containers that implement `Default`, and we use the associated `::Container` all over Timely.
+// We can only access the type if all requirements for the `ContainerBuilder` implementation are
+// satisfied.
 pub trait Container: Default {
     /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
@@ -34,10 +38,6 @@ pub trait Container: Default {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
-    /// Remove all contents from `self` while retaining allocated memory.
-    /// After calling `clear`, `is_empty` must return `true` and `len` 0.
-    fn clear(&mut self);
 
     /// Iterator type when reading from the container.
     type Iter<'a>: Iterator<Item=Self::ItemRef<'a>> where Self: 'a;
@@ -96,6 +96,8 @@ pub trait PushInto<T> {
 /// decide to represent a push order for `extract` and `finish`, or not.
 pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
+    // The container is `Clone` because `Tee` requires it, otherwise we need to repeat it
+    // all over Timely. `'static` because we don't want lifetimes everywhere.
     type Container: Container + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
@@ -117,7 +119,6 @@ pub trait ContainerBuilder: Default + 'static {
             let index = index(&datum);
             builders[index].push_into(datum);
         }
-        container.clear();
     }
 
     /// Indicates a good moment to release resources.
@@ -205,8 +206,6 @@ impl<T> Container for Vec<T> {
         Vec::is_empty(self)
     }
 
-    fn clear(&mut self) { Vec::clear(self) }
-
     type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
 
     fn iter(&self) -> Self::Iter<'_> {
@@ -276,15 +275,6 @@ mod rc {
             std::ops::Deref::deref(self).is_empty()
         }
 
-        fn clear(&mut self) {
-            // Try to reuse the allocation if possible
-            if let Some(inner) = Rc::get_mut(self) {
-                inner.clear();
-            } else {
-                *self = Self::default();
-            }
-        }
-
         type Iter<'a> = T::Iter<'a> where Self: 'a;
 
         fn iter(&self) -> Self::Iter<'_> {
@@ -315,15 +305,6 @@ mod arc {
 
         fn is_empty(&self) -> bool {
             std::ops::Deref::deref(self).is_empty()
-        }
-
-        fn clear(&mut self) {
-            // Try to reuse the allocation if possible
-            if let Some(inner) = Arc::get_mut(self) {
-                inner.clear();
-            } else {
-                *self = Self::default();
-            }
         }
 
         type Iter<'a> = T::Iter<'a> where Self: 'a;
