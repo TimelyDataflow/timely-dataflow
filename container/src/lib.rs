@@ -20,12 +20,6 @@ use std::collections::VecDeque;
 // We can only access the type if all requirements for the `ContainerBuilder` implementation are
 // satisfied.
 pub trait Container: Default {
-    /// The type of elements when reading non-destructively from the container.
-    type ItemRef<'a> where Self: 'a;
-
-    /// The type of elements when draining the container.
-    type Item<'a> where Self: 'a;
-
     /// The number of elements in this container
     ///
     /// This number is used in progress tracking to confirm the receipt of some number
@@ -38,16 +32,24 @@ pub trait Container: Default {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+}
 
+/// TODO
+pub trait IterContainer {
+    /// The type of elements when reading non-destructively from the container.
+    type ItemRef<'a> where Self: 'a;
     /// Iterator type when reading from the container.
     type Iter<'a>: Iterator<Item=Self::ItemRef<'a>> where Self: 'a;
-
     /// Returns an iterator that reads the contents of this container.
     fn iter(&self) -> Self::Iter<'_>;
+}
 
+/// TODO
+pub trait DrainContainer {
+    /// The type of elements when draining the container.
+    type Item<'a> where Self: 'a;
     /// Iterator type when draining the container.
     type DrainIter<'a>: Iterator<Item=Self::Item<'a>> where Self: 'a;
-
     /// Returns an iterator that drains the contents of this container.
     /// Drain leaves the container in an undefined state.
     fn drain(&mut self) -> Self::DrainIter<'_>;
@@ -112,8 +114,9 @@ pub trait ContainerBuilder: Default + 'static {
     /// Partitions `container` among `builders`, using the function `index` to direct items.
     fn partition<I>(container: &mut Self::Container, builders: &mut [Self], mut index: I)
     where
-        Self: for<'a> PushInto<<Self::Container as Container>::Item<'a>>,
-        I: for<'a> FnMut(&<Self::Container as Container>::Item<'a>) -> usize,
+        Self::Container: DrainContainer,
+        Self: for<'a> PushInto<<Self::Container as DrainContainer>::Item<'a>>,
+        I: for<'a> FnMut(&<Self::Container as DrainContainer>::Item<'a>) -> usize,
     {
         for datum in container.drain() {
             let index = index(&datum);
@@ -195,25 +198,25 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
 impl<C: Container + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
 impl<T> Container for Vec<T> {
-    type ItemRef<'a> = &'a T where T: 'a;
-    type Item<'a> = T where T: 'a;
-
     fn len(&self) -> usize {
         Vec::len(self)
     }
-
     fn is_empty(&self) -> bool {
         Vec::is_empty(self)
     }
+}
 
+impl<T> IterContainer for Vec<T> {
+    type ItemRef<'a> = &'a T where T: 'a;
     type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
-
     fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
+}
 
+impl<T> DrainContainer for Vec<T> {
+    type Item<'a> = T where T: 'a;
     type DrainIter<'a> = std::vec::Drain<'a, T> where Self: 'a;
-
     fn drain(&mut self) -> Self::DrainIter<'_> {
         self.drain(..)
     }
@@ -261,31 +264,25 @@ mod rc {
     use std::ops::Deref;
     use std::rc::Rc;
 
-    use crate::Container;
+    use crate::{Container, IterContainer, DrainContainer};
 
     impl<T: Container> Container for Rc<T> {
-        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
-        type Item<'a> = T::ItemRef<'a> where Self: 'a;
-
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
         }
-
         fn is_empty(&self) -> bool {
             std::ops::Deref::deref(self).is_empty()
         }
-
+    }
+    impl<T: IterContainer> IterContainer for Rc<T> {
+        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;
-
-        fn iter(&self) -> Self::Iter<'_> {
-            self.deref().iter()
-        }
-
+        fn iter(&self) -> Self::Iter<'_> { self.deref().iter() }
+    }
+    impl<T: IterContainer> DrainContainer for Rc<T> {
+        type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type DrainIter<'a> = T::Iter<'a> where Self: 'a;
-
-        fn drain(&mut self) -> Self::DrainIter<'_> {
-            self.iter()
-        }
+        fn drain(&mut self) -> Self::DrainIter<'_> { self.iter() }
     }
 }
 
@@ -293,31 +290,21 @@ mod arc {
     use std::ops::Deref;
     use std::sync::Arc;
 
-    use crate::Container;
+    use crate::{Container, IterContainer, DrainContainer};
 
     impl<T: Container> Container for Arc<T> {
+        fn len(&self) -> usize { std::ops::Deref::deref(self).len() }
+        fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
+    }
+    impl<T: IterContainer> IterContainer for Arc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
-        type Item<'a> = T::ItemRef<'a> where Self: 'a;
-
-        fn len(&self) -> usize {
-            std::ops::Deref::deref(self).len()
-        }
-
-        fn is_empty(&self) -> bool {
-            std::ops::Deref::deref(self).is_empty()
-        }
-
         type Iter<'a> = T::Iter<'a> where Self: 'a;
-
-        fn iter(&self) -> Self::Iter<'_> {
-            self.deref().iter()
-        }
-
+        fn iter(&self) -> Self::Iter<'_> { self.deref().iter() }
+    }
+    impl<T: IterContainer> DrainContainer for Arc<T> {
+        type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type DrainIter<'a> = T::Iter<'a> where Self: 'a;
-
-        fn drain(&mut self) -> Self::DrainIter<'_> {
-            self.iter()
-        }
+        fn drain(&mut self) -> Self::DrainIter<'_> { self.iter() }
     }
 }
 

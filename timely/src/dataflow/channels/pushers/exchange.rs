@@ -3,15 +3,17 @@
 use crate::communication::Push;
 use crate::container::{ContainerBuilder, PushInto};
 use crate::dataflow::channels::Message;
-use crate::{Container, Data};
+use crate::Data;
+use crate::container::DrainContainer;
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distribution function.
 pub struct Exchange<T, CB, P, H>
 where
     CB: ContainerBuilder,
+    CB::Container: DrainContainer,
     P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64
 {
     pushers: Vec<P>,
     builders: Vec<CB>,
@@ -22,8 +24,9 @@ where
 impl<T: Clone, CB, P, H>  Exchange<T, CB, P, H>
 where
     CB: ContainerBuilder,
+    CB::Container: DrainContainer,
     P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64
 {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, CB, P, H> {
@@ -48,9 +51,10 @@ where
 impl<T: Eq+Data, CB, P, H> Push<Message<T, CB::Container>> for Exchange<T, CB, P, H>
 where
     CB: ContainerBuilder,
-    CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
+    CB::Container: DrainContainer,
+    CB: for<'a> PushInto<<CB::Container as DrainContainer>::Item<'a>>,
     P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64
 {
     #[inline(never)]
     fn push(&mut self, message: &mut Option<Message<T, CB::Container>>) {

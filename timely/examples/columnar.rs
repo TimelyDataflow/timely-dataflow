@@ -1,13 +1,12 @@
 //! Wordcount based on the `columnar` crate.
 
-use {
-    std::collections::HashMap,
-    timely::{Container, container::CapacityContainerBuilder},
-    timely::dataflow::channels::pact::{ExchangeCore, Pipeline},
-    timely::dataflow::InputHandleCore,
-    timely::dataflow::operators::{Inspect, Operator, Probe},
-    timely::dataflow::ProbeHandle,
-};
+use std::collections::HashMap;
+
+use timely::container::{IterContainer, CapacityContainerBuilder};
+use timely::dataflow::channels::pact::{ExchangeCore, Pipeline};
+use timely::dataflow::InputHandleCore;
+use timely::dataflow::operators::{Inspect, Operator, Probe};
+use timely::dataflow::ProbeHandle;
 
 // Creates `WordCountContainer` and `WordCountReference` structs,
 // as well as various implementations relating them to `WordCount`.
@@ -179,10 +178,13 @@ mod container {
 
     impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
         fn len(&self) -> usize { self.borrow().len() }
+    }
+    impl<C: columnar::ContainerBytes> timely::container::IterContainer for Column<C> {
         type ItemRef<'a> = C::Ref<'a>;
         type Iter<'a> = IterOwn<C::Borrowed<'a>>;
         fn iter<'a>(&'a self) -> Self::Iter<'a> { self.borrow().into_index_iter() }
-
+    }
+    impl<C: columnar::ContainerBytes> timely::container::DrainContainer for Column<C> {
         type Item<'a> = C::Ref<'a>;
         type DrainIter<'a> = IterOwn<C::Borrowed<'a>>;
         fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> { self.borrow().into_index_iter() }

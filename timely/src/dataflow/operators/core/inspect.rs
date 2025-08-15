@@ -1,12 +1,13 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
 use crate::{Container, Data};
+use crate::container::IterContainer;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
-pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
+pub trait Inspect<G: Scope, C: IterContainer>: InspectCore<G, C> + Sized {
     /// Runs a supplied closure on each observed data element.
     ///
     /// # Examples
@@ -90,14 +91,14 @@ pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
     fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container + Data> Inspect<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container + IterContainer + Data> Inspect<G, C> for StreamCore<G, C> {
     fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
         self.inspect_container(func)
     }
 }
 
 /// Inspect containers
-pub trait InspectCore<G: Scope, C: Container> {
+pub trait InspectCore<G: Scope, C: IterContainer> {
     /// Runs a supplied closure on each observed container, and each frontier advancement.
     ///
     /// Rust's `Result` type is used to distinguish the events, with `Ok` for time and data,
@@ -120,7 +121,7 @@ pub trait InspectCore<G: Scope, C: Container> {
     fn inspect_container<F>(&self, func: F) -> StreamCore<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container + Data> InspectCore<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container + IterContainer + Data> InspectCore<G, C> for StreamCore<G, C> {
 
     fn inspect_container<F>(&self, mut func: F) -> StreamCore<G, C>
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static

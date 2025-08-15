@@ -10,7 +10,8 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use std::rc::Rc;
 
-use crate::{Container, container::{ContainerBuilder, LengthPreservingContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto}};
+use crate::Container;
+use crate::container::{ContainerBuilder, DrainContainer, LengthPreservingContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -53,7 +54,8 @@ pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 impl<CB, F> ExchangeCore<CB, F>
 where
     CB: LengthPreservingContainerBuilder,
-    for<'a> F: FnMut(&<CB::Container as Container>::Item<'a>)->u64
+    CB::Container: DrainContainer,
+    for<'a> F: FnMut(&<CB::Container as DrainContainer>::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new_core(func: F) -> ExchangeCore<CB, F> {
@@ -66,7 +68,7 @@ where
 
 impl<C, F> ExchangeCore<CapacityContainerBuilder<C>, F>
 where
-    C: SizableContainer,
+    C: SizableContainer + DrainContainer,
     for<'a> F: FnMut(&C::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
@@ -82,9 +84,10 @@ where
 impl<T: Timestamp, CB, H: 'static> ParallelizationContract<T, CB::Container> for ExchangeCore<CB, H>
 where
     CB: ContainerBuilder,
-    CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
+    CB::Container: DrainContainer,
+    CB: for<'a> PushInto<<CB::Container as DrainContainer>::Item<'a>>,
     CB::Container: Data + Send + crate::dataflow::channels::ContainerBytes,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, CB, LogPusher<Box<dyn Push<Message<T, CB::Container>>>>, H>;
     type Puller = LogPuller<Box<dyn Pull<Message<T, CB::Container>>>>;

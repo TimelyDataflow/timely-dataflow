@@ -1,13 +1,13 @@
 //! Extension methods for `StreamCore` based on record-by-record transformation.
 
-use crate::container::{Container, SizableContainer, PushInto};
+use crate::container::{Container, DrainContainer, SizableContainer, PushInto};
 use crate::Data;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for `Stream`.
-pub trait Map<S: Scope, C: Container> {
+pub trait Map<S: Scope, C: DrainContainer> {
     /// Consumes each element of the stream and yields a new element.
     ///
     /// # Examples
@@ -51,7 +51,7 @@ pub trait Map<S: Scope, C: Container> {
     ;
 }
 
-impl<S: Scope, C: Container + Data> Map<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + DrainContainer + Data> Map<S, C> for StreamCore<S, C> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
