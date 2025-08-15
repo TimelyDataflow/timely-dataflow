@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.5...timely-v0.22.0) - 2025-08-15
+
+### Other
+
+- Merge pull request #687 from antiguru/exchange_new
+- Manually implement
+- use length prefixed encoding to reliably receive events
+- eliminate moving in and out of sessions
+- replace custom enum with Result
+- use less unreachable statements
+- emit data with the same capability they came in with
+- process input in sorted time order
+- lazily create and then reuse output sessions
+- Deflake tests by avoiding port conflict
+- Remove GuardedProgressEvent
+- Remove GuardedMessageEvent
+- Update timely/src/dataflow/operators/capability.rs
+- Avoid capability validity scan with explicit index
+- Downgrade capability validity test to debug_assert
+
 ## [0.21.5](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.4...timely-v0.21.5) - 2025-08-05
 
 ### Other
