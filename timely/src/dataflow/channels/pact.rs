@@ -35,8 +35,8 @@ pub trait ParallelizationContract<T, C> {
 pub struct Pipeline;
 
 impl<T: 'static, C: Container + 'static> ParallelizationContract<T, C> for Pipeline {
-    type Pusher = LogPusher<T, C, ThreadPusher<Message<T, C>>>;
-    type Puller = LogPuller<T, C, ThreadPuller<Message<T, C>>>;
+    type Pusher = LogPusher<ThreadPusher<Message<T, C>>>;
+    type Puller = LogPuller<ThreadPuller<Message<T, C>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (pusher, puller) = allocator.pipeline::<Message<T, C>>(identifier, address);
         (LogPusher::new(pusher, allocator.index(), allocator.index(), identifier, logging.clone()),
@@ -86,8 +86,8 @@ where
     CB::Container: Data + Send + crate::dataflow::channels::ContainerBytes,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
 {
-    type Pusher = ExchangePusher<T, CB, LogPusher<T, CB::Container, Box<dyn Push<Message<T, CB::Container>>>>, H>;
-    type Puller = LogPuller<T, CB::Container, Box<dyn Pull<Message<T, CB::Container>>>>;
+    type Pusher = ExchangePusher<T, CB, LogPusher<Box<dyn Push<Message<T, CB::Container>>>>, H>;
+    type Puller = LogPuller<Box<dyn Pull<Message<T, CB::Container>>>>;
 
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, CB::Container>>(identifier, address);
@@ -104,17 +104,16 @@ impl<C, F> Debug for ExchangeCore<C, F> {
 
 /// Wraps a `Message<T,D>` pusher to provide a `Push<(T, Content<D>)>`.
 #[derive(Debug)]
-pub struct LogPusher<T, C, P: Push<Message<T, C>>> {
+pub struct LogPusher<P> {
     pusher: P,
     channel: usize,
     counter: usize,
     source: usize,
     target: usize,
-    phantom: PhantomData<(T, C)>,
     logging: Option<Logger>,
 }
 
-impl<T, C, P: Push<Message<T, C>>> LogPusher<T, C, P> {
+impl<P> LogPusher<P> {
     /// Allocates a new pusher.
     pub fn new(pusher: P, source: usize, target: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPusher {
@@ -123,13 +122,12 @@ impl<T, C, P: Push<Message<T, C>>> LogPusher<T, C, P> {
             counter: 0,
             source,
             target,
-            phantom: PhantomData,
             logging,
         }
     }
 }
 
-impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<T, C, P> {
+impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<P> {
     #[inline]
     fn push(&mut self, pair: &mut Option<Message<T, C>>) {
         if let Some(bundle) = pair {
@@ -158,28 +156,26 @@ impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<
 
 /// Wraps a `Message<T,D>` puller to provide a `Pull<(T, Content<D>)>`.
 #[derive(Debug)]
-pub struct LogPuller<T, C, P: Pull<Message<T, C>>> {
+pub struct LogPuller<P> {
     puller: P,
     channel: usize,
     index: usize,
-    phantom: PhantomData<(T, C)>,
     logging: Option<Logger>,
 }
 
-impl<T, C, P: Pull<Message<T, C>>> LogPuller<T, C, P> {
+impl<P> LogPuller<P> {
     /// Allocates a new `Puller`.
     pub fn new(puller: P, index: usize, channel: usize, logging: Option<Logger>) -> Self {
         LogPuller {
             puller,
             channel,
             index,
-            phantom: PhantomData,
             logging,
         }
     }
 }
 
-impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<T, C, P> {
+impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<P> {
     #[inline]
     fn pull(&mut self) -> &mut Option<Message<T, C>> {
         let result = self.puller.pull();
