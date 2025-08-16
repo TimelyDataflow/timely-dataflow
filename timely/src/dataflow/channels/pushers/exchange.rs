@@ -3,7 +3,7 @@
 use crate::communication::Push;
 use crate::container::{ContainerBuilder, PushInto};
 use crate::dataflow::channels::Message;
-use crate::{Container, Data};
+use crate::Container;
 
 /// Distribute containers to several pushers.
 ///
@@ -32,9 +32,9 @@ pub struct DrainContainerDistributor<CB, T, P, H> {
 }
 
 impl<CB: Default, T, P, H> DrainContainerDistributor<CB, T, P, H> {
-    /// Allocates a new `DrainContainerPartitioner` with the given pusher count and hash function.
+    /// Constructs a new `DrainContainerDistributor` with the given hash function.
     pub fn new(hash_func: H) -> Self {
-        DrainContainerDistributor {
+        Self {
             builders: Vec::new(),
             hash_func,
             _phantom: std::marker::PhantomData,
@@ -98,11 +98,7 @@ pub struct Exchange<T, C, P, D> {
     _phantom: std::marker::PhantomData<C>,
 }
 
-impl<T: Clone, C, P, D>  Exchange<T, C, P, D>
-where
-    P: Push<Message<T, C>>,
-    D: Distributor<T, C, P>,
-{
+impl<T: Clone, C, P, D>  Exchange<T, C, P, D> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distributor.
     pub fn new(pushers: Vec<P>, distributor: D) -> Exchange<T, C, P, D> {
         Exchange {
@@ -114,7 +110,7 @@ where
     }
 }
 
-impl<T: Eq+Data, C, P, D> Push<Message<T, C>> for Exchange<T, C, P, D>
+impl<T: Eq+Clone, C, P, D> Push<Message<T, C>> for Exchange<T, C, P, D>
 where
     P: Push<Message<T, C>>,
     D: Distributor<T, C, P>,
@@ -131,17 +127,24 @@ where
             let data = &mut message.data;
 
             // if the time isn't right, flush everything.
-            if self.current.as_ref().is_some_and(|x| x != time) {
-                self.distributor.flush(time, &mut self.pushers);
+            match self.current.as_ref() {
+                // We have a current time, and it is different from the new time.
+                Some(current_time) if current_time != time => {
+                    self.distributor.flush(current_time, &mut self.pushers);
+                    self.current = Some(time.clone());
+                }
+                // We had no time before, or flushed.
+                None => self.current = Some(time.clone()),
+                // Time didn't change since last call.
+                _ => {}
             }
-            self.current = Some(time.clone());
 
             self.distributor.partition(data, time, &mut self.pushers);
         }
         else {
             // flush
-            if let Some(time) = self.current.as_ref() {
-                self.distributor.flush(time, &mut self.pushers);
+            if let Some(time) = self.current.take() {
+                self.distributor.flush(&time, &mut self.pushers);
             }
             self.distributor.relax();
             for index in 0..self.pushers.len() {
