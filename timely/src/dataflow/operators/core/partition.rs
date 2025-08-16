@@ -5,7 +5,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::{Scope, StreamCore};
-use crate::{Container, Data};
+use crate::{WithProgress, Data};
 
 /// Partition a stream of records into multiple streams.
 pub trait Partition<G: Scope, C: DrainContainer> {
@@ -34,7 +34,7 @@ pub trait Partition<G: Scope, C: DrainContainer> {
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static;
 }
 
-impl<G: Scope, C: Container + DrainContainer + Data> Partition<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: WithProgress + DrainContainer + Data> Partition<G, C> for StreamCore<G, C> {
     fn partition<CB, D2, F>(&self, parts: u64, mut route: F) -> Vec<StreamCore<G, CB::Container>>
     where
         CB: ContainerBuilder + PushInto<D2>,

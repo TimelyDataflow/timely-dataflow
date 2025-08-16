@@ -3,11 +3,11 @@
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::Operator;
 use crate::dataflow::{Scope, StreamCore};
-use crate::{Container, Data};
+use crate::{WithProgress, Data};
 use std::rc::Rc;
 
 /// Convert a stream into a stream of shared containers
-pub trait SharedStream<S: Scope, C: Container> {
+pub trait SharedStream<S: Scope, C: WithProgress> {
     /// Convert a stream into a stream of shared data
     ///
     /// # Examples
@@ -24,7 +24,7 @@ pub trait SharedStream<S: Scope, C: Container> {
     fn shared(&self) -> StreamCore<S, Rc<C>>;
 }
 
-impl<S: Scope, C: Container + Data> SharedStream<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: WithProgress + Data> SharedStream<S, C> for StreamCore<S, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {

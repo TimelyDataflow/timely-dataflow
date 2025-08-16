@@ -4,20 +4,21 @@
 
 use std::collections::VecDeque;
 
-/// A container transferring data through dataflow edges
+/// An object with effects on progress
 ///
-/// A container stores a number of updates and thus is able to describe it count
+/// The object stores a number of updates and thus is able to describe it count
 /// (`update_count()`) and whether it is empty (`is_empty()`). It is empty if the
 /// update count is zero.
 ///
-/// A container must implement default. The default implementation is not required to allocate
-/// memory for variable-length components.
+/// It must implement default for historic reason. The default implementation is not required
+/// to allocate memory for variable-length components.
+// TODO: Remove `Default` requirement in the future.
 // The container is `Default` because `CapacityContainerBuilder` only implements `ContainerBuilder`
 // for containers that implement `Default`, and we use the associated `::Container` all over Timely.
 // We can only access the type if all requirements for the `ContainerBuilder` implementation are
 // satisfied.
-pub trait Container: Default {
-    /// The number of updates in this container
+pub trait WithProgress: Default {
+    /// The number of updates
     ///
     /// This number is used in progress tracking to confirm the receipt of some number
     /// of outstanding updates, and it is highly load bearing. The main restriction is
@@ -25,7 +26,7 @@ pub trait Container: Default {
     /// must preserve the number of items.
     fn update_count(&self) -> i64;
 
-    /// Determine if the container contains any updates, corresponding to `update_count() == 0`.
+    /// Determine if this contains any updates, corresponding to `update_count() == 0`.
     #[inline] fn is_empty(&self) -> bool { self.update_count() == 0 }
 }
 
@@ -51,7 +52,7 @@ pub trait DrainContainer {
 }
 
 /// A container that can be sized and reveals its capacity.
-pub trait SizableContainer: Container {
+pub trait SizableContainer: WithProgress {
     /// Indicates that the container is "full" and should be shipped.
     fn at_capacity(&self) -> bool;
     /// Restores `self` to its desired capacity, if it has one.
@@ -95,7 +96,7 @@ pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
     // The container is `Clone` because `Tee` requires it, otherwise we need to repeat it
     // all over Timely. `'static` because we don't want lifetimes everywhere.
-    type Container: Container + Clone + 'static;
+    type Container: WithProgress + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -167,7 +168,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
     }
 }
 
-impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: WithProgress + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
@@ -190,9 +191,9 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
     }
 }
 
-impl<C: Container + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
+impl<C: WithProgress + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
-impl<T> Container for Vec<T> {
+impl<T> WithProgress for Vec<T> {
     #[inline] fn update_count(&self) -> i64 { i64::try_from(Vec::len(self)).unwrap() }
     #[inline] fn is_empty(&self) -> bool { Vec::is_empty(self) }
 }
@@ -255,9 +256,9 @@ mod rc {
     use std::ops::Deref;
     use std::rc::Rc;
 
-    use crate::{Container, IterContainer, DrainContainer};
+    use crate::{WithProgress, IterContainer, DrainContainer};
 
-    impl<T: Container> Container for Rc<T> {
+    impl<T: WithProgress> WithProgress for Rc<T> {
         #[inline] fn update_count(&self) -> i64 { std::ops::Deref::deref(self).update_count() }
         #[inline] fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
     }
@@ -277,9 +278,9 @@ mod arc {
     use std::ops::Deref;
     use std::sync::Arc;
 
-    use crate::{Container, IterContainer, DrainContainer};
+    use crate::{WithProgress, IterContainer, DrainContainer};
 
-    impl<T: Container> Container for Arc<T> {
+    impl<T: WithProgress> WithProgress for Arc<T> {
         #[inline] fn update_count(&self) -> i64 { std::ops::Deref::deref(self).update_count() }
         #[inline] fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
     }

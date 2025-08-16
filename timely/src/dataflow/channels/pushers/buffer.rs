@@ -6,7 +6,7 @@ use crate::container::{ContainerBuilder, CapacityContainerBuilder, PushInto};
 use crate::dataflow::channels::Message;
 use crate::dataflow::operators::Capability;
 use crate::progress::Timestamp;
-use crate::{Container, Data};
+use crate::{WithProgress, Data};
 
 /// Buffers data sent at the same time, for efficient communication.
 ///
@@ -44,7 +44,7 @@ impl<T, CB: Default, P> Buffer<T, CB, P> {
     }
 }
 
-impl<T, C: Container + Data, P: Push<Message<T, C>>> Buffer<T, CapacityContainerBuilder<C>, P> where T: Eq+Clone {
+impl<T, C: WithProgress + Data, P: Push<Message<T, C>>> Buffer<T, CapacityContainerBuilder<C>, P> where T: Eq+Clone {
     /// Returns a `Session`, which accepts data to send at the associated time
     #[inline]
     pub fn session(&mut self, time: &T) -> Session<'_, T, CapacityContainerBuilder<C>, P> {

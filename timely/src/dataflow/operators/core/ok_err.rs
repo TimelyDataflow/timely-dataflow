@@ -1,6 +1,6 @@
 //! Operators that separate one stream into two streams based on some condition
 
-use crate::{Container, Data};
+use crate::{WithProgress, Data};
 use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
@@ -39,7 +39,7 @@ pub trait OkErr<S: Scope, C: DrainContainer> {
     ;
 }
 
-impl<S: Scope, C: Container + DrainContainer + Data> OkErr<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: WithProgress + DrainContainer + Data> OkErr<S, C> for StreamCore<S, C> {
     fn ok_err<C1, D1, C2, D2, L>(
         &self,
         mut logic: L,
