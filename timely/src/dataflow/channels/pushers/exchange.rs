@@ -5,55 +5,122 @@ use crate::container::{ContainerBuilder, PushInto};
 use crate::dataflow::channels::Message;
 use crate::{Container, Data};
 
-// TODO : Software write combining
-/// Distributes records among target pushees according to a distribution function.
-pub struct Exchange<T, CB, P, H>
-where
-    CB: ContainerBuilder,
-    P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
-{
-    pushers: Vec<P>,
-    builders: Vec<CB>,
-    current: Option<T>,
-    hash_func: H,
+/// Distribute containers to several pushers.
+///
+/// A distributor sits behind an exchange pusher, and partitions containers at a given time
+/// into several pushers. It can use [`Message::push_at`] to push its outputs at the desired
+/// pusher.
+///
+/// It needs to uphold progress tracking requirements. The count of the input container
+/// must be preserved across the output containers, from the first call to `partition` until the
+/// call to `flush` for a specific time stamp.
+pub trait Distributor<T, C, P> {
+    /// Partition the contents of `container` at `time` into the `pushers`.
+    fn partition(&mut self, container: &mut C, time: &T, pushers: &mut [P]);
+    /// Flush any remaining contents into the `pushers` at time `time`.
+    fn flush(&mut self, time: &T, pushers: &mut [P]);
+    /// Optionally release resources, such as memory.
+    fn relax(&mut self);
 }
 
-impl<T: Clone, CB, P, H>  Exchange<T, CB, P, H>
-where
-    CB: ContainerBuilder,
-    P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
-{
-    /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
-    pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, CB, P, H> {
-        let builders = std::iter::repeat_with(Default::default).take(pushers.len()).collect();
-        Exchange {
-            pushers,
-            hash_func: key,
-            builders,
-            current: None,
+/// A distributor creating containers from a drainable container based
+/// on a hash function of the container's item.
+pub struct DrainContainerDistributor<CB, T, P, H> {
+    builders: Vec<CB>,
+    hash_func: H,
+    _phantom: std::marker::PhantomData<(T, P)>,
+}
+
+impl<CB: Default, T, P, H> DrainContainerDistributor<CB, T, P, H> {
+    /// Allocates a new `DrainContainerPartitioner` with the given pusher count and hash function.
+    pub fn new(hash_func: H) -> Self {
+        DrainContainerDistributor {
+            builders: Vec::new(),
+            hash_func,
+            _phantom: std::marker::PhantomData,
         }
     }
-    #[inline]
-    fn flush(&mut self, index: usize) {
-        while let Some(container) = self.builders[index].finish() {
-            if let Some(ref time) = self.current {
-                Message::push_at(container, time.clone(), &mut self.pushers[index]);
+}
+
+impl<CB, T, P, H> Distributor<T, CB::Container, P> for DrainContainerDistributor<CB, T, P, H>
+where
+    CB: ContainerBuilder + for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
+    CB::Container: Container,
+    T: Clone,
+    P: Push<Message<T, CB::Container>>,
+    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64,
+{
+    fn partition(&mut self, container: &mut CB::Container, time: &T, pushers: &mut [P]) {
+        self.builders.resize_with(pushers.len(), Default::default);
+        if pushers.len().is_power_of_two() {
+            let mask = (pushers.len() - 1) as u64;
+            for datum in container.drain() {
+                let index = ((self.hash_func)(&datum) & mask) as usize;
+                self.builders[index].push_into(datum);
+                while let Some(produced) = self.builders[index].extract() {
+                    Message::push_at(produced, time.clone(), &mut pushers[index]);
+                }
+            }
+        }
+        else {
+            let num_pushers = pushers.len() as u64;
+            for datum in container.drain() {
+                let index = ((self.hash_func)(&datum) % num_pushers) as usize;
+                self.builders[index].push_into(datum);
+                while let Some(produced) = self.builders[index].extract() {
+                    Message::push_at(produced, time.clone(), &mut pushers[index]);
+                }
             }
         }
     }
+
+    fn flush(&mut self, time: &T, pushers: &mut [P]) {
+        for (builder, pusher) in self.builders.iter_mut().zip(pushers.iter_mut()) {
+            while let Some(container) = builder.finish() {
+                Message::push_at(container, time.clone(), pusher);
+            }
+        }
+    }
+
+    fn relax(&mut self) {
+        for builder in &mut self.builders {
+            builder.relax();
+        }
+    }
 }
 
-impl<T: Eq+Data, CB, P, H> Push<Message<T, CB::Container>> for Exchange<T, CB, P, H>
+// TODO : Software write combining
+/// Distributes records among target pushees according to a distributor.
+pub struct Exchange<T, C, P, D> {
+    pushers: Vec<P>,
+    current: Option<T>,
+    distributor: D,
+    _phantom: std::marker::PhantomData<C>,
+}
+
+impl<T: Clone, C, P, D>  Exchange<T, C, P, D>
 where
-    CB: ContainerBuilder,
-    CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
-    P: Push<Message<T, CB::Container>>,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
+    P: Push<Message<T, C>>,
+    D: Distributor<T, C, P>,
+{
+    /// Allocates a new `Exchange` from a supplied set of pushers and a distributor.
+    pub fn new(pushers: Vec<P>, distributor: D) -> Exchange<T, C, P, D> {
+        Exchange {
+            pushers,
+            current: None,
+            distributor,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T: Eq+Data, C, P, D> Push<Message<T, C>> for Exchange<T, C, P, D>
+where
+    P: Push<Message<T, C>>,
+    D: Distributor<T, C, P>,
 {
     #[inline(never)]
-    fn push(&mut self, message: &mut Option<Message<T, CB::Container>>) {
+    fn push(&mut self, message: &mut Option<Message<T, C>>) {
         // if only one pusher, no exchange
         if self.pushers.len() == 1 {
             self.pushers[0].push(message);
@@ -65,35 +132,19 @@ where
 
             // if the time isn't right, flush everything.
             if self.current.as_ref().is_some_and(|x| x != time) {
-                for index in 0..self.pushers.len() {
-                    self.flush(index);
-                }
+                self.distributor.flush(time, &mut self.pushers);
             }
             self.current = Some(time.clone());
 
-            let hash_func = &mut self.hash_func;
-
-            // if the number of pushers is a power of two, use a mask
-            if self.pushers.len().is_power_of_two() {
-                let mask = (self.pushers.len() - 1) as u64;
-                CB::partition(data, &mut self.builders, |datum| ((hash_func)(datum) & mask) as usize);
-            }
-            // as a last resort, use mod (%)
-            else {
-                let num_pushers = self.pushers.len() as u64;
-                CB::partition(data, &mut self.builders, |datum| ((hash_func)(datum) % num_pushers) as usize);
-            }
-            for (buffer, pusher) in self.builders.iter_mut().zip(self.pushers.iter_mut()) {
-                while let Some(container) = buffer.extract() {
-                    Message::push_at(container, time.clone(), pusher);
-                }
-            }
+            self.distributor.partition(data, time, &mut self.pushers);
         }
         else {
             // flush
+            if let Some(time) = self.current.as_ref() {
+                self.distributor.flush(time, &mut self.pushers);
+            }
+            self.distributor.relax();
             for index in 0..self.pushers.len() {
-                self.flush(index);
-                self.builders[index].relax();
                 self.pushers[index].push(&mut None);
             }
         }
