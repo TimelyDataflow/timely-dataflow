@@ -148,7 +148,7 @@ impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<
                     source: self.source,
                     target: self.target,
                     seq_no: self.counter - 1,
-                    length: bundle.data.len(),
+                    update_count: bundle.data.update_count(),
                 })
             }
         }
@@ -193,7 +193,7 @@ impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<
                     source: bundle.from,
                     target,
                     seq_no: bundle.seq,
-                    length: bundle.data.len(),
+                    update_count: bundle.data.update_count(),
                 });
             }
         }

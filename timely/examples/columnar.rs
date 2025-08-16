@@ -177,7 +177,8 @@ mod container {
     }
 
     impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
-        fn len(&self) -> usize { self.borrow().len() }
+        #[inline] fn update_count(&self) -> i64 { i64::try_from(self.borrow().len()).unwrap() }
+        #[inline] fn is_empty(&self) -> bool { self.borrow().is_empty() }
     }
     impl<C: columnar::ContainerBytes> timely::container::IterContainer for Column<C> {
         type ItemRef<'a> = C::Ref<'a>;

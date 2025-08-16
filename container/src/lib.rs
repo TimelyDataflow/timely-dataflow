@@ -6,32 +6,27 @@ use std::collections::VecDeque;
 
 /// A container transferring data through dataflow edges
 ///
-/// A container stores a number of elements and thus is able to describe it length (`len()`) and
-/// whether it is empty (`is_empty()`).
+/// A container stores a number of updates and thus is able to describe it count
+/// (`update_count()`) and whether it is empty (`is_empty()`). It is empty if the
+/// update count is zero.
 ///
 /// A container must implement default. The default implementation is not required to allocate
 /// memory for variable-length components.
-///
-/// We require the container to be cloneable to enable efficient copies when providing references
-/// of containers to operators. Care must be taken that the type's `clone_from` implementation
-/// is efficient (which is not necessarily the case when deriving `Clone`.)
 // The container is `Default` because `CapacityContainerBuilder` only implements `ContainerBuilder`
 // for containers that implement `Default`, and we use the associated `::Container` all over Timely.
 // We can only access the type if all requirements for the `ContainerBuilder` implementation are
 // satisfied.
 pub trait Container: Default {
-    /// The number of elements in this container
+    /// The number of updates in this container
     ///
     /// This number is used in progress tracking to confirm the receipt of some number
-    /// of outstanding records, and it is highly load bearing. The main restriction is
+    /// of outstanding updates, and it is highly load bearing. The main restriction is
     /// imposed on the `LengthPreservingContainerBuilder` trait, whose implementors
     /// must preserve the number of items.
-    fn len(&self) -> usize;
+    fn update_count(&self) -> i64;
 
-    /// Determine if the container contains any elements, corresponding to `len() == 0`.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
+    /// Determine if the container contains any updates, corresponding to `update_count() == 0`.
+    #[inline] fn is_empty(&self) -> bool { self.update_count() == 0 }
 }
 
 /// TODO
@@ -198,18 +193,14 @@ impl<C: Container + Clone + 'static> ContainerBuilder for CapacityContainerBuild
 impl<C: Container + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
 impl<T> Container for Vec<T> {
-    fn len(&self) -> usize {
-        Vec::len(self)
-    }
-    fn is_empty(&self) -> bool {
-        Vec::is_empty(self)
-    }
+    #[inline] fn update_count(&self) -> i64 { i64::try_from(Vec::len(self)).unwrap() }
+    #[inline] fn is_empty(&self) -> bool { Vec::is_empty(self) }
 }
 
 impl<T> IterContainer for Vec<T> {
     type ItemRef<'a> = &'a T where T: 'a;
     type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
-    fn iter(&self) -> Self::Iter<'_> {
+    #[inline] fn iter(&self) -> Self::Iter<'_> {
         self.as_slice().iter()
     }
 }
@@ -217,7 +208,7 @@ impl<T> IterContainer for Vec<T> {
 impl<T> DrainContainer for Vec<T> {
     type Item<'a> = T where T: 'a;
     type DrainIter<'a> = std::vec::Drain<'a, T> where Self: 'a;
-    fn drain(&mut self) -> Self::DrainIter<'_> {
+    #[inline] fn drain(&mut self) -> Self::DrainIter<'_> {
         self.drain(..)
     }
 }
@@ -267,22 +258,18 @@ mod rc {
     use crate::{Container, IterContainer, DrainContainer};
 
     impl<T: Container> Container for Rc<T> {
-        fn len(&self) -> usize {
-            std::ops::Deref::deref(self).len()
-        }
-        fn is_empty(&self) -> bool {
-            std::ops::Deref::deref(self).is_empty()
-        }
+        #[inline] fn update_count(&self) -> i64 { std::ops::Deref::deref(self).update_count() }
+        #[inline] fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
     }
     impl<T: IterContainer> IterContainer for Rc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;
-        fn iter(&self) -> Self::Iter<'_> { self.deref().iter() }
+        #[inline] fn iter(&self) -> Self::Iter<'_> { self.deref().iter() }
     }
     impl<T: IterContainer> DrainContainer for Rc<T> {
         type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type DrainIter<'a> = T::Iter<'a> where Self: 'a;
-        fn drain(&mut self) -> Self::DrainIter<'_> { self.iter() }
+        #[inline] fn drain(&mut self) -> Self::DrainIter<'_> { self.iter() }
     }
 }
 
@@ -293,18 +280,18 @@ mod arc {
     use crate::{Container, IterContainer, DrainContainer};
 
     impl<T: Container> Container for Arc<T> {
-        fn len(&self) -> usize { std::ops::Deref::deref(self).len() }
-        fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
+        #[inline] fn update_count(&self) -> i64 { std::ops::Deref::deref(self).update_count() }
+        #[inline] fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
     }
     impl<T: IterContainer> IterContainer for Arc<T> {
         type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
         type Iter<'a> = T::Iter<'a> where Self: 'a;
-        fn iter(&self) -> Self::Iter<'_> { self.deref().iter() }
+        #[inline] fn iter(&self) -> Self::Iter<'_> { self.deref().iter() }
     }
     impl<T: IterContainer> DrainContainer for Arc<T> {
         type Item<'a> = T::ItemRef<'a> where Self: 'a;
         type DrainIter<'a> = T::Iter<'a> where Self: 'a;
-        fn drain(&mut self) -> Self::DrainIter<'_> { self.iter() }
+        #[inline] fn drain(&mut self) -> Self::DrainIter<'_> { self.iter() }
     }
 }
 
