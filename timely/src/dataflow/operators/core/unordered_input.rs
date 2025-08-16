@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::{Container, Data};
+use crate::{WithProgress, Data};
 use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
@@ -164,7 +164,7 @@ impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
     }
 }
 
-impl<T: Timestamp, C: Container + Data> UnorderedHandle<T, CapacityContainerBuilder<C>> {
+impl<T: Timestamp, C: WithProgress + Data> UnorderedHandle<T, CapacityContainerBuilder<C>> {
     /// Allocates a new automatically flushing session based on the supplied capability.
     #[inline]
     pub fn session(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'_, T, CapacityContainerBuilder<C>, Counter<T, C, Tee<T, C>>>> {

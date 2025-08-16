@@ -10,7 +10,8 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use std::rc::Rc;
 
-use crate::{Container, container::{ContainerBuilder, LengthPreservingContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto}};
+use crate::WithProgress;
+use crate::container::{ContainerBuilder, DrainContainer, LengthPreservingContainerBuilder, SizableContainer, CapacityContainerBuilder, PushInto};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -34,7 +35,7 @@ pub trait ParallelizationContract<T, C> {
 #[derive(Debug)]
 pub struct Pipeline;
 
-impl<T: 'static, C: Container + 'static> ParallelizationContract<T, C> for Pipeline {
+impl<T: 'static, C: WithProgress + 'static> ParallelizationContract<T, C> for Pipeline {
     type Pusher = LogPusher<ThreadPusher<Message<T, C>>>;
     type Puller = LogPuller<ThreadPuller<Message<T, C>>>;
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
@@ -53,7 +54,8 @@ pub type Exchange<D, F> = ExchangeCore<CapacityContainerBuilder<Vec<D>>, F>;
 impl<CB, F> ExchangeCore<CB, F>
 where
     CB: LengthPreservingContainerBuilder,
-    for<'a> F: FnMut(&<CB::Container as Container>::Item<'a>)->u64
+    CB::Container: DrainContainer,
+    for<'a> F: FnMut(&<CB::Container as DrainContainer>::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new_core(func: F) -> ExchangeCore<CB, F> {
@@ -66,7 +68,7 @@ where
 
 impl<C, F> ExchangeCore<CapacityContainerBuilder<C>, F>
 where
-    C: SizableContainer,
+    C: SizableContainer + DrainContainer,
     for<'a> F: FnMut(&C::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
@@ -82,9 +84,10 @@ where
 impl<T: Timestamp, CB, H: 'static> ParallelizationContract<T, CB::Container> for ExchangeCore<CB, H>
 where
     CB: ContainerBuilder,
-    CB: for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
+    CB::Container: DrainContainer,
+    CB: for<'a> PushInto<<CB::Container as DrainContainer>::Item<'a>>,
     CB::Container: Data + Send + crate::dataflow::channels::ContainerBytes,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, CB, LogPusher<Box<dyn Push<Message<T, CB::Container>>>>, H>;
     type Puller = LogPuller<Box<dyn Pull<Message<T, CB::Container>>>>;
@@ -127,7 +130,7 @@ impl<P> LogPusher<P> {
     }
 }
 
-impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<P> {
+impl<T, C: WithProgress, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<P> {
     #[inline]
     fn push(&mut self, pair: &mut Option<Message<T, C>>) {
         if let Some(bundle) = pair {
@@ -145,7 +148,7 @@ impl<T, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPusher<
                     source: self.source,
                     target: self.target,
                     seq_no: self.counter - 1,
-                    length: bundle.data.len(),
+                    update_count: bundle.data.update_count(),
                 })
             }
         }
@@ -175,7 +178,7 @@ impl<P> LogPuller<P> {
     }
 }
 
-impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<P> {
+impl<T, C: WithProgress, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<P> {
     #[inline]
     fn pull(&mut self) -> &mut Option<Message<T, C>> {
         let result = self.puller.pull();
@@ -190,7 +193,7 @@ impl<T, C: Container, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPuller<
                     source: bundle.from,
                     target,
                     seq_no: bundle.seq,
-                    length: bundle.data.len(),
+                    update_count: bundle.data.update_count(),
                 });
             }
         }
