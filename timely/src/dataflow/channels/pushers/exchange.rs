@@ -51,7 +51,9 @@ where
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64,
 {
     fn partition(&mut self, container: &mut CB::Container, time: &T, pushers: &mut [P]) {
-        self.builders.resize_with(pushers.len(), Default::default);
+        if self.builders.len() != pushers.len() {
+            self.builders.resize_with(pushers.len(), Default::default);
+        }
         if pushers.len().is_power_of_two() {
             let mask = (pushers.len() - 1) as u64;
             for datum in container.drain() {
