@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.22.0...timely-v0.23.0) - 2025-08-16
+
+### Other
+
+- Remove T, C parameters from LogPuller/Pusher
+
 ## [0.22.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.21.5...timely-v0.22.0) - 2025-08-15
 
 ### Other
