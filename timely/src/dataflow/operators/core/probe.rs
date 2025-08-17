@@ -13,7 +13,7 @@ use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
 use crate::dataflow::{StreamCore, Scope};
-use crate::{Container, Data};
+use crate::Container;
 
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, C: Container> {
@@ -79,7 +79,7 @@ pub trait Probe<G: Scope, C: Container> {
     fn probe_with(&self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: Container + Data> Probe<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
     fn probe(&self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.

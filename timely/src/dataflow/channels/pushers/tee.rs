@@ -17,7 +17,7 @@ pub struct Tee<T, C> {
     shared: PushList<T, C>,
 }
 
-impl<T: Data, C: Container + Data> Push<Message<T, C>> for Tee<T, C> {
+impl<T: Data, C: Container> Push<Message<T, C>> for Tee<T, C> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         let mut pushers = self.shared.borrow_mut();
@@ -32,14 +32,14 @@ impl<T: Data, C: Container + Data> Push<Message<T, C>> for Tee<T, C> {
                 pushers[index-1].push(&mut None);
             }
         }
-        if pushers.len() > 0 {
+        if !pushers.is_empty() {
             let last = pushers.len() - 1;
             pushers[last].push(message);
         }
     }
 }
 
-impl<T, C: Container> Tee<T, C> {
+impl<T, C: Default> Tee<T, C> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
     pub fn new() -> (Tee<T, C>, TeeHelper<T, C>) {
         let shared = Rc::new(RefCell::new(Vec::new()));
@@ -52,7 +52,7 @@ impl<T, C: Container> Tee<T, C> {
     }
 }
 
-impl<T, C: Container> Clone for Tee<T, C> {
+impl<T, C: Default> Clone for Tee<T, C> {
     fn clone(&self) -> Self {
         Self {
             buffer: Default::default(),

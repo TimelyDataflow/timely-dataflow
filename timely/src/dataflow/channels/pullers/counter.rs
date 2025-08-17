@@ -6,10 +6,10 @@ use std::cell::RefCell;
 use crate::dataflow::channels::Message;
 use crate::progress::ChangeBatch;
 use crate::communication::Pull;
-use crate::Container;
+use crate::WithProgress;
 
 /// A wrapper which accounts records pulled past in a shared count map.
-pub struct Counter<T: Ord+Clone+'static, C, P: Pull<Message<T, C>>> {
+pub struct Counter<T, C, P> {
     pullable: P,
     consumed: Rc<RefCell<ChangeBatch<T>>>,
     phantom: ::std::marker::PhantomData<C>,
@@ -19,7 +19,7 @@ pub struct Counter<T: Ord+Clone+'static, C, P: Pull<Message<T, C>>> {
 pub struct ConsumedGuard<T: Ord + Clone + 'static> {
     consumed: Rc<RefCell<ChangeBatch<T>>>,
     time: Option<T>,
-    len: usize,
+    update_count: i64,
 }
 
 impl<T:Ord+Clone+'static> ConsumedGuard<T> {
@@ -32,11 +32,11 @@ impl<T:Ord+Clone+'static> Drop for ConsumedGuard<T> {
     fn drop(&mut self) {
         // SAFETY: we're in a Drop impl, so this runs at most once
         let time = self.time.take().unwrap();
-        self.consumed.borrow_mut().update(time, self.len as i64);
+        self.consumed.borrow_mut().update(time, self.update_count);
     }
 }
 
-impl<T:Ord+Clone+'static, C: Container, P: Pull<Message<T, C>>> Counter<T, C, P> {
+impl<T:Ord+Clone+'static, C: WithProgress, P: Pull<Message<T, C>>> Counter<T, C, P> {
     /// Retrieves the next timestamp and batch of data.
     #[inline]
     pub fn next(&mut self) -> Option<&mut Message<T, C>> {
@@ -49,7 +49,7 @@ impl<T:Ord+Clone+'static, C: Container, P: Pull<Message<T, C>>> Counter<T, C, P>
             let guard = ConsumedGuard {
                 consumed: Rc::clone(&self.consumed),
                 time: Some(message.time.clone()),
-                len: message.data.len(),
+                update_count: message.data.update_count(),
             };
             Some((guard, message))
         }
