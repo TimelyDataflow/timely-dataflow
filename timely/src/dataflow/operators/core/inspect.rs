@@ -1,6 +1,6 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
-use crate::{WithProgress, Data};
+use crate::Container;
 use crate::container::IterContainer;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
@@ -91,7 +91,7 @@ pub trait Inspect<G: Scope, C: IterContainer>: InspectCore<G, C> + Sized {
     fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: WithProgress + IterContainer + Data> Inspect<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container + IterContainer> Inspect<G, C> for StreamCore<G, C> {
     fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
         self.inspect_container(func)
     }
@@ -121,7 +121,7 @@ pub trait InspectCore<G: Scope, C: IterContainer> {
     fn inspect_container<F>(&self, func: F) -> StreamCore<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: WithProgress + IterContainer + Data> InspectCore<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container + IterContainer> InspectCore<G, C> for StreamCore<G, C> {
 
     fn inspect_container<F>(&self, mut func: F) -> StreamCore<G, C>
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static

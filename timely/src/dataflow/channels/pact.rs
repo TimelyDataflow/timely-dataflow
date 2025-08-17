@@ -19,7 +19,6 @@ use crate::dataflow::channels::Message;
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::worker::AsWorker;
-use crate::Data;
 
 /// A `ParallelizationContract` allocates paired `Push` and `Pull` implementors.
 pub trait ParallelizationContract<T, C> {
@@ -86,7 +85,7 @@ where
     CB: ContainerBuilder,
     CB::Container: DrainContainer,
     CB: for<'a> PushInto<<CB::Container as DrainContainer>::Item<'a>>,
-    CB::Container: Data + Send + crate::dataflow::channels::ContainerBytes,
+    CB::Container: Send + crate::dataflow::channels::ContainerBytes,
     for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, CB, LogPusher<Box<dyn Push<Message<T, CB::Container>>>>, H>;

@@ -11,7 +11,6 @@ use crate::dataflow::Scope;
 use crate::dataflow::channels::pushers::tee::TeeHelper;
 use crate::dataflow::channels::Message;
 use std::fmt::{self, Debug};
-use crate::WithProgress;
 
 // use dataflow::scopes::root::loggers::CHANNELS_Q;
 
@@ -47,7 +46,7 @@ impl<S: Scope, C> Clone for StreamCore<S, C> {
 /// A stream batching data in vectors.
 pub type Stream<S, D> = StreamCore<S, Vec<D>>;
 
-impl<S: Scope, C: WithProgress> StreamCore<S, C> {
+impl<S: Scope, C> StreamCore<S, C> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
@@ -76,7 +75,7 @@ impl<S: Scope, C: WithProgress> StreamCore<S, C> {
     pub fn scope(&self) -> S { self.scope.clone() }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
-    pub fn container<D: WithProgress>(self) -> StreamCore<S, D> where Self: AsStream<S, D> { self.as_stream() }
+    pub fn container<C2>(self) -> StreamCore<S, C2> where Self: AsStream<S, C2> { self.as_stream() }
 }
 
 /// A type that can be translated to a [StreamCore].

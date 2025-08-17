@@ -1,6 +1,6 @@
 //! Exchange records between workers.
 
-use crate::ExchangeData;
+use crate::Container;
 use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::ExchangeCore;
 use crate::dataflow::operators::generic::operator::Operator;
@@ -30,9 +30,10 @@ pub trait Exchange<C: DrainContainer> {
 
 impl<G: Scope, C> Exchange<C> for StreamCore<G, C>
 where
-    C: SizableContainer
+    C: Container
+        + SizableContainer
         + DrainContainer
-        + ExchangeData
+        + Send
         + crate::dataflow::channels::ContainerBytes
         + for<'a> PushInto<C::Item<'a>>,
 {

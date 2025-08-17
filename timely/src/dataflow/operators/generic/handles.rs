@@ -15,14 +15,14 @@ use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Message;
 use crate::communication::{Push, Pull};
-use crate::{WithProgress, Data};
+use crate::{Container, WithProgress};
 use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
 /// Handle to an operator's input stream.
-pub struct InputHandleCore<T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>> {
+pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
     pull_counter: PullCounter<T, C, P>,
     internal: Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>,
     /// Timestamp summaries from this input to each output.
@@ -36,7 +36,7 @@ pub struct InputHandleCore<T: Timestamp, C: WithProgress, P: Pull<Message<T, C>>
 pub type InputHandle<T, D, P> = InputHandleCore<T, Vec<D>, P>;
 
 /// Handle to an operator's input stream and frontier.
-pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: WithProgress +'a, P: Pull<Message<T, C>>+'a> {
+pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: 'a, P: Pull<Message<T, C>>+'a> {
     /// The underlying input handle.
     pub handle: &'a mut InputHandleCore<T, C, P>,
     /// The frontier as reported by timely progress tracking.
@@ -231,7 +231,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     }
 }
 
-impl<'a, T: Timestamp, C: WithProgress + Data, P: Push<Message<T, C>>> OutputHandleCore<'a, T, CapacityContainerBuilder<C>, P> {
+impl<'a, T: Timestamp, C: Container, P: Push<Message<T, C>>> OutputHandleCore<'a, T, CapacityContainerBuilder<C>, P> {
     /// Obtains a session that can send data at the timestamp associated with capability `cap`.
     ///
     /// In order to send data at a future timestamp, obtain a capability for the new timestamp

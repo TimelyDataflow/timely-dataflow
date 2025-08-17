@@ -104,6 +104,12 @@ pub mod scheduling;
 pub trait Data: Clone+'static { }
 impl<T: Clone+'static> Data for T { }
 
+/// A composite trait for types usable as containers in timely dataflow.
+///
+/// The `Container` trait is necessary for all containers in timely dataflow channels.
+pub trait Container: WithProgress + Default + Clone + 'static { }
+impl<C: WithProgress + Default + Clone + 'static> Container for C { }
+
 /// A composite trait for types usable on exchange channels in timely dataflow.
 ///
 /// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`

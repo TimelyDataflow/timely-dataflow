@@ -26,7 +26,7 @@ use crate::logging::{TimelyLogger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
-use crate::{WithProgress, Data};
+use crate::{WithProgress, Container};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::Message;
@@ -35,7 +35,7 @@ use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::scopes::Child;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
-pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: WithProgress> {
+pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     /// Moves the `Stream` argument into a child of its current `Scope`.
     ///
     /// # Examples
@@ -53,7 +53,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: WithProgress> {
     fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+ WithProgress> Enter<G, T, C> for StreamCore<G, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> for StreamCore<G, C> {
     fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
@@ -85,7 +85,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+ WithProgress> Enter<
 }
 
 /// Extension trait to move a `Stream` to the parent of its current `Scope`.
-pub trait Leave<G: Scope, C: WithProgress> {
+pub trait Leave<G: Scope, C> {
     /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// # Examples
@@ -103,7 +103,7 @@ pub trait Leave<G: Scope, C: WithProgress> {
     fn leave(&self) -> StreamCore<G, C>;
 }
 
-impl<G: Scope, C: WithProgress + Data, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
+impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
     fn leave(&self) -> StreamCore<G, C> {
 
         let scope = self.scope();
@@ -130,14 +130,14 @@ impl<G: Scope, C: WithProgress + Data, T: Timestamp+Refines<G::Timestamp>> Leave
 }
 
 
-struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: WithProgress + Data> {
+struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> {
     targets: Counter<TInner, TContainer, Tee<TInner, TContainer>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
 
-impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: WithProgress + Data> Push<Message<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
+impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> Push<Message<TOuter, TContainer>> for IngressNub<TOuter, TInner, TContainer> {
     fn push(&mut self, element: &mut Option<Message<TOuter, TContainer>>) {
         if let Some(outer_message) = element {
             let data = ::std::mem::take(&mut outer_message.data);
@@ -159,13 +159,13 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: WithProgr
 }
 
 
-struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data> {
+struct EgressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer> {
     targets: Tee<TOuter, TContainer>,
     phantom: PhantomData<TInner>,
 }
 
-impl<TOuter, TInner, TContainer: WithProgress> Push<Message<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
-where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Data {
+impl<TOuter, TInner, TContainer: Container> Push<Message<TInner, TContainer>> for EgressNub<TOuter, TInner, TContainer>
+where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, {
     fn push(&mut self, message: &mut Option<Message<TInner, TContainer>>) {
         if let Some(inner_message) = message {
             let data = ::std::mem::take(&mut inner_message.data);

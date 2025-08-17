@@ -9,7 +9,7 @@ use crate::communication::Pull;
 use crate::WithProgress;
 
 /// A wrapper which accounts records pulled past in a shared count map.
-pub struct Counter<T: Ord+Clone+'static, C, P: Pull<Message<T, C>>> {
+pub struct Counter<T, C, P> {
     pullable: P,
     consumed: Rc<RefCell<ChangeBatch<T>>>,
     phantom: ::std::marker::PhantomData<C>,

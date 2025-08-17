@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 // for containers that implement `Default`, and we use the associated `::Container` all over Timely.
 // We can only access the type if all requirements for the `ContainerBuilder` implementation are
 // satisfied.
-pub trait WithProgress: Default {
+pub trait WithProgress {
     /// The number of updates
     ///
     /// This number is used in progress tracking to confirm the receipt of some number
@@ -52,7 +52,7 @@ pub trait DrainContainer {
 }
 
 /// A container that can be sized and reveals its capacity.
-pub trait SizableContainer: WithProgress {
+pub trait SizableContainer: Sized {
     /// Indicates that the container is "full" and should be shipped.
     fn at_capacity(&self) -> bool;
     /// Restores `self` to its desired capacity, if it has one.
@@ -96,7 +96,7 @@ pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
     // The container is `Clone` because `Tee` requires it, otherwise we need to repeat it
     // all over Timely. `'static` because we don't want lifetimes everywhere.
-    type Container: WithProgress + Clone + 'static;
+    type Container: WithProgress + Default + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -152,7 +152,7 @@ pub struct CapacityContainerBuilder<C>{
     pending: VecDeque<C>,
 }
 
-impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuilder<C> {
+impl<T, C: SizableContainer + Default + PushInto<T>> PushInto<T> for CapacityContainerBuilder<C> {
     #[inline]
     fn push_into(&mut self, item: T) {
         // Ensure capacity
@@ -168,7 +168,7 @@ impl<T, C: SizableContainer + PushInto<T>> PushInto<T> for CapacityContainerBuil
     }
 }
 
-impl<C: WithProgress + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: WithProgress + Default + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
@@ -191,7 +191,7 @@ impl<C: WithProgress + Clone + 'static> ContainerBuilder for CapacityContainerBu
     }
 }
 
-impl<C: WithProgress + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
+impl<C: WithProgress + SizableContainer + Default + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
 impl<T> WithProgress for Vec<T> {
     #[inline] fn update_count(&self) -> i64 { i64::try_from(Vec::len(self)).unwrap() }
