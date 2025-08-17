@@ -98,7 +98,7 @@ impl<G: Scope, C: Container + IterContainer> Inspect<G, C> for StreamCore<G, C> 
 }
 
 /// Inspect containers
-pub trait InspectCore<G: Scope, C: IterContainer> {
+pub trait InspectCore<G: Scope, C> {
     /// Runs a supplied closure on each observed container, and each frontier advancement.
     ///
     /// Rust's `Result` type is used to distinguish the events, with `Ok` for time and data,
@@ -121,7 +121,7 @@ pub trait InspectCore<G: Scope, C: IterContainer> {
     fn inspect_container<F>(&self, func: F) -> StreamCore<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container + IterContainer> InspectCore<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container> InspectCore<G, C> for StreamCore<G, C> {
 
     fn inspect_container<F>(&self, mut func: F) -> StreamCore<G, C>
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static
