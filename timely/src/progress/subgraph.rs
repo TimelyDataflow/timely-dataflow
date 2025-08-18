@@ -31,6 +31,53 @@ use crate::worker::ProgressMode;
 // the Subgraph itself. An identifier greater than zero corresponds to an actual child, which can
 // be found at position (id - 1) in the `children` field of the Subgraph.
 
+/// Behavior of subgraph builders
+pub trait SubgraphBuilderT<TOuter, TInner>
+where
+    TOuter: Timestamp,
+    TInner: Timestamp,
+{
+    /// The subgraph type produced by this builder.
+    type Subgraph: Operate<TOuter> + 'static;
+
+    /// Creates a `SubgraphBuilder` from a path of indexes from the dataflow root to the subgraph,
+    /// terminating with the local index of the new subgraph itself.
+    fn new_from(
+        path: Rc<[usize]>,
+        identifier: usize,
+        logging: Option<Logger>,
+        summary_logging: Option<SummaryLogger<TInner::Summary>>,
+        name: &str,
+    ) -> Self;
+
+    /// Now that initialization is complete, actually build a subgraph.
+    fn build<A: crate::worker::AsWorker>(self, worker: &mut A) -> Self::Subgraph;
+
+    /// The name of this subgraph.
+    fn name(&self) -> &str;
+
+    /// A sequence of integers uniquely identifying the subgraph.
+    fn path(&self) -> Rc<[usize]>;
+
+    /// Introduces a dependence from the source to the target.
+    ///
+    /// This method does not effect data movement, but rather reveals to the progress tracking infrastructure
+    /// that messages produced by `source` should be expected to be consumed at `target`.
+    fn connect(&mut self, source: Source, target: Target);
+
+    /// Adds a new child to the subgraph.
+    fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize);
+
+    /// Allocates a new child identifier, for later use.
+    fn allocate_child_id(&mut self) -> usize;
+
+    /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
+    fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<TInner>>>) -> Target where TInner: Refines<TOuter>;
+
+    /// Allocates a new output from the subgraph and returns the source of that output in the outer graph.
+    fn new_output(&mut self) -> Source where TInner: Refines<TOuter>;
+}
+
 /// A builder for interactively initializing a `Subgraph`.
 ///
 /// This collects all the information necessary to get a `Subgraph` up and
@@ -71,69 +118,26 @@ where
     summary_logging: Option<SummaryLogger<TInner::Summary>>,
 }
 
-impl<TOuter, TInner> SubgraphBuilder<TOuter, TInner>
+impl<TOuter, TInner> SubgraphBuilderT<TOuter, TInner> for SubgraphBuilder<TOuter, TInner>
 where
     TOuter: Timestamp,
     TInner: Timestamp+Refines<TOuter>,
 {
-    /// Allocates a new input to the subgraph and returns the target to that input in the outer graph.
-    pub fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<TInner>>>) -> Target {
-        self.input_messages.push(shared_counts);
-        Target::new(self.index, self.input_messages.len() - 1)
+    type Subgraph = Subgraph<TOuter, TInner>;
+
+    fn name(&self) -> &str {
+        &self.name
     }
 
-    /// Allocates a new output from the subgraph and returns the source of that output in the outer graph.
-    pub fn new_output(&mut self) -> Source {
-        self.output_capabilities.push(MutableAntichain::new());
-        Source::new(self.index, self.output_capabilities.len() - 1)
+    fn path(&self) -> Rc<[usize]> {
+        Rc::clone(&self.path)
     }
 
-    /// Introduces a dependence from the source to the target.
-    ///
-    /// This method does not effect data movement, but rather reveals to the progress tracking infrastructure
-    /// that messages produced by `source` should be expected to be consumed at `target`.
-    pub fn connect(&mut self, source: Source, target: Target) {
+    fn connect(&mut self, source: Source, target: Target) {
         self.edge_stash.push((source, target));
     }
 
-    /// Creates a `SubgraphBuilder` from a path of indexes from the dataflow root to the subgraph,
-    /// terminating with the local index of the new subgraph itself.
-    pub fn new_from(
-        path: Rc<[usize]>,
-        identifier: usize,
-        logging: Option<Logger>,
-        summary_logging: Option<SummaryLogger<TInner::Summary>>,
-        name: &str,
-    )
-        -> SubgraphBuilder<TOuter, TInner>
-    {
-        // Put an empty placeholder for "outer scope" representative.
-        let children = vec![PerOperatorState::empty(0, 0)];
-        let index = path[path.len() - 1];
-
-        SubgraphBuilder {
-            name: name.to_owned(),
-            path,
-            index,
-            identifier,
-            children,
-            child_count: 1,
-            edge_stash: Vec::new(),
-            input_messages: Vec::new(),
-            output_capabilities: Vec::new(),
-            logging,
-            summary_logging,
-        }
-    }
-
-    /// Allocates a new child identifier, for later use.
-    pub fn allocate_child_id(&mut self) -> usize {
-        self.child_count += 1;
-        self.child_count - 1
-    }
-
-    /// Adds a new child to the subgraph.
-    pub fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize) {
+    fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize) {
         if let Some(l) = &mut self.logging {
             let mut child_path = Vec::with_capacity(self.path.len() + 1);
             child_path.extend_from_slice(&self.path[..]);
@@ -148,8 +152,39 @@ where
         self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone(), &mut self.summary_logging));
     }
 
-    /// Now that initialization is complete, actually build a subgraph.
-    pub fn build<A: crate::worker::AsWorker>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
+    fn allocate_child_id(&mut self) -> usize {
+        self.child_count += 1;
+        self.child_count - 1
+    }
+
+    fn new_from(
+        path: Rc<[usize]>,
+        identifier: usize,
+        logging: Option<Logger>,
+        summary_logging: Option<SummaryLogger<TInner::Summary>>,
+        name: &str,
+    ) -> Self
+    {
+        // Put an empty placeholder for "outer scope" representative.
+        let children = vec![PerOperatorState::empty(0, 0)];
+        let index = path[path.len() - 1];
+
+        Self {
+            name: name.to_owned(),
+            path,
+            index,
+            identifier,
+            children,
+            child_count: 1,
+            edge_stash: Vec::new(),
+            input_messages: Vec::new(),
+            output_capabilities: Vec::new(),
+            logging,
+            summary_logging,
+        }
+    }
+
+    fn build<A: crate::worker::AsWorker>(mut self, worker: &mut A) -> Subgraph<TOuter, TInner> {
         // at this point, the subgraph is frozen. we should initialize any internal state which
         // may have been determined after construction (e.g. the numbers of inputs and outputs).
         // we also need to determine what to return as a summary and initial capabilities, which
@@ -222,8 +257,17 @@ where
             progress_mode: worker.config().progress_mode,
         }
     }
-}
 
+    fn new_input(&mut self, shared_counts: Rc<RefCell<ChangeBatch<TInner>>>) -> Target where TInner: Refines<TOuter> {
+        self.input_messages.push(shared_counts);
+        Target::new(self.index, self.input_messages.len() - 1)
+    }
+
+    fn new_output(&mut self) -> Source where TInner: Refines<TOuter> {
+        self.output_capabilities.push(MutableAntichain::new());
+        Source::new(self.index, self.output_capabilities.len() - 1)
+    }
+}
 
 /// A dataflow subgraph.
 ///

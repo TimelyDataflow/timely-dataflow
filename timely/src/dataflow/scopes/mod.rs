@@ -1,10 +1,11 @@
 //! Hierarchical organization of timely dataflow graphs.
 
 use std::rc::Rc;
-use crate::progress::{Timestamp, Operate, Source, Target};
+use crate::progress::{Timestamp, Operate, Source, Target, SubgraphBuilder};
 use crate::order::Product;
 use crate::progress::timestamp::Refines;
 use crate::communication::Allocate;
+use crate::progress::subgraph::SubgraphBuilderT;
 use crate::worker::AsWorker;
 
 pub mod child;
@@ -84,22 +85,24 @@ pub trait Scope: ScopeParent {
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Enter, Leave};
     /// use timely::order::Product;
+    /// use timely::progress::SubgraphBuilder;
     ///
     /// timely::execute_from_args(std::env::args(), |worker| {
     ///     // must specify types as nothing else drives inference.
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<String>();
-    ///         let output = child1.scoped::<Product<u64,u32>,_,_>("ScopeName", |child2| {
+    ///         let output = child1.scoped::<Product<u64,u32>,_,_,SubgraphBuilder<_,_>>("ScopeName", |child2| {
     ///             stream.enter(child2).leave()
     ///         });
     ///         input
     ///     });
     /// });
     /// ```
-    fn scoped<T, R, F>(&mut self, name: &str, func: F) -> R
+    fn scoped<T, R, F, SG>(&mut self, name: &str, func: F) -> R
     where
         T: Timestamp+Refines<<Self as ScopeParent>::Timestamp>,
-        F: FnOnce(&mut Child<Self, T>) -> R;
+        F: FnOnce(&mut Child<Self, T, SG>) -> R,
+        SG: SubgraphBuilderT<Self::Timestamp, T>;
 
     /// Creates a iterative dataflow subgraph.
     ///
@@ -111,24 +114,26 @@ pub trait Scope: ScopeParent {
     /// ```
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Enter, Leave};
+    /// use timely::progress::SubgraphBuilder;
     ///
     /// timely::execute_from_args(std::env::args(), |worker| {
     ///     // must specify types as nothing else drives inference.
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<String>();
-    ///         let output = child1.iterative::<u32,_,_>(|child2| {
+    ///         let output = child1.iterative::<u32,_,_,SubgraphBuilder<_,_>>(|child2| {
     ///             stream.enter(child2).leave()
     ///         });
     ///         input
     ///     });
     /// });
     /// ```
-    fn iterative<T, R, F>(&mut self, func: F) -> R
+    fn iterative<T, R, F, SG>(&mut self, func: F) -> R
     where
         T: Timestamp,
-        F: FnOnce(&mut Child<Self, Product<<Self as ScopeParent>::Timestamp, T>>) -> R,
+        F: FnOnce(&mut Child<Self, Product<<Self as ScopeParent>::Timestamp, T>, SG>) -> R,
+        SG: SubgraphBuilderT<Self::Timestamp, Product<Self::Timestamp, T>>,
     {
-        self.scoped::<Product<<Self as ScopeParent>::Timestamp, T>,R,F>("Iterative", func)
+        self.scoped::<Product<<Self as ScopeParent>::Timestamp, T>,R,F,_>("Iterative", func)
     }
 
     /// Creates a dataflow region with the same timestamp.
@@ -155,7 +160,7 @@ pub trait Scope: ScopeParent {
     /// ```
     fn region<R, F>(&mut self, func: F) -> R
     where
-        F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
+        F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp, SubgraphBuilder<Self::Timestamp, Self::Timestamp>>) -> R,
     {
         self.region_named("Region", func)
     }
@@ -173,23 +178,25 @@ pub trait Scope: ScopeParent {
     /// ```
     /// use timely::dataflow::Scope;
     /// use timely::dataflow::operators::{Input, Enter, Leave};
+    /// use timely::progress::SubgraphBuilder;
     ///
     /// timely::execute_from_args(std::env::args(), |worker| {
     ///     // must specify types as nothing else drives inference.
     ///     let input = worker.dataflow::<u64,_,_>(|child1| {
     ///         let (input, stream) = child1.new_input::<String>();
-    ///         let output = child1.region_named("region", |child2| {
+    ///         let output = child1.region_named::<_,_,SubgraphBuilder<_,_>>("region", |child2| {
     ///             stream.enter(child2).leave()
     ///         });
     ///         input
     ///     });
     /// });
     /// ```
-    fn region_named<R, F>(&mut self, name: &str, func: F) -> R
+    fn region_named<R, F, SG>(&mut self, name: &str, func: F) -> R
     where
-        F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp>) -> R,
+        F: FnOnce(&mut Child<Self, <Self as ScopeParent>::Timestamp, SG>) -> R,
+        SG: SubgraphBuilderT<Self::Timestamp, Self::Timestamp>,
     {
-        self.scoped::<<Self as ScopeParent>::Timestamp,R,F>(name, func)
+        self.scoped::<<Self as ScopeParent>::Timestamp,R,F,_>(name, func)
     }
 
 }
