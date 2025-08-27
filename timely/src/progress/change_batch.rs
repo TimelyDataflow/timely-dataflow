@@ -56,6 +56,24 @@ impl<T, const X: usize> ChangeBatch<T, X> {
         }
     }
 
+    /// Constructs a `ChangeBatch` from updates.
+    ///
+    /// # Examples
+    ///
+    ///```
+    /// use timely::progress::ChangeBatch;
+    ///
+    /// let updates = [(5, 1), (5, -1)].into();
+    /// let mut batch = ChangeBatch::from_updates(updates);
+    /// assert!(batch.is_empty());
+    ///```
+    pub fn from_updates(updates: SmallVec<[(T, i64); X]>) -> Self {
+        Self {
+            updates,
+            clean: 0,
+        }
+    }
+
     /// Returns `true` if the change batch is not guaranteed compact.
     pub fn is_dirty(&self) -> bool {
         self.updates.len() > self.clean
