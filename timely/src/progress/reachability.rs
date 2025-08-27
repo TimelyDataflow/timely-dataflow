@@ -591,10 +591,14 @@ impl<T:Timestamp> Tracker<T> {
         // By filtering the changes through `self.pointstamps` we react only to discrete
         // changes in the frontier, rather than changes in the pointstamp counts that
         // witness that frontier.
-        for ((target, time), diff) in self.target_changes.drain() {
+        use itertools::Itertools;
+        let mut target_changes = self.target_changes.drain().peekable();
+        while let Some(((target, _), _)) = target_changes.peek() {
 
+            let target = *target;
             let operator = &mut self.per_operator[target.node].targets[target.port];
-            let changes = operator.pointstamps.update_iter(Some((time, diff)));
+            let target_updates = target_changes.peeking_take_while(|((t, _),_)| t == &target).map(|((_,time),diff)| (time,diff));
+            let changes = operator.pointstamps.update_iter(target_updates);
 
             for (time, diff) in changes {
                 self.total_counts += diff;
@@ -610,10 +614,13 @@ impl<T:Timestamp> Tracker<T> {
             }
         }
 
-        for ((source, time), diff) in self.source_changes.drain() {
+        let mut source_changes = self.source_changes.drain().peekable();
+        while let Some(((source, _), _)) = source_changes.peek() {
 
+            let source = *source;
             let operator = &mut self.per_operator[source.node].sources[source.port];
-            let changes = operator.pointstamps.update_iter(Some((time, diff)));
+            let source_updates = source_changes.peeking_take_while(|((s, _),_)| s == &source).map(|((_,time),diff)| (time,diff));
+            let changes = operator.pointstamps.update_iter(source_updates);
 
             for (time, diff) in changes {
                 self.total_counts += diff;
@@ -761,7 +768,7 @@ fn summarize_outputs<T: Timestamp>(
             }
         }
     }
-    
+
     let mut results: HashMap<Location, PortConnectivity<T::Summary>> = HashMap::new();
     let mut worklist = VecDeque::<(Location, usize, T::Summary)>::new();
 
