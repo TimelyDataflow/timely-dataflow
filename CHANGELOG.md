@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.23.0...timely-v0.24.0) - 2025-08-28
+
+### Other
+
+- Update for rebase
+- Move S generic to into_stream method
+- Introduce builder for flatmap operators
+- Merge remote-tracking branch 'upstream/master' into container_rework
+- Distributor trait ([#700](https://github.com/TimelyDataflow/timely-dataflow/pull/700))
+
 ## [0.23.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.22.0...timely-v0.23.0) - 2025-08-28
 
 ### Other
