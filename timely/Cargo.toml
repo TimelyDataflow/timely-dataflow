@@ -27,6 +27,7 @@ columnation = "0.1"
 getopts = { version = "0.2.21", optional = true }
 bincode = { version = "1.0" }
 byteorder = "1.5"
+itertools = "0.14.0"
 serde = { version = "1.0", features = ["derive"] }
 timely_bytes = { path = "../bytes", version = "0.22" }
 timely_logging = { path = "../logging", version = "0.22" }
