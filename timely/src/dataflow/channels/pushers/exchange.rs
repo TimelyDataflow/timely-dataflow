@@ -14,45 +14,43 @@ use crate::Container;
 /// It needs to uphold progress tracking requirements. The count of the input container
 /// must be preserved across the output containers, from the first call to `partition` until the
 /// call to `flush` for a specific time stamp.
-pub trait Distributor<T, C, P> {
+pub trait Distributor<C> {
     /// Partition the contents of `container` at `time` into the `pushers`.
-    fn partition(&mut self, container: &mut C, time: &T, pushers: &mut [P]);
+    fn partition<T: Clone, P: Push<Message<T, C>>>(&mut self, container: &mut C, time: &T, pushers: &mut [P]);
     /// Flush any remaining contents into the `pushers` at time `time`.
-    fn flush(&mut self, time: &T, pushers: &mut [P]);
+    fn flush<T: Clone, P: Push<Message<T, C>>>(&mut self, time: &T, pushers: &mut [P]);
     /// Optionally release resources, such as memory.
     fn relax(&mut self);
 }
 
 /// A distributor creating containers from a drainable container based
 /// on a hash function of the container's item.
-pub struct DrainContainerDistributor<CB, T, P, H> {
+pub struct DrainContainerDistributor<CB, H> {
     builders: Vec<CB>,
     hash_func: H,
-    _phantom: std::marker::PhantomData<(T, P)>,
 }
 
-impl<CB: Default, T, P, H> DrainContainerDistributor<CB, T, P, H> {
+impl<CB: Default, H> DrainContainerDistributor<CB, H> {
     /// Constructs a new `DrainContainerDistributor` with the given hash function.
     pub fn new(hash_func: H) -> Self {
         Self {
             builders: Vec::new(),
             hash_func,
-            _phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl<CB, T, P, H> Distributor<T, CB::Container, P> for DrainContainerDistributor<CB, T, P, H>
+impl<CB, H> Distributor<CB::Container> for DrainContainerDistributor<CB, H>
 where
     CB: ContainerBuilder + for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
-    CB::Container: Container,
-    T: Clone,
-    P: Push<Message<T, CB::Container>>,
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64,
 {
-    fn partition(&mut self, container: &mut CB::Container, time: &T, pushers: &mut [P]) {
-        if self.builders.len() != pushers.len() {
+    fn partition<T: Clone, P: Push<Message<T, CB::Container>>>(&mut self, container: &mut CB::Container, time: &T, pushers: &mut [P]) {
+        if self.builders.len() <= pushers.len() {
             self.builders.resize_with(pushers.len(), Default::default);
+        }
+        else {
+            debug_assert_eq!(self.builders.len(), pushers.len());
         }
         if pushers.len().is_power_of_two() {
             let mask = (pushers.len() - 1) as u64;
@@ -76,7 +74,7 @@ where
         }
     }
 
-    fn flush(&mut self, time: &T, pushers: &mut [P]) {
+    fn flush<T: Clone, P: Push<Message<T, CB::Container>>>(&mut self, time: &T, pushers: &mut [P]) {
         for (builder, pusher) in self.builders.iter_mut().zip(pushers.iter_mut()) {
             while let Some(container) = builder.finish() {
                 Message::push_at(container, time.clone(), pusher);
@@ -93,29 +91,27 @@ where
 
 // TODO : Software write combining
 /// Distributes records among target pushees according to a distributor.
-pub struct Exchange<T, C, P, D> {
+pub struct Exchange<T, P, D> {
     pushers: Vec<P>,
     current: Option<T>,
     distributor: D,
-    _phantom: std::marker::PhantomData<C>,
 }
 
-impl<T: Clone, C, P, D>  Exchange<T, C, P, D> {
+impl<T: Clone, P, D>  Exchange<T, P, D> {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distributor.
-    pub fn new(pushers: Vec<P>, distributor: D) -> Exchange<T, C, P, D> {
+    pub fn new(pushers: Vec<P>, distributor: D) -> Exchange<T, P, D> {
         Exchange {
             pushers,
             current: None,
             distributor,
-            _phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl<T: Eq+Clone, C, P, D> Push<Message<T, C>> for Exchange<T, C, P, D>
+impl<T: Eq+Clone, C, P, D> Push<Message<T, C>> for Exchange<T, P, D>
 where
     P: Push<Message<T, C>>,
-    D: Distributor<T, C, P>,
+    D: Distributor<C>,
 {
     #[inline(never)]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {

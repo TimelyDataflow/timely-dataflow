@@ -88,9 +88,8 @@ where
 {
     type Pusher = ExchangePusher<
         T,
-        CB::Container,
         LogPusher<Box<dyn Push<Message<T, CB::Container>>>>,
-        DrainContainerDistributor<CB, T, LogPusher<Box<dyn Push<Message<T, CB::Container>>>>, H>
+        DrainContainerDistributor<CB, H>
     >;
     type Puller = LogPuller<Box<dyn Pull<Message<T, CB::Container>>>>;
 
