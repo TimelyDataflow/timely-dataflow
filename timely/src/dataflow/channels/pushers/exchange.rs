@@ -1,9 +1,8 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
 use crate::communication::Push;
-use crate::container::{ContainerBuilder, PushInto};
+use crate::container::{ContainerBuilder, DrainContainer, PushInto};
 use crate::dataflow::channels::Message;
-use crate::Container;
 
 /// Distribute containers to several pushers.
 ///
@@ -43,8 +42,8 @@ impl<CB: Default, H> DrainContainerDistributor<CB, H> {
 
 impl<CB, H> Distributor<CB::Container> for DrainContainerDistributor<CB, H>
 where
-    CB: ContainerBuilder + for<'a> PushInto<<CB::Container as Container>::Item<'a>>,
-    for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64,
+    CB: ContainerBuilder<Container: DrainContainer> + for<'a> PushInto<<CB::Container as DrainContainer>::Item<'a>>,
+    for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64,
 {
     fn partition<T: Clone, P: Push<Message<T, CB::Container>>>(&mut self, container: &mut CB::Container, time: &T, pushers: &mut [P]) {
         debug_assert_eq!(self.builders.len(), pushers.len());

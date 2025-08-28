@@ -1,6 +1,6 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
-use crate::{Container, Data};
+use crate::Container;
 use crate::order::PartialOrder;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
@@ -45,11 +45,11 @@ pub trait Reclock<S: Scope> {
     /// assert_eq!(extracted[1], (5, vec![4,5]));
     /// assert_eq!(extracted[2], (8, vec![6,7,8]));
     /// ```
-    fn reclock<TC: Container + Data>(&self, clock: &StreamCore<S, TC>) -> Self;
+    fn reclock<TC: Container>(&self, clock: &StreamCore<S, TC>) -> Self;
 }
 
-impl<S: Scope, C: Container + Data> Reclock<S> for StreamCore<S, C> {
-    fn reclock<TC: Container + Data>(&self, clock: &StreamCore<S, TC>) -> StreamCore<S, C> {
+impl<S: Scope, C: Container> Reclock<S> for StreamCore<S, C> {
+    fn reclock<TC: Container>(&self, clock: &StreamCore<S, TC>) -> StreamCore<S, C> {
 
         let mut stash = vec![];
 

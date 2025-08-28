@@ -39,7 +39,7 @@ impl<T, C: Container> Message<T, C> {
     }
 
     /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
-    /// leaves in place, or the container's default element. The buffer is cleared.
+    /// leaves in place, or the container's default element. The buffer is left in an undefined state.
     #[inline]
     pub fn push_at<P: Push<Message<T, C>>>(buffer: &mut C, time: T, pusher: &mut P) {
 
@@ -51,7 +51,6 @@ impl<T, C: Container> Message<T, C> {
 
         if let Some(message) = bundle {
             *buffer = message.data;
-            buffer.clear();
         }
     }
 }

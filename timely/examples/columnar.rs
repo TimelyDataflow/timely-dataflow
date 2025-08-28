@@ -1,13 +1,12 @@
 //! Wordcount based on the `columnar` crate.
 
-use {
-    std::collections::HashMap,
-    timely::{Container, container::CapacityContainerBuilder},
-    timely::dataflow::channels::pact::{ExchangeCore, Pipeline},
-    timely::dataflow::InputHandleCore,
-    timely::dataflow::operators::{Inspect, Operator, Probe},
-    timely::dataflow::ProbeHandle,
-};
+use std::collections::HashMap;
+
+use timely::container::{IterContainer, CapacityContainerBuilder};
+use timely::dataflow::channels::pact::{ExchangeCore, Pipeline};
+use timely::dataflow::InputHandleCore;
+use timely::dataflow::operators::{Inspect, Operator, Probe};
+use timely::dataflow::ProbeHandle;
 
 // Creates `WordCountContainer` and `WordCountReference` structs,
 // as well as various implementations relating them to `WordCount`.
@@ -177,21 +176,16 @@ mod container {
         }
     }
 
-    impl<C: columnar::ContainerBytes> timely::Container for Column<C> {
-        fn len(&self) -> usize { self.borrow().len() }
-        // This sets `self` to be an empty `Typed` variant, appropriate for pushing into.
-        fn clear(&mut self) {
-            match self {
-                Column::Typed(t) => t.clear(),
-                Column::Bytes(_) => *self = Column::Typed(Default::default()),
-                Column::Align(_) => *self = Column::Typed(Default::default()),
-            }
-        }
-
+    impl<C: columnar::ContainerBytes> timely::Accountable for Column<C> {
+        #[inline] fn record_count(&self) -> i64 { i64::try_from(self.borrow().len()).unwrap() }
+        #[inline] fn is_empty(&self) -> bool { self.borrow().is_empty() }
+    }
+    impl<C: columnar::ContainerBytes> timely::container::IterContainer for Column<C> {
         type ItemRef<'a> = C::Ref<'a>;
         type Iter<'a> = IterOwn<C::Borrowed<'a>>;
         fn iter<'a>(&'a self) -> Self::Iter<'a> { self.borrow().into_index_iter() }
-
+    }
+    impl<C: columnar::ContainerBytes> timely::container::DrainContainer for Column<C> {
         type Item<'a> = C::Ref<'a>;
         type DrainIter<'a> = IterOwn<C::Borrowed<'a>>;
         fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> { self.borrow().into_index_iter() }

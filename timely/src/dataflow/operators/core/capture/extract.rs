@@ -1,7 +1,8 @@
 //! Traits and types for extracting captured timely dataflow streams.
 
 use super::Event;
-use crate::{container::{SizableContainer, PushInto}};
+use crate::Container;
+use crate::container::{SizableContainer, DrainContainer, PushInto};
 
 /// Supports extracting a sequence of timestamp and data.
 pub trait Extract<T, C> {
@@ -50,8 +51,7 @@ pub trait Extract<T, C> {
 
 impl<T: Ord, C: SizableContainer> Extract<T, C> for ::std::sync::mpsc::Receiver<Event<T, C>>
 where
-    for<'a> C: PushInto<C::Item<'a>>,
-    for<'a> C::Item<'a>: Ord,
+    for<'a> C: Container + DrainContainer<Item<'a>: Ord> + PushInto<C::Item<'a>>,
 {
     fn extract(self) -> Vec<(T, C)> {
         let mut staged = std::collections::BTreeMap::new();
@@ -71,7 +71,7 @@ where
             to_sort.sort();
             let mut sorted = C::default();
             for datum in to_sort.into_iter() {
-                sorted.push(datum);
+                sorted.push_into(datum);
             }
             if !sorted.is_empty() {
                 result.push((time, sorted));
