@@ -70,13 +70,13 @@ pub trait Map<S: Scope, C: DrainContainer> {
     ///         .map(|x| x + 1)
     ///         .map(|x| x + 1)
     ///         .map(Some)
-    ///         .into_stream::<Vec<i32>>()
+    ///         .into_stream::<_,Vec<i32>>()
     ///         .capture()
     /// });
     ///
     /// assert_eq!((4..14).collect::<Vec<_>>(), data.extract()[0].1);
     /// ```
-    fn flat_map_builder<'t, I, L>(&'t self, logic: L) -> FlatMapBuilder<'t, Self, S, C, L, I>
+    fn flat_map_builder<'t, I, L>(&'t self, logic: L) -> FlatMapBuilder<'t, Self, C, L, I>
     where
         C: Clone + 'static,
         L: for<'a> Fn(C::Item<'a>) -> I,
@@ -106,16 +106,16 @@ impl<S: Scope, C: Container + DrainContainer> Map<S, C> for StreamCore<S, C> {
 
 
 /// A stream wrapper that allows the accumulation of flatmap logic.
-pub struct FlatMapBuilder<'t, T: Map<S, C>, S: Scope, C: Container, F: 'static, I>
+pub struct FlatMapBuilder<'t, T, C: Container, F: 'static, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
     stream: &'t T,
     logic: F,
-    marker: std::marker::PhantomData<(S, C)>,
+    marker: std::marker::PhantomData<C>,
 }
 
-impl<'t, T: Map<S, C>, S: Scope, C: Container + Clone + 'static, F, I> FlatMapBuilder<'t, T, S, C, F, I>
+impl<'t, T, C: Container + Clone + 'static, F, I> FlatMapBuilder<'t, T, C, F, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
@@ -125,7 +125,7 @@ where
     }
 
     /// Transform a flatmapped stream through addiitonal logic.
-    pub fn map<G: Fn(I) -> I2 + 'static, I2>(self, g: G) -> FlatMapBuilder<'t, T, S, C, impl Fn(C::Item<'_>) -> I2 + 'static, I2> {
+    pub fn map<G: Fn(I) -> I2 + 'static, I2>(self, g: G) -> FlatMapBuilder<'t, T, C, impl Fn(C::Item<'_>) -> I2 + 'static, I2> {
         let logic = self.logic;
         FlatMapBuilder {
             stream: self.stream,
@@ -134,9 +134,11 @@ where
         }
     }
     /// Convert the wrapper into a stream.
-    pub fn into_stream<C2>(self) -> StreamCore<S, C2>
+    pub fn into_stream<S, C2>(self) -> StreamCore<S, C2>
     where
         I: IntoIterator,
+        S: Scope,
+        T: Map<S, C>,
         C2: SizableContainer + PushInto<I::Item> + Data,
     {
         Map::flat_map(self.stream, self.logic)
@@ -157,7 +159,7 @@ mod tests {
                 .map(|x| x + 1)
                 .map(|x| x + 1)
                 .map(Some)
-                .into_stream::<Vec<i32>>()
+                .into_stream::<_,Vec<i32>>()
                 .capture()
         });
 
