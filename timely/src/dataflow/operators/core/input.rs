@@ -10,7 +10,7 @@ use crate::scheduling::{Schedule, Activator};
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 use crate::progress::operate::Connectivity;
-use crate::{WithProgress, Container};
+use crate::{Accountable, Container};
 use crate::communication::Push;
 use crate::dataflow::{Scope, ScopeParent, StreamCore};
 use crate::dataflow::channels::pushers::{Tee, Counter};

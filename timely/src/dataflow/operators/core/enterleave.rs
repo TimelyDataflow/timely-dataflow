@@ -26,7 +26,7 @@ use crate::logging::{TimelyLogger, MessagesEvent};
 use crate::progress::Timestamp;
 use crate::progress::timestamp::Refines;
 use crate::progress::{Source, Target};
-use crate::{WithProgress, Container};
+use crate::{Accountable, Container};
 use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::Message;
@@ -207,7 +207,7 @@ impl<P> LogPusher<P> {
 
 impl<T, C, P> Push<Message<T, C>> for LogPusher<P>
 where
-    C: WithProgress,
+    C: Accountable,
     P: Push<Message<T, C>>,
 {
     fn push(&mut self, element: &mut Option<Message<T, C>>) {

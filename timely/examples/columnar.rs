@@ -176,7 +176,7 @@ mod container {
         }
     }
 
-    impl<C: columnar::ContainerBytes> timely::WithProgress for Column<C> {
+    impl<C: columnar::ContainerBytes> timely::Accountable for Column<C> {
         #[inline] fn record_count(&self) -> i64 { i64::try_from(self.borrow().len()).unwrap() }
         #[inline] fn is_empty(&self) -> bool { self.borrow().is_empty() }
     }

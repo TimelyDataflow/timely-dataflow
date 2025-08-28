@@ -4,15 +4,12 @@
 
 use std::collections::VecDeque;
 
-/// An object with effects on progress
+/// An type containing a number of records accounted for by progress tracking.
 ///
 /// The object stores a number of updates and thus is able to describe it count
 /// (`update_count()`) and whether it is empty (`is_empty()`). It is empty if the
 /// update count is zero.
-///
-/// It must implement default for historic reason. The default implementation is not required
-/// to allocate memory for variable-length components.
-pub trait WithProgress {
+pub trait Accountable {
     /// The number of records
     ///
     /// This number is used in progress tracking to confirm the receipt of some number
@@ -22,12 +19,13 @@ pub trait WithProgress {
     fn record_count(&self) -> i64;
 
     /// Determine if this contains any updates, corresponding to `update_count() == 0`.
+    /// It is a correctness error for this to by anything other than `self.record_count() == 0`.
     #[inline] fn is_empty(&self) -> bool { self.record_count() == 0 }
 }
 
-/// A container that allows iteration.
+/// A container that allows iteration morally equivalent to [`IntoIterator`].
 ///
-/// Iterating the container presents items in an implmentation-specific order.
+/// Iterating the container presents items in an implementation-specific order.
 /// The container's contents are not changed.
 pub trait IterContainer {
     /// The type of elements when reading non-destructively from the container.
@@ -54,7 +52,7 @@ pub trait DrainContainer {
 }
 
 /// A container that can be sized and reveals its capacity.
-pub trait SizableContainer: Sized {
+pub trait SizableContainer {
     /// Indicates that the container is "full" and should be shipped.
     fn at_capacity(&self) -> bool;
     /// Restores `self` to its desired capacity, if it has one.
@@ -65,7 +63,7 @@ pub trait SizableContainer: Sized {
     ///
     /// Assume that the `stash` is in an undefined state, and properly clear it
     /// before re-using it.
-    fn ensure_capacity(&mut self, stash: &mut Option<Self>);
+    fn ensure_capacity(&mut self, stash: &mut Option<Self>) where Self: Sized;
 }
 
 /// A container that can absorb items of a specific type.
@@ -90,8 +88,10 @@ pub trait PushInto<T> {
 ///
 /// The caller should consume the containers returned by [`Self::extract`] and
 /// [`Self::finish`]. Implementations can recycle buffers, but should ensure that they clear
-/// any remaining elements. It is up to the implementation of this trait to ensure that
-/// containers are properly cleared before recycling them.
+/// any remaining elements.
+///
+/// Implementations are allowed to re-use the contents of the mutable references left by the caller,
+/// but they should ensure that they clear the contents before doing so.
 ///
 /// For example, a consolidating builder can aggregate differences in-place, but it has
 /// to ensure that it preserves the intended information.
@@ -102,7 +102,7 @@ pub trait ContainerBuilder: Default + 'static {
     /// The container type we're building.
     // The container is `Clone` because `Tee` requires it, otherwise we need to repeat it
     // all over Timely. `'static` because we don't want lifetimes everywhere.
-    type Container: WithProgress + Default + Clone + 'static;
+    type Container: Accountable + Default + Clone + 'static;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -139,7 +139,7 @@ pub trait ContainerBuilder: Default + 'static {
 /// A wrapper trait indicating that the container building will preserve the number of records.
 ///
 /// Specifically, the sum of record counts of all extracted and finished containers must equal the
-/// number of times that `push_into` is called on the container builder.
+/// number of accounted records that are pushed into the container builder.
 /// If you have any questions about this trait you are best off not implementing it.
 pub trait LengthPreservingContainerBuilder : ContainerBuilder { }
 
@@ -175,7 +175,7 @@ impl<T, C: SizableContainer + Default + PushInto<T>> PushInto<T> for CapacityCon
     }
 }
 
-impl<C: WithProgress + Default + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: Accountable + Default + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
@@ -198,9 +198,9 @@ impl<C: WithProgress + Default + Clone + 'static> ContainerBuilder for CapacityC
     }
 }
 
-impl<C: WithProgress + SizableContainer + Default + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
+impl<C: Accountable + SizableContainer + Default + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
-impl<T> WithProgress for Vec<T> {
+impl<T> Accountable for Vec<T> {
     #[inline] fn record_count(&self) -> i64 { i64::try_from(Vec::len(self)).unwrap() }
     #[inline] fn is_empty(&self) -> bool { Vec::is_empty(self) }
 }
@@ -263,9 +263,9 @@ mod rc {
     use std::ops::Deref;
     use std::rc::Rc;
 
-    use crate::{WithProgress, IterContainer, DrainContainer};
+    use crate::{IterContainer, DrainContainer};
 
-    impl<T: WithProgress> WithProgress for Rc<T> {
+    impl<T: crate::Accountable> crate::Accountable for Rc<T> {
         #[inline] fn record_count(&self) -> i64 { std::ops::Deref::deref(self).record_count() }
         #[inline] fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
     }
@@ -285,9 +285,9 @@ mod arc {
     use std::ops::Deref;
     use std::sync::Arc;
 
-    use crate::{WithProgress, IterContainer, DrainContainer};
+    use crate::{IterContainer, DrainContainer};
 
-    impl<T: WithProgress> WithProgress for Arc<T> {
+    impl<T: crate::Accountable> crate::Accountable for Arc<T> {
         #[inline] fn record_count(&self) -> i64 { std::ops::Deref::deref(self).record_count() }
         #[inline] fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
     }

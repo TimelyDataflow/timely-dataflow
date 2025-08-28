@@ -65,7 +65,7 @@ pub use timely_communication::Config as CommunicationConfig;
 pub use worker::Config as WorkerConfig;
 pub use execute::Config as Config;
 
-pub use timely_container::WithProgress;
+pub use timely_container::Accountable;
 /// Re-export of the `timely_container` crate.
 pub mod container {
     pub use timely_container::*;
@@ -107,8 +107,8 @@ impl<T: Clone+'static> Data for T { }
 /// A composite trait for types usable as containers in timely dataflow.
 ///
 /// The `Container` trait is necessary for all containers in timely dataflow channels.
-pub trait Container: WithProgress + Default + Clone + 'static { }
-impl<C: WithProgress + Default + Clone + 'static> Container for C { }
+pub trait Container: Accountable + Default + Clone + 'static { }
+impl<C: Accountable + Default + Clone + 'static> Container for C { }
 
 /// A composite trait for types usable on exchange channels in timely dataflow.
 ///

@@ -6,7 +6,7 @@ use crate::container::{ContainerBuilder, CapacityContainerBuilder, PushInto};
 use crate::dataflow::channels::Message;
 use crate::dataflow::operators::Capability;
 use crate::progress::Timestamp;
-use crate::{Container, WithProgress};
+use crate::{Container, Accountable};
 
 /// Buffers data sent at the same time, for efficient communication.
 ///
