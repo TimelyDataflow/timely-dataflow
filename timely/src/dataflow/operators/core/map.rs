@@ -106,7 +106,7 @@ impl<S: Scope, C: Container + DrainContainer> Map<S, C> for StreamCore<S, C> {
 
 
 /// A stream wrapper that allows the accumulation of flatmap logic.
-pub struct FlatMapBuilder<'t, T, C: Container, F: 'static, I>
+pub struct FlatMapBuilder<'t, T, C: DrainContainer, F: 'static, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
@@ -115,7 +115,7 @@ where
     marker: std::marker::PhantomData<C>,
 }
 
-impl<'t, T, C: Container + Clone + 'static, F, I> FlatMapBuilder<'t, T, C, F, I>
+impl<'t, T, C: DrainContainer + Clone + 'static, F, I> FlatMapBuilder<'t, T, C, F, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
@@ -139,7 +139,7 @@ where
         I: IntoIterator,
         S: Scope,
         T: Map<S, C>,
-        C2: SizableContainer + PushInto<I::Item> + Data,
+        C2: Container + SizableContainer + PushInto<I::Item>,
     {
         Map::flat_map(self.stream, self.logic)
     }
