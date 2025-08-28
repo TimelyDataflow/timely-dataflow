@@ -31,10 +31,11 @@ pub struct DrainContainerDistributor<CB, H> {
 }
 
 impl<CB: Default, H> DrainContainerDistributor<CB, H> {
-    /// Constructs a new `DrainContainerDistributor` with the given hash function.
-    pub fn new(hash_func: H) -> Self {
+    /// Constructs a new `DrainContainerDistributor` with the given hash function for a number of
+    /// peers.
+    pub fn new(hash_func: H, peers: usize) -> Self {
         Self {
-            builders: Vec::new(),
+            builders: std::iter::repeat_with(Default::default).take(peers).collect(),
             hash_func,
         }
     }
@@ -46,12 +47,7 @@ where
     for<'a> H: FnMut(&<CB::Container as Container>::Item<'a>) -> u64,
 {
     fn partition<T: Clone, P: Push<Message<T, CB::Container>>>(&mut self, container: &mut CB::Container, time: &T, pushers: &mut [P]) {
-        if self.builders.len() <= pushers.len() {
-            self.builders.resize_with(pushers.len(), Default::default);
-        }
-        else {
-            debug_assert_eq!(self.builders.len(), pushers.len());
-        }
+        debug_assert_eq!(self.builders.len(), pushers.len());
         if pushers.len().is_power_of_two() {
             let mask = (pushers.len() - 1) as u64;
             for datum in container.drain() {
