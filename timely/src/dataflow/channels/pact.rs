@@ -147,7 +147,7 @@ impl<T, C: WithProgress, P: Push<Message<T, C>>> Push<Message<T, C>> for LogPush
                     source: self.source,
                     target: self.target,
                     seq_no: self.counter - 1,
-                    update_count: bundle.data.update_count(),
+                    record_count: bundle.data.record_count(),
                 })
             }
         }
@@ -192,7 +192,7 @@ impl<T, C: WithProgress, P: Pull<Message<T, C>>> Pull<Message<T, C>> for LogPull
                     source: bundle.from,
                     target,
                     seq_no: bundle.seq,
-                    update_count: bundle.data.update_count(),
+                    record_count: bundle.data.record_count(),
                 });
             }
         }

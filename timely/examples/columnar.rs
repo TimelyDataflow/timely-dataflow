@@ -177,7 +177,7 @@ mod container {
     }
 
     impl<C: columnar::ContainerBytes> timely::WithProgress for Column<C> {
-        #[inline] fn update_count(&self) -> i64 { i64::try_from(self.borrow().len()).unwrap() }
+        #[inline] fn record_count(&self) -> i64 { i64::try_from(self.borrow().len()).unwrap() }
         #[inline] fn is_empty(&self) -> bool { self.borrow().is_empty() }
     }
     impl<C: columnar::ContainerBytes> timely::container::IterContainer for Column<C> {

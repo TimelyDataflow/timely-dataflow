@@ -49,10 +49,9 @@ pub trait Extract<T, C> {
     fn extract(self) -> Vec<(T, C)>;
 }
 
-impl<T, C> Extract<T, C> for ::std::sync::mpsc::Receiver<Event<T, C>>
+impl<T: Ord, C: SizableContainer> Extract<T, C> for ::std::sync::mpsc::Receiver<Event<T, C>>
 where
-    for<'a> C: Container + SizableContainer + DrainContainer<Item<'a>: Ord> + PushInto<C::Item<'a>>,
-    T: Ord,
+    for<'a> C: Container + DrainContainer<Item<'a>: Ord> + PushInto<C::Item<'a>>,
 {
     fn extract(self) -> Vec<(T, C)> {
         let mut staged = std::collections::BTreeMap::new();

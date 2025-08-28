@@ -19,7 +19,7 @@ pub struct Counter<T, C, P> {
 pub struct ConsumedGuard<T: Ord + Clone + 'static> {
     consumed: Rc<RefCell<ChangeBatch<T>>>,
     time: Option<T>,
-    update_count: i64,
+    record_count: i64,
 }
 
 impl<T:Ord+Clone+'static> ConsumedGuard<T> {
@@ -32,7 +32,7 @@ impl<T:Ord+Clone+'static> Drop for ConsumedGuard<T> {
     fn drop(&mut self) {
         // SAFETY: we're in a Drop impl, so this runs at most once
         let time = self.time.take().unwrap();
-        self.consumed.borrow_mut().update(time, self.update_count);
+        self.consumed.borrow_mut().update(time, self.record_count);
     }
 }
 
@@ -49,7 +49,7 @@ impl<T:Ord+Clone+'static, C: WithProgress, P: Pull<Message<T, C>>> Counter<T, C,
             let guard = ConsumedGuard {
                 consumed: Rc::clone(&self.consumed),
                 time: Some(message.time.clone()),
-                update_count: message.data.update_count(),
+                record_count: message.data.record_count(),
             };
             Some((guard, message))
         }

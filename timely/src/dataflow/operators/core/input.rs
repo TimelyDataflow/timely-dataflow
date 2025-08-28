@@ -374,7 +374,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
 
     /// Sends a container at each of the destinations. There can be more than one; clone if needed.
     /// Does not take `self` because `flush` and `extract` borrow `self` mutably.
-    /// Clears the container.
+    /// Leaves the container in an undefined state.
     // TODO: Find a better name for this function.
     #[inline]
     fn send_container(

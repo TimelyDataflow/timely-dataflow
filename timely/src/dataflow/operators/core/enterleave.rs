@@ -218,7 +218,7 @@ where
                 source: self.index,
                 target: self.index,
                 seq_no: self.counter,
-                update_count: bundle.data.update_count(),
+                record_count: bundle.data.record_count(),
             };
             let recv_event = MessagesEvent {
                 is_send: false,

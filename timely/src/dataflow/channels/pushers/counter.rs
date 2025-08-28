@@ -21,7 +21,7 @@ impl<T: Timestamp, C: WithProgress, P> Push<Message<T, C>> for Counter<T, C, P> 
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         if let Some(message) = message {
-            self.produced.borrow_mut().update(message.time.clone(), message.data.update_count());
+            self.produced.borrow_mut().update(message.time.clone(), message.data.record_count());
         }
 
         // only propagate `None` if dirty (indicates flush)

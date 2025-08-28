@@ -135,7 +135,7 @@ pub struct MessagesEvent {
     /// Message sequence number.
     pub seq_no: usize,
     /// Number of typed records in the message.
-    pub update_count: i64,
+    pub record_count: i64,
 }
 
 /// Records the starting and stopping of an operator.
