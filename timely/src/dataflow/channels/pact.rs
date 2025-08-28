@@ -15,6 +15,7 @@ use crate::container::{ContainerBuilder, DrainContainer, LengthPreservingContain
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::communication::{Push, Pull};
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
+use crate::dataflow::channels::pushers::exchange::DrainContainerDistributor;
 use crate::dataflow::channels::Message;
 use crate::logging::{TimelyLogger as Logger, MessagesEvent};
 use crate::progress::Timestamp;
@@ -80,21 +81,24 @@ where
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Timestamp, CB, H: 'static> ParallelizationContract<T, CB::Container> for ExchangeCore<CB, H>
+impl<T: Timestamp, CB, H> ParallelizationContract<T, CB::Container> for ExchangeCore<CB, H>
 where
-    CB: ContainerBuilder,
-    CB::Container: DrainContainer,
-    CB: for<'a> PushInto<<CB::Container as DrainContainer>::Item<'a>>,
+    CB: ContainerBuilder<Container: DrainContainer> + for<'a> PushInto<<CB::Container as DrainContainer>::Item<'a>>,
     CB::Container: Send + crate::dataflow::channels::ContainerBytes,
-    for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64
+    for<'a> H: FnMut(&<CB::Container as DrainContainer>::Item<'a>) -> u64 + 'static,
 {
-    type Pusher = ExchangePusher<T, CB, LogPusher<Box<dyn Push<Message<T, CB::Container>>>>, H>;
+    type Pusher = ExchangePusher<
+        T,
+        LogPusher<Box<dyn Push<Message<T, CB::Container>>>>,
+        DrainContainerDistributor<CB, H>
+    >;
     type Puller = LogPuller<Box<dyn Pull<Message<T, CB::Container>>>>;
 
     fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<Logger>) -> (Self::Pusher, Self::Puller) {
         let (senders, receiver) = allocator.allocate::<Message<T, CB::Container>>(identifier, address);
         let senders = senders.into_iter().enumerate().map(|(i,x)| LogPusher::new(x, allocator.index(), i, identifier, logging.clone())).collect::<Vec<_>>();
-        (ExchangePusher::new(senders, self.hash_func), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
+        let distributor = DrainContainerDistributor::new(self.hash_func, allocator.peers());
+        (ExchangePusher::new(senders, distributor), LogPuller::new(receiver, allocator.index(), identifier, logging.clone()))
     }
 }
 

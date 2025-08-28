@@ -113,20 +113,6 @@ pub trait ContainerBuilder: Default + 'static {
     /// be called repeatedly until it returns `None`.
     #[must_use]
     fn finish(&mut self) -> Option<&mut Self::Container>;
-    /// Partitions `container` among `builders`, using the function `index` to direct items.
-    /// Drains the container. The container is left in an undefined state.
-    fn partition<I>(container: &mut Self::Container, builders: &mut [Self], mut index: I)
-    where
-        Self::Container: DrainContainer,
-        Self: for<'a> PushInto<<Self::Container as DrainContainer>::Item<'a>>,
-        I: for<'a> FnMut(&<Self::Container as DrainContainer>::Item<'a>) -> usize,
-    {
-        for datum in container.drain() {
-            let index = index(&datum);
-            builders[index].push_into(datum);
-        }
-    }
-
     /// Indicates a good moment to release resources.
     ///
     /// By default, does nothing. Callers first needs to drain the contents using [`Self::finish`]
