@@ -12,13 +12,13 @@ pub trait SharedStream<S: Scope, C> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::{ToStream, InspectCore};
     /// use timely::dataflow::operators::rc::SharedStream;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .shared()
-    ///            .inspect(|x| println!("seen: {:?}", x));
+    ///            .inspect_container(|x| println!("seen: {:?}", x));
     /// });
     /// ```
     fn shared(&self) -> StreamCore<S, Rc<C>>;
@@ -43,12 +43,13 @@ mod test {
     use crate::dataflow::channels::pact::Pipeline;
     use crate::dataflow::operators::capture::Extract;
     use crate::dataflow::operators::rc::SharedStream;
-    use crate::dataflow::operators::{Capture, Concatenate, Operator, ToStream};
+    use crate::dataflow::operators::{Capture, Concatenate, InspectCore, Operator, ToStream};
 
     #[test]
     fn test_shared() {
         let output = crate::example(|scope| {
             let shared = vec![Ok(0), Err(())].to_stream(scope).container::<Vec<_>>().shared();
+            let shared = shared.inspect_container(|x| println!("seen: {x:?}"));
             scope
                 .concatenate([
                     shared.unary(Pipeline, "read shared 1", |_, _| {

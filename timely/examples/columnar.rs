@@ -2,10 +2,12 @@
 
 use std::collections::HashMap;
 
-use timely::container::{IterContainer, CapacityContainerBuilder};
+use columnar::Index;
+use timely::Accountable;
+use timely::container::CapacityContainerBuilder;
 use timely::dataflow::channels::pact::{ExchangeCore, Pipeline};
 use timely::dataflow::InputHandleCore;
-use timely::dataflow::operators::{Inspect, Operator, Probe};
+use timely::dataflow::operators::{InspectCore, Operator, Probe};
 use timely::dataflow::ProbeHandle;
 
 // Creates `WordCountContainer` and `WordCountReference` structs,
@@ -44,7 +46,7 @@ fn main() {
                         move |input, output| {
                             while let Some((time, data)) = input.next() {
                                 let mut session = output.session(&time);
-                                for wordcount in data.iter().flat_map(|wordcount| {
+                                for wordcount in data.borrow().into_index_iter().flat_map(|wordcount| {
                                     wordcount.text.split_whitespace().map(move |text| WordCountReference { text, diff: wordcount.diff })
                                 }) {
                                     session.give(wordcount);
@@ -73,7 +75,7 @@ fn main() {
                                 if !input.frontier().less_equal(key.time()) {
                                     let mut session = output.session(key);
                                     for batch in val.drain(..) {
-                                        for wordcount in batch.iter() {
+                                        for wordcount in batch.borrow().into_index_iter() {
                                             let total =
                                             if let Some(count) = counts.get_mut(wordcount.text) {
                                                 *count += wordcount.diff;
@@ -94,7 +96,17 @@ fn main() {
                     },
                 )
                 .container::<Container>()
-                .inspect(|x| println!("seen: {:?}", x))
+                .inspect_container(|x| {
+                    match x {
+                        Ok((time, data)) => {
+                            println!("seen at: {:?}\t{:?} records", time, data.record_count());
+                            for wc in data.borrow().into_index_iter() {
+                                println!("  {}: {}", wc.text, wc.diff);
+                            }
+                        },
+                        Err(frontier) => println!("frontier advanced to {:?}", frontier),
+                    }
+                })
                 .probe_with(&probe);
         });
 
@@ -167,7 +179,7 @@ mod container {
 
     impl<C: columnar::ContainerBytes> Column<C> {
         /// Borrows the contents no matter their representation.
-        #[inline(always)] fn borrow(&self) -> C::Borrowed<'_> {
+        #[inline(always)] pub fn borrow(&self) -> C::Borrowed<'_> {
             match self {
                 Column::Typed(t) => t.borrow(),
                 Column::Bytes(b) => <C::Borrowed<'_> as FromBytes>::from_bytes(&mut Indexed::decode(bytemuck::cast_slice(b))),
@@ -179,11 +191,6 @@ mod container {
     impl<C: columnar::ContainerBytes> timely::Accountable for Column<C> {
         #[inline] fn record_count(&self) -> i64 { i64::try_from(self.borrow().len()).unwrap() }
         #[inline] fn is_empty(&self) -> bool { self.borrow().is_empty() }
-    }
-    impl<C: columnar::ContainerBytes> timely::container::IterContainer for Column<C> {
-        type ItemRef<'a> = C::Ref<'a>;
-        type Iter<'a> = IterOwn<C::Borrowed<'a>>;
-        fn iter<'a>(&'a self) -> Self::Iter<'a> { self.borrow().into_index_iter() }
     }
     impl<C: columnar::ContainerBytes> timely::container::DrainContainer for Column<C> {
         type Item<'a> = C::Ref<'a>;

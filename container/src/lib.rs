@@ -4,7 +4,7 @@
 
 use std::collections::VecDeque;
 
-/// An type containing a number of records accounted for by progress tracking.
+/// A type containing a number of records accounted for by progress tracking.
 ///
 /// The object stores a number of updates and thus is able to describe it count
 /// (`update_count()`) and whether it is empty (`is_empty()`). It is empty if the
@@ -19,21 +19,8 @@ pub trait Accountable {
     fn record_count(&self) -> i64;
 
     /// Determine if this contains any updates, corresponding to `update_count() == 0`.
-    /// It is a correctness error for this to by anything other than `self.record_count() == 0`.
+    /// It is a correctness error for this to be anything other than `self.record_count() == 0`.
     #[inline] fn is_empty(&self) -> bool { self.record_count() == 0 }
-}
-
-/// A container that allows iteration morally equivalent to [`IntoIterator`].
-///
-/// Iterating the container presents items in an implementation-specific order.
-/// The container's contents are not changed.
-pub trait IterContainer {
-    /// The type of elements when reading non-destructively from the container.
-    type ItemRef<'a> where Self: 'a;
-    /// Iterator type when reading from the container.
-    type Iter<'a>: Iterator<Item=Self::ItemRef<'a>> where Self: 'a;
-    /// Returns an iterator that reads the contents of this container.
-    fn iter(&self) -> Self::Iter<'_>;
 }
 
 /// A container that can drain itself.
@@ -191,14 +178,6 @@ impl<T> Accountable for Vec<T> {
     #[inline] fn is_empty(&self) -> bool { Vec::is_empty(self) }
 }
 
-impl<T> IterContainer for Vec<T> {
-    type ItemRef<'a> = &'a T where T: 'a;
-    type Iter<'a> = std::slice::Iter<'a, T> where Self: 'a;
-    #[inline] fn iter(&self) -> Self::Iter<'_> {
-        self.as_slice().iter()
-    }
-}
-
 impl<T> DrainContainer for Vec<T> {
     type Item<'a> = T where T: 'a;
     type DrainIter<'a> = std::vec::Drain<'a, T> where Self: 'a;
@@ -246,46 +225,32 @@ impl<T: Clone> PushInto<&&T> for Vec<T> {
 }
 
 mod rc {
-    use std::ops::Deref;
-    use std::rc::Rc;
-
-    use crate::{IterContainer, DrainContainer};
-
-    impl<T: crate::Accountable> crate::Accountable for Rc<T> {
-        #[inline] fn record_count(&self) -> i64 { std::ops::Deref::deref(self).record_count() }
-        #[inline] fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
+    impl<T: crate::Accountable> crate::Accountable for std::rc::Rc<T> {
+        #[inline] fn record_count(&self) -> i64 { self.as_ref().record_count() }
+        #[inline] fn is_empty(&self) -> bool { self.as_ref().is_empty() }
     }
-    impl<T: IterContainer> IterContainer for Rc<T> {
-        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
-        type Iter<'a> = T::Iter<'a> where Self: 'a;
-        #[inline] fn iter(&self) -> Self::Iter<'_> { self.deref().iter() }
-    }
-    impl<T: IterContainer> DrainContainer for Rc<T> {
-        type Item<'a> = T::ItemRef<'a> where Self: 'a;
-        type DrainIter<'a> = T::Iter<'a> where Self: 'a;
-        #[inline] fn drain(&mut self) -> Self::DrainIter<'_> { self.iter() }
+    impl<T> crate::DrainContainer for std::rc::Rc<T>
+    where
+        for<'a> &'a T: IntoIterator
+    {
+        type Item<'a> = <&'a T as IntoIterator>::Item where Self: 'a;
+        type DrainIter<'a> = <&'a T as IntoIterator>::IntoIter where Self: 'a;
+        #[inline] fn drain(&mut self) -> Self::DrainIter<'_> { self.into_iter() }
     }
 }
 
 mod arc {
-    use std::ops::Deref;
-    use std::sync::Arc;
-
-    use crate::{IterContainer, DrainContainer};
-
-    impl<T: crate::Accountable> crate::Accountable for Arc<T> {
-        #[inline] fn record_count(&self) -> i64 { std::ops::Deref::deref(self).record_count() }
-        #[inline] fn is_empty(&self) -> bool { std::ops::Deref::deref(self).is_empty() }
+    impl<T: crate::Accountable> crate::Accountable for std::sync::Arc<T> {
+        #[inline] fn record_count(&self) -> i64 { self.as_ref().record_count() }
+        #[inline] fn is_empty(&self) -> bool { self.as_ref().is_empty() }
     }
-    impl<T: IterContainer> IterContainer for Arc<T> {
-        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
-        type Iter<'a> = T::Iter<'a> where Self: 'a;
-        #[inline] fn iter(&self) -> Self::Iter<'_> { self.deref().iter() }
-    }
-    impl<T: IterContainer> DrainContainer for Arc<T> {
-        type Item<'a> = T::ItemRef<'a> where Self: 'a;
-        type DrainIter<'a> = T::Iter<'a> where Self: 'a;
-        #[inline] fn drain(&mut self) -> Self::DrainIter<'_> { self.iter() }
+    impl<T> crate::DrainContainer for std::sync::Arc<T>
+    where
+        for<'a> &'a T: IntoIterator
+    {
+        type Item<'a> = <&'a T as IntoIterator>::Item where Self: 'a;
+        type DrainIter<'a> = <&'a T as IntoIterator>::IntoIter where Self: 'a;
+        #[inline] fn drain(&mut self) -> Self::DrainIter<'_> { self.into_iter() }
     }
 }
 
