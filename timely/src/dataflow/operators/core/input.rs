@@ -75,7 +75,7 @@ pub trait Input : Scope {
     /// ```
     /// use std::rc::Rc;
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, Inspect};
+    /// use timely::dataflow::operators::core::{Input, InspectCore};
     /// use timely::container::CapacityContainerBuilder;
     ///
     /// // construct and execute a timely dataflow
@@ -84,7 +84,7 @@ pub trait Input : Scope {
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input_with_builder::<CapacityContainerBuilder<Rc<Vec<_>>>>();
-    ///         stream.inspect(|x| println!("hello {:?}", x));
+    ///         stream.inspect_container(|x| println!("hello {:?}", x));
     ///         input
     ///     });
     ///

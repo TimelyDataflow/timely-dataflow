@@ -1,13 +1,15 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
 use crate::Container;
-use crate::container::IterContainer;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
-pub trait Inspect<G: Scope, C: IterContainer>: InspectCore<G, C> + Sized {
+pub trait Inspect<G: Scope, C>: InspectCore<G, C> + Sized
+where
+    for<'a> &'a C: IntoIterator,
+{
     /// Runs a supplied closure on each observed data element.
     ///
     /// # Examples
@@ -21,10 +23,10 @@ pub trait Inspect<G: Scope, C: IterContainer>: InspectCore<G, C> + Sized {
     /// ```
     fn inspect<F>(&self, mut func: F) -> Self
     where
-        F: for<'a> FnMut(C::ItemRef<'a>) + 'static,
+        F: for<'a> FnMut(<&'a C as IntoIterator>::Item) + 'static,
     {
         self.inspect_batch(move |_, data| {
-            for datum in data.iter() { func(datum); }
+            for datum in data.into_iter() { func(datum); }
         })
     }
 
@@ -41,10 +43,10 @@ pub trait Inspect<G: Scope, C: IterContainer>: InspectCore<G, C> + Sized {
     /// ```
     fn inspect_time<F>(&self, mut func: F) -> Self
     where
-        F: for<'a> FnMut(&G::Timestamp, C::ItemRef<'a>) + 'static,
+        F: for<'a> FnMut(&G::Timestamp, <&'a C as IntoIterator>::Item) + 'static,
     {
         self.inspect_batch(move |time, data| {
-            for datum in data.iter() {
+            for datum in data.into_iter() {
                 func(time, datum);
             }
         })
@@ -91,7 +93,10 @@ pub trait Inspect<G: Scope, C: IterContainer>: InspectCore<G, C> + Sized {
     fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container + IterContainer> Inspect<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container> Inspect<G, C> for StreamCore<G, C>
+where
+    for<'a> &'a C: IntoIterator,
+{
     fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
         self.inspect_container(func)
     }
