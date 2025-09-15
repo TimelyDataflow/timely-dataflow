@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.23.0...timely-v0.24.0) - 2025-08-28
+
+This version of Timely has some exciting new features.
+
+* The `Distributor` trait offers a generalization of the `Exchange` type. It allows users to define custom distribution
+  strategies for routing data across workers. The `Exchange` type requires a row-by-row distribution and uses
+  container builders to form batches of data, which limits its flexibility. The `Distributor` trait, on the other hand,
+  allows users to define their own behavior for distributing data, and does not need to work row-by-row.
+  It only needs to uphold progress tracking requirements, which are that the amount of records on the input
+  matches those on the output.
+* We split the `Container` trait into multiple traits. The `Accountable` trait indicates the number of records
+  in a container for progress tracking and is the only required trait for a container.
+  The `iter` and `drain` functions are part of the new `IterContainer` and `DrainContainer` traits.
+  We do not require all containers to provide all of these traits, and it is mostly high-level operators that require
+  a container to implement them. We alos removed the `clear` function from containers as it
+  is not well-defined in all cases, for example for immutable data.
+* The `Map` trait offers a `flat_map_builder` function to accumulate flatmap logic.
+
+### Other
+
+- Introduce builder for flatmap operators ([#704](https://github.com/TimelyDataflow/timely-dataflow/pull/704))
+- Container rework ([#697](https://github.com/TimelyDataflow/timely-dataflow/pull/697))
+- Distributor trait ([#700](https://github.com/TimelyDataflow/timely-dataflow/pull/700))
+
 ## [0.23.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.22.0...timely-v0.23.0) - 2025-08-28
 
 ### Other
