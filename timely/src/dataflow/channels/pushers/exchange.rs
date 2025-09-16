@@ -19,7 +19,7 @@ pub trait Distributor<C> {
     /// Flush any remaining contents into the `pushers` at time `time`.
     fn flush<T: Clone, P: Push<Message<T, C>>>(&mut self, time: &T, pushers: &mut [P]);
     /// Optionally release resources, such as memory.
-    fn relax(&mut self);
+    fn relax(&mut self) { }
 }
 
 /// A distributor creating containers from a drainable container based
