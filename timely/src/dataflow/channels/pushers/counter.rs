@@ -1,6 +1,5 @@
 //! A wrapper which counts the number of records pushed past and updates a shared count map.
 
-use std::marker::PhantomData;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -11,13 +10,12 @@ use crate::Accountable;
 
 /// A wrapper which updates shared `produced` based on the number of records pushed.
 #[derive(Debug)]
-pub struct Counter<T, C, P: Push<Message<T, C>>> {
+pub struct Counter<T, P> {
     pushee: P,
     produced: Rc<RefCell<ChangeBatch<T>>>,
-    phantom: PhantomData<C>,
 }
 
-impl<T: Timestamp, C: Accountable, P> Push<Message<T, C>> for Counter<T, C, P> where P: Push<Message<T, C>> {
+impl<T: Timestamp, C: Accountable, P> Push<Message<T, C>> for Counter<T, P> where P: Push<Message<T, C>> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         if let Some(message) = message {
@@ -31,13 +29,12 @@ impl<T: Timestamp, C: Accountable, P> Push<Message<T, C>> for Counter<T, C, P> w
     }
 }
 
-impl<T, C, P: Push<Message<T, C>>> Counter<T, C, P> where T : Ord+Clone+'static {
+impl<T, P> Counter<T, P> where T : Ord+Clone+'static {
     /// Allocates a new `Counter` from a pushee and shared counts.
-    pub fn new(pushee: P) -> Counter<T, C, P> {
+    pub fn new(pushee: P) -> Counter<T, P> {
         Counter {
             pushee,
             produced: Rc::new(RefCell::new(ChangeBatch::new())),
-            phantom: PhantomData,
         }
     }
     /// A references to shared changes in counts, for cloning or draining.

@@ -148,11 +148,11 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 /// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
 pub struct UnorderedHandle<T: Timestamp, CB: ContainerBuilder> {
-    buffer: PushBuffer<T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>,
+    buffer: PushBuffer<T, CB, Counter<T, Tee<T, CB::Container>>>,
 }
 
 impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
-    fn new(pusher: Counter<T, CB::Container, Tee<T, CB::Container>>) -> UnorderedHandle<T, CB> {
+    fn new(pusher: Counter<T, Tee<T, CB::Container>>) -> UnorderedHandle<T, CB> {
         UnorderedHandle {
             buffer: PushBuffer::new(pusher),
         }
@@ -160,7 +160,7 @@ impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
 
     /// Allocates a new automatically flushing session based on the supplied capability.
     #[inline]
-    pub fn session_with_builder(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'_, T, CB, Counter<T, CB::Container, Tee<T, CB::Container>>>> {
+    pub fn session_with_builder(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'_, T, CB, Counter<T, Tee<T, CB::Container>>>> {
         ActivateOnDrop::new(self.buffer.autoflush_session_with_builder(cap.capability.clone()), Rc::clone(&cap.address), Rc::clone(&cap.activations))
     }
 }
@@ -168,7 +168,7 @@ impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
 impl<T: Timestamp, C: Container> UnorderedHandle<T, CapacityContainerBuilder<C>> {
     /// Allocates a new automatically flushing session based on the supplied capability.
     #[inline]
-    pub fn session(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'_, T, CapacityContainerBuilder<C>, Counter<T, C, Tee<T, C>>>> {
+    pub fn session(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'_, T, CapacityContainerBuilder<C>, Counter<T, Tee<T, C>>>> {
         self.session_with_builder(cap)
     }
 }
