@@ -3,7 +3,6 @@
 use std::fmt::Debug;
 use std::any::Any;
 use std::default::Default;
-use std::hash::Hash;
 
 use crate::ExchangeData;
 use crate::order::PartialOrder;
@@ -12,7 +11,7 @@ use crate::order::PartialOrder;
 ///
 /// By implementing this trait, you promise that the type's [PartialOrder] implementation
 /// is compatible with [Ord], such that if `a.less_equal(b)` then `a <= b`.
-pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+ExchangeData+Hash+Ord {
+pub trait Timestamp: Clone+Eq+PartialOrder+Ord+Debug+Any+ExchangeData {
     /// A type summarizing action on a timestamp along a dataflow path.
     type Summary : PathSummary<Self> + 'static;
     /// A unique minimum value in our partial order.
@@ -22,7 +21,7 @@ pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+ExchangeData+Hash+Ord 
 }
 
 /// A summary of how a timestamp advances along a timely dataflow path.
-pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
+pub trait PathSummary<T> : Clone+Eq+PartialOrder+Debug+Default {
     /// Advances a timestamp according to the timestamp actions on the path.
     ///
     /// The path may advance the timestamp sufficiently that it is no longer valid, for example if
