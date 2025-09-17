@@ -1,7 +1,7 @@
 //! Conversion to the `StreamCore` type from iterators.
 
-use crate::container::{CapacityContainerBuilder, ContainerBuilder, SizableContainer, PushInto};
-use crate::Container;
+use crate::container::{CapacityContainerBuilder, SizableContainer, PushInto};
+use crate::{Container, ContainerBuilder};
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::{StreamCore, Scope};
 

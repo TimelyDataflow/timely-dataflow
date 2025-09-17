@@ -85,11 +85,11 @@ pub trait PushInto<T> {
 ///
 /// The trait does not prescribe any specific ordering guarantees, and each implementation can
 /// decide to represent a push order for `extract` and `finish`, or not.
-pub trait ContainerBuilder: Default + 'static {
+pub trait ContainerBuilder: Default {
     /// The container type we're building.
     // The container is `Clone` because `Tee` requires it, otherwise we need to repeat it
     // all over Timely. `'static` because we don't want lifetimes everywhere.
-    type Container: Accountable + Default + Clone + 'static;
+    type Container;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
