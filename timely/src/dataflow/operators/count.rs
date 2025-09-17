@@ -48,7 +48,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     }
 }
 
-impl<G: Scope, D: Data> Accumulate<G, D> for Stream<G, D> {
+impl<G: Scope<Timestamp: ::std::hash::Hash>, D: Data> Accumulate<G, D> for Stream<G, D> {
     fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A> {
 
         let mut accums = HashMap::new();
