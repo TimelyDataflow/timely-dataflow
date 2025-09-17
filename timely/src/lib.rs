@@ -110,6 +110,10 @@ impl<T: Clone+'static> Data for T { }
 pub trait Container: Accountable + Default + Clone + 'static { }
 impl<C: Accountable + Default + Clone + 'static> Container for C { }
 
+/// A composite trait for types usable as container builders in timely dataflow.
+pub trait ContainerBuilder: timely_container::ContainerBuilder<Container: Container> + Default + 'static {}
+impl<CB: timely_container::ContainerBuilder<Container: Container> + Default + 'static> ContainerBuilder for CB {}
+
 /// A composite trait for types usable on exchange channels in timely dataflow.
 ///
 /// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`

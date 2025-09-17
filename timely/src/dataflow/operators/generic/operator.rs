@@ -12,8 +12,8 @@ use crate::dataflow::{Scope, StreamCore};
 use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
-use crate::Container;
-use crate::container::{ContainerBuilder, CapacityContainerBuilder};
+use crate::{Container, ContainerBuilder};
+use crate::container::CapacityContainerBuilder;
 
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, C1> {
