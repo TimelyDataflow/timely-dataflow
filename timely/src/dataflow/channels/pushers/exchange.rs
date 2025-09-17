@@ -1,7 +1,8 @@
 //! The exchange pattern distributes pushed data between many target pushees.
 
+use crate::ContainerBuilder;
 use crate::communication::Push;
-use crate::container::{ContainerBuilder, DrainContainer, PushInto};
+use crate::container::{DrainContainer, PushInto};
 use crate::dataflow::channels::Message;
 
 /// Distribute containers to several pushers.
