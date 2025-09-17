@@ -218,7 +218,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 pub struct Handle<T: Timestamp, CB: ContainerBuilder> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
-    pushers: Vec<Counter<T, CB::Container, Tee<T, CB::Container>>>,
+    pushers: Vec<Counter<T, Tee<T, CB::Container>>>,
     builder: CB,
     buffer: CB::Container,
     now_at: T,
@@ -341,7 +341,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
 
     fn register(
         &mut self,
-        pusher: Counter<T, CB::Container, Tee<T, CB::Container>>,
+        pusher: Counter<T, Tee<T, CB::Container>>,
         progress: Rc<RefCell<ChangeBatch<T>>>,
     ) {
         // flush current contents, so new registrant does not see existing data.
@@ -380,7 +380,7 @@ impl<T: Timestamp, CB: ContainerBuilder> Handle<T, CB> {
     fn send_container(
         container: &mut CB::Container,
         buffer: &mut CB::Container,
-        pushers: &mut [Counter<T, CB::Container, Tee<T, CB::Container>>],
+        pushers: &mut [Counter<T, Tee<T, CB::Container>>],
         now_at: &T
     ) {
         for index in 0 .. pushers.len() {

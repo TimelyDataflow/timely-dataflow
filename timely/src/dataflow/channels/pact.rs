@@ -110,11 +110,7 @@ mod distributor {
         C: Accountable + ContainerBytes + Send + 'static,
         D: Distributor<C> + 'static,
     {
-        type Pusher = Exchange<
-            T,
-            LogPusher<Box<dyn Push<Message<T, C>>>>,
-            D
-        >;
+        type Pusher = Exchange<T, LogPusher<Box<dyn Push<Message<T, C>>>>, D>;
         type Puller = LogPuller<Box<dyn Pull<Message<T, C>>>>;
         fn connect<A: AsWorker>(self, allocator: &mut A, identifier: usize, address: Rc<[usize]>, logging: Option<TimelyLogger>) -> (Self::Pusher, Self::Puller) {
             let (senders, receiver) = allocator.allocate::<Message<T, C>>(identifier, address);

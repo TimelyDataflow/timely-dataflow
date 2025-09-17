@@ -159,14 +159,14 @@ pub fn new_input_handle<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>>(
 /// pusher is flushed (via the `cease` method) once it is no longer used.
 #[derive(Debug)]
 pub struct OutputWrapper<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> {
-    push_buffer: Buffer<T, CB, PushCounter<T, CB::Container, P>>,
+    push_buffer: Buffer<T, CB, PushCounter<T, P>>,
     internal_buffer: Rc<RefCell<ChangeBatch<T>>>,
     port: usize,
 }
 
 impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> OutputWrapper<T, CB, P> {
     /// Creates a new output wrapper from a push buffer.
-    pub fn new(push_buffer: Buffer<T, CB, PushCounter<T, CB::Container, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>, port: usize) -> Self {
+    pub fn new(push_buffer: Buffer<T, CB, PushCounter<T, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>, port: usize) -> Self {
         OutputWrapper {
             push_buffer,
             internal_buffer,
@@ -188,7 +188,7 @@ impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Out
 
 /// Handle to an operator's output stream.
 pub struct OutputHandleCore<'a, T: Timestamp, CB: ContainerBuilder+'a, P: Push<Message<T, CB::Container>>+'a> {
-    push_buffer: &'a mut Buffer<T, CB, PushCounter<T, CB::Container, P>>,
+    push_buffer: &'a mut Buffer<T, CB, PushCounter<T, P>>,
     internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
     port: usize,
 }
@@ -220,7 +220,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     ///            });
     /// });
     /// ```
-    pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CB, PushCounter<T, CB::Container, P>> where 'a: 'b {
+    pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CB, PushCounter<T, P>> where 'a: 'b {
         debug_assert!(cap.valid_for_output(self.internal_buffer, self.port), "Attempted to open output session with invalid capability");
         self.push_buffer.session_with_builder(cap.time())
     }
@@ -255,7 +255,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Message<T, C>>> OutputHandleCore<'a
     /// });
     /// ```
     #[inline]
-    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CapacityContainerBuilder<C>, PushCounter<T, C, P>> where 'a: 'b {
+    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CapacityContainerBuilder<C>, PushCounter<T, P>> where 'a: 'b {
         self.session_with_builder(cap)
     }
 }

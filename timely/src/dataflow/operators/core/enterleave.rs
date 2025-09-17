@@ -131,7 +131,7 @@ impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for
 
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> {
-    targets: Counter<TInner, TContainer, Tee<TInner, TContainer>>,
+    targets: Counter<TInner, Tee<TInner, TContainer>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
