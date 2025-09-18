@@ -40,7 +40,6 @@
 
 use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pushers::Counter as PushCounter;
-use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 use crate::progress::Timestamp;
 
@@ -76,7 +75,7 @@ where
 
         let (targets, stream) = builder.new_output();
 
-        let mut output = PushBuffer::new(PushCounter::new(targets));
+        let mut output = PushCounter::new(targets);
         let mut event_streams = self.into_iter().collect::<Vec<_>>();
         let mut started = false;
         let mut allocation: C = Default::default();
@@ -100,14 +99,14 @@ where
                                 progress.internals[0].extend(vec.into_iter());
                             },
                             Owned(Event::Messages(time, mut data)) => {
-                                output.session(&time).give_container(&mut data);
+                                output.give(time.clone(), &mut data);
                             }
                             Borrowed(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.iter().cloned());
                             },
                             Borrowed(Event::Messages(time, data)) => {
                                 allocation.clone_from(data);
-                                output.session(time).give_container(&mut allocation);
+                                output.give(time.clone(), &mut allocation);
                             }
                         }
                     }
@@ -118,8 +117,9 @@ where
                     activator.activate_after(delay);
                 }
 
-                output.cease();
-                output.inner().produced().borrow_mut().drain_into(&mut progress.produceds[0]);
+                use timely_communication::Push;
+                output.push(&mut None);
+                output.produced().borrow_mut().drain_into(&mut progress.produceds[0]);
 
                 false
             }

@@ -5,7 +5,6 @@ pub use self::counter::Counter;
 pub mod tee;
 pub mod exchange;
 pub mod counter;
-pub mod buffer;
 pub mod progress;
 
 /// An output pusher which validates capabilities, records progress, and tees output.

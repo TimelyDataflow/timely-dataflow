@@ -213,24 +213,17 @@ pub struct Session<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: Capabilit
 impl<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: CapabilityTrait<T>> Session<'a, 'b, T, CB, CT> {
 
     /// Provides one record at the time specified by the `Session`.
-    #[inline]
-    pub fn give<D>(&mut self, data: D) where CB: PushInto<D> {
+    #[inline] pub fn give<D>(&mut self, data: D) where CB: PushInto<D> {
         self.buffer.builder.push_into(data);
         self.extract_and_send();
     }
-
     /// Provides an iterator of records at the time specified by the `Session`.
-    #[inline]
-    pub fn give_iterator<I>(&mut self, iter: I)
-    where
-        I: Iterator,
-        CB: PushInto<I::Item>,
-    {
+    #[inline] pub fn give_iterator<I>(&mut self, iter: I) where I: Iterator, CB: PushInto<I::Item> {
         for item in iter { self.buffer.builder.push_into(item); }
         self.extract_and_send();
     }
     /// Provides an entire container, flushing the container builder.
-    pub fn give_container(&mut self, container: &mut CB::Container) {
+    #[inline] pub fn give_container(&mut self, container: &mut CB::Container) {
         self.buffer.session.give(&self.capability, container);
     }
 

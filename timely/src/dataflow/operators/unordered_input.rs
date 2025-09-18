@@ -51,7 +51,7 @@ pub trait UnorderedInput<G: Scope> {
     ///
     ///     // feed values 0..10 at times 0..10.
     ///     for round in 0..10 {
-    ///         input.session(cap.clone()).give(round);
+    ///         input.activate().session(&cap).give(round);
     ///         cap = cap.delayed(&(round + 1));
     ///         worker.step();
     ///     }
