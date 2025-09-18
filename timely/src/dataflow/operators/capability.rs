@@ -342,7 +342,7 @@ impl<T: Timestamp> Debug for InputCapability<T> {
     }
 }
 
-/// Capability that activates on drop.
+/// Capability that activates on drop or downgrade.
 #[derive(Clone, Debug)]
 pub struct ActivateCapability<T: Timestamp> {
     pub(crate) capability: Capability<T>,

@@ -177,28 +177,21 @@ pub struct Session<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: Capabilit
 impl<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: CapabilityTrait<T>> Session<'a, 'b, T, CB, CT> {
 
     /// Provides one record at the time specified by the `Session`.
-    #[inline]
-    pub fn give<D>(&mut self, data: D) where CB: PushInto<D> {
+    #[inline] pub fn give<D>(&mut self, data: D) where CB: PushInto<D> {
         self.buffer.builder.push_into(data);
         self.extract_and_send();
     }
-
     /// Provides an iterator of records at the time specified by the `Session`.
-    #[inline]
-    pub fn give_iterator<I>(&mut self, iter: I)
-    where
-        I: Iterator,
-        CB: PushInto<I::Item>,
-    {
+    #[inline] pub fn give_iterator<I>(&mut self, iter: I) where I: Iterator, CB: PushInto<I::Item> {
         for item in iter { self.buffer.builder.push_into(item); }
         self.extract_and_send();
     }
     /// Provide a container at the time specified by the [Session].
-    pub fn give_container(&mut self, container: &mut CB::Container) {
+    #[inline] pub fn give_container(&mut self, container: &mut CB::Container) {
         self.buffer.session.give(&self.capability, container);
     }
     /// Provide multiple containers at the time specifid by the [Session].
-    pub fn give_containers<'c>(&mut self, containers: impl Iterator<Item = &'c mut CB::Container>) {
+    #[inline] pub fn give_containers<'c>(&mut self, containers: impl Iterator<Item = &'c mut CB::Container>) {
         for container in containers { self.buffer.session.give(&self.capability, container); }
     }
 
