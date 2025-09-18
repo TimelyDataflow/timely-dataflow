@@ -85,7 +85,7 @@ impl<G: Scope, C: Container> Concatenate<G, C> for G {
                 let mut output = output.activate();
                 for handle in handles.iter_mut() {
                     handle.for_each(|time, data| {
-                        output.session(&time).give_container(data);
+                        output.give(&time, data);
                     })
                 }
             }

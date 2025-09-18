@@ -37,6 +37,7 @@ use crate::dataflow::channels::pullers::counter::ConsumedGuard;
 pub trait CapabilityTrait<T: Timestamp> {
     /// The timestamp associated with the capability.
     fn time(&self) -> &T;
+    /// Validates that the capability is valid for a specific internal buffer and output port.
     fn valid_for_output(&self, query_buffer: &Rc<RefCell<ChangeBatch<T>>>, port: usize) -> bool;
 }
 
@@ -229,7 +230,7 @@ type CapabilityUpdates<T> = Rc<RefCell<Vec<Rc<RefCell<ChangeBatch<T>>>>>>;
 
 /// An capability of an input port.
 ///
-/// Holding onto this capability will implicitly holds onto a capability for all the outputs
+/// Holding onto this capability will implicitly hold on to a capability for all the outputs
 /// ports this input is connected to, after the connection summaries have been applied.
 ///
 /// This input capability supplies a `retain_for_output(self)` method which consumes the input
