@@ -77,6 +77,9 @@ impl<G: Scope, C: Container + DrainContainer> Partition<G, C> for StreamCore<G, 
                     while let Some((part, data)) = parts.pop_first() {
                         for datum in data.into_iter() {
                             c_build.push_into(datum);
+                            while let Some(container) = c_build.extract() {
+                                handles[part as usize].give(&cap, container);
+                            }
                         }
                         while let Some(container) = c_build.finish() {
                             handles[part as usize].give(&cap, container);
