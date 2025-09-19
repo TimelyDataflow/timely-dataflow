@@ -118,7 +118,7 @@ where
                 }
 
                 use timely_communication::Push;
-                output.push(&mut None);
+                output.done();
                 output.produced().borrow_mut().drain_into(&mut progress.produceds[0]);
 
                 false

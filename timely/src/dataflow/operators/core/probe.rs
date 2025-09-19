@@ -117,7 +117,7 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
                     output.give(time.clone(), data);
                 }
                 use timely_communication::Push;
-                output.push(&mut None);
+                output.done();
 
                 // extract what we know about progress from the input and output adapters.
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);

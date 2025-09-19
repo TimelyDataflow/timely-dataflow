@@ -63,5 +63,5 @@ impl<'a, T: Timestamp, C, P: Push<Message<T, C>>> std::ops::DerefMut for Progres
 }
 
 impl<'a, T: Timestamp, C, P: Push<Message<T, C>>> Drop for ProgressSession<'a, T, C, P> {
-    fn drop(&mut self) { self.borrow.pushee.push(&mut None); }
+    fn drop(&mut self) { self.borrow.pushee.done(); }
 }
