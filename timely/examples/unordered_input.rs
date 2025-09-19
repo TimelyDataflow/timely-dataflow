@@ -1,6 +1,5 @@
 use timely::dataflow::operators::*;
 use timely::Config;
-// use timely::progress::timestamp::RootTimestamp;
 
 fn main() {
     timely::execute(Config::thread(), |worker| {
@@ -11,7 +10,7 @@ fn main() {
         });
 
         for round in 0..10 {
-            input.session(cap.clone()).give(round);
+            input.activate().session(&cap).give(round);
             cap = cap.delayed(&(round + 1));
             worker.step();
         }

@@ -9,15 +9,13 @@ use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
 use crate::Container;
-use crate::container::ContainerBuilder;
 use crate::dataflow::{Scope, StreamCore};
-use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
-use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
+use crate::dataflow::channels::pushers;
 use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::capability::Capability;
-use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_handle, OutputWrapper};
+use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_handle};
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 use crate::dataflow::operators::generic::builder_raw::OperatorShape;
 use crate::progress::operate::PortConnectivity;
@@ -90,7 +88,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<CB: ContainerBuilder>(&mut self) -> (OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>, StreamCore<G, CB::Container>) {
+    pub fn new_output<C: Container>(&mut self) -> (pushers::Output<G::Timestamp, C>, StreamCore<G, C>) {
         let connection = (0..self.builder.shape().inputs()).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
@@ -103,9 +101,9 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_output_connection<CB: ContainerBuilder, I>(&mut self, connection: I) -> (
-        OutputWrapper<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>,
-        StreamCore<G, CB::Container>
+    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (
+        pushers::Output<G::Timestamp, C>,
+        StreamCore<G, C>,
     )
     where
         I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)> + Clone,
@@ -116,14 +114,14 @@ impl<G: Scope> OperatorBuilder<G> {
         let internal = Rc::new(RefCell::new(ChangeBatch::new()));
         self.internal.borrow_mut().push(Rc::clone(&internal));
 
-        let mut buffer = PushBuffer::new(PushCounter::new(tee));
-        self.produced.push(Rc::clone(buffer.inner().produced()));
+        let counter = PushCounter::new(tee);
+        self.produced.push(Rc::clone(counter.produced()));
 
         for (input, entry) in connection {
             self.summaries[input].borrow_mut().add_port(new_output, entry);
         }
 
-        (OutputWrapper::new(buffer, internal, new_output), stream)
+        (pushers::Output::new(counter, internal, new_output), stream)
     }
 
     /// Creates an operator implementation from supplied logic constructor.
@@ -222,7 +220,7 @@ impl<G: Scope> OperatorBuilder<G> {
 
 #[cfg(test)]
 mod tests {
-    use crate::container::CapacityContainerBuilder;
+    use crate::dataflow::operators::generic::OutputBuilder;
 
     #[test]
     #[should_panic]
@@ -237,9 +235,10 @@ mod tests {
 
             let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
 
-            // let mut input = builder.new_input(stream, Pipeline);
-            let (mut output1, _stream1) = builder.new_output::<CapacityContainerBuilder<Vec<()>>>();
-            let (mut output2, _stream2) = builder.new_output::<CapacityContainerBuilder<Vec<()>>>();
+            let (output1, _stream1) = builder.new_output::<Vec<()>>();
+            let (output2, _stream2) = builder.new_output::<Vec<()>>();
+            let mut output1 = OutputBuilder::from(output1);
+            let mut output2 = OutputBuilder::from(output2);
 
             builder.build(move |capabilities| {
                 move |_frontiers| {
@@ -267,9 +266,10 @@ mod tests {
 
             let mut builder = OperatorBuilder::new("Failure".to_owned(), scope.clone());
 
-            // let mut input = builder.new_input(stream, Pipeline);
-            let (mut output1, _stream1) = builder.new_output::<CapacityContainerBuilder<Vec<()>>>();
-            let (mut output2, _stream2) = builder.new_output::<CapacityContainerBuilder<Vec<()>>>();
+            let (output1, _stream1) = builder.new_output::<Vec<()>>();
+            let (output2, _stream2) = builder.new_output::<Vec<()>>();
+            let mut output1 = OutputBuilder::from(output1);
+            let mut output2 = OutputBuilder::from(output2);
 
             builder.build(move |mut capabilities| {
                 move |_frontiers| {

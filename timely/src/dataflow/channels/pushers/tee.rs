@@ -29,7 +29,7 @@ impl<T: Data, C: Container> Push<Message<T, C>> for Tee<T, C> {
         }
         else {
             for index in 1..pushers.len() {
-                pushers[index-1].push(&mut None);
+                pushers[index-1].done();
             }
         }
         if !pushers.is_empty() {
