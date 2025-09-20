@@ -12,10 +12,12 @@ fn gh_523() {
                 .input_from(&mut input)
                 .unary(Pipeline, "Test", move |_, _| {
                     move |input, output| {
-                        input.for_each(|cap, data| {
+                        input.for_each_time(|cap, data| {
                             let mut session = output.session(&cap);
-                            session.give_container(&mut Vec::new());
-                            session.give_container(data);
+                            for data in data {
+                                session.give_container(&mut Vec::new());
+                                session.give_container(data);
+                            }
                         });
                     }
                 })

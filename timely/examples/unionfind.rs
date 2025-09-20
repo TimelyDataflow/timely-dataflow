@@ -61,10 +61,9 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
 
             move |input, output| {
 
-                while let Some((time, data)) = input.next() {
-
+                input.for_each_time(|time, data| {
                     let mut session = output.session(&time);
-                    for &(mut x, mut y) in data.iter() {
+                    for &mut (mut x, mut y) in data.flatten() {
 
                         // grow arrays if required.
                         let m = ::std::cmp::max(x, y);
@@ -86,7 +85,7 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
                             }
                         }
                     }
-                }
+                });
             }
         })
     }

@@ -78,20 +78,20 @@ fn main() {
             // Buffer records until all prior timestamps have completed.
             .binary_frontier(&cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 
-                move |input1, input2, output| {
+                move |(input1, frontier1), (input2, frontier2), output| {
 
                     // Stash received data.
-                    input1.for_each(|time, data| {
+                    input1.for_each_time(|time, data| {
                         stash.entry(time.retain())
                              .or_insert(Vec::new())
-                             .extend(data.drain(..));
+                             .extend(data.flat_map(|d| d.drain(..)));
                     });
 
                     // Consider sending stashed data.
                     for (time, data) in stash.iter_mut() {
                         // Only send data once the probe is not less than the time.
                         // That is, once we have finished all strictly prior work.
-                        if !input2.frontier().less_than(time.time()) {
+                        if !frontier2.less_than(time.time()) {
                             output.session(&time).give_iterator(data.drain(..));
                         }
                     }

@@ -40,9 +40,9 @@ fn main() {
                     move |input1, input2, output| {
 
                         // Drain first input, check second map, update first map.
-                        input1.for_each(|time, data| {
+                        input1.for_each_time(|time, data| {
                             let mut session = output.session(&time);
-                            for (key, val1) in data.drain(..) {
+                            for (key, val1) in data.flat_map(|d| d.drain(..)) {
                                 if let Some(values) = map2.get(&key) {
                                     for val2 in values.iter() {
                                         session.give((val1, *val2));
@@ -54,9 +54,9 @@ fn main() {
                         });
 
                         // Drain second input, check first map, update second map.
-                        input2.for_each(|time, data| {
+                        input2.for_each_time(|time, data| {
                             let mut session = output.session(&time);
-                            for (key, val2) in data.drain(..) {
+                            for (key, val2) in data.flat_map(|d| d.drain(..)) {
                                 if let Some(values) = map1.get(&key) {
                                     for val1 in values.iter() {
                                         session.give((*val1, val2));

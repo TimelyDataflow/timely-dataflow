@@ -29,15 +29,15 @@ fn main() {
                     let mut queues = HashMap::new();
                     let mut counts = HashMap::new();
 
-                    move |input, output| {
-                        while let Some((time, data)) = input.next() {
+                    move |(input, frontier), output| {
+                        input.for_each_time(|time, data| {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
-                                  .push(std::mem::take(data));
-                        }
+                                  .extend(data.map(std::mem::take));
+                        });
 
                         for (key, val) in queues.iter_mut() {
-                            if !input.frontier().less_equal(key.time()) {
+                            if !frontier.less_equal(key.time()) {
                                 let mut session = output.session(key);
                                 for mut batch in val.drain(..) {
                                     for (word, diff) in batch.drain(..) {

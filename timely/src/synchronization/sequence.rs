@@ -173,12 +173,11 @@ impl<T: ExchangeData> Sequencer<T> {
             .sink(
                 Exchange::new(|x: &(usize, usize, T)| x.0 as u64),
                 "SequenceOutput",
-                move |input| {
+                move |(input, frontier)| {
 
                     // grab each command and queue it up
-                    input.for_each(|time, data| {
-                        recvd.reserve(data.len());
-                        for (worker, counter, element) in data.drain(..) {
+                    input.for_each_time(|time, data| {
+                        for (worker, counter, element) in data.flat_map(|d| d.drain(..)) {
                             recvd.push(((*time.time(), worker, counter), element));
                         }
                     });
@@ -194,7 +193,7 @@ impl<T: ExchangeData> Sequencer<T> {
                     }
 
                     // determine how many (which) elements to read from `recvd`.
-                    let count = recvd.iter().filter(|&((ref time, _, _), _)| !input.frontier().less_equal(time)).count();
+                    let count = recvd.iter().filter(|&((ref time, _, _), _)| !frontier.less_equal(time)).count();
                     let iter = recvd.drain(..count);
 
                     if let Some(recv_queue) = recv_weak.upgrade() {

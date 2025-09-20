@@ -5,10 +5,10 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
-use crate::progress::frontier::MutableAntichain;
 use crate::progress::operate::PortConnectivity;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
@@ -21,6 +21,25 @@ use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
+#[must_use]
+pub struct InputSession<'a, T: Timestamp, C, P: Pull<Message<T, C>>> {
+    input: &'a mut InputHandleCore<T, C, P>,
+}
+
+impl<'a, T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputSession<'a, T, C, P> {
+    /// Iterates through distinct capabilities and the lists of containers associated with each.
+    pub fn for_each_time<F>(self, logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>), C: Default {
+        self.input.for_each_time(logic)
+    }
+    /// Iterates through pairs of capability and container.
+    ///
+    /// The `for_each_time` method is equivalent, but groups containers by capability and is preferred,
+    /// in that it often leads to grouping work by capability, including the creation of output sessions.
+    pub fn for_each<F>(self, logic: F) where F: FnMut(InputCapability<T>, &mut C) {
+        self.input.for_each(logic)
+    }
+}
+
 /// Handle to an operator's input stream.
 pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
     pull_counter: PullCounter<T, C, P>,
@@ -30,23 +49,15 @@ pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
     /// Each timestamp received through this input may only produce output timestamps
     /// greater or equal to the input timestamp subjected to at least one of these summaries.
     summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
+    /// Staged capabilities and containers.
+    staging: VecDeque<(InputCapability<T>, C)>,
+    staged: Vec<C>,
 }
-
-/// Handle to an operator's input stream, specialized to vectors.
-pub type InputHandle<T, D, P> = InputHandleCore<T, Vec<D>, P>;
-
-/// Handle to an operator's input stream and frontier.
-pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: 'a, P: Pull<Message<T, C>>+'a> {
-    /// The underlying input handle.
-    pub handle: &'a mut InputHandleCore<T, C, P>,
-    /// The frontier as reported by timely progress tracking.
-    pub frontier: &'a MutableAntichain<T>,
-}
-
-/// Handle to an operator's input stream and frontier, specialized to vectors.
-pub type FrontieredInputHandle<'a, T, D, P> = FrontieredInputHandleCore<'a, T, Vec<D>, P>;
 
 impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
+
+    /// Activates an input handle with a session that reorders inputs and must be drained.
+    pub fn activate(&mut self) -> InputSession<'_, T, C, P> { InputSession { input: self } }
 
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
@@ -59,78 +70,29 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
             (InputCapability::new(Rc::clone(internal), Rc::clone(summaries), guard), &mut bundle.data)
         })
     }
-
-    /// Repeatedly calls `logic` till exhaustion of the available input data.
-    /// `logic` receives a capability and an input buffer.
+    /// Iterates through pairs of capability and container.
     ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_container(data);
-    ///                });
-    ///            });
-    /// });
-    /// ```
-    #[inline]
-    pub fn for_each<F: FnMut(InputCapability<T>, &mut C)>(&mut self, mut logic: F) {
+    /// The `for_each_time` method is equivalent, but groups containers by capability and is preferred,
+    /// in that it often leads to grouping work by capability, including the creation of output sessions.
+    pub fn for_each<F>(&mut self, mut logic: F) where F: FnMut(InputCapability<T>, &mut C) {
+        while let Some((cap, data)) = self.next() { logic(cap, data); }
+    }
+    /// Iterates through distinct capabilities and the lists of containers associated with each.
+    pub fn for_each_time<F>(&mut self, mut logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>), C: Default {
         while let Some((cap, data)) = self.next() {
-            logic(cap, data);
+            let data = std::mem::take(data);
+            self.staging.push_back((cap, data));
         }
-    }
+        self.staging.make_contiguous().sort_by(|x,y| x.0.time().cmp(&y.0.time()));
 
-}
-
-impl<'a, T: Timestamp, C: Accountable, P: Pull<Message<T, C>>+'a> FrontieredInputHandleCore<'a, T, C, P> {
-    /// Allocate a new frontiered input handle.
-    pub fn new(handle: &'a mut InputHandleCore<T, C, P>, frontier: &'a MutableAntichain<T>) -> Self {
-        FrontieredInputHandleCore {
-            handle,
-            frontier,
+        while let Some((cap, data)) = self.staging.pop_front() {
+            self.staged.push(data);
+            let more = self.staging.iter().take_while(|(c,_)| c.time() == cap.time()).count();
+            self.staged.extend(self.staging.drain(..more).map(|(_,d)| d));
+            logic(cap, self.staged.iter_mut());
+            // Could return these back to the input ..
+            self.staged.clear();
         }
-    }
-
-    /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
-    /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
-    /// Returns `None` when there's no more data available.
-    #[inline]
-    pub fn next(&mut self) -> Option<(InputCapability<T>, &mut C)> {
-        self.handle.next()
-    }
-
-    /// Repeatedly calls `logic` till exhaustion of the available input data.
-    /// `logic` receives a capability and an input buffer.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
-    ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_container(data);
-    ///                });
-    ///            });
-    /// });
-    /// ```
-    #[inline]
-    pub fn for_each<F: FnMut(InputCapability<T>, &mut C)>(&mut self, logic: F) {
-        self.handle.for_each(logic)
-    }
-
-    /// Inspect the frontier associated with this input.
-    #[inline]
-    pub fn frontier(&self) -> &'a MutableAntichain<T> {
-        self.frontier
     }
 }
 
@@ -149,6 +111,8 @@ pub fn new_input_handle<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>>(
         pull_counter,
         internal,
         summaries,
+        staging: Default::default(),
+        staged: Default::default(),
     }
 }
 
@@ -212,10 +176,10 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary::<CapacityContainerBuilder<_>, _, _, _>(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each(|cap, data| {
+    ///                input.for_each_time(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session_with_builder(&cap.delayed(&time))
-    ///                          .give_container(data);
+    ///                          .give_containers(data);
     ///                });
     ///            });
     /// });
@@ -246,10 +210,10 @@ impl<'a, T: Timestamp, C: Container, P: Push<Message<T, C>>> OutputHandleCore<'a
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each(|cap, data| {
+    ///                input.for_each_time(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session(&cap.delayed(&time))
-    ///                          .give_container(data);
+    ///                          .give_containers(data);
     ///                });
     ///            });
     /// });
