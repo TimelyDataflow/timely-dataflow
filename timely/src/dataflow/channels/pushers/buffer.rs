@@ -115,7 +115,7 @@ impl<T, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Buffer<T, CB, 
             Message::push_at(container, time, &mut self.pusher);
         }
     }
-    
+
     /// An internal implementation of push that should only be called by sessions.
     #[inline]
     fn push_internal<D>(&mut self, item: D) where CB: PushInto<D> {
@@ -138,10 +138,13 @@ where
     T: Eq + Clone + 'a,
     P: Push<Message<T, CB::Container>> + 'a,
 {
-    /// Provide a container at the time specified by the [Session]. Maintains FIFO order with
-    /// previously pushed data.
+    /// Provide a container at the time specified by the [Session].
     pub fn give_container(&mut self, container: &mut CB::Container) {
         self.buffer.give_container(container)
+    }
+    /// Provide multiple containers at the time specifid by the [Session].
+    pub fn give_containers<'b>(&mut self, containers: impl Iterator<Item = &'b mut CB::Container>) {
+        for container in containers { self.buffer.give_container(container); }
     }
 }
 

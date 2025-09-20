@@ -41,19 +41,21 @@ fn main() {
 
                     let timer = ::std::time::Instant::now();
 
-                    move |input1, input2, output| {
+                    move |(input1, frontier1), (input2, frontier2), output| {
 
                         // hold on to edge changes until it is time.
-                        input1.for_each(|time, data| {
-                            edge_stash.entry(time.retain()).or_default().append(data);
+                        input1.for_each_time(|time, data| {
+                            let entry = edge_stash.entry(time.retain()).or_default();
+                            data.for_each(|data| entry.append(data));
                         });
 
                         // hold on to rank changes until it is time.
-                        input2.for_each(|time, data| {
-                            rank_stash.entry(time.retain()).or_default().append(data);
+                        input2.for_each_time(|time, data| {
+                            let entry = rank_stash.entry(time.retain()).or_default();
+                            data.for_each(|data| entry.append(data));
                         });
 
-                        let frontiers = &[input1.frontier(), input2.frontier()];
+                        let frontiers = &[frontier1, frontier2];
 
                         for (time, edge_changes) in edge_stash.iter_mut() {
                             if frontiers.iter().all(|f| !f.less_equal(time)) {

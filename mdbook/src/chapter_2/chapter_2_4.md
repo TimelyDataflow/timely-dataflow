@@ -20,12 +20,12 @@ fn main() {
             .unary(Pipeline, "increment", |capability, info| {
 
                 move |input, output| {
-                    while let Some((time, data)) = input.next() {
+                    input.for_each_time(|time, data| {
                         let mut session = output.session(&time);
-                        for datum in data.drain(..) {
+                        for datum in data.flat_map(|d| d.drain(..)) {
                             session.give(datum + 1);
                         }
-                    }
+                    });
                 }
             })
             .container::<Vec<_>>();
@@ -136,15 +136,15 @@ fn main() {
                 let mut maximum = 0;    // define this here; use in the closure
 
                 move |input, output| {
-                    while let Some((time, data)) = input.next() {
+                    input.for_each_time(|time, data| {
                         let mut session = output.session(&time);
-                        for datum in data.drain(..) {
+                        for datum in data.flat_map(|d| d.drain(..)) {
                             if datum > maximum {
                                 session.give(datum + 1);
                                 maximum = datum;
                             }
                         }
-                    }
+                    });
                 }
             })
             .container::<Vec<_>>();
@@ -187,21 +187,21 @@ fn main() {
             let mut notificator = FrontierNotificator::default();
             let mut stash = HashMap::new();
 
-            move |input1, input2, output| {
-                while let Some((time, data)) = input1.next() {
+            move |(input1, frontier1), (input2, frontier2), output| {
+                input1.for_each_time(|time, data| {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(std::mem::take(data));
+                         .extend(data.map(std::mem::take));
                     notificator.notify_at(time.retain());
-                }
-                while let Some((time, data)) = input2.next() {
+                });
+                input2.for_each_time(|time, data| {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
-                         .push(std::mem::take(data));
+                         .extend(data.map(std::mem::take));
                     notificator.notify_at(time.retain());
-                }
+                });
 
-                notificator.for_each(&[input1.frontier(), input2.frontier()], |time, notificator| {
+                notificator.for_each(&[frontier1, frontier2], |time, notificator| {
                     let mut session = output.session(&time);
                     if let Some(list) = stash.remove(time.time()) {
                         for mut vector in list.into_iter() {
@@ -237,21 +237,21 @@ fn main() {
 
             let mut stash = HashMap::new();
 
-            move |input1, input2, output| {
+            move |(input1, frontier1), (input2, frontier2), output| {
 
-                while let Some((time, data)) = input1.next() {
+                input1.for_each_time(|time, data| {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(std::mem::take(data));
-                }
-                while let Some((time, data)) = input2.next() {
+                         .extend(data.map(std::mem::take));
+                });
+                input2.for_each_time(|time, data| {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
-                         .push(std::mem::take(data));
-                }
+                         .extend(data.map(std::mem::take));
+                });
 
                 // consider sending everything in `stash`.
-                let frontiers = &[input1.frontier(), input2.frontier()];
+                let frontiers = &[frontier1, frontier2];
                 for (time, list) in stash.iter_mut() {
                     // if neither input can produce data at `time`, ship `list`.
                     if frontiers.iter().all(|f| !f.less_equal(time.time())) {

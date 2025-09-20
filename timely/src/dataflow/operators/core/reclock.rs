@@ -56,12 +56,14 @@ impl<S: Scope, C: Container> Reclock<S> for StreamCore<S, C> {
         self.binary_notify(clock, Pipeline, Pipeline, "Reclock", vec![], move |input1, input2, output, notificator| {
 
             // stash each data input with its timestamp.
-            input1.for_each(|cap, data| {
-                stash.push((cap.time().clone(), std::mem::take(data)));
+            input1.for_each_time(|cap, data| {
+                for data in data {
+                    stash.push((cap.time().clone(), std::mem::take(data)));
+                }
             });
 
             // request notification at time, to flush stash.
-            input2.for_each(|time, _data| {
+            input2.for_each_time(|time, _data| {
                 notificator.notify_at(time.retain());
             });
 

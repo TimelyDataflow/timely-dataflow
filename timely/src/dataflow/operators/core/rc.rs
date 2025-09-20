@@ -28,10 +28,11 @@ impl<S: Scope, C: Container> SharedStream<S, C> for StreamCore<S, C> {
     fn shared(&self) -> StreamCore<S, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
-                input.for_each(|time, data| {
-                    output
-                        .session(&time)
-                        .give_container(&mut Rc::new(std::mem::take(data)));
+                input.for_each_time(|time, data| {
+                    let mut session = output.session(&time);
+                    for data in data {
+                        session.give_container(&mut Rc::new(std::mem::take(data)));
+                    }
                 });
             }
         })
@@ -54,15 +55,15 @@ mod test {
                 .concatenate([
                     shared.unary(Pipeline, "read shared 1", |_, _| {
                         move |input, output| {
-                            input.for_each(|time, data| {
-                                output.session(&time).give(data.as_ptr() as usize);
+                            input.for_each_time(|time, data| {
+                                output.session(&time).give_iterator(data.map(|d| d.as_ptr() as usize));
                             });
                         }
                     }),
                     shared.unary(Pipeline, "read shared 2", |_, _| {
                         move |input, output| {
-                            input.for_each(|time, data| {
-                                output.session(&time).give(data.as_ptr() as usize);
+                            input.for_each_time(|time, data| {
+                                output.session(&time).give_iterator(data.map(|d| d.as_ptr() as usize));
                             });
                         }
                     }),
