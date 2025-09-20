@@ -84,8 +84,8 @@ impl<G: Scope, C: Container> Concatenate<G, C> for G {
             move |_frontier| {
                 let mut output = output.activate();
                 for handle in handles.iter_mut() {
-                    handle.for_each(|time, data| {
-                        output.session(&time).give_container(data);
+                    handle.activate().for_each(|time, data| {
+                        output.session(&time).give_containers(data);
                     })
                 }
             }

@@ -61,10 +61,10 @@ impl<S: Scope, C: Container + DrainContainer> OkErr<S, C> for StreamCore<S, C> {
                 let mut output1_handle = output1.activate();
                 let mut output2_handle = output2.activate();
 
-                input.for_each(|time, data| {
+                input.activate().for_each(|time, data| {
                     let mut out1 = output1_handle.session(&time);
                     let mut out2 = output2_handle.session(&time);
-                    for datum in data.drain() {
+                    for datum in data.flat_map(|d| d.drain()) {
                         match logic(datum) {
                             Ok(datum) => out1.give(datum),
                             Err(datum) => out2.give(datum),

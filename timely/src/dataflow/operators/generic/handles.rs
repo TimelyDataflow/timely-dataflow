@@ -9,7 +9,6 @@ use std::collections::VecDeque;
 
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
-use crate::progress::frontier::MutableAntichain;
 use crate::progress::operate::PortConnectivity;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::channels::pushers::Counter as PushCounter;
@@ -61,20 +60,6 @@ pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
     staged: Vec<C>,
 }
 
-/// Handle to an operator's input stream, specialized to vectors.
-pub type InputHandle<T, D, P> = InputHandleCore<T, Vec<D>, P>;
-
-/// Handle to an operator's input stream and frontier.
-pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: 'a, P: Pull<Message<T, C>>+'a> {
-    /// The underlying input handle.
-    pub handle: &'a mut InputHandleCore<T, C, P>,
-    /// The frontier as reported by timely progress tracking.
-    pub frontier: &'a MutableAntichain<T>,
-}
-
-/// Handle to an operator's input stream and frontier, specialized to vectors.
-pub type FrontieredInputHandle<'a, T, D, P> = FrontieredInputHandleCore<'a, T, Vec<D>, P>;
-
 impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
 
     /// Activates an input handle with a session that reorders inputs and must be drained.
@@ -90,78 +75,6 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
         self.pull_counter.next_guarded().map(|(guard, bundle)| {
             (InputCapability::new(Rc::clone(internal), Rc::clone(summaries), guard), &mut bundle.data)
         })
-    }
-
-    /// Repeatedly calls `logic` till exhaustion of the available input data.
-    /// `logic` receives a capability and an input buffer.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_containers(data);
-    ///                });
-    ///            });
-    /// });
-    /// ```
-    #[inline]
-    pub fn for_each<F: FnMut(InputCapability<T>, &mut C)>(&mut self, mut logic: F) {
-        while let Some((cap, data)) = self.next() {
-            logic(cap, data);
-        }
-    }
-}
-
-impl<'a, T: Timestamp, C: Accountable, P: Pull<Message<T, C>>+'a> FrontieredInputHandleCore<'a, T, C, P> {
-    /// Allocate a new frontiered input handle.
-    pub fn new(handle: &'a mut InputHandleCore<T, C, P>, frontier: &'a MutableAntichain<T>) -> Self {
-        FrontieredInputHandleCore {
-            handle,
-            frontier,
-        }
-    }
-
-    /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
-    /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
-    /// Returns `None` when there's no more data available.
-    #[inline]
-    pub fn next(&mut self) -> Option<(InputCapability<T>, &mut C)> {
-        self.handle.next()
-    }
-
-    /// Repeatedly calls `logic` till exhaustion of the available input data.
-    /// `logic` receives a capability and an input buffer.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
-    ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_containers(data);
-    ///                });
-    ///            });
-    /// });
-    /// ```
-    #[inline]
-    pub fn for_each<F: FnMut(InputCapability<T>, &mut C)>(&mut self, logic: F) {
-        self.handle.for_each(logic)
-    }
-
-    /// Inspect the frontier associated with this input.
-    #[inline]
-    pub fn frontier(&self) -> &'a MutableAntichain<T> {
-        self.frontier
     }
 }
 

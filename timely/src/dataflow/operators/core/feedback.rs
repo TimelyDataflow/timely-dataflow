@@ -118,12 +118,12 @@ impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
 
         builder.build(move |_capability| move |_frontier| {
             let mut output = output.activate();
-            input.for_each(|cap, data| {
+            input.activate().for_each(|cap, data| {
                 if let Some(new_time) = summary.results_in(cap.time()) {
                     let new_cap = cap.delayed(&new_time);
                     output
                         .session(&new_cap)
-                        .give_container(data);
+                        .give_containers(data);
                 }
             });
         });
