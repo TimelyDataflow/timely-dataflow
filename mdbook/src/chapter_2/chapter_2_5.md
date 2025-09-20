@@ -206,18 +206,18 @@ As before, I'm just going to show you the new code, which now lives just after `
                     let mut counts = HashMap::new();
                     let mut buffer = Vec::new();
 
-                    move |input, output| {
+                    move |(input, frontier), output| {
 
                         // for each input batch, stash it at `time`.
-                        while let Some((time, data)) = input.next() {
+                        input.for_each(|time, data| {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
-                                  .extend(std::mem::take(data));
-                        }
+                                  .extend(data.flat_map(|d| d.drain(..)));
+                        });
 
                         // enable each stashed time if ready.
                         for (time, vals) in queues.iter_mut() {
-                            if !input.frontier().less_equal(time.time()) {
+                            if !frontier.less_equal(time.time()) {
                                 let vals = std::mem::replace(vals, Vec::new());
                                 buffer.push((time.clone(), vals));
                             }

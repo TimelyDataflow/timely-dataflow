@@ -44,14 +44,16 @@ fn main() {
                     "Split",
                     |_cap, _info| {
                         move |input, output| {
-                            while let Some((time, data)) = input.next() {
+                            input.for_each(|time, data| {
                                 let mut session = output.session(&time);
-                                for wordcount in data.borrow().into_index_iter().flat_map(|wordcount| {
-                                    wordcount.text.split_whitespace().map(move |text| WordCountReference { text, diff: wordcount.diff })
-                                }) {
-                                    session.give(wordcount);
+                                for data in data {
+                                    for wordcount in data.borrow().into_index_iter().flat_map(|wordcount| {
+                                        wordcount.text.split_whitespace().map(move |text| WordCountReference { text, diff: wordcount.diff })
+                                    }) {
+                                        session.give(wordcount);
+                                    }
                                 }
-                            }
+                            });
                         }
                     },
                 )
@@ -63,16 +65,17 @@ fn main() {
                         let mut queues = HashMap::new();
                         let mut counts = HashMap::new();
 
-                        move |input, output| {
-                            while let Some((time, data)) = input.next() {
+                        move |(input, frontier), output| {
+                            input.for_each(|time, data| {
                                 queues
                                     .entry(time.retain())
                                     .or_insert(Vec::new())
-                                    .push(std::mem::take(data));
-                            }
+                                    .extend(data.map(std::mem::take));
+
+                            });
 
                             for (key, val) in queues.iter_mut() {
-                                if !input.frontier().less_equal(key.time()) {
+                                if !frontier.less_equal(key.time()) {
                                     let mut session = output.session(key);
                                     for batch in val.drain(..) {
                                         for wordcount in batch.borrow().into_index_iter() {

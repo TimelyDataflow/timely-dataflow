@@ -14,8 +14,10 @@ fn gh_523() {
                     move |input, output| {
                         input.for_each(|cap, data| {
                             let mut session = output.session(&cap);
-                            session.give_container(&mut Vec::new());
-                            session.give_container(data);
+                            for data in data {
+                                session.give_container(&mut Vec::new());
+                                session.give_container(data);
+                            }
                         });
                     }
                 })

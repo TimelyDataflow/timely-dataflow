@@ -55,8 +55,11 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn map_in_place<L: FnMut(&mut D)+'static>(&self, mut logic: L) -> Stream<S, D> {
         self.unary(Pipeline, "MapInPlace", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                for datum in data.iter_mut() { logic(datum); }
-                output.session(&time).give_container(data);
+                let mut session = output.session(&time);
+                for data in data {
+                    for datum in data.iter_mut() { logic(datum); }
+                    session.give_container(data);
+                }
             })
         })
     }

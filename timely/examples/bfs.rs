@@ -55,7 +55,7 @@ fn main() {
                     // receive edges, start to sort them
                     input1.for_each(|time, data| {
                         notify.notify_at(time.retain());
-                        edge_list.push(std::mem::take(data));
+                        edge_list.extend(data.map(std::mem::take));
                     });
 
                     // receive (node, worker) pairs, note any new ones.
@@ -65,7 +65,7 @@ fn main() {
                                       notify.notify_at(time.retain());
                                       Vec::new()
                                   })
-                                  .push(std::mem::take(data));
+                                  .extend(data.map(std::mem::take));
                     });
 
                     notify.for_each(|time, _num, _notify| {

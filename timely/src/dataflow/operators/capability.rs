@@ -426,10 +426,9 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///     vec![()].into_iter().to_stream(scope)
     ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
-    ///             move |input, output| {
-    ///                 cap.downgrade(&input.frontier().frontier());
-    ///                 while let Some((time, data)) = input.next() {
-    ///                 }
+    ///             move |(input, frontier), output| {
+    ///                 cap.downgrade(&frontier.frontier());
+    ///                 input.for_each(|time, data| {});
     ///                 let a_cap = cap.first();
     ///                 if let Some(a_cap) = a_cap.as_ref() {
     ///                     output.session(a_cap).give(());

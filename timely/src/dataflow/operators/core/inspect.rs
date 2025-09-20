@@ -133,15 +133,17 @@ impl<G: Scope, C: Container> InspectCore<G, C> for StreamCore<G, C> {
     {
         use crate::progress::timestamp::Timestamp;
         let mut frontier = crate::progress::Antichain::from_elem(G::Timestamp::minimum());
-        self.unary_frontier(Pipeline, "InspectBatch", move |_,_| move |input, output| {
-            if input.frontier.frontier() != frontier.borrow() {
+        self.unary_frontier(Pipeline, "InspectBatch", move |_,_| move |(input, chain), output| {
+            if chain.frontier() != frontier.borrow() {
                 frontier.clear();
-                frontier.extend(input.frontier.frontier().iter().cloned());
+                frontier.extend(chain.frontier().iter().cloned());
                 func(Err(frontier.elements()));
             }
             input.for_each(|time, data| {
-                func(Ok((&time, &*data)));
-                output.session(&time).give_container(data);
+                for data in data {
+                    func(Ok((&time, &*data)));
+                    output.session(&time).give_container(data);
+                }
             });
         })
     }

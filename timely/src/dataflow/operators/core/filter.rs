@@ -30,7 +30,8 @@ where
     fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(&self, mut predicate: P) -> StreamCore<G, C> {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                output.session(&time).give_iterator(data.drain().filter(&mut predicate));
+                output.session(&time)
+                      .give_iterator(data.flat_map(|d| d.drain()).filter(&mut predicate));
             });
         })
     }

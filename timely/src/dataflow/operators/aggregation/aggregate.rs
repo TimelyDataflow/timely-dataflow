@@ -81,7 +81,7 @@ impl<S: Scope<Timestamp: ::std::hash::Hash>, K: ExchangeData+Hash+Eq, V: Exchang
             // read each input, fold into aggregates
             input.for_each(|time, data| {
                 let agg_time = aggregates.entry(time.time().clone()).or_insert_with(HashMap::new);
-                for (key, val) in data.drain(..) {
+                for (key, val) in data.flat_map(|d| d.drain(..)) {
                     let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
                     fold(&key, val, agg);
                 }

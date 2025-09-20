@@ -42,28 +42,28 @@ fn main() {
                         // Drain first input, check second map, update first map.
                         input1.for_each(|time, data| {
                             let mut session = output.session(&time);
-                            for (key, val1) in data.drain(..) {
-                                if let Some(values) = map2.get(&key) {
+                            for (key, val1) in data.flatten() {
+                                if let Some(values) = map2.get(key) {
                                     for val2 in values.iter() {
-                                        session.give((val1, *val2));
+                                        session.give((*val1, *val2));
                                     }
                                 }
 
-                                map1.entry(key).or_default().push(val1);
+                                map1.entry(*key).or_default().push(*val1);
                             }
                         });
 
                         // Drain second input, check first map, update second map.
                         input2.for_each(|time, data| {
                             let mut session = output.session(&time);
-                            for (key, val2) in data.drain(..) {
-                                if let Some(values) = map1.get(&key) {
+                            for (key, val2) in data.flatten() {
+                                if let Some(values) = map1.get(key) {
                                     for val1 in values.iter() {
-                                        session.give((*val1, val2));
+                                        session.give((*val1, *val2));
                                     }
                                 }
 
-                                map2.entry(key).or_default().push(val2);
+                                map2.entry(*key).or_default().push(*val2);
                             }
                         });
                     }

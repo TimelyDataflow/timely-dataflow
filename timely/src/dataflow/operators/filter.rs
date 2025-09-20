@@ -26,9 +26,10 @@ impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
     fn filter<P: FnMut(&D)->bool+'static>(&self, mut predicate: P) -> Stream<G, D> {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                data.retain(|x| predicate(x));
-                if !data.is_empty() {
-                    output.session(&time).give_container(data);
+                let mut session = output.session(&time);
+                for data in data {
+                    data.retain(&mut predicate);
+                    session.give_container(data);
                 }
             });
         })

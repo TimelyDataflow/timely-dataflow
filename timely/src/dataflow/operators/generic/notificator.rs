@@ -56,7 +56,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     ///     (0..10).to_stream(scope)
     ///            .unary_notify(Pipeline, "example", Some(0), |input, output, notificator| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_container(data);
+    ///                    output.session(&cap).give_containers(data);
     ///                    let time = cap.time().clone() + 1;
     ///                    notificator.notify_at(cap.delayed(&time));
     ///                });
@@ -191,16 +191,16 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///         in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
 ///             let mut notificator = FrontierNotificator::default();
 ///             let mut stash = HashMap::new();
-///             move |input1, input2, output| {
-///                 while let Some((time, data)) = input1.next() {
-///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
+///             move |(input1, frontier1), (input2, frontier2), output| {
+///                 input1.for_each(|time, data| {
+///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
 ///                     notificator.notify_at(time.retain());
-///                 }
-///                 while let Some((time, data)) = input2.next() {
-///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.drain(..));
+///                 });
+///                 input2.for_each(|time, data| {
+///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
 ///                     notificator.notify_at(time.retain());
-///                 }
-///                 notificator.for_each(&[input1.frontier(), input2.frontier()], |time, _| {
+///                 });
+///                 notificator.for_each(&[frontier1, frontier2], |time, _| {
 ///                     if let Some(mut vec) = stash.remove(time.time()) {
 ///                         output.session(&time).give_iterator(vec.drain(..));
 ///                     }
@@ -263,13 +263,13 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///     (0..10).to_stream(scope)
     ///            .unary_frontier(Pipeline, "example", |_, _| {
     ///                let mut notificator = FrontierNotificator::default();
-    ///                move |input, output| {
+    ///                move |(input, frontier), output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_container(data);
+    ///                        output.session(&cap).give_containers(data);
     ///                        let time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));
     ///                    });
-    ///                    notificator.for_each(&[input.frontier()], |cap, _| {
+    ///                    notificator.for_each(&[frontier], |cap, _| {
     ///                        println!("done with time: {:?}", cap.time());
     ///                    });
     ///                }
@@ -393,14 +393,14 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///     (0..10).to_stream(scope)
     ///            .unary_frontier(Pipeline, "example", |_, _| {
     ///                let mut notificator = FrontierNotificator::default();
-    ///                move |input, output| {
+    ///                move |(input, frontier), output| {
     ///                    input.for_each(|cap, data| {
-    ///                        output.session(&cap).give_container(data);
+    ///                        output.session(&cap).give_containers(data);
     ///                        let time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));
     ///                        assert_eq!(notificator.pending().filter(|t| t.0.time() == &time).count(), 1);
     ///                    });
-    ///                    notificator.for_each(&[input.frontier()], |cap, _| {
+    ///                    notificator.for_each(&[frontier], |cap, _| {
     ///                        println!("done with time: {:?}", cap.time());
     ///                    });
     ///                }

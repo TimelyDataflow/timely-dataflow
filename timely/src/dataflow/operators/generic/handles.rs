@@ -5,6 +5,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 
 use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
@@ -21,6 +22,31 @@ use crate::container::{ContainerBuilder, CapacityContainerBuilder};
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
+#[must_use]
+pub struct InputSession<'a, T: Timestamp, C, P: Pull<Message<T, C>>> {
+    input: &'a mut InputHandleCore<T, C, P>,
+}
+
+impl<'a, T: Timestamp, C: Accountable + Default, P: Pull<Message<T, C>>> InputSession<'a, T, C, P> {
+    /// Iterates through distinct capabilities and the lists of containers associated with each.
+    pub fn for_each<F>(self, mut logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>) {
+        while let Some((cap, data)) = self.input.next() {
+            let data = std::mem::take(data);
+            self.input.staging.push_back((cap, data));
+        }
+        self.input.staging.make_contiguous().sort_by(|x,y| x.0.time().cmp(&y.0.time()));
+
+        while let Some((cap, data)) = self.input.staging.pop_front() {
+            self.input.staged.push(data);
+            let more = self.input.staging.iter().take_while(|(c,_)| c.time() == cap.time()).count();
+            self.input.staged.extend(self.input.staging.drain(..more).map(|(_,d)| d));
+            logic(cap, self.input.staged.iter_mut());
+            // Could return these back to the input ..
+            self.input.staged.clear();
+        }
+    }
+}
+
 /// Handle to an operator's input stream.
 pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
     pull_counter: PullCounter<T, C, P>,
@@ -30,6 +56,9 @@ pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
     /// Each timestamp received through this input may only produce output timestamps
     /// greater or equal to the input timestamp subjected to at least one of these summaries.
     summaries: Rc<RefCell<PortConnectivity<T::Summary>>>,
+    /// Staged capabilities and containers.
+    staging: VecDeque<(InputCapability<T>, C)>,
+    staged: Vec<C>,
 }
 
 /// Handle to an operator's input stream, specialized to vectors.
@@ -47,6 +76,9 @@ pub struct FrontieredInputHandleCore<'a, T: Timestamp, C: 'a, P: Pull<Message<T,
 pub type FrontieredInputHandle<'a, T, D, P> = FrontieredInputHandleCore<'a, T, Vec<D>, P>;
 
 impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
+
+    /// Activates an input handle with a session that reorders inputs and must be drained.
+    pub fn activate(&mut self) -> InputSession<'_, T, C, P> { InputSession { input: self } }
 
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
@@ -73,7 +105,7 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_container(data);
+    ///                    output.session(&cap).give_containers(data);
     ///                });
     ///            });
     /// });
@@ -84,7 +116,6 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
             logic(cap, data);
         }
     }
-
 }
 
 impl<'a, T: Timestamp, C: Accountable, P: Pull<Message<T, C>>+'a> FrontieredInputHandleCore<'a, T, C, P> {
@@ -117,7 +148,7 @@ impl<'a, T: Timestamp, C: Accountable, P: Pull<Message<T, C>>+'a> FrontieredInpu
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap,_info| |input, output| {
     ///                input.for_each(|cap, data| {
-    ///                    output.session(&cap).give_container(data);
+    ///                    output.session(&cap).give_containers(data);
     ///                });
     ///            });
     /// });
@@ -149,6 +180,8 @@ pub fn new_input_handle<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>>(
         pull_counter,
         internal,
         summaries,
+        staging: Default::default(),
+        staged: Default::default(),
     }
 }
 
@@ -215,7 +248,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     ///                input.for_each(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session_with_builder(&cap.delayed(&time))
-    ///                          .give_container(data);
+    ///                          .give_containers(data);
     ///                });
     ///            });
     /// });
@@ -249,7 +282,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Message<T, C>>> OutputHandleCore<'a
     ///                input.for_each(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session(&cap.delayed(&time))
-    ///                          .give_container(data);
+    ///                          .give_containers(data);
     ///                });
     ///            });
     /// });

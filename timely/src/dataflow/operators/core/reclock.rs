@@ -57,7 +57,9 @@ impl<S: Scope, C: Container> Reclock<S> for StreamCore<S, C> {
 
             // stash each data input with its timestamp.
             input1.for_each(|cap, data| {
-                stash.push((cap.time().clone(), std::mem::take(data)));
+                for data in data {
+                    stash.push((cap.time().clone(), std::mem::take(data)));
+                }
             });
 
             // request notification at time, to flush stash.

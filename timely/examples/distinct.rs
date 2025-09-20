@@ -24,12 +24,14 @@ fn main() {
                                 .entry(*time.time())
                                 .or_insert(HashMap::new());
                             let mut session = output.session(&time);
-                            for &datum in data.iter() {
-                                let count = counts.entry(datum).or_insert(0);
-                                if *count == 0 {
-                                    session.give(datum);
+                            for data in data {
+                                for &datum in data.iter() {
+                                    let count = counts.entry(datum).or_insert(0);
+                                    if *count == 0 {
+                                        session.give(datum);
+                                    }
+                                    *count += 1;
                                 }
-                                *count += 1;
                             }
                         })
                     })
