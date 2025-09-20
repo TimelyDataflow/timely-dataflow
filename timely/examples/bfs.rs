@@ -53,13 +53,13 @@ fn main() {
                 move |input1, input2, output, notify| {
 
                     // receive edges, start to sort them
-                    input1.for_each(|time, data| {
+                    input1.for_each_time(|time, data| {
                         notify.notify_at(time.retain());
                         edge_list.extend(data.map(std::mem::take));
                     });
 
                     // receive (node, worker) pairs, note any new ones.
-                    input2.for_each(|time, data| {
+                    input2.for_each_time(|time, data| {
                         node_lists.entry(*time.time())
                                   .or_insert_with(|| {
                                       notify.notify_at(time.retain());

@@ -61,7 +61,7 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
 
             move |input, output| {
 
-                input.for_each(|time, data| {
+                input.for_each_time(|time, data| {
                     let mut session = output.session(&time);
                     for &mut (mut x, mut y) in data.flatten() {
 

@@ -81,7 +81,7 @@ fn main() {
                 move |(input1, frontier1), (input2, frontier2), output| {
 
                     // Stash received data.
-                    input1.for_each(|time, data| {
+                    input1.for_each_time(|time, data| {
                         stash.entry(time.retain())
                              .or_insert(Vec::new())
                              .extend(data.flat_map(|d| d.drain(..)));

@@ -55,7 +55,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary_notify(Pipeline, "example", Some(0), |input, output, notificator| {
-    ///                input.for_each(|cap, data| {
+    ///                input.for_each_time(|cap, data| {
     ///                    output.session(&cap).give_containers(data);
     ///                    let time = cap.time().clone() + 1;
     ///                    notificator.notify_at(cap.delayed(&time));
@@ -192,11 +192,11 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///             let mut notificator = FrontierNotificator::default();
 ///             let mut stash = HashMap::new();
 ///             move |(input1, frontier1), (input2, frontier2), output| {
-///                 input1.for_each(|time, data| {
+///                 input1.for_each_time(|time, data| {
 ///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
 ///                     notificator.notify_at(time.retain());
 ///                 });
-///                 input2.for_each(|time, data| {
+///                 input2.for_each_time(|time, data| {
 ///                     stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
 ///                     notificator.notify_at(time.retain());
 ///                 });
@@ -264,7 +264,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///            .unary_frontier(Pipeline, "example", |_, _| {
     ///                let mut notificator = FrontierNotificator::default();
     ///                move |(input, frontier), output| {
-    ///                    input.for_each(|cap, data| {
+    ///                    input.for_each_time(|cap, data| {
     ///                        output.session(&cap).give_containers(data);
     ///                        let time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));
@@ -394,7 +394,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///            .unary_frontier(Pipeline, "example", |_, _| {
     ///                let mut notificator = FrontierNotificator::default();
     ///                move |(input, frontier), output| {
-    ///                    input.for_each(|cap, data| {
+    ///                    input.for_each_time(|cap, data| {
     ///                        output.session(&cap).give_containers(data);
     ///                        let time = cap.time().clone() + 1;
     ///                        notificator.notify_at(cap.delayed(&time));

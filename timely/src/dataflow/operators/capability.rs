@@ -428,7 +428,7 @@ impl<T: Timestamp> CapabilitySet<T> {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
     ///             move |(input, frontier), output| {
     ///                 cap.downgrade(&frontier.frontier());
-    ///                 input.for_each(|time, data| {});
+    ///                 input.for_each_time(|time, data| {});
     ///                 let a_cap = cap.first();
     ///                 if let Some(a_cap) = a_cap.as_ref() {
     ///                     output.session(a_cap).give(());

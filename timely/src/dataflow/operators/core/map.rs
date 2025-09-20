@@ -97,7 +97,7 @@ impl<S: Scope, C: Container + DrainContainer> Map<S, C> for StreamCore<S, C> {
         L: FnMut(C::Item<'_>)->I + 'static,
     {
         self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
-            input.for_each(|time, data| {
+            input.for_each_time(|time, data| {
                 output.session(&time)
                       .give_iterator(data.flat_map(|d| d.drain()).flat_map(&mut logic));
             });

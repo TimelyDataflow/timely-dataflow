@@ -26,23 +26,17 @@ pub struct InputSession<'a, T: Timestamp, C, P: Pull<Message<T, C>>> {
     input: &'a mut InputHandleCore<T, C, P>,
 }
 
-impl<'a, T: Timestamp, C: Accountable + Default, P: Pull<Message<T, C>>> InputSession<'a, T, C, P> {
+impl<'a, T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputSession<'a, T, C, P> {
     /// Iterates through distinct capabilities and the lists of containers associated with each.
-    pub fn for_each<F>(self, mut logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>) {
-        while let Some((cap, data)) = self.input.next() {
-            let data = std::mem::take(data);
-            self.input.staging.push_back((cap, data));
-        }
-        self.input.staging.make_contiguous().sort_by(|x,y| x.0.time().cmp(&y.0.time()));
-
-        while let Some((cap, data)) = self.input.staging.pop_front() {
-            self.input.staged.push(data);
-            let more = self.input.staging.iter().take_while(|(c,_)| c.time() == cap.time()).count();
-            self.input.staged.extend(self.input.staging.drain(..more).map(|(_,d)| d));
-            logic(cap, self.input.staged.iter_mut());
-            // Could return these back to the input ..
-            self.input.staged.clear();
-        }
+    pub fn for_each_time<F>(self, logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>), C: Default {
+        self.input.for_each_time(logic)
+    }
+    /// Iterates through pairs of capability and container.
+    ///
+    /// The `for_each_time` method is equivalent, but groups containers by capability and is preferred,
+    /// in that it often leads to grouping work by capability, including the creation of output sessions.
+    pub fn for_each<F>(self, logic: F) where F: FnMut(InputCapability<T>, &mut C) {
+        self.input.for_each(logic)
     }
 }
 
@@ -75,6 +69,30 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
         self.pull_counter.next_guarded().map(|(guard, bundle)| {
             (InputCapability::new(Rc::clone(internal), Rc::clone(summaries), guard), &mut bundle.data)
         })
+    }
+    /// Iterates through pairs of capability and container.
+    ///
+    /// The `for_each_time` method is equivalent, but groups containers by capability and is preferred,
+    /// in that it often leads to grouping work by capability, including the creation of output sessions.
+    pub fn for_each<F>(&mut self, mut logic: F) where F: FnMut(InputCapability<T>, &mut C) {
+        while let Some((cap, data)) = self.next() { logic(cap, data); }
+    }
+    /// Iterates through distinct capabilities and the lists of containers associated with each.
+    pub fn for_each_time<F>(&mut self, mut logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>), C: Default {
+        while let Some((cap, data)) = self.next() {
+            let data = std::mem::take(data);
+            self.staging.push_back((cap, data));
+        }
+        self.staging.make_contiguous().sort_by(|x,y| x.0.time().cmp(&y.0.time()));
+
+        while let Some((cap, data)) = self.staging.pop_front() {
+            self.staged.push(data);
+            let more = self.staging.iter().take_while(|(c,_)| c.time() == cap.time()).count();
+            self.staged.extend(self.staging.drain(..more).map(|(_,d)| d));
+            logic(cap, self.staged.iter_mut());
+            // Could return these back to the input ..
+            self.staged.clear();
+        }
     }
 }
 
@@ -158,7 +176,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>>
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary::<CapacityContainerBuilder<_>, _, _, _>(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each(|cap, data| {
+    ///                input.for_each_time(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session_with_builder(&cap.delayed(&time))
     ///                          .give_containers(data);
@@ -192,7 +210,7 @@ impl<'a, T: Timestamp, C: Container, P: Push<Message<T, C>>> OutputHandleCore<'a
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
     ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each(|cap, data| {
+    ///                input.for_each_time(|cap, data| {
     ///                    let time = cap.time().clone() + 1;
     ///                    output.session(&cap.delayed(&time))
     ///                          .give_containers(data);

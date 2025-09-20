@@ -30,7 +30,7 @@ fn main() {
                     let mut counts = HashMap::new();
 
                     move |(input, frontier), output| {
-                        input.for_each(|time, data| {
+                        input.for_each_time(|time, data| {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
                                   .extend(data.map(std::mem::take));

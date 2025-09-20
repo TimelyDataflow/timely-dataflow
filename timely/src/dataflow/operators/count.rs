@@ -53,7 +53,7 @@ impl<G: Scope<Timestamp: ::std::hash::Hash>, D: Data> Accumulate<G, D> for Strea
 
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
-            input.for_each(|time, data| {
+            input.for_each_time(|time, data| {
                 for data in data {
                     logic(accums.entry(time.time().clone()).or_insert_with(|| default.clone()), data);
                 }

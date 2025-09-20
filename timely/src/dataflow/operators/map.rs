@@ -54,7 +54,7 @@ pub trait Map<S: Scope, D: Data> {
 impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     fn map_in_place<L: FnMut(&mut D)+'static>(&self, mut logic: L) -> Stream<S, D> {
         self.unary(Pipeline, "MapInPlace", move |_,_| move |input, output| {
-            input.for_each(|time, data| {
+            input.for_each_time(|time, data| {
                 let mut session = output.session(&time);
                 for data in data {
                     for datum in data.iter_mut() { logic(datum); }

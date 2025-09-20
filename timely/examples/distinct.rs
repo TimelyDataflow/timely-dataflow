@@ -18,7 +18,7 @@ fn main() {
             scope.input_from(&mut input)
                 .unary(Exchange::new(|x| *x), "Distinct", move |_, _|
                     move |input, output| {
-                        input.for_each(|time, data| {
+                        input.for_each_time(|time, data| {
                             let counts =
                             counts_by_time
                                 .entry(*time.time())

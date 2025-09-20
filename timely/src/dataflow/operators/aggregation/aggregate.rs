@@ -79,7 +79,7 @@ impl<S: Scope<Timestamp: ::std::hash::Hash>, K: ExchangeData+Hash+Eq, V: Exchang
         self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {
 
             // read each input, fold into aggregates
-            input.for_each(|time, data| {
+            input.for_each_time(|time, data| {
                 let agg_time = aggregates.entry(time.time().clone()).or_insert_with(HashMap::new);
                 for (key, val) in data.flat_map(|d| d.drain(..)) {
                     let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);

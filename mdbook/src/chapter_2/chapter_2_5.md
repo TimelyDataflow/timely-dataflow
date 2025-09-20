@@ -209,7 +209,7 @@ As before, I'm just going to show you the new code, which now lives just after `
                     move |(input, frontier), output| {
 
                         // for each input batch, stash it at `time`.
-                        input.for_each(|time, data| {
+                        input.for_each_time(|time, data| {
                             queues.entry(time.retain())
                                   .or_insert(Vec::new())
                                   .extend(data.flat_map(|d| d.drain(..)));

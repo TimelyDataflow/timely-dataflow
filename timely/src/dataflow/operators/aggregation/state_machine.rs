@@ -84,7 +84,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             });
 
             // stash each input and request a notification when ready
-            input.for_each(|time, data| {
+            input.for_each_time(|time, data| {
 
                 // stash if not time yet
                 if notificator.frontier(0).less_than(time.time()) {

@@ -44,7 +44,7 @@ fn main() {
                     "Split",
                     |_cap, _info| {
                         move |input, output| {
-                            input.for_each(|time, data| {
+                            input.for_each_time(|time, data| {
                                 let mut session = output.session(&time);
                                 for data in data {
                                     for wordcount in data.borrow().into_index_iter().flat_map(|wordcount| {
@@ -66,7 +66,7 @@ fn main() {
                         let mut counts = HashMap::new();
 
                         move |(input, frontier), output| {
-                            input.for_each(|time, data| {
+                            input.for_each_time(|time, data| {
                                 queues
                                     .entry(time.retain())
                                     .or_insert(Vec::new())

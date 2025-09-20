@@ -176,7 +176,7 @@ impl<T: ExchangeData> Sequencer<T> {
                 move |(input, frontier)| {
 
                     // grab each command and queue it up
-                    input.for_each(|time, data| {
+                    input.for_each_time(|time, data| {
                         for (worker, counter, element) in data.flat_map(|d| d.drain(..)) {
                             recvd.push(((*time.time(), worker, counter), element));
                         }

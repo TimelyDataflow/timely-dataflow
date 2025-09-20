@@ -139,10 +139,11 @@ impl<G: Scope, C: Container> InspectCore<G, C> for StreamCore<G, C> {
                 frontier.extend(chain.frontier().iter().cloned());
                 func(Err(frontier.elements()));
             }
-            input.for_each(|time, data| {
+            input.for_each_time(|time, data| {
+                let mut session = output.session(&time);
                 for data in data {
                     func(Ok((&time, &*data)));
-                    output.session(&time).give_container(data);
+                    session.give_container(data);
                 }
             });
         })

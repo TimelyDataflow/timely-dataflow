@@ -20,7 +20,7 @@ fn main() {
             .unary(Pipeline, "increment", |capability, info| {
 
                 move |input, output| {
-                    input.for_each(|time, data| {
+                    input.for_each_time(|time, data| {
                         let mut session = output.session(&time);
                         for datum in data.flat_map(|d| d.drain(..)) {
                             session.give(datum + 1);
@@ -136,7 +136,7 @@ fn main() {
                 let mut maximum = 0;    // define this here; use in the closure
 
                 move |input, output| {
-                    input.for_each(|time, data| {
+                    input.for_each_time(|time, data| {
                         let mut session = output.session(&time);
                         for datum in data.flat_map(|d| d.drain(..)) {
                             if datum > maximum {
@@ -188,13 +188,13 @@ fn main() {
             let mut stash = HashMap::new();
 
             move |(input1, frontier1), (input2, frontier2), output| {
-                input1.for_each(|time, data| {
+                input1.for_each_time(|time, data| {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
                     notificator.notify_at(time.retain());
                 });
-                input2.for_each(|time, data| {
+                input2.for_each_time(|time, data| {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
@@ -239,12 +239,12 @@ fn main() {
 
             move |(input1, frontier1), (input2, frontier2), output| {
 
-                input1.for_each(|time, data| {
+                input1.for_each_time(|time, data| {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
                 });
-                input2.for_each(|time, data| {
+                input2.for_each_time(|time, data| {
                     stash.entry(time.retain())
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));

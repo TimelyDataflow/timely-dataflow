@@ -37,7 +37,7 @@ fn operator_scaling(scale: u64) {
                 move |_frontiers| {
                     for (input, output) in handles.iter_mut() {
                         let mut output = output.activate();
-                        input.activate().for_each(|time, data| {
+                        input.activate().for_each_time(|time, data| {
                             let mut output = output.session_with_builder(&time);
                             for datum in data.flat_map(|d| d.drain(..)) {
                                 output.give(datum);

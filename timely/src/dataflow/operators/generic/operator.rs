@@ -39,7 +39,7 @@ pub trait Operator<G: Scope, C1> {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(12);
     ///                 }
-    ///                 input.for_each(|time, data| {
+    ///                 input.for_each_time(|time, data| {
     ///                     stash.entry(time.time().clone())
     ///                          .or_insert(Vec::new())
     ///                          .extend(data.flat_map(|d| d.drain(..)));
@@ -77,7 +77,7 @@ pub trait Operator<G: Scope, C1> {
     ///     (0u64..10)
     ///         .to_stream(scope)
     ///         .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
-    ///             input.for_each(|time, data| {
+    ///             input.for_each_time(|time, data| {
     ///                 output.session(&time).give_containers(data);
     ///                 notificator.notify_at(time.retain());
     ///             });
@@ -113,7 +113,7 @@ pub trait Operator<G: Scope, C1> {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
-    ///                 input.for_each(|time, data| {
+    ///                 input.for_each_time(|time, data| {
     ///                     output.session(&time).give_containers(data);
     ///                 });
     ///             }
@@ -147,11 +147,11 @@ pub trait Operator<G: Scope, C1> {
     ///            let mut notificator = FrontierNotificator::default();
     ///            let mut stash = HashMap::new();
     ///            move |(input1, frontier1), (input2, frontier2), output| {
-    ///                input1.for_each(|time, data| {
+    ///                input1.for_each_time(|time, data| {
     ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
     ///                    notificator.notify_at(time.retain());
     ///                });
-    ///                input2.for_each(|time, data| {
+    ///                input2.for_each_time(|time, data| {
     ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
     ///                    notificator.notify_at(time.retain());
     ///                });
@@ -204,11 +204,11 @@ pub trait Operator<G: Scope, C1> {
     ///        let (in2_handle, in2) = scope.new_input();
     ///
     ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
-    ///            input1.for_each(|time, data| {
+    ///            input1.for_each_time(|time, data| {
     ///                output.session(&time).give_containers(data);
     ///                notificator.notify_at(time.retain());
     ///            });
-    ///            input2.for_each(|time, data| {
+    ///            input2.for_each_time(|time, data| {
     ///                output.session(&time).give_containers(data);
     ///                notificator.notify_at(time.retain());
     ///            });
@@ -258,12 +258,8 @@ pub trait Operator<G: Scope, C1> {
     ///                 if let Some(ref c) = cap.take() {
     ///                     output.session(&c).give(100);
     ///                 }
-    ///                 input1.for_each(|time, data| {
-    ///                     output.session(&time).give_containers(data);
-    ///                 });
-    ///                 input2.for_each(|time, data| {
-    ///                     output.session(&time).give_containers(data);
-    ///                 });
+    ///                 input1.for_each_time(|time, data| output.session(&time).give_containers(data));
+    ///                 input2.for_each_time(|time, data| output.session(&time).give_containers(data));
     ///             }
     ///         }).inspect(|x| println!("{:?}", x));
     /// });
@@ -294,7 +290,7 @@ pub trait Operator<G: Scope, C1> {
     ///     (0u64..10)
     ///         .to_stream(scope)
     ///         .sink(Pipeline, "example", |(input, frontier)| {
-    ///             input.for_each(|time, data| {
+    ///             input.for_each_time(|time, data| {
     ///                 for datum in data.flatten() {
     ///                     println!("{:?}:\t{:?}", time, datum);
     ///                 }
