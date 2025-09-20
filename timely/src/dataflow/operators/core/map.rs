@@ -98,8 +98,8 @@ impl<S: Scope, C: Container + DrainContainer> Map<S, C> for StreamCore<S, C> {
     {
         self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
             input.for_each(|time, data| {
-                let out_iter = data.flat_map(|d| d.drain()).flat_map(&mut logic);
-                output.session(&time).give_iterator(out_iter);
+                output.session(&time)
+                      .give_iterator(data.flat_map(|d| d.drain()).flat_map(&mut logic));
             });
         })
     }

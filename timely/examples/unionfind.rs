@@ -63,31 +63,29 @@ impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
 
                 input.for_each(|time, data| {
                     let mut session = output.session(&time);
-                    for data in data {
-                        for &(mut x, mut y) in data.iter() {
+                    for &mut (mut x, mut y) in data.flatten() {
 
-                            // grow arrays if required.
-                            let m = ::std::cmp::max(x, y);
-                            for i in roots.len() .. (m + 1) {
-                                roots.push(i);
-                                ranks.push(0);
-                            }
+                        // grow arrays if required.
+                        let m = ::std::cmp::max(x, y);
+                        for i in roots.len() .. (m + 1) {
+                            roots.push(i);
+                            ranks.push(0);
+                        }
 
-                            // look up roots for `x` and `y`.
-                            while x != roots[x] { x = roots[x]; }
-                            while y != roots[y] { y = roots[y]; }
+                        // look up roots for `x` and `y`.
+                        while x != roots[x] { x = roots[x]; }
+                        while y != roots[y] { y = roots[y]; }
 
-                            if x != y {
-                                session.give((x, y));
-                                match ranks[x].cmp(&ranks[y]) {
-                                    Ordering::Less    => { roots[x] = y },
-                                    Ordering::Greater => { roots[y] = x },
-                                    Ordering::Equal   => { roots[y] = x; ranks[x] += 1 },
-                                }
+                        if x != y {
+                            session.give((x, y));
+                            match ranks[x].cmp(&ranks[y]) {
+                                Ordering::Less    => { roots[x] = y },
+                                Ordering::Greater => { roots[y] = x },
+                                Ordering::Equal   => { roots[y] = x; ranks[x] += 1 },
                             }
                         }
                     }
-                })
+                });
             }
         })
     }

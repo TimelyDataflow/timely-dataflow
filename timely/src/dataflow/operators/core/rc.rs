@@ -56,14 +56,14 @@ mod test {
                     shared.unary(Pipeline, "read shared 1", |_, _| {
                         move |input, output| {
                             input.for_each(|time, data| {
-                                for data in data { output.session(&time).give(data.as_ptr() as usize); }
+                                output.session(&time).give_iterator(data.map(|d| d.as_ptr() as usize));
                             });
                         }
                     }),
                     shared.unary(Pipeline, "read shared 2", |_, _| {
                         move |input, output| {
                             input.for_each(|time, data| {
-                                for data in data { output.session(&time).give(data.as_ptr() as usize); }
+                                output.session(&time).give_iterator(data.map(|d| d.as_ptr() as usize));
                             });
                         }
                     }),

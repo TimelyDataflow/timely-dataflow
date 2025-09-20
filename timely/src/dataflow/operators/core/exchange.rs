@@ -44,8 +44,7 @@ where
         self.unary(ExchangeCore::new(route), "Exchange", |_, _| {
             move |input, output| {
                 input.for_each(|time, data| {
-                    let mut session = output.session(&time);
-                    for data in data { session.give_container(data); }
+                    output.session(&time).give_containers(data);
                 });
             }
         })

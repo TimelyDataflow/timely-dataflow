@@ -22,8 +22,8 @@ fn main() {
                 move |input, output| {
                     input.for_each(|time, data| {
                         let mut session = output.session(&time);
-                        for datum in data.flatten() {
-                            session.give(*datum + 1);
+                        for datum in data.flat_map(|d| d.drain(..)) {
+                            session.give(datum + 1);
                         }
                     });
                 }
@@ -138,10 +138,10 @@ fn main() {
                 move |input, output| {
                     input.for_each(|time, data| {
                         let mut session = output.session(&time);
-                        for datum in data.flatten() {
-                            if *datum > maximum {
-                                session.give(*datum + 1);
-                                maximum = *datum;
+                        for datum in data.flat_map(|d| d.drain(..)) {
+                            if datum > maximum {
+                                session.give(datum + 1);
+                                maximum = datum;
                             }
                         }
                     });

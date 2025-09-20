@@ -114,7 +114,7 @@ impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
                     } else {
                         output1_handle.session(&time)
                     };
-                    for data in data { out.give_container(data); }
+                    out.give_containers(data);
                 });
             }
         });

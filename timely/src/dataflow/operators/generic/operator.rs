@@ -124,7 +124,7 @@ pub trait Operator<G: Scope, C1> {
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(InputSession<G::Timestamp, C1, P::Puller>,
+        L: FnMut(InputSession<'_, G::Timestamp, C1, P::Puller>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P: ParallelizationContract<G::Timestamp, C1>;
 
@@ -273,8 +273,8 @@ pub trait Operator<G: Scope, C1> {
         C2: Container,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(InputSession<G::Timestamp, C1, P1::Puller>,
-                 InputSession<G::Timestamp, C2, P2::Puller>,
+        L: FnMut(InputSession<'_, G::Timestamp, C1, P1::Puller>,
+                 InputSession<'_, G::Timestamp, C2, P2::Puller>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P1: ParallelizationContract<G::Timestamp, C1>,
         P2: ParallelizationContract<G::Timestamp, C2>;
@@ -362,7 +362,7 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
     where
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(InputSession<G::Timestamp, C1, P::Puller>,
+        L: FnMut(InputSession<'_, G::Timestamp, C1, P::Puller>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P: ParallelizationContract<G::Timestamp, C1> {
 
@@ -445,8 +445,8 @@ impl<G: Scope, C1: Container> Operator<G, C1> for StreamCore<G, C1> {
         C2: Container,
         CB: ContainerBuilder,
         B: FnOnce(Capability<G::Timestamp>, OperatorInfo) -> L,
-        L: FnMut(InputSession<G::Timestamp, C1, P1::Puller>,
-                 InputSession<G::Timestamp, C2, P2::Puller>,
+        L: FnMut(InputSession<'_, G::Timestamp, C1, P1::Puller>,
+                 InputSession<'_, G::Timestamp, C2, P2::Puller>,
                  &mut OutputHandleCore<G::Timestamp, CB, Tee<G::Timestamp, CB::Container>>)+'static,
         P1: ParallelizationContract<G::Timestamp, C1>,
         P2: ParallelizationContract<G::Timestamp, C2> {
