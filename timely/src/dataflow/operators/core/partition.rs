@@ -1,9 +1,9 @@
 //! Partition a stream of records into multiple streams.
+use std::collections::BTreeMap;
 
 use crate::container::{DrainContainer, ContainerBuilder, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::operators::InputCapability;
 use crate::dataflow::{Scope, StreamCore};
 use crate::Container;
 
@@ -46,45 +46,37 @@ impl<G: Scope, C: Container + DrainContainer> Partition<G, C> for StreamCore<G, 
         let mut outputs = Vec::with_capacity(parts as usize);
         let mut streams = Vec::with_capacity(parts as usize);
 
+        let mut c_build = CB::default();
+
         for _ in 0..parts {
-            let (output, stream) = builder.new_output::<CB>();
+            let (output, stream) = builder.new_output::<CB::Container>();
             outputs.push(output);
             streams.push(stream);
         }
 
         builder.build(move |_| {
-            let mut todo = vec![];
             move |_frontiers| {
                 let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
-
-                // The capability associated with each session in `sessions`.
-                let mut sessions_cap: Option<InputCapability<G::Timestamp>> = None;
-                let mut sessions = vec![];
-
-                while let Some((cap, data)) = input.next() {
-                    todo.push((cap, std::mem::take(data)));
-                }
-                todo.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-
-                for (cap, mut data) in todo.drain(..) {
-                    if sessions_cap.as_ref().map_or(true, |s_cap| s_cap.time() != cap.time()) {
-                        sessions = handles.iter_mut().map(|h| (None, Some(h))).collect();
-                        sessions_cap = Some(cap);
+                let mut targets = BTreeMap::<u64,Vec<_>>::default();
+                input.for_each_time(|time, data| {
+                    // Sort data by intended output.
+                    for datum in data.flat_map(|d| d.drain()) {
+                        let (part, datum) = route(datum);
+                        targets.entry(part).or_default().push(datum);
                     }
-                    for datum in data.drain() {
-                        let (part, datum2) = route(datum);
-
-                        let session = match sessions[part as usize] {
-                            (Some(ref mut s), _) => s,
-                            (ref mut session_slot, ref mut handle) => {
-                                let handle = handle.take().unwrap();
-                                let session = handle.session_with_builder(sessions_cap.as_ref().unwrap());
-                                session_slot.insert(session)
+                    // Form each intended output into a container and ship.
+                    while let Some((part, data)) = targets.pop_first() {
+                        for datum in data.into_iter() {
+                            c_build.push_into(datum);
+                            while let Some(container) = c_build.extract() {
+                                handles[part as usize].give(&time, container);
                             }
-                        };
-                        session.give(datum2);
+                        }
+                        while let Some(container) = c_build.finish() {
+                            handles[part as usize].give(&time, container);
+                        }
                     }
-                }
+                });
             }
         });
 

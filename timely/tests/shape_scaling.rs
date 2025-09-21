@@ -25,8 +25,7 @@ fn operator_scaling(scale: u64) {
             let mut handles = Vec::with_capacity(parts.len());
             let mut outputs = Vec::with_capacity(parts.len());
             for (index, part) in parts.into_iter().enumerate() {
-                use timely::container::CapacityContainerBuilder;
-                let (output, stream) = builder.new_output_connection::<CapacityContainerBuilder<Vec<()>>,_>([]);
+                let (output, stream) = builder.new_output_connection::<Vec<()>,_>([]);
                 use timely::progress::Antichain;
                 let connectivity = [(index, Antichain::from_elem(Default::default()))];
                 handles.push((builder.new_input_connection(&part, Pipeline, connectivity), output));
@@ -37,11 +36,8 @@ fn operator_scaling(scale: u64) {
                 move |_frontiers| {
                     for (input, output) in handles.iter_mut() {
                         let mut output = output.activate();
-                        input.activate().for_each_time(|time, data| {
-                            let mut output = output.session_with_builder(&time);
-                            for datum in data.flat_map(|d| d.drain(..)) {
-                                output.give(datum);
-                            }
+                        input.for_each(|time, data| {
+                            output.give(&time, data);
                         });
                     }
                 }

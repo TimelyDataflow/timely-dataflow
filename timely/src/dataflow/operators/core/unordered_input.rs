@@ -3,8 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::Container;
-use crate::container::{ContainerBuilder, CapacityContainerBuilder};
+use crate::container::ContainerBuilder;
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
 
@@ -12,12 +11,12 @@ use crate::progress::{Operate, operate::SharedProgress, Timestamp};
 use crate::progress::Source;
 use crate::progress::ChangeBatch;
 use crate::progress::operate::Connectivity;
-use crate::dataflow::channels::pushers::{Counter, Tee};
-use crate::dataflow::channels::pushers::buffer::{Buffer as PushBuffer, AutoflushSession};
-
+use crate::dataflow::channels::pushers::{Counter, Tee, Output};
+use crate::dataflow::operators::generic::{OutputBuilder, OutputBuilderSession};
 use crate::dataflow::operators::{ActivateCapability, Capability};
-
 use crate::dataflow::{Scope, StreamCore};
+
+use crate::scheduling::Activations;
 
 /// Create a new `Stream` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
@@ -65,7 +64,7 @@ pub trait UnorderedInput<G: Scope> {
     ///
     ///     // feed values 0..10 at times 0..10.
     ///     for round in 0..10 {
-    ///         input.session(cap.clone()).give(round);
+    ///         input.activate().session(&cap).give(round);
     ///         cap = cap.delayed(&(round + 1));
     ///         worker.step();
     ///     }
@@ -88,6 +87,7 @@ impl<G: Scope> UnorderedInput<G> for G {
         let cap = Capability::new(G::Timestamp::minimum(), Rc::clone(&internal));
         let counter = Counter::new(output);
         let produced = Rc::clone(counter.produced());
+        let counter = Output::new(counter, Rc::clone(&internal), 0);
         let peers = self.peers();
 
         let index = self.allocate_operator_index();
@@ -95,7 +95,7 @@ impl<G: Scope> UnorderedInput<G> for G {
 
         let cap = ActivateCapability::new(cap, Rc::clone(&address), self.activations());
 
-        let helper = UnorderedHandle::new(counter);
+        let helper = UnorderedHandle::new(counter, Rc::clone(&address), self.activations());
 
         self.add_operator_with_index(Box::new(UnorderedOperator {
             name: "UnorderedInput".to_owned(),
@@ -146,29 +146,24 @@ impl<T:Timestamp> Operate<T> for UnorderedOperator<T> {
 }
 
 /// A handle to an input [StreamCore], used to introduce data to a timely dataflow computation.
-#[derive(Debug)]
 pub struct UnorderedHandle<T: Timestamp, CB: ContainerBuilder> {
-    buffer: PushBuffer<T, CB, Counter<T, Tee<T, CB::Container>>>,
+    output: OutputBuilder<T, CB>,
+    address: Rc<[usize]>,
+    activations: Rc<RefCell<Activations>>,
 }
 
 impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
-    fn new(pusher: Counter<T, Tee<T, CB::Container>>) -> UnorderedHandle<T, CB> {
-        UnorderedHandle {
-            buffer: PushBuffer::new(pusher),
+    fn new(output: Output<T, CB::Container>, address: Rc<[usize]>, activations: Rc<RefCell<Activations>>) -> Self {
+        Self {
+            output: OutputBuilder::from(output),
+            address,
+            activations,
         }
     }
 
     /// Allocates a new automatically flushing session based on the supplied capability.
     #[inline]
-    pub fn session_with_builder(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'_, T, CB, Counter<T, Tee<T, CB::Container>>>> {
-        ActivateOnDrop::new(self.buffer.autoflush_session_with_builder(cap.capability.clone()), Rc::clone(&cap.address), Rc::clone(&cap.activations))
-    }
-}
-
-impl<T: Timestamp, C: Container> UnorderedHandle<T, CapacityContainerBuilder<C>> {
-    /// Allocates a new automatically flushing session based on the supplied capability.
-    #[inline]
-    pub fn session(&mut self, cap: ActivateCapability<T>) -> ActivateOnDrop<AutoflushSession<'_, T, CapacityContainerBuilder<C>, Counter<T, Tee<T, C>>>> {
-        self.session_with_builder(cap)
+    pub fn activate(&mut self) -> ActivateOnDrop<OutputBuilderSession<'_, T, CB>> {
+        ActivateOnDrop::new(self.output.activate(), Rc::clone(&self.address), Rc::clone(&self.activations))
     }
 }

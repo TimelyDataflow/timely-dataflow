@@ -6,7 +6,6 @@ use std::cell::RefCell;
 use crate::progress::Timestamp;
 use crate::progress::frontier::{AntichainRef, MutableAntichain};
 use crate::dataflow::channels::pushers::Counter as PushCounter;
-use crate::dataflow::channels::pushers::buffer::Buffer as PushBuffer;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
@@ -92,7 +91,7 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let (tee, stream) = builder.new_output();
-        let mut output = PushBuffer::new(PushCounter::new(tee));
+        let mut output = PushCounter::new(tee);
 
         let shared_frontier = Rc::downgrade(&handle.frontier);
         let mut started = false;
@@ -115,13 +114,14 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
                 while let Some(message) = input.next() {
                     let time = &message.time;
                     let data = &mut message.data;
-                    output.session(time).give_container(data);
+                    output.give(time.clone(), data);
                 }
-                output.cease();
+                use timely_communication::Push;
+                output.done();
 
                 // extract what we know about progress from the input and output adapters.
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
-                output.inner().produced().borrow_mut().drain_into(&mut progress.produceds[0]);
+                output.produced().borrow_mut().drain_into(&mut progress.produceds[0]);
 
                 false
             },

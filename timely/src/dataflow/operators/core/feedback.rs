@@ -1,10 +1,7 @@
 //! Create cycles in a timely dataflow graph.
 
 use crate::Container;
-use crate::container::CapacityContainerBuilder;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::channels::pushers::Tee;
-use crate::dataflow::operators::generic::OutputWrapper;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::scopes::child::Iterative;
 use crate::dataflow::{StreamCore, Scope};
@@ -118,12 +115,10 @@ impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
 
         builder.build(move |_capability| move |_frontier| {
             let mut output = output.activate();
-            input.activate().for_each_time(|cap, data| {
+            input.for_each(|cap, data| {
                 if let Some(new_time) = summary.results_in(cap.time()) {
                     let new_cap = cap.delayed(&new_time);
-                    output
-                        .session(&new_cap)
-                        .give_containers(data);
+                    output.give(&new_cap, data);
                 }
             });
         });
@@ -135,5 +130,5 @@ impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
 pub struct Handle<G: Scope, C: Container> {
     builder: OperatorBuilder<G>,
     summary: <G::Timestamp as Timestamp>::Summary,
-    output: OutputWrapper<G::Timestamp, CapacityContainerBuilder<C>, Tee<G::Timestamp, C>>,
+    output: crate::dataflow::channels::pushers::Output<G::Timestamp, C>,
 }

@@ -11,12 +11,10 @@ use crate::progress::Timestamp;
 use crate::progress::ChangeBatch;
 use crate::progress::operate::PortConnectivity;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
-use crate::dataflow::channels::pushers::Counter as PushCounter;
-use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Message;
-use crate::communication::{Push, Pull};
+use crate::communication::Pull;
 use crate::{Container, Accountable};
-use crate::container::{ContainerBuilder, CapacityContainerBuilder};
+use crate::container::{ContainerBuilder, CapacityContainerBuilder, PushInto};
 
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
@@ -116,116 +114,101 @@ pub fn new_input_handle<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>>(
     }
 }
 
-/// An owned instance of an output buffer which ensures certain API use.
-///
-/// An `OutputWrapper` exists to prevent anyone from using the wrapped buffer in any way other
-/// than with an `OutputHandle`, whose methods ensure that capabilities are used and that the
-/// pusher is flushed (via the `cease` method) once it is no longer used.
-#[derive(Debug)]
-pub struct OutputWrapper<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> {
-    push_buffer: Buffer<T, CB, PushCounter<T, P>>,
-    internal_buffer: Rc<RefCell<ChangeBatch<T>>>,
-    port: usize,
+/// An owning pair of output pusher and container builder.
+pub struct OutputBuilder<T: Timestamp, CB: ContainerBuilder> {
+    output: crate::dataflow::channels::pushers::Output<T, CB::Container>,
+    builder: CB,
 }
 
-impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> OutputWrapper<T, CB, P> {
-    /// Creates a new output wrapper from a push buffer.
-    pub fn new(push_buffer: Buffer<T, CB, PushCounter<T, P>>, internal_buffer: Rc<RefCell<ChangeBatch<T>>>, port: usize) -> Self {
-        OutputWrapper {
-            push_buffer,
-            internal_buffer,
-            port,
-        }
+impl<T: Timestamp, CB: ContainerBuilder> OutputBuilder<T, CB> {
+    /// Constructs an output builder from an output and a default container builder.
+    pub fn from(output: crate::dataflow::channels::pushers::Output<T, CB::Container>) -> Self {
+        Self { output, builder: CB::default() }
     }
-    /// Borrows the push buffer into a handle, which can be used to send records.
-    ///
-    /// This method ensures that the only access to the push buffer is through the `OutputHandle`
-    /// type which ensures the use of capabilities, and which calls `cease` when it is dropped.
-    pub fn activate(&mut self) -> OutputHandleCore<'_, T, CB, P> {
-        OutputHandleCore {
-            push_buffer: &mut self.push_buffer,
-            internal_buffer: &self.internal_buffer,
-            port: self.port,
+    /// An activated output buffer for building containers.
+    pub fn activate<'a>(&'a mut self) -> OutputBuilderSession<'a, T, CB> {
+        OutputBuilderSession {
+            session: self.output.activate(),
+            builder: &mut self.builder,
         }
     }
 }
 
-/// Handle to an operator's output stream.
-pub struct OutputHandleCore<'a, T: Timestamp, CB: ContainerBuilder+'a, P: Push<Message<T, CB::Container>>+'a> {
-    push_buffer: &'a mut Buffer<T, CB, PushCounter<T, P>>,
-    internal_buffer: &'a Rc<RefCell<ChangeBatch<T>>>,
-    port: usize,
+/// A wrapper around a live output session, with a container builder to buffer.
+pub struct OutputBuilderSession<'a, T: Timestamp, CB: ContainerBuilder> {
+    session: crate::dataflow::channels::pushers::OutputSession<'a, T, CB::Container>,
+    builder: &'a mut CB,
 }
 
-/// Handle specialized to `Vec`-based container.
-pub type OutputHandle<'a, T, D, P> = OutputHandleCore<'a, T, CapacityContainerBuilder<Vec<D>>, P>;
-
-impl<'a, T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> OutputHandleCore<'a, T, CB, P> {
-    /// Obtains a session that can send data at the timestamp associated with capability `cap`.
+impl<'a, T: Timestamp, CB: ContainerBuilder> OutputBuilderSession<'a, T, CB> {
+    /// A container-building session associated with a capability.
     ///
-    /// In order to send data at a future timestamp, obtain a capability for the new timestamp
-    /// first, as show in the example.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    /// use timely::container::CapacityContainerBuilder;
-    ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .unary::<CapacityContainerBuilder<_>, _, _, _>(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each_time(|cap, data| {
-    ///                    let time = cap.time().clone() + 1;
-    ///                    output.session_with_builder(&cap.delayed(&time))
-    ///                          .give_containers(data);
-    ///                });
-    ///            });
-    /// });
-    /// ```
-    pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CB, PushCounter<T, P>> where 'a: 'b {
-        debug_assert!(cap.valid_for_output(self.internal_buffer, self.port), "Attempted to open output session with invalid capability");
-        self.push_buffer.session_with_builder(cap.time())
-    }
-
-    /// Flushes all pending data and indicate that no more data immediately follows.
-    pub fn cease(&mut self) {
-        self.push_buffer.cease();
+    /// This method is the prefered way of sending records that must be accumulated into a container,
+    /// as it avoid the recurring overhead of capability validation.
+    pub fn session_with_builder<'b, CT: CapabilityTrait<T>>(&'b mut self, capability: &'b CT) -> Session<'a, 'b, T, CB, CT> where 'a: 'b {
+        debug_assert!(self.session.valid(capability));
+        Session {
+            buffer: self,
+            capability,
+        }
     }
 }
 
-impl<'a, T: Timestamp, C: Container, P: Push<Message<T, C>>> OutputHandleCore<'a, T, CapacityContainerBuilder<C>, P> {
-    /// Obtains a session that can send data at the timestamp associated with capability `cap`.
+impl<'a, T: Timestamp, C: Container> OutputBuilderSession<'a, T, CapacityContainerBuilder<C>> {
+    /// A container-building session associated with a capability.
     ///
-    /// In order to send data at a future timestamp, obtain a capability for the new timestamp
-    /// first, as show in the example.
-    ///
-    /// # Examples
-    /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::generic::Operator;
-    /// use timely::dataflow::channels::pact::Pipeline;
-    ///
-    /// timely::example(|scope| {
-    ///     (0..10).to_stream(scope)
-    ///            .unary(Pipeline, "example", |_cap, _info| |input, output| {
-    ///                input.for_each_time(|cap, data| {
-    ///                    let time = cap.time().clone() + 1;
-    ///                    output.session(&cap.delayed(&time))
-    ///                          .give_containers(data);
-    ///                });
-    ///            });
-    /// });
-    /// ```
-    #[inline]
-    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, cap: &'b CT) -> Session<'b, T, CapacityContainerBuilder<C>, PushCounter<T, P>> where 'a: 'b {
-        self.session_with_builder(cap)
+    /// This method is the prefered way of sending records that must be accumulated into a container,
+    /// as it avoid the recurring overhead of capability validation.
+    pub fn session<'b, CT: CapabilityTrait<T>>(&'b mut self, capability: &'b CT) -> Session<'a, 'b, T, CapacityContainerBuilder<C>, CT> where 'a: 'b {
+        debug_assert!(self.session.valid(capability));
+        Session {
+            buffer: self,
+            capability,
+        }
     }
 }
 
-impl<T: Timestamp, CB: ContainerBuilder, P: Push<Message<T, CB::Container>>> Drop for OutputHandleCore<'_, T, CB, P> {
-    fn drop(&mut self) {
-        self.push_buffer.cease();
+/// An active output building session, which accepts items and builds containers.
+pub struct Session<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: CapabilityTrait<T>> {
+    buffer: &'b mut OutputBuilderSession<'a, T, CB>,
+    capability: &'b CT,
+}
+
+impl<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: CapabilityTrait<T>> Session<'a, 'b, T, CB, CT> {
+
+    /// Provides one record at the time specified by the `Session`.
+    #[inline] pub fn give<D>(&mut self, data: D) where CB: PushInto<D> {
+        self.buffer.builder.push_into(data);
+        self.extract_and_send();
     }
+    /// Provides an iterator of records at the time specified by the `Session`.
+    #[inline] pub fn give_iterator<I>(&mut self, iter: I) where I: Iterator, CB: PushInto<I::Item> {
+        for item in iter { self.buffer.builder.push_into(item); }
+        self.extract_and_send();
+    }
+    /// Provide a container at the time specified by the [Session].
+    #[inline] pub fn give_container(&mut self, container: &mut CB::Container) {
+        self.buffer.session.give(&self.capability, container);
+    }
+    /// Provide multiple containers at the time specifid by the [Session].
+    #[inline] pub fn give_containers<'c>(&mut self, containers: impl Iterator<Item = &'c mut CB::Container>) {
+        for container in containers { self.buffer.session.give(&self.capability, container); }
+    }
+
+    /// Extracts built containers and sends them.
+    pub fn extract_and_send(&mut self) {
+        while let Some(container) = self.buffer.builder.extract() {
+            self.buffer.session.give(&self.capability, container);
+        }
+    }
+    /// Finalizes containers and sends them.
+    pub fn flush(&mut self) {
+        while let Some(container) = self.buffer.builder.finish() {
+            self.buffer.session.give(&self.capability, container);
+        }
+    }
+}
+
+impl<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: CapabilityTrait<T>> Drop for Session<'a, 'b, T, CB, CT> {
+    fn drop(&mut self) { self.flush() }
 }

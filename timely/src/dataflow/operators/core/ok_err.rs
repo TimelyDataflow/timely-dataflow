@@ -4,6 +4,7 @@ use crate::Container;
 use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
+use crate::dataflow::operators::generic::OutputBuilder;
 use crate::dataflow::{Scope, StreamCore};
 
 /// Extension trait for `Stream`.
@@ -53,8 +54,11 @@ impl<S: Scope, C: Container + DrainContainer> OkErr<S, C> for StreamCore<S, C> {
         builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
-        let (mut output1, stream1) = builder.new_output();
-        let (mut output2, stream2) = builder.new_output();
+        let (output1, stream1) = builder.new_output();
+        let (output2, stream2) = builder.new_output();
+
+        let mut output1 = OutputBuilder::from(output1);
+        let mut output2 = OutputBuilder::from(output2);
 
         builder.build(move |_| {
             move |_frontiers| {

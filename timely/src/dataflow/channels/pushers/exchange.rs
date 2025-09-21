@@ -141,7 +141,7 @@ where
             }
             self.distributor.relax();
             for index in 0..self.pushers.len() {
-                self.pushers[index].push(&mut None);
+                self.pushers[index].done();
             }
         }
     }
