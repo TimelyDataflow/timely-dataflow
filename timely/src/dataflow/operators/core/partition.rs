@@ -54,38 +54,29 @@ impl<G: Scope, C: Container + DrainContainer> Partition<G, C> for StreamCore<G, 
             streams.push(stream);
         }
 
-        let mut caps = BTreeMap::default();
-
         builder.build(move |_| {
-            let mut todo: BTreeMap<_,Vec<_>> = Default::default();
             move |_frontiers| {
                 let mut handles = outputs.iter_mut().map(|o| o.activate()).collect::<Vec<_>>();
-                let mut parts = BTreeMap::<u64,Vec<_>>::default();
-                while let Some((cap, data)) = input.next() {
-                    todo.entry(cap.time().clone()).or_default().push(std::mem::take(data));
-                    caps.insert(cap.time().clone(), cap);
-                }
-
-                while let Some((time, dataz)) = todo.pop_first() {
-                    let cap = caps.remove(&time).unwrap();
-                    for mut data in dataz.into_iter() {
-                        for datum in data.drain() {
-                            let (part, datum) = route(datum);
-                            parts.entry(part).or_default().push(datum);
-                        }
+                let mut targets = BTreeMap::<u64,Vec<_>>::default();
+                input.for_each_time(|time, data| {
+                    // Sort data by intended output.
+                    for datum in data.flat_map(|d| d.drain()) {
+                        let (part, datum) = route(datum);
+                        targets.entry(part).or_default().push(datum);
                     }
-                    while let Some((part, data)) = parts.pop_first() {
+                    // Form each intended output into a container and ship.
+                    while let Some((part, data)) = targets.pop_first() {
                         for datum in data.into_iter() {
                             c_build.push_into(datum);
                             while let Some(container) = c_build.extract() {
-                                handles[part as usize].give(&cap, container);
+                                handles[part as usize].give(&time, container);
                             }
                         }
                         while let Some(container) = c_build.finish() {
-                            handles[part as usize].give(&cap, container);
+                            handles[part as usize].give(&time, container);
                         }
                     }
-                }
+                });
             }
         });
 
