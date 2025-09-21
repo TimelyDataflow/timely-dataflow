@@ -15,8 +15,8 @@ use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers::buffer::{Buffer, Session};
 use crate::dataflow::channels::Message;
 use crate::communication::{Push, Pull};
-use crate::{Container, Accountable};
-use crate::container::{ContainerBuilder, CapacityContainerBuilder};
+use crate::{Accountable, Container, ContainerBuilder};
+use crate::container::CapacityContainerBuilder;
 
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;

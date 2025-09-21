@@ -3,14 +3,14 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::container::{CapacityContainerBuilder, ContainerBuilder, PushInto};
+use crate::container::{CapacityContainerBuilder, PushInto};
 
 use crate::scheduling::{Schedule, Activator};
 
 use crate::progress::{Operate, operate::SharedProgress, Timestamp, ChangeBatch};
 use crate::progress::Source;
 use crate::progress::operate::Connectivity;
-use crate::{Accountable, Container};
+use crate::{Accountable, Container, ContainerBuilder};
 use crate::communication::Push;
 use crate::dataflow::{Scope, ScopeParent, StreamCore};
 use crate::dataflow::channels::pushers::{Tee, Counter};

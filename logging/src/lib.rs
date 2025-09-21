@@ -34,7 +34,7 @@ impl Registry {
     /// need to do with containers they receive and what properties to uphold.
     ///
     /// Passing a `&mut None` container to an action indicates a flush.
-    pub fn insert<CB: ContainerBuilder, F: FnMut(&Duration, &mut Option<CB::Container>)+'static>(
+    pub fn insert<CB: ContainerBuilder<Container: Default> + 'static, F: FnMut(&Duration, &mut Option<CB::Container>)+'static>(
         &mut self,
         name: &str,
         action: F) -> Option<Box<dyn Any>>
@@ -44,7 +44,7 @@ impl Registry {
     }
 
     /// Binds a log name to a logger.
-    pub fn insert_logger<CB: ContainerBuilder>(&mut self, name: &str, logger: Logger<CB>) -> Option<Box<dyn Any>> {
+    pub fn insert_logger<CB: ContainerBuilder<Container: Default> + 'static>(&mut self, name: &str, logger: Logger<CB>) -> Option<Box<dyn Any>> {
         self.map.insert(name.to_owned(), (Box::new(logger.clone()), Box::new(logger))).map(|x| x.0)
     }
 
@@ -59,7 +59,7 @@ impl Registry {
     }
 
     /// Retrieves a shared logger, if one has been inserted.
-    pub fn get<CB: ContainerBuilder>(&self, name: &str) -> Option<Logger<CB>> {
+    pub fn get<CB: ContainerBuilder<Container: Default> + 'static>(&self, name: &str) -> Option<Logger<CB>> {
         self.map
             .get(name)
             .and_then(|entry| entry.0.downcast_ref::<Logger<CB>>())
@@ -89,11 +89,11 @@ impl Flush for Registry {
 }
 
 /// A buffering logger.
-pub struct Logger<CB: ContainerBuilder> {
+pub struct Logger<CB: ContainerBuilder<Container: Default>> {
     inner: Rc<RefCell<LoggerInner<CB, dyn FnMut(&Duration, &mut Option<CB::Container>)>>>,
 }
 
-impl<CB: ContainerBuilder> Clone for Logger<CB> {
+impl<CB: ContainerBuilder<Container: Default>> Clone for Logger<CB> {
     fn clone(&self) -> Self {
         Self {
             inner: Rc::clone(&self.inner)
@@ -101,7 +101,7 @@ impl<CB: ContainerBuilder> Clone for Logger<CB> {
     }
 }
 
-impl<CB: ContainerBuilder + Debug> Debug for Logger<CB> {
+impl<CB: ContainerBuilder<Container: Default> + Debug> Debug for Logger<CB> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Logger")
             .field("inner", &self.inner)
@@ -109,7 +109,7 @@ impl<CB: ContainerBuilder + Debug> Debug for Logger<CB> {
     }
 }
 
-struct LoggerInner<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> {
+struct LoggerInner<CB: ContainerBuilder<Container: Default>, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> {
     /// common instant used for all loggers.
     time:   Instant,
     /// offset to allow re-calibration.
@@ -120,7 +120,7 @@ struct LoggerInner<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Optio
     action: A,
 }
 
-impl<CB: ContainerBuilder> Logger<CB> {
+impl<CB: ContainerBuilder<Container: Default>> Logger<CB> {
     /// Allocates a new shareable logger bound to a write destination.
     pub fn new<F>(time: Instant, offset: Duration, action: F) -> Self
     where
@@ -185,12 +185,12 @@ impl<CB: ContainerBuilder> Logger<CB> {
 ///
 /// Construct a `TypedLogger` with [`Logger::into_typed`] or by calling `into` on a `Logger`.
 #[derive(Debug)]
-pub struct TypedLogger<CB: ContainerBuilder, T> {
+pub struct TypedLogger<CB: ContainerBuilder<Container: Default>, T> {
     inner: Logger<CB>,
     _marker: PhantomData<T>,
 }
 
-impl<CB: ContainerBuilder, T> TypedLogger<CB, T> {
+impl<CB: ContainerBuilder<Container: Default>, T> TypedLogger<CB, T> {
     /// Logs an event. Equivalent to [`Logger::log`], with the exception that it converts the
     /// event to `T` before logging.
     pub fn log<S: Into<T>>(&self, event: S)
@@ -211,7 +211,7 @@ impl<CB: ContainerBuilder, T> TypedLogger<CB, T> {
     }
 }
 
-impl<CB: ContainerBuilder, T> Clone for TypedLogger<CB, T> {
+impl<CB: ContainerBuilder<Container: Default>, T> Clone for TypedLogger<CB, T> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -220,7 +220,7 @@ impl<CB: ContainerBuilder, T> Clone for TypedLogger<CB, T> {
     }
 }
 
-impl<CB: ContainerBuilder, T> From<Logger<CB>> for TypedLogger<CB, T> {
+impl<CB: ContainerBuilder<Container: Default>, T> From<Logger<CB>> for TypedLogger<CB, T> {
     fn from(inner: Logger<CB>) -> Self {
         TypedLogger {
             inner,
@@ -229,14 +229,14 @@ impl<CB: ContainerBuilder, T> From<Logger<CB>> for TypedLogger<CB, T> {
     }
 }
 
-impl<CB: ContainerBuilder, T> std::ops::Deref for TypedLogger<CB, T> {
+impl<CB: ContainerBuilder<Container: Default>, T> std::ops::Deref for TypedLogger<CB, T> {
     type Target = Logger<CB>;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> LoggerInner<CB, A> {
+impl<CB: ContainerBuilder<Container: Default>, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> LoggerInner<CB, A> {
     /// Push a container with a time at an action.
     #[inline]
     fn push(action: &mut A, time: &Duration, container: &mut CB::Container) {
@@ -272,7 +272,7 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Containe
 }
 
 /// Flush on the *last* drop of a logger.
-impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> Drop for LoggerInner<CB, A> {
+impl<CB: ContainerBuilder<Container: Default>, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> Drop for LoggerInner<CB, A> {
     fn drop(&mut self) {
         self.flush();
     }
@@ -280,7 +280,7 @@ impl<CB: ContainerBuilder, A: ?Sized + FnMut(&Duration, &mut Option<CB::Containe
 
 impl<CB, A: ?Sized + FnMut(&Duration, &mut Option<CB::Container>)> Debug for LoggerInner<CB, A>
 where
-    CB: ContainerBuilder + Debug,
+    CB: ContainerBuilder<Container: Default> + Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LoggerInner")
@@ -298,7 +298,7 @@ trait Flush {
     fn flush(&self);
 }
 
-impl<CB: ContainerBuilder> Flush for Logger<CB> {
+impl<CB: ContainerBuilder<Container: Default>> Flush for Logger<CB> {
     fn flush(&self) {
         self.inner.borrow_mut().flush()
     }
