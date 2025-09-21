@@ -126,8 +126,8 @@ impl<T: Timestamp, CB: ContainerBuilder> OutputBuilder<T, CB> {
         Self { output, builder: CB::default() }
     }
     /// An activated output buffer for building containers.
-    pub fn activate<'a>(&'a mut self) -> OutputBuffer<'a, T, CB> {
-        OutputBuffer {
+    pub fn activate<'a>(&'a mut self) -> OutputBuilderSession<'a, T, CB> {
+        OutputBuilderSession {
             session: self.output.activate(),
             builder: &mut self.builder,
         }
@@ -135,12 +135,12 @@ impl<T: Timestamp, CB: ContainerBuilder> OutputBuilder<T, CB> {
 }
 
 /// A wrapper around a live output session, with a container builder to buffer.
-pub struct OutputBuffer<'a, T: Timestamp, CB: ContainerBuilder> {
+pub struct OutputBuilderSession<'a, T: Timestamp, CB: ContainerBuilder> {
     session: crate::dataflow::channels::pushers::OutputSession<'a, T, CB::Container>,
     builder: &'a mut CB,
 }
 
-impl<'a, T: Timestamp, CB: ContainerBuilder> OutputBuffer<'a, T, CB> {
+impl<'a, T: Timestamp, CB: ContainerBuilder> OutputBuilderSession<'a, T, CB> {
     /// A container-building session associated with a capability.
     ///
     /// This method is the prefered way of sending records that must be accumulated into a container,
@@ -154,7 +154,7 @@ impl<'a, T: Timestamp, CB: ContainerBuilder> OutputBuffer<'a, T, CB> {
     }
 }
 
-impl<'a, T: Timestamp, C: Container> OutputBuffer<'a, T, CapacityContainerBuilder<C>> {
+impl<'a, T: Timestamp, C: Container> OutputBuilderSession<'a, T, CapacityContainerBuilder<C>> {
     /// A container-building session associated with a capability.
     ///
     /// This method is the prefered way of sending records that must be accumulated into a container,
@@ -170,7 +170,7 @@ impl<'a, T: Timestamp, C: Container> OutputBuffer<'a, T, CapacityContainerBuilde
 
 /// An active output building session, which accepts items and builds containers.
 pub struct Session<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: CapabilityTrait<T>> {
-    buffer: &'b mut OutputBuffer<'a, T, CB>,
+    buffer: &'b mut OutputBuilderSession<'a, T, CB>,
     capability: &'b CT,
 }
 

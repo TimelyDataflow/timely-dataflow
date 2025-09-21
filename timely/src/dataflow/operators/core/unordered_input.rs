@@ -12,7 +12,7 @@ use crate::progress::Source;
 use crate::progress::ChangeBatch;
 use crate::progress::operate::Connectivity;
 use crate::dataflow::channels::pushers::{Counter, Tee, Output};
-use crate::dataflow::operators::generic::{OutputBuilder, OutputBuffer};
+use crate::dataflow::operators::generic::{OutputBuilder, OutputBuilderSession};
 use crate::dataflow::operators::{ActivateCapability, Capability};
 use crate::dataflow::{Scope, StreamCore};
 
@@ -163,7 +163,7 @@ impl<T: Timestamp, CB: ContainerBuilder> UnorderedHandle<T, CB> {
 
     /// Allocates a new automatically flushing session based on the supplied capability.
     #[inline]
-    pub fn activate(&mut self) -> ActivateOnDrop<OutputBuffer<'_, T, CB>> {
+    pub fn activate(&mut self) -> ActivateOnDrop<OutputBuilderSession<'_, T, CB>> {
         ActivateOnDrop::new(self.output.activate(), Rc::clone(&self.address), Rc::clone(&self.activations))
     }
 }
