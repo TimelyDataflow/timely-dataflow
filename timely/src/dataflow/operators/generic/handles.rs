@@ -176,6 +176,9 @@ pub struct Session<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: Capabilit
 
 impl<'a: 'b, 'b, T: Timestamp, CB: ContainerBuilder, CT: CapabilityTrait<T>> Session<'a, 'b, T, CB, CT> {
 
+    /// Provides access to the underlying container builder.
+    pub fn builder(&mut self) -> &mut CB { &mut self.buffer.builder }
+
     /// Provides one record at the time specified by the `Session`.
     #[inline] pub fn give<D>(&mut self, data: D) where CB: PushInto<D> {
         self.buffer.builder.push_into(data);
