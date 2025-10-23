@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.25.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.24.0...timely-v0.25.0) - 2025-10-23
 
+The timely operator architecture has changed a bit, for the better but with footguns for migration.
+Timely operators used to fuse sessions opened with the same capabilities, allowing one to treat session creation as low cost.
+This behavior has been stopped, and the data sent into one session will be formed into one container.
+Sessions will supply and use their own container builder, and the recommended fix is to consolidate output you want to send by session.
+
+The change comes because the embedded container builder is at odds with folks who want to bring their own containers.
+The refactoring de-embeds the container builder, surfacing it to "user code" but at the expense of being unable to chain across sessions.
+
+To make it easier to bundle work by sessions, input handles provide a new `for_each_time` method that provide input collections grouped by time.
+This allows many operators to draw down these groups by time, perform the work and create one session to transmit the results.
+This should be strictly better than not doing it, and relying on timely to fuse sessions, as it ensures all work that can be fused is fused.
+
 ### Other
 
 - Remove constraints from container builders ([#712](https://github.com/TimelyDataflow/timely-dataflow/pull/712))
