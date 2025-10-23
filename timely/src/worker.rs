@@ -205,7 +205,7 @@ pub trait AsWorker : Scheduler {
     /// Acquires a logger by name, if the log register exists and the name is registered.
     ///
     /// For a more precise understanding of why a result is `None` one can use the direct functions.
-    fn logger_for<CB: timely_container::ContainerBuilder>(&self, name: &str) -> Option<timely_logging::Logger<CB>> {
+    fn logger_for<CB: crate::ContainerBuilder>(&self, name: &str) -> Option<timely_logging::Logger<CB>> {
         self.log_register().and_then(|l| l.get(name))
     }
     /// Provides access to the timely logging stream.

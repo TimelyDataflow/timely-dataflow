@@ -85,11 +85,11 @@ pub trait PushInto<T> {
 ///
 /// The trait does not prescribe any specific ordering guarantees, and each implementation can
 /// decide to represent a push order for `extract` and `finish`, or not.
-pub trait ContainerBuilder: Default + 'static {
+pub trait ContainerBuilder: Default {
     /// The container type we're building.
     // The container is `Clone` because `Tee` requires it, otherwise we need to repeat it
     // all over Timely. `'static` because we don't want lifetimes everywhere.
-    type Container: Accountable + Default + Clone + 'static;
+    type Container;
     /// Extract assembled containers, potentially leaving unfinished data behind. Can
     /// be called repeatedly, for example while the caller can send data.
     ///
@@ -148,7 +148,7 @@ impl<T, C: SizableContainer + Default + PushInto<T>> PushInto<T> for CapacityCon
     }
 }
 
-impl<C: Accountable + Default + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: Accountable + Default> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
@@ -171,7 +171,7 @@ impl<C: Accountable + Default + Clone + 'static> ContainerBuilder for CapacityCo
     }
 }
 
-impl<C: Accountable + SizableContainer + Default + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
+impl<C: Accountable + SizableContainer + Default> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
 impl<T> Accountable for Vec<T> {
     #[inline] fn record_count(&self) -> i64 { i64::try_from(Vec::len(self)).unwrap() }

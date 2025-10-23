@@ -1,11 +1,11 @@
 //! Partition a stream of records into multiple streams.
 use std::collections::BTreeMap;
 
-use crate::container::{DrainContainer, ContainerBuilder, PushInto};
+use crate::container::{DrainContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, StreamCore};
-use crate::Container;
+use crate::{Container, ContainerBuilder};
 
 /// Partition a stream of records into multiple streams.
 pub trait Partition<G: Scope, C: DrainContainer> {
