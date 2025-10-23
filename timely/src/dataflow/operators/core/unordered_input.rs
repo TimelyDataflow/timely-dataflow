@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::container::ContainerBuilder;
+use crate::ContainerBuilder;
 
 use crate::scheduling::{Schedule, ActivateOnDrop};
 

@@ -13,8 +13,8 @@ use crate::progress::operate::PortConnectivity;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::channels::Message;
 use crate::communication::Pull;
-use crate::{Container, Accountable};
-use crate::container::{ContainerBuilder, CapacityContainerBuilder, PushInto};
+use crate::{Container, ContainerBuilder, Accountable};
+use crate::container::{CapacityContainerBuilder, PushInto};
 
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
