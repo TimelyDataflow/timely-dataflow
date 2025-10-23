@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.24.0...timely-v0.25.0) - 2025-10-23
+
+### Other
+
+- Remove constraints from container builders ([#712](https://github.com/TimelyDataflow/timely-dataflow/pull/712))
+- Update various dependencies ([#719](https://github.com/TimelyDataflow/timely-dataflow/pull/719))
+- Provide access for wrapped builder ([#717](https://github.com/TimelyDataflow/timely-dataflow/pull/717))
+- Pivot container builders above capability checking ([#715](https://github.com/TimelyDataflow/timely-dataflow/pull/715))
+- Add and use `InputSession` ([#716](https://github.com/TimelyDataflow/timely-dataflow/pull/716))
+- Remove Container argument from Counter ([#714](https://github.com/TimelyDataflow/timely-dataflow/pull/714))
+- Remove Hash from Timestamp ([#713](https://github.com/TimelyDataflow/timely-dataflow/pull/713))
+- Remove IterContainer ([#707](https://github.com/TimelyDataflow/timely-dataflow/pull/707))
+- Replace ExchangeCore with DistributePact ([#711](https://github.com/TimelyDataflow/timely-dataflow/pull/711))
+- Create pact for Distributors ([#709](https://github.com/TimelyDataflow/timely-dataflow/pull/709))
+
 ## [0.24.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.23.0...timely-v0.24.0) - 2025-08-28
 
 This version of Timely has some exciting new features.
