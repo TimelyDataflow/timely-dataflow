@@ -148,7 +148,7 @@ impl<T, C: SizableContainer + Default + PushInto<T>> PushInto<T> for CapacityCon
     }
 }
 
-impl<C: Accountable + Default + Clone + 'static> ContainerBuilder for CapacityContainerBuilder<C> {
+impl<C: Accountable + Default> ContainerBuilder for CapacityContainerBuilder<C> {
     type Container = C;
 
     #[inline]
@@ -171,7 +171,7 @@ impl<C: Accountable + Default + Clone + 'static> ContainerBuilder for CapacityCo
     }
 }
 
-impl<C: Accountable + SizableContainer + Default + Clone + 'static> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
+impl<C: Accountable + SizableContainer + Default> LengthPreservingContainerBuilder for CapacityContainerBuilder<C> { }
 
 impl<T> Accountable for Vec<T> {
     #[inline] fn record_count(&self) -> i64 { i64::try_from(Vec::len(self)).unwrap() }
