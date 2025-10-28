@@ -42,12 +42,4 @@ impl<T, P> Counter<T, P> where T : Ord+Clone+'static {
     pub fn produced(&self) -> &Rc<RefCell<ChangeBatch<T>>> {
         &self.produced
     }
-    /// Ships a time and a container.
-    ///
-    /// This is not a validated capability, and this method should not be used without great care.
-    /// Ideally, users would not have direct access to a `Counter`, and preventing this is the way
-    /// to uphold invariants.
-    #[inline] pub fn give<C: crate::Container>(&mut self, time: T, container: &mut C) where P: Push<Message<T, C>> {
-        if !container.is_empty() { Message::push_at(container, time, self); }
-    }
 }
