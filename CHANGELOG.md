@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.25.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.25.0...timely-v0.25.1) - 2025-10-28
 
-### Other
+This release fixes an issue with corrupted progress traffic when using the push counter's `give` function.
+In Timely, we use it within the replay and probe operators, but downstream crates might use it in more
+places. Do not use version v0.25.0.
 
 - Record progress updates for direct container sends ([#721](https://github.com/TimelyDataflow/timely-dataflow/pull/721))
 
