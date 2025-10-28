@@ -13,6 +13,7 @@ use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 use crate::dataflow::{StreamCore, Scope};
 use crate::Container;
+use crate::dataflow::channels::Message;
 
 /// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, C: Container> {
@@ -112,9 +113,7 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
                 }
 
                 while let Some(message) = input.next() {
-                    let time = &message.time;
-                    let data = &mut message.data;
-                    output.give(time.clone(), data);
+                    Message::push_at(&mut message.data, message.time.clone(), &mut output);
                 }
                 use timely_communication::Push;
                 output.done();

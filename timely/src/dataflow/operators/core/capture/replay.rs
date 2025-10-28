@@ -46,6 +46,7 @@ use crate::progress::Timestamp;
 use super::Event;
 use super::event::EventIterator;
 use crate::Container;
+use crate::dataflow::channels::Message;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
@@ -99,14 +100,14 @@ where
                                 progress.internals[0].extend(vec.into_iter());
                             },
                             Owned(Event::Messages(time, mut data)) => {
-                                output.give(time.clone(), &mut data);
+                                Message::push_at(&mut data, time, &mut output);
                             }
                             Borrowed(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.iter().cloned());
                             },
                             Borrowed(Event::Messages(time, data)) => {
                                 allocation.clone_from(data);
-                                output.give(time.clone(), &mut allocation);
+                                Message::push_at(&mut allocation, time.clone(), &mut output);
                             }
                         }
                     }
