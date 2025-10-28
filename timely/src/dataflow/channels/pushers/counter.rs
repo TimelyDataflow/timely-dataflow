@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::progress::{ChangeBatch, Timestamp};
+use crate::progress::ChangeBatch;
 use crate::dataflow::channels::Message;
 use crate::communication::Push;
 use crate::Accountable;
@@ -15,7 +15,7 @@ pub struct Counter<T, P> {
     produced: Rc<RefCell<ChangeBatch<T>>>,
 }
 
-impl<T: Timestamp, C: Accountable, P> Push<Message<T, C>> for Counter<T, P> where P: Push<Message<T, C>> {
+impl<T: Clone+Ord, C: Accountable, P> Push<Message<T, C>> for Counter<T, P> where P: Push<Message<T, C>> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         if let Some(message) = message {
@@ -48,6 +48,6 @@ impl<T, P> Counter<T, P> where T : Ord+Clone+'static {
     /// Ideally, users would not have direct access to a `Counter`, and preventing this is the way
     /// to uphold invariants.
     #[inline] pub fn give<C: crate::Container>(&mut self, time: T, container: &mut C) where P: Push<Message<T, C>> {
-        if !container.is_empty() { Message::push_at(container, time, &mut self.pushee); }
+        if !container.is_empty() { Message::push_at(container, time, self); }
     }
 }
