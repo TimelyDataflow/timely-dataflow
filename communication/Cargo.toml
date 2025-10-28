@@ -1,6 +1,6 @@
 [package]
 name = "timely_communication"
-version = "0.25.0"
+version = "0.25.1"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 description = "Communication layer for timely dataflow"
 edition.workspace = true
@@ -25,7 +25,7 @@ getopts = { version = "0.2.24", optional = true }
 byteorder = "1.5"
 serde = { version = "1.0", features = ["derive"] }
 timely_bytes = { path = "../bytes", version = "0.25" }
-timely_container = { path = "../container", version = "0.25.0" }
+timely_container = { path = "../container", version = "0.25.1" }
 timely_logging = { path = "../logging", version = "0.25" }
 
 # Lgalloc only supports linux and macos, don't depend on any other OS.

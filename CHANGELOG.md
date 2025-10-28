@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.25.0...timely-v0.25.1) - 2025-10-28
+
+### Other
+
+- Record progress updates for direct container sends ([#721](https://github.com/TimelyDataflow/timely-dataflow/pull/721))
+
 ## [0.25.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.24.0...timely-v0.25.0) - 2025-10-23
 
 The timely operator architecture has changed a bit, for the better but with footguns for migration.
