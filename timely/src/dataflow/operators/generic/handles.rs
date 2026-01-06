@@ -19,25 +19,6 @@ use crate::container::{CapacityContainerBuilder, PushInto};
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
-#[must_use]
-pub struct InputSession<'a, T: Timestamp, C, P: Pull<Message<T, C>>> {
-    input: &'a mut InputHandleCore<T, C, P>,
-}
-
-impl<'a, T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputSession<'a, T, C, P> {
-    /// Iterates through distinct capabilities and the lists of containers associated with each.
-    pub fn for_each_time<F>(self, logic: F) where F: FnMut(InputCapability<T>, std::slice::IterMut::<C>), C: Default {
-        self.input.for_each_time(logic)
-    }
-    /// Iterates through pairs of capability and container.
-    ///
-    /// The `for_each_time` method is equivalent, but groups containers by capability and is preferred,
-    /// in that it often leads to grouping work by capability, including the creation of output sessions.
-    pub fn for_each<F>(self, logic: F) where F: FnMut(InputCapability<T>, &mut C) {
-        self.input.for_each(logic)
-    }
-}
-
 /// Handle to an operator's input stream.
 pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
     pull_counter: PullCounter<T, C, P>,
@@ -53,15 +34,11 @@ pub struct InputHandleCore<T: Timestamp, C, P: Pull<Message<T, C>>> {
 }
 
 impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C, P> {
-
-    /// Activates an input handle with a session that reorders inputs and must be drained.
-    pub fn activate(&mut self) -> InputSession<'_, T, C, P> { InputSession { input: self } }
-
     /// Reads the next input buffer (at some timestamp `t`) and a corresponding capability for `t`.
     /// The timestamp `t` of the input buffer can be retrieved by invoking `.time()` on the capability.
     /// Returns `None` when there's no more data available.
     #[inline]
-    pub fn next(&mut self) -> Option<(InputCapability<T>, &mut C)> {
+    fn next(&mut self) -> Option<(InputCapability<T>, &mut C)> {
         let internal = &self.internal;
         let summaries = &self.summaries;
         self.pull_counter.next_guarded().map(|(guard, bundle)| {
@@ -92,10 +69,6 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
             self.staged.clear();
         }
     }
-}
-
-pub fn _access_pull_counter<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>>(input: &mut InputHandleCore<T, C, P>) -> &mut PullCounter<T, C, P> {
-    &mut input.pull_counter
 }
 
 /// Constructs an input handle.
