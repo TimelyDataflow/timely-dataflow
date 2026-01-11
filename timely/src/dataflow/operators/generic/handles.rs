@@ -19,6 +19,11 @@ use crate::container::{CapacityContainerBuilder, PushInto};
 use crate::dataflow::operators::InputCapability;
 use crate::dataflow::operators::capability::CapabilityTrait;
 
+/// An input wrapper type that exists to provide a `must_use` decoration.
+///
+/// This type is consumed by its methods `for_each` and `for_each_time`, either of which should be called on it.
+/// Failure to call either of these methods is very likely a logical error, as it means that input data may linger
+/// indefinitely, as the system will not re-invoke the operator until there is additional input data (or another reason).
 #[must_use]
 pub struct InputSession<'a, T: Timestamp, C, P: Pull<Message<T, C>>> {
     input: &'a mut InputHandleCore<T, C, P>,
