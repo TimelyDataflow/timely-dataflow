@@ -61,9 +61,9 @@ pub trait Operator<G: Scope, C1> {
                  &mut OutputBuilderSession<'_, G::Timestamp, CB>)+'static,
         P: ParallelizationContract<G::Timestamp, C1>;
 
-    /// Creates a new dataflow operator that partitions its input stream by a parallelization
-    /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
-    /// `logic` can read from the input stream, write to the output stream, and inspect the frontier at the input.
+    /// Creates a new dataflow operator that partitions its input stream by a parallelization strategy `pact`,
+    /// and repeatedly invokes the closure supplied as `logic`, which can read from the input stream, write to
+    /// the output stream, and inspect the frontier at the input.
     ///
     /// # Examples
     /// ```
@@ -186,9 +186,9 @@ pub trait Operator<G: Scope, C1> {
         P1: ParallelizationContract<G::Timestamp, C1>,
         P2: ParallelizationContract<G::Timestamp, C2>;
 
-    /// Creates a new dataflow operator that partitions its input streams by a parallelization
-    /// strategy `pact`, and repeatedly invokes `logic`, the function returned by the function passed as `constructor`.
-    /// `logic` can read from the input streams, write to the output stream, and inspect the frontier at the inputs.
+    /// Creates a new dataflow operator that partitions its input stream by a parallelization strategy `pact`,
+    /// and repeatedly invokes the closure supplied as `logic`, which can read from the input streams, write to
+    /// the output stream, and inspect the frontier at the inputs.
     ///
     /// # Examples
     /// ```
