@@ -114,7 +114,7 @@ fn main() {
         });
 
         // introduce data and watch!
-        for round in 0..10 {
+        for round in 0.. {
             input.send(WordCountReference { text: "flat container", diff: 1 });
             input.advance_to(round + 1);
             while probe.less_than(input.time()) {
@@ -318,9 +318,12 @@ mod builder {
         fn finish(&mut self) -> Option<&mut Self::Container> {
             if !self.current.is_empty() {
                 self.pending.push_back(Column::Typed(std::mem::take(&mut self.current)));
+                if let Some(Column::Typed(spare)) = self.empty.take() {
+                    self.current = spare;
+                    self.current.clear();
+                }
             }
-            self.empty = self.pending.pop_front();
-            self.empty.as_mut()
+            self.extract()
         }
 
         #[inline]
