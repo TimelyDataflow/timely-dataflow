@@ -187,10 +187,10 @@ impl<T> DrainContainer for Vec<T> {
 }
 
 impl<T> SizableContainer for Vec<T> {
-    fn at_capacity(&self) -> bool {
+    #[inline] fn at_capacity(&self) -> bool {
         self.len() == self.capacity()
     }
-    fn ensure_capacity(&mut self, stash: &mut Option<Self>) {
+    #[inline] fn ensure_capacity(&mut self, stash: &mut Option<Self>) {
         if self.capacity() == 0 {
             *self = stash.take().unwrap_or_default();
             self.clear();
