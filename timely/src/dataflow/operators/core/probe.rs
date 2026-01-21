@@ -94,6 +94,8 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
         let (tee, stream) = builder.new_output();
         let mut output = PushCounter::new(tee);
 
+        handle.frontier.borrow_mut().update_iter(std::iter::once((Timestamp::minimum(), 1)));
+
         let shared_frontier = Rc::downgrade(&handle.frontier);
         let mut started = false;
 
@@ -109,6 +111,10 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
                 if !started {
                     // discard initial capability.
                     progress.internals[0].update(G::Timestamp::minimum(), -1);
+                    if let Some(shared_frontier) = shared_frontier.upgrade() {
+                        let mut borrow = shared_frontier.borrow_mut();
+                        borrow.update_iter(std::iter::once((Timestamp::minimum(), -1)));
+                    }
                     started = true;
                 }
 
