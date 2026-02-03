@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.25.1...timely-v0.26.0) - 2026-02-03
+
+### Other
+
+- Streaming columnar.rs example ([#732](https://github.com/TimelyDataflow/timely-dataflow/pull/732))
+- Correct _notify docs ([#731](https://github.com/TimelyDataflow/timely-dataflow/pull/731))
+- Remove InputSession ([#729](https://github.com/TimelyDataflow/timely-dataflow/pull/729))
+- Remove push counter's give ([#723](https://github.com/TimelyDataflow/timely-dataflow/pull/723))
+
 ## [0.25.1](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.25.0...timely-v0.25.1) - 2025-10-28
 
 This release fixes an issue with corrupted progress traffic when using the push counter's `give` function.
