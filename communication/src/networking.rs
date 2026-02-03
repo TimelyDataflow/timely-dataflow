@@ -12,11 +12,6 @@ use byteorder::{ReadBytesExt, WriteBytesExt};
 use columnar::Columnar;
 use serde::{Deserialize, Serialize};
 
-// This constant is sent along immediately after establishing a TCP stream, so
-// that it is easy to sniff out Timely traffic when it is multiplexed with
-// other traffic on the same port.
-const HANDSHAKE_MAGIC: u64 = 0xc2f1fb770118add9;
-
 /// The byte order for writing message headers and stream initialization.
 type ByteOrder = byteorder::BigEndian;
 
@@ -129,7 +124,6 @@ pub fn start_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
             match TcpStream::connect(address) {
                 Ok(mut stream) => {
                     stream.set_nodelay(true).expect("set_nodelay call failed");
-                    stream.write_u64::<ByteOrder>(HANDSHAKE_MAGIC).expect("failed to encode/send handshake magic");
                     stream.write_u64::<ByteOrder>(my_index as u64).expect("failed to encode/send worker index");
                     if noisy { println!("worker {}:\tconnection to worker {}", my_index, index); }
                     break Some(stream);
@@ -163,11 +157,6 @@ pub fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
                     let mut buffer = [0u8;16];
                     stream.read_exact(&mut buffer)?;
                     let mut cursor = io::Cursor::new(buffer);
-                    let magic = cursor.read_u64::<ByteOrder>().expect("failed to decode magic");
-                    if magic != HANDSHAKE_MAGIC {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData,
-                            "received incorrect timely handshake"));
-                    }
                     let identifier = cursor.read_u64::<ByteOrder>().expect("failed to decode worker index") as usize;
                     results[identifier - my_index - 1] = Some(stream);
                     if noisy { println!("worker {}:\tconnection from worker {}", my_index, identifier); }
