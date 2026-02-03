@@ -150,7 +150,7 @@ pub fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
     let mut results: Vec<_> = (0..(addresses.len() - my_index - 1)).map(|_| None).collect();
 
     // We may have multiple addresses to bind to, and will listen on each of them until all received.
-    let listeners = addresses[my_index].split_whitespace().map(|addr| TcpListener::bind(addr)).collect::<Result<Vec<_>>>()?;
+    let listeners = addresses[my_index].split_whitespace().map(TcpListener::bind).collect::<Result<Vec<_>>>()?;
     for listener in listeners.iter() { listener.set_nonblocking(true).expect("Couldn't set nonblocking"); }
 
     // Until we have all intended connections, poll each listener, sleeping briefly if none have accepted a new stream.
