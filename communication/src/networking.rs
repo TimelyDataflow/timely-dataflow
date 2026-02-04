@@ -1,7 +1,7 @@
 //! Networking code for sending and receiving fixed size `Vec<u8>` between machines.
 
 use std::io;
-use std::io::{Read, Result};
+use std::io::Result;
 use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::thread;
@@ -154,10 +154,7 @@ pub fn await_connections(addresses: Arc<Vec<String>>, my_index: usize, noisy: bo
             match listener.accept() {
                 Ok((mut stream, _)) => {
                     stream.set_nodelay(true).expect("set_nodelay call failed");
-                    let mut buffer = [0u8;16];
-                    stream.read_exact(&mut buffer)?;
-                    let mut cursor = io::Cursor::new(buffer);
-                    let identifier = cursor.read_u64::<ByteOrder>().expect("failed to decode worker index") as usize;
+                    let identifier = stream.read_u64::<ByteOrder>().expect("failed to decode worker index") as usize;
                     results[identifier - my_index - 1] = Some(stream);
                     if noisy { println!("worker {}:\tconnection from worker {}", my_index, identifier); }
                     received = true;
