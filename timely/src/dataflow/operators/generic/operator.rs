@@ -78,7 +78,7 @@ pub trait Operator<G: Scope, C1> {
     ///         .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
     ///             input.for_each_time(|time, data| {
     ///                 output.session(&time).give_containers(data);
-    ///                 notificator.notify_at(time.retain());
+    ///                 notificator.notify_at(time.retain(output.output_index()));
     ///             });
     ///             notificator.for_each(|time, _cnt, _not| {
     ///                 println!("notified at {:?}", time);
@@ -148,11 +148,11 @@ pub trait Operator<G: Scope, C1> {
     ///            move |(input1, frontier1), (input2, frontier2), output| {
     ///                input1.for_each_time(|time, data| {
     ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
-    ///                    notificator.notify_at(time.retain());
+    ///                    notificator.notify_at(time.retain(output.output_index()));
     ///                });
     ///                input2.for_each_time(|time, data| {
     ///                    stash.entry(time.time().clone()).or_insert(Vec::new()).extend(data.flat_map(|d| d.drain(..)));
-    ///                    notificator.notify_at(time.retain());
+    ///                    notificator.notify_at(time.retain(output.output_index()));
     ///                });
     ///                notificator.for_each(&[frontier1, frontier2], |time, _not| {
     ///                    if let Some(mut vec) = stash.remove(time.time()) {
@@ -205,11 +205,11 @@ pub trait Operator<G: Scope, C1> {
     ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
     ///            input1.for_each_time(|time, data| {
     ///                output.session(&time).give_containers(data);
-    ///                notificator.notify_at(time.retain());
+    ///                notificator.notify_at(time.retain(output.output_index()));
     ///            });
     ///            input2.for_each_time(|time, data| {
     ///                output.session(&time).give_containers(data);
-    ///                notificator.notify_at(time.retain());
+    ///                notificator.notify_at(time.retain(output.output_index()));
     ///            });
     ///            notificator.for_each(|time, _cnt, _not| {
     ///                println!("notified at {:?}", time);

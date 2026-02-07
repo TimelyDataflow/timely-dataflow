@@ -45,13 +45,13 @@ fn main() {
 
                         // hold on to edge changes until it is time.
                         input1.for_each_time(|time, data| {
-                            let entry = edge_stash.entry(time.retain()).or_default();
+                            let entry = edge_stash.entry(time.retain(output.output_index())).or_default();
                             data.for_each(|data| entry.append(data));
                         });
 
                         // hold on to rank changes until it is time.
                         input2.for_each_time(|time, data| {
-                            let entry = rank_stash.entry(time.retain()).or_default();
+                            let entry = rank_stash.entry(time.retain(output.output_index())).or_default();
                             data.for_each(|data| entry.append(data));
                         });
 

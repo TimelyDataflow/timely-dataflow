@@ -114,6 +114,10 @@ pub struct OutputBuilderSession<'a, T: Timestamp, CB: ContainerBuilder> {
 }
 
 impl<'a, T: Timestamp, CB: ContainerBuilder> OutputBuilderSession<'a, T, CB> {
+    /// The index of the output port wrapped by this session.
+    #[inline]
+    pub fn output_index(&self) -> usize { self.session.output_index()}
+
     /// A container-building session associated with a capability.
     ///
     /// This method is the prefered way of sending records that must be accumulated into a container,

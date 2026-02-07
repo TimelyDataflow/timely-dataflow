@@ -89,7 +89,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
                 // stash if not time yet
                 if notificator.frontier(0).less_than(time.time()) {
                     for data in data { pending.entry(time.time().clone()).or_insert_with(Vec::new).append(data); }
-                    notificator.notify_at(time.retain());
+                    notificator.notify_at(time.retain(output.output_index()));
                 }
                 else {
                     // else we can process immediately

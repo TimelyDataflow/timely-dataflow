@@ -57,7 +57,7 @@ impl<G: Scope<Timestamp: ::std::hash::Hash>, D: Data> Accumulate<G, D> for Strea
                 for data in data {
                     logic(accums.entry(time.time().clone()).or_insert_with(|| default.clone()), data);
                 }
-                notificator.notify_at(time.retain());
+                notificator.notify_at(time.retain(output.output_index()));
             });
 
             notificator.for_each(|time,_,_| {

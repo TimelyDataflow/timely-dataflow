@@ -85,7 +85,7 @@ impl<S: Scope<Timestamp: ::std::hash::Hash>, K: ExchangeData+Hash+Eq, V: Exchang
                     let agg = agg_time.entry(key.clone()).or_insert_with(Default::default);
                     fold(&key, val, agg);
                 }
-                notificator.notify_at(time.retain());
+                notificator.notify_at(time.retain(output.output_index()));
             });
 
             // pop completed aggregates, send along whatever

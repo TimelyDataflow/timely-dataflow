@@ -267,20 +267,18 @@ impl<T: Timestamp> InputCapability<T> {
     }
 
     /// The timestamp associated with this capability.
+    #[inline]
     pub fn time(&self) -> &T {
         self.consumed_guard.time()
     }
 
+    /// Delays capability for a specific output port.
+    ///
     /// Makes a new capability for a timestamp `new_time` greater or equal to the timestamp of
     /// the source capability (`self`).
     ///
     /// This method panics if `self.time` is not less or equal to `new_time`.
-    pub fn delayed(&self, new_time: &T) -> Capability<T> {
-        self.delayed_for_output(new_time, 0)
-    }
-
-    /// Delays capability for a specific output port.
-    pub fn delayed_for_output(&self, new_time: &T, output_port: usize) -> Capability<T> {
+    pub fn delayed(&self, new_time: &T, output_port: usize) -> Capability<T> {
         use crate::progress::timestamp::PathSummary;
         if let Some(path) = self.summaries.borrow().get(output_port) {
             if path.iter().flat_map(|summary| summary.results_in(self.time())).any(|time| time.less_equal(new_time)) {
@@ -294,34 +292,16 @@ impl<T: Timestamp> InputCapability<T> {
         }
     }
 
-    /// Transform to an owned capability.
+    /// Transforms to an owned capability for a specific output port.
     ///
     /// This method produces an owned capability which must be dropped to release the
     /// capability. Users should take care that these capabilities are only stored for
     /// as long as they are required, as failing to drop them may result in livelock.
     ///
-    /// This method panics if the timestamp summary to output zero strictly advances the time.
-    pub fn retain(self) -> Capability<T> {
-        self.retain_for_output(0)
-    }
-
-    /// Transforms to an owned capability for a specific output port.
-    ///
     /// This method panics if the timestamp summary to `output_port` strictly advances the time.
-    pub fn retain_for_output(self, output_port: usize) -> Capability<T> {
-        use crate::progress::timestamp::PathSummary;
-        let self_time = self.time().clone();
-        if let Some(path) = self.summaries.borrow().get(output_port) {
-            if path.iter().flat_map(|summary| summary.results_in(&self_time)).any(|time| time.less_equal(&self_time)) {
-                Capability::new(self_time, Rc::clone(&self.internal.borrow()[output_port]))
-            }
-            else {
-                panic!("Attempted to retain a time ({:?}) not greater or equal to the operators input-output summary ({:?}) applied to the capabilities time ({:?})", self_time, path, self_time);
-            }
-        }
-        else {
-            panic!("Attempted to retain a capability for a disconnected output");
-        }
+    #[inline]
+    pub fn retain(&self, output_port: usize) -> Capability<T> {
+        self.delayed(self.time(), output_port)
     }
 }
 

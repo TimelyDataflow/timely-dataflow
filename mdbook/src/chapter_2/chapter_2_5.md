@@ -210,7 +210,7 @@ As before, I'm just going to show you the new code, which now lives just after `
 
                         // for each input batch, stash it at `time`.
                         input.for_each_time(|time, data| {
-                            queues.entry(time.retain())
+                            queues.entry(time.retain(output.output_index()))
                                   .or_insert(Vec::new())
                                   .extend(data.flat_map(|d| d.drain(..)));
                         });
@@ -295,7 +295,7 @@ Inside the closure, we do two things: (i) read inputs and (ii) update counts and
 ```rust,ignore
         // for each input batch, stash it at `time`.
         while let Some((time, data)) = input.next() {
-            queues.entry(time.retain())
+            queues.entry(time.retain(output.output_index()))
                   .or_insert(Vec::new())
                   .extend(std::mem::take(data));
         }
