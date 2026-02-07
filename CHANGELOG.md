@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.26.1...timely-v0.27.0) - 2026-02-07
+
+### Other
+
+- Delay/retain input capabilities for specific outputs ([#738](https://github.com/TimelyDataflow/timely-dataflow/pull/738))
+
 ## [0.26.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.25.1...timely-v0.26.0) - 2026-02-03
 
 ### Other
