@@ -963,13 +963,13 @@ fn main() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
-                    notificator.notify_at(time.retain());
+                    notificator.notify_at(time.retain(output.output_index()));
                 });
                 input2.for_each_time(|time, data| {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
-                    notificator.notify_at(time.retain());
+                    notificator.notify_at(time.retain(output.output_index()));
                 });
 
                 notificator.for_each(&amp;[frontier1, frontier2], |time, notificator| {
@@ -1006,12 +1006,12 @@ fn main() {
             move |(input1, frontier1), (input2, frontier2), output| {
 
                 input1.for_each_time(|time, data| {
-                    stash.entry(time.retain())
+                    stash.entry(time.retain(output.output_index()))
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
                 });
                 input2.for_each_time(|time, data| {
-                    stash.entry(time.retain())
+                    stash.entry(time.retain(output.output_index()))
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
                 });
@@ -1203,7 +1203,7 @@ fn main() {
 
                         // for each input batch, stash it at `time`.
                         input.for_each_time(|time, data| {
-                            queues.entry(time.retain())
+                            queues.entry(time.retain(output.output_index()))
                                   .or_insert(Vec::new())
                                   .extend(data.flat_map(|d| d.drain(..)));
                         });
@@ -1272,7 +1272,7 @@ fn main() {
 <p>Inside the closure, we do two things: (i) read inputs and (ii) update counts and send outputs. Let's do the input reading first:</p>
 <pre><code class="language-rust ignore">        // for each input batch, stash it at `time`.
         while let Some((time, data)) = input.next() {
-            queues.entry(time.retain())
+            queues.entry(time.retain(output.output_index()))
                   .or_insert(Vec::new())
                   .extend(std::mem::take(data));
         }</code></pre>
@@ -1645,7 +1645,7 @@ fn main() {
 
                     // Stash received data.
                     input1.for_each_time(|time, data| {
-                        stash.entry(time.retain())
+                        stash.entry(time.retain(output.output_index()))
                              .or_insert(Vec::new())
                              .extend(data.flat_map(|d| d.drain(..)));
                     });
