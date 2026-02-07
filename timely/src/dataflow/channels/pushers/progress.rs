@@ -36,6 +36,10 @@ impl<T: Timestamp, P> Progress<T, P> {
     pub fn valid<CT: CapabilityTrait<T>>(&self, capability: &CT) -> bool {
         capability.valid_for_output(&self.internal, self.port)
     }
+
+    /// The index of the output port.
+    #[inline]
+    pub fn output_index(&self) -> usize { self.port }
 }
 
 impl<T, P> Progress<T, P> where T : Ord+Clone+'static {

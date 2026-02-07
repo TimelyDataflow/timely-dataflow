@@ -117,7 +117,7 @@ impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
             let mut output = output.activate();
             input.for_each(|cap, data| {
                 if let Some(new_time) = summary.results_in(cap.time()) {
-                    let new_cap = cap.delayed(&new_time);
+                    let new_cap = cap.delayed(&new_time, output.output_index());
                     output.give(&new_cap, data);
                 }
             });

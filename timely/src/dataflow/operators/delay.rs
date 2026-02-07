@@ -103,7 +103,7 @@ impl<G: Scope<Timestamp: ::std::hash::Hash>, D: Data> Delay<G, D> for Stream<G, 
                     let new_time = func(&datum, &time);
                     assert!(time.time().less_equal(&new_time));
                     elements.entry(new_time.clone())
-                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
+                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time, output.output_index())); Vec::new() })
                             .push(datum);
                 }
             });
@@ -130,7 +130,7 @@ impl<G: Scope<Timestamp: ::std::hash::Hash>, D: Data> Delay<G, D> for Stream<G, 
                 let new_time = func(&time);
                 assert!(time.time().less_equal(&new_time));
                 elements.entry(new_time.clone())
-                        .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
+                        .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time, output.output_index())); Vec::new() })
                         .extend(data.map(std::mem::take));
             });
 

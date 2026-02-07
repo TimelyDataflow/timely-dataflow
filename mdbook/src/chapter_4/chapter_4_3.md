@@ -82,7 +82,7 @@ fn main() {
 
                     // Stash received data.
                     input1.for_each_time(|time, data| {
-                        stash.entry(time.retain())
+                        stash.entry(time.retain(output.output_index()))
                              .or_insert(Vec::new())
                              .extend(data.flat_map(|d| d.drain(..)));
                     });

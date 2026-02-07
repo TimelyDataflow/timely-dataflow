@@ -192,13 +192,13 @@ fn main() {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
-                    notificator.notify_at(time.retain());
+                    notificator.notify_at(time.retain(output.output_index()));
                 });
                 input2.for_each_time(|time, data| {
                     stash.entry(time.time().clone())
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
-                    notificator.notify_at(time.retain());
+                    notificator.notify_at(time.retain(output.output_index()));
                 });
 
                 notificator.for_each(&[frontier1, frontier2], |time, notificator| {
@@ -240,12 +240,12 @@ fn main() {
             move |(input1, frontier1), (input2, frontier2), output| {
 
                 input1.for_each_time(|time, data| {
-                    stash.entry(time.retain())
+                    stash.entry(time.retain(output.output_index()))
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
                 });
                 input2.for_each_time(|time, data| {
-                    stash.entry(time.retain())
+                    stash.entry(time.retain(output.output_index()))
                          .or_insert(Vec::new())
                          .extend(data.map(std::mem::take));
                 });

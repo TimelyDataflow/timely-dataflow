@@ -54,7 +54,7 @@ fn main() {
 
                     // receive edges, start to sort them
                     input1.for_each_time(|time, data| {
-                        notify.notify_at(time.retain());
+                        notify.notify_at(time.retain(output.output_index()));
                         edge_list.extend(data.map(std::mem::take));
                     });
 
@@ -62,7 +62,7 @@ fn main() {
                     input2.for_each_time(|time, data| {
                         node_lists.entry(*time.time())
                                   .or_insert_with(|| {
-                                      notify.notify_at(time.retain());
+                                      notify.notify_at(time.retain(output.output_index()));
                                       Vec::new()
                                   })
                                   .extend(data.map(std::mem::take));

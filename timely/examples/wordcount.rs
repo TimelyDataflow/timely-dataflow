@@ -31,7 +31,7 @@ fn main() {
 
                     move |(input, frontier), output| {
                         input.for_each_time(|time, data| {
-                            queues.entry(time.retain())
+                            queues.entry(time.retain(output.output_index()))
                                   .or_insert(Vec::new())
                                   .extend(data.map(std::mem::take));
                         });

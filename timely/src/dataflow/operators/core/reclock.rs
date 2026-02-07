@@ -64,7 +64,7 @@ impl<S: Scope, C: Container> Reclock<S> for StreamCore<S, C> {
 
             // request notification at time, to flush stash.
             input2.for_each_time(|time, _data| {
-                notificator.notify_at(time.retain());
+                notificator.notify_at(time.retain(output.output_index()));
             });
 
             // each time with complete stash can be flushed.
