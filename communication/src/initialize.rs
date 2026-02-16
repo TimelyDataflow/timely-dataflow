@@ -142,12 +142,13 @@ impl Config {
     ///
     /// This method is only available if the `getopts` feature is enabled, which
     /// it is by default.
+    /// The `Ok` variant returns the free command-line arguments as well as the config.
     #[cfg(feature = "getopts")]
-    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<Config, String> {
+    pub fn from_args<I: Iterator<Item=String>>(args: I) -> Result<(Config, Vec<String>), String> {
         let mut opts = getopts::Options::new();
         Config::install_options(&mut opts);
         let matches = opts.parse(args).map_err(|e| e.to_string())?;
-        Config::from_matches(&matches)
+        Config::from_matches(&matches).map(|c| (c, matches.free))
     }
 
     /// Attempts to assemble the described communication infrastructure.
@@ -224,7 +225,7 @@ impl Config {
 /// }
 ///
 /// // extract the configuration from user-supplied arguments, initialize the computation.
-/// let config = timely_communication::Config::from_args(std::env::args()).unwrap();
+/// let (config, _free) = timely_communication::Config::from_args(std::env::args()).unwrap();
 /// let guards = timely_communication::initialize(config, |mut allocator| {
 ///
 ///     println!("worker {} of {} started", allocator.index(), allocator.peers());
@@ -317,7 +318,7 @@ pub fn initialize<T:Send+'static, F: Fn(Generic)->T+Send+Sync+'static>(
 /// }
 ///
 /// // extract the configuration from user-supplied arguments, initialize the computation.
-/// let config = timely_communication::Config::from_args(std::env::args()).unwrap();
+/// let (config, _free) = timely_communication::Config::from_args(std::env::args()).unwrap();
 /// let guards = timely_communication::initialize(config, |mut allocator| {
 ///
 ///     println!("worker {} of {} started", allocator.index(), allocator.peers());
