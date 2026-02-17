@@ -18,6 +18,7 @@ workspace = true
 
 [features]
 default = ["getopts"]
+lgalloc = ["dep:lgalloc"]
 
 [dependencies]
 columnar = { workspace = true }
@@ -29,5 +30,9 @@ timely_container = { path = "../container", version = "0.26.1" }
 timely_logging = { path = "../logging", version = "0.26" }
 
 # Lgalloc only supports linux and macos, don't depend on any other OS.
-[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
-lgalloc = "0.4"
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+lgalloc = { version = "0.6", optional = true }
+
+[[example]]
+name = "lgalloc"
+required-features = ["lgalloc"]
