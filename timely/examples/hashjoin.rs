@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rand::{RngExt, SeedableRng, rngs::SmallRng};
 
 use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Probe};
@@ -82,8 +82,8 @@ fn main() {
             // Send some amount of data, no more than `batch`.
             let to_send = std::cmp::min(batch, vals/peers - sent);
             for _ in 0 .. to_send {
-                input1.send((rng.gen_range(0..keys), rng.gen_range(0..keys)));
-                input2.send((rng.gen_range(0..keys), rng.gen_range(0..keys)));
+                input1.send((rng.random_range(0..keys), rng.random_range(0..keys)));
+                input2.send((rng.random_range(0..keys), rng.random_range(0..keys)));
             }
             sent += to_send;
 

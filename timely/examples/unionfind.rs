@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rand::{RngExt, SeedableRng, rngs::SmallRng};
 
 use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Exchange, Probe};
@@ -34,7 +34,7 @@ fn main() {
         let mut rng: SmallRng = SeedableRng::seed_from_u64(index as u64);
 
         for edge in 0..(edges / peers) {
-            input.send((rng.gen_range(0..nodes), rng.gen_range(0..nodes)));
+            input.send((rng.random_range(0..nodes), rng.random_range(0..nodes)));
             if edge % batch == (batch - 1) {
                 let next = input.epoch() + 1;
                 input.advance_to(next);

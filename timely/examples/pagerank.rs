@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rand::{RngExt, SeedableRng, rngs::SmallRng};
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Feedback, ConnectLoop, Probe};
@@ -159,7 +159,7 @@ fn main() {
         let mut rng2: SmallRng = SeedableRng::seed_from_u64(worker.index() as u64);
 
         for _ in 0 .. edges / worker.peers() {
-            input.send(((rng1.gen_range(0..nodes), rng1.gen_range(0..nodes)), 1));
+            input.send(((rng1.random_range(0..nodes), rng1.random_range(0..nodes)), 1));
         }
 
         input.advance_to(1);
@@ -169,8 +169,8 @@ fn main() {
         }
 
         for i in 1 .. 1000 {
-            input.send(((rng1.gen_range(0..nodes), rng1.gen_range(0..nodes)), 1));
-            input.send(((rng2.gen_range(0..nodes), rng2.gen_range(0..nodes)), -1));
+            input.send(((rng1.random_range(0..nodes), rng1.random_range(0..nodes)), 1));
+            input.send(((rng2.random_range(0..nodes), rng2.random_range(0..nodes)), -1));
             input.advance_to(i + 1);
             while probe.less_than(input.time()) {
                 worker.step();
