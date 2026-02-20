@@ -46,7 +46,7 @@ impl<S: Scope, C> Clone for StreamCore<S, C> {
 /// A stream batching data in vectors.
 pub type Stream<S, D> = StreamCore<S, Vec<D>>;
 
-impl<S: Scope, C> StreamCore<S, C> {
+impl<S: Scope, C: crate::Container> StreamCore<S, C> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the

@@ -1,4 +1,9 @@
-//! A `Push` implementor with a list of `Box<Push>` to forward pushes to.
+//! The `Tee` and `TeeHelper` types, by which stream consumers rendezvous with the producer.
+//!
+//! The design is a shared list of `Box<dyn Push<T>>` types, which are added to by `TeeHelper`
+//! and pushed into by the `Tee` once the dataflow is running. Some care is taken so that `T`
+//! does not need to implement `Clone`, other than for the instantiation of a (boxed) variant
+//! that supports multiple consumers, to avoid the constraint for single-consumer streams.
 
 use std::cell::RefCell;
 use std::fmt::{self, Debug};
@@ -9,106 +14,136 @@ use crate::dataflow::channels::Message;
 use crate::communication::Push;
 use crate::{Container, Data};
 
-type PushList<T, C> = Rc<RefCell<Vec<Box<dyn Push<Message<T, C>>>>>>;
+use push_set::{PushSet, PushOne, PushMany, MessagePusher};
+mod push_set {
 
-/// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
-pub struct Tee<T, C> {
-    buffer: C,
-    shared: PushList<T, C>,
+    use crate::dataflow::channels::Message;
+
+    use crate::communication::Push;
+    use crate::Container;
+
+
+    /// A type that can be pushed at, and which may be able to accommodate a similar pusher.
+    ///
+    /// This trait exists to support fanning out of pushers when the data may not be `Clone`,
+    /// allowing the implementation for multiple pushers (which may require cloning) to be
+    /// behind an abstraction.
+    pub trait PushSet<T> : Push<T> {
+        fn insert(&mut self, other: Box<dyn Push<T>>) -> Result<(), Box<dyn Push<T>>>;
+    }
+
+    /// A `Push` wrapper that implements `PushOne`.
+    pub struct PushOne<P> { inner: P }
+    impl<T, P: Push<T>> Push<T> for PushOne<P> {
+        fn push(&mut self, item: &mut Option<T>) { self.inner.push(item) }
+    }
+    impl<T: 'static, P: Push<T> + 'static> PushSet<T> for PushOne<P> {
+        fn insert(&mut self, other: Box<dyn Push<T>>) -> Result<(), Box<dyn Push<T>>> { Err(other) }
+    }
+    impl<P> From<P> for PushOne<P> { fn from(inner: P) -> Self { Self { inner } } }
+
+    /// A `Push` wrapper for a list of boxed implementors.
+    pub struct PushMany<T> {
+        /// Used to clone into, for the chance to avoid continual re-allocation.
+        buffer: Option<T>,
+        /// The intended recipients of pushed values.
+        list: Vec<Box<dyn Push<T>>>,
+    }
+    impl<T: Clone> Push<T> for PushMany<T> {
+        fn push(&mut self, item: &mut Option<T>) {
+            // We defensively clone `element` for all but the last element of `self.list`,
+            // as we cannot be sure that a `Push` implementor will not modify the contents.
+            // Indeed, that's the goal of the `Push` trait, to allow one to take ownership.
+
+            // This guard prevents dropping `self.buffer` when a `None` is received.
+            // We might prefer to do that, to reduce steady state memory.
+            if item.is_some() {
+                for pusher in self.list.iter_mut().rev().skip(1).rev() {
+                    self.buffer.clone_from(&item);
+                    pusher.push(&mut self.buffer);
+                }
+                if let Some(pusher) = self.list.last_mut() {
+                    std::mem::swap(&mut self.buffer, item);
+                    pusher.push(&mut self.buffer);
+                }
+            }
+            else { for pusher in self.list.iter_mut() { pusher.done(); } }
+        }
+    }
+    impl<T: Clone + 'static> PushSet<T> for PushMany<T> {
+        fn insert(&mut self, other: Box<dyn Push<T>>) -> Result<(), Box<dyn Push<T>>> {
+            self.list.push(other);
+            Ok(())
+        }
+    }
+    impl<T> From<Vec<Box<dyn Push<T>>>> for PushMany<T> { fn from(list: Vec<Box<dyn Push<T>>>) -> Self { Self { list, buffer: None } } }
+
+    /// A temporary struct to re-present `Message::push_at` as `Push<Message>`. The intent is to delete.
+    pub struct MessagePusher<T, C, P: Push<Message<T, C>>> { pub inner: P, pub phantom: std::marker::PhantomData<(T, C)> }
+    impl<T: Clone, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for MessagePusher<T, C, P> {
+        fn push(&mut self, message: &mut Option<Message<T, C>>) {
+            if let Some(message) = message.as_mut() {
+                Message::push_at(&mut message.data, message.time.clone(), &mut self.inner);
+            }
+            else {
+                self.inner.done()
+            }
+        }
+    }
+
 }
+
+/// The shared state between a `Tee` and `TeeHelper`: an extensible list of pushers.
+type PushList<T, C> = Rc<RefCell<Option<Box<dyn PushSet<Message<T, C>>>>>>;
+
+/// The writing half of a shared destination for pushing at.
+pub struct Tee<T, C> { shared: PushList<T, C> }
 
 impl<T: Data, C: Container> Push<Message<T, C>> for Tee<T, C> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
-        let mut pushers = self.shared.borrow_mut();
-        if let Some(message) = message {
-            for index in 1..pushers.len() {
-                self.buffer.clone_from(&message.data);
-                Message::push_at(&mut self.buffer, message.time.clone(), &mut pushers[index-1]);
-            }
-        }
-        else {
-            for index in 1..pushers.len() {
-                pushers[index-1].done();
-            }
-        }
-        if !pushers.is_empty() {
-            let last = pushers.len() - 1;
-            pushers[last].push(message);
+        if let Some(pushee) = self.shared.borrow_mut().as_mut() {
+            pushee.push(message)
         }
     }
 }
 
-impl<T, C: Default> Tee<T, C> {
+impl<T, C> Tee<T, C> {
     /// Allocates a new pair of `Tee` and `TeeHelper`.
     pub fn new() -> (Tee<T, C>, TeeHelper<T, C>) {
-        let shared = Rc::new(RefCell::new(Vec::new()));
-        let port = Tee {
-            buffer: Default::default(),
-            shared: Rc::clone(&shared),
-        };
-
+        let shared = Rc::new(RefCell::new(None));
+        let port = Tee { shared: Rc::clone(&shared) };
         (port, TeeHelper { shared })
     }
 }
 
-impl<T, C: Default> Clone for Tee<T, C> {
-    fn clone(&self) -> Self {
-        Self {
-            buffer: Default::default(),
-            shared: Rc::clone(&self.shared),
-        }
-    }
+impl<T, C> Debug for Tee<T, C> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "Tee") }
 }
 
-impl<T, C> Debug for Tee<T, C>
-where
-    C: Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_struct("Tee");
-        debug.field("buffer", &self.buffer);
+/// The subscribe half of a shared destination for pushing at.
+pub struct TeeHelper<T, C> { shared: PushList<T, C> }
 
-        if let Ok(shared) = self.shared.try_borrow() {
-            debug.field("shared", &format!("{} pushers", shared.len()));
-        } else {
-            debug.field("shared", &"...");
-        }
-
-        debug.finish()
-    }
-}
-
-/// A shared list of `Box<Push>` used to add `Push` implementors.
-pub struct TeeHelper<T, C> {
-    shared: PushList<T, C>,
-}
-
-impl<T, C> TeeHelper<T, C> {
+impl<T: Clone+'static, C: Container> TeeHelper<T, C> {
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
     pub fn add_pusher<P: Push<Message<T, C>>+'static>(&self, pusher: P) {
-        self.shared.borrow_mut().push(Box::new(pusher));
+        let pusher = MessagePusher { inner: pusher, phantom: std::marker::PhantomData };
+        let mut borrow = self.shared.borrow_mut();
+        *borrow = Some(if let Some(mut inner) = borrow.take() {
+            if let Err(pusher) = inner.insert(Box::new(pusher)) {
+                let prior = inner as Box<dyn Push<Message<T, C>>>;
+                Box::new(PushMany::from(vec![prior, pusher]))
+            }
+            else { inner }
+        }
+        else { Box::new(PushOne::from(pusher)) });
     }
 }
 
 impl<T, C> Clone for TeeHelper<T, C> {
-    fn clone(&self) -> Self {
-        TeeHelper {
-            shared: Rc::clone(&self.shared),
-        }
-    }
+    fn clone(&self) -> Self { TeeHelper { shared: Rc::clone(&self.shared) } }
 }
 
 impl<T, C> Debug for TeeHelper<T, C> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut debug = f.debug_struct("TeeHelper");
-
-        if let Ok(shared) = self.shared.try_borrow() {
-            debug.field("shared", &format!("{} pushers", shared.len()));
-        } else {
-            debug.field("shared", &"...");
-        }
-
-        debug.finish()
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "TeeHelper") }
 }
