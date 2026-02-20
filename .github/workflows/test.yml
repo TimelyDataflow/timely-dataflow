@@ -15,7 +15,7 @@ jobs:
           - windows
         toolchain:
           - stable
-          - 1.79
+          - 1.85
     name: cargo test on ${{ matrix.os }}, rust ${{ matrix.toolchain }}
     runs-on: ${{ matrix.os }}-latest
     steps:

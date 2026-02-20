@@ -30,4 +30,4 @@ timely_logging = { path = "../logging", version = "0.26" }
 
 # Lgalloc only supports linux and macos, don't depend on any other OS.
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
-lgalloc = "0.4"
+lgalloc = "0.6"

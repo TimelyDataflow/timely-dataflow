@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rand::{Rng, SeedableRng, rngs::SmallRng};
+use rand::{RngExt, SeedableRng, rngs::SmallRng};
 
 use timely::dataflow::operators::{ToStream, Concat, Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
@@ -37,7 +37,7 @@ fn main() {
 
             // generate part of a random graph.
             let graph = (0..edges / peers)
-                .map(move |_| (rng.gen_range(0..nodes as u32), rng.gen_range(0..nodes as u32)))
+                .map(move |_| (rng.random_range(0..nodes as u32), rng.random_range(0..nodes as u32)))
                 .to_stream(scope);
 
             // define a loop variable, for the (node, worker) pairs.

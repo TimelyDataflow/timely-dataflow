@@ -36,5 +36,4 @@ timely_container = { path = "../container", version = "0.26" }
 smallvec = { version = "1.15.1", features = ["serde", "const_generics"] }
 
 [dev-dependencies]
-bytemuck = "1.24.0"
-rand = { version = "0.8", features = ["small_rng"] }
+rand = { version = "0.10" }
