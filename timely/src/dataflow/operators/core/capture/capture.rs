@@ -17,7 +17,7 @@ use crate::progress::Timestamp;
 use super::{Event, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<T: Timestamp, C: Container> {
+pub trait Capture<T: Timestamp, C: Container> : Sized {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -103,10 +103,10 @@ pub trait Capture<T: Timestamp, C: Container> {
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// # }
     /// ```
-    fn capture_into<P: EventPusher<T, C>+'static>(&self, pusher: P);
+    fn capture_into<P: EventPusher<T, C>+'static>(self, pusher: P);
 
     /// Captures a stream using Rust's MPSC channels.
-    fn capture(&self) -> ::std::sync::mpsc::Receiver<Event<T, C>> {
+    fn capture(self) -> ::std::sync::mpsc::Receiver<Event<T, C>> {
         let (send, recv) = ::std::sync::mpsc::channel();
         self.capture_into(send);
         recv
@@ -114,7 +114,7 @@ pub trait Capture<T: Timestamp, C: Container> {
 }
 
 impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
-    fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(&self, mut event_pusher: P) {
+    fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
@@ -125,7 +125,7 @@ impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
 
                 if !started {
                     // discard initial capability.
-                    progress.frontiers[0].update(S::Timestamp::minimum(), -1);
+                    progress.frontiers[0].update(Timestamp::minimum(), -1);
                     started = true;
                 }
                 if !progress.frontiers[0].is_empty() {

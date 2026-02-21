@@ -30,7 +30,7 @@ pub trait OkErr<S: Scope, C: DrainContainer> {
     /// });
     /// ```
     fn ok_err<C1, D1, C2, D2, L>(
-        &self,
+        self,
         logic: L,
     ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
     where
@@ -42,7 +42,7 @@ pub trait OkErr<S: Scope, C: DrainContainer> {
 
 impl<S: Scope, C: Container + DrainContainer> OkErr<S, C> for StreamCore<S, C> {
     fn ok_err<C1, D1, C2, D2, L>(
-        &self,
+        self,
         mut logic: L,
     ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
     where

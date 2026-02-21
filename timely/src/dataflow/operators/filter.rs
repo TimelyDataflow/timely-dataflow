@@ -1,12 +1,11 @@
 //! Filters a stream by a predicate.
 
-use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
-pub trait Filter<D: Data> {
+pub trait Filter<D> {
     /// Returns a new instance of `self` containing only records satisfying `predicate`.
     ///
     /// # Examples
@@ -19,11 +18,11 @@ pub trait Filter<D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn filter<P: FnMut(&D)->bool+'static>(&self, predicate: P) -> Self;
+    fn filter<P: FnMut(&D)->bool+'static>(self, predicate: P) -> Self;
 }
 
-impl<G: Scope, D: Data> Filter<D> for Stream<G, D> {
-    fn filter<P: FnMut(&D)->bool+'static>(&self, mut predicate: P) -> Stream<G, D> {
+impl<G: Scope, D: 'static> Filter<D> for Stream<G, D> {
+    fn filter<P: FnMut(&D)->bool+'static>(self, mut predicate: P) -> Stream<G, D> {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each_time(|time, data| {
                 let mut session = output.session(&time);

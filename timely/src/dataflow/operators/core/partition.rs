@@ -27,14 +27,14 @@ pub trait Partition<G: Scope, C: DrainContainer> {
     ///     }
     /// });
     /// ```
-    fn partition<CB, D2, F>(&self, parts: u64, route: F) -> Vec<StreamCore<G, CB::Container>>
+    fn partition<CB, D2, F>(self, parts: u64, route: F) -> Vec<StreamCore<G, CB::Container>>
     where
         CB: ContainerBuilder + PushInto<D2>,
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static;
 }
 
 impl<G: Scope, C: Container + DrainContainer> Partition<G, C> for StreamCore<G, C> {
-    fn partition<CB, D2, F>(&self, parts: u64, mut route: F) -> Vec<StreamCore<G, CB::Container>>
+    fn partition<CB, D2, F>(self, parts: u64, mut route: F) -> Vec<StreamCore<G, CB::Container>>
     where
         CB: ContainerBuilder + PushInto<D2>,
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static,

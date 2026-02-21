@@ -21,11 +21,11 @@ pub trait SharedStream<S: Scope, C> {
     ///            .inspect_container(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn shared(&self) -> StreamCore<S, Rc<C>>;
+    fn shared(self) -> StreamCore<S, Rc<C>>;
 }
 
 impl<S: Scope, C: Container> SharedStream<S, C> for StreamCore<S, C> {
-    fn shared(&self) -> StreamCore<S, Rc<C>> {
+    fn shared(self) -> StreamCore<S, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each_time(|time, data| {
@@ -44,16 +44,15 @@ mod test {
     use crate::dataflow::channels::pact::Pipeline;
     use crate::dataflow::operators::capture::Extract;
     use crate::dataflow::operators::rc::SharedStream;
-    use crate::dataflow::operators::{Capture, Concatenate, InspectCore, Operator, ToStream};
+    use crate::dataflow::operators::{Capture, Concatenate, Operator, ToStream};
 
     #[test]
     fn test_shared() {
         let output = crate::example(|scope| {
             let shared = vec![Ok(0), Err(())].to_stream(scope).container::<Vec<_>>().shared();
-            let shared = shared.inspect_container(|x| println!("seen: {x:?}"));
             scope
                 .concatenate([
-                    shared.unary(Pipeline, "read shared 1", |_, _| {
+                    shared.clone().unary(Pipeline, "read shared 1", |_, _| {
                         move |input, output| {
                             input.for_each_time(|time, data| {
                                 output.session(&time).give_iterator(data.map(|d| d.as_ptr() as usize));

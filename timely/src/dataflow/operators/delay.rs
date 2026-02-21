@@ -2,14 +2,13 @@
 
 use std::collections::HashMap;
 
-use crate::Data;
 use crate::order::{PartialOrder, TotalOrder};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Methods to advance the timestamps of records or batches of records.
-pub trait Delay<G: Scope, D: Data> {
+pub trait Delay<G: Scope, D: 'static> {
 
     /// Advances the timestamp of records using a supplied function.
     ///
@@ -36,7 +35,7 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self;
+    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(self, func: L) -> Self;
 
     /// Advances the timestamp of records using a supplied function.
     ///
@@ -63,7 +62,7 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self
+    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(self, func: L) -> Self
     where G::Timestamp: TotalOrder;
 
     /// Advances the timestamp of batches of records using a supplied function.
@@ -91,11 +90,11 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self;
+    fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(self, func: L) -> Self;
 }
 
-impl<G: Scope<Timestamp: ::std::hash::Hash>, D: Data> Delay<G, D> for Stream<G, D> {
-    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
+impl<G: Scope<Timestamp: ::std::hash::Hash>, D: 'static> Delay<G, D> for Stream<G, D> {
+    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each_time(|time, data| {
@@ -117,13 +116,13 @@ impl<G: Scope<Timestamp: ::std::hash::Hash>, D: Data> Delay<G, D> for Stream<G, 
         })
     }
 
-    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self
+    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(self, func: L) -> Self
     where G::Timestamp: TotalOrder
     {
         self.delay(func)
     }
 
-    fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
+    fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each_time(|time, data| {

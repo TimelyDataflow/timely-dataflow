@@ -62,7 +62,7 @@ pub trait Replay<T: Timestamp, C> : Sized {
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>;
 }
 
-impl<T: Timestamp, C: Container, I> Replay<T, C> for I
+impl<T: Timestamp, C: Container+Clone, I> Replay<T, C> for I
 where
     I : IntoIterator,
     <I as IntoIterator>::Item: EventIterator<T, C>+'static,
@@ -99,8 +99,8 @@ where
                             Owned(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.into_iter());
                             },
-                            Owned(Event::Messages(time, mut data)) => {
-                                Message::push_at(&mut data, time, &mut output);
+                            Owned(Event::Messages(time, data)) => {
+                                output.push(&mut Some(Message::new(time, data)));
                             }
                             Borrowed(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.iter().cloned());

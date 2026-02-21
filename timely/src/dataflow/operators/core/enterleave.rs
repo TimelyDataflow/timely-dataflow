@@ -50,11 +50,11 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
 }
 
 impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> for StreamCore<G, C> {
-    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+    fn enter<'a>(self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -100,11 +100,11 @@ pub trait Leave<G: Scope, C> {
     ///     });
     /// });
     /// ```
-    fn leave(&self) -> StreamCore<G, C>;
+    fn leave(self) -> StreamCore<G, C>;
 }
 
 impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
-    fn leave(&self) -> StreamCore<G, C> {
+    fn leave(self) -> StreamCore<G, C> {
 
         let scope = self.scope();
 
@@ -132,7 +132,7 @@ impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container> {
     targets: Counter<TInner, Tee<TInner, TContainer>>,
-    phantom: ::std::marker::PhantomData<TOuter>,
+    phantom: PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,
 }
@@ -141,7 +141,7 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container
     fn push(&mut self, element: &mut Option<Message<TOuter, TContainer>>) {
         if let Some(outer_message) = element {
             let data = ::std::mem::take(&mut outer_message.data);
-            let mut inner_message = Some(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0));
+            let mut inner_message = Some(Message::new(TInner::to_inner(outer_message.time.clone()), data));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
                 outer_message.data = inner_message.data;
@@ -169,7 +169,7 @@ where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, {
     fn push(&mut self, message: &mut Option<Message<TInner, TContainer>>) {
         if let Some(inner_message) = message {
             let data = ::std::mem::take(&mut inner_message.data);
-            let mut outer_message = Some(Message::new(inner_message.time.clone().to_outer(), data, 0, 0));
+            let mut outer_message = Some(Message::new(inner_message.time.clone().to_outer(), data));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
                 inner_message.data = outer_message.data;

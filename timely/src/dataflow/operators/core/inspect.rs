@@ -21,7 +21,7 @@ where
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn inspect<F>(&self, mut func: F) -> Self
+    fn inspect<F>(self, mut func: F) -> Self
     where
         F: for<'a> FnMut(<&'a C as IntoIterator>::Item) + 'static,
     {
@@ -41,7 +41,7 @@ where
     ///            .inspect_time(|t, x| println!("seen at: {:?}\t{:?}", t, x));
     /// });
     /// ```
-    fn inspect_time<F>(&self, mut func: F) -> Self
+    fn inspect_time<F>(self, mut func: F) -> Self
     where
         F: for<'a> FnMut(&G::Timestamp, <&'a C as IntoIterator>::Item) + 'static,
     {
@@ -63,7 +63,7 @@ where
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
-    fn inspect_batch(&self, mut func: impl FnMut(&G::Timestamp, &C)+'static) -> Self {
+    fn inspect_batch(self, mut func: impl FnMut(&G::Timestamp, &C)+'static) -> Self {
         self.inspect_core(move |event| {
             if let Ok((time, data)) = event {
                 func(time, data);
@@ -90,14 +90,14 @@ where
     ///             });
     /// });
     /// ```
-    fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
+    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
 impl<G: Scope, C: Container> Inspect<G, C> for StreamCore<G, C>
 where
     for<'a> &'a C: IntoIterator,
 {
-    fn inspect_core<F>(&self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
+    fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>) + 'static {
         self.inspect_container(func)
     }
 }
@@ -123,12 +123,12 @@ pub trait InspectCore<G: Scope, C> {
     ///             });
     /// });
     /// ```
-    fn inspect_container<F>(&self, func: F) -> StreamCore<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
+    fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
 impl<G: Scope, C: Container> InspectCore<G, C> for StreamCore<G, C> {
 
-    fn inspect_container<F>(&self, mut func: F) -> StreamCore<G, C>
+    fn inspect_container<F>(self, mut func: F) -> Self
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static
     {
         use crate::progress::timestamp::Timestamp;

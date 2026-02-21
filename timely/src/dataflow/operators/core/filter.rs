@@ -20,14 +20,14 @@ pub trait Filter<C: DrainContainer> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(&self, predicate: P) -> Self;
+    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, predicate: P) -> Self;
 }
 
 impl<G: Scope, C: Container + SizableContainer + DrainContainer> Filter<C> for StreamCore<G, C>
 where
     for<'a> C: PushInto<C::Item<'a>>
 {
-    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(&self, mut predicate: P) -> StreamCore<G, C> {
+    fn filter<P: FnMut(&C::Item<'_>)->bool+'static>(self, mut predicate: P) -> StreamCore<G, C> {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each_time(|time, data| {
                 output.session(&time)
