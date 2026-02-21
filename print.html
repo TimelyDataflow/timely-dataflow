@@ -769,12 +769,12 @@ use timely::dataflow::operators::{ToStream, Partition, Inspect};
 
 fn main() {
     timely::example(|scope| {
-        let streams = (0..10).to_stream(scope)
-                             .partition(3, |x| (x % 3, x));
+        let mut streams = (0..10).to_stream(scope)
+                                 .partition(3, |x| (x % 3, x));
 
-        streams[0].inspect(|x| println!("seen 0: {:?}", x));
-        streams[1].inspect(|x| println!("seen 1: {:?}", x));
-        streams[2].inspect(|x| println!("seen 2: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 2: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 1: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 0: {:?}", x));
     });
 }</code></pre></pre>
 <p>This example breaks the input stream apart into three logical streams, which are then subjected to different <code>inspect</code> operators. Importantly, <code>partition</code> only <em>logically</em> partitions the data, it does not move the data between workers. In the example above, each worker partitions its stream into three parts and no data are exchanged at all (as <code>inspect</code> does not require that of its inputs).</p>
@@ -785,11 +785,12 @@ use timely::dataflow::operators::{ToStream, Partition, Concat, Inspect};
 
 fn main() {
     timely::example(|scope| {
-        let streams = (0..10).to_stream(scope)
+        let mut streams = (0..10).to_stream(scope)
                              .partition(3, |x| (x % 3, x));
-        streams[0]
-            .concat(&amp;streams[1])
-            .concat(&amp;streams[2])
+        streams
+            .pop().unwrap()
+            .concat(streams.pop().unwrap())
+            .concat(streams.pop().unwrap())
             .inspect(|x| println!("seen: {:?}", x));
     });
 }</code></pre></pre>
@@ -953,7 +954,7 @@ fn main() {
         let in1 = (0 .. 10).to_stream(scope);
         let in2 = (0 .. 10).to_stream(scope);
 
-        in1.binary_frontier(&amp;in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
+        in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
             let mut notificator = FrontierNotificator::default();
             let mut stash = HashMap::new();
@@ -999,7 +1000,7 @@ fn main() {
         let in1 = (0 .. 10).to_stream(scope);
         let in2 = (0 .. 10).to_stream(scope);
 
-        in1.binary_frontier(&amp;in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
+        in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
             let mut stash = HashMap::new();
 
@@ -1505,7 +1506,7 @@ fn main() {
         // circulate numbers, Collatz stepping each time.
         (1 .. 10)
             .to_stream(scope)
-            .concat(&amp;stream)
+            .concat(stream)
             .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
             .inspect(|x| println!("{:?}", x))
             .filter(|x| *x != 1)
@@ -1535,17 +1536,17 @@ fn main() {
         let results1 = stream1.map(|x| 3 * x + 1);
 
         // partition the input and feedback streams by even-ness.
-        let parts =
+        let mut parts =
             (1 .. 10)
                 .to_stream(scope)
-                .concat(&amp;results0)
-                .concat(&amp;results1)
+                .concat(results0)
+                .concat(results1)
                 .inspect(|x| println!("{:?}", x))
                 .partition(2, |x| (x % 2, x));
 
         // connect each part appropriately.
-        parts[0].connect_loop(handle0);
-        parts[1].connect_loop(handle1);
+        parts.pop().unwrap().connect_loop(handle1);
+        parts.pop().unwrap().connect_loop(handle0);
     });
 }</code></pre></pre>
 <p>This is a different way to do the same computation (similar; because we've moved input from the head of the dataflow, the limit of <code>100</code> is effectively reduced by one). I won't say it is a better way to do the same computation, but it is different.</p>
@@ -1569,7 +1570,7 @@ fn main() {
 
             input
                 .enter(subscope)
-                .concat(&amp;stream)
+                .concat(stream)
                 .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
                 .inspect(|x| println!("{:?}", x))
                 .filter(|x| *x != 1)
@@ -1639,7 +1640,7 @@ fn main() {
             // Assign timestamps to records so that not much work is in each time.
             .delay(|number, time| number / 100 )
             // Buffer records until all prior timestamps have completed.
-            .binary_frontier(&amp;cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
+            .binary_frontier(cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 
                 move |(input1, frontier1), (input2, frontier2), output| {
 

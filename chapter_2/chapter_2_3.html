@@ -268,12 +268,12 @@ use timely::dataflow::operators::{ToStream, Partition, Inspect};
 
 fn main() {
     timely::example(|scope| {
-        let streams = (0..10).to_stream(scope)
-                             .partition(3, |x| (x % 3, x));
+        let mut streams = (0..10).to_stream(scope)
+                                 .partition(3, |x| (x % 3, x));
 
-        streams[0].inspect(|x| println!("seen 0: {:?}", x));
-        streams[1].inspect(|x| println!("seen 1: {:?}", x));
-        streams[2].inspect(|x| println!("seen 2: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 2: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 1: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 0: {:?}", x));
     });
 }</code></pre></pre>
 <p>This example breaks the input stream apart into three logical streams, which are then subjected to different <code>inspect</code> operators. Importantly, <code>partition</code> only <em>logically</em> partitions the data, it does not move the data between workers. In the example above, each worker partitions its stream into three parts and no data are exchanged at all (as <code>inspect</code> does not require that of its inputs).</p>
@@ -284,11 +284,12 @@ use timely::dataflow::operators::{ToStream, Partition, Concat, Inspect};
 
 fn main() {
     timely::example(|scope| {
-        let streams = (0..10).to_stream(scope)
+        let mut streams = (0..10).to_stream(scope)
                              .partition(3, |x| (x % 3, x));
-        streams[0]
-            .concat(&amp;streams[1])
-            .concat(&amp;streams[2])
+        streams
+            .pop().unwrap()
+            .concat(streams.pop().unwrap())
+            .concat(streams.pop().unwrap())
             .inspect(|x| println!("seen: {:?}", x));
     });
 }</code></pre></pre>

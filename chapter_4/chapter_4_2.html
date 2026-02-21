@@ -192,7 +192,7 @@ fn main() {
         // circulate numbers, Collatz stepping each time.
         (1 .. 10)
             .to_stream(scope)
-            .concat(&amp;stream)
+            .concat(stream)
             .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
             .inspect(|x| println!("{:?}", x))
             .filter(|x| *x != 1)
@@ -222,17 +222,17 @@ fn main() {
         let results1 = stream1.map(|x| 3 * x + 1);
 
         // partition the input and feedback streams by even-ness.
-        let parts =
+        let mut parts =
             (1 .. 10)
                 .to_stream(scope)
-                .concat(&amp;results0)
-                .concat(&amp;results1)
+                .concat(results0)
+                .concat(results1)
                 .inspect(|x| println!("{:?}", x))
                 .partition(2, |x| (x % 2, x));
 
         // connect each part appropriately.
-        parts[0].connect_loop(handle0);
-        parts[1].connect_loop(handle1);
+        parts.pop().unwrap().connect_loop(handle1);
+        parts.pop().unwrap().connect_loop(handle0);
     });
 }</code></pre></pre>
 <p>This is a different way to do the same computation (similar; because we've moved input from the head of the dataflow, the limit of <code>100</code> is effectively reduced by one). I won't say it is a better way to do the same computation, but it is different.</p>
@@ -256,7 +256,7 @@ fn main() {
 
             input
                 .enter(subscope)
-                .concat(&amp;stream)
+                .concat(stream)
                 .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 } )
                 .inspect(|x| println!("{:?}", x))
                 .filter(|x| *x != 1)
