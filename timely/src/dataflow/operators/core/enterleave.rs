@@ -141,7 +141,7 @@ impl<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TContainer: Container
     fn push(&mut self, element: &mut Option<Message<TOuter, TContainer>>) {
         if let Some(outer_message) = element {
             let data = ::std::mem::take(&mut outer_message.data);
-            let mut inner_message = Some(Message::new(TInner::to_inner(outer_message.time.clone()), data, 0, 0));
+            let mut inner_message = Some(Message::new(TInner::to_inner(outer_message.time.clone()), data));
             self.targets.push(&mut inner_message);
             if let Some(inner_message) = inner_message {
                 outer_message.data = inner_message.data;
@@ -169,7 +169,7 @@ where TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, {
     fn push(&mut self, message: &mut Option<Message<TInner, TContainer>>) {
         if let Some(inner_message) = message {
             let data = ::std::mem::take(&mut inner_message.data);
-            let mut outer_message = Some(Message::new(inner_message.time.clone().to_outer(), data, 0, 0));
+            let mut outer_message = Some(Message::new(inner_message.time.clone().to_outer(), data));
             self.targets.push(&mut outer_message);
             if let Some(outer_message) = outer_message {
                 inner_message.data = outer_message.data;

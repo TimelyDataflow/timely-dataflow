@@ -33,8 +33,10 @@ impl<T, C> Message<T, C> {
 
 impl<T, C: Default> Message<T, C> {
     /// Creates a new message instance from arguments.
-    pub fn new(time: T, data: C, from: usize, seq: usize) -> Self {
-        Message { time, data, from, seq }
+    ///
+    /// Zero values are installed for `from` and `seq`, and are meant to be populated by `LogPusher`.
+    pub fn new(time: T, data: C) -> Self {
+        Message { time, data, from: 0, seq: 0 }
     }
 
     /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
@@ -43,7 +45,7 @@ impl<T, C: Default> Message<T, C> {
     pub fn push_at<P: Push<Message<T, C>>>(buffer: &mut C, time: T, pusher: &mut P) {
 
         let data = ::std::mem::take(buffer);
-        let message = Message::new(time, data, 0, 0);
+        let message = Message::new(time, data);
         let mut bundle = Some(message);
 
         pusher.push(&mut bundle);
