@@ -51,7 +51,7 @@ impl<S: Scope, C> StreamCore<S, C> {
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(self, target: Target, pusher: P, identifier: usize) where C: Clone+'static {
+    pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(self, target: Target, pusher: P, identifier: usize) where C: 'static {
 
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {

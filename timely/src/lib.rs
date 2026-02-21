@@ -107,8 +107,8 @@ impl<T: Clone+'static> Data for T { }
 /// A composite trait for types usable as containers in timely dataflow.
 ///
 /// The `Container` trait is necessary for all containers in timely dataflow channels.
-pub trait Container: Accountable + Default + Clone + 'static { }
-impl<C: Accountable + Default + Clone + 'static> Container for C { }
+pub trait Container: Accountable + Default + 'static { }
+impl<C: Accountable + Default + 'static> Container for C { }
 
 /// A composite trait for types usable as container builders in timely dataflow.
 pub trait ContainerBuilder: timely_container::ContainerBuilder<Container: Container> + Default + 'static {}

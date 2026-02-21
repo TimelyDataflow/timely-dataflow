@@ -24,7 +24,7 @@ pub trait Concat<G: Scope, C> {
 
 impl<G: Scope, C: Container> Concat<G, C> for StreamCore<G, C> {
     fn concat(self, other: StreamCore<G, C>) -> StreamCore<G, C> {
-        self.scope().concatenate([self.clone(), other.clone()])
+        self.scope().concatenate([self, other])
     }
 }
 
@@ -49,16 +49,6 @@ pub trait Concatenate<G: Scope, C> {
     fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
     where
         I: IntoIterator<Item=StreamCore<G, C>>;
-}
-
-impl<G: Scope, C: Container> Concatenate<G, C> for StreamCore<G, C> {
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
-    where
-        I: IntoIterator<Item=StreamCore<G, C>>
-    {
-        let clone = self.clone();
-        self.scope().concatenate(Some(clone).into_iter().chain(sources))
-    }
 }
 
 impl<G: Scope, C: Container> Concatenate<G, C> for G {
