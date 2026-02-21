@@ -44,13 +44,12 @@ mod test {
     use crate::dataflow::channels::pact::Pipeline;
     use crate::dataflow::operators::capture::Extract;
     use crate::dataflow::operators::rc::SharedStream;
-    use crate::dataflow::operators::{Capture, Concatenate, InspectCore, Operator, ToStream};
+    use crate::dataflow::operators::{Capture, Concatenate, Operator, ToStream};
 
     #[test]
     fn test_shared() {
         let output = crate::example(|scope| {
             let shared = vec![Ok(0), Err(())].to_stream(scope).container::<Vec<_>>().shared();
-            let shared = shared.inspect_container(|x| println!("seen: {x:?}"));
             scope
                 .concatenate([
                     shared.clone().unary(Pipeline, "read shared 1", |_, _| {

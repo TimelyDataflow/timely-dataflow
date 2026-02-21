@@ -123,12 +123,12 @@ pub trait InspectCore<G: Scope, C> {
     ///             });
     /// });
     /// ```
-    fn inspect_container<F>(self, func: F) -> StreamCore<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
+    fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
 impl<G: Scope, C: Container> InspectCore<G, C> for StreamCore<G, C> {
 
-    fn inspect_container<F>(self, mut func: F) -> StreamCore<G, C>
+    fn inspect_container<F>(self, mut func: F) -> Self
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static
     {
         use crate::progress::timestamp::Timestamp;

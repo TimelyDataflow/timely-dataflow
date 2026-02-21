@@ -24,7 +24,7 @@ pub trait ToStream<D: 'static> {
     fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, D>;
 }
 
-impl<I: IntoIterator+'static> ToStream<I::Item> for I where I::Item: 'static {
+impl<I: IntoIterator+'static> ToStream<I::Item> for I {
     fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, I::Item> {
         ToStreamCore::to_stream(self, scope)
     }

@@ -67,7 +67,7 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
         hash: H) -> Stream<S, R> where S::Timestamp: Eq;
 }
 
-impl<S: Scope<Timestamp: ::std::hash::Hash>, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
+impl<S: Scope<Timestamp: Hash>, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
 
     fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         self,

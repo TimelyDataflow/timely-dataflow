@@ -125,7 +125,7 @@ impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
 
                 if !started {
                     // discard initial capability.
-                    progress.frontiers[0].update(S::Timestamp::minimum(), -1);
+                    progress.frontiers[0].update(Timestamp::minimum(), -1);
                     started = true;
                 }
                 if !progress.frontiers[0].is_empty() {

@@ -11,7 +11,7 @@ use crate::progress::{Operate, operate::SharedProgress, Timestamp};
 use crate::progress::Source;
 use crate::progress::ChangeBatch;
 use crate::progress::operate::Connectivity;
-use crate::dataflow::channels::pushers::{Counter, Tee, Output};
+use crate::dataflow::channels::pushers::{Counter, Output, Tee};
 use crate::dataflow::operators::generic::{OutputBuilder, OutputBuilderSession};
 use crate::dataflow::operators::{ActivateCapability, Capability};
 use crate::dataflow::{Scope, StreamCore};

@@ -7,7 +7,7 @@ use crate::dataflow::{Scope, Stream, StreamCore};
 use crate::Container;
 
 /// Extension trait for `Stream`.
-pub trait Branch<S: Scope, D: 'static> {
+pub trait Branch<S: Scope, D> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
     /// the data and its time. If it returns `true`, the record will be sent

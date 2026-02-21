@@ -19,7 +19,7 @@ pub trait Concat<G: Scope, C> {
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concat(self, _: StreamCore<G, C>) -> StreamCore<G, C>;
+    fn concat(self, other: StreamCore<G, C>) -> StreamCore<G, C>;
 }
 
 impl<G: Scope, C: Container> Concat<G, C> for StreamCore<G, C> {

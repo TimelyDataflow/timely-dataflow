@@ -76,11 +76,9 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///
     /// assert_eq!((4..14).collect::<Vec<_>>(), data.extract()[0].1);
     /// ```
-    fn flat_map_builder<'t, I, L>(self, logic: L) -> FlatMapBuilder<Self, C, L, I>
+    fn flat_map_builder<I, L>(self, logic: L) -> FlatMapBuilder<Self, C, L, I>
     where
-        C: Clone + 'static,
         L: for<'a> Fn(C::Item<'a>) -> I,
-        Self: Sized,
     {
         FlatMapBuilder::new(self, logic)
     }
@@ -116,7 +114,7 @@ where
     marker: std::marker::PhantomData<C>,
 }
 
-impl<'t, T, C: DrainContainer + Clone + 'static, F, I> FlatMapBuilder<T, C, F, I>
+impl<T, C: DrainContainer, F, I> FlatMapBuilder<T, C, F, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
@@ -125,7 +123,7 @@ where
         FlatMapBuilder { stream, logic, marker: std::marker::PhantomData }
     }
 
-    /// Transform a flatmapped stream through addiitonal logic.
+    /// Transform a flatmapped stream through additional logic.
     pub fn map<G: Fn(I) -> I2 + 'static, I2>(self, g: G) -> FlatMapBuilder<T, C, impl Fn(C::Item<'_>) -> I2 + 'static, I2> {
         let logic = self.logic;
         FlatMapBuilder {

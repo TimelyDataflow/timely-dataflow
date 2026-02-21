@@ -108,12 +108,7 @@ impl<C: Accountable + Default + 'static> Container for C { }
 pub trait ContainerBuilder: timely_container::ContainerBuilder<Container: Container> + Default + 'static {}
 impl<CB: timely_container::ContainerBuilder<Container: Container> + Default + 'static> ContainerBuilder for CB {}
 
-/// A composite trait for types usable on exchange channels in timely dataflow.
-///
-/// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`
-/// `Data` trait, which describes requirements for communication along channels.
-pub trait ExchangeData: encoding::Data + 'static { }
-impl<T: encoding::Data + 'static> ExchangeData for T { }
+pub use encoding::Data as ExchangeData;
 
 #[doc = include_str!("../../README.md")]
 #[cfg(doctest)]

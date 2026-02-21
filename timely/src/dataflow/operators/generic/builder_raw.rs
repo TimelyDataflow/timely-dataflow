@@ -146,7 +146,7 @@ impl<G: Scope> OperatorBuilder<G> {
     {
         let new_output = self.shape.outputs;
         self.shape.outputs += 1;
-        let (targets, registrar) = Tee::<G::Timestamp,C>::new();
+        let (target, registrar) = Tee::new();
         let source = Source::new(self.index, new_output);
         let stream = StreamCore::new(source, registrar, self.scope.clone());
 
@@ -154,7 +154,7 @@ impl<G: Scope> OperatorBuilder<G> {
             self.summary[input].add_port(new_output, entry);
         }
 
-        (targets, stream)
+        (target, stream)
     }
 
     /// Creates an operator implementation from supplied logic constructor.

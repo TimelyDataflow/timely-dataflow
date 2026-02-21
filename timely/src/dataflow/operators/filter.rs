@@ -5,7 +5,7 @@ use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
-pub trait Filter<D: 'static> {
+pub trait Filter<D> {
     /// Returns a new instance of `self` containing only records satisfying `predicate`.
     ///
     /// # Examples
