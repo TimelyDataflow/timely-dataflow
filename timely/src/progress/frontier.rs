@@ -329,11 +329,33 @@ impl<T: Ord+std::hash::Hash> std::hash::Hash for Antichain<T> {
 }
 
 impl<T: PartialOrder> From<Vec<T>> for Antichain<T> {
-    fn from(vec: Vec<T>) -> Self {
-        // TODO: We could reuse `vec` with some care.
-        let mut temp = Antichain::new();
-        for elem in vec.into_iter() { temp.insert(elem); }
-        temp
+    fn from(mut vec: Vec<T>) -> Self {
+        // We will iteratively insert elements `vec[index]` into `vec[0 .. valid]`,
+        // by pivoting elements around and maintaining `vec[0 .. valid]` to contain
+        // those elements that form a minimal antichain.
+        let mut valid = 0;
+        for index in 0 .. vec.len() {
+            // Attempt to insert `vec[index]` into `vec[0 .. valid]`.
+            if !vec[0 .. valid].iter().any(|x| x.less_equal(&vec[index])) {
+                // "Retain" elements not greater or equal to `vec[index]`.
+                let mut prior = 0;
+                while prior < valid {
+                    if vec[index].less_equal(&vec[prior]) {
+                        vec.swap(prior, valid - 1);
+                        valid -= 1;
+                    } else {
+                        prior += 1;
+                    }
+                }
+                // "Push" the element to the end of the valid region.
+                vec.swap(valid, index);
+                valid += 1;
+            }
+        }
+        vec.truncate(valid);
+        vec.shrink_to_fit();
+
+        Self { elements: vec.into() }
     }
 }
 
