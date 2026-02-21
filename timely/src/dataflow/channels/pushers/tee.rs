@@ -14,10 +14,9 @@ use crate::dataflow::channels::Message;
 use crate::communication::Push;
 use crate::{Container, Data};
 
-use push_set::{PushSet, PushOne, PushMany, MessagePusher};
+use push_set::{PushSet, PushOne, PushMany};
 mod push_set {
 
-    use crate::dataflow::channels::Message;
     use crate::communication::Push;
 
     /// A type that can be pushed at, and which may be able to accommodate a similar pusher.
@@ -26,7 +25,8 @@ mod push_set {
     /// allowing the implementation for multiple pushers (which may require cloning) to be
     /// behind an abstraction.
     pub trait PushSet<T> : Push<T> {
-        fn insert(&mut self, other: Box<dyn Push<T>>) -> Result<(), Box<dyn Push<T>>>;
+        /// If a list of boxed pushers, that list.
+        fn as_list(&mut self) -> Option<&mut Vec<Box<dyn Push<T>>>>;
     }
 
     /// A `Push` wrapper that implements `PushOne`.
@@ -35,7 +35,7 @@ mod push_set {
         fn push(&mut self, item: &mut Option<T>) { self.inner.push(item) }
     }
     impl<T: 'static, P: Push<T> + 'static> PushSet<T> for PushOne<P> {
-        fn insert(&mut self, other: Box<dyn Push<T>>) -> Result<(), Box<dyn Push<T>>> { Err(other) }
+        fn as_list(&mut self) -> Option<&mut Vec<Box<dyn Push<T>>>> { None }
     }
     impl<P> From<P> for PushOne<P> { fn from(inner: P) -> Self { Self { inner } } }
 
@@ -68,25 +68,9 @@ mod push_set {
         }
     }
     impl<T: Clone + 'static> PushSet<T> for PushMany<T> {
-        fn insert(&mut self, other: Box<dyn Push<T>>) -> Result<(), Box<dyn Push<T>>> {
-            self.list.push(other);
-            Ok(())
-        }
+        fn as_list(&mut self) -> Option<&mut Vec<Box<dyn Push<T>>>> { Some(&mut self.list) }
     }
     impl<T> From<Vec<Box<dyn Push<T>>>> for PushMany<T> { fn from(list: Vec<Box<dyn Push<T>>>) -> Self { Self { list, buffer: None } } }
-
-    /// A temporary struct to re-present `Message::push_at` as `Push<Message>`. The intent is to delete.
-    pub struct MessagePusher<T, C, P: Push<Message<T, C>>> { pub inner: P, pub phantom: std::marker::PhantomData<(T, C)> }
-    impl<T: Clone, C: Default, P: Push<Message<T, C>>> Push<Message<T, C>> for MessagePusher<T, C, P> {
-        fn push(&mut self, message: &mut Option<Message<T, C>>) {
-            if let Some(message) = message.as_mut() {
-                Message::push_at(&mut message.data, message.time.clone(), &mut self.inner);
-            }
-            else {
-                self.inner.done()
-            }
-        }
-    }
 
 }
 
@@ -121,19 +105,37 @@ impl<T, C> Debug for Tee<T, C> {
 /// The subscribe half of a shared destination for pushing at.
 pub struct TeeHelper<T, C> { shared: PushList<T, C> }
 
-impl<T: Clone+'static, C: Clone+Default+'static> TeeHelper<T, C> {
+impl<T: Clone+'static, C: Clone+'static> TeeHelper<T, C> {
+    /// Upgrades the shared list to one that supports cloning.
+    ///
+    /// This method "teaches" the `Tee` how to clone containers, which enables adding multiple pushers.
+    /// It introduces the cost of one additional virtual call through a boxed trait, so one should not
+    /// upgrade for no reason.
+    pub fn upgrade(&self) where C: Clone {
+        let mut borrow = self.shared.borrow_mut();
+        if let Some(mut pusher) = borrow.take() {
+            if pusher.as_list().is_none() {
+                *borrow = Some(Box::new(PushMany::from(vec![pusher as Box<dyn Push<Message<T, C>>>])));
+            }
+            else {
+                *borrow = Some(pusher);
+            }
+        }
+        else {
+            *borrow = Some(Box::new(PushMany::from(vec![])));
+        }
+    }
+
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
     pub fn add_pusher<P: Push<Message<T, C>>+'static>(&self, pusher: P) {
-        let pusher = MessagePusher { inner: pusher, phantom: std::marker::PhantomData };
+        if self.shared.borrow().is_some() { self.upgrade(); }
         let mut borrow = self.shared.borrow_mut();
-        *borrow = Some(if let Some(mut inner) = borrow.take() {
-            if let Err(pusher) = inner.insert(Box::new(pusher)) {
-                let prior = inner as Box<dyn Push<Message<T, C>>>;
-                Box::new(PushMany::from(vec![prior, pusher]))
-            }
-            else { inner }
+        if let Some(many) = borrow.as_mut() {
+            many.as_list().unwrap().push(Box::new(pusher))
         }
-        else { Box::new(PushOne::from(pusher)) });
+        else {
+            *borrow = Some(Box::new(PushOne::from(pusher)));
+        }
     }
 }
 

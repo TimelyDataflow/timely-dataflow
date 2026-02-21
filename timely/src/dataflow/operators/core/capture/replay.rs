@@ -99,8 +99,8 @@ where
                             Owned(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.into_iter());
                             },
-                            Owned(Event::Messages(time, mut data)) => {
-                                Message::push_at(&mut data, time, &mut output);
+                            Owned(Event::Messages(time, data)) => {
+                                output.push(&mut Some(Message::new(time, data)));
                             }
                             Borrowed(Event::Progress(vec)) => {
                                 progress.internals[0].extend(vec.iter().cloned());

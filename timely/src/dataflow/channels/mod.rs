@@ -31,7 +31,7 @@ impl<T, C> Message<T, C> {
     }
 }
 
-impl<T, C: Default> Message<T, C> {
+impl<T, C> Message<T, C> {
     /// Creates a new message instance from arguments.
     ///
     /// Zero values are installed for `from` and `seq`, and are meant to be populated by `LogPusher`.
@@ -39,10 +39,10 @@ impl<T, C: Default> Message<T, C> {
         Message { time, data, from: 0, seq: 0 }
     }
 
-    /// Forms a message, and pushes contents at `pusher`. Replaces `buffer` with what the pusher
-    /// leaves in place, or the container's default element. The buffer is left in an undefined state.
+    /// Forms a message from borrowed parts, and replaces `buffer` with what is left by the `push` call.
+    /// If the pusher returns nothing, then `buffer` is set to the default for the container.
     #[inline]
-    pub fn push_at<P: Push<Message<T, C>>>(buffer: &mut C, time: T, pusher: &mut P) {
+    pub fn push_at<P: Push<Message<T, C>>>(buffer: &mut C, time: T, pusher: &mut P) where C: Default {
 
         let data = ::std::mem::take(buffer);
         let message = Message::new(time, data);
