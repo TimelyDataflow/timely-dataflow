@@ -108,7 +108,7 @@ impl<A: AllocateBuilder> TcpBuilder<A> {
             index: self.index,
             peers: self.peers,
             canaries: Rc::new(RefCell::new(Vec::new())),
-            channel_id_bound: None,
+            channel_id_upper: 0,
             staged: Vec::new(),
             sends,
             recvs,
@@ -128,7 +128,7 @@ pub struct TcpAllocator<A: Allocate> {
     staged:     Vec<Bytes>,                         // staging area for incoming Bytes
     canaries:   Rc<RefCell<Vec<usize>>>,
 
-    channel_id_bound: Option<usize>,
+    channel_id_upper: usize,
 
     // sending, receiving, and responding to binary buffers.
     sends:      Vec<Rc<RefCell<SendEndpoint<MergeQueue>>>>,     // sends[x] -> goes to process x.
@@ -142,10 +142,8 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
     fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>) {
 
         // Assume and enforce in-order identifier allocation.
-        if let Some(bound) = self.channel_id_bound {
-            assert!(bound < identifier);
-        }
-        self.channel_id_bound = Some(identifier);
+        assert!(self.channel_id_upper <= identifier);
+        self.channel_id_upper = identifier + 1;
 
         // Result list of boxed pushers.
         let mut pushes = Vec::<Box<dyn Push<T>>>::new();
@@ -277,7 +275,7 @@ impl<A: Allocate> Allocate for TcpAllocator<A> {
                     match self.to_local.entry(header.channel) {
                         Entry::Vacant(entry) => {
                             // We may receive data before allocating, and shouldn't block.
-                            if self.channel_id_bound.map(|b| b < header.channel).unwrap_or(true) {
+                            if self.channel_id_upper <= header.channel {
                                 entry.insert(Rc::new(RefCell::new(VecDeque::new())))
                                     .borrow_mut()
                                     .push_back(peel);
