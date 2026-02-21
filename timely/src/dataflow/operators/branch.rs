@@ -4,10 +4,10 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::OutputBuilder;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, Stream, StreamCore};
-use crate::{Container, Data};
+use crate::Container;
 
 /// Extension trait for `Stream`.
-pub trait Branch<S: Scope, D: Data> {
+pub trait Branch<S: Scope, D: 'static> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
     /// the data and its time. If it returns `true`, the record will be sent
@@ -35,7 +35,7 @@ pub trait Branch<S: Scope, D: Data> {
     ) -> (Stream<S, D>, Stream<S, D>);
 }
 
-impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
+impl<S: Scope, D: 'static> Branch<S, D> for Stream<S, D> {
     fn branch(
         self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,

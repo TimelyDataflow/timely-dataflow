@@ -21,7 +21,7 @@ pub trait Broadcast<D: ExchangeData> {
     fn broadcast(self) -> Self;
 }
 
-impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
+impl<G: Scope, D: ExchangeData + Clone> Broadcast<D> for Stream<G, D> {
     fn broadcast(self) -> Stream<G, D> {
 
         // NOTE: Simplified implementation due to underlying motion

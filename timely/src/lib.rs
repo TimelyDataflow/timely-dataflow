@@ -98,12 +98,6 @@ pub mod logging;
 
 pub mod scheduling;
 
-/// A composite trait for types usable as data in timely dataflow.
-///
-/// The `Data` trait is necessary for all types that go along timely dataflow channels.
-pub trait Data: Clone+'static { }
-impl<T: Clone+'static> Data for T { }
-
 /// A composite trait for types usable as containers in timely dataflow.
 ///
 /// The `Container` trait is necessary for all containers in timely dataflow channels.
@@ -118,8 +112,8 @@ impl<CB: timely_container::ContainerBuilder<Container: Container> + Default + 's
 ///
 /// The `ExchangeData` trait extends `Data` with any requirements imposed by the `timely_communication`
 /// `Data` trait, which describes requirements for communication along channels.
-pub trait ExchangeData: Data + encoding::Data { }
-impl<T: Data + encoding::Data> ExchangeData for T { }
+pub trait ExchangeData: encoding::Data + 'static { }
+impl<T: encoding::Data + 'static> ExchangeData for T { }
 
 #[doc = include_str!("../../README.md")]
 #[cfg(doctest)]

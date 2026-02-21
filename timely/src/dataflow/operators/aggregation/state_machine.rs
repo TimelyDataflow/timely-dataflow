@@ -2,7 +2,7 @@
 use std::hash::Hash;
 use std::collections::HashMap;
 
-use crate::{Data, ExchangeData};
+use crate::ExchangeData;
 use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
@@ -46,7 +46,7 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     /// });
     /// ```
     fn state_machine<
-        R: Data,                                    // output type
+        R: 'static,                                 // output type
         D: Default+'static,                         // per-key state (data)
         I: IntoIterator<Item=R>,                    // type of output iterator
         F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
@@ -54,9 +54,9 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     >(self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq ;
 }
 
-impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> for Stream<S, (K, V)> {
+impl<S: Scope, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<S, K, V> for Stream<S, (K, V)> {
     fn state_machine<
-            R: Data,                                    // output type
+            R: 'static,                                 // output type
             D: Default+'static,                         // per-key state (data)
             I: IntoIterator<Item=R>,                    // type of output iterator
             F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic

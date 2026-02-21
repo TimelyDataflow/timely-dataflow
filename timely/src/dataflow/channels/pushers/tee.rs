@@ -12,7 +12,7 @@ use std::rc::Rc;
 use crate::dataflow::channels::Message;
 
 use crate::communication::Push;
-use crate::{Container, Data};
+use crate::Container;
 
 use push_set::{PushSet, PushOne, PushMany};
 mod push_set {
@@ -80,7 +80,7 @@ type PushList<T, C> = Rc<RefCell<Option<Box<dyn PushSet<Message<T, C>>>>>>;
 /// The writing half of a shared destination for pushing at.
 pub struct Tee<T, C> { shared: PushList<T, C> }
 
-impl<T: Data, C: Container> Push<Message<T, C>> for Tee<T, C> {
+impl<T: 'static, C: Container> Push<Message<T, C>> for Tee<T, C> {
     #[inline]
     fn push(&mut self, message: &mut Option<Message<T, C>>) {
         if let Some(pushee) = self.shared.borrow_mut().as_mut() {
