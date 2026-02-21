@@ -18,10 +18,7 @@ use push_set::{PushSet, PushOne, PushMany, MessagePusher};
 mod push_set {
 
     use crate::dataflow::channels::Message;
-
     use crate::communication::Push;
-    use crate::Container;
-
 
     /// A type that can be pushed at, and which may be able to accommodate a similar pusher.
     ///
@@ -80,7 +77,7 @@ mod push_set {
 
     /// A temporary struct to re-present `Message::push_at` as `Push<Message>`. The intent is to delete.
     pub struct MessagePusher<T, C, P: Push<Message<T, C>>> { pub inner: P, pub phantom: std::marker::PhantomData<(T, C)> }
-    impl<T: Clone, C: Container, P: Push<Message<T, C>>> Push<Message<T, C>> for MessagePusher<T, C, P> {
+    impl<T: Clone, C: Default, P: Push<Message<T, C>>> Push<Message<T, C>> for MessagePusher<T, C, P> {
         fn push(&mut self, message: &mut Option<Message<T, C>>) {
             if let Some(message) = message.as_mut() {
                 Message::push_at(&mut message.data, message.time.clone(), &mut self.inner);
@@ -124,7 +121,7 @@ impl<T, C> Debug for Tee<T, C> {
 /// The subscribe half of a shared destination for pushing at.
 pub struct TeeHelper<T, C> { shared: PushList<T, C> }
 
-impl<T: Clone+'static, C: Container> TeeHelper<T, C> {
+impl<T: Clone+'static, C: Clone+Default+'static> TeeHelper<T, C> {
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
     pub fn add_pusher<P: Push<Message<T, C>>+'static>(&self, pusher: P) {
         let pusher = MessagePusher { inner: pusher, phantom: std::marker::PhantomData };

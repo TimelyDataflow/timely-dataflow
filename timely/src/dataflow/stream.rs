@@ -46,12 +46,12 @@ impl<S: Scope, C> Clone for StreamCore<S, C> {
 /// A stream batching data in vectors.
 pub type Stream<S, D> = StreamCore<S, Vec<D>>;
 
-impl<S: Scope, C: crate::Container> StreamCore<S, C> {
+impl<S: Scope, C> StreamCore<S, C> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(&self, target: Target, pusher: P, identifier: usize) {
+    pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(&self, target: Target, pusher: P, identifier: usize) where C: Clone+Default+'static {
 
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {

@@ -2,7 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 use crate::communication::Push;
-use crate::Container;
 
 /// A collection of types that may be pushed at.
 pub mod pushers;
@@ -32,7 +31,7 @@ impl<T, C> Message<T, C> {
     }
 }
 
-impl<T, C: Container> Message<T, C> {
+impl<T, C: Default> Message<T, C> {
     /// Creates a new message instance from arguments.
     pub fn new(time: T, data: C, from: usize, seq: usize) -> Self {
         Message { time, data, from, seq }
