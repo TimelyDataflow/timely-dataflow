@@ -7,7 +7,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for `Stream`.
-pub trait Map<S: Scope, C: DrainContainer> {
+pub trait Map<S: Scope, C: DrainContainer> : Sized {
     /// Consumes each element of the stream and yields a new element.
     ///
     /// # Examples
@@ -22,7 +22,7 @@ pub trait Map<S: Scope, C: DrainContainer> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map<C2, D2, L>(&self, mut logic: L) -> StreamCore<S, C2>
+    fn map<C2, D2, L>(self, mut logic: L) -> StreamCore<S, C2>
     where
         C2: Container + SizableContainer + PushInto<D2>,
         L: FnMut(C::Item<'_>)->D2 + 'static,
@@ -43,7 +43,7 @@ pub trait Map<S: Scope, C: DrainContainer> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<C2, I, L>(&self, logic: L) -> StreamCore<S, C2>
+    fn flat_map<C2, I, L>(self, logic: L) -> StreamCore<S, C2>
     where
         I: IntoIterator,
         C2: Container + SizableContainer + PushInto<I::Item>,
@@ -76,7 +76,7 @@ pub trait Map<S: Scope, C: DrainContainer> {
     ///
     /// assert_eq!((4..14).collect::<Vec<_>>(), data.extract()[0].1);
     /// ```
-    fn flat_map_builder<'t, I, L>(&'t self, logic: L) -> FlatMapBuilder<'t, Self, C, L, I>
+    fn flat_map_builder<'t, I, L>(self, logic: L) -> FlatMapBuilder<Self, C, L, I>
     where
         C: Clone + 'static,
         L: for<'a> Fn(C::Item<'a>) -> I,
@@ -90,7 +90,7 @@ impl<S: Scope, C: Container + DrainContainer> Map<S, C> for StreamCore<S, C> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<C2, I, L>(&self, mut logic: L) -> StreamCore<S, C2>
+    fn flat_map<C2, I, L>(self, mut logic: L) -> StreamCore<S, C2>
     where
         I: IntoIterator,
         C2: Container + SizableContainer + PushInto<I::Item>,
@@ -107,26 +107,26 @@ impl<S: Scope, C: Container + DrainContainer> Map<S, C> for StreamCore<S, C> {
 
 
 /// A stream wrapper that allows the accumulation of flatmap logic.
-pub struct FlatMapBuilder<'t, T, C: DrainContainer, F: 'static, I>
+pub struct FlatMapBuilder<T, C: DrainContainer, F: 'static, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
-    stream: &'t T,
+    stream: T,
     logic: F,
     marker: std::marker::PhantomData<C>,
 }
 
-impl<'t, T, C: DrainContainer + Clone + 'static, F, I> FlatMapBuilder<'t, T, C, F, I>
+impl<'t, T, C: DrainContainer + Clone + 'static, F, I> FlatMapBuilder<T, C, F, I>
 where
     for<'a> F: Fn(C::Item<'a>) -> I,
 {
     /// Create a new wrapper with no action on the stream.
-    pub fn new(stream: &'t T, logic: F) -> Self {
+    pub fn new(stream: T, logic: F) -> Self {
         FlatMapBuilder { stream, logic, marker: std::marker::PhantomData }
     }
 
     /// Transform a flatmapped stream through addiitonal logic.
-    pub fn map<G: Fn(I) -> I2 + 'static, I2>(self, g: G) -> FlatMapBuilder<'t, T, C, impl Fn(C::Item<'_>) -> I2 + 'static, I2> {
+    pub fn map<G: Fn(I) -> I2 + 'static, I2>(self, g: G) -> FlatMapBuilder<T, C, impl Fn(C::Item<'_>) -> I2 + 'static, I2> {
         let logic = self.logic;
         FlatMapBuilder {
             stream: self.stream,

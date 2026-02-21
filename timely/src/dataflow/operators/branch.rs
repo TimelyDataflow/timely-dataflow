@@ -30,14 +30,14 @@ pub trait Branch<S: Scope, D: Data> {
     /// });
     /// ```
     fn branch(
-        &self,
+        self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
     ) -> (Stream<S, D>, Stream<S, D>);
 }
 
 impl<S: Scope, D: Data> Branch<S, D> for Stream<S, D> {
     fn branch(
-        &self,
+        self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
     ) -> (Stream<S, D>, Stream<S, D>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
@@ -94,11 +94,11 @@ pub trait BranchWhen<T>: Sized {
     ///     after_five.inspect(|x| println!("Times 5 and later: {:?}", x));
     /// });
     /// ```
-    fn branch_when(&self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
+    fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
 impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
-    fn branch_when(&self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
+    fn branch_when(self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
         builder.set_notify(false);
 

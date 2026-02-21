@@ -50,11 +50,11 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(&self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
 }
 
 impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> for StreamCore<G, C> {
-    fn enter<'a>(&self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+    fn enter<'a>(self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -100,11 +100,11 @@ pub trait Leave<G: Scope, C> {
     ///     });
     /// });
     /// ```
-    fn leave(&self) -> StreamCore<G, C>;
+    fn leave(self) -> StreamCore<G, C>;
 }
 
 impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
-    fn leave(&self) -> StreamCore<G, C> {
+    fn leave(self) -> StreamCore<G, C> {
 
         let scope = self.scope();
 

@@ -126,12 +126,12 @@ use timely::dataflow::operators::{ToStream, Partition, Inspect};
 
 fn main() {
     timely::example(|scope| {
-        let streams = (0..10).to_stream(scope)
-                             .partition(3, |x| (x % 3, x));
+        let mut streams = (0..10).to_stream(scope)
+                                 .partition(3, |x| (x % 3, x));
 
-        streams[0].inspect(|x| println!("seen 0: {:?}", x));
-        streams[1].inspect(|x| println!("seen 1: {:?}", x));
-        streams[2].inspect(|x| println!("seen 2: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 2: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 1: {:?}", x));
+        streams.pop().unwrap().inspect(|x| println!("seen 0: {:?}", x));
     });
 }
 ```
@@ -147,11 +147,12 @@ use timely::dataflow::operators::{ToStream, Partition, Concat, Inspect};
 
 fn main() {
     timely::example(|scope| {
-        let streams = (0..10).to_stream(scope)
+        let mut streams = (0..10).to_stream(scope)
                              .partition(3, |x| (x % 3, x));
-        streams[0]
-            .concat(&streams[1])
-            .concat(&streams[2])
+        streams
+            .pop().unwrap()
+            .concat(streams.pop().unwrap())
+            .concat(streams.pop().unwrap())
             .inspect(|x| println!("seen: {:?}", x));
     });
 }

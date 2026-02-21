@@ -54,7 +54,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P>(&mut self, stream: &StreamCore<G, C>, pact: P) -> InputHandleCore<G::Timestamp, C, P::Puller>
+    pub fn new_input<C: Container, P>(&mut self, stream: StreamCore<G, C>, pact: P) -> InputHandleCore<G::Timestamp, C, P::Puller>
     where
         P: ParallelizationContract<G::Timestamp, C> {
 
@@ -70,7 +70,7 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: &StreamCore<G, C>, pact: P, connection: I) -> InputHandleCore<G::Timestamp, C, P::Puller>
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: StreamCore<G, C>, pact: P, connection: I) -> InputHandleCore<G::Timestamp, C, P::Puller>
     where
         P: ParallelizationContract<G::Timestamp, C>,
         I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)> + Clone,

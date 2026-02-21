@@ -28,7 +28,7 @@ fn operator_scaling(scale: u64) {
                 let (output, stream) = builder.new_output_connection::<Vec<()>,_>([]);
                 use timely::progress::Antichain;
                 let connectivity = [(index, Antichain::from_elem(Default::default()))];
-                handles.push((builder.new_input_connection(&part, Pipeline, connectivity), output));
+                handles.push((builder.new_input_connection(part, Pipeline, connectivity), output));
                 outputs.push(stream);
             }
 

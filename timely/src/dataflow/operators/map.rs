@@ -7,7 +7,7 @@ use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::operators::core::{Map as MapCore};
 
 /// Extension trait for `Stream`.
-pub trait Map<S: Scope, D: Data> {
+pub trait Map<S: Scope, D: Data> : Sized {
     /// Consumes each element of the stream and yields a new element.
     ///
     /// # Examples
@@ -20,7 +20,7 @@ pub trait Map<S: Scope, D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map<D2: Data, L: FnMut(D)->D2+'static>(&self, mut logic: L) -> Stream<S, D2> {
+    fn map<D2: Data, L: FnMut(D)->D2+'static>(self, mut logic: L) -> Stream<S, D2> {
         self.flat_map(move |x| std::iter::once(logic(x)))
     }
     /// Updates each element of the stream and yields the element, re-using memory where possible.
@@ -35,7 +35,7 @@ pub trait Map<S: Scope, D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map_in_place<L: FnMut(&mut D)+'static>(&self, logic: L) -> Stream<S, D>;
+    fn map_in_place<L: FnMut(&mut D)+'static>(self, logic: L) -> Stream<S, D>;
     /// Consumes each element of the stream and yields some number of new elements.
     ///
     /// # Examples
@@ -48,11 +48,11 @@ pub trait Map<S: Scope, D: Data> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<I: IntoIterator, L: FnMut(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data;
+    fn flat_map<I: IntoIterator, L: FnMut(D)->I+'static>(self, logic: L) -> Stream<S, I::Item> where I::Item: Data;
 }
 
 impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
-    fn map_in_place<L: FnMut(&mut D)+'static>(&self, mut logic: L) -> Stream<S, D> {
+    fn map_in_place<L: FnMut(&mut D)+'static>(self, mut logic: L) -> Stream<S, D> {
         self.unary(Pipeline, "MapInPlace", move |_,_| move |input, output| {
             input.for_each_time(|time, data| {
                 let mut session = output.session(&time);
@@ -66,7 +66,7 @@ impl<S: Scope, D: Data> Map<S, D> for Stream<S, D> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<I: IntoIterator, L: FnMut(D)->I+'static>(&self, logic: L) -> Stream<S, I::Item> where I::Item: Data {
+    fn flat_map<I: IntoIterator, L: FnMut(D)->I+'static>(self, logic: L) -> Stream<S, I::Item> where I::Item: Data {
         MapCore::flat_map(self, logic)
     }
 }

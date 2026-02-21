@@ -76,7 +76,7 @@ fn main() {
             // Assign timestamps to records so that not much work is in each time.
             .delay(|number, time| number / 100 )
             // Buffer records until all prior timestamps have completed.
-            .binary_frontier(&cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
+            .binary_frontier(cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 
                 move |(input1, frontier1), (input2, frontier2), output| {
 

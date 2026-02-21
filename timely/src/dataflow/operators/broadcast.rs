@@ -18,11 +18,11 @@ pub trait Broadcast<D: ExchangeData> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn broadcast(&self) -> Self;
+    fn broadcast(self) -> Self;
 }
 
 impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
-    fn broadcast(&self) -> Stream<G, D> {
+    fn broadcast(self) -> Stream<G, D> {
 
         // NOTE: Simplified implementation due to underlying motion
         // in timely dataflow internals. Optimize once they have

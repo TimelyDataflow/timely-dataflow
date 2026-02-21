@@ -103,15 +103,17 @@ impl<T, C> Debug for Tee<T, C> {
 }
 
 /// The subscribe half of a shared destination for pushing at.
+///
+/// Cloning a `TeeHelper` will upgrade it, teaching the shared list how to clone containers.
 pub struct TeeHelper<T, C> { shared: PushList<T, C> }
 
-impl<T: Clone+'static, C: Clone+'static> TeeHelper<T, C> {
+impl<T: 'static, C: 'static> TeeHelper<T, C> {
     /// Upgrades the shared list to one that supports cloning.
     ///
     /// This method "teaches" the `Tee` how to clone containers, which enables adding multiple pushers.
     /// It introduces the cost of one additional virtual call through a boxed trait, so one should not
     /// upgrade for no reason.
-    pub fn upgrade(&self) where C: Clone {
+    pub fn upgrade(&self) where T: Clone, C: Clone {
         let mut borrow = self.shared.borrow_mut();
         if let Some(mut pusher) = borrow.take() {
             if pusher.as_list().is_none() {
@@ -127,8 +129,7 @@ impl<T: Clone+'static, C: Clone+'static> TeeHelper<T, C> {
     }
 
     /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
-    pub fn add_pusher<P: Push<Message<T, C>>+'static>(&self, pusher: P) {
-        if self.shared.borrow().is_some() { self.upgrade(); }
+    pub fn add_pusher<P: Push<Message<T, C>>+'static>(self, pusher: P) {
         let mut borrow = self.shared.borrow_mut();
         if let Some(many) = borrow.as_mut() {
             many.as_list().unwrap().push(Box::new(pusher))
@@ -139,8 +140,8 @@ impl<T: Clone+'static, C: Clone+'static> TeeHelper<T, C> {
     }
 }
 
-impl<T, C> Clone for TeeHelper<T, C> {
-    fn clone(&self) -> Self { TeeHelper { shared: Rc::clone(&self.shared) } }
+impl<T: Clone+'static, C: Clone+'static> Clone for TeeHelper<T, C> {
+    fn clone(&self) -> Self { self.upgrade(); TeeHelper { shared: Rc::clone(&self.shared) } }
 }
 
 impl<T, C> Debug for TeeHelper<T, C> {

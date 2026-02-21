@@ -23,7 +23,7 @@ pub trait Exchange<C: DrainContainer> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn exchange<F>(&self, route: F) -> Self
+    fn exchange<F>(self, route: F) -> Self
     where
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static;
 }
@@ -37,7 +37,7 @@ where
         + crate::dataflow::channels::ContainerBytes
         + for<'a> PushInto<C::Item<'a>>,
 {
-    fn exchange<F>(&self, route: F) -> StreamCore<G, C>
+    fn exchange<F>(self, route: F) -> StreamCore<G, C>
     where
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static,
     {

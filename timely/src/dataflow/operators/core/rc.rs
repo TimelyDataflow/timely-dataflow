@@ -21,11 +21,11 @@ pub trait SharedStream<S: Scope, C> {
     ///            .inspect_container(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn shared(&self) -> StreamCore<S, Rc<C>>;
+    fn shared(self) -> StreamCore<S, Rc<C>>;
 }
 
 impl<S: Scope, C: Container> SharedStream<S, C> for StreamCore<S, C> {
-    fn shared(&self) -> StreamCore<S, Rc<C>> {
+    fn shared(self) -> StreamCore<S, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each_time(|time, data| {
@@ -53,7 +53,7 @@ mod test {
             let shared = shared.inspect_container(|x| println!("seen: {x:?}"));
             scope
                 .concatenate([
-                    shared.unary(Pipeline, "read shared 1", |_, _| {
+                    shared.clone().unary(Pipeline, "read shared 1", |_, _| {
                         move |input, output| {
                             input.for_each_time(|time, data| {
                                 output.session(&time).give_iterator(data.map(|d| d.as_ptr() as usize));

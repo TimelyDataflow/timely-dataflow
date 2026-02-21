@@ -7,7 +7,7 @@ use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Accumulates records within a timestamp.
-pub trait Accumulate<G: Scope, D: Data> {
+pub trait Accumulate<G: Scope, D: Data> : Sized {
     /// Accumulates records within a timestamp.
     ///
     /// # Examples
@@ -25,7 +25,7 @@ pub trait Accumulate<G: Scope, D: Data> {
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(0, vec![45])]);
     /// ```
-    fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A>;
+    fn accumulate<A: Data>(self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A>;
     /// Counts the number of records observed at each time.
     ///
     /// # Examples
@@ -43,13 +43,13 @@ pub trait Accumulate<G: Scope, D: Data> {
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(0, vec![10])]);
     /// ```
-    fn count(&self) -> Stream<G, usize> {
+    fn count(self) -> Stream<G, usize> {
         self.accumulate(0, |sum, data| *sum += data.len())
     }
 }
 
 impl<G: Scope<Timestamp: ::std::hash::Hash>, D: Data> Accumulate<G, D> for Stream<G, D> {
-    fn accumulate<A: Data>(&self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A> {
+    fn accumulate<A: Data>(self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A> {
 
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {

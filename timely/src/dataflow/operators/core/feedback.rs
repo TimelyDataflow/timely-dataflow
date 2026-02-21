@@ -27,7 +27,7 @@ pub trait Feedback<G: Scope> {
     ///     // circulate 0..10 for 100 iterations.
     ///     let (handle, cycle) = scope.feedback(1);
     ///     (0..10).to_stream(scope)
-    ///            .concat(&cycle)
+    ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
     ///            .branch_when(|t| t < &100).1
     ///            .connect_loop(handle);
@@ -54,7 +54,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     scope.iterative::<usize,_,_>(|inner| {
     ///         let (handle, cycle) = inner.loop_variable(1);
     ///         (0..10).to_stream(inner)
-    ///                .concat(&cycle)
+    ///                .concat(cycle)
     ///                .inspect(|x| println!("seen: {:?}", x))
     ///                .branch_when(|t| t.inner < 100).1
     ///                .connect_loop(handle);
@@ -95,17 +95,17 @@ pub trait ConnectLoop<G: Scope, C: Container> {
     ///     // circulate 0..10 for 100 iterations.
     ///     let (handle, cycle) = scope.feedback(1);
     ///     (0..10).to_stream(scope)
-    ///            .concat(&cycle)
+    ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
     ///            .branch_when(|t| t < &100).1
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn connect_loop(&self, handle: Handle<G, C>);
+    fn connect_loop(self, handle: Handle<G, C>);
 }
 
 impl<G: Scope, C: Container> ConnectLoop<G, C> for StreamCore<G, C> {
-    fn connect_loop(&self, handle: Handle<G, C>) {
+    fn connect_loop(self, handle: Handle<G, C>) {
 
         let mut builder = handle.builder;
         let summary = handle.summary;

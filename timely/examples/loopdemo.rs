@@ -27,11 +27,11 @@ fn main() {
 
             let step =
             stream
-                .concat(&loop_stream)
+                .concat(loop_stream)
                 .map(|x| if x % 2 == 0 { x / 2 } else { 3 * x + 1 })
                 .filter(|x| x > &1);
 
-            step.connect_loop(loop_handle);
+            step.clone().connect_loop(loop_handle);
             step.probe_with(&probe);
         });
 

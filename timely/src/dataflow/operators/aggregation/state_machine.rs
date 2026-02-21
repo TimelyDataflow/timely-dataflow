@@ -51,7 +51,7 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
         I: IntoIterator<Item=R>,                    // type of output iterator
         F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
         H: Fn(&K)->u64+'static,                     // "hash" function for keys
-    >(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq ;
+    >(self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq ;
 }
 
 impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> for Stream<S, (K, V)> {
@@ -61,7 +61,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> StateMachine<S, K, V> f
             I: IntoIterator<Item=R>,                    // type of output iterator
             F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
             H: Fn(&K)->u64+'static,                     // "hash" function for keys
-        >(&self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq {
+        >(self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq {
 
         let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state

@@ -27,7 +27,7 @@ pub struct StreamCore<S: Scope, C> {
     ports: TeeHelper<S::Timestamp, C>,
 }
 
-impl<S: Scope, C> Clone for StreamCore<S, C> {
+impl<S: Scope, C: Clone+'static> Clone for StreamCore<S, C> {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
@@ -51,7 +51,7 @@ impl<S: Scope, C> StreamCore<S, C> {
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
     /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(&self, target: Target, pusher: P, identifier: usize) where C: Clone+'static {
+    pub fn connect_to<P: Push<Message<S::Timestamp, C>>+'static>(self, target: Target, pusher: P, identifier: usize) where C: Clone+'static {
 
         let mut logging = self.scope().logging();
         logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
