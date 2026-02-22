@@ -116,6 +116,24 @@ pub trait ContainerBuilder: Default {
 /// If you have any questions about this trait you are best off not implementing it.
 pub trait LengthPreservingContainerBuilder : ContainerBuilder { }
 
+pub use noop::NoopBuilder;
+/// A container builder that accepts containers and produces them immediately.
+mod noop {
+
+    /// A container builder that only accepts containers, and produces them as output.
+    ///
+    /// This exists for operators that have containers ready to go, and haven't the need for a builder.
+    pub struct NoopBuilder<C>{ phantom: std::marker::PhantomData<C> }
+
+    impl<C> Default for NoopBuilder<C> { fn default() -> Self { Self { phantom: std::marker::PhantomData } } }
+    impl<C> super::ContainerBuilder for NoopBuilder<C> {
+        type Container = C;
+        #[inline] fn extract(&mut self) -> Option<&mut C> { None }
+        #[inline] fn finish(&mut self) -> Option<&mut C> { None }
+    }
+
+}
+
 /// A default container builder that uses length and preferred capacity to chunk data.
 ///
 /// Maintains a single empty allocation between [`Self::push_into`] and [`Self::extract`], but not
