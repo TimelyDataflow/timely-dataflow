@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use rand::{RngExt, SeedableRng, rngs::SmallRng};
-
 use timely::dataflow::operators::{ToStream, Concat, Feedback, ConnectLoop};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Exchange;
@@ -17,8 +15,6 @@ fn main() {
 
         let index = worker.index();
         let peers = worker.peers();
-
-        let mut rng: SmallRng = SeedableRng::seed_from_u64(index as u64);
 
         // pending edges and node updates.
         let mut edge_list = Vec::new();
@@ -36,8 +32,13 @@ fn main() {
         worker.dataflow::<usize,_,_>(move |scope| {
 
             // generate part of a random graph.
-            let graph = (0..edges / peers)
-                .map(move |_| (rng.random_range(0..nodes as u32), rng.random_range(0..nodes as u32)))
+            use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+            let hasher = BuildHasherDefault::<DefaultHasher>::new();
+            let graph =
+            (0..edges/peers)
+                .map(move |i| (hasher.hash_one(&(i,index,0)) as usize % nodes,
+                               hasher.hash_one(&(i,index,1)) as usize % nodes))
+                .map(|(src,dst)| (src as u32, dst as u32))
                 .to_stream(scope);
 
             // define a loop variable, for the (node, worker) pairs.

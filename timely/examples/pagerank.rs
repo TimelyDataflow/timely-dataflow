@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use rand::{RngExt, SeedableRng, rngs::SmallRng};
 
 use timely::dataflow::{InputHandle, ProbeHandle};
 use timely::dataflow::operators::{Feedback, ConnectLoop, Probe};
@@ -155,11 +154,16 @@ fn main() {
         let nodes: usize = std::env::args().nth(1).unwrap().parse().unwrap();
         let edges: usize = std::env::args().nth(2).unwrap().parse().unwrap();
 
-        let mut rng1: SmallRng = SeedableRng::seed_from_u64(worker.index() as u64);
-        let mut rng2: SmallRng = SeedableRng::seed_from_u64(worker.index() as u64);
+        let index = worker.index();
+        // Generate roughly random data.
+        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+        let hasher = BuildHasherDefault::<DefaultHasher>::new();
+        let mut insert = (0..).map(move |i| (hasher.hash_one(&(i,index,0)) as usize % nodes,
+                                             hasher.hash_one(&(i,index,1)) as usize % nodes));
+        let remove = insert.clone();
 
-        for _ in 0 .. edges / worker.peers() {
-            input.send(((rng1.random_range(0..nodes), rng1.random_range(0..nodes)), 1));
+        for ins in (&mut insert).take(edges / worker.peers()) {
+            input.send((ins, 1));
         }
 
         input.advance_to(1);
@@ -168,10 +172,10 @@ fn main() {
             worker.step();
         }
 
-        for i in 1 .. 1000 {
-            input.send(((rng1.random_range(0..nodes), rng1.random_range(0..nodes)), 1));
-            input.send(((rng2.random_range(0..nodes), rng2.random_range(0..nodes)), -1));
-            input.advance_to(i + 1);
+        for (ins, del) in insert.zip(remove).take(1000) {
+            input.send((ins, 1));
+            input.send((del,-1));
+            input.advance_to(input.time() + 1);
             while probe.less_than(input.time()) {
                 worker.step();
             }
