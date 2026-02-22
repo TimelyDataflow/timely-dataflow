@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
 
-use rand::{RngExt, SeedableRng, rngs::SmallRng};
-
 use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Exchange, Probe};
 use timely::dataflow::operators::generic::operator::Operator;
@@ -31,10 +29,14 @@ fn main() {
                  .probe_with(&probe);
         });
 
-        let mut rng: SmallRng = SeedableRng::seed_from_u64(index as u64);
+        // Generate roughly random data.
+        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+        let hasher = BuildHasherDefault::<DefaultHasher>::new();
+        let insert = (0..).map(move |i| (hasher.hash_one(&(i,index,0)) as usize % nodes,
+                                         hasher.hash_one(&(i,index,1)) as usize % nodes));
 
-        for edge in 0..(edges / peers) {
-            input.send((rng.random_range(0..nodes), rng.random_range(0..nodes)));
+        for (edge, arc) in insert.take(edges / peers).enumerate() {
+            input.send(arc);
             if edge % batch == (batch - 1) {
                 let next = input.epoch() + 1;
                 input.advance_to(next);

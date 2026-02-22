@@ -34,6 +34,3 @@ timely_logging = { path = "../logging", version = "0.26" }
 timely_communication = { path = "../communication", version = "0.26", default-features = false }
 timely_container = { path = "../container", version = "0.26" }
 smallvec = { version = "1.15.1", features = ["serde", "const_generics"] }
-
-[dev-dependencies]
-rand = { version = "0.10" }

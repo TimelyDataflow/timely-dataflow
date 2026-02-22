@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use rand::{RngExt, SeedableRng, rngs::SmallRng};
-
 use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Probe};
 use timely::dataflow::operators::generic::Operator;
@@ -72,7 +70,13 @@ fn main() {
                 .probe_with(&probe);
         });
 
-        let mut rng: SmallRng = SeedableRng::seed_from_u64(index as u64);
+        // Generate roughly random data.
+        use std::hash::{BuildHasher, BuildHasherDefault, DefaultHasher};
+        let hasher = BuildHasherDefault::<DefaultHasher>::new();
+        let mut insert = (0..).map(move |i| (hasher.hash_one(&(i,index,0)) % keys,
+                                             hasher.hash_one(&(i,index,1)) % keys,
+                                             hasher.hash_one(&(i,index,2)) % keys,
+                                             hasher.hash_one(&(i,index,3)) % keys));
 
         let timer = std::time::Instant::now();
 
@@ -81,9 +85,9 @@ fn main() {
 
             // Send some amount of data, no more than `batch`.
             let to_send = std::cmp::min(batch, vals/peers - sent);
-            for _ in 0 .. to_send {
-                input1.send((rng.random_range(0..keys), rng.random_range(0..keys)));
-                input2.send((rng.random_range(0..keys), rng.random_range(0..keys)));
+            for (src0, dst0, src1, dst1) in (&mut insert).take(to_send) {
+                input1.send((src0, dst0));
+                input2.send((src1, dst1));
             }
             sent += to_send;
 
