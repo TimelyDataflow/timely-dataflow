@@ -6,7 +6,7 @@ use columnar::Index;
 use timely::Accountable;
 use timely::container::CapacityContainerBuilder;
 use timely::dataflow::channels::pact::{ExchangeCore, Pipeline};
-use timely::dataflow::InputHandleCore;
+use timely::dataflow::InputHandle;
 use timely::dataflow::operators::{InspectCore, Operator, Probe};
 use timely::dataflow::ProbeHandle;
 
@@ -32,7 +32,7 @@ fn main() {
 
     // initializes and runs a timely dataflow.
     timely::execute(config, |worker| {
-        let mut input = <InputHandleCore<_, CapacityContainerBuilder<Container>>>::new();
+        let mut input = <InputHandle<_, CapacityContainerBuilder<Container>>>::new();
         let probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output

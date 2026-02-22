@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::ExchangeData;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
 
@@ -26,8 +26,8 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
-    /// use timely::dataflow::operators::aggregation::StateMachine;
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::vec::{Map, aggregation::StateMachine};
     ///
     /// timely::example(|scope| {
     ///
@@ -51,17 +51,17 @@ pub trait StateMachine<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> {
         I: IntoIterator<Item=R>,                    // type of output iterator
         F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
         H: Fn(&K)->u64+'static,                     // "hash" function for keys
-    >(self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq ;
+    >(self, fold: F, hash: H) -> StreamVec<S, R> where S::Timestamp : Hash+Eq ;
 }
 
-impl<S: Scope, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<S, K, V> for Stream<S, (K, V)> {
+impl<S: Scope, K: ExchangeData+Hash+Eq+Clone, V: ExchangeData> StateMachine<S, K, V> for StreamVec<S, (K, V)> {
     fn state_machine<
             R: 'static,                                 // output type
             D: Default+'static,                         // per-key state (data)
             I: IntoIterator<Item=R>,                    // type of output iterator
             F: Fn(&K, V, &mut D)->(bool, I)+'static,    // state update logic
             H: Fn(&K)->u64+'static,                     // "hash" function for keys
-        >(self, fold: F, hash: H) -> Stream<S, R> where S::Timestamp : Hash+Eq {
+        >(self, fold: F, hash: H) -> StreamVec<S, R> where S::Timestamp : Hash+Eq {
 
         let mut pending: HashMap<_, Vec<(K, V)>> = HashMap::new();   // times -> (keys -> state)
         let mut states = HashMap::new();    // keys -> state

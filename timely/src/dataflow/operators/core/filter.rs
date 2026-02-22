@@ -11,8 +11,8 @@ pub trait Filter<C: DrainContainer> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::core::{Filter, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::vec::Filter;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)

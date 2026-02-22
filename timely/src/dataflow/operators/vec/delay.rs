@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::order::{PartialOrder, TotalOrder};
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Methods to advance the timestamps of records or batches of records.
@@ -22,7 +22,8 @@ pub trait Delay<G: Scope, D: 'static> {
     /// and delays each element `i` to time `i`.
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay, Operator};
+    /// use timely::dataflow::operators::{ToStream, Operator};
+    /// use timely::dataflow::operators::vec::Delay;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -49,7 +50,8 @@ pub trait Delay<G: Scope, D: 'static> {
     /// and delays each element `i` to time `i`.
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay, Operator};
+    /// use timely::dataflow::operators::{ToStream, Operator};
+    /// use timely::dataflow::operators::vec::Delay;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -77,7 +79,8 @@ pub trait Delay<G: Scope, D: 'static> {
     /// and delays each batch (there is just one) to time `1`.
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay, Operator};
+    /// use timely::dataflow::operators::{ToStream, Operator};
+    /// use timely::dataflow::operators::vec::Delay;
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
@@ -93,7 +96,7 @@ pub trait Delay<G: Scope, D: 'static> {
     fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(self, func: L) -> Self;
 }
 
-impl<G: Scope<Timestamp: ::std::hash::Hash>, D: 'static> Delay<G, D> for Stream<G, D> {
+impl<G: Scope<Timestamp: ::std::hash::Hash>, D: 'static> Delay<G, D> for StreamVec<G, D> {
     fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(self, mut func: L) -> Self {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {

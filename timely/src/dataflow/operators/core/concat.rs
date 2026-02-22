@@ -15,7 +15,9 @@ pub trait Concat<G: Scope, C> {
     /// timely::example(|scope| {
     ///
     ///     let stream = (0..10).to_stream(scope);
-    ///     stream.clone().concat(stream)
+    ///     stream.clone()
+    ///           .concat(stream)
+    ///           .container::<Vec<_>>()
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
@@ -43,6 +45,7 @@ pub trait Concatenate<G: Scope, C> {
     ///                        (0..10).to_stream(scope)];
     ///
     ///     scope.concatenate(streams)
+    ///          .container::<Vec<_>>()
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```

@@ -21,12 +21,14 @@ pub trait Feedback<G: Scope> {
     /// # Examples
     /// ```
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{Feedback, ConnectLoop, ToStream, Concat, Inspect, BranchWhen};
+    /// use timely::dataflow::operators::{Feedback, ConnectLoop, ToStream, Concat, Inspect};
+    /// use timely::dataflow::operators::vec::BranchWhen;
     ///
     /// timely::example(|scope| {
     ///     // circulate 0..10 for 100 iterations.
     ///     let (handle, cycle) = scope.feedback(1);
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
     ///            .branch_when(|t| t < &100).1
@@ -47,13 +49,15 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     /// # Examples
     /// ```
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect, BranchWhen};
+    /// use timely::dataflow::operators::{LoopVariable, ConnectLoop, ToStream, Concat, Inspect};
+    /// use timely::dataflow::operators::vec::BranchWhen;
     ///
     /// timely::example(|scope| {
     ///     // circulate 0..10 for 100 iterations.
     ///     scope.iterative::<usize,_,_>(|inner| {
     ///         let (handle, cycle) = inner.loop_variable(1);
     ///         (0..10).to_stream(inner)
+    ///                .container::<Vec<_>>()
     ///                .concat(cycle)
     ///                .inspect(|x| println!("seen: {:?}", x))
     ///                .branch_when(|t| t.inner < 100).1
@@ -89,12 +93,14 @@ pub trait ConnectLoop<G: Scope, C: Container> {
     /// # Examples
     /// ```
     /// use timely::dataflow::Scope;
-    /// use timely::dataflow::operators::{Feedback, ConnectLoop, ToStream, Concat, Inspect, BranchWhen};
+    /// use timely::dataflow::operators::{Feedback, ConnectLoop, ToStream, Concat, Inspect};
+    /// use timely::dataflow::operators::vec::BranchWhen;
     ///
     /// timely::example(|scope| {
     ///     // circulate 0..10 for 100 iterations.
     ///     let (handle, cycle) = scope.feedback(1);
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
     ///            .branch_when(|t| t < &100).1

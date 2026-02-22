@@ -10,7 +10,7 @@
 //! use timely::dataflow::operators::{Enter, Leave, ToStream, Inspect};
 //!
 //! timely::example(|outer| {
-//!     let stream = (0..9).to_stream(outer);
+//!     let stream = (0..9).to_stream(outer).container::<Vec<_>>();
 //!     let output = outer.region(|inner| {
 //!         stream.enter(inner)
 //!               .inspect(|x| println!("in nested scope: {:?}", x))
@@ -44,7 +44,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     /// use timely::dataflow::operators::{Enter, Leave, ToStream};
     ///
     /// timely::example(|outer| {
-    ///     let stream = (0..9).to_stream(outer);
+    ///     let stream = (0..9).to_stream(outer).container::<Vec<_>>();
     ///     let output = outer.region(|inner| {
     ///         stream.enter(inner).leave()
     ///     });
@@ -94,7 +94,7 @@ pub trait Leave<G: Scope, C> {
     /// use timely::dataflow::operators::{Enter, Leave, ToStream};
     ///
     /// timely::example(|outer| {
-    ///     let stream = (0..9).to_stream(outer);
+    ///     let stream = (0..9).to_stream(outer).container::<Vec<_>>();
     ///     let output = outer.region(|inner| {
     ///         stream.enter(inner).leave()
     ///     });
@@ -243,7 +243,7 @@ mod test {
     fn test_nested() {
 
         use crate::dataflow::{InputHandle, ProbeHandle};
-        use crate::dataflow::operators::{Input, Inspect, Probe};
+        use crate::dataflow::operators::{vec::Input, Inspect, Probe};
 
         use crate::dataflow::Scope;
         use crate::dataflow::operators::{Enter, Leave};

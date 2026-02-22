@@ -1,8 +1,8 @@
 //! Broadcast records to all workers.
 
 use crate::ExchangeData;
-use crate::dataflow::{Stream, Scope};
-use crate::dataflow::operators::{Map, Exchange};
+use crate::dataflow::{StreamVec, Scope};
+use crate::dataflow::operators::{vec::Map, Exchange};
 
 /// Broadcast records to all workers.
 pub trait Broadcast<D: ExchangeData> {
@@ -10,7 +10,7 @@ pub trait Broadcast<D: ExchangeData> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Broadcast, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect, vec::Broadcast};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
@@ -21,8 +21,8 @@ pub trait Broadcast<D: ExchangeData> {
     fn broadcast(self) -> Self;
 }
 
-impl<G: Scope, D: ExchangeData + Clone> Broadcast<D> for Stream<G, D> {
-    fn broadcast(self) -> Stream<G, D> {
+impl<G: Scope, D: ExchangeData + Clone> Broadcast<D> for StreamVec<G, D> {
+    fn broadcast(self) -> StreamVec<G, D> {
 
         // NOTE: Simplified implementation due to underlying motion
         // in timely dataflow internals. Optimize once they have

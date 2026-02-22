@@ -47,6 +47,7 @@ pub trait Capture<T: Timestamp, C: Container> : Sized {
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10).to_stream(scope1)
+    ///                .container::<Vec<_>>()
     ///                .capture_into(handle1)
     ///     );
     ///
@@ -89,6 +90,7 @@ pub trait Capture<T: Timestamp, C: Container> : Sized {
     ///     s.spawn(move || timely::example(move |scope1| {
     ///         (0..10u64)
     ///             .to_stream(scope1)
+    ///             .container::<Vec<_>>()
     ///             .capture_into(EventWriter::new(send))
     ///     }));
     ///     s.spawn(move || timely::example(move |scope2| {

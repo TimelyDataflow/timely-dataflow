@@ -19,7 +19,8 @@ pub trait Reclock<S: Scope> {
     /// # Examples
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Delay, Map, Reclock, Capture};
+    /// use timely::dataflow::operators::{ToStream, Reclock, Capture};
+    /// use timely::dataflow::operators::vec::{Delay, Map};
     /// use timely::dataflow::operators::capture::Extract;
     ///
     /// let captured = timely::example(|scope| {

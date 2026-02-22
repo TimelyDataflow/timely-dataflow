@@ -29,7 +29,9 @@ pub trait Operator<G: Scope, C1> {
     /// use timely::dataflow::channels::pact::Pipeline;
     ///
     /// timely::example(|scope| {
-    ///     (0u64..10).to_stream(scope)
+    ///     (0u64..10)
+    ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&12));
     ///             let mut notificator = FrontierNotificator::default();
@@ -75,6 +77,7 @@ pub trait Operator<G: Scope, C1> {
     /// timely::example(|scope| {
     ///     (0u64..10)
     ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .unary_notify(Pipeline, "example", None, move |input, output, notificator| {
     ///             input.for_each_time(|time, data| {
     ///                 output.session(&time).give_containers(data);
@@ -105,7 +108,9 @@ pub trait Operator<G: Scope, C1> {
     /// use timely::dataflow::Scope;
     ///
     /// timely::example(|scope| {
-    ///     (0u64..10).to_stream(scope)
+    ///     (0u64..10)
+    ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .unary(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&12));
     ///             move |input, output| {
@@ -140,8 +145,8 @@ pub trait Operator<G: Scope, C1> {
     ///
     /// timely::execute(timely::Config::thread(), |worker| {
     ///    let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
-    ///        let (in1_handle, in1) = scope.new_input();
-    ///        let (in2_handle, in2) = scope.new_input();
+    ///        let (in1_handle, in1) = scope.new_input::<Vec<_>>();
+    ///        let (in2_handle, in2) = scope.new_input::<Vec<_>>();
     ///        in1.binary_frontier(in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
     ///            let mut notificator = FrontierNotificator::default();
     ///            let mut stash = HashMap::new();
@@ -199,8 +204,8 @@ pub trait Operator<G: Scope, C1> {
     ///
     /// timely::execute(timely::Config::thread(), |worker| {
     ///    let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
-    ///        let (in1_handle, in1) = scope.new_input();
-    ///        let (in2_handle, in2) = scope.new_input();
+    ///        let (in1_handle, in1) = scope.new_input::<Vec<_>>();
+    ///        let (in2_handle, in2) = scope.new_input::<Vec<_>>();
     ///
     ///        in1.binary_notify(in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
     ///            input1.for_each_time(|time, data| {
@@ -249,8 +254,9 @@ pub trait Operator<G: Scope, C1> {
     /// use timely::dataflow::Scope;
     ///
     /// timely::example(|scope| {
-    ///     let stream2 = (0u64..10).to_stream(scope);
-    ///     (0u64..10).to_stream(scope)
+    ///     let stream1 = (0u64..10).to_stream(scope).container::<Vec<_>>();
+    ///     let stream2 = (0u64..10).to_stream(scope).container::<Vec<_>>();
+    ///     stream1
     ///         .binary(stream2, Pipeline, Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&12));
     ///             move |input1, input2, output| {
@@ -288,6 +294,7 @@ pub trait Operator<G: Scope, C1> {
     /// timely::example(|scope| {
     ///     (0u64..10)
     ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .sink(Pipeline, "example", |(input, frontier)| {
     ///             input.for_each_time(|time, data| {
     ///                 for datum in data.flatten() {

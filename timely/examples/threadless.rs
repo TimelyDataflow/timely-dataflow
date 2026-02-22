@@ -16,6 +16,7 @@ fn main() {
     worker.dataflow(|scope| {
         input
             .to_stream(scope)
+            .container::<Vec<_>>()
             .inspect(|x| println!("{:?}", x))
             .probe_with(&probe);
     });

@@ -33,6 +33,7 @@
 //!
 //!     worker.dataflow::<u64,_,_>(|scope1|
 //!         (0..10).to_stream(scope1)
+//!                .container::<Vec<_>>()
 //!                .capture_into(handle1)
 //!     );
 //!
@@ -69,6 +70,7 @@
 //!     worker.dataflow::<u64,_,_>(|scope1|
 //!         (0..10u64)
 //!             .to_stream(scope1)
+//!             .container::<Vec<_>>()
 //!             .capture_into(EventWriter::new(send))
 //!     );
 //!

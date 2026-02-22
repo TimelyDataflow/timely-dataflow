@@ -42,7 +42,6 @@ pub trait UnorderedInput<G: Scope> {
     /// use timely::*;
     /// use timely::dataflow::operators::{capture::Extract, Capture};
     /// use timely::dataflow::operators::core::{UnorderedInput};
-    /// use timely::dataflow::Stream;
     ///
     /// // get send and recv endpoints, wrap send to share
     /// let (send, recv) = ::std::sync::mpsc::channel();

@@ -50,7 +50,7 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
 
-        let stream = (0 .. 10).to_stream(scope);
+        let stream = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         // Create a new scope with the same (u64) timestamp.
         let result = scope.scoped::<u64,_,_>("SubScope", |subscope| {
@@ -80,7 +80,7 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
 
-        let stream = (0 .. 10).to_stream(scope);
+        let stream = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         // Create a new scope with the same (u64) timestamp.
         let result = scope.region(|subscope| {
@@ -112,7 +112,7 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
 
-        let stream = (0 .. 10).to_stream(scope);
+        let stream = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         // Create a new scope with a (u64, u32) timestamp.
         let result = scope.iterative::<u32,_,_>(|subscope| {

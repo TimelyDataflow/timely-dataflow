@@ -16,14 +16,13 @@ fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
 
-        let mut input = InputHandle::<(), String>::new();
+        let mut input = InputHandle::new();
 
         // define a new dataflow
-        worker.dataflow(|scope| {
+        worker.dataflow::<(),_,_>(|scope| {
 
-            let stream1 = input.to_stream(scope);
-            let stream2 = (0 .. 10).to_stream(scope);
-
+            let stream1 = input.to_stream(scope).container::<Vec<String>>();
+            let stream2 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
         });
 
     }).unwrap();

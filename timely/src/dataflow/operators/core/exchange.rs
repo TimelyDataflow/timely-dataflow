@@ -19,6 +19,7 @@ pub trait Exchange<C: DrainContainer> {
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .exchange(|x| *x)
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });

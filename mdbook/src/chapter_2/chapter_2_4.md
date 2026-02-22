@@ -17,6 +17,7 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
+            .container::<Vec<_>>()
             .unary(Pipeline, "increment", |capability, info| {
 
                 move |input, output| {
@@ -131,6 +132,7 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
+            .container::<Vec<_>>()
             .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
@@ -179,8 +181,8 @@ use timely::dataflow::channels::pact::Pipeline;
 fn main() {
     timely::example(|scope| {
 
-        let in1 = (0 .. 10).to_stream(scope);
-        let in2 = (0 .. 10).to_stream(scope);
+        let in1 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
+        let in2 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
@@ -230,8 +232,8 @@ use timely::dataflow::channels::pact::Pipeline;
 fn main() {
     timely::example(|scope| {
 
-        let in1 = (0 .. 10).to_stream(scope);
-        let in2 = (0 .. 10).to_stream(scope);
+        let in1 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
+        let in2 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 

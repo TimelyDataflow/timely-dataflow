@@ -97,6 +97,7 @@ impl Config {
 ///
 /// timely::example(|scope| {
 ///     (0..10).to_stream(scope)
+///            .container::<Vec<_>>()
 ///            .inspect(|x| println!("seen: {:?}", x));
 /// });
 /// ```
@@ -112,6 +113,7 @@ impl Config {
 ///
 /// let data = timely::example(|scope| {
 ///     (0..10).to_stream(scope)
+///            .container::<Vec<_>>()
 ///            .inspect(|x| println!("seen: {:?}", x))
 ///            .capture()
 /// });
@@ -144,6 +146,7 @@ where
 /// timely::execute_directly(|worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
+///                .container::<Vec<_>>()
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
 /// });
@@ -188,6 +191,7 @@ where
 /// timely::execute(timely::Config::process(3), |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
+///                .container::<Vec<_>>()
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
 /// }).unwrap();
@@ -211,6 +215,7 @@ where
 ///     let send = send.lock().unwrap().clone();
 ///     worker.dataflow::<(),_,_>(move |scope| {
 ///         (0..10).to_stream(scope)
+///                .container::<Vec<_>>()
 ///                .inspect(|x| println!("seen: {:?}", x))
 ///                .capture_into(send);
 ///     });
@@ -266,6 +271,7 @@ where
 /// timely::execute_from_args(std::env::args(), |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
+///                .container::<Vec<_>>()
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
 /// }).unwrap();
@@ -305,6 +311,7 @@ pub fn execute_from_args<I, T, F>(iter: I, func: F) -> Result<WorkerGuards<T>,St
 /// timely::execute::execute_from(builders, other, WorkerConfig::default(), |worker| {
 ///     worker.dataflow::<(),_,_>(|scope| {
 ///         (0..10).to_stream(scope)
+///                .container::<Vec<_>>()
 ///                .inspect(|x| println!("seen: {:?}", x));
 ///     })
 /// }).unwrap();

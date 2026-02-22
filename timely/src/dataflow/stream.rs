@@ -43,8 +43,8 @@ impl<S: Scope, C: Clone+'static> Clone for StreamCore<S, C> {
     }
 }
 
-/// A stream batching data in vectors.
-pub type Stream<S, D> = StreamCore<S, Vec<D>>;
+/// A stream batching data in owning vectors.
+pub type StreamVec<S, D> = StreamCore<S, Vec<D>>;
 
 impl<S: Scope, C> StreamCore<S, C> {
     /// Connects the stream to a destination.
@@ -112,6 +112,7 @@ mod tests {
         crate::example(|scope| {
             let _ = [NotClone]
                 .to_stream(scope)
+                .container::<Vec<_>>()
                 .sink(Pipeline, "check non-clone", |(input, _frontier)| {
                     input.for_each(|_cap, data| {
                         for datum in data.drain(..) {

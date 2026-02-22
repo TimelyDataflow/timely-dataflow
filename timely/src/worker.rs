@@ -309,6 +309,7 @@ impl<A: Allocate> Worker<A> {
     ///     worker.dataflow::<usize,_,_>(|scope| {
     ///         (0 .. 10)
     ///             .to_stream(scope)
+    ///             .container::<Vec<_>>()
     ///             .inspect(|x| println!("{:?}", x));
     ///     });
     ///
@@ -340,6 +341,7 @@ impl<A: Allocate> Worker<A> {
     ///     worker.dataflow::<usize,_,_>(|scope| {
     ///         (0 .. 10)
     ///             .to_stream(scope)
+    ///             .container::<Vec<_>>()
     ///             .inspect(|x| println!("{:?}", x));
     ///     });
     ///
@@ -446,6 +448,7 @@ impl<A: Allocate> Worker<A> {
     ///     worker.dataflow::<usize,_,_>(|scope| {
     ///         (0 .. 10)
     ///             .to_stream(scope)
+    ///             .container::<Vec<_>>()
     ///             .inspect(|x| println!("{:?}", x))
     ///             .probe()
     ///     });
@@ -475,6 +478,7 @@ impl<A: Allocate> Worker<A> {
     ///     worker.dataflow::<usize,_,_>(|scope| {
     ///         (0 .. 10)
     ///             .to_stream(scope)
+    ///             .container::<Vec<_>>()
     ///             .inspect(|x| println!("{:?}", x))
     ///             .probe()
     ///     });

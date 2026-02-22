@@ -14,7 +14,7 @@ fn operator_scaling(scale: u64) {
     timely::execute(Config::thread(), move |worker| {
         let mut input = InputHandle::new();
         worker.dataflow::<u64, _, _>(|scope| {
-            use timely::dataflow::operators::Partition;
+            use timely::dataflow::operators::vec::Partition;
             let parts =
             scope
                 .input_from(&mut input)
@@ -58,7 +58,7 @@ fn subgraph_scaling(scale: u64) {
     timely::execute(Config::thread(), move |worker| {
         let mut input = InputHandle::new();
         worker.dataflow::<u64, _, _>(|scope| {
-            use timely::dataflow::operators::Partition;
+            use timely::dataflow::operators::vec::Partition;
             let parts =
             scope
                 .input_from(&mut input)

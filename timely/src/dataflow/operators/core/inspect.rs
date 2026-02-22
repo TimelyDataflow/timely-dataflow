@@ -14,10 +14,11 @@ where
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
@@ -34,10 +35,11 @@ where
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect_time(|t, x| println!("seen at: {:?}\t{:?}", t, x));
     /// });
     /// ```
@@ -56,10 +58,11 @@ where
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
@@ -78,10 +81,11 @@ where
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect_core(|event| {
     ///                match event {
     ///                    Ok((time, data)) => println!("seen at: {:?}\t{:?} records", time, data.len()),
@@ -111,10 +115,11 @@ pub trait InspectCore<G: Scope, C> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, InspectCore};
+    /// use timely::dataflow::operators::{ToStream, InspectCore};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect_container(|event| {
     ///                match event {
     ///                    Ok((time, data)) => println!("seen at: {:?}\t{:?} records", time, data.len()),

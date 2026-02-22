@@ -39,7 +39,7 @@ pub trait Input : Scope {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, Inspect};
+    /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
@@ -75,7 +75,7 @@ pub trait Input : Scope {
     /// ```
     /// use std::rc::Rc;
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, InspectCore};
+    /// use timely::dataflow::operators::{Input, InspectCore};
     /// use timely::container::CapacityContainerBuilder;
     ///
     /// // construct and execute a timely dataflow
@@ -107,14 +107,14 @@ pub trait Input : Scope {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, Inspect};
-    /// use timely::dataflow::operators::core::input::Handle;
+    /// use timely::dataflow::InputHandle;
+    /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = Handle::new();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
     ///              .container::<Vec<_>>()
@@ -230,14 +230,14 @@ impl<T: Timestamp, C: Container+Clone> Handle<T, CapacityContainerBuilder<C>> {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, Inspect};
-    /// use timely::dataflow::operators::core::input::Handle;
+    /// use timely::dataflow::InputHandle;
+    /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = Handle::new();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
     ///              .container::<Vec<_>>()
@@ -270,15 +270,15 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, Inspect};
-    /// use timely::dataflow::operators::core::input::Handle;
+    /// use timely::dataflow::InputHandle;
+    /// use timely::dataflow::operators::{Input, Inspect};
     /// use timely_container::CapacityContainerBuilder;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = Handle::<_, CapacityContainerBuilder<_>>::new_with_builder();
+    ///     let mut input = InputHandle::<_, CapacityContainerBuilder<_>>::new_with_builder();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
     ///              .container::<Vec<_>>()
@@ -309,14 +309,14 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, Inspect};
-    /// use timely::dataflow::operators::core::input::Handle;
+    /// use timely::dataflow::InputHandle;
+    /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = Handle::new();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
     ///         input.to_stream(scope)
     ///              .container::<Vec<_>>()
@@ -417,14 +417,14 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, InspectCore};
-    /// use timely::dataflow::operators::core::input::Handle;
+    /// use timely::dataflow::InputHandle;
+    /// use timely::dataflow::operators::{Input, InspectCore};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = Handle::new();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
     ///              .inspect_container(|x| println!("hello {:?}", x));
@@ -498,14 +498,14 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     /// # Examples
     /// ```
     /// use timely::*;
-    /// use timely::dataflow::operators::core::{Input, Inspect};
-    /// use timely::dataflow::operators::core::input::Handle;
+    /// use timely::dataflow::InputHandle;
+    /// use timely::dataflow::operators::{Input, Inspect};
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = Handle::new();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
     ///              .container::<Vec<_>>()

@@ -25,6 +25,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|
             scope.input_from(&mut input)
+                 .container::<Vec<_>>()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()

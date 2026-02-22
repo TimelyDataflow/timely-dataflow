@@ -17,6 +17,7 @@ pub trait SharedStream<S: Scope, C> {
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .shared()
     ///            .inspect_container(|x| println!("seen: {:?}", x));
     /// });

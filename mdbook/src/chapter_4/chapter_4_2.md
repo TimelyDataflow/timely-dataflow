@@ -13,7 +13,8 @@ We are going to check the [Collatz conjecture](https://en.wikipedia.org/wiki/Col
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Feedback, ToStream, Concat, Inspect, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter, BranchWhen};
 
 fn main() {
     timely::example(|scope| {
@@ -49,7 +50,8 @@ Perhaps you are a very clever person, and you've realized that we don't need to 
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Feedback, ToStream, Concat, Inspect, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter, Partition};
 
 fn main() {
     timely::example(|scope| {
@@ -87,7 +89,8 @@ Of course, you can do all of this in a nested scope, if that is appropriate. In 
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, Enter, Concat, Inspect, LoopVariable, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter};
 use timely::dataflow::Scope;
 
 fn main() {

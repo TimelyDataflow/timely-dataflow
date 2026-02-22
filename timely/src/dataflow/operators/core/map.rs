@@ -12,11 +12,12 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::core::{Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::core::Map;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .map(|x| x + 1)
     ///            .container::<Vec<_>>()
     ///            .inspect(|x| println!("seen: {:?}", x));
@@ -33,11 +34,12 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::core::{Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::core::Map;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .flat_map(|x| (0..x))
     ///            .container::<Vec<_>>()
     ///            .inspect(|x| println!("seen: {:?}", x));
@@ -59,12 +61,14 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{Capture, ToStream, core::Map};
+    /// use timely::dataflow::operators::{Capture, ToStream};
+    /// use timely::dataflow::operators::core::Map;
     /// use timely::dataflow::operators::capture::Extract;
     ///
     /// let data = timely::example(|scope| {
     ///     (0..10i32)
     ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .flat_map_builder(|x| x + 1)
     ///         .map(|x| x + 1)
     ///         .map(|x| x + 1)
@@ -152,7 +156,7 @@ mod tests {
     #[test]
     fn test_builder() {
         let data = crate::example(|scope| {
-            let stream = (0..10i32).to_stream(scope);
+            let stream = (0..10i32).to_stream(scope).container::<Vec<_>>();
             stream.flat_map_builder(|x| x + 1)
                 .map(|x| x + 1)
                 .map(|x| x + 1)

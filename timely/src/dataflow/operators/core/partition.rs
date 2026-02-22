@@ -13,12 +13,13 @@ pub trait Partition<G: Scope, C: DrainContainer> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::core::{Partition, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::core::Partition;
     /// use timely_container::CapacityContainerBuilder;
     ///
     /// timely::example(|scope| {
     ///     let streams = (0..10).to_stream(scope)
+    ///                          .container::<Vec<_>>()
     ///                          .partition::<CapacityContainerBuilder<Vec<_>>, _, _>(3, |x| (x % 3, x));
     ///
     ///     for (idx, stream) in streams.into_iter().enumerate() {

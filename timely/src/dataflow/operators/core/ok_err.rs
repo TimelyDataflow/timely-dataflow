@@ -17,12 +17,13 @@ pub trait OkErr<S: Scope, C: DrainContainer> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::core::{OkErr, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::core::OkErr;
     ///
     /// timely::example(|scope| {
     ///     let (odd, even) = (0..10)
     ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .ok_err(|x| if x % 2 == 0 { Ok(x) } else { Err(x) });
     ///
     ///     even.container::<Vec<_>>().inspect(|x| println!("even: {:?}", x));

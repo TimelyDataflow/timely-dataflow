@@ -1,7 +1,7 @@
 //! Create new `Streams` connected to external inputs.
 
 use crate::container::CapacityContainerBuilder;
-use crate::dataflow::{Stream, ScopeParent, Scope};
+use crate::dataflow::{StreamVec, ScopeParent, Scope};
 use crate::dataflow::operators::core::{Input as InputCore};
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
@@ -11,11 +11,11 @@ use crate::dataflow::operators::core::{Input as InputCore};
 // NOTE : Experiments with &mut indicate that the borrow of 'a lives for too long.
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
-/// Create a new `Stream` and `Handle` through which to supply input.
+/// Create a new `StreamVec` and `Handle` through which to supply input.
 pub trait Input : Scope {
-    /// Create a new `Stream` and `Handle` through which to supply input.
+    /// Create a new `StreamVec` and `Handle` through which to supply input.
     ///
-    /// The `new_input` method returns a pair `(Handle, Stream)` where the `Stream` can be used
+    /// The `new_input` method returns a pair `(Handle, StreamVec)` where the `StreamVec` can be used
     /// immediately for timely dataflow construction, and the `Handle` is later used to introduce
     /// data into the timely dataflow computation.
     ///
@@ -33,7 +33,7 @@ pub trait Input : Scope {
     ///
     ///     // add an input and base computation off of it
     ///     let mut input = worker.dataflow(|scope| {
-    ///         let (input, stream) = scope.new_input();
+    ///         let (input, stream) = scope.new_input::<Vec<_>>();
     ///         stream.inspect(|x| println!("hello {:?}", x));
     ///         input
     ///     });
@@ -46,7 +46,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, Stream<Self, D>);
+    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, D>, StreamVec<Self, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -58,15 +58,16 @@ pub trait Input : Scope {
     /// ```
     /// use timely::*;
     /// use timely::dataflow::operators::{Input, Inspect};
-    /// use timely::dataflow::operators::input::Handle;
+    /// use timely::dataflow::InputHandle;
     ///
     /// // construct and execute a timely dataflow
     /// timely::execute(Config::thread(), |worker| {
     ///
     ///     // add an input and base computation off of it
-    ///     let mut input = Handle::new();
+    ///     let mut input = InputHandle::new();
     ///     worker.dataflow(|scope| {
     ///         scope.input_from(&mut input)
+    ///              .container::<Vec<_>>()
     ///              .inspect(|x| println!("hello {:?}", x));
     ///     });
     ///
@@ -78,16 +79,16 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> Stream<Self, D>;
+    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, D>) -> StreamVec<Self, D>;
 }
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, Stream<G, D>) {
+    fn new_input<D: Clone+'static>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, D>, StreamVec<G, D>) {
         InputCore::new_input(self)
     }
 
-    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> Stream<G, D> {
+    fn input_from<D: Clone+'static>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, D>) -> StreamVec<G, D> {
         InputCore::input_from(self, handle)
     }
 }
