@@ -51,6 +51,7 @@ fn main() {
         // build a new dataflow.
         worker.dataflow(|scope| {
             input.to_stream(scope)
+                 .container::<Vec<_>>()
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&mut probe);
         });
@@ -119,7 +120,7 @@ Rather than repeat all the code up above, I'm just going to show you the fragmen
 # extern crate timely;
 #
 # use timely::dataflow::{InputHandle, ProbeHandle};
-# use timely::dataflow::operators::{Inspect, Probe, Map};
+# use timely::dataflow::operators::{Inspect, Probe, vec::Map};
 #
 # fn main() {
 #     // initializes and runs a timely dataflow.
@@ -173,7 +174,7 @@ As before, I'm just going to show you the new code, which now lives just after `
 # extern crate timely;
 #
 # use timely::dataflow::{InputHandle, ProbeHandle};
-# use timely::dataflow::operators::{Inspect, Probe, Map};
+# use timely::dataflow::operators::{Inspect, Probe, vec::Map};
 #
 # use std::collections::HashMap;
 # use timely::dataflow::channels::pact::Exchange;

@@ -5,7 +5,7 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
@@ -47,6 +47,7 @@ pub trait Capture<T: Timestamp, C: Container> : Sized {
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10).to_stream(scope1)
+    ///                .container::<Vec<_>>()
     ///                .capture_into(handle1)
     ///     );
     ///
@@ -89,6 +90,7 @@ pub trait Capture<T: Timestamp, C: Container> : Sized {
     ///     s.spawn(move || timely::example(move |scope1| {
     ///         (0..10u64)
     ///             .to_stream(scope1)
+    ///             .container::<Vec<_>>()
     ///             .capture_into(EventWriter::new(send))
     ///     }));
     ///     s.spawn(move || timely::example(move |scope2| {
@@ -113,7 +115,7 @@ pub trait Capture<T: Timestamp, C: Container> : Sized {
     }
 }
 
-impl<S: Scope, C: Container> Capture<S::Timestamp, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container> Capture<S::Timestamp, C> for Stream<S, C> {
     fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());

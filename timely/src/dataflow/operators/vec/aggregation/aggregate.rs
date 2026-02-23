@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::ExchangeData;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
 
@@ -24,8 +24,8 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
-    /// use timely::dataflow::operators::aggregation::Aggregate;
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::vec::{Map, aggregation::Aggregate};
     ///
     /// timely::example(|scope| {
     ///
@@ -45,12 +45,13 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
     /// obviously do more efficiently; imagine we were doing a hash instead).
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
-    /// use timely::dataflow::operators::aggregation::Aggregate;
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::vec::{Map, aggregation::Aggregate};
     ///
     /// timely::example(|scope| {
     ///
-    ///     (0..10).to_stream(scope)
+    ///     (0..10)
+    ///         .to_stream(scope)
     ///         .map(|x| (x % 2, x))
     ///         .aggregate::<_,Vec<i32>,_,_,_>(
     ///             |_key, val, agg| { agg.push(val); },
@@ -64,16 +65,16 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
         self,
         fold: F,
         emit: E,
-        hash: H) -> Stream<S, R> where S::Timestamp: Eq;
+        hash: H) -> StreamVec<S, R> where S::Timestamp: Eq;
 }
 
-impl<S: Scope<Timestamp: Hash>, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
+impl<S: Scope<Timestamp: Hash>, K: ExchangeData+Clone+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for StreamVec<S, (K, V)> {
 
     fn aggregate<R: 'static, D: Default+'static, F: Fn(&K, V, &mut D)+'static, E: Fn(K, D)->R+'static, H: Fn(&K)->u64+'static>(
         self,
         fold: F,
         emit: E,
-        hash: H) -> Stream<S, R> where S::Timestamp: Eq {
+        hash: H) -> StreamVec<S, R> where S::Timestamp: Eq {
 
         let mut aggregates = HashMap::new();
         self.unary_notify(Exchange::new(move |(k, _)| hash(k)), "Aggregate", vec![], move |input, output, notificator| {

@@ -5,7 +5,7 @@ Let's start with what may be the simplest non-trivial timely dataflow program.
 ```rust
 # extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::{vec::ToStream, Inspect};
 
 timely::example(|scope| {
     (0..10).to_stream(scope)

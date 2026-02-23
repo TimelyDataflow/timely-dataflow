@@ -2,7 +2,7 @@
 
 use crate::container::CapacityContainerBuilder;
 use crate::dataflow::operators::core::Partition as PartitionCore;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::{Scope, StreamVec};
 
 /// Partition a stream of records into multiple streams.
 pub trait Partition<G: Scope, D: 'static, D2: 'static, F: Fn(D) -> (u64, D2)> {
@@ -10,7 +10,7 @@ pub trait Partition<G: Scope, D: 'static, D2: 'static, F: Fn(D) -> (u64, D2)> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Partition, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect, vec::Partition};
     ///
     /// timely::example(|scope| {
     ///     let mut streams = (0..10).to_stream(scope)
@@ -21,11 +21,11 @@ pub trait Partition<G: Scope, D: 'static, D2: 'static, F: Fn(D) -> (u64, D2)> {
     ///     streams.pop().unwrap().inspect(|x| println!("seen 0: {:?}", x));
     /// });
     /// ```
-    fn partition(self, parts: u64, route: F) -> Vec<Stream<G, D2>>;
+    fn partition(self, parts: u64, route: F) -> Vec<StreamVec<G, D2>>;
 }
 
-impl<G: Scope, D: 'static, D2: 'static, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D2, F> for Stream<G, D> {
-    fn partition(self, parts: u64, route: F) -> Vec<Stream<G, D2>> {
+impl<G: Scope, D: 'static, D2: 'static, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D2, F> for StreamVec<G, D> {
+    fn partition(self, parts: u64, route: F) -> Vec<StreamVec<G, D2>> {
         PartitionCore::partition::<CapacityContainerBuilder<_>, _, _>(self, parts, route)
     }
 }

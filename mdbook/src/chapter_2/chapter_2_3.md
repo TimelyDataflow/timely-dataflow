@@ -13,7 +13,7 @@ The following program should print out the numbers one through ten.
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -27,12 +27,12 @@ fn main() {
 }
 ```
 
-The closure `map` takes *owned* data as input, which means you are able to mutate it as you like without cloning or copying the data. For example, if you have a stream of `String` data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.
+This `map` operator consumes and produces *owned* data, which allows you to mutate the data without necessarily reallocating. For example, if you have a stream of `String` data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.
 
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -56,7 +56,7 @@ For example, the `map_in_place` method takes a closure which receives a mutable 
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -76,7 +76,7 @@ Alternately, the `flat_map` method takes input data and allows your closure to t
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -97,7 +97,7 @@ Another fundamental operation is *filtering*, in which a predicate dictates a su
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Filter};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Filter};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -122,7 +122,7 @@ The `partition` operator takes two arguments, a number of resulting streams to p
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Partition, Inspect};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Partition};
 
 fn main() {
     timely::example(|scope| {
@@ -143,7 +143,7 @@ In the other direction, `concat` takes two streams and produces one output strea
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Partition, Concat, Inspect};
+use timely::dataflow::operators::{ToStream, Concat, Inspect, vec::Partition};
 
 fn main() {
     timely::example(|scope| {
@@ -163,7 +163,7 @@ There is also a `concatenate` method defined for scopes which collects all strea
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Partition, Concatenate, Inspect};
+use timely::dataflow::operators::{ToStream, Concatenate, Inspect, vec::Partition};
 
 fn main() {
     timely::example(|scope| {

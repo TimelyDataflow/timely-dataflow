@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Accumulates records within a timestamp.
@@ -12,7 +12,8 @@ pub trait Accumulate<G: Scope, D: 'static> : Sized {
     /// # Examples
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Accumulate, Capture};
+    /// use timely::dataflow::operators::{ToStream, Capture};
+    /// use timely::dataflow::operators::vec::count::Accumulate;
     /// use timely::dataflow::operators::capture::Extract;
     ///
     /// let captured = timely::example(|scope| {
@@ -24,13 +25,14 @@ pub trait Accumulate<G: Scope, D: 'static> : Sized {
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(0, vec![45])]);
     /// ```
-    fn accumulate<A: Clone+'static>(self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A>;
+    fn accumulate<A: Clone+'static>(self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> StreamVec<G, A>;
     /// Counts the number of records observed at each time.
     ///
     /// # Examples
     ///
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Accumulate, Capture};
+    /// use timely::dataflow::operators::{ToStream, Capture};
+    /// use timely::dataflow::operators::vec::count::Accumulate;
     /// use timely::dataflow::operators::capture::Extract;
     ///
     /// let captured = timely::example(|scope| {
@@ -42,13 +44,13 @@ pub trait Accumulate<G: Scope, D: 'static> : Sized {
     /// let extracted = captured.extract();
     /// assert_eq!(extracted, vec![(0, vec![10])]);
     /// ```
-    fn count(self) -> Stream<G, usize> {
+    fn count(self) -> StreamVec<G, usize> {
         self.accumulate(0, |sum, data| *sum += data.len())
     }
 }
 
-impl<G: Scope<Timestamp: ::std::hash::Hash>, D: 'static> Accumulate<G, D> for Stream<G, D> {
-    fn accumulate<A: Clone+'static>(self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> Stream<G, A> {
+impl<G: Scope<Timestamp: ::std::hash::Hash>, D: 'static> Accumulate<G, D> for StreamVec<G, D> {
+    fn accumulate<A: Clone+'static>(self, default: A, logic: impl Fn(&mut A, &mut Vec<D>)+'static) -> StreamVec<G, A> {
 
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {

@@ -1,4 +1,4 @@
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, Exchange, Feedback, Concat, ConnectLoop, vec::{Map, BranchWhen}};
 
 fn main() {
 

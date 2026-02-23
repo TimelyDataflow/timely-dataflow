@@ -1,7 +1,7 @@
 //! Filters a stream by a predicate.
 
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
@@ -10,7 +10,8 @@ pub trait Filter<D> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Filter, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::vec::Filter;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
@@ -21,8 +22,8 @@ pub trait Filter<D> {
     fn filter<P: FnMut(&D)->bool+'static>(self, predicate: P) -> Self;
 }
 
-impl<G: Scope, D: 'static> Filter<D> for Stream<G, D> {
-    fn filter<P: FnMut(&D)->bool+'static>(self, mut predicate: P) -> Stream<G, D> {
+impl<G: Scope, D: 'static> Filter<D> for StreamVec<G, D> {
+    fn filter<P: FnMut(&D)->bool+'static>(self, mut predicate: P) -> StreamVec<G, D> {
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each_time(|time, data| {
                 let mut session = output.session(&time);

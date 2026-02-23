@@ -39,7 +39,8 @@ fn main() {
                 .map(move |i| (hasher.hash_one(&(i,index,0)) as usize % nodes,
                                hasher.hash_one(&(i,index,1)) as usize % nodes))
                 .map(|(src,dst)| (src as u32, dst as u32))
-                .to_stream(scope);
+                .to_stream(scope)
+                .container::<Vec<_>>();
 
             // define a loop variable, for the (node, worker) pairs.
             let (handle, stream) = scope.feedback(1usize);

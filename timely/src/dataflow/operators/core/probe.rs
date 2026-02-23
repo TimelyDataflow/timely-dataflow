@@ -11,7 +11,7 @@ use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Stream, Scope};
 use crate::Container;
 use crate::dataflow::channels::Message;
 
@@ -30,7 +30,7 @@ pub trait Probe<G: Scope, C: Container> {
     ///
     ///     // add an input and base computation off of it
     ///     let (mut input, probe) = worker.dataflow(|scope| {
-    ///         let (input, stream) = scope.new_input();
+    ///         let (input, stream) = scope.new_input::<Vec<_>>();
     ///         let probe = stream.inspect(|x| println!("hello {:?}", x))
     ///                           .probe();
     ///         (input, probe)
@@ -61,7 +61,7 @@ pub trait Probe<G: Scope, C: Container> {
     ///     // add an input and base computation off of it
     ///     let mut probe = Handle::new();
     ///     let mut input = worker.dataflow(|scope| {
-    ///         let (input, stream) = scope.new_input();
+    ///         let (input, stream) = scope.new_input::<Vec<_>>();
     ///         stream.probe_with(&mut probe)
     ///               .inspect(|x| println!("hello {:?}", x));
     ///
@@ -76,10 +76,10 @@ pub trait Probe<G: Scope, C: Container> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe_with(self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C>;
+    fn probe_with(self, handle: &Handle<G::Timestamp>) -> Stream<G, C>;
 }
 
-impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container> Probe<G, C> for Stream<G, C> {
     fn probe(self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
@@ -87,7 +87,7 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
         self.probe_with(&handle);
         handle
     }
-    fn probe_with(self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C> {
+    fn probe_with(self, handle: &Handle<G::Timestamp>) -> Stream<G, C> {
 
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
@@ -196,7 +196,7 @@ mod tests {
 
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {
-                let (input, stream) = scope.new_input::<String>();
+                let (input, stream) = scope.new_input::<Vec<String>>();
                 (input, stream.probe())
             });
 

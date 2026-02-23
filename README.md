@@ -23,6 +23,7 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
         (0..10).to_stream(scope)
+               .container::<Vec<_>>()
                .inspect(|x| println!("seen: {:?}", x));
     });
 }
@@ -66,6 +67,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         worker.dataflow(|scope| {
             scope.input_from(&mut input)
+                 .container::<Vec<_>>()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe_with(&mut probe);
@@ -176,14 +178,6 @@ With the current interfaces there is not much to be done. One possible change wo
 ## Buffer management
 
 The timely communication layer currently discards most buffers it moves through exchange channels, because it doesn't have a sane way of rate controlling the output, nor a sane way to determine how many buffers should be cached. If either of these problems were fixed, it would make sense to recycle the buffers to avoid random allocations, especially for small batches. These changes have something like a 10%-20% performance impact in the `dataflow-join` triangle computation workload.
-
-## Support for non-serializable types
-
-The communication layer is based on a type `Content<T>` which can be backed by typed or binary data. Consequently, it requires that the type it supports be serializable, because it needs to have logic for the case that the data is binary, even if this case is not used. It seems like the `Stream` type should be extendable to be parametric in the type of storage used for the data, so that we can express the fact that some types are not serializable and that this is ok.
-
-**NOTE**: Differential dataflow demonstrates how to do this at the user level in its `operators/arrange.rs`, if somewhat sketchily (with a wrapper that lies about the properties of the type it transports).
-
-This would allow us to safely pass `Rc<T>` types around, as long as we use the `Pipeline` parallelization contract.
 
 ## Coarse- vs fine-grained timestamps
 

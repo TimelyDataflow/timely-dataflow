@@ -1,12 +1,12 @@
 //! Barrier synchronization.
 
 use crate::communication::Allocate;
-use crate::dataflow::{InputHandle, ProbeHandle};
+use crate::dataflow::{InputHandleVec, ProbeHandle};
 use crate::worker::Worker;
 
 /// A re-usable barrier synchronization mechanism.
 pub struct Barrier<A: Allocate> {
-    input: InputHandle<usize, ()>,
+    input: InputHandleVec<usize, ()>,
     probe: ProbeHandle<usize>,
     worker: Worker<A>,
 }
@@ -17,7 +17,7 @@ impl<A: Allocate> Barrier<A> {
     pub fn new(worker: &mut Worker<A>) -> Self {
         use crate::dataflow::operators::{Input, Probe};
         let (input, probe) = worker.dataflow(|scope| {
-            let (handle, stream) = scope.new_input::<()>();
+            let (handle, stream) = scope.new_input::<Vec<()>>();
             (handle, stream.probe())
         });
         Barrier { input, probe, worker: worker.clone() }

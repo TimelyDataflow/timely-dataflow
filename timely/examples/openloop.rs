@@ -1,5 +1,6 @@
 use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Input, Filter, Probe};
+use timely::dataflow::operators::{Input, Probe};
+use timely::dataflow::operators::vec::Filter;
 
 fn main() {
 

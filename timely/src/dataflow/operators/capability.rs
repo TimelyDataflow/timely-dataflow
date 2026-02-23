@@ -404,7 +404,10 @@ impl<T: Timestamp> CapabilitySet<T> {
     /// use timely::dataflow::operators::CapabilitySet;
     ///
     /// timely::example(|scope| {
-    ///     vec![()].into_iter().to_stream(scope)
+    ///     vec![()]
+    ///         .into_iter()
+    ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .unary_frontier(Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = CapabilitySet::from_elem(default_cap);
     ///             move |(input, frontier), output| {

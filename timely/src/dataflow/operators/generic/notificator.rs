@@ -54,6 +54,7 @@ impl<'a, T: Timestamp> Notificator<'a, T> {
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .unary_notify(Pipeline, "example", Some(0), |input, output, notificator| {
     ///                input.for_each_time(|cap, data| {
     ///                    output.session(&cap).give_containers(data);
@@ -186,8 +187,8 @@ fn notificator_delivers_notifications_in_topo_order() {
 ///
 /// timely::execute(timely::Config::thread(), |worker| {
 ///     let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
-///         let (in1_handle, in1) = scope.new_input();
-///         let (in2_handle, in2) = scope.new_input();
+///         let (in1_handle, in1) = scope.new_input::<Vec<_>>();
+///         let (in2_handle, in2) = scope.new_input::<Vec<_>>();
 ///         in1.binary_frontier(in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
 ///             let mut notificator = FrontierNotificator::default();
 ///             let mut stash = HashMap::new();
@@ -261,6 +262,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .unary_frontier(Pipeline, "example", |_, _| {
     ///                let mut notificator = FrontierNotificator::default();
     ///                move |(input, frontier), output| {
@@ -391,6 +393,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .unary_frontier(Pipeline, "example", |_, _| {
     ///                let mut notificator = FrontierNotificator::default();
     ///                move |(input, frontier), output| {

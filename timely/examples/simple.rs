@@ -1,4 +1,4 @@
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Inspect, vec::ToStream};
 
 fn main() {
     timely::example(|scope| {

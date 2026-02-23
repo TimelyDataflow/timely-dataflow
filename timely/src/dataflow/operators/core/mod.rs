@@ -1,4 +1,4 @@
-//! Extension traits for `StreamCore` implementing various operators that
+//! Extension traits for `Stream` implementing various operators that
 //! are independent of specific container types.
 
 pub mod capture;

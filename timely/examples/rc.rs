@@ -16,6 +16,7 @@ fn main() {
         let probe = ProbeHandle::new();
         worker.dataflow(|scope| {
             scope.input_from(&mut input)
+                 .container::<Vec<_>>()
                  //.exchange(|x| *x) // <-- cannot exchange this; Rc is not Send.
                  .inspect(move |x| println!("worker {}:\thello {:?}", index, x))
                  .probe_with(&probe);

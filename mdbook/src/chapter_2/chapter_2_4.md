@@ -2,23 +2,22 @@
 
 What if there isn't an operator that does what you want to do? What if what you want to do is better written as imperative code rather than a tangle of dataflow operators? Not a problem! Timely dataflow has you covered.
 
-Timely has several "generic" dataflow operators that are pretty much ready to run, except someone (you) needs to supply their implementation. This isn't as scary as it sounds; you just need to write a closure that says "given a handle to my inputs and outputs, what do I do when timely asks me to run?".
+Timely has several "generic" dataflow operators that are pretty much ready to run, except that someone (you) needs to supply their implementation. This isn't as scary as it sounds; you just need to write a closure that says "given a handle to my inputs and outputs, what do I do when timely asks me to run?".
 
 Let's look at an example
 
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::ToStream;
-use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::operators::{ToStream, Operator};
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
+            .container::<Vec<_>>()
             .unary(Pipeline, "increment", |capability, info| {
-
                 move |input, output| {
                     input.for_each_time(|time, data| {
                         let mut session = output.session(&time);
@@ -33,15 +32,25 @@ fn main() {
 }
 ```
 
-What is going on here? The heart of the mess is the dataflow operator `unary`, which is a ready-to-assemble dataflow operator with one input and one output. The `unary` operator takes three arguments (it looks like so many more!): (i) instructions about how it should distribute its inputs, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.
+What is going on here? The heart of the mess is the dataflow operator `unary`, which is a ready-to-assemble dataflow operator with one input and one output. The `unary` operator takes three arguments (it looks like so many more!): (i) instructions about how its input data should be distributed, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.
 
 Most of what is interesting lies in the closure, so let's first tidy up some loose ends before we dive in there. There are a few ways to request how input data should be distributed and `Pipeline` is the one that says "don't move anything". The string "increment" is utterly arbitrary; this happens to be what the operator does, but you could change it to be your name, or a naughty word, or whatever you like. The `|capability|` stuff should be ignored for the moment; we'll explain in just a moment (it has to do with whether you would like the ability to send data before you receive any).
 
 The heart of the logic lies in the closure that binds `input` and `output`. These two are handles respectively to the operator's input (from which it can read records) and the operator's output (to which it can send records).
 
-The input handle `input` has one primary method, `next`, which may return a pair consisting of a `CapabilityRef<Timestamp>` and a batch of data. Rust really likes you to demonstrate a commitment to only looking at valid data, and our `while` loop does what is called deconstruction: we acknowledge the optional structure and only execute in the case the `Option` variant is `Some`, containing data. The `next` method could also return `None`, indicating that there is no more data available at the moment. It is strongly recommended that you take the hint and stop trying to read inputs at that point; timely gives you the courtesy of executing whatever code you want in this closure, but if you never release control back to the system you'll break things (timely employs ["cooperative multitasking"](https://en.wikipedia.org/wiki/Cooperative_multitasking)).
+The input handle `input` has one primary method, `for_each_time`, which is invoked for each distinct timestamp with a `CapabilityRef<Timestamp>` and a list of batches of data.
+This method should be called each scheduling invocation, if nothing else to move the batches of data from the input to some operator-local storage.
 
-The output handle `output` has one primary method, `session`, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) element at a time with `give`, (ii) iterator at a time with `give_iterator`, and (iii) vector at a time with `give_content`. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the `while` loop.
+The output handle `output` has one primary method, `session`, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) an element at a time with `give`, (ii) an iterator at a time with `give_iterator`, and (iii) a container at a time with `give_container`. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the `while` loop.
+
+### Containers
+
+The example above has two calls to `container::<Vec<_>>()`.
+These exist because timely allows you to be flexible about how you would like to store your data in batches, perhaps in a `Vec` or perhaps using some other type.
+The method signals the container type the stream should have, and mostly exists to inform Rust's type inference of your preferences when they are not otherwise available.
+In this case `unary`, as well as the other generic operators, works with arbitrary containers on its inputs and outputs, and needs to prescriptive guidance.
+
+We use `Vec` as a container for demonstration code, but the `columnar.rs` example shows how to build an alternate container that is able to lay out the data differently, in its case using fewer and larger allocations, even for types like `String` which can own small allocations.
 
 ### Other shapes
 
@@ -131,6 +140,7 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
+            .container::<Vec<_>>()
             .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
@@ -179,8 +189,8 @@ use timely::dataflow::channels::pact::Pipeline;
 fn main() {
     timely::example(|scope| {
 
-        let in1 = (0 .. 10).to_stream(scope);
-        let in2 = (0 .. 10).to_stream(scope);
+        let in1 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
+        let in2 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
@@ -230,8 +240,8 @@ use timely::dataflow::channels::pact::Pipeline;
 fn main() {
     timely::example(|scope| {
 
-        let in1 = (0 .. 10).to_stream(scope);
-        let in2 = (0 .. 10).to_stream(scope);
+        let in1 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
+        let in2 = (0 .. 10).to_stream(scope).container::<Vec<_>>();
 
         in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 

@@ -11,6 +11,7 @@ fn main() {
         worker.dataflow::<u64,_,_>(|scope|
             (0..10u64)
                 .to_stream(scope)
+                .container::<Vec<_>>()
                 .capture_into(EventWriter::new(send))
         );
     }).unwrap();

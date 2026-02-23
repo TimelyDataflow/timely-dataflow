@@ -4,7 +4,7 @@ use crate::Container;
 use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::ExchangeCore;
 use crate::dataflow::operators::generic::operator::Operator;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 
 /// Exchange records between workers.
 pub trait Exchange<C: DrainContainer> {
@@ -19,6 +19,7 @@ pub trait Exchange<C: DrainContainer> {
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .exchange(|x| *x)
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
@@ -28,7 +29,7 @@ pub trait Exchange<C: DrainContainer> {
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static;
 }
 
-impl<G: Scope, C> Exchange<C> for StreamCore<G, C>
+impl<G: Scope, C> Exchange<C> for Stream<G, C>
 where
     C: Container
         + SizableContainer
@@ -37,7 +38,7 @@ where
         + crate::dataflow::channels::ContainerBytes
         + for<'a> PushInto<C::Item<'a>>,
 {
-    fn exchange<F>(self, route: F) -> StreamCore<G, C>
+    fn exchange<F>(self, route: F) -> Stream<G, C>
     where
         for<'a> F: FnMut(&C::Item<'a>) -> u64 + 'static,
     {

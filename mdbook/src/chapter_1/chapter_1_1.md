@@ -6,7 +6,8 @@ Dataflow programming is fundamentally about describing your program as independe
 
 Let's write an overly simple dataflow program. Remember our `examples/hello.rs` program? We are going to revisit that, but with some **timestamp** aspects removed. The goal is to get a sense for dataflow with all of its warts, and to get you excited for the next section where we bring back the timestamps. :)
 
-Here is a reduced version of `examples/hello.rs` that just feeds data into our dataflow, without paying any attention to progress made. In particular, we have removed the `probe()` operation, the resulting `probe` variable, and the use of `probe` to determine how long we should step the worker before introducing more data.
+Here is a reduced version of `examples/hello.rs` that just feeds data into our dataflow, without paying any attention to progress made.
+In particular, we have commented out the line that holds back the introduce of data until `probe` and `input` agree on a time.
 
 ```rust
 #![allow(unused_variables)]
@@ -25,6 +26,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|
             scope.input_from(&mut input)
+                 .container::<Vec<_>>()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()
@@ -42,9 +44,9 @@ fn main() {
 }
 ```
 
-This program is a *dataflow program*. There are two dataflow operators here, `exchange` and `inspect`, each of which is asked to do a thing in response to input data. The `exchange` operator takes each datum and hands it to a downstream worker based on the value it sees; with two workers, one will get all the even numbers and the other all the odd numbers. The `inspect` operator takes an action for each datum, in this case printing something to the screen.
-
-Importantly, we haven't imposed any constraints on how these operators need to run. We removed the code that caused the input to be delayed until a certain amount of progress had been made, and it shows in the results when we run with more than one worker:
+It turns out this handshake between `probe` and `input` was part of what made the output make any sense.
+We waited for `probe` to confirm that the system was caught up before introducing more data to `input`.
+When we remove these constraints we get a more haphazard output.
 
 ```ignore
     Echidnatron% cargo run --example hello -- -w2

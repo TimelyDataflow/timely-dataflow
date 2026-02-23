@@ -14,6 +14,7 @@ fn main() {
         worker.dataflow::<(),_,_>(|scope| {
             (0 .. 10)
                 .to_stream(scope)
+                .container::<Vec<_>>()
                 .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
@@ -36,6 +37,7 @@ fn main() {
         worker.dataflow::<(),_,_>(|scope| {
             (0 .. 10)
                 .to_stream(scope)
+                .container::<Vec<_>>()
                 .inspect_batch(|t, xs| println!("hello: {:?} @ {:?}", xs, t));
         });
     }).unwrap();
@@ -58,8 +60,8 @@ use timely::dataflow::operators::capture::Extract;
 
 fn main() {
     let (data1, data2) = timely::example(|scope| {
-        let data1 = (0..3).to_stream(scope).capture();
-        let data2 = vec![0,1,2].to_stream(scope).capture();
+        let data1 = (0..3).to_stream(scope).container::<Vec<_>>().capture();
+        let data2 = vec![0,1,2].to_stream(scope).container::<Vec<_>>().capture();
         (data1, data2)
     });
 

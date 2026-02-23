@@ -1,8 +1,8 @@
-//! Extension methods for `StreamCore` based on record-by-record transformation.
+//! Extension methods for `Stream` based on record-by-record transformation.
 
 use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::Container;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
@@ -12,17 +12,18 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::core::{Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::core::Map;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .map(|x| x + 1)
     ///            .container::<Vec<_>>()
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map<C2, D2, L>(self, mut logic: L) -> StreamCore<S, C2>
+    fn map<C2, D2, L>(self, mut logic: L) -> Stream<S, C2>
     where
         C2: Container + SizableContainer + PushInto<D2>,
         L: FnMut(C::Item<'_>)->D2 + 'static,
@@ -33,17 +34,18 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::ToStream;
-    /// use timely::dataflow::operators::core::{Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::core::Map;
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .flat_map(|x| (0..x))
     ///            .container::<Vec<_>>()
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<C2, I, L>(self, logic: L) -> StreamCore<S, C2>
+    fn flat_map<C2, I, L>(self, logic: L) -> Stream<S, C2>
     where
         I: IntoIterator,
         C2: Container + SizableContainer + PushInto<I::Item>,
@@ -59,12 +61,14 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{Capture, ToStream, core::Map};
+    /// use timely::dataflow::operators::{Capture, ToStream};
+    /// use timely::dataflow::operators::core::Map;
     /// use timely::dataflow::operators::capture::Extract;
     ///
     /// let data = timely::example(|scope| {
     ///     (0..10i32)
     ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .flat_map_builder(|x| x + 1)
     ///         .map(|x| x + 1)
     ///         .map(|x| x + 1)
@@ -84,11 +88,11 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     }
 }
 
-impl<S: Scope, C: Container + DrainContainer> Map<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + DrainContainer> Map<S, C> for Stream<S, C> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<C2, I, L>(self, mut logic: L) -> StreamCore<S, C2>
+    fn flat_map<C2, I, L>(self, mut logic: L) -> Stream<S, C2>
     where
         I: IntoIterator,
         C2: Container + SizableContainer + PushInto<I::Item>,
@@ -133,7 +137,7 @@ where
         }
     }
     /// Convert the wrapper into a stream.
-    pub fn into_stream<S, C2>(self) -> StreamCore<S, C2>
+    pub fn into_stream<S, C2>(self) -> Stream<S, C2>
     where
         I: IntoIterator,
         S: Scope,
@@ -152,7 +156,7 @@ mod tests {
     #[test]
     fn test_builder() {
         let data = crate::example(|scope| {
-            let stream = (0..10i32).to_stream(scope);
+            let stream = (0..10i32).to_stream(scope).container::<Vec<_>>();
             stream.flat_map_builder(|x| x + 1)
                 .map(|x| x + 1)
                 .map(|x| x + 1)

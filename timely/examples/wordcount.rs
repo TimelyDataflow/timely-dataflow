@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Map, Operator, Inspect, Probe};
+use timely::dataflow::operators::{Operator, Inspect, Probe};
+use timely::dataflow::operators::vec::Map;
 use timely::dataflow::channels::pact::Exchange;
 
 fn main() {
@@ -17,13 +18,11 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         worker.dataflow::<usize,_,_>(|scope| {
             input.to_stream(scope)
-                .container::<Vec<_>>()
-                .flat_map(|(text, diff): (String, i64)|
+                 .flat_map(|(text, diff): (String, i64)|
                     text.split_whitespace()
                         .map(move |word| (word.to_owned(), diff))
                         .collect::<Vec<_>>()
                  )
-                 .container::<Vec<_>>()
                  .unary_frontier(exchange, "WordCount", |_capability, _info| {
 
                     let mut queues = HashMap::new();

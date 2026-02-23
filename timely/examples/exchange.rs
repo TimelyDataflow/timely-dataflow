@@ -13,6 +13,7 @@ fn main() {
         let probe = worker.dataflow(|scope|
             scope
                 .input_from(&mut input)
+                .container::<Vec<_>>()
                 .exchange(|&x| x as u64)
                 .probe()
         );

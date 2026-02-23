@@ -9,7 +9,7 @@ use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
 use crate::Container;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::channels::pushers::Counter as PushCounter;
 use crate::dataflow::channels::pushers;
 use crate::dataflow::channels::pact::ParallelizationContract;
@@ -54,7 +54,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P>(&mut self, stream: StreamCore<G, C>, pact: P) -> InputHandleCore<G::Timestamp, C, P::Puller>
+    pub fn new_input<C: Container, P>(&mut self, stream: Stream<G, C>, pact: P) -> InputHandleCore<G::Timestamp, C, P::Puller>
     where
         P: ParallelizationContract<G::Timestamp, C> {
 
@@ -70,7 +70,7 @@ impl<G: Scope> OperatorBuilder<G> {
     ///
     /// Commonly the connections are either the unit summary, indicating the same timestamp might be produced as output, or an empty
     /// antichain indicating that there is no connection from the input to the output.
-    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: StreamCore<G, C>, pact: P, connection: I) -> InputHandleCore<G::Timestamp, C, P::Puller>
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<G, C>, pact: P, connection: I) -> InputHandleCore<G::Timestamp, C, P::Puller>
     where
         P: ParallelizationContract<G::Timestamp, C>,
         I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)> + Clone,
@@ -88,7 +88,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: Container>(&mut self) -> (pushers::Output<G::Timestamp, C>, StreamCore<G, C>) {
+    pub fn new_output<C: Container>(&mut self) -> (pushers::Output<G::Timestamp, C>, Stream<G, C>) {
         let connection = (0..self.builder.shape().inputs()).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
@@ -103,7 +103,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// antichain indicating that there is no connection from the input to the output.
     pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (
         pushers::Output<G::Timestamp, C>,
-        StreamCore<G, C>,
+        Stream<G, C>,
     )
     where
         I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)> + Clone,

@@ -2,7 +2,7 @@
 
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
@@ -14,10 +14,11 @@ where
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
@@ -34,10 +35,11 @@ where
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect_time(|t, x| println!("seen at: {:?}\t{:?}", t, x));
     /// });
     /// ```
@@ -56,10 +58,11 @@ where
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect_batch(|t,xs| println!("seen at: {:?}\t{:?} records", t, xs.len()));
     /// });
     /// ```
@@ -78,10 +81,11 @@ where
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect_core(|event| {
     ///                match event {
     ///                    Ok((time, data)) => println!("seen at: {:?}\t{:?} records", time, data.len()),
@@ -93,7 +97,7 @@ where
     fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container> Inspect<G, C> for StreamCore<G, C>
+impl<G: Scope, C: Container> Inspect<G, C> for Stream<G, C>
 where
     for<'a> &'a C: IntoIterator,
 {
@@ -111,10 +115,11 @@ pub trait InspectCore<G: Scope, C> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Map, InspectCore};
+    /// use timely::dataflow::operators::{ToStream, InspectCore};
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .inspect_container(|event| {
     ///                match event {
     ///                    Ok((time, data)) => println!("seen at: {:?}\t{:?} records", time, data.len()),
@@ -126,7 +131,7 @@ pub trait InspectCore<G: Scope, C> {
     fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container> InspectCore<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container> InspectCore<G, C> for Stream<G, C> {
 
     fn inspect_container<F>(self, mut func: F) -> Self
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static

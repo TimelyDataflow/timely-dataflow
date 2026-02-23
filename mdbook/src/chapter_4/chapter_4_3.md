@@ -9,7 +9,7 @@ Let's consider a simple example, where we take an input stream of numbers, and p
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, vec::Map};
 
 fn main() {
     timely::example(|scope| {
@@ -36,7 +36,7 @@ Let's take a simple example, where we have a stream of timestamped numbers comin
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, vec::Map};
 
 fn main() {
     timely::example(|scope| {
@@ -59,7 +59,8 @@ The idea here is to take our stream of work, and to use the `delay` operator to 
 ```rust,no_run
 extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Feedback, ToStream, Operator, ConnectLoop};
+use timely::dataflow::operators::vec::{Delay, Map, Filter};
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {

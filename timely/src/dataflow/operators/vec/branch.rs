@@ -3,10 +3,10 @@
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::OutputBuilder;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, Stream, StreamCore};
+use crate::dataflow::{Scope, StreamVec, Stream};
 use crate::Container;
 
-/// Extension trait for `Stream`.
+/// Extension trait for `StreamVec`.
 pub trait Branch<S: Scope, D> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to
@@ -18,7 +18,7 @@ pub trait Branch<S: Scope, D> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, Branch, Inspect};
+    /// use timely::dataflow::operators::{ToStream, Inspect, vec::Branch};
     ///
     /// timely::example(|scope| {
     ///     let (odd, even) = (0..10)
@@ -32,14 +32,14 @@ pub trait Branch<S: Scope, D> {
     fn branch(
         self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
-    ) -> (Stream<S, D>, Stream<S, D>);
+    ) -> (StreamVec<S, D>, StreamVec<S, D>);
 }
 
-impl<S: Scope, D: 'static> Branch<S, D> for Stream<S, D> {
+impl<S: Scope, D: 'static> Branch<S, D> for StreamVec<S, D> {
     fn branch(
         self,
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
-    ) -> (Stream<S, D>, Stream<S, D>) {
+    ) -> (StreamVec<S, D>, StreamVec<S, D>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
         builder.set_notify(false);
 
@@ -82,11 +82,13 @@ pub trait BranchWhen<T>: Sized {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::{ToStream, BranchWhen, Inspect, Delay};
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    /// use timely::dataflow::operators::vec::{BranchWhen, Delay};
     ///
     /// timely::example(|scope| {
     ///     let (before_five, after_five) = (0..10)
     ///         .to_stream(scope)
+    ///         .container::<Vec<_>>()
     ///         .delay(|x,t| *x) // data 0..10 at time 0..10
     ///         .branch_when(|time| time >= &5);
     ///
@@ -97,7 +99,7 @@ pub trait BranchWhen<T>: Sized {
     fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
+impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for Stream<S, C> {
     fn branch_when(self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
         builder.set_notify(false);

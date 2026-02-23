@@ -2,15 +2,15 @@ use std::collections::HashMap;
 
 use Data;
 use dataflow::channels::pact::Pipeline;
-use dataflow::{Stream, Scope};
+use dataflow::{StreamVec, Scope};
 use dataflow::operators::unary::Unary;
 
 pub trait Queue {
     fn queue(&self) -> Self;
 }
 
-impl<G: Scope, D: Data> Queue for Stream<G, D> {
-    fn queue(&self) -> Stream<G, D> {
+impl<G: Scope, D: Data> Queue for StreamVec<G, D> {
+    fn queue(&self) -> StreamVec<G, D> {
         let mut elements = HashMap::new();
         self.unary_notify(Pipeline, "Queue", vec![], move |input, output, notificator| {
             while let Some((time, data)) = input.next() {

@@ -10,6 +10,7 @@ fn gh_523() {
         let probe = worker.dataflow::<u64, _, _>(|scope| {
             scope
                 .input_from(&mut input)
+                .container::<Vec<_>>()
                 .unary(Pipeline, "Test", move |_, _| {
                     move |input, output| {
                         input.for_each_time(|cap, data| {

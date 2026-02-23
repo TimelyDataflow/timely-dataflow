@@ -1,5 +1,5 @@
-// use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Input, Map, Probe};
+use timely::dataflow::operators::{Input, Probe};
+use timely::dataflow::operators::vec::Map;
 
 fn main() {
     // initializes and runs a timely dataflow.

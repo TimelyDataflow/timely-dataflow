@@ -1,13 +1,13 @@
-//! Conversion to the `StreamCore` type from iterators.
+//! Conversion to the `Stream` type from iterators.
 
 use crate::container::{CapacityContainerBuilder, SizableContainer, PushInto};
 use crate::{Container, ContainerBuilder};
 use crate::dataflow::operators::generic::operator::source;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Stream, Scope};
 
-/// Converts to a timely [StreamCore], using a container builder.
+/// Converts to a timely [Stream], using a container builder.
 pub trait ToStreamBuilder<CB: ContainerBuilder> {
-    /// Converts to a timely [StreamCore], using the supplied container builder type.
+    /// Converts to a timely [Stream], using the supplied container builder type.
     ///
     /// # Examples
     ///
@@ -28,11 +28,11 @@ pub trait ToStreamBuilder<CB: ContainerBuilder> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream_with_builder<S: Scope>(self, scope: &mut S) -> StreamCore<S, CB::Container>;
+    fn to_stream_with_builder<S: Scope>(self, scope: &mut S) -> Stream<S, CB::Container>;
 }
 
 impl<CB: ContainerBuilder, I: IntoIterator+'static> ToStreamBuilder<CB> for I where CB: PushInto<I::Item> {
-    fn to_stream_with_builder<S: Scope>(self, scope: &mut S) -> StreamCore<S, CB::Container> {
+    fn to_stream_with_builder<S: Scope>(self, scope: &mut S) -> Stream<S, CB::Container> {
 
         source::<_, CB, _, _>(scope, "ToStreamBuilder", |capability, info| {
 
@@ -59,10 +59,10 @@ impl<CB: ContainerBuilder, I: IntoIterator+'static> ToStreamBuilder<CB> for I wh
     }
 }
 
-/// Converts to a timely [StreamCore]. Equivalent to [`ToStreamBuilder`] but
+/// Converts to a timely [Stream]. Equivalent to [`ToStreamBuilder`] but
 /// uses a [`CapacityContainerBuilder`].
 pub trait ToStream<C> {
-    /// Converts to a timely [StreamCore].
+    /// Converts to a timely [Stream].
     ///
     /// # Examples
     ///
@@ -78,11 +78,11 @@ pub trait ToStream<C> {
     ///
     /// assert_eq!(data1.extract(), data2.extract());
     /// ```
-    fn to_stream<S: Scope>(self, scope: &mut S) -> StreamCore<S, C>;
+    fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, C>;
 }
 
 impl<C: Container + SizableContainer, I: IntoIterator+'static> ToStream<C> for I where C: PushInto<I::Item> {
-    fn to_stream<S: Scope>(self, scope: &mut S) -> StreamCore<S, C> {
+    fn to_stream<S: Scope>(self, scope: &mut S) -> Stream<S, C> {
         ToStreamBuilder::<CapacityContainerBuilder<C>>::to_stream_with_builder(self, scope)
     }
 }

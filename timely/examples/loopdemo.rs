@@ -1,5 +1,6 @@
 use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::{Input, Feedback, Concat, Map, Filter, ConnectLoop, Probe};
+use timely::dataflow::operators::{Input, Feedback, Concat, ConnectLoop, Probe};
+use timely::dataflow::operators::vec::{Map, Filter};
 
 fn main() {
 

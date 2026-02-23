@@ -35,6 +35,7 @@ pub trait Extract<T, C> {
     ///
     ///     worker.dataflow::<u64,_,_>(|scope1|
     ///         (0..10).to_stream(scope1)
+    ///                .container::<Vec<_>>()
     ///                .capture_into(handle1)
     ///     );
     ///

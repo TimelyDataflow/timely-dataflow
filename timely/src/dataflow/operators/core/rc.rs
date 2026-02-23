@@ -2,7 +2,7 @@
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::Operator;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::Container;
 use std::rc::Rc;
 
@@ -17,15 +17,16 @@ pub trait SharedStream<S: Scope, C> {
     ///
     /// timely::example(|scope| {
     ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
     ///            .shared()
     ///            .inspect_container(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn shared(self) -> StreamCore<S, Rc<C>>;
+    fn shared(self) -> Stream<S, Rc<C>>;
 }
 
-impl<S: Scope, C: Container> SharedStream<S, C> for StreamCore<S, C> {
-    fn shared(self) -> StreamCore<S, Rc<C>> {
+impl<S: Scope, C: Container> SharedStream<S, C> for Stream<S, C> {
+    fn shared(self) -> Stream<S, Rc<C>> {
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
                 input.for_each_time(|time, data| {
