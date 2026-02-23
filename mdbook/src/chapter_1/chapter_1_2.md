@@ -34,20 +34,20 @@ The output we get with two workers is now:
     Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
-    worker 1:	hello 1 @ (Root, 1)
-    worker 1:	hello 3 @ (Root, 3)
-    worker 1:	hello 5 @ (Root, 5)
-    worker 0:	hello 0 @ (Root, 0)
-    worker 0:	hello 2 @ (Root, 2)
-    worker 0:	hello 4 @ (Root, 4)
-    worker 0:	hello 6 @ (Root, 6)
-    worker 0:	hello 8 @ (Root, 8)
-    worker 1:	hello 7 @ (Root, 7)
-    worker 1:	hello 9 @ (Root, 9)
+    worker 1:	hello 1 @ 1
+    worker 1:	hello 3 @ 3
+    worker 1:	hello 5 @ 5
+    worker 0:	hello 0 @ 0
+    worker 0:	hello 2 @ 2
+    worker 0:	hello 4 @ 4
+    worker 0:	hello 6 @ 6
+    worker 0:	hello 8 @ 8
+    worker 1:	hello 7 @ 7
+    worker 1:	hello 9 @ 9
     Echidnatron%
 ```
 
-The timestamps are the `(Root, i)` things for various values of `i`. These happen to correspond to the data themselves, but had we provided random input data rather than `i` itself we would still be able to make sense of the output and put it back "in order".
+The timestamps are the `@ i` things for various values of `i`. These happen to correspond to the data themselves, but had we provided random input data rather than `i` itself we would still be able to make sense of the output and put it back "in order".
 
 ## Timestamps for dataflow operators
 

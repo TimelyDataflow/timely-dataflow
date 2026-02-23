@@ -27,7 +27,7 @@ fn main() {
 }
 ```
 
-The closure `map` takes *owned* data as input, which means you are able to mutate it as you like without cloning or copying the data. For example, if you have a stream of `String` data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.
+This `map` operator consumes and produces *owned* data, which allows you to mutate the data without necessarily reallocating. For example, if you have a stream of `String` data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.
 
 ```rust
 extern crate timely;

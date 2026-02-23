@@ -1,6 +1,6 @@
 # Chapter 1: Core Concepts
 
-Timely dataflow relies on two fundamental concepts: **timestamps** and **dataflow**, which together lead to the concept of **progress**. We will want to break down these concepts because they play a fundamental role in understanding how timely dataflow programs are structured.
+Timely dataflow relies on two fundamental concepts: **dataflow** and **timestamps**, which together lead to the concept of **progress**. We will want to break down these concepts because they play a fundamental role in understanding how timely dataflow programs are structured.
 
 ## Dataflow
 

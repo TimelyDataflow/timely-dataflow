@@ -75,6 +75,20 @@ impl<S: Scope, C> Stream<S, C> {
     pub fn scope(&self) -> S { self.scope.clone() }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
+    ///
+    /// This method can be needed when the container type of a stream is unconstrained,
+    /// most commonly after creating an input, or bracking wholly generic operators.
+    ///
+    /// # Examples
+    /// ```
+    /// use timely::dataflow::operators::{ToStream, Inspect};
+    ///
+    /// timely::example(|scope| {
+    ///     (0..10).to_stream(scope)
+    ///            .container::<Vec<_>>()
+    ///            .inspect(|x| println!("seen: {:?}", x));
+    /// });
+    /// ```
     pub fn container<C2>(self) -> Stream<S, C2> where Self: AsStream<S, C2> { self.as_stream() }
 }
 

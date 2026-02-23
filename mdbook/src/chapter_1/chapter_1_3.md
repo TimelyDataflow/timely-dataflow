@@ -49,13 +49,13 @@ Let's talk about each of them.
 
 ## Input capabilities
 
-The `input` structure is how we provide data to a timely dataflow computation, and it has a timestamp associated with it. Initially this timestamp is the default value, usually something like `0` for integers. Whatever timestamp `input` has, it can introduce data with that timestamp or greater. We can advance this timestamp, via the `advance_to` method, which restricts the timestamps we can use to those greater or equal to whatever timestamp is supplied as the argument.
+The `input` structure is how we provide data to a timely dataflow computation, and it has a timestamp associated with it. Initially this timestamp is the default value, usually something like `0` for unsigned integers. Whatever timestamp `input` has, it can introduce data with that timestamp or greater. We can advance this timestamp, via the `advance_to` method, which permanently restricts the timestamps we can use to those greater or equal to whatever timestamp is supplied as the argument.
 
 The `advance_to` method is a big deal. This is the moment in the computation where our program reveals to the system, and through the system to all other dataflow workers, that we might soon be able to announce a timestamp as complete. There may still be records in flight bearing that timestamp, but as they are retired the system can finally report that progress has been made.
 
 ## Output possibilities
 
-The `probe` structure is how we learn about the possibility of timestamped data at some point in the dataflow graph. We can, at any point, consult a probe with the `less_than` method and ask whether it is still possible that we might see a time less than the argument at that point in the dataflow graph. There is also a `less_equal` method, if you prefer that.
+The `probe` structure is how we learn about the possibility of receiving timestamped data at some point in the dataflow graph. We can, at any point, consult a probe with the `less_than` method and ask whether it is still possible that we might see a time less than the argument at that point in the dataflow graph. There is also a `less_equal` method, if you prefer that.
 
 Putting a probe after the `inspect` operator, which passes through all data it receives as input only after invoking its method, tells us whether we should expect to see the method associated with `inspect` fire again for a given timestamp. If we are told we won't see any more messages with timestamp `t` after the `inspect`, then the `inspect` won't see any either.
 

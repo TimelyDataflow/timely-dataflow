@@ -1,6 +1,6 @@
-# Custom Datatypes
+# Custom Datatypes and Containers
 
-**WORK IN PROGRESS**
+**THIS TEXT IS LARGELY INCORRECT AND NEEDS IMPROVEMENT**
 
 Timely dataflow allows you to use a variety of Rust types, but you may also find that you need (or would prefer) your own `struct` and `enum` types.
 
