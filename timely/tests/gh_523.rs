@@ -23,6 +23,7 @@ fn gh_523() {
                 })
                 .exchange(|x| *x)
                 .probe()
+                .0
         });
 
         for round in 0..2 {

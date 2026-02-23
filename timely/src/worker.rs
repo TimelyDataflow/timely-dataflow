@@ -448,6 +448,7 @@ impl<A: Allocate> Worker<A> {
     ///             .to_stream(scope)
     ///             .inspect(|x| println!("{:?}", x))
     ///             .probe()
+    ///             .0
     ///     });
     ///
     ///     worker.step_while(|| probe.less_than(&0));
@@ -477,6 +478,7 @@ impl<A: Allocate> Worker<A> {
     ///             .to_stream(scope)
     ///             .inspect(|x| println!("{:?}", x))
     ///             .probe()
+    ///             .0
     ///     });
     ///
     ///     worker.step_or_park_while(None, || probe.less_than(&0));
