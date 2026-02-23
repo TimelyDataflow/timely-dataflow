@@ -15,6 +15,7 @@ fn main() {
                 .input_from(&mut input)
                 .exchange(|&x| x as u64)
                 .probe()
+                .0
         );
 
 

@@ -22,6 +22,7 @@ timely::execute_from_args(std::env::args(), |worker| {
              .exchange(|x| *x)
              .inspect(move |x| println!("worker {}:\thello {}", index, x))
              .probe()
+             .0
     );
 
     // introduce data and watch!

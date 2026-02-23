@@ -28,6 +28,7 @@ fn main() {
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()
+                 .0
         );
 
         // introduce data and watch!

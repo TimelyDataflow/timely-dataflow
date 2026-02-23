@@ -18,7 +18,7 @@ impl<A: Allocate> Barrier<A> {
         use crate::dataflow::operators::{Input, Probe};
         let (input, probe) = worker.dataflow(|scope| {
             let (handle, stream) = scope.new_input::<()>();
-            (handle, stream.probe())
+            (handle, stream.probe().0)
         });
         Barrier { input, probe, worker: worker.clone() }
     }
@@ -51,4 +51,3 @@ impl<A: Allocate> Barrier<A> {
         !self.probe.less_than(self.input.time())
     }
 }
-

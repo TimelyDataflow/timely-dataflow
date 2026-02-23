@@ -19,6 +19,8 @@ use crate::dataflow::channels::Message;
 pub trait Probe<G: Scope, C: Container> {
     /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
     ///
+    /// Returns a tuple of a probe handle and the input stream.
+    ///
     /// # Examples
     /// ```
     /// use timely::*;
@@ -31,8 +33,8 @@ pub trait Probe<G: Scope, C: Container> {
     ///     // add an input and base computation off of it
     ///     let (mut input, probe) = worker.dataflow(|scope| {
     ///         let (input, stream) = scope.new_input();
-    ///         let probe = stream.inspect(|x| println!("hello {:?}", x))
-    ///                           .probe();
+    ///         let (probe, _) = stream.inspect(|x| println!("hello {:?}", x))
+    ///                                .probe();
     ///         (input, probe)
     ///     });
     ///
@@ -44,7 +46,7 @@ pub trait Probe<G: Scope, C: Container> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe(self) -> Handle<G::Timestamp>;
+    fn probe(self) -> (Handle<G::Timestamp>, Self);
 
     /// Inserts a progress probe in a stream.
     ///
@@ -80,12 +82,12 @@ pub trait Probe<G: Scope, C: Container> {
 }
 
 impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
-    fn probe(self) -> Handle<G::Timestamp> {
+    fn probe(self) -> (Handle<G::Timestamp>, Self) {
 
         // the frontier is shared state; scope updates, handle reads.
         let handle = Handle::<G::Timestamp>::new();
-        self.probe_with(&handle);
-        handle
+        let stream = self.probe_with(&handle);
+        (handle, stream)
     }
     fn probe_with(self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C> {
 
@@ -197,7 +199,7 @@ mod tests {
             // create a new input, and inspect its output
             let (mut input, probe) = worker.dataflow(move |scope| {
                 let (input, stream) = scope.new_input::<String>();
-                (input, stream.probe())
+                (input, stream.probe().0)
             });
 
             // introduce data and watch!
