@@ -7,7 +7,7 @@ use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OutputBuilder;
 use crate::dataflow::{Scope, StreamCore};
 
-/// Extension trait for `Stream`.
+/// Extension trait for `StreamCore`.
 pub trait OkErr<S: Scope, C: DrainContainer> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with the data.

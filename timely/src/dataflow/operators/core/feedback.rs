@@ -86,9 +86,9 @@ impl<'a, G: Scope, T: Timestamp> LoopVariable<'a, G, T> for Iterative<'a, G, T> 
     }
 }
 
-/// Connect a `Stream` to the input of a loop variable.
+/// Connect a `StreamCore` to the input of a loop variable.
 pub trait ConnectLoop<G: Scope, C: Container> {
-    /// Connect a `Stream` to be the input of a loop variable.
+    /// Connect a `StreamCore` to be the input of a loop variable.
     ///
     /// # Examples
     /// ```

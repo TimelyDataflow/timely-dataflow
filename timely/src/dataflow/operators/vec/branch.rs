@@ -6,7 +6,7 @@ use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, StreamVec, StreamCore};
 use crate::Container;
 
-/// Extension trait for `Stream`.
+/// Extension trait for `StreamVec`.
 pub trait Branch<S: Scope, D> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with a reference to

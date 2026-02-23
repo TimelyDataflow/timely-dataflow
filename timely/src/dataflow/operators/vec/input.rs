@@ -93,5 +93,5 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
     }
 }
 
-/// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
+/// A handle to an input `StreamVec`, used to introduce data to a timely dataflow computation.
 pub type Handle<T, D> = crate::dataflow::operators::core::input::Handle<T, CapacityContainerBuilder<Vec<D>>>;

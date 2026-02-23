@@ -1,4 +1,4 @@
-//! Monitor progress at a `Stream`.
+//! Monitor progress at a `StreamCore`.
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -15,7 +15,7 @@ use crate::dataflow::{StreamCore, Scope};
 use crate::Container;
 use crate::dataflow::channels::Message;
 
-/// Monitors progress at a `Stream`.
+/// Monitors progress at a `StreamCore`.
 pub trait Probe<G: Scope, C: Container> {
     /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
     ///

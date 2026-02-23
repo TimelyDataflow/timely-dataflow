@@ -1,11 +1,11 @@
-//! Extension methods for `Stream` based on record-by-record transformation.
+//! Extension methods for `StreamVec` based on record-by-record transformation.
 
 use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::operators::core::{Map as MapCore};
 
-/// Extension trait for `Stream`.
+/// Extension trait for `StreamVec`.
 pub trait Map<S: Scope, D: 'static> : Sized {
     /// Consumes each element of the stream and yields a new element.
     ///

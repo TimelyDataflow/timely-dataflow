@@ -1,9 +1,9 @@
-//! Extension methods for `Stream` containing `Result`s.
+//! Extension methods for `StreamVec` containing `Result`s.
 
 use crate::dataflow::operators::vec::Map;
 use crate::dataflow::{Scope, StreamVec};
 
-/// Extension trait for `Stream`.
+/// Extension trait for `StreamVec`.
 pub trait ResultStream<S: Scope, T: 'static, E: 'static> {
     /// Returns a new instance of `self` containing only `ok` records.
     ///

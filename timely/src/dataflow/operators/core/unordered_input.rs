@@ -18,7 +18,7 @@ use crate::dataflow::{Scope, StreamCore};
 
 use crate::scheduling::Activations;
 
-/// Create a new `Stream` and `Handle` through which to supply input.
+/// Create a new `StreamCore` and `Handle` through which to supply input.
 pub trait UnorderedInput<G: Scope> {
     /// Create a new capability-based [StreamCore] and [UnorderedHandle] through which to supply input. This
     /// input supports multiple open epochs (timestamps) at the same time.

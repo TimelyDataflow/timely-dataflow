@@ -1,8 +1,11 @@
-//! Extension traits for `Stream` implementing various operators.
+//! Extension traits for `StreamCore` and `StreamVec` implementing various operators.
 //!
-//! A collection of functions taking typed `Stream` objects as input and producing new `Stream`
+//! A collection of functions taking typed stream objects as input and producing new stream
 //! objects as output. Many of the operators provide simple, composable functionality. Some of the
 //! operators are more complicated, for use with advanced timely dataflow features.
+//!
+//! The [`core`](core) module defines operators that work for streams of general containers.
+//! The [`vec`](vec) module defines operators that work for streams of vector containers.
 //!
 //! The [`Operator`](generic::operator) trait provides general
 //! operators whose behavior can be supplied using closures accepting input and output handles.

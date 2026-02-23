@@ -1,11 +1,11 @@
-//! Conversion to the `Stream` type from iterators.
+//! Conversion to the `StreamVec` type from iterators.
 
 use crate::dataflow::{StreamVec, Scope};
 use crate::dataflow::operators::core::{ToStream as ToStreamCore};
 
-/// Converts to a timely `Stream`.
+/// Converts to a timely `StreamVec`.
 pub trait ToStream<D: 'static> {
-    /// Converts to a timely `Stream`.
+    /// Converts to a timely `StreamVec`.
     ///
     /// # Examples
     ///

@@ -24,7 +24,7 @@ use crate::dataflow::channels::Message;
 // NOTE : Experiments with &mut indicate that the borrow of 'a lives for too long.
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
-/// Create a new `Stream` and `Handle` through which to supply input.
+/// Create a new `StreamCore` and `Handle` through which to supply input.
 pub trait Input : Scope {
     /// Create a new [StreamCore] and [Handle] through which to supply input.
     ///
@@ -493,7 +493,7 @@ where
 }
 
 impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
-    /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
+    /// Sends one record into the corresponding timely dataflow `StreamCore`, at the current epoch.
     ///
     /// # Examples
     /// ```

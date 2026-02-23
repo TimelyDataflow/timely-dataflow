@@ -1,4 +1,4 @@
-//! Extension methods for `Stream` based on record-by-record transformation.
+//! Extension methods for `StreamCore` based on record-by-record transformation.
 
 use crate::Container;
 use crate::order::PartialOrder;

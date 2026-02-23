@@ -1,6 +1,6 @@
-//! Extension traits to move a `Stream` between an outer `Scope` and inner `Scope`.
+//! Extension traits to move a `StreamCore` between an outer `Scope` and inner `Scope`.
 //!
-//! Each `Stream` indicates its containing `Scope` as part of its type signature. To create a new
+//! Each `StreamCore` indicates its containing `Scope` as part of its type signature. To create a new
 //! stream with the same contents in another scope, one must explicit use the methods `enter` and
 //! `leave`, to clearly indicate the transition to the timely dataflow progress tracking logic.
 //!
@@ -34,9 +34,9 @@ use crate::worker::AsWorker;
 use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::scopes::Child;
 
-/// Extension trait to move a `Stream` into a child of its current `Scope`.
+/// Extension trait to move a `StreamCore` into a child of its current `Scope`.
 pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
-    /// Moves the `Stream` argument into a child of its current `Scope`.
+    /// Moves the `StreamCore` argument into a child of its current `Scope`.
     ///
     /// # Examples
     /// ```
@@ -84,9 +84,9 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> 
     }
 }
 
-/// Extension trait to move a `Stream` to the parent of its current `Scope`.
+/// Extension trait to move a `StreamCore` to the parent of its current `Scope`.
 pub trait Leave<G: Scope, C> {
-    /// Moves a `Stream` to the parent of its current `Scope`.
+    /// Moves a `StreamCore` to the parent of its current `Scope`.
     ///
     /// # Examples
     /// ```

@@ -1,7 +1,7 @@
 //! A handle to a typed stream of timely data.
 //!
 //! Most high-level timely dataflow programming is done with streams, which are each a handle to an
-//! operator output. Extension methods on the `Stream` type provide the appearance of higher-level
+//! operator output. Extension methods on the `StreamCore` type provide the appearance of higher-level
 //! declarative programming, while constructing a dataflow graph underneath.
 
 use crate::progress::{Source, Target};
@@ -16,7 +16,7 @@ use std::fmt::{self, Debug};
 
 /// Abstraction of a stream of `C: Container` records timestamped with `S::Timestamp`.
 ///
-/// Internally `Stream` maintains a list of data recipients who should be presented with data
+/// Internally `StreamCore` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
 pub struct StreamCore<S: Scope, C> {
     /// The progress identifier of the stream's data source.
@@ -65,7 +65,7 @@ impl<S: Scope, C> StreamCore<S, C> {
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);
     }
-    /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
+    /// Allocates a `StreamCore` from a supplied `Source` name and rendezvous point.
     pub fn new(source: Source, output: TeeHelper<S::Timestamp, C>, scope: S) -> Self {
         Self { name: source, ports: output, scope }
     }

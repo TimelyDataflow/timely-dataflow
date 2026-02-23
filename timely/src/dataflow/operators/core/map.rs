@@ -6,7 +6,7 @@ use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
-/// Extension trait for `Stream`.
+/// Extension trait for `StreamCore`.
 pub trait Map<S: Scope, C: DrainContainer> : Sized {
     /// Consumes each element of the stream and yields a new element.
     ///
