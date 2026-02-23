@@ -1,7 +1,7 @@
 //! A handle to a typed stream of timely data.
 //!
 //! Most high-level timely dataflow programming is done with streams, which are each a handle to an
-//! operator output. Extension methods on the `StreamCore` type provide the appearance of higher-level
+//! operator output. Extension methods on the `Stream` type provide the appearance of higher-level
 //! declarative programming, while constructing a dataflow graph underneath.
 
 use crate::progress::{Source, Target};
@@ -16,9 +16,9 @@ use std::fmt::{self, Debug};
 
 /// Abstraction of a stream of `C: Container` records timestamped with `S::Timestamp`.
 ///
-/// Internally `StreamCore` maintains a list of data recipients who should be presented with data
+/// Internally `Stream` maintains a list of data recipients who should be presented with data
 /// produced by the source of the stream.
-pub struct StreamCore<S: Scope, C> {
+pub struct Stream<S: Scope, C> {
     /// The progress identifier of the stream's data source.
     name: Source,
     /// The `Scope` containing the stream.
@@ -27,7 +27,7 @@ pub struct StreamCore<S: Scope, C> {
     ports: TeeHelper<S::Timestamp, C>,
 }
 
-impl<S: Scope, C: Clone+'static> Clone for StreamCore<S, C> {
+impl<S: Scope, C: Clone+'static> Clone for Stream<S, C> {
     fn clone(&self) -> Self {
         Self {
             name: self.name,
@@ -44,9 +44,9 @@ impl<S: Scope, C: Clone+'static> Clone for StreamCore<S, C> {
 }
 
 /// A stream batching data in owning vectors.
-pub type StreamVec<S, D> = StreamCore<S, Vec<D>>;
+pub type StreamVec<S, D> = Stream<S, Vec<D>>;
 
-impl<S: Scope, C> StreamCore<S, C> {
+impl<S: Scope, C> Stream<S, C> {
     /// Connects the stream to a destination.
     ///
     /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
@@ -65,7 +65,7 @@ impl<S: Scope, C> StreamCore<S, C> {
         self.scope.add_edge(self.name, target);
         self.ports.add_pusher(pusher);
     }
-    /// Allocates a `StreamCore` from a supplied `Source` name and rendezvous point.
+    /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
     pub fn new(source: Source, output: TeeHelper<S::Timestamp, C>, scope: S) -> Self {
         Self { name: source, ports: output, scope }
     }
@@ -75,20 +75,20 @@ impl<S: Scope, C> StreamCore<S, C> {
     pub fn scope(&self) -> S { self.scope.clone() }
 
     /// Allows the assertion of a container type, for the benefit of type inference.
-    pub fn container<C2>(self) -> StreamCore<S, C2> where Self: AsStream<S, C2> { self.as_stream() }
+    pub fn container<C2>(self) -> Stream<S, C2> where Self: AsStream<S, C2> { self.as_stream() }
 }
 
-/// A type that can be translated to a [StreamCore].
+/// A type that can be translated to a [Stream].
 pub trait AsStream<S: Scope, C> {
-    /// Translate `self` to a [StreamCore].
-    fn as_stream(self) -> StreamCore<S, C>;
+    /// Translate `self` to a [Stream].
+    fn as_stream(self) -> Stream<S, C>;
 }
 
-impl<S: Scope, C> AsStream<S, C> for StreamCore<S, C> {
+impl<S: Scope, C> AsStream<S, C> for Stream<S, C> {
     fn as_stream(self) -> Self { self }
 }
 
-impl<S, C> Debug for StreamCore<S, C>
+impl<S, C> Debug for Stream<S, C>
 where
     S: Scope,
 {

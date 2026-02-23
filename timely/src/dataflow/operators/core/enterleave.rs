@@ -1,6 +1,6 @@
-//! Extension traits to move a `StreamCore` between an outer `Scope` and inner `Scope`.
+//! Extension traits to move a `Stream` between an outer `Scope` and inner `Scope`.
 //!
-//! Each `StreamCore` indicates its containing `Scope` as part of its type signature. To create a new
+//! Each `Stream` indicates its containing `Scope` as part of its type signature. To create a new
 //! stream with the same contents in another scope, one must explicit use the methods `enter` and
 //! `leave`, to clearly indicate the transition to the timely dataflow progress tracking logic.
 //!
@@ -31,12 +31,12 @@ use crate::communication::Push;
 use crate::dataflow::channels::pushers::{Counter, Tee};
 use crate::dataflow::channels::Message;
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Stream, Scope};
 use crate::dataflow::scopes::Child;
 
-/// Extension trait to move a `StreamCore` into a child of its current `Scope`.
+/// Extension trait to move a `Stream` into a child of its current `Scope`.
 pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
-    /// Moves the `StreamCore` argument into a child of its current `Scope`.
+    /// Moves the `Stream` argument into a child of its current `Scope`.
     ///
     /// # Examples
     /// ```
@@ -50,11 +50,11 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(self, _: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C>;
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> for StreamCore<G, C> {
-    fn enter<'a>(self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> for Stream<G, C> {
+    fn enter<'a>(self, scope: &Child<'a, G, T>) -> Stream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
@@ -76,7 +76,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> 
             self.connect_to(input, ingress, channel_id);
         }
 
-        StreamCore::new(
+        Stream::new(
             Source::new(0, input.port),
             registrar,
             scope.clone(),
@@ -84,9 +84,9 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> Enter<G, T, C> 
     }
 }
 
-/// Extension trait to move a `StreamCore` to the parent of its current `Scope`.
+/// Extension trait to move a `Stream` to the parent of its current `Scope`.
 pub trait Leave<G: Scope, C> {
-    /// Moves a `StreamCore` to the parent of its current `Scope`.
+    /// Moves a `Stream` to the parent of its current `Scope`.
     ///
     /// # Examples
     /// ```
@@ -100,11 +100,11 @@ pub trait Leave<G: Scope, C> {
     ///     });
     /// });
     /// ```
-    fn leave(self) -> StreamCore<G, C>;
+    fn leave(self) -> Stream<G, C>;
 }
 
-impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for StreamCore<Child<'_, G, T>, C> {
-    fn leave(self) -> StreamCore<G, C> {
+impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for Stream<Child<'_, G, T>, C> {
+    fn leave(self) -> Stream<G, C> {
 
         let scope = self.scope();
 
@@ -121,7 +121,7 @@ impl<G: Scope, C: Container, T: Timestamp+Refines<G::Timestamp>> Leave<G, C> for
             self.connect_to(target, egress, channel_id);
         }
 
-        StreamCore::new(
+        Stream::new(
             output,
             registrar,
             scope.parent,

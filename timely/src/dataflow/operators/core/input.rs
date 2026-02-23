@@ -12,7 +12,7 @@ use crate::progress::Source;
 use crate::progress::operate::Connectivity;
 use crate::{Accountable, Container, ContainerBuilder};
 use crate::communication::Push;
-use crate::dataflow::{Scope, ScopeParent, StreamCore};
+use crate::dataflow::{Scope, ScopeParent, Stream};
 use crate::dataflow::channels::pushers::{Tee, Counter};
 use crate::dataflow::channels::Message;
 
@@ -24,11 +24,11 @@ use crate::dataflow::channels::Message;
 // NOTE : Experiments with &mut indicate that the borrow of 'a lives for too long.
 // NOTE : Might be able to fix with another lifetime parameter, say 'c: 'a.
 
-/// Create a new `StreamCore` and `Handle` through which to supply input.
+/// Create a new `Stream` and `Handle` through which to supply input.
 pub trait Input : Scope {
-    /// Create a new [StreamCore] and [Handle] through which to supply input.
+    /// Create a new [Stream] and [Handle] through which to supply input.
     ///
-    /// The `new_input` method returns a pair `(Handle, StreamCore)` where the [StreamCore] can be used
+    /// The `new_input` method returns a pair `(Handle, Stream)` where the [Stream] can be used
     /// immediately for timely dataflow construction, and the `Handle` is later used to introduce
     /// data into the timely dataflow computation.
     ///
@@ -59,11 +59,11 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input<C: Container+Clone>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<Self, C>);
+    fn new_input<C: Container+Clone>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, Stream<Self, C>);
 
-    /// Create a new [StreamCore] and [Handle] through which to supply input.
+    /// Create a new [Stream] and [Handle] through which to supply input.
     ///
-    /// The `new_input` method returns a pair `(Handle, StreamCore)` where the [StreamCore] can be used
+    /// The `new_input` method returns a pair `(Handle, Stream)` where the [Stream] can be used
     /// immediately for timely dataflow construction, and the `Handle` is later used to introduce
     /// data into the timely dataflow computation.
     ///
@@ -96,7 +96,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CB>, StreamCore<Self, CB::Container>);
+    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&mut self) -> (Handle<<Self as ScopeParent>::Timestamp, CB>, Stream<Self, CB::Container>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -129,24 +129,24 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from<CB: ContainerBuilder<Container: Clone>>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, CB>) -> StreamCore<Self, CB::Container>;
+    fn input_from<CB: ContainerBuilder<Container: Clone>>(&mut self, handle: &mut Handle<<Self as ScopeParent>::Timestamp, CB>) -> Stream<Self, CB::Container>;
 }
 
 use crate::order::TotalOrder;
 impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
-    fn new_input<C: Container+Clone>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, StreamCore<G, C>) {
+    fn new_input<C: Container+Clone>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CapacityContainerBuilder<C>>, Stream<G, C>) {
         let mut handle = Handle::new();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CB>, StreamCore<G, CB::Container>) {
+    fn new_input_with_builder<CB: ContainerBuilder<Container: Clone>>(&mut self) -> (Handle<<G as ScopeParent>::Timestamp, CB>, Stream<G, CB::Container>) {
         let mut handle = Handle::new_with_builder();
         let stream = self.input_from(&mut handle);
         (handle, stream)
     }
 
-    fn input_from<CB: ContainerBuilder<Container: Clone>>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, CB>) -> StreamCore<G, CB::Container> {
+    fn input_from<CB: ContainerBuilder<Container: Clone>>(&mut self, handle: &mut Handle<<G as ScopeParent>::Timestamp, CB>) -> Stream<G, CB::Container> {
         let (output, registrar) = Tee::<<G as ScopeParent>::Timestamp, CB::Container>::new();
         let counter = Counter::new(output);
         let produced = Rc::clone(counter.produced());
@@ -171,7 +171,7 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
             copies,
         }), index);
 
-        StreamCore::new(Source::new(index, 0), registrar, self.clone())
+        Stream::new(Source::new(index, 0), registrar, self.clone())
     }
 }
 
@@ -213,7 +213,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 }
 
 
-/// A handle to an input `StreamCore`, used to introduce data to a timely dataflow computation.
+/// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
 pub struct Handle<T: Timestamp, CB: ContainerBuilder<Container: Clone>> {
     activate: Vec<Activator>,
@@ -331,7 +331,7 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     ///     }
     /// });
     /// ```
-    pub fn to_stream<G>(&mut self, scope: &mut G) -> StreamCore<G, CB::Container>
+    pub fn to_stream<G>(&mut self, scope: &mut G) -> Stream<G, CB::Container>
     where
         T: TotalOrder,
         G: Scope<Timestamp=T>,
@@ -410,7 +410,7 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
         }
     }
 
-    /// Sends a batch of records into the corresponding timely dataflow [StreamCore], at the current epoch.
+    /// Sends a batch of records into the corresponding timely dataflow [Stream], at the current epoch.
     ///
     /// This method flushes single elements previously sent with `send`, to keep the insertion order.
     ///
@@ -493,7 +493,7 @@ where
 }
 
 impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
-    /// Sends one record into the corresponding timely dataflow `StreamCore`, at the current epoch.
+    /// Sends one record into the corresponding timely dataflow `Stream`, at the current epoch.
     ///
     /// # Examples
     /// ```

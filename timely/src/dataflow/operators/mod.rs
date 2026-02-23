@@ -1,4 +1,4 @@
-//! Extension traits for `StreamCore` and `StreamVec` implementing various operators.
+//! Extension traits for `Stream` and `StreamVec` implementing various operators.
 //!
 //! A collection of functions taking typed stream objects as input and producing new stream
 //! objects as output. Many of the operators provide simple, composable functionality. Some of the

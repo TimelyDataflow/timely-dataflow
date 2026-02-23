@@ -3,7 +3,7 @@
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::OutputBuilder;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, StreamVec, StreamCore};
+use crate::dataflow::{Scope, StreamVec, Stream};
 use crate::Container;
 
 /// Extension trait for `StreamVec`.
@@ -73,7 +73,7 @@ impl<S: Scope, D: 'static> Branch<S, D> for StreamVec<S, D> {
     }
 }
 
-/// Extension trait for `StreamCore`.
+/// Extension trait for `Stream`.
 pub trait BranchWhen<T>: Sized {
     /// Takes one input stream and splits it into two output streams.
     /// For each time, the supplied closure is called. If it returns `true`,
@@ -99,7 +99,7 @@ pub trait BranchWhen<T>: Sized {
     fn branch_when(self, condition: impl Fn(&T) -> bool + 'static) -> (Self, Self);
 }
 
-impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for StreamCore<S, C> {
+impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for Stream<S, C> {
     fn branch_when(self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
         builder.set_notify(false);

@@ -1,4 +1,4 @@
-//! Monitor progress at a `StreamCore`.
+//! Monitor progress at a `Stream`.
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -11,11 +11,11 @@ use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Stream, Scope};
 use crate::Container;
 use crate::dataflow::channels::Message;
 
-/// Monitors progress at a `StreamCore`.
+/// Monitors progress at a `Stream`.
 pub trait Probe<G: Scope, C: Container> {
     /// Constructs a progress probe which indicates which timestamps have elapsed at the operator.
     ///
@@ -76,10 +76,10 @@ pub trait Probe<G: Scope, C: Container> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe_with(self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C>;
+    fn probe_with(self, handle: &Handle<G::Timestamp>) -> Stream<G, C>;
 }
 
-impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container> Probe<G, C> for Stream<G, C> {
     fn probe(self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
@@ -87,7 +87,7 @@ impl<G: Scope, C: Container> Probe<G, C> for StreamCore<G, C> {
         self.probe_with(&handle);
         handle
     }
-    fn probe_with(self, handle: &Handle<G::Timestamp>) -> StreamCore<G, C> {
+    fn probe_with(self, handle: &Handle<G::Timestamp>) -> Stream<G, C> {
 
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));

@@ -1,6 +1,6 @@
 //! Abstractions for timely dataflow programming.
 //!
-//! Timely dataflow programs are constructed by manipulating [`StreamCore`](stream) objects,
+//! Timely dataflow programs are constructed by manipulating [`Stream`](stream) objects,
 //! most often using pre-defined [operators] that implement known patterns.
 //!
 //! # Examples
@@ -14,7 +14,7 @@
 //! });
 //! ```
 
-pub use self::stream::{StreamCore, StreamVec};
+pub use self::stream::{Stream, StreamVec};
 pub use self::scopes::{Scope, ScopeParent};
 
 pub use self::operators::core::input::Handle as InputHandle;

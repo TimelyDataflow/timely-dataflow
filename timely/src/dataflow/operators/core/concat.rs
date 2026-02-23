@@ -2,7 +2,7 @@
 
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Stream, Scope};
 
 /// Merge the contents of two streams.
 pub trait Concat<G: Scope, C> {
@@ -21,11 +21,11 @@ pub trait Concat<G: Scope, C> {
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concat(self, other: StreamCore<G, C>) -> StreamCore<G, C>;
+    fn concat(self, other: Stream<G, C>) -> Stream<G, C>;
 }
 
-impl<G: Scope, C: Container> Concat<G, C> for StreamCore<G, C> {
-    fn concat(self, other: StreamCore<G, C>) -> StreamCore<G, C> {
+impl<G: Scope, C: Container> Concat<G, C> for Stream<G, C> {
+    fn concat(self, other: Stream<G, C>) -> Stream<G, C> {
         self.scope().concatenate([self, other])
     }
 }
@@ -49,15 +49,15 @@ pub trait Concatenate<G: Scope, C> {
     ///          .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
+    fn concatenate<I>(&self, sources: I) -> Stream<G, C>
     where
-        I: IntoIterator<Item=StreamCore<G, C>>;
+        I: IntoIterator<Item=Stream<G, C>>;
 }
 
 impl<G: Scope, C: Container> Concatenate<G, C> for G {
-    fn concatenate<I>(&self, sources: I) -> StreamCore<G, C>
+    fn concatenate<I>(&self, sources: I) -> Stream<G, C>
     where
-        I: IntoIterator<Item=StreamCore<G, C>>
+        I: IntoIterator<Item=Stream<G, C>>
     {
 
         // create an operator builder.

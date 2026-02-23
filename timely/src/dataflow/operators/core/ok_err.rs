@@ -5,9 +5,9 @@ use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OutputBuilder;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 
-/// Extension trait for `StreamCore`.
+/// Extension trait for `Stream`.
 pub trait OkErr<S: Scope, C: DrainContainer> {
     /// Takes one input stream and splits it into two output streams.
     /// For each record, the supplied closure is called with the data.
@@ -33,7 +33,7 @@ pub trait OkErr<S: Scope, C: DrainContainer> {
     fn ok_err<C1, D1, C2, D2, L>(
         self,
         logic: L,
-    ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
+    ) -> (Stream<S, C1>, Stream<S, C2>)
     where
         C1: Container + SizableContainer + PushInto<D1>,
         C2: Container + SizableContainer + PushInto<D2>,
@@ -41,11 +41,11 @@ pub trait OkErr<S: Scope, C: DrainContainer> {
     ;
 }
 
-impl<S: Scope, C: Container + DrainContainer> OkErr<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + DrainContainer> OkErr<S, C> for Stream<S, C> {
     fn ok_err<C1, D1, C2, D2, L>(
         self,
         mut logic: L,
-    ) -> (StreamCore<S, C1>, StreamCore<S, C2>)
+    ) -> (Stream<S, C1>, Stream<S, C2>)
     where
         C1: Container + SizableContainer + PushInto<D1>,
         C2: Container + SizableContainer + PushInto<D2>,

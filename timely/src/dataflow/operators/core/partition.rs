@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use crate::container::{DrainContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::{Container, ContainerBuilder};
 
 /// Partition a stream of records into multiple streams.
@@ -28,14 +28,14 @@ pub trait Partition<G: Scope, C: DrainContainer> {
     ///     }
     /// });
     /// ```
-    fn partition<CB, D2, F>(self, parts: u64, route: F) -> Vec<StreamCore<G, CB::Container>>
+    fn partition<CB, D2, F>(self, parts: u64, route: F) -> Vec<Stream<G, CB::Container>>
     where
         CB: ContainerBuilder + PushInto<D2>,
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static;
 }
 
-impl<G: Scope, C: Container + DrainContainer> Partition<G, C> for StreamCore<G, C> {
-    fn partition<CB, D2, F>(self, parts: u64, mut route: F) -> Vec<StreamCore<G, CB::Container>>
+impl<G: Scope, C: Container + DrainContainer> Partition<G, C> for Stream<G, C> {
+    fn partition<CB, D2, F>(self, parts: u64, mut route: F) -> Vec<Stream<G, CB::Container>>
     where
         CB: ContainerBuilder + PushInto<D2>,
         F: FnMut(C::Item<'_>) -> (u64, D2) + 'static,

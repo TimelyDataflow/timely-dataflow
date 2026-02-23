@@ -1,12 +1,12 @@
-//! Extension methods for `StreamCore` based on record-by-record transformation.
+//! Extension methods for `Stream` based on record-by-record transformation.
 
 use crate::container::{DrainContainer, SizableContainer, PushInto};
 use crate::Container;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
-/// Extension trait for `StreamCore`.
+/// Extension trait for `Stream`.
 pub trait Map<S: Scope, C: DrainContainer> : Sized {
     /// Consumes each element of the stream and yields a new element.
     ///
@@ -23,7 +23,7 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn map<C2, D2, L>(self, mut logic: L) -> StreamCore<S, C2>
+    fn map<C2, D2, L>(self, mut logic: L) -> Stream<S, C2>
     where
         C2: Container + SizableContainer + PushInto<D2>,
         L: FnMut(C::Item<'_>)->D2 + 'static,
@@ -45,7 +45,7 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn flat_map<C2, I, L>(self, logic: L) -> StreamCore<S, C2>
+    fn flat_map<C2, I, L>(self, logic: L) -> Stream<S, C2>
     where
         I: IntoIterator,
         C2: Container + SizableContainer + PushInto<I::Item>,
@@ -88,11 +88,11 @@ pub trait Map<S: Scope, C: DrainContainer> : Sized {
     }
 }
 
-impl<S: Scope, C: Container + DrainContainer> Map<S, C> for StreamCore<S, C> {
+impl<S: Scope, C: Container + DrainContainer> Map<S, C> for Stream<S, C> {
     // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
     // TODO : number of elements from the iterator. This would allow iterators that produce many
     // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<C2, I, L>(self, mut logic: L) -> StreamCore<S, C2>
+    fn flat_map<C2, I, L>(self, mut logic: L) -> Stream<S, C2>
     where
         I: IntoIterator,
         C2: Container + SizableContainer + PushInto<I::Item>,
@@ -137,7 +137,7 @@ where
         }
     }
     /// Convert the wrapper into a stream.
-    pub fn into_stream<S, C2>(self) -> StreamCore<S, C2>
+    pub fn into_stream<S, C2>(self) -> Stream<S, C2>
     where
         I: IntoIterator,
         S: Scope,

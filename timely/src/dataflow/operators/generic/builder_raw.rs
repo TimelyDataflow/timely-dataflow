@@ -14,7 +14,7 @@ use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 use crate::progress::operate::{Connectivity, PortConnectivity};
 use crate::Container;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{Stream, Scope};
 use crate::dataflow::channels::pushers::Tee;
 use crate::dataflow::channels::pact::ParallelizationContract;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
@@ -104,7 +104,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input<C: Container, P>(&mut self, stream: StreamCore<G, C>, pact: P) -> P::Puller
+    pub fn new_input<C: Container, P>(&mut self, stream: Stream<G, C>, pact: P) -> P::Puller
     where
         P: ParallelizationContract<G::Timestamp, C>
     {
@@ -113,7 +113,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
-    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: StreamCore<G, C>, pact: P, connection: I) -> P::Puller
+    pub fn new_input_connection<C: Container, P, I>(&mut self, stream: Stream<G, C>, pact: P, connection: I) -> P::Puller
     where
         P: ParallelizationContract<G::Timestamp, C>,
         I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)>,
@@ -133,14 +133,14 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output<C: Container>(&mut self) -> (Tee<G::Timestamp, C>, StreamCore<G, C>) {
+    pub fn new_output<C: Container>(&mut self) -> (Tee<G::Timestamp, C>, Stream<G, C>) {
 
         let connection = (0 .. self.shape.inputs).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
-    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (Tee<G::Timestamp, C>, StreamCore<G, C>)
+    pub fn new_output_connection<C: Container, I>(&mut self, connection: I) -> (Tee<G::Timestamp, C>, Stream<G, C>)
     where
         I: IntoIterator<Item = (usize, Antichain<<G::Timestamp as Timestamp>::Summary>)>,
     {
@@ -148,7 +148,7 @@ impl<G: Scope> OperatorBuilder<G> {
         self.shape.outputs += 1;
         let (target, registrar) = Tee::new();
         let source = Source::new(self.index, new_output);
-        let stream = StreamCore::new(source, registrar, self.scope.clone());
+        let stream = Stream::new(source, registrar, self.scope.clone());
 
         for (input, entry) in connection {
             self.summary[input].add_port(new_output, entry);

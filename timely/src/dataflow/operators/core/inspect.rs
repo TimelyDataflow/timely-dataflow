@@ -2,7 +2,7 @@
 
 use crate::Container;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, Stream};
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
@@ -97,7 +97,7 @@ where
     fn inspect_core<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container> Inspect<G, C> for StreamCore<G, C>
+impl<G: Scope, C: Container> Inspect<G, C> for Stream<G, C>
 where
     for<'a> &'a C: IntoIterator,
 {
@@ -131,7 +131,7 @@ pub trait InspectCore<G: Scope, C> {
     fn inspect_container<F>(self, func: F) -> Self where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container> InspectCore<G, C> for StreamCore<G, C> {
+impl<G: Scope, C: Container> InspectCore<G, C> for Stream<G, C> {
 
     fn inspect_container<F>(self, mut func: F) -> Self
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static

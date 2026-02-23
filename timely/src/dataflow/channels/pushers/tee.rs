@@ -128,7 +128,7 @@ impl<T: 'static, C: 'static> TeeHelper<T, C> {
         }
     }
 
-    /// Adds a new `Push` implementor to the list of recipients shared with a `StreamCore`.
+    /// Adds a new `Push` implementor to the list of recipients shared with a `Stream`.
     pub fn add_pusher<P: Push<Message<T, C>>+'static>(self, pusher: P) {
         let mut borrow = self.shared.borrow_mut();
         if let Some(many) = borrow.as_mut() {
