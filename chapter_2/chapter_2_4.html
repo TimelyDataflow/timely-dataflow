@@ -175,20 +175,19 @@
                     <main>
                         <h1 id="creating-operators"><a class="header" href="#creating-operators">Creating Operators</a></h1>
 <p>What if there isn't an operator that does what you want to do? What if what you want to do is better written as imperative code rather than a tangle of dataflow operators? Not a problem! Timely dataflow has you covered.</p>
-<p>Timely has several "generic" dataflow operators that are pretty much ready to run, except someone (you) needs to supply their implementation. This isn't as scary as it sounds; you just need to write a closure that says "given a handle to my inputs and outputs, what do I do when timely asks me to run?".</p>
+<p>Timely has several "generic" dataflow operators that are pretty much ready to run, except that someone (you) needs to supply their implementation. This isn't as scary as it sounds; you just need to write a closure that says "given a handle to my inputs and outputs, what do I do when timely asks me to run?".</p>
 <p>Let's look at an example</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::ToStream;
-use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::operators::{ToStream, Operator};
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
+            .container::&lt;Vec&lt;_&gt;&gt;()
             .unary(Pipeline, "increment", |capability, info| {
-
                 move |input, output| {
                     input.for_each_time(|time, data| {
                         let mut session = output.session(&amp;time);
@@ -201,11 +200,18 @@ fn main() {
             .container::&lt;Vec&lt;_&gt;&gt;();
     });
 }</code></pre></pre>
-<p>What is going on here? The heart of the mess is the dataflow operator <code>unary</code>, which is a ready-to-assemble dataflow operator with one input and one output. The <code>unary</code> operator takes three arguments (it looks like so many more!): (i) instructions about how it should distribute its inputs, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.</p>
+<p>What is going on here? The heart of the mess is the dataflow operator <code>unary</code>, which is a ready-to-assemble dataflow operator with one input and one output. The <code>unary</code> operator takes three arguments (it looks like so many more!): (i) instructions about how its input data should be distributed, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.</p>
 <p>Most of what is interesting lies in the closure, so let's first tidy up some loose ends before we dive in there. There are a few ways to request how input data should be distributed and <code>Pipeline</code> is the one that says "don't move anything". The string "increment" is utterly arbitrary; this happens to be what the operator does, but you could change it to be your name, or a naughty word, or whatever you like. The <code>|capability|</code> stuff should be ignored for the moment; we'll explain in just a moment (it has to do with whether you would like the ability to send data before you receive any).</p>
 <p>The heart of the logic lies in the closure that binds <code>input</code> and <code>output</code>. These two are handles respectively to the operator's input (from which it can read records) and the operator's output (to which it can send records).</p>
-<p>The input handle <code>input</code> has one primary method, <code>next</code>, which may return a pair consisting of a <code>CapabilityRef&lt;Timestamp&gt;</code> and a batch of data. Rust really likes you to demonstrate a commitment to only looking at valid data, and our <code>while</code> loop does what is called deconstruction: we acknowledge the optional structure and only execute in the case the <code>Option</code> variant is <code>Some</code>, containing data. The <code>next</code> method could also return <code>None</code>, indicating that there is no more data available at the moment. It is strongly recommended that you take the hint and stop trying to read inputs at that point; timely gives you the courtesy of executing whatever code you want in this closure, but if you never release control back to the system you'll break things (timely employs <a href="https://en.wikipedia.org/wiki/Cooperative_multitasking">"cooperative multitasking"</a>).</p>
-<p>The output handle <code>output</code> has one primary method, <code>session</code>, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) element at a time with <code>give</code>, (ii) iterator at a time with <code>give_iterator</code>, and (iii) vector at a time with <code>give_content</code>. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the <code>while</code> loop.</p>
+<p>The input handle <code>input</code> has one primary method, <code>for_each_time</code>, which is invoked for each distinct timestamp with a <code>CapabilityRef&lt;Timestamp&gt;</code> and a list of batches of data.
+This method should be called each scheduling invocation, if nothing else to move the batches of data from the input to some operator-local storage.</p>
+<p>The output handle <code>output</code> has one primary method, <code>session</code>, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) an element at a time with <code>give</code>, (ii) an iterator at a time with <code>give_iterator</code>, and (iii) a container at a time with <code>give_container</code>. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the <code>while</code> loop.</p>
+<h3 id="containers"><a class="header" href="#containers">Containers</a></h3>
+<p>The example above has two calls to <code>container::&lt;Vec&lt;_&gt;&gt;()</code>.
+These exist because timely allows you to be flexible about how you would like to store your data in batches, perhaps in a <code>Vec</code> or perhaps using some other type.
+The method signals the container type the stream should have, and mostly exists to inform Rust's type inference of your preferences when they are not otherwise available.
+In this case <code>unary</code>, as well as the other generic operators, works with arbitrary containers on its inputs and outputs, and needs to prescriptive guidance.</p>
+<p>We use <code>Vec</code> as a container for demonstration code, but the <code>columnar.rs</code> example shows how to build an alternate container that is able to lay out the data differently, in its case using fewer and larger allocations, even for types like <code>String</code> which can own small allocations.</p>
 <h3 id="other-shapes"><a class="header" href="#other-shapes">Other shapes</a></h3>
 <p>The <code>unary</code> method is handy if you have one input and one output. What if you want something with two inputs? Or what about zero inputs? We've still got you covered.</p>
 <p>There is a <code>binary</code> method which looks a lot like unary, except that it has twice as many inputs (and ways to distribute the inputs), and requires a closure accepting two inputs and one output. You still get to write arbitrary code to drive the operator around as you like.</p>
@@ -272,6 +278,7 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
+            .container::&lt;Vec&lt;_&gt;&gt;()
             .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
@@ -309,8 +316,8 @@ use timely::dataflow::channels::pact::Pipeline;
 fn main() {
     timely::example(|scope| {
 
-        let in1 = (0 .. 10).to_stream(scope);
-        let in2 = (0 .. 10).to_stream(scope);
+        let in1 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
+        let in2 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
 
         in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
@@ -355,8 +362,8 @@ use timely::dataflow::channels::pact::Pipeline;
 fn main() {
     timely::example(|scope| {
 
-        let in1 = (0 .. 10).to_stream(scope);
-        let in2 = (0 .. 10).to_stream(scope);
+        let in1 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
+        let in2 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
 
         in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 

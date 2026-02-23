@@ -216,6 +216,7 @@ fn main() {
         // build a new dataflow.
         worker.dataflow(|scope| {
             input.to_stream(scope)
+                 .container::&lt;Vec&lt;_&gt;&gt;()
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&amp;mut probe);
         });
@@ -261,7 +262,7 @@ fn main() {
 <pre><pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
 </span><span class="boring">
 </span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
-</span><span class="boring">use timely::dataflow::operators::{Inspect, Probe, Map};
+</span><span class="boring">use timely::dataflow::operators::{Inspect, Probe, vec::Map};
 </span><span class="boring">
 </span><span class="boring">fn main() {
 </span><span class="boring">    // initializes and runs a timely dataflow.
@@ -304,7 +305,7 @@ fn main() {
 <pre><pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
 </span><span class="boring">
 </span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
-</span><span class="boring">use timely::dataflow::operators::{Inspect, Probe, Map};
+</span><span class="boring">use timely::dataflow::operators::{Inspect, Probe, vec::Map};
 </span><span class="boring">
 </span><span class="boring">use std::collections::HashMap;
 </span><span class="boring">use timely::dataflow::channels::pact::Exchange;

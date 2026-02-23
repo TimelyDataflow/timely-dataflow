@@ -181,7 +181,8 @@
 <p>We are going to check the <a href="https://en.wikipedia.org/wiki/Collatz_conjecture">Collatz conjecture</a>, which says that if you repeatedly divide even numbers by two, and multiply odd numbers by three and add one, you eventually reach the number one. We could do this in lots of ways, but this is the timely dataflow way to do it.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Feedback, ToStream, Concat, Inspect, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter, BranchWhen};
 
 fn main() {
     timely::example(|scope| {
@@ -208,7 +209,8 @@ fn main() {
 <p>Perhaps you are a very clever person, and you've realized that we don't need to test the results of odd numbers to see if they are one, which would be easy if we broke our stream apart into streams of even and odd numbers. We can do that, by having two loop variables, one for even (<code>0</code>) and one for odd (<code>1</code>).</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Feedback, ToStream, Concat, Inspect, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter, Partition};
 
 fn main() {
     timely::example(|scope| {
@@ -240,7 +242,8 @@ fn main() {
 <p>Of course, you can do all of this in a nested scope, if that is appropriate. In the example above, we just used the ambient <code>u64</code> timestamp from <code>timely::example</code>, but perhaps you were hoping that it would correspond to streamed input, or something else. We just need to introduce a new nested scope, in that case.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, Enter, Concat, Inspect, LoopVariable, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter};
 use timely::dataflow::Scope;
 
 fn main() {

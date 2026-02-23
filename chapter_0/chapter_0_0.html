@@ -179,7 +179,7 @@
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate timely;
 </span>
-use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::{vec::ToStream, Inspect};
 
 timely::example(|scope| {
     (0..10).to_stream(scope)

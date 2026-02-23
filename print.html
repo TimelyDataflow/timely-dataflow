@@ -186,7 +186,7 @@
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate timely;
 </span>
-use timely::dataflow::operators::{ToStream, Inspect};
+use timely::dataflow::operators::{vec::ToStream, Inspect};
 
 timely::example(|scope| {
     (0..10).to_stream(scope)
@@ -235,6 +235,7 @@ timely::execute_from_args(std::env::args(), |worker| {
     // create a new input, exchange data, and inspect its output
     let probe = worker.dataflow(|scope|
         scope.input_from(&amp;mut input)
+             .container::&lt;Vec&lt;_&gt;&gt;()
              .exchange(|x| *x)
              .inspect(move |x| println!("worker {}:\thello {}", index, x))
              .probe()
@@ -352,7 +353,7 @@ timely::execute_from_args(std::env::args(), |worker| {
 <p><strong>Data Parallelism</strong>: The operators in timely dataflow are largely "data-parallel", meaning they can operate on independent parts of the data concurrently. This allows the underlying system to distribute timely dataflow computations across multiple parallel workers. These can be threads on your computer, or even threads across computers in a cluster you have access to. This distribution typically improves the throughput of the system, and lets you scale to larger problems with access to more resources (computation, communication, and memory).</p>
 </li>
 <li>
-<p><strong>Streaming Data</strong>: The core data type in timely dataflow is a <em>stream</em> of data, an unbounded collection of data not all of which is available right now, but which instead arrives as the computation proceeds. Streams are a helpful generalization of static data sets, which are assumed available at the start of the computation. By expressing your program as a computation on streams, you've explained both how it should respond to static input data sets (feed all the data in at once) but also how it should react to new data that might arrive later on.</p>
+<p><strong>Streaming Data</strong>: The core data type in timely dataflow is a <em>stream</em> of data, an unbounded volume of data not all of which is available right now, but which instead arrives as the computation proceeds. Streams are a helpful generalization of static data sets, which are assumed available at the start of the computation. By expressing your program as a computation on streams, you've explained both how it should respond to static input data sets (feed all the data in at once) but also how it should react to new data that might arrive later on.</p>
 </li>
 <li>
 <p><strong>Expressivity</strong>: Timely dataflow's main addition over traditional stream processors is its ability to express higher-level control constructs, like iteration. This moves stream computations from the limitations of straight line code to the world of <em>algorithms</em>. Many of the advantages of timely dataflow computations come from our ability to express a more intelligent algorithm than the alternative systems, which can only express more primitive computations.</p>
@@ -377,7 +378,7 @@ timely::execute_from_args(std::env::args(), |worker| {
 <hr />
 <p>Timely dataflow is in a bit of a weird space between language library and runtime system. This means that it doesn't quite have the stability guarantees a library might have (when you call <code>data.sort()</code> you don't think about "what if it fails?"), nor does it have the surrounding infrastructure of a <a href="https://www.microsoft.com/en-us/research/project/dryadlinq/">DryadLINQ</a> or <a href="https://spark.apache.org">Spark</a> style of experience. Part of this burden is simply passed to you, and this may be intolerable depending on your goals for your program.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="chapter-1-core-concepts"><a class="header" href="#chapter-1-core-concepts">Chapter 1: Core Concepts</a></h1>
-<p>Timely dataflow relies on two fundamental concepts: <strong>timestamps</strong> and <strong>dataflow</strong>, which together lead to the concept of <strong>progress</strong>. We will want to break down these concepts because they play a fundamental role in understanding how timely dataflow programs are structured.</p>
+<p>Timely dataflow relies on two fundamental concepts: <strong>dataflow</strong> and <strong>timestamps</strong>, which together lead to the concept of <strong>progress</strong>. We will want to break down these concepts because they play a fundamental role in understanding how timely dataflow programs are structured.</p>
 <h2 id="dataflow"><a class="header" href="#dataflow">Dataflow</a></h2>
 <p>Dataflow programming is fundamentally about describing your program as independent components, each of which operate in response to the availability of input data, as well as describing the connections between these components.</p>
 <p>The most important part of dataflow programming is the <em>independence</em> of the components. When you write a dataflow program, you provide the computer with flexibility in how it executes your program. Rather than insisting on a specific sequence of instructions the computer should follow, the computer can work on each of the components as it sees fit, perhaps even sharing the work with other computers.</p>
@@ -394,7 +395,8 @@ timely::execute_from_args(std::env::args(), |worker| {
 <p>Dataflow programming is fundamentally about describing your program as independent components, each of which operate in response to the availability of input data, as well as describing the connections between these components. This has several advantages, mostly in how it allows a computer to execute your program, but it can take a bit of thinking to re-imagine your imperative computation as a dataflow computation.</p>
 <h2 id="an-example-1"><a class="header" href="#an-example-1">An example</a></h2>
 <p>Let's write an overly simple dataflow program. Remember our <code>examples/hello.rs</code> program? We are going to revisit that, but with some <strong>timestamp</strong> aspects removed. The goal is to get a sense for dataflow with all of its warts, and to get you excited for the next section where we bring back the timestamps. :)</p>
-<p>Here is a reduced version of <code>examples/hello.rs</code> that just feeds data into our dataflow, without paying any attention to progress made. In particular, we have removed the <code>probe()</code> operation, the resulting <code>probe</code> variable, and the use of <code>probe</code> to determine how long we should step the worker before introducing more data.</p>
+<p>Here is a reduced version of <code>examples/hello.rs</code> that just feeds data into our dataflow, without paying any attention to progress made.
+In particular, we have commented out the line that holds back the introduce of data until <code>probe</code> and <code>input</code> agree on a time.</p>
 <pre><pre class="playground"><code class="language-rust">#![allow(unused_variables)]
 extern crate timely;
 
@@ -411,6 +413,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|
             scope.input_from(&amp;mut input)
+                 .container::&lt;Vec&lt;_&gt;&gt;()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()
@@ -426,8 +429,9 @@ fn main() {
         }
     }).unwrap();
 }</code></pre></pre>
-<p>This program is a <em>dataflow program</em>. There are two dataflow operators here, <code>exchange</code> and <code>inspect</code>, each of which is asked to do a thing in response to input data. The <code>exchange</code> operator takes each datum and hands it to a downstream worker based on the value it sees; with two workers, one will get all the even numbers and the other all the odd numbers. The <code>inspect</code> operator takes an action for each datum, in this case printing something to the screen.</p>
-<p>Importantly, we haven't imposed any constraints on how these operators need to run. We removed the code that caused the input to be delayed until a certain amount of progress had been made, and it shows in the results when we run with more than one worker:</p>
+<p>It turns out this handshake between <code>probe</code> and <code>input</code> was part of what made the output make any sense.
+We waited for <code>probe</code> to confirm that the system was caught up before introducing more data to <code>input</code>.
+When we remove these constraints we get a more haphazard output.</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
@@ -513,19 +517,19 @@ fn main() {
 <pre><code class="language-ignore">    Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`
-    worker 1:	hello 1 @ (Root, 1)
-    worker 1:	hello 3 @ (Root, 3)
-    worker 1:	hello 5 @ (Root, 5)
-    worker 0:	hello 0 @ (Root, 0)
-    worker 0:	hello 2 @ (Root, 2)
-    worker 0:	hello 4 @ (Root, 4)
-    worker 0:	hello 6 @ (Root, 6)
-    worker 0:	hello 8 @ (Root, 8)
-    worker 1:	hello 7 @ (Root, 7)
-    worker 1:	hello 9 @ (Root, 9)
+    worker 1:	hello 1 @ 1
+    worker 1:	hello 3 @ 3
+    worker 1:	hello 5 @ 5
+    worker 0:	hello 0 @ 0
+    worker 0:	hello 2 @ 2
+    worker 0:	hello 4 @ 4
+    worker 0:	hello 6 @ 6
+    worker 0:	hello 8 @ 8
+    worker 1:	hello 7 @ 7
+    worker 1:	hello 9 @ 9
     Echidnatron%
 </code></pre>
-<p>The timestamps are the <code>(Root, i)</code> things for various values of <code>i</code>. These happen to correspond to the data themselves, but had we provided random input data rather than <code>i</code> itself we would still be able to make sense of the output and put it back "in order".</p>
+<p>The timestamps are the <code>@ i</code> things for various values of <code>i</code>. These happen to correspond to the data themselves, but had we provided random input data rather than <code>i</code> itself we would still be able to make sense of the output and put it back "in order".</p>
 <h2 id="timestamps-for-dataflow-operators"><a class="header" href="#timestamps-for-dataflow-operators">Timestamps for dataflow operators</a></h2>
 <p>Timestamps are not only helpful for dataflow users, but for the operators themselves. With time we will start to write more interesting dataflow operators, and it may be important for them to understand which records should be thought to come before others.</p>
 <p>Imagine, for example, a dataflow operator whose job is to report the "sum so far", where "so far" should be with respect to the timestamp (as opposed to whatever arbitrary order the operator receives the records). Such an operator can't simply take its input records, add them to a total, and produce the result. The input records may no longer be ordered by timestamp, and the produced summations may not reflect any partial sum of the input. Instead, the operator needs to look at the timestamps on the records, and incorporate the numbers in order of their timestamps.</p>
@@ -548,6 +552,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|
             scope.input_from(&amp;mut input)
+                 .container::&lt;Vec&lt;_&gt;&gt;()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()
@@ -568,10 +573,10 @@ fn main() {
 worker.step_while(|| probe.less_than(input.time()));</code></pre>
 <p>Let's talk about each of them.</p>
 <h2 id="input-capabilities"><a class="header" href="#input-capabilities">Input capabilities</a></h2>
-<p>The <code>input</code> structure is how we provide data to a timely dataflow computation, and it has a timestamp associated with it. Initially this timestamp is the default value, usually something like <code>0</code> for integers. Whatever timestamp <code>input</code> has, it can introduce data with that timestamp or greater. We can advance this timestamp, via the <code>advance_to</code> method, which restricts the timestamps we can use to those greater or equal to whatever timestamp is supplied as the argument.</p>
+<p>The <code>input</code> structure is how we provide data to a timely dataflow computation, and it has a timestamp associated with it. Initially this timestamp is the default value, usually something like <code>0</code> for unsigned integers. Whatever timestamp <code>input</code> has, it can introduce data with that timestamp or greater. We can advance this timestamp, via the <code>advance_to</code> method, which permanently restricts the timestamps we can use to those greater or equal to whatever timestamp is supplied as the argument.</p>
 <p>The <code>advance_to</code> method is a big deal. This is the moment in the computation where our program reveals to the system, and through the system to all other dataflow workers, that we might soon be able to announce a timestamp as complete. There may still be records in flight bearing that timestamp, but as they are retired the system can finally report that progress has been made.</p>
 <h2 id="output-possibilities"><a class="header" href="#output-possibilities">Output possibilities</a></h2>
-<p>The <code>probe</code> structure is how we learn about the possibility of timestamped data at some point in the dataflow graph. We can, at any point, consult a probe with the <code>less_than</code> method and ask whether it is still possible that we might see a time less than the argument at that point in the dataflow graph. There is also a <code>less_equal</code> method, if you prefer that.</p>
+<p>The <code>probe</code> structure is how we learn about the possibility of receiving timestamped data at some point in the dataflow graph. We can, at any point, consult a probe with the <code>less_than</code> method and ask whether it is still possible that we might see a time less than the argument at that point in the dataflow graph. There is also a <code>less_equal</code> method, if you prefer that.</p>
 <p>Putting a probe after the <code>inspect</code> operator, which passes through all data it receives as input only after invoking its method, tells us whether we should expect to see the method associated with <code>inspect</code> fire again for a given timestamp. If we are told we won't see any more messages with timestamp <code>t</code> after the <code>inspect</code>, then the <code>inspect</code> won't see any either.</p>
 <p>The <code>less_than</code> and <code>less_equal</code> methods are the only place where we learn about the state of the rest of the system. These methods are non-blocking; they always return immediately with either a "yes, you might see such a timestamp" or a "no, you will not see such a timestamp".</p>
 <h2 id="responding-to-progress-information"><a class="header" href="#responding-to-progress-information">Responding to progress information</a></h2>
@@ -589,6 +594,7 @@ use timely::dataflow::operators::{ToStream, Inspect};
 fn main() {
     timely::example(|scope| {
         (0..10).to_stream(scope)
+               .container::&lt;Vec&lt;_&gt;&gt;()
                .inspect(|x| println!("seen: {:?}", x));
     });
 }</code></pre></pre>
@@ -608,19 +614,23 @@ fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
 
-        let mut input = InputHandle::&lt;(), String&gt;::new();
+        let mut input = InputHandle::new();
 
         // define a new dataflow
-        worker.dataflow(|scope| {
+        worker.dataflow::&lt;(),_,_&gt;(|scope| {
 
-            let stream1 = input.to_stream(scope);
-            let stream2 = (0 .. 10).to_stream(scope);
-
+            let stream1 = input.to_stream(scope).container::&lt;Vec&lt;String&gt;&gt;();
+            let stream2 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
         });
 
     }).unwrap();
 }</code></pre></pre>
 <p>There will be more to do to get data into <code>input</code>, and we aren't going to worry about that at the moment. But, now you know two of the places you can get data from!</p>
+<p>At this point you may also have questions about the <code>container()</code> method with many symbols.
+Rust is statically typed, and needs to know the type of things that each program will manipulate.
+Timely dataflow bundles your individual data atoms into batches backed by a "container" type, and we need to communicate this type to Rust as well.
+In our first case, we've said we have an input but we haven't provided any clues about the type of data, and must do so to compile the program even thought we don't care for the example.
+In our second case, we've shown some data (integers) but we haven't revealed how we want to hold on to them, as we communicate the <code>Vec</code> structure and leave the data type unspecified with <code>_</code> (which Rust can fill in from the type of the integers).</p>
 <h2 id="other-sources"><a class="header" href="#other-sources">Other sources</a></h2>
 <p>There are other sources of input that are a bit more advanced. Once we learn how to create custom operators, the <code>source</code> method will allow us to create a custom operator with zero input streams and one output stream, which looks like a source of data (hence the name). There are also the <code>Capture</code> and <code>Replay</code> traits that allow us to exfiltrate the contents of a stream from one dataflow (using <code>capture_into</code>) and re-load it in another dataflow (using <code>replay_into</code>).</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="observing-outputs"><a class="header" href="#observing-outputs">Observing Outputs</a></h1>
@@ -635,6 +645,7 @@ fn main() {
         worker.dataflow::&lt;(),_,_&gt;(|scope| {
             (0 .. 10)
                 .to_stream(scope)
+                .container::&lt;Vec&lt;_&gt;&gt;()
                 .inspect(|x| println!("hello: {}", x));
         });
     }).unwrap();
@@ -651,6 +662,7 @@ fn main() {
         worker.dataflow::&lt;(),_,_&gt;(|scope| {
             (0 .. 10)
                 .to_stream(scope)
+                .container::&lt;Vec&lt;_&gt;&gt;()
                 .inspect_batch(|t, xs| println!("hello: {:?} @ {:?}", xs, t));
         });
     }).unwrap();
@@ -666,8 +678,8 @@ use timely::dataflow::operators::capture::Extract;
 
 fn main() {
     let (data1, data2) = timely::example(|scope| {
-        let data1 = (0..3).to_stream(scope).capture();
-        let data2 = vec![0,1,2].to_stream(scope).capture();
+        let data1 = (0..3).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;().capture();
+        let data2 = vec![0,1,2].to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;().capture();
         (data1, data2)
     });
 
@@ -682,7 +694,7 @@ fn main() {
 <p>The following program should print out the numbers one through ten.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -694,10 +706,10 @@ fn main() {
         });
     }).unwrap();
 }</code></pre></pre>
-<p>The closure <code>map</code> takes <em>owned</em> data as input, which means you are able to mutate it as you like without cloning or copying the data. For example, if you have a stream of <code>String</code> data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.</p>
+<p>This <code>map</code> operator consumes and produces <em>owned</em> data, which allows you to mutate the data without necessarily reallocating. For example, if you have a stream of <code>String</code> data, then you could upper-case the string contents without having to make a second copy; your closure owns the data that comes in, with all the benefits that entails.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -715,7 +727,7 @@ fn main() {
 <p>For example, the <code>map_in_place</code> method takes a closure which receives a mutable reference and produces no output; instead, this method allows you to change the data <em>in-place</em>, which can be a valuable way to avoid duplication of resources.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -731,7 +743,7 @@ fn main() {
 <p>Alternately, the <code>flat_map</code> method takes input data and allows your closure to transform each element to an iterator, which it then enumerates into the output stream. The following fragment takes each number from zero through eight and has each produce all numbers less than it. The result should be 8 zeros, 7 ones, and so on up to 1 seven.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -747,7 +759,7 @@ fn main() {
 <p>Another fundamental operation is <em>filtering</em>, in which a predicate dictates a subset of the stream to retain.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Filter};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Filter};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
@@ -765,7 +777,7 @@ fn main() {
 <p>The <code>partition</code> operator takes two arguments, a number of resulting streams to produce, and a closure which takes each record to a pair of the target partition identifier and the output record. The output of <code>partition</code> is a list of streams, where each stream contains those elements mapped to the stream under the closure.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Partition, Inspect};
+use timely::dataflow::operators::{ToStream, Inspect, vec::Partition};
 
 fn main() {
     timely::example(|scope| {
@@ -781,7 +793,7 @@ fn main() {
 <p>In the other direction, <code>concat</code> takes two streams and produces one output stream containing elements sent along either. The following example merges the partitioned streams back together.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Partition, Concat, Inspect};
+use timely::dataflow::operators::{ToStream, Concat, Inspect, vec::Partition};
 
 fn main() {
     timely::example(|scope| {
@@ -797,7 +809,7 @@ fn main() {
 <p>There is also a <code>concatenate</code> method defined for scopes which collects all streams from a supplied vector, effectively undoing the work of <code>partition</code> in one operator.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Partition, Concatenate, Inspect};
+use timely::dataflow::operators::{ToStream, Concatenate, Inspect, vec::Partition};
 
 fn main() {
     timely::example(|scope| {
@@ -817,20 +829,19 @@ fn main() {
 <p>There are any number of other operators, most of which you should be able to find in the <code>timely::dataflow::operators</code> module. Scanning through the documentation for this module may lead you to operators that you need, and alternately their implementations may demonstrate how to <em>construct</em> similar operators, if the one you require is not present. Operator construction is the subject of the next section!</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="creating-operators"><a class="header" href="#creating-operators">Creating Operators</a></h1>
 <p>What if there isn't an operator that does what you want to do? What if what you want to do is better written as imperative code rather than a tangle of dataflow operators? Not a problem! Timely dataflow has you covered.</p>
-<p>Timely has several "generic" dataflow operators that are pretty much ready to run, except someone (you) needs to supply their implementation. This isn't as scary as it sounds; you just need to write a closure that says "given a handle to my inputs and outputs, what do I do when timely asks me to run?".</p>
+<p>Timely has several "generic" dataflow operators that are pretty much ready to run, except that someone (you) needs to supply their implementation. This isn't as scary as it sounds; you just need to write a closure that says "given a handle to my inputs and outputs, what do I do when timely asks me to run?".</p>
 <p>Let's look at an example</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::ToStream;
-use timely::dataflow::operators::generic::operator::Operator;
+use timely::dataflow::operators::{ToStream, Operator};
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
+            .container::&lt;Vec&lt;_&gt;&gt;()
             .unary(Pipeline, "increment", |capability, info| {
-
                 move |input, output| {
                     input.for_each_time(|time, data| {
                         let mut session = output.session(&amp;time);
@@ -843,11 +854,18 @@ fn main() {
             .container::&lt;Vec&lt;_&gt;&gt;();
     });
 }</code></pre></pre>
-<p>What is going on here? The heart of the mess is the dataflow operator <code>unary</code>, which is a ready-to-assemble dataflow operator with one input and one output. The <code>unary</code> operator takes three arguments (it looks like so many more!): (i) instructions about how it should distribute its inputs, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.</p>
+<p>What is going on here? The heart of the mess is the dataflow operator <code>unary</code>, which is a ready-to-assemble dataflow operator with one input and one output. The <code>unary</code> operator takes three arguments (it looks like so many more!): (i) instructions about how its input data should be distributed, (ii) a tasteful name, and (iii) the logic it should execute whenever timely gives it a chance to do things.</p>
 <p>Most of what is interesting lies in the closure, so let's first tidy up some loose ends before we dive in there. There are a few ways to request how input data should be distributed and <code>Pipeline</code> is the one that says "don't move anything". The string "increment" is utterly arbitrary; this happens to be what the operator does, but you could change it to be your name, or a naughty word, or whatever you like. The <code>|capability|</code> stuff should be ignored for the moment; we'll explain in just a moment (it has to do with whether you would like the ability to send data before you receive any).</p>
 <p>The heart of the logic lies in the closure that binds <code>input</code> and <code>output</code>. These two are handles respectively to the operator's input (from which it can read records) and the operator's output (to which it can send records).</p>
-<p>The input handle <code>input</code> has one primary method, <code>next</code>, which may return a pair consisting of a <code>CapabilityRef&lt;Timestamp&gt;</code> and a batch of data. Rust really likes you to demonstrate a commitment to only looking at valid data, and our <code>while</code> loop does what is called deconstruction: we acknowledge the optional structure and only execute in the case the <code>Option</code> variant is <code>Some</code>, containing data. The <code>next</code> method could also return <code>None</code>, indicating that there is no more data available at the moment. It is strongly recommended that you take the hint and stop trying to read inputs at that point; timely gives you the courtesy of executing whatever code you want in this closure, but if you never release control back to the system you'll break things (timely employs <a href="https://en.wikipedia.org/wiki/Cooperative_multitasking">"cooperative multitasking"</a>).</p>
-<p>The output handle <code>output</code> has one primary method, <code>session</code>, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) element at a time with <code>give</code>, (ii) iterator at a time with <code>give_iterator</code>, and (iii) vector at a time with <code>give_content</code>. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the <code>while</code> loop.</p>
+<p>The input handle <code>input</code> has one primary method, <code>for_each_time</code>, which is invoked for each distinct timestamp with a <code>CapabilityRef&lt;Timestamp&gt;</code> and a list of batches of data.
+This method should be called each scheduling invocation, if nothing else to move the batches of data from the input to some operator-local storage.</p>
+<p>The output handle <code>output</code> has one primary method, <code>session</code>, which starts up an output session at the indicated time. The resulting session can be given data in various ways: (i) an element at a time with <code>give</code>, (ii) an iterator at a time with <code>give_iterator</code>, and (iii) a container at a time with <code>give_container</code>. Internally it is buffering up the output and flushing automatically when the session goes out of scope, which happens above when we go around the <code>while</code> loop.</p>
+<h3 id="containers"><a class="header" href="#containers">Containers</a></h3>
+<p>The example above has two calls to <code>container::&lt;Vec&lt;_&gt;&gt;()</code>.
+These exist because timely allows you to be flexible about how you would like to store your data in batches, perhaps in a <code>Vec</code> or perhaps using some other type.
+The method signals the container type the stream should have, and mostly exists to inform Rust's type inference of your preferences when they are not otherwise available.
+In this case <code>unary</code>, as well as the other generic operators, works with arbitrary containers on its inputs and outputs, and needs to prescriptive guidance.</p>
+<p>We use <code>Vec</code> as a container for demonstration code, but the <code>columnar.rs</code> example shows how to build an alternate container that is able to lay out the data differently, in its case using fewer and larger allocations, even for types like <code>String</code> which can own small allocations.</p>
 <h3 id="other-shapes"><a class="header" href="#other-shapes">Other shapes</a></h3>
 <p>The <code>unary</code> method is handy if you have one input and one output. What if you want something with two inputs? Or what about zero inputs? We've still got you covered.</p>
 <p>There is a <code>binary</code> method which looks a lot like unary, except that it has twice as many inputs (and ways to distribute the inputs), and requires a closure accepting two inputs and one output. You still get to write arbitrary code to drive the operator around as you like.</p>
@@ -914,6 +932,7 @@ fn main() {
     timely::example(|scope| {
         (0u64..10)
             .to_stream(scope)
+            .container::&lt;Vec&lt;_&gt;&gt;()
             .unary(Pipeline, "increment", |capability, info| {
 
                 let mut maximum = 0;    // define this here; use in the closure
@@ -951,8 +970,8 @@ use timely::dataflow::channels::pact::Pipeline;
 fn main() {
     timely::example(|scope| {
 
-        let in1 = (0 .. 10).to_stream(scope);
-        let in2 = (0 .. 10).to_stream(scope);
+        let in1 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
+        let in2 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
 
         in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
@@ -997,8 +1016,8 @@ use timely::dataflow::channels::pact::Pipeline;
 fn main() {
     timely::example(|scope| {
 
-        let in1 = (0 .. 10).to_stream(scope);
-        let in2 = (0 .. 10).to_stream(scope);
+        let in1 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
+        let in2 = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
 
         in1.binary_frontier(in2, Pipeline, Pipeline, "concat_buffer", |capability, info| {
 
@@ -1079,6 +1098,7 @@ fn main() {
         // build a new dataflow.
         worker.dataflow(|scope| {
             input.to_stream(scope)
+                 .container::&lt;Vec&lt;_&gt;&gt;()
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&amp;mut probe);
         });
@@ -1124,7 +1144,7 @@ fn main() {
 <pre><pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
 </span><span class="boring">
 </span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
-</span><span class="boring">use timely::dataflow::operators::{Inspect, Probe, Map};
+</span><span class="boring">use timely::dataflow::operators::{Inspect, Probe, vec::Map};
 </span><span class="boring">
 </span><span class="boring">fn main() {
 </span><span class="boring">    // initializes and runs a timely dataflow.
@@ -1167,7 +1187,7 @@ fn main() {
 <pre><pre class="playground"><code class="language-rust"><span class="boring">extern crate timely;
 </span><span class="boring">
 </span><span class="boring">use timely::dataflow::{InputHandle, ProbeHandle};
-</span><span class="boring">use timely::dataflow::operators::{Inspect, Probe, Map};
+</span><span class="boring">use timely::dataflow::operators::{Inspect, Probe, vec::Map};
 </span><span class="boring">
 </span><span class="boring">use std::collections::HashMap;
 </span><span class="boring">use timely::dataflow::channels::pact::Exchange;
@@ -1429,7 +1449,7 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
 
-        let stream = (0 .. 10).to_stream(scope);
+        let stream = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
 
         // Create a new scope with the same (u64) timestamp.
         let result = scope.scoped::&lt;u64,_,_&gt;("SubScope", |subscope| {
@@ -1452,7 +1472,7 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
 
-        let stream = (0 .. 10).to_stream(scope);
+        let stream = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
 
         // Create a new scope with the same (u64) timestamp.
         let result = scope.region(|subscope| {
@@ -1476,7 +1496,7 @@ use timely::dataflow::operators::*;
 fn main() {
     timely::example(|scope| {
 
-        let stream = (0 .. 10).to_stream(scope);
+        let stream = (0 .. 10).to_stream(scope).container::&lt;Vec&lt;_&gt;&gt;();
 
         // Create a new scope with a (u64, u32) timestamp.
         let result = scope.iterative::&lt;u32,_,_&gt;(|subscope| {
@@ -1495,7 +1515,8 @@ fn main() {
 <p>We are going to check the <a href="https://en.wikipedia.org/wiki/Collatz_conjecture">Collatz conjecture</a>, which says that if you repeatedly divide even numbers by two, and multiply odd numbers by three and add one, you eventually reach the number one. We could do this in lots of ways, but this is the timely dataflow way to do it.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Feedback, ToStream, Concat, Inspect, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter, BranchWhen};
 
 fn main() {
     timely::example(|scope| {
@@ -1522,7 +1543,8 @@ fn main() {
 <p>Perhaps you are a very clever person, and you've realized that we don't need to test the results of odd numbers to see if they are one, which would be easy if we broke our stream apart into streams of even and odd numbers. We can do that, by having two loop variables, one for even (<code>0</code>) and one for odd (<code>1</code>).</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Feedback, ToStream, Concat, Inspect, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter, Partition};
 
 fn main() {
     timely::example(|scope| {
@@ -1554,7 +1576,8 @@ fn main() {
 <p>Of course, you can do all of this in a nested scope, if that is appropriate. In the example above, we just used the ambient <code>u64</code> timestamp from <code>timely::example</code>, but perhaps you were hoping that it would correspond to streamed input, or something else. We just need to introduce a new nested scope, in that case.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, Enter, Concat, Inspect, LoopVariable, ConnectLoop};
+use timely::dataflow::operators::vec::{Map, Filter};
 use timely::dataflow::Scope;
 
 fn main() {
@@ -1587,7 +1610,7 @@ fn main() {
 <p>Let's consider a simple example, where we take an input stream of numbers, and produce all numbers less than each input.</p>
 <pre><pre class="playground"><code class="language-rust">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, vec::Map};
 
 fn main() {
     timely::example(|scope| {
@@ -1606,7 +1629,7 @@ fn main() {
 <p>Let's take a simple example, where we have a stream of timestamped numbers coming at us, performing the <code>flat_map</code> up above. Our goal is to process all of the data, but to do so in a controlled manner where we never overwhelm the computation. For example, we might want to do approximately this:</p>
 <pre><pre class="playground"><code class="language-rust no_run">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{ToStream, vec::Map};
 
 fn main() {
     timely::example(|scope| {
@@ -1623,7 +1646,8 @@ fn main() {
 <p>The idea here is to take our stream of work, and to use the <code>delay</code> operator to assign new timestamps to the records. We will spread the work out so that each timestamp has at most (in this case) 100 numbers. We can write a <code>binary</code> operator that will buffer received records until their timestamp is "next", meaning all strictly prior work has drained from the dataflow fragment. How do we do this? We turn our previously unary operator into a binary operator that has a feedback edge connected to its second input. We use the frontier of that feedback input to control when we emit data.</p>
 <pre><pre class="playground"><code class="language-rust no_run">extern crate timely;
 
-use timely::dataflow::operators::*;
+use timely::dataflow::operators::{Feedback, ToStream, Operator, ConnectLoop};
+use timely::dataflow::operators::vec::{Delay, Map, Filter};
 use timely::dataflow::channels::pact::Pipeline;
 
 fn main() {
@@ -1711,7 +1735,7 @@ fn main() {
 <p>One nice aspect of <code>capture_into</code> is that it really does reveal everything that an operator sees about a stream. If you got your hands on the resulting sequence of events, you would be able to review the full history of the stream. In principle, this could be a fine place to persist the data, capturing both data and progress information.</p>
 <h2 id="replaying-streams"><a class="header" href="#replaying-streams">Replaying Streams</a></h2>
 <p>At <em>its</em> core, <code>replay_into</code> takes some sequence of <code>Event&lt;T, D&gt;</code> items and reproduces the stream, as it was recorded. It is also fairly simple, and we can just look at its implementation as well:</p>
-<pre><code class="language-rust ignore">    fn replay_into&lt;S: Scope&lt;Timestamp=T&gt;&gt;(self, scope: &amp;mut S) -&gt; Stream&lt;S, D&gt;{
+<pre><code class="language-rust ignore">    fn replay_into&lt;S: Scope&lt;Timestamp=T&gt;&gt;(self, scope: &amp;mut S) -&gt; StreamVec&lt;S, D&gt;{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
         let (targets, stream) = builder.new_output();
@@ -1777,6 +1801,7 @@ fn main() {
         worker.dataflow::&lt;u64,_,_&gt;(|scope|
             (0..10u64)
                 .to_stream(scope)
+                .container::&lt;Vec&lt;_&gt;&gt;()
                 .capture_into(EventWriter::new(send))
         );
     }).unwrap();
@@ -1836,8 +1861,8 @@ fn main() {
 <h2 id="capture-types"><a class="header" href="#capture-types">Capture types</a></h2>
 <p>There are several sorts of things you could capture into and replay from. In the <code>capture::events</code> module you will find two examples, a linked list and a binary serializer / deserializer (wrapper around <code>Write</code> and <code>Read</code> traits). The binary serializer is fairly general; we used it up above to wrap TCP streams. You could also write to files, or write to shared memory. However, be mindful that the serialization format (abomonation) is essentially the in-memory representation, and Rust makes no guarantees about the stability of such a representation across builds.</p>
 <p>There is also <a href="https://github.com/TimelyDataflow/timely-dataflow/tree/master/kafkaesque">an in-progress Kafka adapter</a> available in the repository, which uses Kafka topics to store the binary representation of captured streams, which can then be replayed by any timely computation that can read them. This may be a while before it is sorted out, because Kafka seems to have a few quirks, but if you would like to help get in touch.</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="custom-datatypes"><a class="header" href="#custom-datatypes">Custom Datatypes</a></h1>
-<p><strong>WORK IN PROGRESS</strong></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="custom-datatypes-and-containers"><a class="header" href="#custom-datatypes-and-containers">Custom Datatypes and Containers</a></h1>
+<p><strong>THIS TEXT IS LARGELY INCORRECT AND NEEDS IMPROVEMENT</strong></p>
 <p>Timely dataflow allows you to use a variety of Rust types, but you may also find that you need (or would prefer) your own <code>struct</code> and <code>enum</code> types.</p>
 <p>Timely dataflow provides two traits, <code>Data</code> and <code>ExchangeData</code> for types that timely dataflow can transport within a worker thread and across threads.</p>
 <h2 id="the-data-trait"><a class="header" href="#the-data-trait">The <code>Data</code> trait</a></h2>

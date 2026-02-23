@@ -213,7 +213,7 @@
 <p>One nice aspect of <code>capture_into</code> is that it really does reveal everything that an operator sees about a stream. If you got your hands on the resulting sequence of events, you would be able to review the full history of the stream. In principle, this could be a fine place to persist the data, capturing both data and progress information.</p>
 <h2 id="replaying-streams"><a class="header" href="#replaying-streams">Replaying Streams</a></h2>
 <p>At <em>its</em> core, <code>replay_into</code> takes some sequence of <code>Event&lt;T, D&gt;</code> items and reproduces the stream, as it was recorded. It is also fairly simple, and we can just look at its implementation as well:</p>
-<pre><code class="language-rust ignore">    fn replay_into&lt;S: Scope&lt;Timestamp=T&gt;&gt;(self, scope: &amp;mut S) -&gt; Stream&lt;S, D&gt;{
+<pre><code class="language-rust ignore">    fn replay_into&lt;S: Scope&lt;Timestamp=T&gt;&gt;(self, scope: &amp;mut S) -&gt; StreamVec&lt;S, D&gt;{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
         let (targets, stream) = builder.new_output();
@@ -279,6 +279,7 @@ fn main() {
         worker.dataflow::&lt;u64,_,_&gt;(|scope|
             (0..10u64)
                 .to_stream(scope)
+                .container::&lt;Vec&lt;_&gt;&gt;()
                 .capture_into(EventWriter::new(send))
         );
     }).unwrap();

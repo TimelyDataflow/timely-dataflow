@@ -174,7 +174,7 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="chapter-1-core-concepts"><a class="header" href="#chapter-1-core-concepts">Chapter 1: Core Concepts</a></h1>
-<p>Timely dataflow relies on two fundamental concepts: <strong>timestamps</strong> and <strong>dataflow</strong>, which together lead to the concept of <strong>progress</strong>. We will want to break down these concepts because they play a fundamental role in understanding how timely dataflow programs are structured.</p>
+<p>Timely dataflow relies on two fundamental concepts: <strong>dataflow</strong> and <strong>timestamps</strong>, which together lead to the concept of <strong>progress</strong>. We will want to break down these concepts because they play a fundamental role in understanding how timely dataflow programs are structured.</p>
 <h2 id="dataflow"><a class="header" href="#dataflow">Dataflow</a></h2>
 <p>Dataflow programming is fundamentally about describing your program as independent components, each of which operate in response to the availability of input data, as well as describing the connections between these components.</p>
 <p>The most important part of dataflow programming is the <em>independence</em> of the components. When you write a dataflow program, you provide the computer with flexibility in how it executes your program. Rather than insisting on a specific sequence of instructions the computer should follow, the computer can work on each of the components as it sees fit, perhaps even sharing the work with other computers.</p>

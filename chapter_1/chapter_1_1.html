@@ -177,7 +177,8 @@
 <p>Dataflow programming is fundamentally about describing your program as independent components, each of which operate in response to the availability of input data, as well as describing the connections between these components. This has several advantages, mostly in how it allows a computer to execute your program, but it can take a bit of thinking to re-imagine your imperative computation as a dataflow computation.</p>
 <h2 id="an-example"><a class="header" href="#an-example">An example</a></h2>
 <p>Let's write an overly simple dataflow program. Remember our <code>examples/hello.rs</code> program? We are going to revisit that, but with some <strong>timestamp</strong> aspects removed. The goal is to get a sense for dataflow with all of its warts, and to get you excited for the next section where we bring back the timestamps. :)</p>
-<p>Here is a reduced version of <code>examples/hello.rs</code> that just feeds data into our dataflow, without paying any attention to progress made. In particular, we have removed the <code>probe()</code> operation, the resulting <code>probe</code> variable, and the use of <code>probe</code> to determine how long we should step the worker before introducing more data.</p>
+<p>Here is a reduced version of <code>examples/hello.rs</code> that just feeds data into our dataflow, without paying any attention to progress made.
+In particular, we have commented out the line that holds back the introduce of data until <code>probe</code> and <code>input</code> agree on a time.</p>
 <pre><pre class="playground"><code class="language-rust">#![allow(unused_variables)]
 extern crate timely;
 
@@ -194,6 +195,7 @@ fn main() {
         // create a new input, exchange data, and inspect its output
         let probe = worker.dataflow(|scope|
             scope.input_from(&amp;mut input)
+                 .container::&lt;Vec&lt;_&gt;&gt;()
                  .exchange(|x| *x)
                  .inspect(move |x| println!("worker {}:\thello {}", index, x))
                  .probe()
@@ -209,8 +211,9 @@ fn main() {
         }
     }).unwrap();
 }</code></pre></pre>
-<p>This program is a <em>dataflow program</em>. There are two dataflow operators here, <code>exchange</code> and <code>inspect</code>, each of which is asked to do a thing in response to input data. The <code>exchange</code> operator takes each datum and hands it to a downstream worker based on the value it sees; with two workers, one will get all the even numbers and the other all the odd numbers. The <code>inspect</code> operator takes an action for each datum, in this case printing something to the screen.</p>
-<p>Importantly, we haven't imposed any constraints on how these operators need to run. We removed the code that caused the input to be delayed until a certain amount of progress had been made, and it shows in the results when we run with more than one worker:</p>
+<p>It turns out this handshake between <code>probe</code> and <code>input</code> was part of what made the output make any sense.
+We waited for <code>probe</code> to confirm that the system was caught up before introducing more data to <code>input</code>.
+When we remove these constraints we get a more haphazard output.</p>
 <pre><code class="language-ignore">    Echidnatron% cargo run --example hello -- -w2
         Finished dev [unoptimized + debuginfo] target(s) in 0.0 secs
         Running `target/debug/examples/hello -w2`

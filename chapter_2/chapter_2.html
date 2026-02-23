@@ -184,6 +184,7 @@ use timely::dataflow::operators::{ToStream, Inspect};
 fn main() {
     timely::example(|scope| {
         (0..10).to_stream(scope)
+               .container::&lt;Vec&lt;_&gt;&gt;()
                .inspect(|x| println!("seen: {:?}", x));
     });
 }</code></pre></pre>
