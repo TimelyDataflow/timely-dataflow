@@ -135,6 +135,8 @@ impl<T: 'static, C: 'static> TeeHelper<T, C> {
             many.as_list().unwrap().push(Box::new(pusher))
         }
         else {
+            // If we are adding a second pusher without upgrading, something has gone wrong.
+            assert!(borrow.is_none());
             *borrow = Some(Box::new(PushOne::from(pusher)));
         }
     }
