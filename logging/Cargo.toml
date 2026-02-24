@@ -4,6 +4,7 @@ version = "0.26.1"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 description = "Common timely logging infrastructure"
 edition.workspace = true
+rust-version.workspace = true
 
 documentation = "https://docs.rs/timely/"
 homepage = "https://github.com/TimelyDataflow/timely-dataflow"
