@@ -156,7 +156,7 @@ where
         // will depend on child summaries and capabilities, as well as edges in the subgraph.
 
         // perhaps first check that the children are sanely identified
-        self.children.sort_by(|x,y| x.index.cmp(&y.index));
+        self.children.sort_unstable_by(|x,y| x.index.cmp(&y.index));
         assert!(self.children.iter().enumerate().all(|(i,x)| i == x.index));
 
         let inputs = self.input_messages.len();
@@ -487,7 +487,7 @@ where
         }
 
         // Consider scheduling each recipient of progress information to shut down.
-        self.maybe_shutdown.sort();
+        self.maybe_shutdown.sort_unstable();
         self.maybe_shutdown.dedup();
         for child_index in self.maybe_shutdown.drain(..) {
             let child_state = self.pointstamp_tracker.node_state(child_index);

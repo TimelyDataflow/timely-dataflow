@@ -36,7 +36,7 @@ impl<T, P: BytesPush> Pusher<T, P> {
 impl<T: Bytesable, P: BytesPush> Push<T> for Pusher<T, P> {
     #[inline]
     fn push(&mut self, element: &mut Option<T>) {
-        if let Some(ref mut element) = *element {
+        if let Some(ref element) = *element {
 
             // determine byte lengths and build header.
             let mut header = self.header;

@@ -182,7 +182,7 @@ impl<T: ExchangeData+Clone> Sequencer<T> {
                         }
                     });
 
-                    recvd.sort_by(|x,y| x.0.cmp(&y.0));
+                    recvd.sort_unstable_by(|x,y| x.0.cmp(&y.0));
 
                     if let Some(last) = recvd.last() {
                         let mut activator_borrow = activator_sink.borrow_mut();

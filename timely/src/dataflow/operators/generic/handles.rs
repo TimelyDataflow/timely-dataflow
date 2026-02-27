@@ -58,7 +58,7 @@ impl<T: Timestamp, C: Accountable, P: Pull<Message<T, C>>> InputHandleCore<T, C,
             let data = std::mem::take(data);
             self.staging.push_back((cap, data));
         }
-        self.staging.make_contiguous().sort_by(|x,y| x.0.time().cmp(&y.0.time()));
+        self.staging.make_contiguous().sort_unstable_by(|x,y| x.0.time().cmp(&y.0.time()));
 
         while let Some((cap, data)) = self.staging.pop_front() {
             self.staged.push(data);
