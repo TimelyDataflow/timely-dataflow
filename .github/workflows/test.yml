@@ -6,7 +6,18 @@ on:
   pull_request:
 
 jobs:
+  msrv:
+    name: Determine MSRV
+    runs-on: ubuntu-latest
+    outputs:
+      msrv: ${{ steps.msrv.outputs.msrv }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: msrv
+        run: echo "msrv=$(grep '^rust-version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: msrv
     strategy:
       matrix:
         os:
@@ -15,7 +26,7 @@ jobs:
           - windows
         toolchain:
           - stable
-          - 1.86
+          - ${{ needs.msrv.outputs.msrv }}
     name: cargo test on ${{ matrix.os }}, rust ${{ matrix.toolchain }}
     runs-on: ${{ matrix.os }}-latest
     steps:

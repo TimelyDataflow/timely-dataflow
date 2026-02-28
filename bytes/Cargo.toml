@@ -2,7 +2,8 @@
 name = "timely_bytes"
 version = "0.26.1"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
-edition = "2018"
+edition.workspace = true
+rust-version.workspace = true
 
 description = "Disjoint mutable byte slices from a common allocation"
 
