@@ -5,12 +5,15 @@ on:
     branches:
       - master
 
+concurrency:
+  group: deploy
+
 jobs:
   deploy:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - run: cargo install mdbook --version 0.4.40
+      - run: cargo install mdbook --version 0.5.2
       - run: cd mdbook && mdbook build
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
