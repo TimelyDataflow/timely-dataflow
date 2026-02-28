@@ -308,7 +308,7 @@ impl<T: Timestamp> FrontierNotificator<T> {
 
         if !self.pending.is_empty() {
 
-            self.pending.sort_by(|x,y| x.0.time().cmp(y.0.time()));
+            self.pending.sort_unstable_by(|x,y| x.0.time().cmp(y.0.time()));
             for i in 0 .. self.pending.len() - 1 {
                 if self.pending[i].0.time() == self.pending[i+1].0.time() {
                     self.pending[i+1].1 += self.pending[i].1;

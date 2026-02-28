@@ -86,7 +86,7 @@ impl Activations {
                 let moment = timer.elapsed() + delay;
                 self.queue.push(Reverse((moment, path.to_vec())));
             }
-        } 
+        }
         else {
             self.activate(path);
         }
@@ -115,7 +115,7 @@ impl Activations {
 
         {   // Scoped, to allow borrow to drop.
             let slices = &self.slices[..];
-            self.bounds.sort_by_key(|x| &slices[x.0 .. (x.0 + x.1)]);
+            self.bounds.sort_unstable_by_key(|x| &slices[x.0 .. (x.0 + x.1)]);
             self.bounds.dedup_by_key(|x| &slices[x.0 .. (x.0 + x.1)]);
         }
 

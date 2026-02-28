@@ -89,7 +89,7 @@ impl<T, const X: usize> ChangeBatch<T, X>
 where
     T: Ord,
 {
-    
+
     /// Allocates a new `ChangeBatch` with a single entry.
     ///
     /// # Examples
@@ -291,7 +291,7 @@ where
     #[inline]
     pub fn compact(&mut self) {
         if self.clean < self.updates.len() && self.updates.len() > 1 {
-            self.updates.sort_by(|x,y| x.0.cmp(&y.0));
+            self.updates.sort_unstable_by(|x,y| x.0.cmp(&y.0));
             for i in 0 .. self.updates.len() - 1 {
                 if self.updates[i].0 == self.updates[i+1].0 {
                     self.updates[i+1].1 += self.updates[i].1;
