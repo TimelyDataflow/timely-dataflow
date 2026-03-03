@@ -35,7 +35,7 @@
             const path_to_root = "../";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "../searchindex-8c9abe30.js";
+            window.path_to_searchindex_js = "../searchindex-8b624a9b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="../toc-394d71ec.js"></script>
@@ -197,6 +197,7 @@ timely::execute_from_args(std::env::args(), |worker| {
              .exchange(|x| *x)
              .inspect(move |x| println!("worker {}:\thello {}", index, x))
              .probe()
+             .0
     );
 
     // introduce data and watch!
