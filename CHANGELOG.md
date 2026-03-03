@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Streams are not backed by vectors by default
+
+Timely streams are now container-oriented by default, rather than vector-oriented.
+Timely has historically had the `Stream` type mean "A stream that transports vectors of items".
+This was a helpful opinion early days when the goal was to make the first programs easy to type.
+Since, we've learned that vectors and Rust ownership can be a performance anti-pattern:
+exchanging owned data and e.g. deallocation obligations among workers is effectively an allocator microbenchmark.
+
+Instead, we've renamed `Stream` to `StreamVec` and moved the associated operators to a `operators::vec` module.
+The previous `StreamCore` that works with general containers has been promoted to `Stream`, and is the recommended type.
+Many/most of the timely operators work over arbitrary containers, and are defined on the new `Stream`.
+The `Stream::container<C>()` method has proven useful for "hinting" at the container type you intend.
+
+### Streams are not Clone by default
+
+Timely streams are now non-clone by default.
+Streams do implement clone when their containers can be cloned.
+This allows the use of non-clone containers, and for users to ensure (by not advertising `Clone`) that their streams are not unintentionally cloned.
+A low-friction migration is to require `Clone` for transmitted types, and call `.clone()` on the stream when you would use it.
+Idiomatically, most operations now take a `Stream` rather than a `&Stream`, and we've found that adopting this migration helps as well.
+There is a low cost to cloning a stream that you only use once: one additional virtual call will occur for each container shipped along it.
+
 ## [0.26.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.25.1...timely-v0.26.0) - 2026-02-03
 
 ### Other
