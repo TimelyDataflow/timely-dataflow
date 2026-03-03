@@ -9,6 +9,9 @@ on:
     branches:
       - master
 
+concurrency:
+  group: release-plz
+
 jobs:
   release-plz:
     name: Release-plz
