@@ -4,6 +4,7 @@ version = "0.26.1"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 description = "Communication layer for timely dataflow"
 edition.workspace = true
+rust-version.workspace = true
 
 # These URLs point to more information about the repository
 

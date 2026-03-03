@@ -5,6 +5,7 @@ version = "0.26.1"
 authors = ["Frank McSherry <fmcsherry@me.com>"]
 readme = "../README.md"
 edition.workspace = true
+rust-version.workspace = true
 description = "A low-latency data-parallel dataflow system in Rust"
 
 # These URLs point to more information about the repository

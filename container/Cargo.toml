@@ -4,6 +4,7 @@ version = "0.26.1"
 description = "Container abstractions for Timely"
 license = "MIT"
 edition.workspace = true
+rust-version.workspace = true
 
 [lints]
 workspace = true

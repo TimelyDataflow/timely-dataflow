@@ -12,6 +12,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
+rust-version = "1.86"
 
 [workspace.dependencies]
 columnar = "0.11"
