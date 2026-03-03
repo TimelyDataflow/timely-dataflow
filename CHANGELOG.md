@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0](https://github.com/TimelyDataflow/timely-dataflow/compare/timely-v0.26.1...timely-v0.27.0) - 2026-03-03
+
+### Other
+
+- Return input stream ([#747](https://github.com/TimelyDataflow/timely-dataflow/pull/747))
+- MRSV 1.86 ([#748](https://github.com/TimelyDataflow/timely-dataflow/pull/748))
+- Avoid allocations when sorting ([#751](https://github.com/TimelyDataflow/timely-dataflow/pull/751))
+- Assert if a second pusher is added without upgrading ([#750](https://github.com/TimelyDataflow/timely-dataflow/pull/750))
+- Reorganize types and traits to deprioritize `Vec` streams ([#746](https://github.com/TimelyDataflow/timely-dataflow/pull/746))
+- Replace seeded rand datagen with hash functions ([#745](https://github.com/TimelyDataflow/timely-dataflow/pull/745))
+- `Tee` implementation without `Clone` requirement ([#744](https://github.com/TimelyDataflow/timely-dataflow/pull/744))
+- Bump oldest Rust version from 1.79 to 1.85 ([#743](https://github.com/TimelyDataflow/timely-dataflow/pull/743))
+- Delay/retain input capabilities for specific outputs ([#738](https://github.com/TimelyDataflow/timely-dataflow/pull/738))
+
 ### Streams are not backed by vectors by default
 
 Timely streams are now container-oriented by default, rather than vector-oriented.
