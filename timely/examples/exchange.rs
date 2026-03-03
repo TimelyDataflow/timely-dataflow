@@ -16,6 +16,7 @@ fn main() {
                 .container::<Vec<_>>()
                 .exchange(|&x| x as u64)
                 .probe()
+                .0
         );
 
 

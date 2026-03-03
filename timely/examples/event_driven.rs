@@ -24,7 +24,7 @@ fn main() {
                 for _step in 0 .. length {
                     stream = stream.map(|x: ()| x);
                 }
-                let probe = stream.probe();
+                let (probe, _stream) = stream.probe();
                 inputs.push(input);
                 probes.push(probe);
             });
