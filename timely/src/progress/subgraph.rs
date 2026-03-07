@@ -198,6 +198,8 @@ where
 
         activations.borrow_mut().activate(&self.path[..]);
 
+        let notify_me: bool = self.children.iter().any(|c| c.notify);
+
         Subgraph {
             name: self.name,
             path: self.path,
@@ -221,6 +223,7 @@ where
             scope_summary,
 
             progress_mode: worker.config().progress_mode,
+            notify_me,
         }
     }
 }
@@ -273,6 +276,8 @@ where
     scope_summary: Connectivity<TInner::Summary>,
 
     progress_mode: ProgressMode,
+
+    notify_me: bool,
 }
 
 impl<TOuter, TInner> Schedule for Subgraph<TOuter, TInner>
@@ -524,7 +529,9 @@ where
                 .iter()
                 .any(|((location, time), diff)|
                     // Must publish scope-wide visible subtractions.
-                    tracker.is_global(*location, time) && *diff < 0
+                    tracker.is_global(*location, time) && *diff < 0 ||
+                    // Must confirm the receipt of inbound messages.
+                    location.node == 0
                 )
         };
 
@@ -586,6 +593,8 @@ where
         // Return summaries and shared progress information.
         (internal_summary, Rc::clone(&self.shared_progress), self)
     }
+
+    fn notify_me(&self) -> bool { self.notify_me }
 }
 
 struct PerOperatorState<T: Timestamp> {
@@ -619,7 +628,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             index:      0,
             id:         usize::MAX,
             local:      false,
-            notify:     true,
+            notify:     false,
             inputs,
             outputs,
 
