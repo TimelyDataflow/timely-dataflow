@@ -204,9 +204,9 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn initialize(&mut self) -> (Connectivity<<T as Timestamp>::Summary>, Rc<RefCell<SharedProgress<T>>>) {
+    fn initialize(self: Box<Self>) -> (Connectivity<<T as Timestamp>::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>) {
         self.shared_progress.borrow_mut().internals[0].update(T::minimum(), self.copies as i64);
-        (Vec::new(), Rc::clone(&self.shared_progress))
+        (Vec::new(), Rc::clone(&self.shared_progress), self)
     }
 
     fn notify_me(&self) -> bool { false }
