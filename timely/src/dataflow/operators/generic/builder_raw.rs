@@ -24,7 +24,7 @@ use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 pub struct OperatorShape {
     name: String,   // A meaningful name for the operator.
     notify: bool,   // Does the operator require progress notifications.
-    peers: usize,   // The total number of workers in the computation.
+    peers: usize,   // The total number of workers in the computation. Needed to initialize pointstamp counts with the correct magnitude.
     inputs: usize,  // The number of input ports.
     outputs: usize, // The number of output ports.
 }
@@ -42,14 +42,10 @@ impl OperatorShape {
     }
 
     /// The number of inputs of this operator
-    pub fn inputs(&self) -> usize {
-        self.inputs
-    }
+    pub fn inputs(&self) -> usize { self.inputs }
 
     /// The number of outputs of this operator
-    pub fn outputs(&self) -> usize {
-        self.outputs
-    }
+    pub fn outputs(&self) -> usize { self.outputs }
 }
 
 /// Builds operators with generic shape.
@@ -84,24 +80,16 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// The operator's scope-local index.
-    pub fn index(&self) -> usize {
-        self.index
-    }
+    pub fn index(&self) -> usize { self.index }
 
     /// The operator's worker-unique identifier.
-    pub fn global(&self) -> usize {
-        self.global
-    }
+    pub fn global(&self) -> usize { self.global }
 
     /// Return a reference to the operator's shape
-    pub fn shape(&self) -> &OperatorShape {
-        &self.shape
-    }
+    pub fn shape(&self) -> &OperatorShape { &self.shape }
 
     /// Indicates whether the operator requires frontier information.
-    pub fn set_notify(&mut self, notify: bool) {
-        self.shape.notify = notify;
-    }
+    pub fn set_notify(&mut self, notify: bool) { self.shape.notify = notify; }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input<C: Container, P>(&mut self, stream: Stream<G, C>, pact: P) -> P::Puller
@@ -134,7 +122,6 @@ impl<G: Scope> OperatorBuilder<G> {
 
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output<C: Container>(&mut self) -> (Tee<G::Timestamp, C>, Stream<G, C>) {
-
         let connection = (0 .. self.shape.inputs).map(|i| (i, Antichain::from_elem(Default::default())));
         self.new_output_connection(connection)
     }
@@ -218,7 +205,7 @@ where
     fn outputs(&self) -> usize { self.shape.outputs }
 
     // announce internal topology as fully connected, and hold all default capabilities.
-    fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>) {
+    fn initialize(self: Box<Self>) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>) {
 
         // Request the operator to be scheduled at least once.
         self.activations.borrow_mut().activate(&self.address[..]);
@@ -230,7 +217,7 @@ where
             .iter_mut()
             .for_each(|output| output.update(T::minimum(), self.shape.peers as i64));
 
-        (self.summary.clone(), Rc::clone(&self.shared_progress))
+        (self.summary.clone(), Rc::clone(&self.shared_progress), self)
     }
 
     fn notify_me(&self) -> bool { self.shape.notify }

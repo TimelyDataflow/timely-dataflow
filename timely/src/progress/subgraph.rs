@@ -134,6 +134,7 @@ where
 
     /// Adds a new child to the subgraph.
     pub fn add_child(&mut self, child: Box<dyn Operate<TInner>>, index: usize, identifier: usize) {
+        let child = PerOperatorState::new(child, index, identifier, self.logging.clone(), &mut self.summary_logging);
         if let Some(l) = &mut self.logging {
             let mut child_path = Vec::with_capacity(self.path.len() + 1);
             child_path.extend_from_slice(&self.path[..]);
@@ -142,10 +143,10 @@ where
             l.log(crate::logging::OperatesEvent {
                 id: identifier,
                 addr: child_path,
-                name: child.name().to_owned(),
+                name: child.name.to_owned(),
             });
         }
-        self.children.push(PerOperatorState::new(child, index, identifier, self.logging.clone(), &mut self.summary_logging));
+        self.children.push(child);
     }
 
     /// Now that initialization is complete, actually build a subgraph.
@@ -545,7 +546,7 @@ where
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Connectivity<TOuter::Summary>, Rc<RefCell<SharedProgress<TOuter>>>) {
+    fn initialize(mut self: Box<Self>) -> (Connectivity<TOuter::Summary>, Rc<RefCell<SharedProgress<TOuter>>>, Box<dyn Schedule>) {
 
         // double-check that child 0 (the outside world) is correctly shaped.
         assert_eq!(self.children[0].outputs, self.inputs());
@@ -583,7 +584,7 @@ where
         self.propagate_pointstamps();  // Propagate expressed capabilities to output frontiers.
 
         // Return summaries and shared progress information.
-        (internal_summary, Rc::clone(&self.shared_progress))
+        (internal_summary, Rc::clone(&self.shared_progress), self)
     }
 }
 
@@ -598,13 +599,13 @@ struct PerOperatorState<T: Timestamp> {
     inputs: usize,      // number of inputs to the operator
     outputs: usize,     // number of outputs from the operator
 
-    operator: Option<Box<dyn Operate<T>>>,
+    operator: Option<Box<dyn Schedule>>,
 
     edges: Vec<Vec<Target>>,    // edges from the outputs of the operator
 
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    internal_summary: Connectivity<T::Summary>,   // cached result from get_internal_summary.
+    internal_summary: Connectivity<T::Summary>,   // cached result from initialize.
 
     logging: Option<Logger>,
 }
@@ -632,7 +633,7 @@ impl<T: Timestamp> PerOperatorState<T> {
     }
 
     pub fn new(
-        mut scope: Box<dyn Operate<T>>,
+        scope: Box<dyn Operate<T>>,
         index: usize,
         identifier: usize,
         logging: Option<Logger>,
@@ -644,7 +645,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let outputs = scope.outputs();
         let notify = scope.notify_me();
 
-        let (internal_summary, shared_progress) = scope.get_internal_summary();
+        let (internal_summary, shared_progress, operator) = scope.initialize();
 
         if let Some(l) = summary_logging {
             l.log(crate::logging::OperatesSummaryEvent {
@@ -666,8 +667,8 @@ impl<T: Timestamp> PerOperatorState<T> {
         );
 
         PerOperatorState {
-            name:               scope.name().to_owned(),
-            operator:           Some(scope),
+            name:               operator.name().to_owned(),
+            operator:           Some(operator),
             index,
             id:                 identifier,
             local,

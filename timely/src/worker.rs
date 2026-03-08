@@ -668,7 +668,7 @@ impl<A: Allocate> Worker<A> {
             func(&mut resources, &mut builder)
         };
 
-        let mut operator = subscope.into_inner().build(self);
+        let operator = subscope.into_inner().build(self);
 
         if let Some(l) = logging.as_mut() {
             l.log(crate::logging::OperatesEvent {
@@ -679,7 +679,7 @@ impl<A: Allocate> Worker<A> {
             l.flush();
         }
 
-        operator.get_internal_summary();
+        let (_, _, operator) = Box::new(operator).initialize();
 
         let mut temp_channel_ids = self.temp_channel_ids.borrow_mut();
         let channel_ids = temp_channel_ids.drain(..).collect::<Vec<_>>();
@@ -687,7 +687,7 @@ impl<A: Allocate> Worker<A> {
         let wrapper = Wrapper {
             logging,
             identifier,
-            operate: Some(Box::new(operator)),
+            operate: Some(operator),
             resources: Some(Box::new(resources)),
             channel_ids,
         };

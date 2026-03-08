@@ -130,7 +130,7 @@ pub struct Builder<T: Timestamp> {
     /// Internal connections within hosted operators.
     ///
     /// Indexed by operator index, then input port, then output port. This is the
-    /// same format returned by `get_internal_summary`, as if we simply appended
+    /// same format returned by `initialize`, as if we simply appended
     /// all of the summaries for the hosted nodes.
     pub nodes: Vec<Connectivity<T::Summary>>,
     /// Direct connections from sources to targets.
@@ -359,7 +359,7 @@ pub struct Tracker<T:Timestamp> {
     /// Internal connections within hosted operators.
     ///
     /// Indexed by operator index, then input port, then output port. This is the
-    /// same format returned by `get_internal_summary`, as if we simply appended
+    /// same format returned by `initialize`, as if we simply appended
     /// all of the summaries for the hosted nodes.
     nodes: Vec<Connectivity<T::Summary>>,
     /// Direct connections from sources to targets.

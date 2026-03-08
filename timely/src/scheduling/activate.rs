@@ -18,7 +18,7 @@ use std::sync::mpsc::{Sender, Receiver};
 /// There is no known harm to "spurious wake-ups" where a not-active path is
 /// returned through `extensions()`.
 pub trait Scheduler {
-    /// Mark a path as immediately scheduleable.
+    /// Mark a path as immediately schedulable.
     fn activate(&mut self, path: &[usize]);
     /// Populates `dest` with next identifiers on active extensions of `path`.
     ///

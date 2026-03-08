@@ -96,6 +96,8 @@ impl<G: Scope, C: Container> Probe<G, C> for Stream<G, C> {
         let (tee, stream) = builder.new_output();
         let mut output = PushCounter::new(tee);
 
+        // Conservatively introduce a minimal time to the handle.
+        // This will be relaxed when the operator is first scheduled and can see its frontier.
         handle.frontier.borrow_mut().update_iter(std::iter::once((Timestamp::minimum(), 1)));
 
         let shared_frontier = Rc::downgrade(&handle.frontier);
@@ -104,15 +106,17 @@ impl<G: Scope, C: Container> Probe<G, C> for Stream<G, C> {
         builder.build(
             move |progress| {
 
-                // surface all frontier changes to the shared frontier.
+                // Mirror presented frontier changes into the shared handle.
                 if let Some(shared_frontier) = shared_frontier.upgrade() {
                     let mut borrow = shared_frontier.borrow_mut();
                     borrow.update_iter(progress.frontiers[0].drain());
                 }
 
+                // At initialization, we have a few tasks.
                 if !started {
-                    // discard initial capability.
+                    // We must discard the capability held by `OpereratorCore`.
                     progress.internals[0].update(G::Timestamp::minimum(), -1);
+                    // We must retract the conservative hold in the shared handle.
                     if let Some(shared_frontier) = shared_frontier.upgrade() {
                         let mut borrow = shared_frontier.borrow_mut();
                         borrow.update_iter(std::iter::once((Timestamp::minimum(), -1)));

@@ -6,8 +6,14 @@ use std::cell::RefCell;
 use crate::scheduling::Schedule;
 use crate::progress::{Timestamp, ChangeBatch, Antichain};
 
-/// Methods for describing an operators topology, and the progress it makes.
-pub trait Operate<T: Timestamp> : Schedule {
+/// A dataflow operator that progress with a specific timestamp type.
+///
+/// This trait describes the methods necessary to present as a dataflow operator.
+/// This trait is a "builder" for operators, in that it reveals the structure of the operator
+/// and its requirements, but then (through `initialize`) consumes itself to produce a boxed
+/// schedulable object. At the moment of initialization, the values of the other methods are
+/// captured and frozen.
+pub trait Operate<T: Timestamp> {
 
     /// Indicates if the operator is strictly local to this worker.
     ///
@@ -33,20 +39,27 @@ pub trait Operate<T: Timestamp> : Schedule {
     /// The number of outputs.
     fn outputs(&self) -> usize;
 
-    /// Fetches summary information about internal structure of the operator.
+    /// Initializes the operator, converting the operator builder to a schedulable object.
     ///
-    /// Each operator must summarize its internal structure by a map from pairs `(input, output)`
+    /// In addition, initialization produces internal connectivity, and a shared progress conduit
+    /// which must contain any initial output capabilities the operator would like to hold.
+    ///
+    /// The internal connectivity summarizes the operator by a map from pairs `(input, output)`
     /// to an antichain of timestamp summaries, indicating how a timestamp on any of its inputs may
-    /// be transformed to timestamps on any of its outputs.
+    /// be transformed to timestamps on any of its outputs. The conservative and most common result
+    /// is full connectivity between all inputs and outputs, each with the identity summary.
     ///
-    /// Each operator must also indicate whether it initially holds any capabilities on any of its
-    /// outputs, so that the parent operator can properly initialize its progress information.
-    ///
-    /// The default behavior is to indicate that timestamps on any input can emerge unchanged on
-    /// any output, and no initial capabilities are held.
-    fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>);
+    /// The shared progress object allows information to move between the host and the schedulable.
+    /// Importantly, it also indicates the initial internal capabilities for all of its outputs.
+    /// This must happen at this moment, as it is the only moment where an operator is allowed to
+    /// safely "create" capabilities without basing them on other, prior capabilities.
+    fn initialize(self: Box<Self>) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>, Box<dyn Schedule>);
 
-    /// Indicates of whether the operator requires `push_external_progress` information or not.
+    /// Indicates if the operator should be invoked on the basis of input frontier transitions.
+    ///
+    /// This value is conservatively set to `true`, but operators that know they are oblivious to
+    /// frontier information can indicate this with `false`, and they will not be scheduled on the
+    /// basis of their input frontiers changing.
     fn notify_me(&self) -> bool { true }
 }
 
