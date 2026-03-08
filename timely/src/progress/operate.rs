@@ -46,7 +46,11 @@ pub trait Operate<T: Timestamp> : Schedule {
     /// any output, and no initial capabilities are held.
     fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>);
 
-    /// Indicates of whether the operator requires `push_external_progress` information or not.
+    /// Indicates if the operator should be invoked on the basis of input frontier transitions.
+    ///
+    /// This value is conservatively set to `true`, but operators that know they are oblivious to
+    /// frontier information can indicate this with `false`, and they will not be scheduled on the
+    /// basis of their input frontiers changing.
     fn notify_me(&self) -> bool { true }
 }
 

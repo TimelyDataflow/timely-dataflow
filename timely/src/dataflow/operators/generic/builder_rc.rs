@@ -49,9 +49,7 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Indicates whether the operator requires frontier information.
-    pub fn set_notify(&mut self, notify: bool) {
-        self.builder.set_notify(notify);
-    }
+    pub fn set_notify(&mut self, notify: bool) { self.builder.set_notify(notify); }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input<C: Container, P>(&mut self, stream: Stream<G, C>, pact: P) -> InputHandleCore<G::Timestamp, C, P::Puller>
@@ -197,24 +195,16 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Get the identifier assigned to the operator being constructed
-    pub fn index(&self) -> usize {
-        self.builder.index()
-    }
+    pub fn index(&self) -> usize { self.builder.index() }
 
     /// The operator's worker-unique identifier.
-    pub fn global(&self) -> usize {
-        self.builder.global()
-    }
+    pub fn global(&self) -> usize { self.builder.global() }
 
     /// Return a reference to the operator's shape
-    pub fn shape(&self) -> &OperatorShape {
-        self.builder.shape()
-    }
+    pub fn shape(&self) -> &OperatorShape { self.builder.shape() }
 
     /// Creates operator info for the operator.
-    pub fn operator_info(&self) -> OperatorInfo {
-        self.builder.operator_info()
-    }
+    pub fn operator_info(&self) -> OperatorInfo { self.builder.operator_info() }
 }
 
 
