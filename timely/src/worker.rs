@@ -679,7 +679,7 @@ impl<A: Allocate> Worker<A> {
             l.flush();
         }
 
-        operator.get_internal_summary();
+        operator.initialize();
 
         let mut temp_channel_ids = self.temp_channel_ids.borrow_mut();
         let channel_ids = temp_channel_ids.drain(..).collect::<Vec<_>>();

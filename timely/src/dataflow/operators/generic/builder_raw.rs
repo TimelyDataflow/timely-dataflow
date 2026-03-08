@@ -205,7 +205,7 @@ where
     fn outputs(&self) -> usize { self.shape.outputs }
 
     // announce internal topology as fully connected, and hold all default capabilities.
-    fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>) {
+    fn initialize(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>) {
 
         // Request the operator to be scheduled at least once.
         self.activations.borrow_mut().activate(&self.address[..]);

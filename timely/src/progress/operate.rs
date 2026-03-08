@@ -33,18 +33,17 @@ pub trait Operate<T: Timestamp> : Schedule {
     /// The number of outputs.
     fn outputs(&self) -> usize;
 
-    /// Fetches summary information about internal structure of the operator.
+    /// Initializes the operator, collecting internal connectivity and initial output capabilities.
     ///
     /// Each operator must summarize its internal structure by a map from pairs `(input, output)`
     /// to an antichain of timestamp summaries, indicating how a timestamp on any of its inputs may
-    /// be transformed to timestamps on any of its outputs.
+    /// be transformed to timestamps on any of its outputs. The conservative and most common result
+    /// is full connectivity between all inputs and outputs, each with the identity summary.
     ///
-    /// Each operator must also indicate whether it initially holds any capabilities on any of its
-    /// outputs, so that the parent operator can properly initialize its progress information.
-    ///
-    /// The default behavior is to indicate that timestamps on any input can emerge unchanged on
-    /// any output, and no initial capabilities are held.
-    fn get_internal_summary(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>);
+    /// Each operator must also indicate the initial internal capabilities for all of its outputs.
+    /// This must happen at this moment, as it is the only moment where an operator is allowed to
+    /// safely "create" capabilities without basing them on other, prior capabilities.
+    fn initialize(&mut self) -> (Connectivity<T::Summary>, Rc<RefCell<SharedProgress<T>>>);
 
     /// Indicates if the operator should be invoked on the basis of input frontier transitions.
     ///

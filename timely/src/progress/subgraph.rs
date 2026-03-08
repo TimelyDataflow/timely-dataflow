@@ -545,7 +545,7 @@ where
 
     // produces connectivity summaries from inputs to outputs, and reports initial internal
     // capabilities on each of the outputs (projecting capabilities from contained scopes).
-    fn get_internal_summary(&mut self) -> (Connectivity<TOuter::Summary>, Rc<RefCell<SharedProgress<TOuter>>>) {
+    fn initialize(&mut self) -> (Connectivity<TOuter::Summary>, Rc<RefCell<SharedProgress<TOuter>>>) {
 
         // double-check that child 0 (the outside world) is correctly shaped.
         assert_eq!(self.children[0].outputs, self.inputs());
@@ -604,7 +604,7 @@ struct PerOperatorState<T: Timestamp> {
 
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
 
-    internal_summary: Connectivity<T::Summary>,   // cached result from get_internal_summary.
+    internal_summary: Connectivity<T::Summary>,   // cached result from initialize.
 
     logging: Option<Logger>,
 }
@@ -644,7 +644,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let outputs = scope.outputs();
         let notify = scope.notify_me();
 
-        let (internal_summary, shared_progress) = scope.get_internal_summary();
+        let (internal_summary, shared_progress) = scope.initialize();
 
         if let Some(l) = summary_logging {
             l.log(crate::logging::OperatesSummaryEvent {

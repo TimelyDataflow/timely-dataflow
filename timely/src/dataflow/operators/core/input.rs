@@ -204,7 +204,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
     fn inputs(&self) -> usize { 0 }
     fn outputs(&self) -> usize { 1 }
 
-    fn get_internal_summary(&mut self) -> (Connectivity<<T as Timestamp>::Summary>, Rc<RefCell<SharedProgress<T>>>) {
+    fn initialize(&mut self) -> (Connectivity<<T as Timestamp>::Summary>, Rc<RefCell<SharedProgress<T>>>) {
         self.shared_progress.borrow_mut().internals[0].update(T::minimum(), self.copies as i64);
         (Vec::new(), Rc::clone(&self.shared_progress))
     }
