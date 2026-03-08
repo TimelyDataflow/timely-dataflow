@@ -585,15 +585,6 @@ where
         // Return summaries and shared progress information.
         (internal_summary, Rc::clone(&self.shared_progress))
     }
-
-    fn set_external_summary(&mut self) {
-        self.accept_frontier();
-        self.propagate_pointstamps();  // ensure propagation of input frontiers.
-        self.children
-            .iter_mut()
-            .flat_map(|child| child.operator.as_mut())
-            .for_each(|op| op.set_external_summary());
-    }
 }
 
 struct PerOperatorState<T: Timestamp> {
