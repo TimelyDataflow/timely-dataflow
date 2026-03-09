@@ -19,7 +19,7 @@ use crate::scheduling::activate::Activations;
 use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress};
 use crate::progress::{Location, Port, Source, Target};
-use crate::progress::operate::{Connectivity, PortConnectivity};
+use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity};
 use crate::progress::ChangeBatch;
 use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
@@ -198,7 +198,7 @@ where
 
         activations.borrow_mut().activate(&self.path[..]);
 
-        let notify_me: bool = self.children.iter().any(|c| c.notify);
+        let notify_me: FrontierInterest = self.children.iter().map(|c| c.notify).max().unwrap();
 
         Subgraph {
             name: self.name,
@@ -277,7 +277,7 @@ where
 
     progress_mode: ProgressMode,
 
-    notify_me: bool,
+    notify_me: FrontierInterest,
 }
 
 impl<TOuter, TInner> Schedule for Subgraph<TOuter, TInner>
@@ -474,16 +474,20 @@ where
         self.pointstamp_tracker.propagate_all();
 
         // Drain propagated information into shared progress structure.
-        for ((location, time), diff) in self.pointstamp_tracker.pushed().drain() {
+        let (pushed, operators) = self.pointstamp_tracker.pushed();
+        for ((location, time), diff) in pushed.drain() {
             self.maybe_shutdown.push(location.node);
             // Targets are actionable, sources are not.
             if let crate::progress::Port::Target(port) = location.port {
-                if self.children[location.node].notify {
-                    self.temp_active.push(Reverse(location.node));
-                }
-                // TODO: This logic could also be guarded by `.notify`, but
-                // we want to be a bit careful to make sure all related logic
-                // agrees with this (e.g. initialization, operator logic, etc.)
+                // Activate based on expressed frontier interest.
+                let activate = match self.children[location.node].notify {
+                    FrontierInterest::Always => true,
+                    FrontierInterest::IfCapability => { operators[location.node].cap_counts > 0 }
+                    FrontierInterest::Never => false,
+                };
+                if activate { self.temp_active.push(Reverse(location.node)); }
+
+                // Keep this current independent of the interest.
                 self.children[location.node]
                     .shared_progress
                     .borrow_mut()
@@ -498,7 +502,7 @@ where
         for child_index in self.maybe_shutdown.drain(..) {
             let child_state = self.pointstamp_tracker.node_state(child_index);
             let frontiers_empty = child_state.targets.iter().all(|x| x.implications.is_empty());
-            let no_capabilities = child_state.sources.iter().all(|x| x.pointstamps.is_empty());
+            let no_capabilities = child_state.cap_counts == 0;
             if frontiers_empty && no_capabilities {
                 self.temp_active.push(Reverse(child_index));
             }
@@ -594,7 +598,7 @@ where
         (internal_summary, Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> bool { self.notify_me }
+    fn notify_me(&self) -> FrontierInterest { self.notify_me }
 }
 
 struct PerOperatorState<T: Timestamp> {
@@ -604,7 +608,7 @@ struct PerOperatorState<T: Timestamp> {
     id: usize,          // worker-unique identifier
 
     local: bool,        // indicates whether the operator will exchange data or not
-    notify: bool,
+    notify: FrontierInterest,
     inputs: usize,      // number of inputs to the operator
     outputs: usize,     // number of outputs from the operator
 
@@ -628,7 +632,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             index:      0,
             id:         usize::MAX,
             local:      false,
-            notify:     false,
+            notify:     FrontierInterest::IfCapability,
             inputs,
             outputs,
 

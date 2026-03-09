@@ -18,7 +18,7 @@ use crate::dataflow::operators::capability::Capability;
 use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_handle};
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 use crate::dataflow::operators::generic::builder_raw::OperatorShape;
-use crate::progress::operate::PortConnectivity;
+use crate::progress::operate::{FrontierInterest, PortConnectivity};
 
 use super::builder_raw::OperatorBuilder as OperatorBuilderRaw;
 
@@ -49,7 +49,11 @@ impl<G: Scope> OperatorBuilder<G> {
     }
 
     /// Indicates whether the operator requires frontier information.
-    pub fn set_notify(&mut self, notify: bool) { self.builder.set_notify(notify); }
+    pub fn set_notify(&mut self, notify: bool) {
+        let interest = if notify { FrontierInterest::Always } else { FrontierInterest::Never };
+        self.builder.set_notify(interest);
+
+    }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input<C: Container, P>(&mut self, stream: Stream<G, C>, pact: P) -> InputHandleCore<G::Timestamp, C, P::Puller>

@@ -12,7 +12,7 @@ use crate::scheduling::{Schedule, Activations};
 
 use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
-use crate::progress::operate::{Connectivity, PortConnectivity};
+use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity};
 use crate::Container;
 use crate::dataflow::{Stream, Scope};
 use crate::dataflow::channels::pushers::Tee;
@@ -23,7 +23,7 @@ use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 #[derive(Debug)]
 pub struct OperatorShape {
     name: String,   // A meaningful name for the operator.
-    notify: bool,   // Does the operator require progress notifications.
+    notify: FrontierInterest,   // Does the operator require progress notifications.
     peers: usize,   // The total number of workers in the computation. Needed to initialize pointstamp counts with the correct magnitude.
     inputs: usize,  // The number of input ports.
     outputs: usize, // The number of output ports.
@@ -34,7 +34,7 @@ impl OperatorShape {
     fn new(name: String, peers: usize) -> Self {
         OperatorShape {
             name,
-            notify: true,
+            notify: FrontierInterest::Always,
             peers,
             inputs: 0,
             outputs: 0,
@@ -89,7 +89,7 @@ impl<G: Scope> OperatorBuilder<G> {
     pub fn shape(&self) -> &OperatorShape { &self.shape }
 
     /// Indicates whether the operator requires frontier information.
-    pub fn set_notify(&mut self, notify: bool) { self.shape.notify = notify; }
+    pub fn set_notify(&mut self, notify: FrontierInterest) { self.shape.notify = notify; }
 
     /// Adds a new input to a generic operator builder, returning the `Pull` implementor to use.
     pub fn new_input<C: Container, P>(&mut self, stream: Stream<G, C>, pact: P) -> P::Puller
@@ -220,5 +220,5 @@ where
         (self.summary.clone(), Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> bool { self.shape.notify }
+    fn notify_me(&self) -> FrontierInterest { self.shape.notify }
 }

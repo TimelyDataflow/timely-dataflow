@@ -60,7 +60,18 @@ pub trait Operate<T: Timestamp> {
     /// This value is conservatively set to `true`, but operators that know they are oblivious to
     /// frontier information can indicate this with `false`, and they will not be scheduled on the
     /// basis of their input frontiers changing.
-    fn notify_me(&self) -> bool { true }
+    fn notify_me(&self) -> FrontierInterest { FrontierInterest::Always }
+}
+
+/// The ways in which an operator can express interest in activation when an input frontier changes.
+#[derive(Ord, PartialOrd, Eq, PartialEq, Copy, Clone, Debug)]
+pub enum FrontierInterest {
+    /// Never interested in frontier changes, as for example the `map()` and `filter()` operators.
+    Never,
+    /// Interested when the operator holds capabilities.
+    IfCapability,
+    /// Always interested in frontier changes, as for example the `probe()` and `capture()` operators.
+    Always,
 }
 
 /// Operator internal connectivity, from inputs to outputs.

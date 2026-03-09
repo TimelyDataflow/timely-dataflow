@@ -38,6 +38,7 @@
 //! let mut results =
 //! tracker
 //!     .pushed()
+//!     .0
 //!     .drain()
 //!     .filter(|((location, time), delta)| location.is_target())
 //!     .collect::<Vec<_>>();
@@ -60,6 +61,7 @@
 //! let mut results =
 //! tracker
 //!     .pushed()
+//!     .0
 //!     .drain()
 //!     .filter(|((location, time), delta)| location.is_target())
 //!     .collect::<Vec<_>>();
@@ -413,6 +415,8 @@ pub struct PerOperator<T: Timestamp> {
     pub targets: Vec<PortInformation<T>>,
     /// Port information for each source.
     pub sources: Vec<PortInformation<T>>,
+    /// Sum across outputs of capabilities.
+    pub cap_counts: i64,
 }
 
 impl<T: Timestamp> PerOperator<T> {
@@ -421,6 +425,7 @@ impl<T: Timestamp> PerOperator<T> {
         PerOperator {
             targets: vec![PortInformation::new(); inputs],
             sources: vec![PortInformation::new(); outputs],
+            cap_counts: 0,
         }
     }
 }
@@ -618,13 +623,15 @@ impl<T:Timestamp> Tracker<T> {
         while let Some(((source, _), _)) = source_changes.peek() {
 
             let source = *source;
-            let operator = &mut self.per_operator[source.node].sources[source.port];
+            let operator = &mut self.per_operator[source.node];
+            let op_source = &mut operator.sources[source.port];
             let source_updates = source_changes.peeking_take_while(|((s, _),_)| s == &source).map(|((_,time),diff)| (time,diff));
-            let changes = operator.pointstamps.update_iter(source_updates);
+            let changes = op_source.pointstamps.update_iter(source_updates);
 
             for (time, diff) in changes {
                 self.total_counts += diff;
-                for (output, summaries) in operator.output_summaries.iter_ports() {
+                operator.cap_counts += diff;
+                for (output, summaries) in op_source.output_summaries.iter_ports() {
                     let output_changes = &mut self.output_changes[output];
                     summaries
                         .elements()
@@ -708,8 +715,8 @@ impl<T:Timestamp> Tracker<T> {
     }
 
     /// A mutable reference to the pushed results of changes.
-    pub fn pushed(&mut self) -> &mut ChangeBatch<(Location, T)> {
-        &mut self.pushed_changes
+    pub fn pushed(&mut self) -> (&mut ChangeBatch<(Location, T)>, &[PerOperator<T>]) {
+        (&mut self.pushed_changes, &self.per_operator)
     }
 
     /// Reveals per-operator frontier state.
