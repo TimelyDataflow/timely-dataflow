@@ -5,7 +5,7 @@ use crate::dataflow::operators::core::Partition as PartitionCore;
 use crate::dataflow::{Scope, StreamVec};
 
 /// Partition a stream of records into multiple streams.
-pub trait Partition<G: Scope, D: 'static, D2: 'static, F: Fn(D) -> (u64, D2)> {
+pub trait Partition<G: Scope, D: 'static> {
     /// Produces `parts` output streams, containing records produced and assigned by `route`.
     ///
     /// # Examples
@@ -21,11 +21,11 @@ pub trait Partition<G: Scope, D: 'static, D2: 'static, F: Fn(D) -> (u64, D2)> {
     ///     streams.pop().unwrap().inspect(|x| println!("seen 0: {:?}", x));
     /// });
     /// ```
-    fn partition(self, parts: u64, route: F) -> Vec<StreamVec<G, D2>>;
+    fn partition<D2: 'static, F: Fn(D) -> (u64, D2)+'static>(self, parts: u64, route: F) -> Vec<StreamVec<G, D2>>;
 }
 
-impl<G: Scope, D: 'static, D2: 'static, F: Fn(D)->(u64, D2)+'static> Partition<G, D, D2, F> for StreamVec<G, D> {
-    fn partition(self, parts: u64, route: F) -> Vec<StreamVec<G, D2>> {
+impl<G: Scope, D: 'static> Partition<G, D> for StreamVec<G, D> {
+    fn partition<D2: 'static, F: Fn(D)->(u64, D2)+'static>(self, parts: u64, route: F) -> Vec<StreamVec<G, D2>> {
         PartitionCore::partition::<CapacityContainerBuilder<_>, _, _>(self, parts, route)
     }
 }
