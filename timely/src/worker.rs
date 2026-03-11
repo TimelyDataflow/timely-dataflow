@@ -112,7 +112,7 @@ impl Config {
     #[cfg(feature = "getopts")]
     pub fn from_matches(matches: &getopts::Matches) -> Result<Config, String> {
         let progress_mode = matches
-            .opt_get_default("progress-mode", ProgressMode::Eager)?;
+            .opt_get_default("progress-mode", ProgressMode::Demand)?;
         Ok(Config::default().progress_mode(progress_mode))
     }
 
