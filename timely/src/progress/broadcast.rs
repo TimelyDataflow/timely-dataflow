@@ -117,8 +117,8 @@ impl<T:Timestamp+Send> Progcaster<T> {
             // options for improving it if performance limits users who want other logging.
             self.progress_logging.as_ref().map(|l| {
 
-                let mut messages = Vec::with_capacity(changes.len());
-                let mut internal = Vec::with_capacity(changes.len());
+                let mut messages = Vec::with_capacity(recv_changes.len());
+                let mut internal = Vec::with_capacity(recv_changes.len());
 
                 for ((location, time), diff) in recv_changes.iter() {
 
