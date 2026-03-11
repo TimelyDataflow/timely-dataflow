@@ -92,7 +92,7 @@ fn main() {
             sent += to_send;
 
             // Advance input, iterate until data cleared.
-            let next = input1.epoch() + 1;
+            let next = input1.time() + 1;
             input1.advance_to(next);
             input2.advance_to(next);
             while probe.less_than(input1.time()) {

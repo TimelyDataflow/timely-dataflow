@@ -469,11 +469,6 @@ impl<T: Timestamp, CB: ContainerBuilder<Container: Clone>> Handle<T, CB> {
     /// and to begin to shut down operators, as this input can no longer produce data.
     pub fn close(self) { }
 
-    /// Reports the current epoch.
-    pub fn epoch(&self) -> &T {
-        &self.now_at
-    }
-
     /// Reports the current timestamp.
     pub fn time(&self) -> &T {
         &self.now_at

@@ -38,7 +38,7 @@ fn main() {
         for (edge, arc) in insert.take(edges / peers).enumerate() {
             input.send(arc);
             if edge % batch == (batch - 1) {
-                let next = input.epoch() + 1;
+                let next = input.time() + 1;
                 input.advance_to(next);
                 while probe.less_than(input.time()) {
                     worker.step();

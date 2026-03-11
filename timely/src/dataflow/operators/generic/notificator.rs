@@ -109,7 +109,7 @@ fn notificator_delivers_notifications_in_topo_order() {
     use crate::order::Product;
     use crate::dataflow::operators::capability::Capability;
 
-    let mut frontier = MutableAntichain::new_bottom(Product::new(0, 0));
+    let mut frontier = MutableAntichain::from_elem(Product::new(0, 0));
 
     let root_capability = Capability::new(Product::new(0,0), Rc::new(RefCell::new(ChangeBatch::new())));
 
