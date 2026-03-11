@@ -219,10 +219,10 @@ impl<T> Antichain<T> {
     ///
     /// let mut frontier = Antichain::from_elem(2);
     ///```
-    pub fn from_elem(element: T) -> Antichain<T> { 
+    pub fn from_elem(element: T) -> Antichain<T> {
         let mut elements = SmallVec::with_capacity(1);
         elements.push(element);
-        Antichain { elements } 
+        Antichain { elements }
     }
 
     /// Clears the contents of the antichain.
@@ -440,11 +440,11 @@ impl<T> MutableAntichain<T> {
     ///```
     /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
     ///
-    /// let mut frontier = MutableAntichain::new_bottom(0u64);
+    /// let mut frontier = MutableAntichain::from_elem(0u64);
     /// assert!(frontier.frontier() == AntichainRef::new(&[0u64]));
     ///```
     #[inline]
-    pub fn new_bottom(bottom: T) -> MutableAntichain<T> 
+    pub fn from_elem(bottom: T) -> MutableAntichain<T>
     where
         T: Ord+Clone,
     {
@@ -477,7 +477,7 @@ impl<T> MutableAntichain<T> {
     ///```
     /// use timely::progress::frontier::MutableAntichain;
     ///
-    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// let mut frontier = MutableAntichain::from_elem(1u64);
     /// assert!(!frontier.less_than(&0));
     /// assert!(!frontier.less_than(&1));
     /// assert!(frontier.less_than(&2));
@@ -497,7 +497,7 @@ impl<T> MutableAntichain<T> {
     ///```
     /// use timely::progress::frontier::MutableAntichain;
     ///
-    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// let mut frontier = MutableAntichain::from_elem(1u64);
     /// assert!(!frontier.less_equal(&0));
     /// assert!(frontier.less_equal(&1));
     /// assert!(frontier.less_equal(&2));
@@ -517,7 +517,7 @@ impl<T> MutableAntichain<T> {
     ///```
     /// use timely::progress::frontier::{AntichainRef, MutableAntichain};
     ///
-    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// let mut frontier = MutableAntichain::from_elem(1u64);
     /// let changes =
     /// frontier
     ///     .update_iter(vec![(1, -1), (2, 7)])
@@ -621,7 +621,7 @@ pub trait MutableAntichainFilter<T: PartialOrder+Ord+Clone> {
     /// ```
     /// use timely::progress::frontier::{MutableAntichain, MutableAntichainFilter};
     ///
-    /// let mut frontier = MutableAntichain::new_bottom(1u64);
+    /// let mut frontier = MutableAntichain::from_elem(1u64);
     /// let changes =
     /// vec![(1, -1), (2, 7)]
     ///     .filter_through(&mut frontier)
