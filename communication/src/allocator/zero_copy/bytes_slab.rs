@@ -80,7 +80,7 @@ impl BytesSlab {
             if self.stash.is_empty() {
                 for shared in self.in_progress.iter_mut() {
                     if let Some(mut bytes) = shared.take() {
-                        if bytes.try_regenerate::<BoxDerefMut>() {
+                        if bytes.try_regenerate::<BoxDerefMut>() == Some(true) {
                             // NOTE: Test should be redundant, but better safe...
                             if bytes.len() == (1 << self.shift) {
                                 self.stash.push(bytes);
