@@ -167,9 +167,9 @@ where
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
         // Pipeline chain fusion: detect and fuse chains of pipeline-connected operators.
-        let min_chain_length = worker.config().min_chain_length;
-        if min_chain_length >= 2 {
-            let chains = detect_chains(&self.children, &self.edge_stash, min_chain_length);
+        let fuse_chain_length = worker.config().fuse_chain_length;
+        if fuse_chain_length >= 2 {
+            let chains = detect_chains(&self.children, &self.edge_stash, fuse_chain_length);
             for chain in chains {
                 fuse_chain::<TInner>(&mut self.children, &mut self.edge_stash, &chain);
             }

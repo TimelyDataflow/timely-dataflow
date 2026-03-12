@@ -76,7 +76,7 @@ fn chain_fusion_with_probe() {
     }).unwrap();
 }
 
-/// Verifies that fusion is disabled when min_chain_length is 0.
+/// Verifies that fusion is disabled when fuse_chain_length is 0.
 #[test]
 fn chain_fusion_disabled() {
     let result = Arc::new(Mutex::new(Vec::new()));
@@ -84,7 +84,7 @@ fn chain_fusion_disabled() {
 
     let config = timely::Config {
         communication: timely::CommunicationConfig::Thread,
-        worker: timely::WorkerConfig::default().min_chain_length(0),
+        worker: timely::WorkerConfig::default().fuse_chain_length(0),
     };
 
     timely::execute(config, move |worker| {

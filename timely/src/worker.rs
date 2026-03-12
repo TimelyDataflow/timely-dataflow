@@ -82,11 +82,11 @@ impl FromStr for ProgressMode {
 pub struct Config {
     /// The progress mode to use.
     pub(crate) progress_mode: ProgressMode,
-    /// Minimum chain length for pipeline chain fusion.
+    /// Minimum chain length for pipeline chain fusion (default: 2).
     ///
     /// Chains of pipeline-connected operators shorter than this threshold
     /// will not be fused. Set to 0 to disable fusion entirely.
-    pub(crate) min_chain_length: usize,
+    pub(crate) fuse_chain_length: usize,
     /// A map from parameter name to typed parameter values.
     registry: HashMap<String, Arc<dyn Any + Send + Sync>>,
 }
@@ -95,7 +95,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             progress_mode: ProgressMode::default(),
-            min_chain_length: 2,
+            fuse_chain_length: 2,
             registry: HashMap::new(),
         }
     }
@@ -114,6 +114,7 @@ impl Config {
     #[cfg(feature = "getopts")]
     pub fn install_options(opts: &mut getopts::Options) {
         opts.optopt("", "progress-mode", "progress tracking mode (eager or demand)", "MODE");
+        opts.optopt("", "fuse-chain-length", "minimum chain length for pipeline fusion (0 disables, default: 2)", "N");
     }
 
     /// Instantiates a configuration based upon the parsed options in `matches`.
@@ -128,7 +129,10 @@ impl Config {
     pub fn from_matches(matches: &getopts::Matches) -> Result<Config, String> {
         let progress_mode = matches
             .opt_get_default("progress-mode", ProgressMode::Demand)?;
-        Ok(Config::default().progress_mode(progress_mode))
+        let fuse_chain_length: usize = matches
+            .opt_get_default("fuse-chain-length", 2)
+            .map_err(|e: std::num::ParseIntError| e.to_string())?;
+        Ok(Config::default().progress_mode(progress_mode).fuse_chain_length(fuse_chain_length))
     }
 
     /// Sets the progress mode to `progress_mode`.
@@ -137,12 +141,12 @@ impl Config {
         self
     }
 
-    /// Sets the minimum chain length for pipeline chain fusion.
+    /// Sets the minimum chain length for pipeline chain fusion (default: 2).
     ///
     /// Chains of pipeline-connected operators shorter than this threshold
-    /// will not be fused. Set to 0 to disable fusion entirely. Default: 2.
-    pub fn min_chain_length(mut self, min_chain_length: usize) -> Self {
-        self.min_chain_length = min_chain_length;
+    /// will not be fused. Set to 0 to disable fusion entirely.
+    pub fn fuse_chain_length(mut self, fuse_chain_length: usize) -> Self {
+        self.fuse_chain_length = fuse_chain_length;
         self
     }
 
