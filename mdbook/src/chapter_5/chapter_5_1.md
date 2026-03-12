@@ -108,7 +108,10 @@ The `allocator` reference bound by the worker closure is the only handle a worke
 
 There are a few implementations of the `Allocate` trait, which is defined as
 
-```rust,ignore
+```rust,no_run
+# trait Exchangeable {}
+# trait Push<T> {}
+# trait Pull<T> {}
 pub trait Allocate {
     fn index(&self) -> usize;
     fn peers(&self) -> usize;
@@ -126,14 +129,18 @@ One crucial assumption made in this design is that the channels can be identifie
 
 The `Bytesable` trait that we impose on all types that we exchange is a "marker trait": it wraps several constraints together, like so
 
-```rust,ignore
+```rust,no_run
+# use std::any::Any;
+# trait Bytesable {}
 pub trait Exchangeable : Send+Any+Bytesable { }
 impl<T: Send+Any+Bytesable> Exchangeable for T { }
 ```
 
 These traits are all Rust traits, except for `Bytesable`, and they mostly just say that we can send the data around. The `Bytesable` trait is something we introduce, and asks for methods to get into and out of a sequence of bytes.
 
-```rust,ignore
+```rust,no_run
+# extern crate timely_bytes;
+# use timely_bytes::arc::Bytes;
 pub trait Bytesable {
     fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W);
     fn from_bytes(bytes: Bytes) -> Self;
@@ -152,7 +159,7 @@ The two traits `Push` and `Pull` are the heart of the communication underlying t
 
 The `Push` trait looks like so (with two helper methods elided):
 
-```rust,ignore
+```rust,no_run
 pub trait Push<T> {
     fn push(&mut self, element: &mut Option<T>);
 }
@@ -172,7 +179,7 @@ Although not used by timely at the moment, this is also designed to support zero
 
 The `Pull` trait is the dual to `Push`: it allows someone on the other end of a channel to request whatever the channel has in store next, also as a mutable reference to an option wrapped around the type.
 
-```rust,ignore
+```rust,no_run
 pub trait Pull<T> {
     fn pull(&mut self) -> &mut Option<T>;
 }
