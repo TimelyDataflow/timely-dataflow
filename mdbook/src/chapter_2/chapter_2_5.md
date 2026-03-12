@@ -82,20 +82,44 @@ The input handle is how we supply data to the computation, and the probe handle 
 
 The next step is to build a timely dataflow. Here we use `input` as a source of data, and attach `probe` to the end so that we can watch for completion of work.
 
-```rust,ignore
+```rust
+# extern crate timely;
+# use timely::dataflow::{InputHandle, ProbeHandle};
+# use timely::dataflow::operators::{Input, Inspect, Probe};
+# fn main() {
+#     timely::execute_from_args(std::env::args().take(1), |worker| {
+#         let mut input = InputHandle::new();
+#         let mut probe: ProbeHandle<usize> = ProbeHandle::new();
         // build a new dataflow.
         worker.dataflow(|scope| {
             input.to_stream(scope)
+                 .container::<Vec<_>>()
                  .inspect(|x| println!("seen: {:?}", x))
                  .probe_with(&mut probe);
         });
+#         input.send(("round".to_owned(), 1i64));
+#     }).unwrap();
+# }
 ```
 
 This computation is pretty simple: it just prints out the inputs we send at it.
 
 Having constructed the dataflow, we feed it some data.
 
-```rust,ignore
+```rust
+# extern crate timely;
+# use timely::dataflow::{InputHandle, ProbeHandle};
+# use timely::dataflow::operators::{Input, Inspect, Probe};
+# fn main() {
+#     timely::execute_from_args(std::env::args().take(1), |worker| {
+#         let mut input = InputHandle::new();
+#         let mut probe = ProbeHandle::new();
+#         worker.dataflow(|scope| {
+#             input.to_stream(scope)
+#                  .container::<Vec<_>>()
+#                  .inspect(|x| println!("seen: {:?}", x))
+#                  .probe_with(&mut probe);
+#         });
         // feed the dataflow with data.
         for round in 0..10 {
             input.send(("round".to_owned(), 1));
@@ -104,6 +128,8 @@ Having constructed the dataflow, we feed it some data.
                 worker.step();
             }
         }
+#     }).unwrap();
+# }
 ```
 
 There are several things going on here. First, we `send` some data into the input, which allows the data to circulate through the workers along the dataflow. This data will be of type `(String, i64)`, because our example wants to send some text and annotate each with the change in the count (we add or remove text with `+1` or `-1`, respectively). Second, we `advance_to` to tell timely dataflow that we have ceased sending data for `round` and anything before it. At this point timely can start to reason about `round` becoming complete, once all the associated data make their way through the dataflow. Finally, we repeatedly `step` the worker until `probe` reports that it has caught up to `round + 1`, meaning that data for `round` are fully flushed from the system (and printed to the screen, one hopes).

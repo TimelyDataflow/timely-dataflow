@@ -41,9 +41,28 @@ fn main() {
 
 We'll put the whole program up here, but there are really just two lines that deal with progress tracking:
 
-```rust,ignore
+```rust
+# extern crate timely;
+# use timely::dataflow::InputHandle;
+# use timely::dataflow::operators::{Input, Exchange, Inspect, Probe};
+# fn main() {
+#     timely::execute_from_args(std::env::args().take(1), |worker| {
+#         let mut input = InputHandle::new();
+#         let probe = worker.dataflow(|scope|
+#             scope.input_from(&mut input)
+#                  .container::<Vec<_>>()
+#                  .exchange(|x| *x)
+#                  .inspect(move |x| println!("hello {}", x))
+#                  .probe()
+#                  .0
+#         );
+#         for round in 0..10 {
+#             input.send(round);
 input.advance_to(round + 1);
 worker.step_while(|| probe.less_than(input.time()));
+#         }
+#     }).unwrap();
+# }
 ```
 
 Let's talk about each of them.
