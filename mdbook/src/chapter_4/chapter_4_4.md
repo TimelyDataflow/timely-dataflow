@@ -9,39 +9,43 @@ At its core, `capture_into` records everything it sees about the stream it is at
 The `capture_into` method is relative simple, and we can just look at it:
 
 ```rust,ignore
-    fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, event_pusher: P) {
+    fn capture_into<P: EventPusher<S::Timestamp, C>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
         let mut started = false;
 
-        let event_pusher1 = Rc::new(RefCell::new(event_pusher));
-        let event_pusher2 = event_pusher1.clone();
-
         builder.build(
-            move |frontier| {
+            move |progress| {
                 if !started {
-                    frontier[0].update(Default::default(), -1);
+                    // discard initial capability.
+                    progress.frontiers[0].update(S::Timestamp::minimum(), -1);
                     started = true;
                 }
-                if !frontier[0].is_empty() {
-                    let to_send = ::std::mem::replace(&mut frontier[0], ChangeBatch::new());
-                    event_pusher1.borrow_mut().push(Event::Progress(to_send.into_inner()));
+                if !progress.frontiers[0].is_empty() {
+                    // transmit any frontier progress.
+                    let to_send = ::std::mem::replace(&mut progress.frontiers[0], ChangeBatch::new());
+                    event_pusher.push(Event::Progress(to_send.into_inner()));
                 }
-            },
-            move |consumed, _internal, _external| {
-                let mut borrow = event_pusher2.borrow_mut();
-                while let Some((time, data)) = input.next() {
-                    borrow.push(Event::Messages(time.clone(), data.deref_mut().clone()));
+
+                // turn each received message into an event.
+                while let Some(message) = input.next() {
+                    let (time, data) = match message.as_ref_or_mut() {
+                        RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
+                        RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
+                    };
+                    let vector = data.replace(Default::default());
+                    event_pusher.push(Event::Messages(time.clone(), vector));
                 }
-                input.consumed().borrow_mut().drain_into(&mut consumed[0]);
+
+                input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);
                 false
             }
         );
     }
 ```
 
-The method is generic with respect to some implementor `P` of the trait `EventPusher` which defines a method `push` that accepts `Event<T, D>` items (we will see a few implementations in just a moment). After a bit of set-up, `capture_into` builds a new operator with one input and zero outputs, and sets the logic for (i) what to do when the input frontier changes, and (ii) what to do when presented with the opportunity to do a bit of computation. In both cases, we just create new events based on what we see (progress changes and data messages, respectively).
+The method is generic with respect to some implementor `P` of the trait `EventPusher` which defines a method `push` that accepts `Event<T, D>` items (we will see a few implementations in just a moment). After a bit of set-up, `capture_into` builds a new operator with one input and zero outputs, and sets the logic for what to do when the operator is scheduled. The single closure handles both frontier changes and data processing, creating new events based on what it sees (progress changes and data messages).
 
 There is a mysterious subtraction of `Default::default()`, which has to do with the contract that the replaying operators assume the stream starts with such a capability. This prevents the need for the replayers to block on the stream in their operator construction (any operator must state any initial capabilities as part of its construction; it cannot defer that until later).
 
@@ -52,7 +56,7 @@ One nice aspect of `capture_into` is that it really does reveal everything that 
 At *its* core, `replay_into` takes some sequence of `Event<T, D>` items and reproduces the stream, as it was recorded. It is also fairly simple, and we can just look at its implementation as well:
 
 ```rust,ignore
-    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamVec<S, D>{
+    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
         let (targets, stream) = builder.new_output();
@@ -61,31 +65,32 @@ At *its* core, `replay_into` takes some sequence of `Event<T, D>` items and repr
         let mut event_streams = self.into_iter().collect::<Vec<_>>();
         let mut started = false;
 
+        let mut allocation: C = Default::default();
+
         builder.build(
-            move |_frontier| { },
-            move |_consumed, internal, produced| {
+            move |progress| {
 
                 if !started {
-                    internal[0].update(Default::default(), (event_streams.len() as i64) - 1);
+                    progress.internals[0].update(S::Timestamp::minimum(), (event_streams.len() as i64) - 1);
                     started = true;
                 }
 
                 for event_stream in event_streams.iter_mut() {
                     while let Some(event) = event_stream.next() {
-                        match *event {
-                            Event::Start => { },
-                            Event::Progress(ref vec) => {
-                                internal[0].extend(vec.iter().cloned());
+                        match event {
+                            Event::Progress(vec) => {
+                                progress.internals[0].extend(vec.iter().cloned());
                             },
-                            Event::Messages(ref time, ref data) => {
-                                output.session(time).give_iterator(data.iter().cloned());
+                            Event::Messages(ref time, data) => {
+                                allocation.clone_from(data);
+                                output.session(time).give_container(&mut allocation);
                             }
                         }
                     }
                 }
 
                 output.cease();
-                output.inner().produced().borrow_mut().drain_into(&mut produced[0]);
+                output.inner().produced().borrow_mut().drain_into(&mut progress.produceds[0]);
 
                 false
             }
@@ -99,7 +104,7 @@ The type of `self` here is actually something that allows us to enumerate a sequ
 
 ```rust,ignore
                 if !started {
-                    internal[0].update(Default::default(), (event_streams.len() as i64) - 1);
+                    progress.internals[0].update(S::Timestamp::minimum(), (event_streams.len() as i64) - 1);
                     started = true;
                 }
 ```
@@ -112,7 +117,7 @@ Having done the initial adjustment, we literally just play out the streams (note
 
 We can check out the examples `examples/capture_send.rs` and `examples/capture_recv.rs` to see a paired use of capture and receive demonstrating the generality.
 
-The `capture_send` example creates a new TCP connection for each worker, which it wraps and uses as an `EventPusher`. Timely dataflow takes care of all the serialization and stuff like that (warning: it uses abomonation, so this is not great for long-term storage).
+The `capture_send` example creates a new TCP connection for each worker, which it wraps and uses as an `EventPusher`. Timely dataflow takes care of all the serialization and stuff like that (warning: by default it uses abomonation for serialization, so this is not great for long-term storage; the `bincode` feature uses serde instead).
 
 ```rust,no_run
 extern crate timely;
@@ -207,6 +212,4 @@ which just goes on and on, but which should produce 50 lines of text, with five 
 
 ## Capture types
 
-There are several sorts of things you could capture into and replay from. In the `capture::events` module you will find two examples, a linked list and a binary serializer / deserializer (wrapper around `Write` and `Read` traits). The binary serializer is fairly general; we used it up above to wrap TCP streams. You could also write to files, or write to shared memory. However, be mindful that the serialization format (abomonation) is essentially the in-memory representation, and Rust makes no guarantees about the stability of such a representation across builds.
-
-There is also [an in-progress Kafka adapter](https://github.com/TimelyDataflow/timely-dataflow/tree/master/kafkaesque) available in the repository, which uses Kafka topics to store the binary representation of captured streams, which can then be replayed by any timely computation that can read them. This may be a while before it is sorted out, because Kafka seems to have a few quirks, but if you would like to help get in touch.
+There are several sorts of things you could capture into and replay from. In the `capture::events` module you will find two examples, a linked list and a binary serializer / deserializer (wrapper around `Write` and `Read` traits). The binary serializer is fairly general; we used it up above to wrap TCP streams. You could also write to files, or write to shared memory. However, be mindful that the default serialization format (abomonation) is essentially the in-memory representation, and Rust makes no guarantees about the stability of such a representation across builds.

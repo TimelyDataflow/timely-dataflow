@@ -75,7 +75,7 @@ fn main() {
         (1 .. 100_000u64)
             .to_stream(scope)
             // Assign timestamps to records so that not much work is in each time.
-            .delay(|number, time| number / 100 )
+            .delay(|number, time| *number / 100 )
             // Buffer records until all prior timestamps have completed.
             .binary_frontier(cycle, Pipeline, Pipeline, "Buffer", move |capability, info| {
 

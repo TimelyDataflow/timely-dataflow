@@ -81,17 +81,24 @@ There are a few steps here, and we'll talk through the important parts in each o
 
 ## Configuration
 
-There is only a limited amount of configuration you can currently do in a timely dataflow computation, and it all lives in the `initialize::Configuration` type. This type is a simple enumeration of three ways a timely computation could run:
+There is only a limited amount of configuration you can currently do in a timely dataflow computation, and it all lives in the `initialize::Config` type. This type is an enumeration of the ways a timely computation could run:
 
 ```rust,ignore
-pub enum Configuration {
+pub enum Config {
     Thread,
     Process(usize),
-    Cluster(usize, usize, Vec<String>, bool)
+    ProcessBinary(usize),
+    Cluster {
+        threads: usize,
+        process: usize,
+        addresses: Vec<String>,
+        report: bool,
+        log_fn: Box<dyn Fn(CommunicationSetup) -> Option<Logger<...>> + Send + Sync>,
+    }
 }
 ```
 
-The first variant `Thread` indicates that we will simply have one worker thread. This is a helpful thing to know because it means that all of our exchange channels can be dramatically simplified, just down to simple queues. The second variant `Process` corresponds to multiple worker threads within one process. The number indicates the parameters. The third variant `Cluster` is how we indicate that this process will participate in a larger clustered computation; we supply the number of threads, this process' identifier, a list of addresses of all participants, and a boolean for whether we would like some diagnostics about the established connections.
+The first variant `Thread` indicates that we will simply have one worker thread. This is a helpful thing to know because it means that all of our exchange channels can be dramatically simplified, just down to simple queues. The second variant `Process` corresponds to multiple worker threads within one process. The `ProcessBinary` variant is similar but uses zero-copy exchange channels. The `Cluster` variant is how we indicate that this process will participate in a larger clustered computation; we supply the number of threads, this process' identifier, a list of addresses of all participants, a boolean for whether we would like some diagnostics about the established connections, and a logging function.
 
 The configuration is important because it determines how we build the channel allocator `allocator` that we eventually provide to each worker: `allocator` will be responsible for building communication channels to other workers, and it will need to know where these other workers are.
 
@@ -105,13 +112,13 @@ There are a few implementations of the `Allocate` trait, which is defined as
 pub trait Allocate {
     fn index(&self) -> usize;
     fn peers(&self) -> usize;
-    fn allocate<T: Data>(&mut self) -> (Vec<Box<Push<T>>>, Box<Pull<T>>);
+    fn allocate<T: Exchangeable>(&mut self, identifier: usize) -> (Vec<Box<dyn Push<T>>>, Box<dyn Pull<T>>);
 }
 ```
 
-These methods are the only functionality provided by `allocator`. A worker can ask for its own index, which is a number from zero up to the number of total peer workers (including itself), which it can also ask for. Perhaps most importantly, the worker can also request the allocation of a typed channel, which is returned as a pair of (i) a list of `Push` endpoints into which it can send data, and (ii) a single `Pull` endpoint from which it can extract data. The list has length equal to the number of peers, and data sent into push endpoint `i` will eventually be received by the worker with index `i`, if it keeps pulling on its pull endpoint.
+These methods are the only functionality provided by `allocator`. A worker can ask for its own index, which is a number from zero up to the number of total peer workers (including itself), which it can also ask for. Perhaps most importantly, the worker can also request the allocation of a typed channel by providing an identifier, which is returned as a pair of (i) a list of `Push` endpoints into which it can send data, and (ii) a single `Pull` endpoint from which it can extract data. The list has length equal to the number of peers, and data sent into push endpoint `i` will eventually be received by the worker with index `i`, if it keeps pulling on its pull endpoint.
 
-The channels are various and interesting, but should be smartly arranged. The channel from the worker back to itself is just a queue, the channels within the same process are Rust's inter-thread channels, and the channels between processes will automatically serialize and deserialize the type `T` for you (this is part of the `T: Data` requirement).
+The channels are various and interesting, but should be smartly arranged. The channel from the worker back to itself is just a queue, the channels within the same process are Rust's inter-thread channels, and the channels between processes will automatically serialize and deserialize the type `T` for you (this is part of the `T: Exchangeable` requirement).
 
 One crucial assumption made in this design is that the channels can be identified by their order of creation. If two workers start executing in different processes, allocating multiple channels, the only way we will know how to align these channels is by identifiers handed out as the channels are allocated. I strongly recommend against non-deterministic channel construction, or "optimizing out" some channels from some workers.
 
@@ -128,8 +135,9 @@ These traits are all Rust traits, except for `Bytesable`, and they mostly just s
 
 ```rust,ignore
 pub trait Bytesable {
-    fn into_bytes(&mut self, &mut Vec<u8>);
-    fn from_bytes(&mut Vec<u8>) -> Self;
+    fn into_bytes<W: ::std::io::Write>(&self, writer: &mut W);
+    fn from_bytes(bytes: Bytes) -> Self;
+    fn length_in_bytes(&self) -> usize;
 }
 ```
 
