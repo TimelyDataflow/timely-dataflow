@@ -71,7 +71,7 @@ Each worker maintains an accumulation of progress update batches, which explains
 Progress tracking occurs in the context of a dataflow graph of operators all with a common timestamp type `T: Timestamp`. The `Timestamp` trait requires the `PartialOrder` trait, meaning two timestamps may be ordered but need not be. Each type implementing `Timestamp` must also specify an associated type `Summary` implementing `PathSummary<Self>`.
 
 ```rust,ignore
-pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
+pub trait Timestamp: Clone+Eq+PartialOrder+Ord+Debug+Any+ExchangeData {
     type Summary : PathSummary<Self> + 'static;
     fn minimum() -> Self;
 }
