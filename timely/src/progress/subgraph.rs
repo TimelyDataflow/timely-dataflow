@@ -7,7 +7,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Reverse;
 
 use crate::logging::TimelyLogger as Logger;
@@ -16,14 +16,14 @@ use crate::logging::TimelySummaryLogger as SummaryLogger;
 use crate::scheduling::Schedule;
 use crate::scheduling::activate::Activations;
 
-use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter};
+use crate::progress::frontier::{MutableAntichain, MutableAntichainFilter, Antichain};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress};
 use crate::progress::{Location, Port, Source, Target};
 use crate::progress::operate::{FrontierInterest, Connectivity, PortConnectivity};
 use crate::progress::ChangeBatch;
 use crate::progress::broadcast::Progcaster;
 use crate::progress::reachability;
-use crate::progress::timestamp::Refines;
+use crate::progress::timestamp::{Refines, PathSummary};
 
 use crate::worker::ProgressMode;
 
@@ -166,12 +166,25 @@ where
         // Create empty child zero representative.
         self.children[0] = PerOperatorState::empty(outputs, inputs);
 
+        // Pipeline chain fusion: detect and fuse chains of pipeline-connected operators.
+        let min_chain_length = worker.config().min_chain_length;
+        if min_chain_length >= 2 {
+            let chains = detect_chains(&self.children, &self.edge_stash, min_chain_length);
+            for chain in chains {
+                fuse_chain::<TInner>(&mut self.children, &mut self.edge_stash, &chain);
+            }
+        }
+
         let mut builder = reachability::Builder::new();
 
         // Child 0 has `inputs` outputs and `outputs` inputs, not yet connected.
         let summary = (0..outputs).map(|_| PortConnectivity::default()).collect();
         builder.add_node(0, outputs, inputs, summary);
         for (index, child) in self.children.iter().enumerate().skip(1) {
+            // Skip tombstoned children (absorbed into chains).
+            if child.inputs == 0 && child.outputs == 0 && child.operator.is_none() {
+                continue;
+            }
             builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
         }
 
@@ -192,7 +205,13 @@ where
 
         let mut incomplete = vec![true; self.children.len()];
         incomplete[0] = false;
-        let incomplete_count = incomplete.len() - 1;
+        // Tombstoned children are not incomplete.
+        for (i, child) in self.children.iter().enumerate().skip(1) {
+            if child.inputs == 0 && child.outputs == 0 && child.operator.is_none() {
+                incomplete[i] = false;
+            }
+        }
+        let incomplete_count = incomplete.iter().filter(|&&b| b).count();
 
         let activations = worker.activations();
 
@@ -821,5 +840,364 @@ impl<T: Timestamp> PerOperatorState<T> {
 impl<T: Timestamp> Drop for PerOperatorState<T> {
     fn drop(&mut self) {
         self.shut_down();
+    }
+}
+
+// --- Pipeline chain fusion ---
+
+/// Detects maximal fusible chains from the edge topology.
+///
+/// A chain is a sequence of operators `[A, B, C, ...]` where each link satisfies:
+/// * Both operators have exactly 1 input and 1 output
+/// * A's sole output targets B's sole input (no fan-out)
+/// * B's sole input comes from A's output (no fan-in)
+/// * Both are `local == true` (pipeline edges only)
+/// * Both have `notify == false` (no frontier observation)
+///
+/// Returns chains of at least `min_length` operators, identified by index.
+fn detect_chains<T: Timestamp>(
+    children: &[PerOperatorState<T>],
+    edge_stash: &[(Source, Target)],
+    min_length: usize,
+) -> Vec<Vec<usize>> {
+    // Build forward map: source_node -> target_node (only for single-input/single-output pipeline edges).
+    // Build reverse map: target_node -> source_node.
+    let mut forward: HashMap<usize, usize> = HashMap::new();
+    let mut reverse: HashMap<usize, usize> = HashMap::new();
+
+    // Count edges per source and target to detect fan-out/fan-in.
+    let mut source_edge_count: HashMap<usize, usize> = HashMap::new();
+    let mut target_edge_count: HashMap<usize, usize> = HashMap::new();
+
+    for (source, target) in edge_stash.iter() {
+        *source_edge_count.entry(source.node).or_insert(0) += 1;
+        *target_edge_count.entry(target.node).or_insert(0) += 1;
+    }
+
+    for (source, target) in edge_stash.iter() {
+        let src = source.node;
+        let tgt = target.node;
+
+        // Skip child 0 (the subgraph boundary).
+        if src == 0 || tgt == 0 { continue; }
+
+        let src_child = &children[src];
+        let tgt_child = &children[tgt];
+
+        // Both must have exactly 1 input and 1 output.
+        if src_child.inputs != 1 || src_child.outputs != 1 { continue; }
+        if tgt_child.inputs != 1 || tgt_child.outputs != 1 { continue; }
+
+        // Both must be local (pipeline edges) and not frontier-observing.
+        if !src_child.local || !tgt_child.local { continue; }
+        if src_child.notify || tgt_child.notify { continue; }
+
+        // No fan-out from source, no fan-in to target.
+        if source_edge_count.get(&src) != Some(&1) { continue; }
+        if target_edge_count.get(&tgt) != Some(&1) { continue; }
+
+        // Must have an operator (not already tombstoned).
+        if src_child.operator.is_none() || tgt_child.operator.is_none() { continue; }
+
+        // Edge must connect port 0 -> port 0.
+        if source.port != 0 || target.port != 0 { continue; }
+
+        forward.insert(src, tgt);
+        reverse.insert(tgt, src);
+    }
+
+    // Walk chains starting from heads (nodes with no predecessor in a chain).
+    let mut visited = vec![false; children.len()];
+    let mut chains = Vec::new();
+
+    for &head in forward.keys() {
+        // A head is a node that is not a successor in any chain link.
+        if reverse.contains_key(&head) { continue; }
+        if visited[head] { continue; }
+
+        let mut chain = vec![head];
+        visited[head] = true;
+        let mut current = head;
+        while let Some(&next) = forward.get(&current) {
+            if visited[next] { break; }
+            chain.push(next);
+            visited[next] = true;
+            current = next;
+        }
+
+        if chain.len() >= min_length {
+            chains.push(chain);
+        }
+    }
+
+    chains
+}
+
+/// Composes internal summaries for a chain of single-input/single-output operators.
+///
+/// For chain `[A, B, C]`, the composed summary is:
+/// `A.summary[0→0] followed_by B.summary[0→0] followed_by C.summary[0→0]`
+fn compose_summaries<T: Timestamp>(
+    summaries: &[&Connectivity<T::Summary>],
+) -> Connectivity<T::Summary> {
+    if summaries.is_empty() {
+        return vec![PortConnectivity::default()];
+    }
+
+    // Start with the first operator's summary (input 0 -> output 0).
+    let mut result_antichain: Antichain<T::Summary> = Antichain::new();
+
+    // Extract the first summary's 0→0 antichain.
+    if let Some(first) = summaries[0].get(0) {
+        if let Some(ac) = first.get(0) {
+            result_antichain = ac.clone();
+        }
+    }
+
+    // Compose with each subsequent operator's summary.
+    for summary in &summaries[1..] {
+        let next_antichain = summary.get(0).and_then(|pc| pc.get(0));
+        let next_antichain = match next_antichain {
+            Some(ac) => ac,
+            None => {
+                // No path through this operator; result is empty.
+                result_antichain = Antichain::new();
+                break;
+            }
+        };
+
+        let mut composed = Antichain::new();
+        for a in result_antichain.elements().iter() {
+            for b in next_antichain.elements().iter() {
+                if let Some(c) = a.followed_by(b) {
+                    composed.insert(c);
+                }
+            }
+        }
+        result_antichain = composed;
+    }
+
+    let mut port_connectivity = PortConnectivity::default();
+    for elem in result_antichain.elements().iter() {
+        port_connectivity.insert_ref(0, elem);
+    }
+    vec![port_connectivity]
+}
+
+/// A member of a fused chain, holding the original operator and its progress handle.
+struct ChainMember<T: Timestamp> {
+    operator: Box<dyn Schedule>,
+    shared_progress: Rc<RefCell<SharedProgress<T>>>,
+}
+
+/// Schedules a chain of pipeline-connected operators as a single unit.
+///
+/// The chain presents as a single operator to the subgraph: it has the first
+/// member's input and the last member's output. Intermediate progress is
+/// hidden from the reachability tracker.
+struct ChainScheduler<T: Timestamp> {
+    name: String,
+    path: Vec<usize>,
+    /// Progress visible to the subgraph (first op's inputs, last op's outputs).
+    chain_progress: Rc<RefCell<SharedProgress<T>>>,
+    /// Operators in execution order, with their individual SharedProgress handles.
+    members: Vec<ChainMember<T>>,
+}
+
+impl<T: Timestamp> Schedule for ChainScheduler<T> {
+    fn name(&self) -> &str { &self.name }
+    fn path(&self) -> &[usize] { &self.path }
+
+    fn schedule(&mut self) -> bool {
+        let n = self.members.len();
+        assert!(n > 0);
+
+        // Step 1: Copy chain's input frontier to first member's frontier.
+        {
+            let mut chain_sp = self.chain_progress.borrow_mut();
+            let mut first_sp = self.members[0].shared_progress.borrow_mut();
+            for (port, frontier) in chain_sp.frontiers.iter_mut().enumerate() {
+                for (time, diff) in frontier.iter() {
+                    first_sp.frontiers[port].update(time.clone(), *diff);
+                }
+            }
+        }
+
+        // Step 2: Schedule each member in sequence, propagating frontiers forward.
+        let mut any_incomplete = false;
+        for i in 0..n {
+            let incomplete = self.members[i].operator.schedule();
+            any_incomplete = any_incomplete || incomplete;
+
+            // Propagate: current member's produceds become next member's frontiers
+            // (conceptually, records flow through the pipeline channel).
+            // The data actually flows through the ThreadPusher/ThreadPuller pipeline
+            // channels that already exist between the operators. We only need to
+            // propagate frontier information for notify-capable operators, but since
+            // we only fuse notify=false operators, we skip frontier propagation between
+            // members. The intermediate consumeds/produceds are simply discarded.
+        }
+
+        // Step 3: Aggregate progress.
+        {
+            let mut chain_sp = self.chain_progress.borrow_mut();
+
+            // consumeds = first member's consumeds
+            let mut first_sp = self.members[0].shared_progress.borrow_mut();
+            for (port, consumed) in first_sp.consumeds.iter_mut().enumerate() {
+                for (time, diff) in consumed.iter() {
+                    chain_sp.consumeds[port].update(time.clone(), *diff);
+                }
+            }
+            drop(first_sp);
+
+            // produceds = last member's produceds
+            let mut last_sp = self.members[n-1].shared_progress.borrow_mut();
+            for (port, produced) in last_sp.produceds.iter_mut().enumerate() {
+                for (time, diff) in produced.iter() {
+                    chain_sp.produceds[port].update(time.clone(), *diff);
+                }
+            }
+            drop(last_sp);
+
+            // internals = aggregate from all members
+            for member in self.members.iter() {
+                let mut member_sp = member.shared_progress.borrow_mut();
+                for (port, internal) in member_sp.internals.iter_mut().enumerate() {
+                    for (time, diff) in internal.iter() {
+                        // All internals map to the chain's single output (port 0).
+                        chain_sp.internals[port].update(time.clone(), *diff);
+                    }
+                }
+            }
+        }
+
+        // Step 4: Clear all members' SharedProgress to prevent accumulation.
+        for member in self.members.iter() {
+            let mut sp = member.shared_progress.borrow_mut();
+            for batch in sp.frontiers.iter_mut() { batch.clear(); }
+            for batch in sp.consumeds.iter_mut() { batch.clear(); }
+            for batch in sp.internals.iter_mut() { batch.clear(); }
+            for batch in sp.produceds.iter_mut() { batch.clear(); }
+        }
+
+        // Clear the chain's own frontiers (consumed by step 1).
+        {
+            let mut chain_sp = self.chain_progress.borrow_mut();
+            for batch in chain_sp.frontiers.iter_mut() { batch.clear(); }
+        }
+
+        any_incomplete
+    }
+}
+
+/// Fuses a detected chain into a single operator within `children`, rewriting `edge_stash`.
+///
+/// The head of the chain retains its slot and becomes the fused operator.
+/// All other chain members become tombstones.
+fn fuse_chain<T: Timestamp>(
+    children: &mut [PerOperatorState<T>],
+    edge_stash: &mut Vec<(Source, Target)>,
+    chain: &[usize],
+) {
+    assert!(chain.len() >= 2);
+    let head_idx = chain[0];
+    let tail_idx = *chain.last().unwrap();
+
+    // Compose internal summaries.
+    let summary_refs: Vec<&Connectivity<T::Summary>> = chain.iter()
+        .map(|&idx| &children[idx].internal_summary)
+        .collect();
+    let composed_summary = compose_summaries::<T>(&summary_refs);
+
+    // Collect members by extracting operators and shared_progress from children.
+    let mut members = Vec::with_capacity(chain.len());
+    let mut chain_name_parts = Vec::new();
+    let mut head_path = Vec::new();
+
+    for (i, &idx) in chain.iter().enumerate() {
+        let child = &mut children[idx];
+        let operator = child.operator.take().expect("chain member must have an operator");
+        let shared_progress = Rc::clone(&child.shared_progress);
+
+        if i == 0 {
+            head_path = operator.path().to_vec();
+        }
+        chain_name_parts.push(child.name.clone());
+
+        members.push(ChainMember {
+            operator,
+            shared_progress,
+        });
+    }
+
+    let chain_name = format!("Chain[{}]", chain_name_parts.join(" -> "));
+
+    // Create the chain's SharedProgress: 1 input, 1 output (matching head's input, tail's output).
+    let chain_progress = Rc::new(RefCell::new(SharedProgress::new(1, 1)));
+
+    // Transfer initial internal capabilities: the chain's initial internals should reflect
+    // the last member's initial capabilities (at the chain's output port).
+    // All members' internals need to be cleared so they don't pollute Subgraph::initialize().
+    // However, for correctness, only the *last* member's internals matter (those are at the
+    // chain's output), and we move them to the chain's shared_progress.
+    {
+        let mut last_sp = members.last().unwrap().shared_progress.borrow_mut();
+        let mut chain_sp = chain_progress.borrow_mut();
+        for (port, internal) in last_sp.internals.iter_mut().enumerate() {
+            for (time, diff) in internal.iter() {
+                chain_sp.internals[port].update(time.clone(), *diff);
+            }
+        }
+    }
+
+    // Clear all members' internals to prevent double-counting during initialize().
+    for member in members.iter() {
+        let mut sp = member.shared_progress.borrow_mut();
+        for batch in sp.internals.iter_mut() { batch.clear(); }
+    }
+
+    let chain_scheduler: Box<dyn Schedule> = Box::new(ChainScheduler {
+        name: chain_name.clone(),
+        path: head_path,
+        chain_progress: Rc::clone(&chain_progress),
+        members,
+    });
+
+    // Install the fused operator at the head slot.
+    let head = &mut children[head_idx];
+    head.name = chain_name;
+    head.operator = Some(chain_scheduler);
+    head.shared_progress = chain_progress;
+    head.internal_summary = composed_summary;
+    // Head keeps inputs=1, outputs=1, local=true, notify=false.
+
+    // Tombstone all other chain members.
+    for &idx in &chain[1..] {
+        let child = &mut children[idx];
+        child.name = format!("Tombstone({})", child.name);
+        child.operator = None;
+        child.shared_progress = Rc::new(RefCell::new(SharedProgress::new(0, 0)));
+        child.edges = Vec::new();
+        child.inputs = 0;
+        child.outputs = 0;
+        child.internal_summary = Vec::new();
+    }
+
+    // Rewrite edge_stash:
+    // 1. Remove internal chain edges (edges between consecutive chain members).
+    // 2. Rewrite edges from the tail's output to use the head's index as source.
+    let chain_set: std::collections::HashSet<usize> = chain.iter().cloned().collect();
+
+    edge_stash.retain(|(source, target)| {
+        // Remove edges internal to the chain.
+        !(chain_set.contains(&source.node) && chain_set.contains(&target.node))
+    });
+
+    // Rewrite edges from tail's output to come from head's output instead.
+    for (source, _target) in edge_stash.iter_mut() {
+        if source.node == tail_idx {
+            source.node = head_idx;
+        }
     }
 }

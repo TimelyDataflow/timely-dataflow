@@ -78,12 +78,27 @@ impl FromStr for ProgressMode {
 }
 
 /// Worker configuration.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// The progress mode to use.
     pub(crate) progress_mode: ProgressMode,
+    /// Minimum chain length for pipeline chain fusion.
+    ///
+    /// Chains of pipeline-connected operators shorter than this threshold
+    /// will not be fused. Set to 0 to disable fusion entirely.
+    pub(crate) min_chain_length: usize,
     /// A map from parameter name to typed parameter values.
     registry: HashMap<String, Arc<dyn Any + Send + Sync>>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            progress_mode: ProgressMode::default(),
+            min_chain_length: 2,
+            registry: HashMap::new(),
+        }
+    }
 }
 
 impl Config {
@@ -119,6 +134,15 @@ impl Config {
     /// Sets the progress mode to `progress_mode`.
     pub fn progress_mode(mut self, progress_mode: ProgressMode) -> Self {
         self.progress_mode = progress_mode;
+        self
+    }
+
+    /// Sets the minimum chain length for pipeline chain fusion.
+    ///
+    /// Chains of pipeline-connected operators shorter than this threshold
+    /// will not be fused. Set to 0 to disable fusion entirely. Default: 2.
+    pub fn min_chain_length(mut self, min_chain_length: usize) -> Self {
+        self.min_chain_length = min_chain_length;
         self
     }
 
