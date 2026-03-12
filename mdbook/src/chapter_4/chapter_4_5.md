@@ -4,14 +4,23 @@
 
 Timely dataflow allows you to use a variety of Rust types, but you may also find that you need (or would prefer) your own `struct` and `enum` types.
 
-Timely dataflow provides the `ExchangeData` trait for types that timely dataflow can transport within a worker thread and across threads.
+Timely dataflow provides two traits, `Data` and `ExchangeData` for types that timely dataflow can transport within a worker thread and across threads.
+
+## The `Data` trait
+
+The `Data` trait is essentially a synonym for `Clone+'static`, meaning the type must be cloneable and cannot contain any references with other than a static lifetime. Most types implement these traits automatically, but if yours do not you should decorate your struct definition with a derivation of the `Clone` trait:
+
+```rust,ignore
+#[derive(Clone)]
+struct YourStruct { .. }
+```
 
 ## The `ExchangeData` trait
 
-The `ExchangeData` trait is a synonym for
+The `ExchangeData` trait is more complicated, and is established in the `communication/` module. The trait is a synonym for
 
 ```rust,ignore
-Send+Any+serde::Serialize+for<'a>serde::Deserialize<'a>+'static
+Send+Sync+Any+serde::Serialize+for<'a>serde::Deserialize<'a>+'static
 ```
 
 where `serde` is Rust's most popular serialization and deserialization crate. A great many types implement these traits. If your types does not, you should add these decorators to their definition:
