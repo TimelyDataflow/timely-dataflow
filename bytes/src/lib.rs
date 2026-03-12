@@ -107,7 +107,8 @@ pub mod arc {
         ///
         /// If uniquely held, this method recovers the initial pointer and length
         /// of the sequestered allocation and re-initializes the BytesMut. The return
-        /// value indicates whether this occurred.
+        /// value indicates whether this occurred. A `None` value indicates that the
+        /// downcast to `B` failed and the type is not correct.
         ///
         /// # Examples
         ///
@@ -123,19 +124,19 @@ pub mod arc {
         /// drop(shared3);
         /// drop(shared2);
         /// drop(shared4);
-        /// assert!(shared1.try_regenerate::<Vec<u8>>());
+        /// assert_eq!(shared1.try_regenerate::<Vec<u8>>(), Some(true));
         /// assert!(shared1.len() == 1024);
         /// ```
-        pub fn try_regenerate<B>(&mut self) -> bool where B: DerefMut<Target=[u8]>+'static {
+        pub fn try_regenerate<B>(&mut self) -> Option<bool> where B: DerefMut<Target=[u8]>+'static {
             // Only possible if this is the only reference to the sequestered allocation.
             if let Some(boxed) = Arc::get_mut(&mut self.sequestered) {
-                let downcast = boxed.downcast_mut::<B>().expect("Downcast failed");
+                let downcast = boxed.downcast_mut::<B>()?;
                 self.ptr = downcast.as_mut_ptr();
                 self.len = downcast.len();
-                true
+                Some(true)
             }
             else {
-                false
+                Some(false)
             }
         }
 

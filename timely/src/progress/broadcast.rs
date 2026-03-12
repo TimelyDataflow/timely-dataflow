@@ -144,9 +144,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
             });
 
             // We clone rather than drain to avoid deserialization.
-            for &(ref update, delta) in recv_changes.iter() {
-                changes.update(update.clone(), delta);
-            }
+            changes.extend(recv_changes.iter().map(|(u,d)| (u.clone(), *d)));
         }
 
     }
