@@ -890,8 +890,6 @@ fn detect_chains<T: Timestamp>(
         if !src_child.local || !tgt_child.local { continue; }
 
         // Both must not require notifications.
-        // Fusing notify=true operators requires propagating frontier changes
-        // to each member within the chain, which is not yet implemented correctly.
         if src_child.notify || tgt_child.notify { continue; }
 
         // No fan-out from source, no fan-in to target.
@@ -1009,11 +1007,6 @@ struct ChainMember<T: Timestamp> {
 /// The chain presents as a single operator to the subgraph: it has the first
 /// member's input and the last member's output. Intermediate progress is
 /// hidden from the reachability tracker.
-///
-/// Only `notify=false` operators with identity internal summaries are fused.
-/// This means members don't observe frontiers, so we only need to propagate
-/// the chain's external frontier to the first member and aggregate progress
-/// from all members.
 struct ChainScheduler<T: Timestamp> {
     name: String,
     path: Vec<usize>,
@@ -1146,16 +1139,21 @@ fn fuse_chain<T: Timestamp>(
     // Create the chain's SharedProgress: 1 input, 1 output (matching head's input, tail's output).
     let chain_progress = Rc::new(RefCell::new(SharedProgress::new(1, 1)));
 
-    // Transfer initial internal capabilities from the last member to chain_progress.
-    // Only the last member's initial capabilities are visible at the chain's output.
-    // Intermediate members' capabilities are internal to the chain: their +1/-1
-    // deltas flow through the chain's aggregate internals in Step 3.
+    // Transfer initial internal capabilities from ALL members to chain_progress.
+    //
+    // Each member declared +peers capabilities at T::minimum() during initialize().
+    // All N members' capabilities must be visible to the reachability tracker at the
+    // chain's single output port, because each member independently drops its
+    // capability during execution. If we only reported one member's initial caps,
+    // the tracker would go negative after N members drop their capabilities.
     {
-        let mut last_sp = members.last().unwrap().shared_progress.borrow_mut();
         let mut chain_sp = chain_progress.borrow_mut();
-        for (port, internal) in last_sp.internals.iter_mut().enumerate() {
-            for (time, diff) in internal.iter() {
-                chain_sp.internals[port].update(time.clone(), *diff);
+        for member in members.iter() {
+            let mut member_sp = member.shared_progress.borrow_mut();
+            for (port, internal) in member_sp.internals.iter_mut().enumerate() {
+                for (time, diff) in internal.iter() {
+                    chain_sp.internals[port].update(time.clone(), *diff);
+                }
             }
         }
     }
@@ -1179,8 +1177,6 @@ fn fuse_chain<T: Timestamp>(
     head.operator = Some(chain_scheduler);
     head.shared_progress = chain_progress;
     head.internal_summary = composed_summary;
-    // All chain members are notify=false (enforced by detect_chains).
-    head.notify = false;
 
     // Tombstone all other chain members.
     for &idx in &chain[1..] {
