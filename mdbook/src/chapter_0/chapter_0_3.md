@@ -10,7 +10,7 @@ Timely dataflow is a *dataflow* system, and this means that at its core it likes
 
 For example, sorting a slice of data is a fundamental task and one that parallelizes. But, the task of sorting is traditionally viewed as transforming the data in a supplied slice, rather than sending the data to multiple workers and then announcing that it got sorted. The data really does need to end up in one place, one single pre-existing memory allocation, and timely dataflow is not great at problems that cannot be recast as the movement of data.
 
-One could re-imagine the sorting process as moving data around, and indeed this is what happens when large clusters need to be brought to bear on such a task, but that doesn't help you at all if what you needed was to sort your single allocation. A library like [Rayon](https://github.com/rayon-rs/rayon) would almost surely be better suited to the task.
+One could re-imagine the sorting process as moving data around, and indeed this is what happens when large clusters need to be brought to bear on such a task, but that doesn't help you at all if what you needed was to sort your single allocation. A library like [Rayon](https://crates.io/crates/rayon) would almost surely be better suited to the task.
 
 ---
 
