@@ -181,10 +181,8 @@ where
         let summary = (0..outputs).map(|_| PortConnectivity::default()).collect();
         builder.add_node(0, outputs, inputs, summary);
         for (index, child) in self.children.iter().enumerate().skip(1) {
-            // Skip tombstoned children (absorbed into chains).
-            if child.inputs == 0 && child.outputs == 0 && child.operator.is_none() {
-                continue;
-            }
+            // Tombstoned children are added with (0, 0) inputs/outputs and empty summary
+            // to preserve index positions in the reachability tracker.
             builder.add_node(index, child.inputs, child.outputs, child.internal_summary.clone());
         }
 
@@ -888,9 +886,8 @@ fn detect_chains<T: Timestamp>(
         if src_child.inputs != 1 || src_child.outputs != 1 { continue; }
         if tgt_child.inputs != 1 || tgt_child.outputs != 1 { continue; }
 
-        // Both must be local (pipeline edges) and not frontier-observing.
+        // Both must be local (pipeline edges).
         if !src_child.local || !tgt_child.local { continue; }
-        if src_child.notify || tgt_child.notify { continue; }
 
         // No fan-out from source, no fan-in to target.
         if source_edge_count.get(&src) != Some(&1) { continue; }
@@ -988,6 +985,7 @@ fn compose_summaries<T: Timestamp>(
 struct ChainMember<T: Timestamp> {
     operator: Box<dyn Schedule>,
     shared_progress: Rc<RefCell<SharedProgress<T>>>,
+    notify: bool,
 }
 
 /// Schedules a chain of pipeline-connected operators as a single unit.
@@ -1002,6 +1000,13 @@ struct ChainScheduler<T: Timestamp> {
     chain_progress: Rc<RefCell<SharedProgress<T>>>,
     /// Operators in execution order, with their individual SharedProgress handles.
     members: Vec<ChainMember<T>>,
+    /// Tracks the input frontier at notify=true members' input positions.
+    ///
+    /// Each entry `(member_index, frontier)` corresponds to a notify=true member.
+    /// The frontier reflects the accumulated capabilities of all upstream members
+    /// plus external frontier changes. With identity summaries, a capability at
+    /// timestamp `t` in member[i] contributes to all notify frontiers at positions j > i.
+    notify_frontiers: Vec<(usize, MutableAntichain<T>)>,
 }
 
 impl<T: Timestamp> Schedule for ChainScheduler<T> {
@@ -1012,30 +1017,52 @@ impl<T: Timestamp> Schedule for ChainScheduler<T> {
         let n = self.members.len();
         assert!(n > 0);
 
-        // Step 1: Copy chain's input frontier to first member's frontier.
+        // Step 1: Copy chain's input frontier changes to first member
+        // and propagate to notify=true members' frontiers.
         {
             let mut chain_sp = self.chain_progress.borrow_mut();
             let mut first_sp = self.members[0].shared_progress.borrow_mut();
             for (port, frontier) in chain_sp.frontiers.iter_mut().enumerate() {
                 for (time, diff) in frontier.iter() {
                     first_sp.frontiers[port].update(time.clone(), *diff);
+                    // Propagate external frontier changes to notify frontiers.
+                    for &mut (j, ref mut nf) in self.notify_frontiers.iter_mut() {
+                        let frontier_changes = nf.update_iter(Some((time.clone(), *diff)));
+                        let mut downstream_sp = self.members[j].shared_progress.borrow_mut();
+                        for (t, d) in frontier_changes {
+                            downstream_sp.frontiers[port].update(t, d);
+                        }
+                    }
                 }
             }
         }
 
-        // Step 2: Schedule each member in sequence, propagating frontiers forward.
+        // Step 2: Schedule each member in sequence.
+        // For chains with notify=true members, propagate capability changes
+        // to downstream notify frontiers after each member runs.
         let mut any_incomplete = false;
         for i in 0..n {
             let incomplete = self.members[i].operator.schedule();
             any_incomplete = any_incomplete || incomplete;
 
-            // Propagate: current member's produceds become next member's frontiers
-            // (conceptually, records flow through the pipeline channel).
-            // The data actually flows through the ThreadPusher/ThreadPuller pipeline
-            // channels that already exist between the operators. We only need to
-            // propagate frontier information for notify-capable operators, but since
-            // we only fuse notify=false operators, we skip frontier propagation between
-            // members. The intermediate consumeds/produceds are simply discarded.
+            // Propagate capability changes to downstream notify members.
+            if !self.notify_frontiers.is_empty() {
+                let mut member_sp = self.members[i].shared_progress.borrow_mut();
+                for internal in member_sp.internals.iter_mut() {
+                    for (time, diff) in internal.iter() {
+                        // Only update notify frontiers at positions j > i.
+                        for &mut (j, ref mut nf) in self.notify_frontiers.iter_mut() {
+                            if j <= i { continue; }
+                            let frontier_changes = nf.update_iter(Some((time.clone(), *diff)));
+                            let mut downstream_sp = self.members[j].shared_progress.borrow_mut();
+                            for (t, d) in frontier_changes {
+                                downstream_sp.frontiers[0].update(t, d);
+                            }
+                        }
+                    }
+                }
+                drop(member_sp);
+            }
         }
 
         // Step 3: Aggregate progress.
@@ -1115,10 +1142,13 @@ fn fuse_chain<T: Timestamp>(
     let mut chain_name_parts = Vec::new();
     let mut head_path = Vec::new();
 
+    let mut has_notify = false;
     for (i, &idx) in chain.iter().enumerate() {
         let child = &mut children[idx];
         let operator = child.operator.take().expect("chain member must have an operator");
         let shared_progress = Rc::clone(&child.shared_progress);
+        let notify = child.notify;
+        has_notify = has_notify || notify;
 
         if i == 0 {
             head_path = operator.path().to_vec();
@@ -1128,6 +1158,7 @@ fn fuse_chain<T: Timestamp>(
         members.push(ChainMember {
             operator,
             shared_progress,
+            notify,
         });
     }
 
@@ -1136,11 +1167,18 @@ fn fuse_chain<T: Timestamp>(
     // Create the chain's SharedProgress: 1 input, 1 output (matching head's input, tail's output).
     let chain_progress = Rc::new(RefCell::new(SharedProgress::new(1, 1)));
 
-    // Transfer initial internal capabilities: the chain's initial internals should reflect
-    // the last member's initial capabilities (at the chain's output port).
-    // All members' internals need to be cleared so they don't pollute Subgraph::initialize().
-    // However, for correctness, only the *last* member's internals matter (those are at the
-    // chain's output), and we move them to the chain's shared_progress.
+    // Transfer initial internal capabilities from all members to chain_progress.
+    // Each member has initial capabilities at T::minimum() (added during initialize()).
+    // The chain's output capabilities = last member's capabilities.
+    // But all members' internals must be accounted for in the chain's internals,
+    // because dropping a capability in any member produces a (-1) internal change
+    // that the chain must report.
+    //
+    // For the chain's initial internals reported to the subgraph, we only report
+    // the *last* member's initial capabilities (those are at the chain's output port).
+    // The intermediate members' capabilities are internal to the chain and cancel out:
+    // each intermediate member's capability implies it can produce data, which the next
+    // member will consume — but this is hidden from the reachability tracker.
     {
         let mut last_sp = members.last().unwrap().shared_progress.borrow_mut();
         let mut chain_sp = chain_progress.borrow_mut();
@@ -1149,6 +1187,26 @@ fn fuse_chain<T: Timestamp>(
                 chain_sp.internals[port].update(time.clone(), *diff);
             }
         }
+    }
+
+    // Initialize notify frontiers for frontier propagation to notify=true members.
+    // Each notify frontier tracks accumulated capabilities from upstream members
+    // plus external frontier changes. Initialized with upstream members' initial caps.
+    let n = members.len();
+    let mut notify_frontiers = Vec::new();
+    for j in 1..n {
+        if !members[j].notify { continue; }
+        let mut frontier = MutableAntichain::new();
+        // Each upstream member [0..j) contributes initial capabilities.
+        for i in 0..j {
+            let mut sp = members[i].shared_progress.borrow_mut();
+            for internal in sp.internals.iter_mut() {
+                for (time, diff) in internal.iter() {
+                    frontier.update_iter(Some((time.clone(), *diff)));
+                }
+            }
+        }
+        notify_frontiers.push((j, frontier));
     }
 
     // Clear all members' internals to prevent double-counting during initialize().
@@ -1162,6 +1220,7 @@ fn fuse_chain<T: Timestamp>(
         path: head_path,
         chain_progress: Rc::clone(&chain_progress),
         members,
+        notify_frontiers,
     });
 
     // Install the fused operator at the head slot.
@@ -1170,7 +1229,7 @@ fn fuse_chain<T: Timestamp>(
     head.operator = Some(chain_scheduler);
     head.shared_progress = chain_progress;
     head.internal_summary = composed_summary;
-    // Head keeps inputs=1, outputs=1, local=true, notify=false.
+    head.notify = has_notify;
 
     // Tombstone all other chain members.
     for &idx in &chain[1..] {

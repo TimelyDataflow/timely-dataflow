@@ -8,12 +8,25 @@ fn main() {
 
         let timer = std::time::Instant::now();
 
-        let mut args = std::env::args();
-        args.next();
+        // Collect positional arguments, skipping flags consumed by timely (-w, -n, -p, -h).
+        let positional: Vec<String> = {
+            let mut pos = Vec::new();
+            let mut args = std::env::args();
+            args.next(); // skip binary name
+            while let Some(arg) = args.next() {
+                if arg.starts_with('-') {
+                    args.next(); // skip flag value
+                } else {
+                    pos.push(arg);
+                }
+            }
+            pos
+        };
 
-        let dataflows = args.next().unwrap().parse::<usize>().unwrap();
-        let length = args.next().unwrap().parse::<usize>().unwrap();
-        let record = args.next() == Some("record".to_string());
+        let dataflows = positional[0].parse::<usize>().unwrap();
+        let length = positional[1].parse::<usize>().unwrap();
+        let record = positional.get(2).map(|s| s.as_str()) == Some("record");
+        let rounds: usize = positional.get(3).map(|s| s.parse().unwrap()).unwrap_or(usize::MAX);
 
         let mut inputs = Vec::new();
         let mut probes = Vec::new();
@@ -37,7 +50,7 @@ fn main() {
 
         println!("{:?}\tdataflows built ({} x {})", timer.elapsed(), dataflows, length);
 
-        for round in 0 .. {
+        for round in 0 .. rounds {
             let dataflow = round % dataflows;
             if record {
                 inputs[dataflow].send(());
