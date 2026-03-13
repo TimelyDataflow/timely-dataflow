@@ -210,7 +210,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
         (Vec::new(), Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> Vec<FrontierInterest> { Vec::new() }
+    fn notify_me(&self) -> &[FrontierInterest] { &[] }
 }
 
 

@@ -60,7 +60,7 @@ pub trait Operate<T: Timestamp> {
     /// Returns a `Vec<FrontierInterest>` with one entry per input. Each entry describes whether
     /// frontier changes on that input should cause the operator to be scheduled. The conservative
     /// default is `Always` for each input.
-    fn notify_me(&self) -> Vec<FrontierInterest> { vec![FrontierInterest::Always; self.inputs()] }
+    fn notify_me(&self) -> &[FrontierInterest];// { &vec![FrontierInterest::Always; self.inputs()] }
 }
 
 /// The ways in which an operator can express interest in activation when an input frontier changes.

@@ -88,13 +88,6 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Return a reference to the operator's shape
     pub fn shape(&self) -> &OperatorShape { &self.shape }
 
-    /// Sets frontier interest for all inputs.
-    pub fn set_notify(&mut self, notify: FrontierInterest) {
-        for n in self.shape.notify.iter_mut() {
-            *n = notify;
-        }
-    }
-
     /// Sets frontier interest for a specific input.
     pub fn set_notify_for(&mut self, input: usize, notify: FrontierInterest) {
         self.shape.notify[input] = notify;
@@ -230,5 +223,5 @@ where
         (self.summary.clone(), Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> Vec<FrontierInterest> { self.shape.notify.clone() }
+    fn notify_me(&self) -> &[FrontierInterest] { &self.shape.notify }
 }

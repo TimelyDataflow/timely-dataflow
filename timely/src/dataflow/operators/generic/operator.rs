@@ -373,9 +373,9 @@ impl<G: Scope, C1: Container> Operator<G, C1> for Stream<G, C1> {
         let operator_info = builder.operator_info();
 
         let mut input = builder.new_input(self, pact);
+        builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);
         let (output, stream) = builder.new_output();
         let mut output = OutputBuilder::from(output);
-        builder.set_notify(false);
 
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
@@ -461,9 +461,10 @@ impl<G: Scope, C1: Container> Operator<G, C1> for Stream<G, C1> {
 
         let mut input1 = builder.new_input(self, pact1);
         let mut input2 = builder.new_input(other, pact2);
+        builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);
+        builder.set_notify_for(1, crate::progress::operate::FrontierInterest::Never);
         let (output, stream) = builder.new_output();
         let mut output = OutputBuilder::from(output);
-        builder.set_notify(false);
 
         builder.build(move |mut capabilities| {
             // `capabilities` should be a single-element vector.
@@ -547,7 +548,6 @@ where
 
     let (output, stream) = builder.new_output();
     let mut output = OutputBuilder::from(output);
-    builder.set_notify(false);
 
     builder.build(move |mut capabilities| {
         // `capabilities` should be a single-element vector.

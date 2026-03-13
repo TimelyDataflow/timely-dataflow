@@ -603,7 +603,7 @@ where
         (internal_summary, Rc::clone(&self.shared_progress), self)
     }
 
-    fn notify_me(&self) -> Vec<FrontierInterest> { self.notify_me.clone() }
+    fn notify_me(&self) -> &[FrontierInterest] { &self.notify_me }
 }
 
 struct PerOperatorState<T: Timestamp> {
@@ -661,7 +661,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let local = scope.local();
         let inputs = scope.inputs();
         let outputs = scope.outputs();
-        let notify = scope.notify_me();
+        let notify = scope.notify_me().to_vec();
 
         let (internal_summary, shared_progress, operator) = scope.initialize();
 

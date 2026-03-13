@@ -63,10 +63,10 @@ impl<G: Scope, C: Container> Concatenate<G, C> for G {
         // create an operator builder.
         use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
         let mut builder = OperatorBuilder::new("Concatenate".to_string(), self.clone());
-        builder.set_notify(false);
 
         // create new input handles for each input stream.
         let mut handles = sources.into_iter().map(|s| builder.new_input(s, Pipeline)).collect::<Vec<_>>();
+        for i in 0 .. handles.len() { builder.set_notify_for(i, crate::progress::operate::FrontierInterest::Never); }
 
         // create one output handle for the concatenated results.
         let (mut output, result) = builder.new_output();

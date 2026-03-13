@@ -41,9 +41,9 @@ impl<S: Scope, D: 'static> Branch<S, D> for StreamVec<S, D> {
         condition: impl Fn(&S::Timestamp, &D) -> bool + 'static,
     ) -> (StreamVec<S, D>, StreamVec<S, D>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
-        builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
+        builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);
         let (output1, stream1) = builder.new_output();
         let (output2, stream2) = builder.new_output();
 
@@ -102,9 +102,9 @@ pub trait BranchWhen<T>: Sized {
 impl<S: Scope, C: Container> BranchWhen<S::Timestamp> for Stream<S, C> {
     fn branch_when(self, condition: impl Fn(&S::Timestamp) -> bool + 'static) -> (Self, Self) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
-        builder.set_notify(false);
 
         let mut input = builder.new_input(self, Pipeline);
+        builder.set_notify_for(0, crate::progress::operate::FrontierInterest::Never);
         let (output1, stream1) = builder.new_output();
         let (output2, stream2) = builder.new_output();
 
