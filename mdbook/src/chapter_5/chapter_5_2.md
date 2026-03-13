@@ -23,14 +23,14 @@ In timely dataflow progress tracking, we identify output ports by the type `Sour
 ```rust
 pub struct Source {
     /// Index of the source operator.
-    pub index: usize,
+    pub node: usize,
     /// Number of the output port from the operator.
     pub port: usize,
 }
 
 pub struct Target {
     /// Index of the target operator.
-    pub index: usize,
+    pub node: usize,
     /// Number of the input port to the operator.
     pub port: usize,
 }
@@ -71,15 +71,16 @@ Each worker maintains an accumulation of progress update batches, which explains
 Progress tracking occurs in the context of a dataflow graph of operators all with a common timestamp type `T: Timestamp`. The `Timestamp` trait requires the `PartialOrder` trait, meaning two timestamps may be ordered but need not be. Each type implementing `Timestamp` must also specify an associated type `Summary` implementing `PathSummary<Self>`.
 
 ```rust,ignore
-pub trait Timestamp: PartialOrder {
-    type Summary : PathSummary<Self>;
+pub trait Timestamp: Clone+Eq+PartialOrder+Debug+Send+Any+Data+Hash+Ord {
+    type Summary : PathSummary<Self> + 'static;
+    fn minimum() -> Self;
 }
 ```
 
 A path summary is informally meant to summarize what *must* happen to a timestamp as it travels along a path in a timely dataflow. Most paths that you might draw have trivial summaries ("no change guaranteed"), but some paths do force changes on timestamps. For example, a path that goes from the end of a loop back to its head *must* increment the loop counter coordinate of any timestamp capability passed along it.
 
 ```rust,ignore
-pub trait PathSummary<T> : PartialOrder {
+pub trait PathSummary<T> : Clone+'static+Eq+PartialOrder+Debug+Default {
     fn results_in(&self, src: &T) -> Option<T>;
     fn followed_by(&self, other: &Self) -> Option<Self>;
 }
@@ -112,7 +113,7 @@ The second part of progress tracking, communicating the implications of current 
 
 Where do path summaries come from?
 
-Each operator in timely dataflow must implement the `Operate` trait. Among other things, that we will get to, the `Operate` trait requires that the operator summarize *itself*, providing a collection of path summaries for each of its internal paths, from each of its inputs to each of its outputs. The operator must describe what timestamps could possibly result at each of its output as a function of a timestamped message arriving at each of its inputs.
+Each operator in timely dataflow must implement the `Operate` builder trait, which consumes the operator during initialization. Among other things, that we will get to, the `Operate` trait requires that the operator summarize *itself*, providing a collection of path summaries for each of its internal paths, from each of its inputs to each of its outputs. The operator must describe what timestamps could possibly result at each of its output as a function of a timestamped message arriving at each of its inputs.
 
 For most operators, this summary is simply: "timestamped data at each of my inputs could result in equivalently timestamped data at each of my outputs". This is a fairly simple summary, and while it isn't very helpful in making progress, it is the only guarantee the operator can provide.
 

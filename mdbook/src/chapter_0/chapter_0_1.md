@@ -2,7 +2,7 @@
 
 Timely dataflow means to capture a large number of idioms, so it is a bit tricky to wrap together one example that shows off all of its features, but let's look at something that shows off some core functionality to give a taste.
 
-The following complete program initializes a timely dataflow computation, in which participants can supply a stream of numbers which are exchanged between the workers based on their value. Workers print to the screen when they see numbers. You can also find this as [`examples/hello.rs`](https://github.com/TimelyDataflow/timely-dataflow/blob/master/examples/hello.rs) in the [timely dataflow repository](https://github.com/TimelyDataflow/timely-dataflow/tree/master/examples).
+The following complete program initializes a timely dataflow computation, in which participants can supply a stream of numbers which are exchanged between the workers based on their value. Workers print to the screen when they see numbers. You can also find this as [`timely/examples/hello.rs`](https://github.com/TimelyDataflow/timely-dataflow/blob/master/timely/examples/hello.rs) in the [timely dataflow repository](https://github.com/TimelyDataflow/timely-dataflow/tree/master/timely/examples).
 
 ```rust
 extern crate timely;

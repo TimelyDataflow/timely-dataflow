@@ -72,14 +72,20 @@ What a mess. Nothing in our dataflow program requires that workers zero and one 
 
 However, this is only a mess if we are concerned about the order, and in many cases we are not. Imagine instead of just printing the number to the screen, we want to find out which numbers are prime and print *them* to the screen.
 
-```rust,ignore
-.inspect(|x| {
+```rust
+# use timely::dataflow::operators::*;
+# timely::example(|scope| {
+#     (0u64..10).to_stream(scope)
+#         .container::<Vec<_>>()
+.inspect(|x: &u64| {
     // we only need to test factors up to sqrt(x)
     let limit = (*x as f64).sqrt() as u64;
     if *x > 1 && (2 .. limit + 1).all(|i| x % i > 0) {
         println!("{} is prime", x);
     }
 })
+#     ;
+# });
 ```
 
  We don't really care that much about the order (we just want the results), and we have written such a simple primality test that we are going to be thrilled if we can distribute the work across multiple cores.

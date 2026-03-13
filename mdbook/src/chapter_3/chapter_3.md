@@ -6,7 +6,20 @@ With a dataflow graph defined, how do we interactively supply data to the comput
 
 The first thing to understand about timely dataflow is that *we are programming the worker threads*. Part of this program is asking the worker to build up a dataflow graph; we did that when we created an `InputHandle` and when we called `dataflow` followed by some `filter` and `map` and `probe` commands. But another part is where we actually start feeding the dataflow graph, advancing the inputs, and letting the worker give each of the operators a chance to run.
 
-```rust,ignore
+```rust
+# extern crate timely;
+# use timely::dataflow::InputHandle;
+# use timely::dataflow::operators::{Input, Inspect, Probe};
+# fn main() {
+#     timely::execute_from_args(std::env::args().take(1), |worker| {
+#         let mut input = InputHandle::new();
+#         let probe = worker.dataflow(|scope|
+#             scope.input_from(&mut input)
+#                  .container::<Vec<_>>()
+#                  .inspect(|x| println!("seen: {:?}", x))
+#                  .probe()
+#                  .0
+#         );
 for round in 0..10 {
     input.send(round);
     input.advance_to(round + 1);
@@ -14,6 +27,8 @@ for round in 0..10 {
         worker.step();
     }
 }
+#     }).unwrap();
+# }
 ```
 
 This is the loop that we've seen in several examples. It looks fairly simple, but this is what actually causes work to happen. We do send data and advance the input, but we also call `worker.step()`, and this is where the actual timely dataflow computation happens. Until you call this, all the data are just building up in queues.

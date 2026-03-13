@@ -25,7 +25,7 @@ In most cases, the `core` operators are an immediate generalization of their non
 
 ## Limitations
 
-* Explain why it's hard to build container-generic operators from smaller operators (unless we have higher-kinded types).
+
 
 Each operator over arbitrary containers either returns an equal container, or needs to be parameterized to indicate the desired output type.
 This is problematic when composing a high-level operator from smaller building blocks, such as the broadcast operator.
